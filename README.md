@@ -45,7 +45,7 @@ Open **http://127.0.0.1:4177/**. No model API key or backend service is required
 | URL | Experience |
 | --- | --- |
 | `/` | Standalone workbook; opens blank or restores locally saved work |
-| `/?embedded` | Workbook inside the Clara example application |
+| `/?embedded` | Workbook inside the Test example application |
 | `/?temporary` | Temporary workbook without browser persistence |
 | `/?demo` | Synthetic audit demonstration data |
 
@@ -238,7 +238,7 @@ The `mcp` Docker target packages the scoped stdio server separately. The web ima
 Example:
 
 ```sh
-FRAME_ANCESTORS="'self' https://clara.example.com" \
+FRAME_ANCESTORS="'self' https://test.example.com" \
   docker compose up --build -d --wait --scale web=2
 ```
 
