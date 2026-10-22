@@ -1,0 +1,20 @@
+# Not applied by kustomization. Replace the class, hostname and TLS secret.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ledgerglass-web
+spec:
+  ingressClassName: your-ingress-class
+  tls:
+    - hosts: [workbook.example.com]
+      secretName: workbook-tls
+  rules:
+    - host: workbook.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ledgerglass-web
+                port: {name: http}

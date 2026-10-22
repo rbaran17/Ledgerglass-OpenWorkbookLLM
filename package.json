@@ -1,0 +1,107 @@
+{
+  "name": "@ledgerglass/workbook",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Embeddable audit workbook with a provider-neutral LLM protocol",
+  "scripts": {
+    "dev": "node scripts/build-file-worker.mjs && node scripts/build-calculation-worker.mjs && vite --host 127.0.0.1",
+    "build": "node scripts/build-file-worker.mjs && node scripts/build-calculation-worker.mjs && tsc --noEmit && vite build",
+    "build:lib": "node scripts/build-file-worker.mjs && node scripts/build-calculation-worker.mjs && vite build --config vite.lib.config.ts && vite build --config vite.mcp.config.ts && node scripts/build-node-calculation.mjs && tsc -p tsconfig.lib.json && node scripts/finalize-lib.mjs && node scripts/build-file-worker.mjs --emit-lib && node scripts/build-source-gateway.mjs && node scripts/build-source-connectors.mjs",
+    "test": "node scripts/build-source-connectors.mjs && node scripts/build-file-worker.mjs && vitest run",
+    "preview": "vite preview --host 127.0.0.1",
+    "test:e2e": "playwright test",
+    "start": "node scripts/serve.mjs",
+    "build:portable": "npm run build && node scripts/portable.mjs",
+    "format": "prettier --write src tests scripts *.ts *.json",
+    "mcp": "node scripts/mcp-stdio.mjs",
+    "generate:examples": "node scripts/generate-examples.mjs",
+    "check:claims": "node scripts/release-claims.mjs",
+    "update:coverage": "node scripts/release-claims.mjs --write",
+    "verify:release": "npm run build:lib && npm run build:portable && npm test -- --reporter=json --outputFile=work/release-tests.json && npm run check:claims -- --report work/release-tests.json",
+    "demo:sources": "node scripts/source-connectors-demo.mjs",
+    "build:container": "npm run build -- --outDir dist-container && node deploy/prepare-assets.mjs dist-container",
+    "start:container": "node deploy/server.mjs",
+    "test:deployment": "node --test deploy/tests/*.test.mjs",
+    "test:containers": "node deploy/verify-containers.mjs"
+  },
+  "dependencies": {
+    "@assistant-ui/react": "0.15.21",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "exceljs": "4.4.0",
+    "fast-formula-parser": "1.0.19",
+    "fflate": "^0.8.3",
+    "html-to-image": "1.11.13",
+    "lucide-react": "^0.468.0",
+    "papaparse": "^5.5.3",
+    "pdf-lib": "1.17.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
+    "saxes": "5.0.1",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "13.5.0",
+    "@types/node": "^22.15.0",
+    "@types/papaparse": "^5.3.16",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.5.0",
+    "axe-core": "4.11.1",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.9.6",
+    "typescript": "^5.8.3",
+    "vite": "^6.4.1",
+    "vitest": "^3.2.4"
+  },
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/ledgerglass.js"
+    },
+    "./style.css": "./lib/ledgerglass.css",
+    "./mcp": {
+      "types": "./lib/mcp/server.d.ts",
+      "import": "./lib/mcp.js"
+    },
+    "./calculation-node": {
+      "types": "./lib/integrations/node-calculation.d.ts",
+      "import": "./lib/node-calculation.js"
+    },
+    "./file-worker.js": "./lib/file-worker.js",
+    "./source-gateway": {
+      "types": "./lib/integrations/source-gateway.d.ts",
+      "import": "./lib/source-gateway.js"
+    },
+    "./source-connectors": {
+      "types": "./lib/integrations/source-connectors.d.ts",
+      "import": "./lib/source-connectors.js"
+    }
+  },
+  "files": [
+    "lib",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.txt",
+    "scripts/mcp-stdio.mjs",
+    "deploy/ReactHost.example.tsx"
+  ],
+  "overrides": {
+    "exceljs": {
+      "uuid": "11.1.1"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,11 @@
+import{readFile,writeFile}from'node:fs/promises';import{createHash}from'node:crypto';import*as sdk from'../lib/ledgerglass.js';
+const book=sdk.createBlankWorkbook('Linked summary'),source=sdk.createBlankWorkbook('Source balances'),replacement=sdk.createBlankWorkbook('Replacement balances');
+book.id='linked-destination';book.sheets[0].id='linked-summary';book.sheets[0].name='Summary';source.id='linked-source';source.revision=7;source.sheets[0].id='linked-balances';source.sheets[0].name='Balances';
+source.sheets[0].cells={A1:{raw:1250.5},A2:{raw:-250.5},A3:{raw:null},B1:{raw:'0017',literal:true},B2:{raw:'=1+1',literal:true}};
+book.sheets[0].cells={A1:{raw:25},B1:{raw:"=SUM('[Balances.xlsx]Balances'!A1:A3)+A1"},B2:{raw:"='[Balances.xlsx]Balances'!B1"},B3:{raw:"='[Balances.xlsx]Balances'!B2"},B4:{raw:"=COUNT('[Balances.xlsx]Balances'!A1:A3)"},B5:{raw:"=COUNTBLANK('[Balances.xlsx]Balances'!A1:A3)"}};
+replacement.id='linked-replacement';replacement.revision=3;replacement.sheets[0].id='replacement-balances';replacement.sheets[0].name='Balances';replacement.sheets[0].cells=structuredClone(source.sheets[0].cells);replacement.sheets[0].cells.A1.raw=3250.5;
+for(const b of [book,source,replacement])b.metadata={createdAt:'2026-09-18T00:00:00.000Z',modifiedAt:'2026-09-18T00:00:00.000Z'};
+const files={'Workbook-links-destination.json':book,'Workbook-links-source.json':source,'Workbook-links-replacement.json':replacement};
+for(const[name,b]of Object.entries(files))await writeFile('examples/'+name,sdk.serializeWorkbook(b));
+const hashes={};for(const name of Object.keys(files))hashes[name]=createHash('sha256').update(await readFile('examples/'+name)).digest('hex');
+await writeFile('examples/Workbook-links-fixture-manifest.json',JSON.stringify({date:'2026-09-18',requirement:'AW-070',synthetic:true,original:1025,refreshed:2025,replacement:3025,textId:'0017',literal:'=1+1',hashes,boundary:'Local synthetic workbooks; no external Excel, source service or LLM execution.'},null,2)+'\n');console.log('Created workbook link fixtures.');

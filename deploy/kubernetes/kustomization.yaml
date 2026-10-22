@@ -1,0 +1,12 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - deployment.yaml
+  - service.yaml
+  - autoscaling.yaml
+  - disruption-budget.yaml
+# Replace with an approved registry image and immutable digest before deployment.
+images:
+  - name: ledgerglass-workbook
+    newName: ledgerglass-workbook
+    newTag: local

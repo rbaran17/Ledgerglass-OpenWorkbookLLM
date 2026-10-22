@@ -1,0 +1,50 @@
+services:
+  web:
+    image: ledgerglass-workbook:local
+    build:
+      context: .
+      target: web
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:22-bookworm-slim}
+    expose: ["8080"]
+    environment:
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-'self'}
+      CONNECT_ORIGINS: ${CONNECT_ORIGINS:-}
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 512m
+    cpus: 1.0
+    stop_grace_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  gateway:
+    image: ${NGINX_IMAGE:-nginx:stable-alpine}
+    user: "101:101"
+    entrypoint: ["nginx", "-g", "daemon off;"]
+    ports: ["127.0.0.1:${LEDGERGLASS_PORT:-8080}:8080"]
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+    tmpfs: ["/tmp:rw,noexec,nosuid,size=64m"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    pids_limit: 64
+    mem_limit: 128m
+    cpus: 0.5
+    depends_on:
+      web: {condition: service_healthy}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8080/readyz"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    stop_grace_period: 20s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
