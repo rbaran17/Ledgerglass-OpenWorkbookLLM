@@ -172,3 +172,24 @@ test("native workbook data round-trips and invalid data is refused", async ({ pa
   await expect(cell(page, "A1")).toHaveAttribute("aria-label", /^A1\s*$/);
   expect(errors).toEqual([]);
 });
+
+test("XML import parses elements and entities", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "temporary");
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByText(/^Import sources/).click();
+  await page.getByLabel("Import source file").setInputFiles({
+    name: "ledger.xml",
+    mimeType: "application/xml",
+    buffer: Buffer.from(
+      '<?xml version="1.0"?><rows><row><Account>Cash &amp; bank</Account><Amount>1250.5</Amount></row><row><Account>Payables</Account><Amount>-300</Amount></row></rows>',
+    ),
+  });
+  await expect(page.getByText("1 table candidates")).toBeVisible();
+  await page.getByRole("button", { name: "Preview import", exact: true }).click();
+  await page.getByRole("button", { name: "Import reviewed table", exact: true }).click();
+  await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 Cash & bank");
+  await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 1250.5");
+  await expect(cell(page, "B3")).toHaveAttribute("aria-label", "B3 -300");
+  expect(errors).toEqual([]);
+});
