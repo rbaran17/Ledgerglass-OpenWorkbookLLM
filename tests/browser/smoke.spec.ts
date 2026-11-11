@@ -126,3 +126,18 @@ test("XLSX export can be opened again", async ({ page }) => {
   await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
+
+test("CSV import keeps quoted fields and numbers", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "temporary");
+  await page.getByLabel("Import workbook file").setInputFiles({
+    name: "ledger.csv",
+    mimeType: "text/csv",
+    buffer: Buffer.from('Account,Amount\n"Cash, operating",1250.5\nPayables,-300\n'),
+  });
+  await page.getByRole("button", { name: "Import reviewed data" }).click();
+  await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 Cash, operating");
+  await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 1250.5");
+  await expect(cell(page, "B3")).toHaveAttribute("aria-label", "B3 -300");
+  expect(errors).toEqual([]);
+});
