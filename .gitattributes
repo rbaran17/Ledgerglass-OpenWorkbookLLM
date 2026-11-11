@@ -3,5 +3,3 @@ Ledgerglass.html linguist-generated=true -diff
 dist/** linguist-generated=true -diff
 package-lock.json linguist-generated=true
 THIRD-PARTY-NOTICES.txt linguist-generated=true
-# Prebuilt worker bundles recovered from the compiled application.
-src/workers/*.min.js linguist-generated=true -diff

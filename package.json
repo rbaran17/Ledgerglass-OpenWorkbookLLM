@@ -52,6 +52,7 @@
     "@types/react-dom": "^19.1.0",
     "@vitejs/plugin-react": "^4.5.0",
     "axe-core": "4.11.1",
+    "esbuild": "0.25.12",
     "jsdom": "^26.1.0",
     "prettier": "^3.9.6",
     "typescript": "^5.8.3",

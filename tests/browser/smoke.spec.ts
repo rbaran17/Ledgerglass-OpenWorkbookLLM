@@ -107,6 +107,8 @@ test("CSV export contains the worksheet", async ({ page }) => {
 
 test("XLSX export can be opened again", async ({ page }) => {
   const errors = watchForErrors(page);
+  const workers: string[] = [];
+  page.on("worker", (w) => workers.push(w.url()));
   await open(page, "demo&temporary");
   await page.getByRole("button", { name: "File", exact: true }).click();
   const downloading = page.waitForEvent("download");
@@ -124,6 +126,7 @@ test("XLSX export can be opened again", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Open derived workbook" }).click();
   await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  expect(workers.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 
@@ -139,5 +142,33 @@ test("CSV import keeps quoted fields and numbers", async ({ page }) => {
   await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 Cash, operating");
   await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 1250.5");
   await expect(cell(page, "B3")).toHaveAttribute("aria-label", "B3 -300");
+  expect(errors).toEqual([]);
+});
+
+test("native workbook data round-trips and invalid data is refused", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  const downloading = page.waitForEvent("download");
+  await page.getByText("Save workbook data").click();
+  const saved = await readFile(await (await downloading).path(), "utf8");
+  expect(JSON.parse(saved).schemaVersion).toBe(1);
+
+  await open(page, "temporary");
+  await page.getByLabel("Import workbook file").setInputFiles({
+    name: "workbook.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(saved),
+  });
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID");
+
+  await open(page, "temporary");
+  await page.getByLabel("Import workbook file").setInputFiles({
+    name: "invalid.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(saved.replace('"sheets"', '"sheetz"')),
+  });
+  await expect(page.getByText("A workbook must contain at least one sheet.")).toBeVisible();
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", /^A1\s*$/);
   expect(errors).toEqual([]);
 });
