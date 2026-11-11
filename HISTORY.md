@@ -47,7 +47,7 @@ All prior functionality, original requirements and criteria, local closure recor
 
 [Review and remaining gaps](docs/USABILITY-ACCESSIBILITY-REVIEW.md) · [Executed evidence](docs/USABILITY-VERIFICATION.json).
 
-**Clara interface update:** coordinated navy/indigo styling, lavender-gray borders, clearer focus states and a responsive Clara example host with workbook switcher, save notifications and profile details. All implemented features and workbook formatting are retained. See [theme choices and verification](docs/CLARA-THEME.md).
+**Interface update:** coordinated navy/indigo styling, lavender-gray borders, clearer focus states and a responsive example host with workbook switcher, save notifications and profile details. All implemented features and workbook formatting are retained.
 
 A portable Excel-style workbook and embeddable React component with a provider-neutral LLM proposal interface. The worksheet fills the component: ribbon, formula bar, grid, sheet tabs and status bar, with no branded application navigation or dashboard.
 
