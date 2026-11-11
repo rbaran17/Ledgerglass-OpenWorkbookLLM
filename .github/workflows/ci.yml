@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, so newly published advisories surface without a code change.
+    - cron: "17 14 * * 2"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deployment-tests:
+    name: Web runtime tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # The runtime and its tests use Node built-ins only; no install is needed.
+      - run: npm run test:deployment
+
+  dependencies:
+    name: Lockfile and advisories
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exactly what the lockfile records
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fail on high or critical advisories in shipped dependencies
+        run: npm audit --omit=dev --audit-level=high

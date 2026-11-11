@@ -1,6 +1,10 @@
 # Ledgerglass
 
-**An embeddable, AI-connected workbook for the browser.**
+**The open-source, Excel-style workbook you can embed in any React app and connect to any LLM.**
+
+[![CI](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml/badge.svg)](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml)
+
+> **Repository status:** this repository currently holds the prebuilt application (`dist/`, `Ledgerglass.html`), the deployment runtime (`deploy/`) and the build scripts. The TypeScript source (`src/`), tests, examples and the reference documents under `docs/` are not published here yet. Until they are, commands that compile from source (`npm run dev`, `npm run build*`, `npm test`, the Docker build) and links into `docs/` will not work. See [Run the prebuilt application](#run-the-prebuilt-application) for what works today.
 
 Ledgerglass is a TypeScript/React spreadsheet component with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
 
@@ -53,6 +57,16 @@ See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement 
 
 ## Quick start
 
+### Run the prebuilt application
+
+No install step is needed; the runtime uses Node built-ins only.
+
+```sh
+STATIC_ROOT=dist PORT=4173 HOST=127.0.0.1 node deploy/server.mjs
+```
+
+Open **http://127.0.0.1:4173/** (add `?demo` or `?embedded`). Alternatively, open `Ledgerglass.html` directly in a desktop browser.
+
 ### Requirements
 
 - Node.js **22.16 or later in the Node 22 family** and npm. The SQLite connector demonstration requires Node 22.16+.
@@ -88,7 +102,7 @@ Open **http://127.0.0.1:4173/**. `npm start` serves the previously built `dist/`
 
 The portable build also creates `Ledgerglass.html`, which includes the application code and styles and can be opened directly, and `Embedded-Workbook.html`, a small launcher that opens the same file in embedded mode (keep both in one folder). Local file storage and browser coordination vary by browser; localhost or HTTPS provides the more predictable experience. Export native JSON as a portable backup.
 
-This source repository omits installed dependencies, generated bundles, portable HTML and large handoff archives. The commands above regenerate the application. Specialist validation pages have individual builders under `scripts/`; for example, after `npm run build:lib` and `npm run build`, run `node scripts/build-collaboration-host.mjs`, then `npm start` and open `/collaboration.html`.
+The prebuilt `dist/` and `Ledgerglass.html` are committed so the application can be tried without a build; installed dependencies and large handoff archives are omitted. With the source present, the commands above regenerate the application. Specialist validation pages have individual builders under `scripts/`; for example, after `npm run build:lib` and `npm run build`, run `node scripts/build-collaboration-host.mjs`, then `npm start` and open `/collaboration.html`.
 
 ## Capabilities
 
@@ -327,7 +341,7 @@ npm run verify:release
 
 The Playwright config starts a development server on port 4173 and supports `CHROME_PATH`. Close any unrelated server on that port before testing. Container checks create and remove their own disposable Compose project; Kubernetes and actual provider acceptance require separate target environments.
 
-**Recorded product evidence:** the 19 September 2026 checkpoint reports **8,734 passing tests across 326 files** and **14 deployment-server tests**. These are dated local records, not a claim that GitHub CI, Docker, Kubernetes or external LLM integration has run successfully. The manual checklist contains **3,167 templates**, with none automatically marked manually Passed. Consult the individual verification records for exact environments and exclusions.
+**Recorded product evidence:** the 19 September 2026 checkpoint reports **8,734 passing tests across 326 files** and **14 deployment-server tests** (17 today). These are dated local records, not a claim that Docker, Kubernetes or external LLM integration has run successfully; GitHub CI currently covers the deployment-server tests and a dependency audit only. The manual checklist contains **3,167 templates**, with none automatically marked manually Passed. Consult the individual verification records for exact environments and exclusions.
 
 | Validation resource | Use |
 | --- | --- |
@@ -352,12 +366,12 @@ tests/                Unit, component, integration and browser tests
 examples/             Synthetic workbooks, source fixtures and expected outputs
 docs/                 Requirements, acceptance stories, guides and evidence
 deploy/               Static runtime, React example, tests and Kubernetes templates
-.github/workflows/    Container verification workflow
+.github/workflows/    Runtime tests and dependency audit
 Dockerfile            Separate web and MCP build targets
 compose.yaml          Local gateway and scalable web service
 ```
 
-`src/generated/`, `lib/`, `dist/`, `dist-container/`, portable HTML, dependencies and scratch reports are build outputs. The repository retains the generators and source fixtures. Historical verification files may refer to the original preparation machine or packaged artifacts; those paths are evidence, not paths required by a fresh checkout.
+`src/generated/`, `lib/`, `dist/`, `dist-container/`, portable HTML, dependencies and scratch reports are build outputs. Of these, `dist/` and the portable HTML are committed for convenience. The layout above describes the complete project; see the repository status note at the top for what is published today. Historical verification files may refer to the original preparation machine or packaged artifacts; those paths are evidence, not paths required by a fresh checkout.
 
 ## Documentation
 
@@ -371,7 +385,7 @@ compose.yaml          Local gateway and scalable web service
 
 | Symptom | Check |
 | --- | --- |
-| `npm start` returns 404 | Run `npm run build:portable` first; generated distributions are not committed |
+| `npm start` fails | Its script is part of the unpublished source; use the command under [Run the prebuilt application](#run-the-prebuilt-application) |
 | SDK import cannot find `lib/` | Run `npm run build:lib`, then pack/install the complete package |
 | Worker or lazy chat load fails | Preserve generated chunks/workers and review host asset paths/CSP |
 | Blank or clipped embedded editor | Give the parent a definite height and import the package CSS |
