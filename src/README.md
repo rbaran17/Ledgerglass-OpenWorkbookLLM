@@ -14,15 +14,16 @@ compiled application in `dist/` and is now the source the build uses.
 
 - The code is formatted but not original: identifiers are the minifier's, and
   there are no types or comments.
-- `main.js` is a single module of about 162,000 lines. Module boundaries from
+- `main.js` is a single module of about 157,000 lines. Module boundaries from
   the original project are not marked.
-- React, ReactDOM, ExcelJS and Papa Parse are imported from `node_modules`, so
-  updates to them take effect on the next build.
-- The formula parser, pdf-lib, zod, fflate, the MCP SDK, the assistant UI
-  libraries and others are still inlined at the versions the original build
+- React, ReactDOM, ExcelJS, Papa Parse and zod are imported from
+  `node_modules`, so updates to them take effect on the next build.
+- The formula parser, pdf-lib, fflate, the assistant UI libraries and others
+  are still inlined at the versions the original build
   used. Updating `package.json` does not change them yet.
 - The worker bundles are opaque. They contain their own copies of the core
-  model and of several libraries.
+  model and of several libraries, including ExcelJS and zod at their original
+  versions. The MCP SDK is not part of the browser application.
 
 ## Safety net
 
