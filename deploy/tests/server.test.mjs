@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, rm, symlink, readFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { request } from 'node:http';
-import { gzipSync, gunzipSync } from 'node:zlib';
+import { brotliCompressSync, brotliDecompressSync, gzipSync, gunzipSync } from 'node:zlib';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { readConfig, startWebServer } from '../server.mjs';
@@ -78,6 +78,37 @@ test('gzip is byte-correct and q=0 explicitly opts out', async t => {
   assert.equal(plain.headers['content-encoding'], undefined);
   assert.notEqual(plain.headers.etag, response.headers.etag);
 });
+test('brotli is preferred when offered and falls back to gzip', async t => {
+  const { get, root } = await setup(t);
+  const source = 'console.log("Workbook");';
+  const path = '/assets/app-abcdef12.js';
+  const withoutSibling = await get(path, { headers: { 'Accept-Encoding': 'gzip, br' } });
+  assert.equal(withoutSibling.headers['content-encoding'], 'gzip');
+  await writeFile(join(root, 'assets/app-abcdef12.js.br'), brotliCompressSync(source));
+  const response = await get(path, { headers: { 'Accept-Encoding': 'gzip, deflate, br' } });
+  assert.equal(response.headers['content-encoding'], 'br');
+  assert.equal(Number(response.headers['content-length']), response.body.length);
+  assert.equal(brotliDecompressSync(response.body).toString(), source);
+  assert.notEqual(response.headers.etag, withoutSibling.headers.etag);
+  const refused = await get(path, { headers: { 'Accept-Encoding': 'br;q=0, gzip' } });
+  assert.equal(refused.headers['content-encoding'], 'gzip');
+  assert.equal((await get(path + '.br')).status, 404);
+});
+test('responses isolate the workbook from other origins', async t => {
+  const { get } = await setup(t);
+  for (const path of ['/', '/assets/app-abcdef12.js', '/missing.js']) {
+    const { headers } = await get(path);
+    assert.equal(headers['cross-origin-opener-policy'], 'same-origin');
+    assert.equal(headers['cross-origin-resource-policy'], 'same-origin');
+  }
+});
+test('shutdown does not wait for the keep-alive timeout', async t => {
+  const { get, runtime } = await setup(t);
+  await get('/');
+  const started = performance.now();
+  await runtime.close();
+  assert.ok(performance.now() - started < 1000);
+});
 test('CSP permits browser workers and explicitly approved embedding origins', async t => {
   const { get } = await setup(t, { frameAncestors: ["'self'", 'https://host.example'], connectOrigins: ['https://api.example'] });
   const { headers } = await get('/');
@@ -85,6 +116,7 @@ test('CSP permits browser workers and explicitly approved embedding origins', as
   assert.match(headers['content-security-policy'], /frame-ancestors 'self' https:\/\/host.example/);
   assert.match(headers['content-security-policy'], /connect-src 'self' https:\/\/api.example/);
   assert.equal(headers['x-frame-options'], undefined);
+  assert.equal(headers['cross-origin-resource-policy'], 'cross-origin');
   assert.equal(headers['x-content-type-options'], 'nosniff');
 });
 test('rejects unsupported methods and never exposes API or source files', async t => {
@@ -102,6 +134,8 @@ test('rejects traversal, malformed escapes, dotfiles and symlink escapes', async
 test('logs contain no URLs, authorization, cookies or queries', async t => {
   const { get, logs } = await setup(t);
   await get('/?workbook=private-id', { headers: { authorization: 'Bearer secret', cookie: 'session=secret' } });
+  // The entry is written when the response finishes, which can follow the client's last byte.
+  for (let attempt = 0; attempt < 100 && logs.length === 0; attempt++) await new Promise(done => setTimeout(done, 10));
   const serialized = JSON.stringify(logs);
   assert.equal(logs.length, 1);
   assert.doesNotMatch(serialized, /private-id|secret|workbook=/);
@@ -130,6 +164,7 @@ test('asset preparation creates a verifiable manifest and gzip siblings', async 
   assert.equal(manifest.files.length, 2);
   const html = await readFile(join(root, 'index.html'));
   assert.deepEqual(gunzipSync(await readFile(join(root, 'index.html.gz'))), html);
+  assert.deepEqual(brotliDecompressSync(await readFile(join(root, 'index.html.br'))), html);
 });
 test('SIGTERM exits cleanly from the actual executable runtime', async t => {
   const { root } = await setup(t);

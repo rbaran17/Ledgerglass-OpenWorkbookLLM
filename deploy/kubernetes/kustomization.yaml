@@ -5,6 +5,7 @@ resources:
   - service.yaml
   - autoscaling.yaml
   - disruption-budget.yaml
+  - network-policy.yaml
 # Replace with an approved registry image and immutable digest before deployment.
 images:
   - name: ledgerglass-workbook

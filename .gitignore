@@ -1,0 +1,15 @@
+node_modules/
+dist-container/
+work/
+test-results/
+playwright-report/
+coverage/
+*.tgz
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+deploy/container-verification.json
+.DS_Store

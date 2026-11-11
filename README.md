@@ -86,7 +86,7 @@ npm start
 
 Open **http://127.0.0.1:4173/**. `npm start` serves the previously built `dist/` directory; it does not compile the application.
 
-The portable build also creates `Ledgerglass.html` and `Embedded-Workbook.html`. These files include the application code and styles and can be opened directly. Local file storage and browser coordination vary by browser; localhost or HTTPS provides the more predictable experience. Export native JSON as a portable backup.
+The portable build also creates `Ledgerglass.html`, which includes the application code and styles and can be opened directly, and `Embedded-Workbook.html`, a small launcher that opens the same file in embedded mode (keep both in one folder). Local file storage and browser coordination vary by browser; localhost or HTTPS provides the more predictable experience. Export native JSON as a portable backup.
 
 This source repository omits installed dependencies, generated bundles, portable HTML and large handoff archives. The commands above regenerate the application. Specialist validation pages have individual builders under `scripts/`; for example, after `npm run build:lib` and `npm run build`, run `node scripts/build-collaboration-host.mjs`, then `npm start` and open `/collaboration.html`.
 
@@ -248,7 +248,7 @@ docker run --rm --read-only --cap-drop ALL \
   -p 127.0.0.1:8080:8080 ledgerglass-workbook:0.1.0
 ```
 
-The `mcp` Docker target packages the scoped stdio server separately. The web image serves immutable assets with a non-root Node runtime, readiness/health endpoints, gzip support and graceful shutdown. It does not provide authentication, workbook database storage or a model proxy.
+The `mcp` Docker target packages the scoped stdio server separately. The web image serves immutable assets with a non-root Node runtime, readiness/health endpoints, brotli and gzip support and graceful shutdown. It does not provide authentication, workbook database storage or a model proxy.
 
 ### Configuration
 

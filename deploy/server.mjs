@@ -50,13 +50,18 @@ export function readConfig(env = process.env) {
   };
 }
 
-function acceptsGzip(header = '') {
-  const encodings = header.toLowerCase().split(',').map(item => item.trim().split(';'));
-  const match = encodings.find(([name]) => name === 'gzip') ?? encodings.find(([name]) => name === '*');
-  if (!match) return false;
-  const quality = match.slice(1).find(part => part.trim().startsWith('q='));
-  const q = quality === undefined ? 1 : Number(quality.trim().slice(2));
-  return Number.isFinite(q) && q > 0 && q <= 1;
+/** Precompressed siblings in preference order; brotli is roughly a third smaller than gzip here. */
+const encodings = [['br', '.br'], ['gzip', '.gz']];
+
+function acceptedEncodings(header = '') {
+  const offered = new Map();
+  for (const item of header.toLowerCase().split(',')) {
+    const [name, ...parameters] = item.split(';').map(part => part.trim());
+    const quality = parameters.find(part => part.startsWith('q='));
+    const q = quality === undefined ? 1 : Number(quality.slice(2));
+    if (name && !offered.has(name)) offered.set(name, Number.isFinite(q) && q > 0 && q <= 1);
+  }
+  return encodings.filter(([name]) => offered.get(name) ?? offered.get('*') ?? false);
 }
 
 export async function startWebServer(options = {}) {
@@ -73,6 +78,8 @@ export async function startWebServer(options = {}) {
     "object-src 'none'", "base-uri 'none'", "form-action 'self'",
     `frame-ancestors ${config.frameAncestors.join(' ')}`,
   ].join('; ');
+  // An approved cross-origin host that enforces COEP can only frame the workbook if it opts in.
+  const resourcePolicy = config.frameAncestors.every(token => token.startsWith("'")) ? 'same-origin' : 'cross-origin';
 
   const server = createServer({ maxHeaderSize: 16 * 1024 }, async (req, res) => {
     const started = performance.now();
@@ -86,6 +93,9 @@ export async function startWebServer(options = {}) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     res.setHeader('Content-Security-Policy', csp);
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // Keep other origins from holding a window reference to, or loading resources from, the workbook.
+    res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+    res.setHeader('Cross-Origin-Resource-Policy', resourcePolicy);
     res.setHeader('Cache-Control', 'no-store');
     const reply = (status, text, contentType = 'text/plain; charset=utf-8') => {
       res.writeHead(status, { 'Content-Type': contentType, 'Content-Length': Buffer.byteLength(text) });
@@ -119,15 +129,17 @@ export async function startWebServer(options = {}) {
       let info = await stat(selected);
       if (!info.isFile()) return reply(404, 'Not found.');
       res.setHeader('Vary', 'Accept-Encoding');
-      if (acceptsGzip(req.headers['accept-encoding'])) {
+      for (const [encoding, suffix] of acceptedEncodings(req.headers['accept-encoding'])) {
         try {
-          const zipped = await realpath(file + '.gz');
-          if (zipped.startsWith(root + sep) && (await stat(zipped)).isFile()) {
-            selected = zipped; info = await stat(selected); res.setHeader('Content-Encoding', 'gzip');
-          }
+          const compressed = await realpath(file + suffix);
+          if (!compressed.startsWith(root + sep)) continue;
+          const compressedInfo = await stat(compressed);
+          if (!compressedInfo.isFile()) continue;
+          selected = compressed; info = compressedInfo; res.setHeader('Content-Encoding', encoding);
+          break;
         } catch { /* Uncompressed assets remain valid. */ }
       }
-      const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}-${selected === file ? 'raw' : 'gzip'}"`;
+      const etag = `W/"${info.size.toString(16)}-${Math.floor(info.mtimeMs).toString(16)}-${res.getHeader('Content-Encoding') ?? 'raw'}"`;
       res.setHeader('ETag', etag);
       res.setHeader('Cache-Control', path.startsWith('/assets/') && /-[\w-]{8,}\.[a-z0-9]+$/.test(path)
         ? 'public, max-age=31536000, immutable' : 'no-cache');
@@ -156,7 +168,11 @@ export async function startWebServer(options = {}) {
     draining = true;
     const deadline = setTimeout(() => server.closeAllConnections(), config.shutdownMs);
     deadline.unref();
-    server.close(error => { clearTimeout(deadline); error ? reject(error) : done(); });
+    // A connection that is finishing a response is not idle yet; keep sweeping so
+    // shutdown does not wait for the keep-alive timeout.
+    const sweep = setInterval(() => server.closeIdleConnections(), 50);
+    sweep.unref();
+    server.close(error => { clearTimeout(deadline); clearInterval(sweep); error ? reject(error) : done(); });
     server.closeIdleConnections();
   });
   return { server, close, beginDrain: () => { draining = true; }, address: server.address() };
