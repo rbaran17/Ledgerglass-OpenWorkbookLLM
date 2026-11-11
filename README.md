@@ -4,14 +4,40 @@
 
 Ledgerglass is a TypeScript/React spreadsheet component with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
 
-![Ledgerglass feature overview: workbook editing, formulas, data analysis, file interoperability, AI, embedding and deployment](docs/assets/ledgerglass-feature-overview.png)
+![Demo: general ledger, trial balance formulas, range statistics, the AI assistant panel and the embedded workbook](docs/assets/demo.gif)
 
-The illustration summarizes the feature families, including capabilities that require host integration. See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement IDs and their status.
+<sub>The synthetic audit demo (<code>?demo</code>): a general ledger, a trial balance built with <code>SUMIF</code> across sheets,
+live selection statistics, the workbook assistant scoped to the selected range, and the same workbook embedded in a host
+application (<code>?embedded</code>).</sub>
+
+**Try it in seconds:** download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a
+desktop browser. Add `?demo` to the address to load the synthetic audit workbook. The AI assistant needs a connected
+provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
+
+See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement IDs and their status.
 
 > **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. The base Excel coverage register records **70 locally accepted, 5 Partial and 1 Planned** requirements. The full product register, including audit and AI extensions, records **78 locally accepted, 19 Partial and 11 Planned**. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
 
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/assets/workbook.png" alt="Standalone workbook with ribbon, formula bar and general ledger"><br><sub><b>Workbook:</b> Excel-style ribbon, formula bar, grid and sheet tabs</sub></td>
+    <td width="50%"><img src="docs/assets/formulas.png" alt="Trial balance with a SUM formula in the formula bar"><br><sub><b>Formulas:</b> trial balance totals that reconcile to zero</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/ai-assistant.png" alt="Workbook assistant panel scoped to the selected range"><br><sub><b>AI assistant:</b> scoped to the selection; changes are proposed for review</sub></td>
+    <td><img src="docs/assets/embedded.png" alt="Workbook embedded inside a host application"><br><sub><b>Embedded:</b> the editor inside a host application</sub></td>
+  </tr>
+  <tr>
+    <td><img src="docs/assets/workbook-health.png" alt="Workbook health diagnostics dialog"><br><sub><b>Workbook health:</b> diagnostics without workbook contents</sub></td>
+    <td></td>
+  </tr>
+</table>
+
 ## Contents
 
+- [Screenshots](#screenshots)
 - [Quick start](#quick-start)
 - [Capabilities](#capabilities)
 - [Embed in React](#embed-in-react)
