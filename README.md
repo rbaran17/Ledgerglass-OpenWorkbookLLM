@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml/badge.svg)](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml)
 
-> **Repository status:** this repository currently holds the prebuilt application (`dist/`, `Ledgerglass.html`), the deployment runtime (`deploy/`) and the build scripts. The TypeScript source (`src/`), tests, examples and the reference documents under `docs/` are not published here yet. Until they are, commands that compile from source (`npm run dev`, `npm run build*`, `npm test`, the Docker build) and links into `docs/` will not work. See [Run the prebuilt application](#run-the-prebuilt-application) for what works today.
+> **Repository status:** the original TypeScript source, unit tests, examples and reference documents under `docs/` are not available. The code in `src/` was recovered from the compiled application: it is formatted and it rebuilds the same app, but identifiers are machine-generated, there are no types, and third-party libraries are still inlined. See [`src/README.md`](src/README.md) for the layout and the recovery roadmap. Working today: `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm test` and `npm run test:e2e`. Not working: the SDK build (`npm run build:lib`), the MCP server (`npm run mcp`), the Docker `mcp` target, and links into `docs/`.
 
 Ledgerglass is a TypeScript/React spreadsheet component with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
 
@@ -59,10 +59,10 @@ See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement 
 
 ### Run the prebuilt application
 
-No install step is needed; the runtime uses Node built-ins only.
+No install step is needed; the runtime uses Node built-ins only and serves the committed `dist/`.
 
 ```sh
-STATIC_ROOT=dist PORT=4173 HOST=127.0.0.1 node deploy/server.mjs
+npm start
 ```
 
 Open **http://127.0.0.1:4173/** (add `?demo` or `?embedded`). Alternatively, open `Ledgerglass.html` directly in a desktop browser.
@@ -341,7 +341,7 @@ npm run verify:release
 
 The Playwright config starts a development server on port 4173 and supports `CHROME_PATH`. Close any unrelated server on that port before testing. Container checks create and remove their own disposable Compose project; Kubernetes and actual provider acceptance require separate target environments.
 
-**Recorded product evidence:** the 19 September 2026 checkpoint reports **8,734 passing tests across 326 files** and **14 deployment-server tests** (17 today). These are dated local records, not a claim that Docker, Kubernetes or external LLM integration has run successfully; GitHub CI currently covers the deployment-server tests and a dependency audit only. The manual checklist contains **3,167 templates**, with none automatically marked manually Passed. Consult the individual verification records for exact environments and exclusions.
+**Recorded product evidence:** the 19 September 2026 checkpoint reports **8,734 passing tests across 326 files** and **14 deployment-server tests** (17 today). These are dated local records, not a claim that Docker, Kubernetes or external LLM integration has run successfully; GitHub CI covers the deployment-server tests, a dependency audit, and a build from `src/` followed by the browser checks in `tests/browser/`. The unit tests behind the recorded counts are not in this repository. The manual checklist contains **3,167 templates**, with none automatically marked manually Passed. Consult the individual verification records for exact environments and exclusions.
 
 | Validation resource | Use |
 | --- | --- |
@@ -385,7 +385,7 @@ compose.yaml          Local gateway and scalable web service
 
 | Symptom | Check |
 | --- | --- |
-| `npm start` fails | Its script is part of the unpublished source; use the command under [Run the prebuilt application](#run-the-prebuilt-application) |
+| `npm start` returns 404 | `dist/` is missing or incomplete; run `npm run build` |
 | SDK import cannot find `lib/` | Run `npm run build:lib`, then pack/install the complete package |
 | Worker or lazy chat load fails | Preserve generated chunks/workers and review host asset paths/CSP |
 | Blank or clipped embedded editor | Give the parent a definite height and import the package CSS |
