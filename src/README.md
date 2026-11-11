@@ -7,7 +7,7 @@ compiled application in `dist/` and is now the source the build uses.
 | --- | --- |
 | `main.js` | The application entry: workbook UI, core model and the third-party libraries not yet replaced by imports |
 | `assistant/` | The assistant chat panel and its Markdown renderer, loaded on demand |
-| `workers/*.min.js` | Prebuilt file-parser and calculation workers, imported as text and started as Blob workers |
+| `workers/` | File-parser and calculation worker sources, bundled at build time and started as Blob workers |
 | `styles/` | Workbook and assistant stylesheets |
 
 ## What to expect
@@ -16,14 +16,16 @@ compiled application in `dist/` and is now the source the build uses.
   there are no types or comments.
 - `main.js` is a single module of about 157,000 lines. Module boundaries from
   the original project are not marked.
-- React, ReactDOM, ExcelJS, Papa Parse and zod are imported from
-  `node_modules`, so updates to them take effect on the next build.
-- The formula parser, pdf-lib, fflate, the assistant UI libraries and others
-  are still inlined at the versions the original build
+- In `main.js`, React, ReactDOM, ExcelJS, Papa Parse and zod are imported
+  from `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse and
+  the formula parser are. Updates to these take effect on the next build.
+- In `main.js` and `assistant/`, the formula parser, pdf-lib, fflate, the
+  assistant UI libraries and others are still inlined at the versions the original build
   used. Updating `package.json` does not change them yet.
-- The worker bundles are opaque. They contain their own copies of the core
-  model and of several libraries, including ExcelJS and zod at their original
-  versions. The MCP SDK is not part of the browser application.
+- The workers (`workers/*.worker.js`) are bundled by
+  `scripts/worker-source-plugin.mjs` and contain their own copies of the core
+  model, under different minified names from `main.js`. The MCP SDK is not
+  part of the browser application.
 
 ## Safety net
 
@@ -41,6 +43,7 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 1. Replace the remaining inlined third-party libraries with imports from
    `node_modules`, one library at a time, so dependency updates take effect.
 2. Split `main.js` into modules along the original boundaries.
-3. Rebuild the workers from shared modules instead of opaque bundles.
+3. Share the core model between `main.js` and the workers instead of keeping
+   three copies.
 4. Give exported and frequently used identifiers meaningful names; add types.
 5. Grow the browser checks and add unit tests around the core model.

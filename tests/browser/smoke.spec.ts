@@ -107,6 +107,8 @@ test("CSV export contains the worksheet", async ({ page }) => {
 
 test("XLSX export can be opened again", async ({ page }) => {
   const errors = watchForErrors(page);
+  const workers: string[] = [];
+  page.on("worker", (w) => workers.push(w.url()));
   await open(page, "demo&temporary");
   await page.getByRole("button", { name: "File", exact: true }).click();
   const downloading = page.waitForEvent("download");
@@ -124,6 +126,7 @@ test("XLSX export can be opened again", async ({ page }) => {
   });
   await page.getByRole("button", { name: "Open derived workbook" }).click();
   await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  expect(workers.length).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
 

@@ -1,6 +1,6 @@
 import "./styles/workbook.css";
-import __fileParserWorkerSource from "./workers/file-parser.worker.min.js?raw";
-import __calculationWorkerSource from "./workers/calculation.worker.min.js?raw";
+import __fileParserWorkerSource from "./workers/file-parser.worker.js?worker-source";
+import __calculationWorkerSource from "./workers/calculation.worker.js?worker-source";
 import i from "react/jsx-runtime";
 import ne from "react";
 import A2e from "react-dom";
