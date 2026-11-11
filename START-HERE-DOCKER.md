@@ -4,7 +4,7 @@ This package contains the complete current workbook source, compiled React SDK, 
 
 ## Run with Docker
 
-From this `auditor-workbook` directory, with Docker Engine/Desktop and Compose v2 available:
+From the repository root, with Docker Engine/Desktop and Compose v2 available:
 
 ```sh
 docker compose up --build -d --scale web=2 --wait
