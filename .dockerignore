@@ -1,0 +1,25 @@
+# Keep the build context to what the image stages compile from.
+.git
+.github
+node_modules
+dist
+dist-container
+lib
+work
+test-results
+playwright-report
+coverage
+docs/assets
+Ledgerglass.html
+Embedded-Workbook.html
+*.tgz
+*.log
+.env
+.env.*
+**/*.pem
+**/*.key
+deploy/kubernetes
+deploy/container-verification.json
+compose.yaml
+Dockerfile
+.dockerignore

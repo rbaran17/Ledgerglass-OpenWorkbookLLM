@@ -248,7 +248,7 @@ docker run --rm --read-only --cap-drop ALL \
   -p 127.0.0.1:8080:8080 ledgerglass-workbook:0.1.0
 ```
 
-The `mcp` Docker target packages the scoped stdio server separately. The web image serves immutable assets with a non-root Node runtime, readiness/health endpoints, gzip support and graceful shutdown. It does not provide authentication, workbook database storage or a model proxy.
+The `mcp` Docker target packages the scoped stdio server separately. The web image serves immutable assets with a non-root Node runtime, readiness/health endpoints, brotli and gzip support and graceful shutdown. It does not provide authentication, workbook database storage or a model proxy.
 
 ### Configuration
 
