@@ -39,7 +39,7 @@ The example expects `/api/workbook-assistant` and `/api/workbook-sources` in **y
 | `deploy/kubernetes/` | Deployment, Service, HPA, disruption budget and optional ingress template |
 | `deploy/server.mjs`, `deploy/tests/` | Dependency-free HTTP runtime and executed runtime checks |
 | `deploy/verify-containers.mjs` | Docker build, three-replica, scale-down and MCP startup verification |
-| `.github/workflows/containers.yml` | Optional CI example; builds/tests, does not publish or deploy |
+| `.github/workflows/ci.yml` | Runs the runtime tests and a dependency audit; does not build images, publish or deploy |
 | `src/`, `lib/`, `examples/`, `tests/`, `scripts/` | Current implementation, SDK, workers, integration examples and regression tests |
 | `docs/BASE-EXCEL-COVERAGE.xlsx` | Current base Excel coverage, including remaining gaps |
 | `docs/DOCKER-AND-SCALING.md` | Deployment design, configuration, operations and developer acceptance |

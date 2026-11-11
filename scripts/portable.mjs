@@ -1,11 +1,29 @@
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 // Bundle every lazy module into the standalone file. A Vite production build may
 // contain several JS/CSS chunks, so selecting the first asset loses the app.
+// Vite's "?raw" imports (the prebuilt worker sources) are plain text to esbuild.
+const rawText = {
+  name: "raw-text",
+  setup(build) {
+    build.onResolve({ filter: /\?raw$/ }, async (args) => {
+      const resolved = await build.resolve(args.path.slice(0, -4), {
+        kind: args.kind,
+        resolveDir: args.resolveDir,
+      });
+      return { path: resolved.path, namespace: "raw-text" };
+    });
+    build.onLoad({ filter: /.*/, namespace: "raw-text" }, async (args) => ({
+      contents: await readFile(args.path, "utf8"),
+      loader: "text",
+    }));
+  },
+};
 const result = await build({
   absWorkingDir: fileURLToPath(new URL("../", import.meta.url)),
-  entryPoints: ["src/main.tsx"],
+  entryPoints: ["src/main.js"],
+  plugins: [rawText],
   outfile: "portable.js",
   bundle: true,
   splitting: false,
