@@ -1,0 +1,5 @@
+# Build outputs: collapse in diffs and keep them out of the repository's language statistics.
+Ledgerglass.html linguist-generated=true -diff
+dist/** linguist-generated=true -diff
+package-lock.json linguist-generated=true
+THIRD-PARTY-NOTICES.txt linguist-generated=true

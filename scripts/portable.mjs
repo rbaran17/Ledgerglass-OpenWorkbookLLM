@@ -26,5 +26,6 @@ const css = result.outputFiles.find(file => file.path.endsWith(".css"))?.text;
 if (!js || !css) throw new Error("Portable application is missing script or styles.");
 const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Workbook</title><style>${css.replaceAll("</style", "<\\/style")}</style></head><body style="margin:0"><div id="root"></div><script type="module">${js.replaceAll("</script", "<\\/script")}</script></body></html>`;
 await writeFile(new URL("../Ledgerglass.html", import.meta.url), html);
-await writeFile(new URL("../Embedded-Workbook.html", import.meta.url), html.replace('<html lang="en">','<html lang="en" data-mode="embedded">'));
+// The embedded edition is the same application in ?embedded mode; link to it rather than duplicate it.
+await writeFile(new URL("../Embedded-Workbook.html", import.meta.url), `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Workbook</title><script>location.replace("Ledgerglass.html?embedded"+(location.search?"&"+location.search.slice(1):"")+location.hash)<\/script><noscript><meta http-equiv="refresh" content="0;url=Ledgerglass.html?embedded"></noscript></head><body><p><a href="Ledgerglass.html?embedded">Open the embedded workbook</a> (keep Ledgerglass.html in the same folder).</p></body></html>\n`);
 console.log(`Portable application created: Ledgerglass.html (${(Buffer.byteLength(html) / 1024 / 1024).toFixed(2)} MB).`);
