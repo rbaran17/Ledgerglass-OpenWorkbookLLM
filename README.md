@@ -3,10 +3,16 @@
 **The open-source, Excel-style workbook you can run in the browser, embed in a larger web application and connect to any LLM.**
 
 [![CI](https://github.com/rbaran17/Ledgerglass/actions/workflows/ci.yml/badge.svg)](https://github.com/rbaran17/Ledgerglass/actions/workflows/ci.yml)
+[![Live demo](https://img.shields.io/badge/live%20demo-open-4f46e5)](https://rbaran17.github.io/Ledgerglass/?demo)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-> **Repository status:** the original TypeScript source, SDK build, examples and most reference documents are not available. `src/` was recovered from the compiled application and reorganised into named modules; third-party libraries are imported from `node_modules`. The repository includes unit tests and browser checks. See [`src/README.md`](src/README.md) for the layout. Commands that run today include `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm run mcp`, `npm test` and `npm run test:e2e`.
+Ledgerglass is a React spreadsheet with an Excel-style ribbon, formula bar, grid and sheet tabs, and 395 worksheet functions calculated in the browser. Use it three ways:
 
-Ledgerglass is a React spreadsheet application (JavaScript) with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
+- **Run it** as a standalone application: one HTML file, a static site, or a Docker container.
+- **Embed it** in your own React application as a component.
+- **Connect it to an LLM**: an assistant that proposes changes for review, an MCP server for one approved selection, and AG-UI / A2UI support so an agent can show a workbook itself.
+
+**[Open the live demo](https://rbaran17.github.io/Ledgerglass/?demo)** (a synthetic audit workbook; nothing leaves your browser), or download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a desktop browser with `?demo` added to the address. The AI assistant needs a connected provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
 
 ![Demo: general ledger, trial balance formulas, range statistics, the AI assistant panel and the embedded workbook](docs/assets/demo.gif)
 
@@ -14,11 +20,9 @@ Ledgerglass is a React spreadsheet application (JavaScript) with an Excel-style 
 live selection statistics, the workbook assistant scoped to the selected range, and the same workbook embedded in a host
 application (<code>?embedded</code>).</sub>
 
-**Try it in seconds:** download [`Ledgerglass.html`](Ledgerglass.html), a single self-contained file, and open it in a
-desktop browser. Add `?demo` to the address to load the synthetic audit workbook. The AI assistant needs a connected
-provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
-
 > **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
+
+> **Project status:** the original TypeScript source, SDK build, examples and most reference documents are not available. `src/` was recovered from the compiled application and reorganised into named modules; third-party libraries are imported from `node_modules`. The repository includes unit tests and browser checks. See [`src/README.md`](src/README.md) for the layout. Commands that run today include `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm run mcp`, `npm test` and `npm run test:e2e`.
 
 ## Screenshots
 

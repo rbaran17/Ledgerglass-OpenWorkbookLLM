@@ -3,7 +3,28 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Embeddable audit workbook with a provider-neutral LLM protocol",
+  "description": "Excel-style workbook for the browser: embeddable React component with formulas, XLSX import/export, an LLM assistant protocol, MCP, AG-UI and A2UI",
+  "keywords": [
+    "spreadsheet",
+    "excel",
+    "workbook",
+    "react",
+    "formulas",
+    "xlsx",
+    "llm",
+    "mcp",
+    "ag-ui",
+    "a2ui",
+    "audit"
+  ],
+  "homepage": "https://github.com/rbaran17/Ledgerglass#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rbaran17/Ledgerglass.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rbaran17/Ledgerglass/issues"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
@@ -22,7 +43,8 @@
     "build:container": "npm run build -- --outDir dist-container && node deploy/prepare-assets.mjs dist-container",
     "start:container": "node deploy/server.mjs",
     "test:deployment": "node --test deploy/tests/*.test.mjs",
-    "test:containers": "node deploy/verify-containers.mjs"
+    "test:containers": "node deploy/verify-containers.mjs",
+    "prepack": "npm run build:lib"
   },
   "dependencies": {
     "@assistant-ui/react": "0.15.33",
@@ -73,7 +95,7 @@
     "README.md",
     "LICENSE",
     "THIRD-PARTY-NOTICES.txt",
-    "docs",
+    "docs/*.md",
     "lib",
     "types",
     "scripts/mcp-stdio.mjs",
@@ -95,5 +117,8 @@
   "license": "MIT",
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
