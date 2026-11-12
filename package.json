@@ -66,10 +66,7 @@
       "import": "./lib/ledgerglass.js"
     },
     "./style.css": "./lib/ledgerglass.css",
-    "./mcp": {
-      "types": "./lib/mcp/server.d.ts",
-      "import": "./lib/mcp.js"
-    },
+    "./mcp": "./src/mcp/server.js",
     "./calculation-node": {
       "types": "./lib/integrations/node-calculation.d.ts",
       "import": "./lib/node-calculation.js"
@@ -91,6 +88,8 @@
     "LICENSE",
     "THIRD-PARTY-NOTICES.txt",
     "scripts/mcp-stdio.mjs",
+    "src/mcp",
+    "src/app",
     "deploy/ReactHost.example.tsx"
   ],
   "overrides": {

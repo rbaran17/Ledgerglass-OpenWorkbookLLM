@@ -1,3 +1,5 @@
+import { isPlainRecord } from "./19b-assistant-protocol.js";
+
 import { downloadBlobAsFile } from "./09-workbook-links.js";
 import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
@@ -549,11 +551,6 @@ class WorkbookRevisionConflictError extends Error {
 }
 const localWorkbookNamespace = "ledgerglass-local-workbook",
   maxLocalCheckpoints = 20,
-  isPlainRecord = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    Object.getPrototypeOf(e) === Object.prototype,
   cloneStructuredValue = (e) => structuredClone(e),
   measureUtf8Bytes = (e) => new TextEncoder().encode(e).byteLength;
 function throwPersistenceError(e, r, t) {

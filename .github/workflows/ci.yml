@@ -69,3 +69,31 @@ jobs:
         run: npm run test:e2e
         env:
           LEDGERGLASS_BUILD: dist-container
+
+  containers:
+    name: Container images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Build the web and MCP images
+        run: |
+          docker build --target web -t ledgerglass-web .
+          docker build --target mcp -t ledgerglass-mcp .
+      - name: Web image starts read-only, reports ready and serves the application
+        run: |
+          docker run -d --name web --read-only --cap-drop ALL \
+            --security-opt no-new-privileges:true -p 127.0.0.1:8080:8080 ledgerglass-web
+          for attempt in $(seq 1 30); do
+            curl -fsS http://127.0.0.1:8080/readyz && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/readyz
+          curl -fsS http://127.0.0.1:8080/ | grep -q 'id="root"'
+          docker rm -f web
+      - name: MCP image serves its tools over stdio
+        run: |
+          docker run --rm ledgerglass-mcp --help | grep -q "Ledgerglass MCP server"
+          docker run --rm -i --entrypoint node ledgerglass-mcp --input-type=module - < deploy/verify-mcp-image.mjs

@@ -1,3 +1,5 @@
+import { hasOnlyAllowedKeys } from "./19b-assistant-protocol.js";
+
 import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { isNullOrEmptyValue, failWithMessage } from "./03-workbook-model.js";
 import {
@@ -753,15 +755,10 @@ function inspectFormulaDependencies(e, r) {
   );
 }
 const fuzzyMatchLimits = Object.freeze({
-    fuzzyCharacters: 512,
-    comparisonWork: 1e7,
-    matchPairs: 1e3,
-  }),
-  hasOnlyAllowedKeys = (e, r) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    Object.keys(e).every((t) => r.includes(t));
+  fuzzyCharacters: 512,
+  comparisonWork: 1e7,
+  matchPairs: 1e3,
+});
 function parseKeyNormalization(e, r, t) {
   if (
     e !== undefined &&

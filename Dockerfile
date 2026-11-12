@@ -10,9 +10,6 @@ COPY . .
 FROM dependencies AS web-build
 RUN npm run build:container
 
-FROM dependencies AS sdk-build
-RUN npm run build:lib
-
 FROM ${NODE_IMAGE} AS production-dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -23,9 +20,11 @@ FROM ${NODE_IMAGE} AS mcp
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
-COPY --from=sdk-build --chown=node:node /app/lib ./lib
+# The server runs from source: the core model and assistant protocol load in plain Node.
 COPY --chown=node:node package.json LICENSE THIRD-PARTY-NOTICES.txt ./
 COPY --chown=node:node scripts/mcp-stdio.mjs ./scripts/mcp-stdio.mjs
+COPY --chown=node:node src/mcp ./src/mcp
+COPY --chown=node:node src/app ./src/app
 USER node
 ENTRYPOINT ["node", "scripts/mcp-stdio.mjs"]
 CMD ["--help"]
