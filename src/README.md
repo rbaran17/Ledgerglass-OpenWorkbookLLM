@@ -22,8 +22,13 @@ compiled application in `dist/` and is now the source the build uses.
   real name.
 - The application lives in `app/` as 57 modules, each depending only on
   lower-numbered ones; the core model is split further into twelve files
-  under `app/03-workbook-model/`. `app/56-main-worksheet-editor.js` is about
-  7,000 lines because it is essentially one very large component. Module
+  under `app/03-workbook-model/`. The main editor component,
+  `app/56-main-worksheet-editor.js` (about 3,000 lines of state, effects and
+  wiring), delegates to twenty modules under `app/56-main-worksheet-editor/`:
+  `render-*.js` build parts of the interface and `*-actions.js` hold the
+  editor's commands. Each takes what it reads from the component as one
+  explicit object, so their long parameter lists show how entangled the
+  editor's state still is. Module
   boundaries follow dependency order, not the original project's files.
 - In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, saxes, the formula parser,
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
@@ -50,8 +55,9 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-1. Break up `app/56-main-worksheet-editor.js`, a single 6,400-line component
-   that needs real refactoring rather than moving code.
+1. Reduce the coupling in `app/56-main-worksheet-editor/`: turn the render
+   functions into components and the action factories into hooks that own
+   their state, so each takes a handful of inputs instead of dozens.
 2. Share the core model between the application and the workers instead of
    keeping three copies.
 3. Review the assigned names, name the remaining locals, and add types.
