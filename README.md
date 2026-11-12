@@ -35,7 +35,13 @@ provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
     <td><img src="docs/assets/workbook-health.png" alt="Workbook health diagnostics dialog"><br><sub><b>Workbook health:</b> diagnostics without workbook contents</sub></td>
     <td></td>
   </tr>
+  <tr>
+    <td><img src="docs/assets/agent-ag-ui.png" alt="A chat in which an agent's render_workbook tool call shows a budget workbook with live formulas"><br><sub><b>Agent-rendered (AG-UI):</b> the agent calls the <code>render_workbook</code> tool and the host shows the editor</sub></td>
+    <td><img src="docs/assets/agent-a2ui.png" alt="An A2UI surface with a text heading and a Workbook component showing a budget"><br><sub><b>Agent-rendered (A2UI):</b> the agent places a <code>Workbook</code> component on a surface; edits flow back to its data</sub></td>
+  </tr>
 </table>
+
+<sub>The two agent screenshots come from a demo host that uses the official AG-UI client and A2UI React renderer with a scripted stand-in agent, not a live model. See [Showing a workbook from an agent](docs/AGENT-UI.md).</sub>
 
 ## Contents
 

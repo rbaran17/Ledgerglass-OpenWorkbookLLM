@@ -4,6 +4,12 @@ An agent can show a workbook to the user in one of two ways. Through AG-UI, the 
 
 Ledgerglass does not depend on either protocol. The host application installs the AG-UI and A2UI packages and passes its own client, renderer and `zod` to the functions in this library. What the library provides is the workbook description format, the conversion from that description to a workbook, the tool and catalog definitions, and the editor component `AgentWorkbook`. The code is written against AG-UI 1.0 (`@ag-ui/client` 1.0.4) and A2UI 1.0 (`@a2ui/react` and `@a2ui/web_core`, version 0.15.0). `npm run test:agent-ui` checks it against those packages (section 6). The package is private and not published (see `docs/LIBRARY.md`); the examples import from `@ledgerglass/workbook` as a host application would.
 
+| AG-UI: a tool call in a chat                                                                            | A2UI: a component on a surface                                                         |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| ![A chat in which an agent's render_workbook tool call shows a budget workbook](assets/agent-ag-ui.png) | ![An A2UI surface with a text heading and a Workbook component](assets/agent-a2ui.png) |
+
+Both screenshots come from a demo host that uses the official AG-UI client and A2UI React renderer with a scripted stand-in agent, not a live model.
+
 ## 1. The workbook description
 
 Both protocols carry the same description: a JSON object with a list of sheets. The table lists every field.
