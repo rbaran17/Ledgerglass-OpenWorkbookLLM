@@ -7,7 +7,7 @@ import { hz } from "./16-text-split-tools.js";
 import { Hi, IW, mS, o4e, vy } from "./42-combine-populations.js";
 
 function s4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
@@ -170,9 +170,9 @@ function s4e(e) {
               children: i.jsx(M, { children: "Clean up text" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close text cleanup"),
+              "aria-label": text("Close text cleanup"),
               onClick: e.onClose,
-              lang: t("Close text cleanup"),
+              lang: language("Close text cleanup"),
               "data-ui-label": "Close text cleanup",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -195,12 +195,12 @@ function s4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Cleanup source range"),
+                  "aria-label": text("Cleanup source range"),
                   value: s,
                   onChange: (H) => {
                     (d(H.target.value), C());
                   },
-                  lang: t("Cleanup source range"),
+                  lang: language("Cleanup source range"),
                   "data-ui-label": "Cleanup source range",
                 }),
               ],
@@ -410,8 +410,8 @@ function s4e(e) {
         B &&
           i.jsxs("section", {
             className: "ttc-preview",
-            "aria-label": r("Text cleanup preview"),
-            lang: t("Text cleanup preview"),
+            "aria-label": text("Text cleanup preview"),
+            lang: language("Text cleanup preview"),
             "data-ui-label": "Text cleanup preview",
             children: [
               i.jsxs("h3", {

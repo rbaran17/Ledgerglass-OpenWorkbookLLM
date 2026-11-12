@@ -111,23 +111,23 @@ const VB = (e) => {
 };
 function eee(e, r, t) {
   const n = e < 0 && r.sections.length > 1,
-    { parsed: o, divisor: a } =
+    { parsed, divisor } =
       r.sections[e === 0 && r.sections.length > 2 ? 2 : n ? 1 : 0];
-  if (!o.hasNumber) return o.prefix + o.suffix;
-  const s = (Math.abs(e) / a) * (o.percent ? 100 : 1);
+  if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
+  const s = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
   if (!Number.isFinite(s)) return "#NUM!";
   let d = new Intl.NumberFormat(t, {
-    minimumFractionDigits: o.minDecimals,
-    maximumFractionDigits: o.maxDecimals,
-    minimumIntegerDigits: Math.max(1, o.minIntegerDigits),
-    useGrouping: o.grouping,
+    minimumFractionDigits: parsed.minDecimals,
+    maximumFractionDigits: parsed.maxDecimals,
+    minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
+    useGrouping: parsed.grouping,
   }).format(s);
   return (
-    o.minIntegerDigits ||
-      (d === "0" && !o.minDecimals
+    parsed.minIntegerDigits ||
+      (d === "0" && !parsed.minDecimals
         ? (d = "")
         : d.startsWith(`0${VB(t)}`) && (d = d.slice(1))),
-    (e < 0 && !n ? "-" : "") + o.prefix + d + o.suffix
+    (e < 0 && !n ? "-" : "") + parsed.prefix + d + parsed.suffix
   );
 }
 function tee(e, r, t, n) {
@@ -351,8 +351,8 @@ function VL(e) {
   const r = new Map();
   for (const a of e) {
     if (!Number.isFinite(a)) return;
-    const { coefficient: s, exponent: d } = zL(a);
-    r.set(d, (r.get(d) ?? 0n) + s);
+    const { coefficient, exponent } = zL(a);
+    r.set(exponent, (r.get(exponent) ?? 0n) + coefficient);
   }
   const t = [...r].filter(([, a]) => a !== 0n);
   if (!t.length) return { coefficient: 0n, exponent: 0 };
@@ -437,11 +437,11 @@ function Zre(e, r, t) {
 }
 function Kre(e, r, t) {
   if (!Xre.has(e)) return HL;
-  const { retrieve: n, issue: o, isIssue: a } = t,
-    s = r.map(n),
-    d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : o("#NUM!"));
+  const { retrieve, issue, isIssue } = t,
+    s = r.map(retrieve),
+    d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : issue("#NUM!"));
   if (e === "SUMPRODUCT") {
-    if (!r.length || r.length > 255) return o("#VALUE!");
+    if (!r.length || r.length > 255) return issue("#VALUE!");
     const p = s.map((b) =>
         Array.isArray(b) ? (b.every(Array.isArray) ? b : [b]) : [[b]],
       ),
@@ -452,35 +452,36 @@ function Kre(e, r, t) {
       !v ||
       p.some((b) => b.length !== m || b.some((y) => y.length !== v))
     )
-      return o("#VALUE!");
-    if (m * v * p.length > 1e5) return o("#LIMIT!");
+      return issue("#VALUE!");
+    if (m * v * p.length > 1e5) return issue("#LIMIT!");
     const g = [];
     for (let b = 0; b < m; b++)
       for (let y = 0; y < v; y++) {
         const w = [];
         for (const A of p) {
           const k = A[b][y];
-          if (a(k)) return k;
+          if (isIssue(k)) return k;
           w.push(typeof k == "number" ? k : 0);
         }
         const E = WL(w);
-        if (!Number.isFinite(E)) return o("#NUM!");
+        if (!Number.isFinite(E)) return issue("#NUM!");
         g.push(E);
       }
     return d(Rc(g));
   }
-  if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2) return o("#VALUE!");
+  if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2)
+    return issue("#VALUE!");
   const u = [];
   for (const p of s) {
-    if (a(p)) return p;
+    if (isIssue(p)) return p;
     if (
       Array.isArray(p) ||
       (typeof p == "string" &&
         !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(p.trim()))
     )
-      return o("#VALUE!");
+      return issue("#VALUE!");
     const m = p == null ? 0 : Number(p);
-    if (!Number.isFinite(m)) return o("#NUM!");
+    if (!Number.isFinite(m)) return issue("#NUM!");
     u.push(m);
   }
   const [l, c = 0] = u;
@@ -497,7 +498,7 @@ function Kre(e, r, t) {
     (e === "MROUND" && Math.sign(l) !== Math.sign(c)) ||
     (e === "FLOOR" && l > 0 && c < 0)
   )
-    return o("#NUM!");
+    return issue("#NUM!");
   const h =
     e === "MROUND"
       ? "nearest"

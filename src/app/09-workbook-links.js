@@ -53,24 +53,27 @@ function yh() {
     }
   );
 }
-function Tue({ workbook: e, sources: r, onReview: t }) {
+function Tue({ workbook, sources, onReview }) {
   const n = ne.useMemo(() => {
     try {
-      const o = nT(e, { sources: r });
+      const o = nT(workbook, { sources });
       return !o.links.length && !o.unsupported.length
         ? null
         : `${o.links.length} workbook link targets · ${o.links.filter((a) => a.status !== "matches-approved-snapshot").length} need source review · ${o.unsupported.length} unsupported. Displayed linked values are cached snapshots.`;
     } catch {
       return "Workbook link inventory needs review; links exceed the supported review limit.";
     }
-  }, [e, r]);
+  }, [workbook, sources]);
   return n
     ? i.jsxs("div", {
         className: "lg-workbook-link-status",
         role: "status",
         children: [
           i.jsx("span", { children: n }),
-          i.jsx("button", { onClick: t, children: "Review workbook links" }),
+          i.jsx("button", {
+            onClick: onReview,
+            children: "Review workbook links",
+          }),
         ],
       })
     : null;
@@ -1120,11 +1123,11 @@ function Mue(e, r, t, n) {
       : "missing-sheet",
   };
 }
-const jue = ({ filename: e, blob: r }) => {
-  const t = URL.createObjectURL(r),
+const jue = ({ filename, blob }) => {
+  const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
-    (n.download = e),
+    (n.download = filename),
     n.click(),
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };

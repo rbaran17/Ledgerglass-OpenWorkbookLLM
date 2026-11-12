@@ -9,7 +9,7 @@ import { Dce, Mce, Oce, a3 } from "./16-text-split-tools.js";
 import { DW, cj, gS, vS } from "./43-text-cleanup.js";
 
 function l4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
@@ -425,9 +425,9 @@ function l4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Clean & Reshape"),
+              "aria-label": text("Close Clean & Reshape"),
               onClick: e.onClose,
-              lang: t("Close Clean & Reshape"),
+              lang: language("Close Clean & Reshape"),
               "data-ui-label": "Close Clean & Reshape",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -461,10 +461,10 @@ function l4e(e) {
                   children: [
                     i.jsx(M, { children: "Source worksheet" }),
                     i.jsx("select", {
-                      "aria-label": r("Transform source worksheet"),
+                      "aria-label": text("Transform source worksheet"),
                       value: d,
                       onChange: (Qe) => u(Qe.target.value),
-                      lang: t("Transform source worksheet"),
+                      lang: language("Transform source worksheet"),
                       "data-ui-label": "Transform source worksheet",
                       children: or.map((Qe) =>
                         i.jsx(
@@ -480,10 +480,10 @@ function l4e(e) {
                   children: [
                     i.jsx(M, { children: "Source range" }),
                     i.jsx("input", {
-                      "aria-label": r("Transform source range"),
+                      "aria-label": text("Transform source range"),
                       value: l,
                       onChange: (Qe) => c(Qe.target.value),
-                      lang: t("Transform source range"),
+                      lang: language("Transform source range"),
                       "data-ui-label": "Transform source range",
                     }),
                   ],
@@ -492,10 +492,10 @@ function l4e(e) {
                   children: [
                     i.jsx(M, { children: "Output worksheet" }),
                     i.jsx("input", {
-                      "aria-label": r("Transform output worksheet"),
+                      "aria-label": text("Transform output worksheet"),
                       value: p,
                       onChange: (Qe) => m(Qe.target.value),
-                      lang: t("Transform output worksheet"),
+                      lang: language("Transform output worksheet"),
                       "data-ui-label": "Transform output worksheet",
                     }),
                   ],
@@ -528,8 +528,8 @@ function l4e(e) {
               ],
             }),
             i.jsxs("section", {
-              "aria-label": r("Transformation recipe"),
-              lang: t("Transformation recipe"),
+              "aria-label": text("Transformation recipe"),
+              lang: language("Transformation recipe"),
               "data-ui-label": "Transformation recipe",
               children: [
                 i.jsxs("h3", {
@@ -627,10 +627,10 @@ function l4e(e) {
                   children: [
                     i.jsx(M, { children: "Operation" }),
                     i.jsx("select", {
-                      "aria-label": r("Field operation"),
+                      "aria-label": text("Field operation"),
                       value: A,
                       onChange: (Qe) => k(Qe.target.value),
-                      lang: t("Field operation"),
+                      lang: language("Field operation"),
                       "data-ui-label": "Field operation",
                       children: DW.map(([Qe, Dt]) =>
                         i.jsx("option", { value: Qe, children: Dt }, Qe),
@@ -642,11 +642,11 @@ function l4e(e) {
                   children: [
                     i.jsx(M, { children: "Field positions" }),
                     i.jsx("input", {
-                      "aria-label": r("Field positions"),
+                      "aria-label": text("Field positions"),
                       value: F,
                       onChange: (Qe) => I(Qe.target.value),
                       placeholder: "1, 3",
-                      lang: t("Field positions"),
+                      lang: language("Field positions"),
                       "data-ui-label": "Field positions",
                     }),
                   ],
@@ -656,10 +656,10 @@ function l4e(e) {
                     children: [
                       i.jsx(M, { children: "Whitespace" }),
                       i.jsxs("select", {
-                        "aria-label": r("Whitespace handling"),
+                        "aria-label": text("Whitespace handling"),
                         value: O,
                         onChange: (Qe) => j(Qe.target.value),
-                        lang: t("Whitespace handling"),
+                        lang: language("Whitespace handling"),
                         "data-ui-label": "Whitespace handling",
                         children: [
                           i.jsx("option", {
@@ -679,10 +679,10 @@ function l4e(e) {
                     children: [
                       i.jsx(M, { children: "Case" }),
                       i.jsxs("select", {
-                        "aria-label": r("Case conversion"),
+                        "aria-label": text("Case conversion"),
                         value: z,
                         onChange: (Qe) => V(Qe.target.value),
-                        lang: t("Case conversion"),
+                        lang: language("Case conversion"),
                         "data-ui-label": "Case conversion",
                         children: [
                           i.jsx("option", {
@@ -712,10 +712,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Find literal text" }),
                           i.jsx("input", {
-                            "aria-label": r("Find literal text"),
+                            "aria-label": text("Find literal text"),
                             value: D,
                             onChange: (Qe) => B(Qe.target.value),
-                            lang: t("Find literal text"),
+                            lang: language("Find literal text"),
                             "data-ui-label": "Find literal text",
                           }),
                         ],
@@ -724,10 +724,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Replace with" }),
                           i.jsx("input", {
-                            "aria-label": r("Replacement text"),
+                            "aria-label": text("Replacement text"),
                             value: _,
                             onChange: (Qe) => C(Qe.target.value),
-                            lang: t("Replacement text"),
+                            lang: language("Replacement text"),
                             "data-ui-label": "Replacement text",
                           }),
                         ],
@@ -741,10 +741,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Split mode" }),
                           i.jsxs("select", {
-                            "aria-label": r("Field split mode"),
+                            "aria-label": text("Field split mode"),
                             value: T,
                             onChange: (Qe) => N(Qe.target.value),
-                            lang: t("Field split mode"),
+                            lang: language("Field split mode"),
                             "data-ui-label": "Field split mode",
                             children: [
                               i.jsx("option", {
@@ -768,10 +768,10 @@ function l4e(e) {
                                     children: "Delimiter characters",
                                   }),
                                   i.jsx("input", {
-                                    "aria-label": r("Delimiter characters"),
+                                    "aria-label": text("Delimiter characters"),
                                     value: R,
                                     onChange: (Qe) => L(Qe.target.value),
-                                    lang: t("Delimiter characters"),
+                                    lang: language("Delimiter characters"),
                                     "data-ui-label": "Delimiter characters",
                                   }),
                                 ],
@@ -803,10 +803,10 @@ function l4e(e) {
                                 children: "Break after character positions",
                               }),
                               i.jsx("input", {
-                                "aria-label": r("Fixed-width breaks"),
+                                "aria-label": text("Fixed-width breaks"),
                                 value: G,
                                 onChange: (Qe) => H(Qe.target.value),
-                                lang: t("Fixed-width breaks"),
+                                lang: language("Fixed-width breaks"),
                                 "data-ui-label": "Fixed-width breaks",
                               }),
                             ],
@@ -818,10 +818,10 @@ function l4e(e) {
                     children: [
                       i.jsx(M, { children: "New field name" }),
                       i.jsx("input", {
-                        "aria-label": r("New field name"),
+                        "aria-label": text("New field name"),
                         value: J,
                         onChange: (Qe) => q(Qe.target.value),
-                        lang: t("New field name"),
+                        lang: language("New field name"),
                         "data-ui-label": "New field name",
                       }),
                     ],
@@ -833,10 +833,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Separator" }),
                           i.jsx("input", {
-                            "aria-label": r("Concatenation separator"),
+                            "aria-label": text("Concatenation separator"),
                             value: Q,
                             onChange: (Qe) => X$1(Qe.target.value),
-                            lang: t("Concatenation separator"),
+                            lang: language("Concatenation separator"),
                             "data-ui-label": "Concatenation separator",
                           }),
                         ],
@@ -861,10 +861,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Result type" }),
                           i.jsx("select", {
-                            "aria-label": r("Conversion type"),
+                            "aria-label": text("Conversion type"),
                             value: te,
                             onChange: (Qe) => ae(Qe.target.value),
-                            lang: t("Conversion type"),
+                            lang: language("Conversion type"),
                             "data-ui-label": "Conversion type",
                             children: [
                               "text",
@@ -882,10 +882,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Decimal separator" }),
                           i.jsxs("select", {
-                            "aria-label": r("Transform decimal separator"),
+                            "aria-label": text("Transform decimal separator"),
                             value: oe,
                             onChange: (Qe) => de(Qe.target.value),
-                            lang: t("Transform decimal separator"),
+                            lang: language("Transform decimal separator"),
                             "data-ui-label": "Transform decimal separator",
                             children: [
                               i.jsx("option", { value: ".", children: "Dot" }),
@@ -901,10 +901,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Grouping separator" }),
                           i.jsxs("select", {
-                            "aria-label": r("Transform grouping separator"),
+                            "aria-label": text("Transform grouping separator"),
                             value: he,
                             onChange: (Qe) => Se(Qe.target.value),
-                            lang: t("Transform grouping separator"),
+                            lang: language("Transform grouping separator"),
                             "data-ui-label": "Transform grouping separator",
                             children: [
                               i.jsx("option", { value: "", children: "None" }),
@@ -929,10 +929,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Slash date order" }),
                           i.jsxs("select", {
-                            "aria-label": r("Transform date order"),
+                            "aria-label": text("Transform date order"),
                             value: le,
                             onChange: (Qe) => ce(Qe.target.value),
-                            lang: t("Transform date order"),
+                            lang: language("Transform date order"),
                             "data-ui-label": "Transform date order",
                             children: [
                               i.jsx("option", {
@@ -956,10 +956,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Fill direction" }),
                           i.jsxs("select", {
-                            "aria-label": r("Fill direction"),
+                            "aria-label": text("Fill direction"),
                             value: ge,
                             onChange: (Qe) => se(Qe.target.value),
-                            lang: t("Fill direction"),
+                            lang: language("Fill direction"),
                             "data-ui-label": "Fill direction",
                             children: [
                               i.jsx("option", {
@@ -984,10 +984,10 @@ function l4e(e) {
                             children: "Group field positions (optional)",
                           }),
                           i.jsx("input", {
-                            "aria-label": r("Fill group fields"),
+                            "aria-label": text("Fill group fields"),
                             value: Te,
                             onChange: (Qe) => Pe(Qe.target.value),
-                            lang: t("Fill group fields"),
+                            lang: language("Fill group fields"),
                             "data-ui-label": "Fill group fields",
                           }),
                         ],
@@ -999,10 +999,10 @@ function l4e(e) {
                               children: [
                                 i.jsx(M, { children: "Fill type" }),
                                 i.jsxs("select", {
-                                  "aria-label": r("Fill value type"),
+                                  "aria-label": text("Fill value type"),
                                   value: Ae,
                                   onChange: (Qe) => ye(Qe.target.value),
-                                  lang: t("Fill value type"),
+                                  lang: language("Fill value type"),
                                   "data-ui-label": "Fill value type",
                                   children: [
                                     i.jsx("option", {
@@ -1025,10 +1025,10 @@ function l4e(e) {
                               children: [
                                 i.jsx(M, { children: "Fill value" }),
                                 i.jsx("input", {
-                                  "aria-label": r("Fill value"),
+                                  "aria-label": text("Fill value"),
                                   value: we,
                                   onChange: (Qe) => Ee(Qe.target.value),
-                                  lang: t("Fill value"),
+                                  lang: language("Fill value"),
                                   "data-ui-label": "Fill value",
                                 }),
                               ],
@@ -1044,10 +1044,10 @@ function l4e(e) {
                         children: [
                           i.jsx(M, { children: "Example worksheet rows" }),
                           i.jsx("input", {
-                            "aria-label": r("Inference example rows"),
+                            "aria-label": text("Inference example rows"),
                             value: qe,
                             onChange: (Qe) => ht(Qe.target.value),
-                            lang: t("Inference example rows"),
+                            lang: language("Inference example rows"),
                             "data-ui-label": "Inference example rows",
                           }),
                         ],
@@ -1058,11 +1058,11 @@ function l4e(e) {
                             children: "Expected text, one example per line",
                           }),
                           i.jsx("textarea", {
-                            "aria-label": r("Inference example values"),
+                            "aria-label": text("Inference example values"),
                             value: Re,
                             onChange: (Qe) => Me(Qe.target.value),
                             rows: 3,
-                            lang: t("Inference example values"),
+                            lang: language("Inference example values"),
                             "data-ui-label": "Inference example values",
                           }),
                         ],
@@ -1083,10 +1083,10 @@ function l4e(e) {
                           children: [
                             i.jsx(M, { children: "Choose a matching pattern" }),
                             i.jsxs("select", {
-                              "aria-label": r("Inferred pattern"),
+                              "aria-label": text("Inferred pattern"),
                               value: $e,
                               onChange: (Qe) => Je(Qe.target.value),
-                              lang: t("Inferred pattern"),
+                              lang: language("Inferred pattern"),
                               "data-ui-label": "Inferred pattern",
                               children: [
                                 i.jsx("option", {
@@ -1172,8 +1172,8 @@ function l4e(e) {
             qt &&
               i.jsxs("section", {
                 className: "fr-preview",
-                "aria-label": r("Transformation preview"),
-                lang: t("Transformation preview"),
+                "aria-label": text("Transformation preview"),
+                lang: language("Transformation preview"),
                 "data-ui-label": "Transformation preview",
                 children: [
                   i.jsx("h3", {

@@ -451,7 +451,7 @@ function Yxe(e, r, t) {
 }
 function Jxe(e) {
   var J;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = FC(),
     o = ne.useRef(null),
     a = ne.useId(),
@@ -585,9 +585,9 @@ function Jxe(e) {
               }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close automation review"),
+              "aria-label": text("Close automation review"),
               onClick: e.onClose,
-              lang: t("Close automation review"),
+              lang: language("Close automation review"),
               "data-ui-label": "Close automation review",
               children: "×",
             }),
@@ -616,13 +616,13 @@ function Jxe(e) {
                   ref: d,
                   type: "file",
                   hidden: true,
-                  "aria-label": r("Automation source file"),
+                  "aria-label": text("Automation source file"),
                   accept:
                     ".bas,.vba,.cls,.ts,.osts,.xlsm,.xlam,.xltm,.xlsx,.xltx,.xls,.xlsb",
                   onChange: (q) => {
                     return void G(q.target.files?.[0]);
                   },
-                  lang: t("Automation source file"),
+                  lang: language("Automation source file"),
                   "data-ui-label": "Automation source file",
                 }),
                 i.jsxs("label", {
@@ -783,8 +783,8 @@ function Jxe(e) {
                     children: [i.jsx(M, { children: "SHA-256: " }), c.sha256],
                   }),
                   i.jsxs("table", {
-                    "aria-label": r("Automation inventory"),
-                    lang: t("Automation inventory"),
+                    "aria-label": text("Automation inventory"),
+                    lang: language("Automation inventory"),
                     "data-ui-label": "Automation inventory",
                     children: [
                       i.jsx("thead", {
@@ -894,8 +894,8 @@ function Jxe(e) {
                           ],
                         }),
                         i.jsx("ul", {
-                          "aria-label": r("Source compatibility issues"),
-                          lang: t("Source compatibility issues"),
+                          "aria-label": text("Source compatibility issues"),
+                          lang: language("Source compatibility issues"),
                           "data-ui-label": "Source compatibility issues",
                           children: N.issues.map((q, W) =>
                             i.jsxs(
@@ -1026,8 +1026,8 @@ function Jxe(e) {
                       }),
                     }),
                   i.jsxs("table", {
-                    "aria-label": r("Migrated workbook commands"),
-                    lang: t("Migrated workbook commands"),
+                    "aria-label": text("Migrated workbook commands"),
+                    lang: language("Migrated workbook commands"),
                     "data-ui-label": "Migrated workbook commands",
                     children: [
                       i.jsx("thead", {
@@ -1069,8 +1069,8 @@ function Jxe(e) {
                     ],
                   }),
                   i.jsxs("table", {
-                    "aria-label": r("Automation change preview"),
-                    lang: t("Automation change preview"),
+                    "aria-label": text("Automation change preview"),
+                    lang: language("Automation change preview"),
                     "data-ui-label": "Automation change preview",
                     children: [
                       i.jsx("thead", {

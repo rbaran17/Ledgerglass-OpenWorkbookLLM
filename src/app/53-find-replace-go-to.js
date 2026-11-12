@@ -278,7 +278,7 @@ const qm = (e) =>
         : String(e),
   Bv = 20;
 function y2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -561,9 +561,9 @@ function y2e(e) {
             }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close Find and Replace"),
+              "aria-label": text("Close Find and Replace"),
               onClick: e.onClose,
-              lang: t("Close Find and Replace"),
+              lang: language("Close Find and Replace"),
               "data-ui-label": "Close Find and Replace",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -572,8 +572,8 @@ function y2e(e) {
         i.jsx("div", {
           className: "st-tabs",
           role: "tablist",
-          "aria-label": r("Search tools"),
-          lang: t("Search tools"),
+          "aria-label": text("Search tools"),
+          lang: language("Search tools"),
           "data-ui-label": "Search tools",
           children: [
             ["find", "Find"],
@@ -926,8 +926,8 @@ function y2e(e) {
             B &&
               i.jsxs("div", {
                 className: "st-results",
-                "aria-label": r("Find results"),
-                lang: t("Find results"),
+                "aria-label": text("Find results"),
+                lang: language("Find results"),
                 "data-ui-label": "Find results",
                 children: [
                   i.jsx("div", {
@@ -1002,10 +1002,10 @@ function y2e(e) {
                     children: [
                       i.jsx("button", {
                         type: "button",
-                        "aria-label": r("Previous results page"),
+                        "aria-label": text("Previous results page"),
                         disabled: !ye,
                         onClick: () => G(ye - 1),
-                        lang: t("Previous results page"),
+                        lang: language("Previous results page"),
                         "data-ui-label": "Previous results page",
                         children: i.jsx(M, { children: "Previous" }),
                       }),
@@ -1020,10 +1020,10 @@ function y2e(e) {
                       }),
                       i.jsx("button", {
                         type: "button",
-                        "aria-label": r("Next results page"),
+                        "aria-label": text("Next results page"),
                         disabled: ye + 1 >= Ae,
                         onClick: () => G(ye + 1),
-                        lang: t("Next results page"),
+                        lang: language("Next results page"),
                         "data-ui-label": "Next results page",
                         children: i.jsx(M, { children: "Next" }),
                       }),
@@ -1034,8 +1034,8 @@ function y2e(e) {
             N &&
               i.jsxs("div", {
                 className: "st-preview",
-                "aria-label": r("Replacement preview"),
-                lang: t("Replacement preview"),
+                "aria-label": text("Replacement preview"),
+                lang: language("Replacement preview"),
                 "data-ui-label": "Replacement preview",
                 children: [
                   i.jsx("h3", {
@@ -1128,10 +1128,10 @@ function y2e(e) {
                     children: [
                       i.jsx("button", {
                         type: "button",
-                        "aria-label": r("Previous preview page"),
+                        "aria-label": text("Previous preview page"),
                         disabled: !Pe,
                         onClick: () => Q(Pe - 1),
-                        lang: t("Previous preview page"),
+                        lang: language("Previous preview page"),
                         "data-ui-label": "Previous preview page",
                         children: i.jsx(M, { children: "Previous" }),
                       }),
@@ -1146,10 +1146,10 @@ function y2e(e) {
                       }),
                       i.jsx("button", {
                         type: "button",
-                        "aria-label": r("Next preview page"),
+                        "aria-label": text("Next preview page"),
                         disabled: Pe + 1 >= Te,
                         onClick: () => Q(Pe + 1),
-                        lang: t("Next preview page"),
+                        lang: language("Next preview page"),
                         "data-ui-label": "Next preview page",
                         children: i.jsx(M, { children: "Next" }),
                       }),
@@ -1160,8 +1160,8 @@ function y2e(e) {
             L &&
               i.jsxs("div", {
                 className: "st-preview",
-                "aria-label": r("Selection preview"),
-                lang: t("Selection preview"),
+                "aria-label": text("Selection preview"),
+                lang: language("Selection preview"),
                 "data-ui-label": "Selection preview",
                 children: [
                   i.jsx("h3", {
@@ -1308,7 +1308,7 @@ function E2e(e) {
   };
 }
 function C2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useRef(null),
     o = ne.useRef(e);
   o.current = e;
@@ -1369,7 +1369,7 @@ function C2e(e) {
                 "aria-valuemin": 20,
                 "aria-valuemax": 80,
                 "aria-disabled": e.readOnly,
-                title: r(
+                title: text(
                   "Drag or use arrow keys to resize; double-click to center",
                 ),
                 style:
@@ -1452,7 +1452,7 @@ function C2e(e) {
                 onLostPointerCapture: () => {
                   ((d.current = null), s(null));
                 },
-                lang: t(
+                lang: language(
                   "Drag or use arrow keys to resize; double-click to center",
                 ),
               },
@@ -1477,28 +1477,31 @@ function dH(e, r) {
 }
 const fH = ne.forwardRef(function (
     {
-      value: r,
-      caret: t = r.length,
-      workbook: n,
-      sheetId: o,
-      inputRef: a,
-      onAccept: s,
-      disabled: d,
-      onExit: u,
+      value,
+      caret = value.length,
+      workbook,
+      sheetId,
+      inputRef,
+      onAccept,
+      disabled,
+      onExit,
     },
     l,
   ) {
     const c = ne.useId(),
       h = ne.useRef(null),
-      f = ne.useMemo(() => Lme(r, t, n, o), [r, t, n, o]),
+      f = ne.useMemo(
+        () => Lme(value, caret, workbook, sheetId),
+        [value, caret, workbook, sheetId],
+      ),
       [p, m] = ne.useState(-1),
       [v, g] = ne.useState(null),
       [b, y] = ne.useState(false),
       [w, E] = ne.useState({ left: 0, top: 0, width: 280 }),
-      A = `${r}:${t}`,
-      k = !d && b && v !== A && (f.items.length > 0 || f.hint);
+      A = `${value}:${caret}`,
+      k = !disabled && b && v !== A && (f.items.length > 0 || f.hint);
     (ne.useEffect(() => {
-      const I = a.current;
+      const I = inputRef.current;
       if (!I) return;
       const O = ["aria-autocomplete", "aria-controls", "aria-activedescendant"],
         j = O.map((z) => I.getAttribute(z));
@@ -1516,10 +1519,10 @@ const fH = ne.forwardRef(function (
             j[V] === null ? I.removeAttribute(z) : I.setAttribute(z, j[V]),
           )
       );
-    }, [k, p, f.items.length, a, c]),
+    }, [k, p, f.items.length, inputRef, c]),
       ne.useEffect(() => m(-1), [A]),
       ne.useEffect(() => {
-        const I = a.current;
+        const I = inputRef.current;
         if (!I) return;
         const O = () => {
             var V;
@@ -1554,7 +1557,7 @@ const fH = ne.forwardRef(function (
               window.removeEventListener("scroll", O, true));
           }
         );
-      }, [a]),
+      }, [inputRef]),
       ne.useEffect(() => {
         if (!k || p < 0) return;
         const I = document.getElementById(`${c}-${p}`),
@@ -1570,15 +1573,16 @@ const fH = ne.forwardRef(function (
       var z;
       const O = f.items[I];
       if (!O) return;
-      (z = a.current) == null || z.focus({ preventScroll: true });
-      const j = Pme(r, O);
-      (s(j.value, j.caret),
+      (z = inputRef.current) == null || z.focus({ preventScroll: true });
+      const j = Pme(value, O);
+      (onAccept(j.value, j.caret),
         m(-1),
         g(null),
         requestAnimationFrame(() => {
           var V, D;
-          ((V = a.current) == null || V.focus(),
-            (D = a.current) == null || D.setSelectionRange(j.caret, j.caret));
+          ((V = inputRef.current) == null || V.focus(),
+            (D = inputRef.current) == null ||
+              D.setSelectionRange(j.caret, j.caret));
         }));
     };
     return (
@@ -1600,7 +1604,9 @@ const fH = ne.forwardRef(function (
                   !I.shiftKey &&
                   p < 0 &&
                   f.items.length &&
-                  /[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?$/.test(r.slice(0, t))
+                  /[A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?$/.test(
+                    value.slice(0, caret),
+                  )
                 ? (I.preventDefault(), F(0), true)
                 : (I.key === "Tab" || I.key === "Enter") && p >= 0 && f.items[p]
                   ? (I.preventDefault(), F(p), true)
@@ -1619,8 +1625,8 @@ const fH = ne.forwardRef(function (
               "aria-label": "Formula assistance",
               onBlur: (I) => {
                 I.currentTarget.contains(I.relatedTarget) ||
-                  I.relatedTarget === a.current ||
-                  (y(false), u == null || u());
+                  I.relatedTarget === inputRef.current ||
+                  (y(false), onExit == null || onExit());
               },
               style: { position: "fixed", ...w },
               children: [
@@ -1651,7 +1657,7 @@ const fH = ne.forwardRef(function (
                             : (I.key === "Escape" || I.key === "Tab") &&
                               (I.preventDefault(),
                               I.key === "Escape" && g(A),
-                              (O = a.current) == null || O.focus()));
+                              (O = inputRef.current) == null || O.focus()));
                     },
                     children: f.items.map((I, O) =>
                       i.jsxs(
@@ -1821,8 +1827,8 @@ function R2e(e, r, t, n, o = false, a = "1900") {
     d = Object.fromEntries([...s].map((l) => [String(l), Og(e)])),
     u = new Set();
   for (const [l, c] of Object.entries(vx(e, t))) {
-    const { col: h } = _t(l);
-    if (!s.has(h)) continue;
+    const { col } = _t(l);
+    if (!s.has(col)) continue;
     const f = gH(e, l, c, t, o, a);
     if (!f && !c.note && !c.tickmark) continue;
     const p = pH(c),
@@ -1837,7 +1843,8 @@ function R2e(e, r, t, n, o = false, a = "1900") {
     let v = 0;
     for (const b of m) v = Math.max(v, mH(b, p, n));
     const g = hH(Math.ceil(v + vH(c, n)), ux, cx);
-    ((d[String(h)] = u.has(h) ? Math.max(d[String(h)], g) : g), u.add(h));
+    ((d[String(col)] = u.has(col) ? Math.max(d[String(col)], g) : g),
+      u.add(col));
   }
   return d;
 }
@@ -1881,18 +1888,19 @@ function _2e(e, r, t, n, o = false, a = "1900") {
     d = Object.fromEntries([...s].map((l) => [String(l), Dg(e)])),
     u = new Set();
   for (const [l, c] of Object.entries(vx(e, t))) {
-    const { row: h, col: f } = _t(l);
-    if (!s.has(h)) continue;
+    const { row, col } = _t(l);
+    if (!s.has(row)) continue;
     const p = gH(e, l, c, t, o, a);
     if (!p && !ys(c.style).fontSize) continue;
     const m = pH(c),
       g = (ys(c.style).fontSize ? (ys(c.style).fontSize * 4) / 3 : 14) * S2e,
       b = hB(c.style).vertical,
       y = Math.ceil((Ig - b) / g),
-      w = Math.max(1, Ip(e, f) - vH(c, n)),
+      w = Math.max(1, Ip(e, col) - vH(c, n)),
       E = ys(c.style).wrap ? I2e(p, w, m, n, y) : 1,
       A = hH(Math.ceil(Math.max(20, E * g) + b), b1, Ig);
-    ((d[String(h)] = u.has(h) ? Math.max(d[String(h)], A) : A), u.add(h));
+    ((d[String(row)] = u.has(row) ? Math.max(d[String(row)], A) : A),
+      u.add(row));
   }
   return d;
 }

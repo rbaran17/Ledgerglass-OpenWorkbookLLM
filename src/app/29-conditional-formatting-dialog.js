@@ -32,20 +32,20 @@ function sfe(e) {
         : i.jsx(lfe, { ...e });
 }
 function lfe({
-  mode: e,
-  workbook: r,
-  sheetId: t,
-  range: n,
-  readOnly: o,
-  onClose: a,
-  onWorkbookChange: s,
+  mode,
+  workbook,
+  sheetId,
+  range,
+  readOnly,
+  onClose,
+  onWorkbookChange,
 }) {
   var Ae, Pe, qe, ht;
-  const { text: d, language: u } = Dr(),
-    l = r.sheets.find((Re) => Re.id === t),
-    c = n.split(":")[0],
-    [h, f] = ne.useState(e === "duplicates" && n === c ? Ta(l) : n),
-    [p, m] = ne.useState(e === "conditional" ? "greater" : "list"),
+  const { text, language } = Dr(),
+    l = workbook.sheets.find((Re) => Re.id === sheetId),
+    c = range.split(":")[0],
+    [h, f] = ne.useState(mode === "duplicates" && range === c ? Ta(l) : range),
+    [p, m] = ne.useState(mode === "conditional" ? "greater" : "list"),
     [v, g] = ne.useState(""),
     [b, y] = ne.useState("100"),
     [w, E] = ne.useState("#fff2cc"),
@@ -107,19 +107,21 @@ function lfe({
       insertColumn: "Insert / Delete Columns",
     },
     ce = (Re, Me) => {
-      (s(Re, Me), a());
+      (onWorkbookChange(Re, Me), onClose());
     };
   async function ge() {
     var Re, Me;
     (H(""), q(true));
     try {
-      if (o && e !== "spelling") throw Error("This workbook is read-only.");
-      if (e === "merge") ce(kE(r, t, h, false), "Merge cells");
-      else if (e === "paint") ce(qQ(r, t, c, W), "Paint cell formatting");
-      else if (e === "protection") {
+      if (readOnly && mode !== "spelling")
+        throw Error("This workbook is read-only.");
+      if (mode === "merge") ce(kE(workbook, sheetId, h, false), "Merge cells");
+      else if (mode === "paint")
+        ce(qQ(workbook, sheetId, c, W), "Paint cell formatting");
+      else if (mode === "protection") {
         const ke = await HQ(
-          r,
-          t,
+          workbook,
+          sheetId,
           T,
           !((Re = l.protection) != null && Re.enabled),
         );
@@ -129,7 +131,7 @@ function lfe({
             ? "Unprotect sheet"
             : "Protect sheet",
         );
-      } else if (e === "conditional") {
+      } else if (mode === "conditional") {
         if (
           ["greater", "less", "between"].includes(p) &&
           (!v.trim() ||
@@ -148,9 +150,9 @@ function lfe({
         };
         ce(
           {
-            ...r,
-            sheets: r.sheets.map((je) =>
-              je.id === t
+            ...workbook,
+            sheets: workbook.sheets.map((je) =>
+              je.id === sheetId
                 ? {
                     ...je,
                     conditionalFormats: [...(je.conditionalFormats ?? []), ke],
@@ -160,7 +162,7 @@ function lfe({
           },
           "Add conditional formatting",
         );
-      } else if (e === "validation") {
+      } else if (mode === "validation") {
         const ke = {
           id: crypto.randomUUID(),
           range: CE(h),
@@ -177,16 +179,16 @@ function lfe({
         };
         ce(
           {
-            ...r,
-            sheets: r.sheets.map((je) =>
-              je.id === t
+            ...workbook,
+            sheets: workbook.sheets.map((je) =>
+              je.id === sheetId
                 ? { ...je, validations: [...(je.validations ?? []), ke] }
                 : je,
             ),
           },
           "Add data validation",
         );
-      } else if (e === "duplicates") {
+      } else if (mode === "duplicates") {
         const ke = ct(h),
           je =
             _ ??
@@ -194,34 +196,34 @@ function lfe({
               { length: ke.lastCol - ke.firstCol + 1 },
               (Je, ze) => ke.firstCol + ze,
             ),
-          $e = WQ(r, t, h, je, D);
+          $e = WQ(workbook, sheetId, h, je, D);
         if (!$e.removed) {
           X$1("No duplicate rows found.");
           return;
         }
         ce($e.workbook, `Remove ${$e.removed} duplicate rows from selection`);
-      } else if (e === "insertRow" || e === "insertColumn") {
+      } else if (mode === "insertRow" || mode === "insertColumn") {
         const ke = ct(h),
           je = {
-            axis: e === "insertRow" ? "row" : "column",
-            index: e === "insertRow" ? ke.firstRow : ke.firstCol,
+            axis: mode === "insertRow" ? "row" : "column",
+            index: mode === "insertRow" ? ke.firstRow : ke.firstCol,
             count: R,
             remove: $,
           };
         ce(
-          LC(r, t, je),
+          LC(workbook, sheetId, je),
           `${$ ? "Delete" : "Insert"} ${R} ${je.axis}${R === 1 ? "" : "s"}`,
         );
-      } else if (e === "spelling") {
-        if (o) throw Error("This workbook is read-only.");
+      } else if (mode === "spelling") {
+        if (readOnly) throw Error("This workbook is read-only.");
         const ke = ae[oe];
         if (!ke) throw Error("No text cells in the selected range.");
         const je = { ...l.cells, [ke[0]]: { ...ke[1], raw: he } };
         ce(
-          hR(r, {
-            ...r,
-            sheets: r.sheets.map(($e) =>
-              $e.id === t ? { ...$e, cells: je } : $e,
+          hR(workbook, {
+            ...workbook,
+            sheets: workbook.sheets.map(($e) =>
+              $e.id === sheetId ? { ...$e, cells: je } : $e,
             ),
           }),
           `Spelling correction at ${ke[0]}`,
@@ -241,7 +243,7 @@ function lfe({
   try {
     se = ct(h);
   } catch {
-    se = ct(n);
+    se = ct(range);
   }
   const we =
     se.lastCol - se.firstCol < 100
@@ -253,17 +255,18 @@ function lfe({
   return i.jsx("div", {
     className: "wt-backdrop",
     onPointerDown: (Re) => {
-      Re.target === Re.currentTarget && a();
+      Re.target === Re.currentTarget && onClose();
     },
     children: i.jsxs("div", {
       className: "wt-dialog",
       ref: te,
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": le[e] ?? e,
+      "aria-label": le[mode] ?? mode,
       onKeyDown: (Re) => {
         if (
-          (Re.key === "Escape" && (Re.stopPropagation(), a()), Re.key === "Tab")
+          (Re.key === "Escape" && (Re.stopPropagation(), onClose()),
+          Re.key === "Tab")
         ) {
           const ke = Array.from(
               te.current?.querySelectorAll(
@@ -285,13 +288,13 @@ function lfe({
             i.jsxs("span", {
               children: [
                 i.jsx(Grid2x2, { size: 19 }),
-                i.jsx("h2", { children: le[e] ?? e }),
+                i.jsx("h2", { children: le[mode] ?? mode }),
               ],
             }),
             i.jsx("button", {
-              "aria-label": d("Close worksheet tool"),
-              onClick: a,
-              lang: u("Close worksheet tool"),
+              "aria-label": text("Close worksheet tool"),
+              onClick: onClose,
+              lang: language("Close worksheet tool"),
               "data-ui-label": "Close worksheet tool",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -300,23 +303,23 @@ function lfe({
         i.jsxs("div", {
           className: "wt-body",
           children: [
-            e !== "protection" &&
-              e !== "paint" &&
+            mode !== "protection" &&
+              mode !== "paint" &&
               i.jsxs("label", {
                 children: [
                   i.jsx(M, { children: "Range" }),
                   i.jsx("input", {
-                    "aria-label": d("Tool range"),
+                    "aria-label": text("Tool range"),
                     value: h,
                     onChange: (Re) => {
                       (f(Re.target.value), C(null));
                     },
-                    lang: u("Tool range"),
+                    lang: language("Tool range"),
                     "data-ui-label": "Tool range",
                   }),
                 ],
               }),
-            e === "paint" &&
+            mode === "paint" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("p", {
@@ -333,11 +336,11 @@ function lfe({
                     children: [
                       i.jsx(M, { children: "Apply to range" }),
                       i.jsx("input", {
-                        "aria-label": d("Format destination"),
+                        "aria-label": text("Format destination"),
                         value: W,
                         onChange: (Re) => K(Re.target.value),
-                        placeholder: d("B2:D10"),
-                        lang: u("Format destination"),
+                        placeholder: text("B2:D10"),
+                        lang: language("Format destination"),
                         "data-ui-label": "Format destination",
                       }),
                     ],
@@ -351,7 +354,7 @@ function lfe({
                   }),
                 ],
               }),
-            e === "merge" &&
+            mode === "merge" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -362,10 +365,10 @@ function lfe({
                   }),
                   i.jsx("button", {
                     className: "wt-secondary",
-                    disabled: o,
+                    disabled: readOnly,
                     onClick: () => {
                       try {
-                        ce(kE(r, t, h, true), "Unmerge cells");
+                        ce(kE(workbook, sheetId, h, true), "Unmerge cells");
                       } catch (Re) {
                         H(String(Re));
                       }
@@ -374,17 +377,17 @@ function lfe({
                   }),
                 ],
               }),
-            e === "conditional" &&
+            mode === "conditional" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("label", {
                     children: [
                       i.jsx(M, { children: "Rule" }),
                       i.jsxs("select", {
-                        "aria-label": d("Conditional rule"),
+                        "aria-label": text("Conditional rule"),
                         value: p,
                         onChange: (Re) => m(Re.target.value),
-                        lang: u("Conditional rule"),
+                        lang: language("Conditional rule"),
                         "data-ui-label": "Conditional rule",
                         children: [
                           i.jsx("option", {
@@ -424,10 +427,10 @@ function lfe({
                       children: [
                         i.jsx(M, { children: "Value" }),
                         i.jsx("input", {
-                          "aria-label": d("Conditional value"),
+                          "aria-label": text("Conditional value"),
                           value: v,
                           onChange: (Re) => g(Re.target.value),
-                          lang: u("Conditional value"),
+                          lang: language("Conditional value"),
                           "data-ui-label": "Conditional value",
                         }),
                       ],
@@ -437,10 +440,10 @@ function lfe({
                       children: [
                         i.jsx(M, { children: "Maximum" }),
                         i.jsx("input", {
-                          "aria-label": d("Conditional maximum"),
+                          "aria-label": text("Conditional maximum"),
                           value: b,
                           onChange: (Re) => y(Re.target.value),
-                          lang: u("Conditional maximum"),
+                          lang: language("Conditional maximum"),
                           "data-ui-label": "Conditional maximum",
                         }),
                       ],
@@ -453,10 +456,10 @@ function lfe({
                           i.jsx(M, { children: "Fill" }),
                           i.jsx("input", {
                             type: "color",
-                            "aria-label": d("Conditional fill"),
+                            "aria-label": text("Conditional fill"),
                             value: w,
                             onChange: (Re) => E(Re.target.value),
-                            lang: u("Conditional fill"),
+                            lang: language("Conditional fill"),
                             "data-ui-label": "Conditional fill",
                           }),
                         ],
@@ -466,10 +469,10 @@ function lfe({
                           i.jsx(M, { children: "Text" }),
                           i.jsx("input", {
                             type: "color",
-                            "aria-label": d("Conditional color"),
+                            "aria-label": text("Conditional color"),
                             value: A,
                             onChange: (Re) => k(Re.target.value),
-                            lang: u("Conditional color"),
+                            lang: language("Conditional color"),
                             "data-ui-label": "Conditional color",
                           }),
                         ],
@@ -493,13 +496,13 @@ function lfe({
                             children: [Re.range, " · ", Re.kind],
                           }),
                           i.jsx("button", {
-                            disabled: o,
+                            disabled: readOnly,
                             onClick: () =>
                               ce(
                                 {
-                                  ...r,
-                                  sheets: r.sheets.map((Me) => {
-                                    return Me.id === t
+                                  ...workbook,
+                                  sheets: workbook.sheets.map((Me) => {
+                                    return Me.id === sheetId
                                       ? {
                                           ...Me,
                                           conditionalFormats:
@@ -521,17 +524,17 @@ function lfe({
                   ),
                 ],
               }),
-            e === "validation" &&
+            mode === "validation" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("label", {
                     children: [
                       i.jsx(M, { children: "Allow" }),
                       i.jsxs("select", {
-                        "aria-label": d("Validation type"),
+                        "aria-label": text("Validation type"),
                         value: p,
                         onChange: (Re) => m(Re.target.value),
-                        lang: u("Validation type"),
+                        lang: language("Validation type"),
                         "data-ui-label": "Validation type",
                         children: [
                           i.jsx("option", { value: "list", children: "List" }),
@@ -560,10 +563,10 @@ function lfe({
                       children: [
                         i.jsx(M, { children: "Condition" }),
                         i.jsxs("select", {
-                          "aria-label": d("Validation operator"),
+                          "aria-label": text("Validation operator"),
                           value: F,
                           onChange: (Re) => I(Re.target.value),
-                          lang: u("Validation operator"),
+                          lang: language("Validation operator"),
                           "data-ui-label": "Validation operator",
                           children: [
                             i.jsx("option", {
@@ -592,12 +595,12 @@ function lfe({
                         ? "Values, separated by commas"
                         : "Minimum / comparison value",
                       i.jsx("input", {
-                        "aria-label": d("Validation values"),
+                        "aria-label": text("Validation values"),
                         value: v,
                         onChange: (Re) => g(Re.target.value),
                         placeholder:
                           p === "list" ? "Pending, Complete, Reviewed" : "0",
-                        lang: u("Validation values"),
+                        lang: language("Validation values"),
                         "data-ui-label": "Validation values",
                       }),
                     ],
@@ -608,10 +611,10 @@ function lfe({
                       children: [
                         i.jsx(M, { children: "Maximum" }),
                         i.jsx("input", {
-                          "aria-label": d("Validation maximum"),
+                          "aria-label": text("Validation maximum"),
                           value: b,
                           onChange: (Re) => y(Re.target.value),
-                          lang: u("Validation maximum"),
+                          lang: language("Validation maximum"),
                           "data-ui-label": "Validation maximum",
                         }),
                       ],
@@ -631,10 +634,10 @@ function lfe({
                     children: [
                       i.jsx(M, { children: "Error message" }),
                       i.jsx("input", {
-                        "aria-label": d("Validation message"),
+                        "aria-label": text("Validation message"),
                         value: z,
                         onChange: (Re) => V(Re.target.value),
-                        lang: u("Validation message"),
+                        lang: language("Validation message"),
                         "data-ui-label": "Validation message",
                       }),
                     ],
@@ -649,13 +652,13 @@ function lfe({
                             children: [Re.range, " · ", Re.kind],
                           }),
                           i.jsx("button", {
-                            disabled: o,
+                            disabled: readOnly,
                             onClick: () =>
                               ce(
                                 {
-                                  ...r,
-                                  sheets: r.sheets.map((Me) => {
-                                    return Me.id === t
+                                  ...workbook,
+                                  sheets: workbook.sheets.map((Me) => {
+                                    return Me.id === sheetId
                                       ? {
                                           ...Me,
                                           validations: Me.validations?.filter(
@@ -676,7 +679,7 @@ function lfe({
                   ),
                 ],
               }),
-            e === "duplicates" &&
+            mode === "duplicates" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("label", {
@@ -736,7 +739,7 @@ function lfe({
                   }),
                 ],
               }),
-            e === "protection" &&
+            mode === "protection" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("p", {
@@ -755,11 +758,11 @@ function lfe({
                         : "Password (optional)",
                       i.jsx("input", {
                         type: "password",
-                        "aria-label": d("Sheet password"),
+                        "aria-label": text("Sheet password"),
                         value: T,
                         onChange: (Re) => N(Re.target.value),
                         autoComplete: "new-password",
-                        lang: u("Sheet password"),
+                        lang: language("Sheet password"),
                         "data-ui-label": "Sheet password",
                       }),
                     ],
@@ -773,17 +776,17 @@ function lfe({
                   }),
                 ],
               }),
-            (e === "insertRow" || e === "insertColumn") &&
+            (mode === "insertRow" || mode === "insertColumn") &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("label", {
                     children: [
                       i.jsx(M, { children: "Operation" }),
                       i.jsxs("select", {
-                        "aria-label": d("Structure operation"),
+                        "aria-label": text("Structure operation"),
                         value: $ ? "delete" : "insert",
                         onChange: (Re) => U(Re.target.value === "delete"),
-                        lang: u("Structure operation"),
+                        lang: language("Structure operation"),
                         "data-ui-label": "Structure operation",
                         children: [
                           i.jsx("option", {
@@ -804,10 +807,10 @@ function lfe({
                       i.jsx(ci, {
                         min: "1",
                         max: "10000",
-                        "aria-label": d("Structure count"),
+                        "aria-label": text("Structure count"),
                         value: R,
                         onValueChange: (Re) => L(Number(Re)),
-                        lang: u("Structure count"),
+                        lang: language("Structure count"),
                         "data-ui-label": "Structure count",
                       }),
                     ],
@@ -821,7 +824,7 @@ function lfe({
                   }),
                 ],
               }),
-            e === "spelling" &&
+            mode === "spelling" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("p", {
@@ -841,13 +844,13 @@ function lfe({
                             children: [
                               i.jsx(M, { children: "Cell" }),
                               i.jsx("select", {
-                                "aria-label": d("Spelling cell"),
+                                "aria-label": text("Spelling cell"),
                                 value: oe,
                                 onChange: (Re) => {
                                   const Me = Number(Re.target.value);
                                   (de(Me), Se(String(ae[Me][1].raw)));
                                 },
-                                lang: u("Spelling cell"),
+                                lang: language("Spelling cell"),
                                 "data-ui-label": "Spelling cell",
                                 children: ae.map(([Re], Me) =>
                                   i.jsx(
@@ -860,13 +863,13 @@ function lfe({
                             ],
                           }),
                           i.jsx("textarea", {
-                            "aria-label": d("Spelling text"),
+                            "aria-label": text("Spelling text"),
                             spellCheck: true,
                             autoCorrect: "on",
                             value: he,
                             onChange: (Re) => Se(Re.target.value),
-                            readOnly: o,
-                            lang: u("Spelling text"),
+                            readOnly,
+                            lang: language("Spelling text"),
                             "data-ui-label": "Spelling text",
                           }),
                         ],
@@ -894,18 +897,18 @@ function lfe({
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: a,
+              onClick: onClose,
               children: i.jsx(M, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "wt-primary",
-              disabled: J || o,
+              disabled: J || readOnly,
               onClick: () => void ge(),
               children: J
                 ? "Applying…"
-                : e === "spelling"
+                : mode === "spelling"
                   ? "Save correction"
-                  : e === "protection"
+                  : mode === "protection"
                     ? (ht = l.protection) != null && ht.enabled
                       ? "Unprotect"
                       : "Protect"
@@ -918,15 +921,17 @@ function lfe({
   });
 }
 function ufe({
-  workbook: e,
-  sheetId: r,
-  tableId: t,
-  context: n,
-  readOnly: o,
-  onWorkbookChange: a,
+  workbook,
+  sheetId,
+  tableId,
+  context,
+  readOnly,
+  onWorkbookChange,
 }) {
-  const { text: s, language: d } = Dr(),
-    u = e.sheets.find((T) => T.id === r).tables.find((T) => T.id === t),
+  const { text, language } = Dr(),
+    u = workbook.sheets
+      .find((T) => T.id === sheetId)
+      .tables.find((T) => T.id === tableId),
     [l, c] = ne.useState(u.columns[0].id),
     [h, f] = ne.useState(u.columns[0].dataType ?? "any"),
     [p, m] = ne.useState("convert"),
@@ -937,16 +942,17 @@ function ufe({
     [F, I] = ne.useState(""),
     [O, j] = ne.useState(0),
     z = { columnId: l, dataType: h, mode: p, invalid: v, decimal: b, group: w },
-    V = JSON.stringify({ context: n, request: z }),
-    D = !!A && (A.context !== V || A.plan.snapshot !== JSON.stringify(e)),
+    V = JSON.stringify({ context, request: z }),
+    D =
+      !!A && (A.context !== V || A.plan.snapshot !== JSON.stringify(workbook)),
     B = ne.useMemo(() => {
       try {
-        return Gne(e, r, t, l);
+        return Gne(workbook, sheetId, tableId, l);
       } catch {
         return null;
       }
-    }, [e, r, t, l]),
-    _ = e.tableEvidence?.filter((T) => T.tableId === t) ?? [];
+    }, [workbook, sheetId, tableId, l]),
+    _ = workbook.tableEvidence?.filter((T) => T.tableId === tableId) ?? [];
   return i.jsxs("details", {
     children: [
       i.jsx("summary", {
@@ -964,7 +970,7 @@ function ufe({
             children: [
               i.jsx(M, { children: "Typed column" }),
               i.jsx("select", {
-                "aria-label": s("Typed column"),
+                "aria-label": text("Typed column"),
                 value: l,
                 onChange: (T) => {
                   (c(T.target.value),
@@ -974,7 +980,7 @@ function ufe({
                     ),
                     k(null));
                 },
-                lang: d("Typed column"),
+                lang: language("Typed column"),
                 "data-ui-label": "Typed column",
                 children: u.columns.map((T) =>
                   i.jsx("option", { value: T.id, children: T.name }, T.id),
@@ -983,8 +989,8 @@ function ufe({
             ],
           }),
           i.jsxs("p", {
-            "aria-label": s("Current column type"),
-            lang: d("Current column type"),
+            "aria-label": text("Current column type"),
+            lang: language("Current column type"),
             "data-ui-label": "Current column type",
             children: [
               i.jsx(M, { children: "Saved type: " }),
@@ -1023,10 +1029,10 @@ function ufe({
             children: [
               i.jsx(M, { children: "Column type" }),
               i.jsx("select", {
-                "aria-label": s("Column type"),
+                "aria-label": text("Column type"),
                 value: h,
                 onChange: (T) => f(T.target.value),
-                lang: d("Column type"),
+                lang: language("Column type"),
                 "data-ui-label": "Column type",
                 children: TP.map((T) =>
                   i.jsx(
@@ -1124,11 +1130,14 @@ function ufe({
           F && i.jsx("p", { role: "alert", children: F }),
           i.jsx("button", {
             type: "button",
-            disabled: o,
+            disabled: readOnly,
             onClick: () => {
               (I(""), j(0), k(null));
               try {
-                k({ plan: RP(e, r, t, z, { readOnly: o }), context: V });
+                k({
+                  plan: RP(workbook, sheetId, tableId, z, { readOnly }),
+                  context: V,
+                });
               } catch (T) {
                 I(T.message);
               }
@@ -1137,9 +1146,9 @@ function ufe({
           }),
           A &&
             i.jsxs("section", {
-              "aria-label": s("Column type preview"),
+              "aria-label": text("Column type preview"),
               className: "lg-table-preview",
-              lang: d("Column type preview"),
+              lang: language("Column type preview"),
               "data-ui-label": "Column type preview",
               children: [
                 i.jsx("h3", {
@@ -1230,13 +1239,14 @@ function ufe({
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: o || D || !A.plan.canApply,
+                  disabled: readOnly || D || !A.plan.canApply,
                   onClick: () => {
                     I("");
                     try {
                       if (D) throw Error("Preview again.");
-                      const T = Zne(e, A.plan, { readOnly: o });
-                      (T !== e && a(T, "Apply reviewed table column type"),
+                      const T = Zne(workbook, A.plan, { readOnly });
+                      (T !== workbook &&
+                        onWorkbookChange(T, "Apply reviewed table column type"),
                         k(null));
                     } catch (T) {
                       I(T.message);
@@ -1297,15 +1307,15 @@ function ufe({
   });
 }
 function cfe({
-  fields: e,
-  groups: r,
-  dateGroups: t,
-  setDateGroups: n,
-  calculatedFields: o,
-  setCalculatedFields: a,
-  onAdd: s,
+  fields,
+  groups,
+  dateGroups,
+  setDateGroups,
+  calculatedFields,
+  setCalculatedFields,
+  onAdd,
 }) {
-  const { text: d } = Dr();
+  const { text } = Dr();
   return i.jsxs(i.Fragment, {
     children: [
       i.jsxs("details", {
@@ -1319,8 +1329,8 @@ function cfe({
                 "Choose year, quarter or month for selected row/column fields. ISO requires YYYY-MM-DD text. Numeric dates require an explicit 1900 or 1904 date system.",
             }),
           }),
-          [...new Set(r)].map((u) => {
-            const l = t.find((c) => c.field === u);
+          [...new Set(groups)].map((u) => {
+            const l = dateGroups.find((c) => c.field === u);
             return i.jsxs(
               "div",
               {
@@ -1335,8 +1345,8 @@ function cfe({
                         "aria-label": `Date grouping ${u}`,
                         value: l?.unit ?? "",
                         onChange: (c) =>
-                          n([
-                            ...t.filter((h) => h.field !== u),
+                          setDateGroups([
+                            ...dateGroups.filter((h) => h.field !== u),
                             ...(c.target.value
                               ? [
                                   {
@@ -1373,8 +1383,8 @@ function cfe({
                         i.jsxs("select", {
                           value: l.dateSystem,
                           onChange: (c) =>
-                            n(
-                              t.map((h) =>
+                            setDateGroups(
+                              dateGroups.map((h) =>
                                 h.field === u
                                   ? { ...h, dateSystem: c.target.value }
                                   : h,
@@ -1415,8 +1425,11 @@ function cfe({
                 "Each calculation uses source-field sums within each group and total. These are aggregate calculations. Use a table calculated column for arithmetic on individual records. Choose sum in Value fields.",
             }),
           }),
-          o.map((u, l) => {
-            const c = (h) => a(o.map((f, p) => (l === p ? { ...f, ...h } : f)));
+          calculatedFields.map((u, l) => {
+            const c = (h) =>
+              setCalculatedFields(
+                calculatedFields.map((f, p) => (l === p ? { ...f, ...h } : f)),
+              );
             return i.jsxs(
               "fieldset",
               {
@@ -1442,7 +1455,7 @@ function cfe({
                       i.jsx("select", {
                         value: u.field,
                         onChange: (h) => c({ field: h.target.value }),
-                        children: e.map((h) =>
+                        children: fields.map((h) =>
                           i.jsx("option", { children: h }, h),
                         ),
                       }),
@@ -1468,8 +1481,8 @@ function cfe({
                       i.jsxs("select", {
                         value: u.otherField ?? "",
                         onChange: (h) =>
-                          a(
-                            o.map((f, p) =>
+                          setCalculatedFields(
+                            calculatedFields.map((f, p) =>
                               p !== l
                                 ? f
                                 : {
@@ -1487,7 +1500,9 @@ function cfe({
                             value: "",
                             children: "Numeric constant",
                           }),
-                          e.map((h) => i.jsx("option", { children: h }, h)),
+                          fields.map((h) =>
+                            i.jsx("option", { children: h }, h),
+                          ),
                         ],
                       }),
                     ],
@@ -1498,7 +1513,7 @@ function cfe({
                         i.jsx(M, { children: "Calculation constant " }),
                         l + 1,
                         i.jsx(ci, {
-                          "aria-label": d("Calculation constant ") + (l + 1),
+                          "aria-label": text("Calculation constant ") + (l + 1),
                           value: Number.isFinite(u.constant) ? u.constant : "",
                           onValueChange: (h) =>
                             c({ constant: h === "" ? NaN : Number(h) }),
@@ -1507,7 +1522,10 @@ function cfe({
                     }),
                   i.jsxs("button", {
                     type: "button",
-                    onClick: () => a(o.filter((h, f) => f !== l)),
+                    onClick: () =>
+                      setCalculatedFields(
+                        calculatedFields.filter((h, f) => f !== l),
+                      ),
                     children: [
                       i.jsx(M, { children: "Remove calculation " }),
                       l + 1,
@@ -1520,26 +1538,26 @@ function cfe({
           }),
           i.jsx("button", {
             type: "button",
-            disabled: !e.length || o.length >= 100,
+            disabled: !fields.length || calculatedFields.length >= 100,
             onClick: () => {
               let u = 1;
               for (
                 ;
-                e.includes(`Calculated${u}`) ||
-                o.some((c) => c.name === `Calculated${u}`);
+                fields.includes(`Calculated${u}`) ||
+                calculatedFields.some((c) => c.name === `Calculated${u}`);
               )
                 u++;
               const l = `Calculated${u}`;
-              (a([
-                ...o,
+              (setCalculatedFields([
+                ...calculatedFields,
                 {
                   name: l,
-                  field: e.at(-1),
+                  field: fields.at(-1),
                   operation: "multiply",
                   constant: 1,
                 },
               ]),
-                s(l));
+                onAdd(l));
             },
             children: i.jsx(M, { children: "Add calculated pivot field" }),
           }),
@@ -1548,8 +1566,8 @@ function cfe({
     ],
   });
 }
-function BI({ workbook: e, pivotId: r, compact: t = false }) {
-  const n = ne.useMemo(() => HP(e, r), [e, r]),
+function BI({ workbook, pivotId, compact = false }) {
+  const n = ne.useMemo(() => HP(workbook, pivotId), [workbook, pivotId]),
     o = n.definition,
     a = o.refresh;
   return i.jsxs("section", {
@@ -1593,7 +1611,7 @@ function BI({ workbook: e, pivotId: r, compact: t = false }) {
             }),
           ],
         }),
-      !t &&
+      !compact &&
         a &&
         i.jsxs(i.Fragment, {
           children: [
@@ -1647,20 +1665,20 @@ function BI({ workbook: e, pivotId: r, compact: t = false }) {
     ],
   });
 }
-function dfe({ workbook: e, sheetId: r, onOpen: t, onExplore: n }) {
-  const { text: o, language: a } = Dr(),
-    s = e.sheets.find((u) => u.id === r)?.pivots ?? [];
+function dfe({ workbook, sheetId, onOpen, onExplore }) {
+  const { text, language } = Dr(),
+    s = workbook.sheets.find((u) => u.id === sheetId)?.pivots ?? [];
   return s.length
     ? i.jsxs("div", {
         className: "lg-pivot-status-bar",
-        "aria-label": o("Pivot result freshness"),
-        lang: a("Pivot result freshness"),
+        "aria-label": text("Pivot result freshness"),
+        lang: language("Pivot result freshness"),
         "data-ui-label": "Pivot result freshness",
         children: [
           s
             .slice(0, 3)
             .map((u) =>
-              i.jsx(BI, { workbook: e, pivotId: u.id, compact: true }, u.id),
+              i.jsx(BI, { workbook, pivotId: u.id, compact: true }, u.id),
             ),
           s.length > 3 &&
             i.jsxs("p", {
@@ -1675,13 +1693,13 @@ function dfe({ workbook: e, sheetId: r, onOpen: t, onExplore: n }) {
             }),
           i.jsx("button", {
             type: "button",
-            onClick: t,
+            onClick: onOpen,
             children: i.jsx(M, { children: "Review / refresh PivotTable" }),
           }),
-          n &&
+          onExplore &&
             i.jsx("button", {
               type: "button",
-              onClick: n,
+              onClick: onExplore,
               children: i.jsx(M, { children: "Filter / explore PivotTable" }),
             }),
         ],

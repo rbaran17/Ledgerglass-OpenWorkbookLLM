@@ -31,7 +31,7 @@ import { Ej, Wm, wS } from "./48-format-cells-and-move.js";
 
 function j4e(e) {
   var z;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
@@ -149,9 +149,9 @@ function j4e(e) {
             }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close outline tools"),
+              "aria-label": text("Close outline tools"),
               onClick: e.onClose,
-              lang: t("Close outline tools"),
+              lang: language("Close outline tools"),
               "data-ui-label": "Close outline tools",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -188,12 +188,12 @@ function j4e(e) {
                   children: [
                     i.jsx(M, { children: "Group by" }),
                     i.jsxs("select", {
-                      "aria-label": r("Outline axis"),
+                      "aria-label": text("Outline axis"),
                       value: d,
                       onChange: (V) => {
                         (u(V.target.value), c(0), f(""));
                       },
-                      lang: t("Outline axis"),
+                      lang: language("Outline axis"),
                       "data-ui-label": "Outline axis",
                       children: [
                         i.jsx("option", { value: "row", children: "Rows" }),
@@ -429,7 +429,7 @@ function F4e(e) {
 const Cj = (e) => new Date(e).toLocaleString();
 function B4e(e) {
   var he, Se;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -593,9 +593,9 @@ function B4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close review tools"),
+              "aria-label": text("Close review tools"),
               onClick: e.onClose,
-              lang: t("Close review tools"),
+              lang: language("Close review tools"),
               "data-ui-label": "Close review tools",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -604,8 +604,8 @@ function B4e(e) {
         i.jsx("div", {
           className: "rv-tabs",
           role: "tablist",
-          "aria-label": r("Review tools"),
-          lang: t("Review tools"),
+          "aria-label": text("Review tools"),
+          lang: language("Review tools"),
           "data-ui-label": "Review tools",
           children: ["comments", "hyperlink"].map((se, we) =>
             i.jsxs(
@@ -700,12 +700,12 @@ function B4e(e) {
                       children: [
                         i.jsx(M, { children: "Show discussions" }),
                         i.jsxs("select", {
-                          "aria-label": r("Show discussions"),
+                          "aria-label": text("Show discussions"),
                           value: f,
                           onChange: (se) => {
                             (p(se.target.value), v(0), b(""), F(""));
                           },
-                          lang: t("Show discussions"),
+                          lang: language("Show discussions"),
                           "data-ui-label": "Show discussions",
                           children: [
                             i.jsx("option", {
@@ -733,8 +733,8 @@ function B4e(e) {
                       children: [
                         i.jsxs("div", {
                           className: "rv-thread-list",
-                          "aria-label": r("Discussions"),
-                          lang: t("Discussions"),
+                          "aria-label": text("Discussions"),
+                          lang: language("Discussions"),
                           "data-ui-label": "Discussions",
                           children: [
                             !G.length &&
@@ -826,8 +826,8 @@ function B4e(e) {
                           className: "rv-thread-detail",
                           children: H
                             ? i.jsxs("section", {
-                                "aria-label": r("Selected discussion"),
-                                lang: t("Selected discussion"),
+                                "aria-label": text("Selected discussion"),
+                                lang: language("Selected discussion"),
                                 "data-ui-label": "Selected discussion",
                                 children: [
                                   i.jsxs("div", {
@@ -990,14 +990,14 @@ function B4e(e) {
                                           children: [
                                             i.jsx(M, { children: "Reply" }),
                                             i.jsx("textarea", {
-                                              "aria-label": r("Reply"),
+                                              "aria-label": text("Reply"),
                                               rows: 3,
                                               maxLength: Jl.textLength,
                                               value: k,
                                               disabled: X$1,
                                               onChange: (se) =>
                                                 F(se.target.value),
-                                              lang: t("Reply"),
+                                              lang: language("Reply"),
                                               "data-ui-label": "Reply",
                                             }),
                                           ],
@@ -1043,13 +1043,13 @@ function B4e(e) {
                             "!",
                             u,
                             i.jsx("textarea", {
-                              "aria-label": r("New comment"),
+                              "aria-label": text("New comment"),
                               rows: 3,
                               maxLength: Jl.textLength,
                               value: E,
                               disabled: $,
                               onChange: (se) => A(se.target.value),
-                              lang: t("New comment"),
+                              lang: language("New comment"),
                               "data-ui-label": "New comment",
                             }),
                           ],
@@ -1117,11 +1117,11 @@ function B4e(e) {
                           children: [
                             i.jsx(M, { children: "Link type" }),
                             i.jsxs("select", {
-                              "aria-label": r("Link type"),
+                              "aria-label": text("Link type"),
                               value: j,
                               disabled: $,
                               onChange: (se) => z(se.target.value),
-                              lang: t("Link type"),
+                              lang: language("Link type"),
                               "data-ui-label": "Link type",
                               children: [
                                 i.jsx("option", {
@@ -1141,16 +1141,16 @@ function B4e(e) {
                               children: [
                                 i.jsx(M, { children: "Address" }),
                                 i.jsx("input", {
-                                  "aria-label": r("Link address"),
+                                  "aria-label": text("Link address"),
                                   type: "text",
                                   value: V,
                                   disabled: $,
-                                  placeholder: r(
+                                  placeholder: text(
                                     "https://example.com/evidence",
                                   ),
                                   maxLength: Jl.urlLength,
                                   onChange: (se) => D(se.target.value),
-                                  lang: t("Link address"),
+                                  lang: language("Link address"),
                                   "data-ui-label": "Link address",
                                 }),
                               ],
@@ -1162,11 +1162,11 @@ function B4e(e) {
                                   children: [
                                     i.jsx(M, { children: "Worksheet" }),
                                     i.jsx("select", {
-                                      "aria-label": r("Link worksheet"),
+                                      "aria-label": text("Link worksheet"),
                                       value: B,
                                       disabled: $,
                                       onChange: (se) => _(se.target.value),
-                                      lang: t("Link worksheet"),
+                                      lang: language("Link worksheet"),
                                       "data-ui-label": "Link worksheet",
                                       children: e.workbook.sheets.map((se) =>
                                         i.jsxs(
@@ -1188,12 +1188,12 @@ function B4e(e) {
                                   children: [
                                     i.jsx(M, { children: "Cell address" }),
                                     i.jsx("input", {
-                                      "aria-label": r("Link cell address"),
+                                      "aria-label": text("Link cell address"),
                                       value: C,
                                       maxLength: 12,
                                       disabled: $,
                                       onChange: (se) => T(se.target.value),
-                                      lang: t("Link cell address"),
+                                      lang: language("Link cell address"),
                                       "data-ui-label": "Link cell address",
                                     }),
                                   ],
@@ -1204,12 +1204,12 @@ function B4e(e) {
                           children: [
                             i.jsx(M, { children: "Display text (optional)" }),
                             i.jsx("input", {
-                              "aria-label": r("Link display text"),
+                              "aria-label": text("Link display text"),
                               value: N,
                               disabled: $,
                               maxLength: Jl.labelLength,
                               onChange: (se) => R(se.target.value),
-                              lang: t("Link display text"),
+                              lang: language("Link display text"),
                               "data-ui-label": "Link display text",
                             }),
                           ],
@@ -1217,8 +1217,8 @@ function B4e(e) {
                         K &&
                           i.jsxs("div", {
                             className: "rv-link-preview",
-                            "aria-label": r("Link preview"),
-                            lang: t("Link preview"),
+                            "aria-label": text("Link preview"),
+                            lang: language("Link preview"),
                             "data-ui-label": "Link preview",
                             children: [
                               i.jsx(Link2, { size: 15 }),
@@ -1234,8 +1234,8 @@ function B4e(e) {
                                     href: K.url,
                                     target: "_blank",
                                     rel: "noopener noreferrer",
-                                    "aria-label": r("Open link preview"),
-                                    lang: t("Open link preview"),
+                                    "aria-label": text("Open link preview"),
+                                    lang: language("Open link preview"),
                                     "data-ui-label": "Open link preview",
                                     children: [
                                       i.jsx(ExternalLink, { size: 15 }),

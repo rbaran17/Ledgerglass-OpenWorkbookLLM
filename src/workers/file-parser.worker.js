@@ -3012,9 +3012,9 @@ function Ow(e) {
 }
 function Mw(e) {
   if (!e) return {};
-  let { binding: t, ...n } = e;
-  if (!t) return n;
-  let i = t.missing ? {} : t.base,
+  let { binding, ...n } = e;
+  if (!binding) return n;
+  let i = binding.missing ? {} : binding.base,
     r = { ...i, ...n };
   return (
     Object.hasOwn(n, "border")
@@ -3739,7 +3739,7 @@ function qo(e, t) {
       ...Vo(t === "row" ? e.hiddenRows : e.hiddenCols, n),
       ...(e.outlineGroups ?? [])
         .filter((o) => o.axis === t && o.collapsed)
-        .map(({ start: o, end: a }) => ({ start: o, end: a })),
+        .map(({ start, end }) => ({ start, end })),
     ].sort((o, a) => o.start - a.start || o.end - a.end),
     r = [];
   for (let o of i) {
@@ -4731,23 +4731,23 @@ var iC = (e) =>
     ?.value ?? ".";
 function ED(e, t, n) {
   let i = e < 0 && t.sections.length > 1,
-    { parsed: r, divisor: o } =
+    { parsed, divisor } =
       t.sections[e === 0 && t.sections.length > 2 ? 2 : i ? 1 : 0];
-  if (!r.hasNumber) return r.prefix + r.suffix;
-  let a = (Math.abs(e) / o) * (r.percent ? 100 : 1);
+  if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
+  let a = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
   if (!Number.isFinite(a)) return "#NUM!";
   let s = new Intl.NumberFormat(n, {
-    minimumFractionDigits: r.minDecimals,
-    maximumFractionDigits: r.maxDecimals,
-    minimumIntegerDigits: Math.max(1, r.minIntegerDigits),
-    useGrouping: r.grouping,
+    minimumFractionDigits: parsed.minDecimals,
+    maximumFractionDigits: parsed.maxDecimals,
+    minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
+    useGrouping: parsed.grouping,
   }).format(a);
   return (
-    r.minIntegerDigits ||
-      (s === "0" && !r.minDecimals
+    parsed.minIntegerDigits ||
+      (s === "0" && !parsed.minDecimals
         ? (s = "")
         : s.startsWith(`0${iC(n)}`) && (s = s.slice(1))),
-    (e < 0 && !i ? "-" : "") + r.prefix + s + r.suffix
+    (e < 0 && !i ? "-" : "") + parsed.prefix + s + parsed.suffix
   );
 }
 function SD(e, t, n, i) {
@@ -4903,8 +4903,8 @@ function FI(e) {
   let t = new Map();
   for (let o of e) {
     if (!Number.isFinite(o)) return;
-    let { coefficient: a, exponent: s } = UI(o);
-    t.set(s, (t.get(s) ?? 0n) + a);
+    let { coefficient, exponent } = UI(o);
+    t.set(exponent, (t.get(exponent) ?? 0n) + coefficient);
   }
   let n = [...t].filter(([, o]) => o !== 0n);
   if (!n.length) return { coefficient: 0n, exponent: 0 };
@@ -4989,11 +4989,11 @@ function nj(e, t, n) {
 }
 function BI(e, t, n) {
   if (!tj.has(e)) return u2;
-  let { retrieve: i, issue: r, isIssue: o } = n,
-    a = t.map(i),
-    s = (f) => (Number.isFinite(f) ? (f === 0 ? 0 : f) : r("#NUM!"));
+  let { retrieve, issue, isIssue } = n,
+    a = t.map(retrieve),
+    s = (f) => (Number.isFinite(f) ? (f === 0 ? 0 : f) : issue("#NUM!"));
   if (e === "SUMPRODUCT") {
-    if (!t.length || t.length > 255) return r("#VALUE!");
+    if (!t.length || t.length > 255) return issue("#VALUE!");
     let f = a.map((g) =>
         Array.isArray(g) ? (g.every(Array.isArray) ? g : [g]) : [[g]],
       ),
@@ -5004,35 +5004,36 @@ function BI(e, t, n) {
       !h ||
       f.some((g) => g.length !== p || g.some((b) => b.length !== h))
     )
-      return r("#VALUE!");
-    if (p * h * f.length > 1e5) return r("#LIMIT!");
+      return issue("#VALUE!");
+    if (p * h * f.length > 1e5) return issue("#LIMIT!");
     let m = [];
     for (let g = 0; g < p; g++)
       for (let b = 0; b < h; b++) {
         let w = [];
         for (let S of f) {
           let O = S[g][b];
-          if (o(O)) return O;
+          if (isIssue(O)) return O;
           w.push(typeof O == "number" ? O : 0);
         }
         let _ = Nm(w);
-        if (!Number.isFinite(_)) return r("#NUM!");
+        if (!Number.isFinite(_)) return issue("#NUM!");
         m.push(_);
       }
     return s(oi(m));
   }
-  if (t.length < (e === "TRUNC" ? 1 : 2) || t.length > 2) return r("#VALUE!");
+  if (t.length < (e === "TRUNC" ? 1 : 2) || t.length > 2)
+    return issue("#VALUE!");
   let l = [];
   for (let f of a) {
-    if (o(f)) return f;
+    if (isIssue(f)) return f;
     if (
       Array.isArray(f) ||
       (typeof f == "string" &&
         !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(f.trim()))
     )
-      return r("#VALUE!");
+      return issue("#VALUE!");
     let p = f == null ? 0 : Number(f);
-    if (!Number.isFinite(p)) return r("#NUM!");
+    if (!Number.isFinite(p)) return issue("#NUM!");
     l.push(p);
   }
   let [c, u = 0] = l;
@@ -5045,7 +5046,7 @@ function BI(e, t, n) {
     (e === "MROUND" && Math.sign(c) !== Math.sign(u)) ||
     (e === "FLOOR" && c > 0 && u < 0)
   )
-    return r("#NUM!");
+    return issue("#NUM!");
   let d =
     e === "MROUND"
       ? "nearest"
@@ -7033,9 +7034,9 @@ function dj(e, t) {
 }
 function fj(e) {
   let t = 0;
-  for (let { refersTo: n } of e) {
+  for (let { refersTo } of e) {
     let i = Co(
-      n.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
+      refersTo.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
     );
     for (let r of i.matchAll(
       /(?:^|[^A-Za-z0-9_.])((?:\$?[A-Za-z]{1,3}\$?[1-9]\d*)(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?)(?![A-Za-z0-9_.])/g,
@@ -8286,7 +8287,7 @@ function j2(e, t) {
               Number(o.sourceRevision) < 0) &&
               ut("Invalid analysis identity or source revision."),
             i.add(s));
-          let { destination: c, ...u } = a;
+          let { destination, ...u } = a;
           return {
             ...u,
             id: s,
@@ -8340,9 +8341,9 @@ function Hm(e, t, n, i) {
     h && g && (o = { sheet: h, table: g });
   }
   if (!o) return null;
-  let { sheet: a, table: s } = o,
-    l = Qe(s.range),
-    c = Hj(s),
+  let { sheet, table } = o,
+    l = Qe(table.range),
+    c = Hj(table),
     u = r[2]
       .replace(/^\[|\]$/g, "")
       .replace(/[\[\]]/g, "")
@@ -8365,11 +8366,11 @@ function Hm(e, t, n, i) {
     d === "#headers" && Object.assign(c, l, { lastRow: l.firstRow }),
     d === "#totals")
   ) {
-    if (!s.showTotals) return null;
+    if (!table.showTotals) return null;
     Object.assign(c, l, { firstRow: l.lastRow });
   }
   if (f) {
-    if (!i || a.id !== t) return null;
+    if (!i || sheet.id !== t) return null;
     let h = tt(i);
     if (h.row < c.firstRow || h.row > c.lastRow) return null;
     ((c.firstRow = h.row), (c.lastRow = h.row));
@@ -8378,7 +8379,7 @@ function Hm(e, t, n, i) {
   if (p.length) {
     if (p.length > 2) return null;
     let h = p.map((m) =>
-      s.columns.findIndex((g) => g.name.toLowerCase() === m.toLowerCase()),
+      table.columns.findIndex((g) => g.name.toLowerCase() === m.toLowerCase()),
     );
     if (h.some((m) => m < 0)) return null;
     ((c.firstCol = l.firstCol + Math.min(...h)),
@@ -8387,7 +8388,7 @@ function Hm(e, t, n, i) {
   return c.firstRow > c.lastRow
     ? null
     : {
-        sheetId: a.id,
+        sheetId: sheet.id,
         range: `${qm(c.firstRow, c.firstCol)}:${qm(c.lastRow, c.lastCol)}`,
       };
 }
@@ -9085,21 +9086,21 @@ function Y5(e, t = {}) {
   for (let l of e.sheets) s.set(l.id, Oa(l.rowCount, qo(l, "row")));
   return (l, c, u) => {
     if (!H2.includes(l)) return G2;
-    let { issue: d, isIssue: f } = u,
+    let { issue, isIssue } = u,
       p = (D) => {
-        if (f(D)) throw D;
-        if (!Bs(D) || !Bs(D.ref)) throw d("#VALUE!");
+        if (isIssue(D)) throw D;
+        if (!Bs(D) || !Bs(D.ref)) throw issue("#VALUE!");
         let W = D.ref;
         if (W.sheet !== undefined && typeof W.sheet != "string")
-          throw d("#REF!");
+          throw issue("#REF!");
         let $ = r.get(
           String(W.sheet ?? u.currentSheetName ?? "").toLowerCase(),
         );
-        if (!$) throw d("#REF!");
+        if (!$) throw issue("#REF!");
         let M = Bs(W.from) ? W.from : W,
           B = Bs(W.to) ? W.to : W,
           V = [M.row, M.col, B.row, B.col];
-        if (V.some((Q) => !Number.isInteger(Q))) throw d("#REF!");
+        if (V.some((Q) => !Number.isInteger(Q))) throw issue("#REF!");
         let [G, H, K, te] = V;
         if (
           G < 1 ||
@@ -9109,11 +9110,11 @@ function Y5(e, t = {}) {
           K > $.rowCount ||
           te > $.colCount
         )
-          throw d("#REF!");
+          throw issue("#REF!");
         return { sheet: $, firstRow: G, lastRow: K, firstCol: H, lastCol: te };
       };
     if (l === "FORMULATEXT" || l === "ISFORMULA") {
-      if (c.length !== 1) return d("#VALUE!");
+      if (c.length !== 1) return issue("#VALUE!");
       let D = p(c[0]),
         W = (M, B) => {
           let V = `${Ue(B - 1)}${M}`;
@@ -9121,11 +9122,11 @@ function Y5(e, t = {}) {
         };
       if (l === "FORMULATEXT") {
         let M = W(D.firstRow, D.firstCol);
-        return Km(M) && M.raw.length <= 8192 ? M.raw : d("#N/A");
+        return Km(M) && M.raw.length <= 8192 ? M.raw : issue("#N/A");
       }
       let $ = (D.lastRow - D.firstRow + 1) * (D.lastCol - D.firstCol + 1);
       return $ > 1e4
-        ? d("#LIMIT!")
+        ? issue("#LIMIT!")
         : $ === 1
           ? Km(W(D.firstRow, D.firstCol))
           : Array.from({ length: D.lastRow - D.firstRow + 1 }, (M, B) =>
@@ -9135,31 +9136,31 @@ function Y5(e, t = {}) {
             );
     }
     let h = l === "AGGREGATE";
-    if (c.length < (h ? 3 : 2) || c.length > 255) return d("#VALUE!");
+    if (c.length < (h ? 3 : 2) || c.length > 255) return issue("#VALUE!");
     let m = (D) => {
         let W = u.retrieve(D);
-        if (f(W)) throw W;
+        if (isIssue(W)) throw W;
         if (
           Array.isArray(W) ||
           !["number", "string", "boolean"].includes(typeof W) ||
           (typeof W == "string" && W.trim() === "") ||
           !Number.isFinite(Number(W))
         )
-          throw d("#VALUE!");
+          throw issue("#VALUE!");
         return Number(W);
       },
       g = m(c[0]);
-    if (h && !Number.isInteger(g)) return d("#VALUE!");
+    if (h && !Number.isInteger(g)) return issue("#VALUE!");
     let b = Math.trunc(g),
       w = !h && b > 100 ? b - 100 : b;
-    if (w < 1 || w > (h ? 19 : 11)) return d("#VALUE!");
+    if (w < 1 || w > (h ? 19 : 11)) return issue("#VALUE!");
     let _ = h ? (c[1] == null ? 0 : m(c[1])) : 0;
-    if (!Number.isInteger(_) || _ < 0 || _ > 7) return d("#VALUE!");
+    if (!Number.isInteger(_) || _ < 0 || _ > 7) return issue("#VALUE!");
     let S = h ? _ % 2 === 1 : b > 100,
       O = h && [2, 3, 6, 7].includes(_),
       E = !h || _ < 4,
       R = h && w >= 14;
-    if (R && (c.length !== 4 || c[3] == null)) return d("#VALUE!");
+    if (R && (c.length !== 4 || c[3] == null)) return issue("#VALUE!");
     let I = R ? m(c[3]) : 0,
       U = R ? [c[2]] : c.slice(h ? 2 : 1),
       T = R && !((D) => Bs(D) && Bs(D.ref))(U[0]),
@@ -9167,12 +9168,13 @@ function Y5(e, t = {}) {
       L = 0;
     for (let D of A) {
       let W = (D.lastRow - D.firstRow + 1) * (D.lastCol - D.firstCol + 1);
-      if (((L += W), W > 2e4 || L > 1e5)) return d("#LIMIT!");
+      if (((L += W), W > 2e4 || L > 1e5)) return issue("#LIMIT!");
     }
     for (let D of A)
       for (let W = D.firstRow; W <= D.lastRow; W++)
         for (let $ = D.firstCol; $ <= D.lastCol; $++)
-          if (u.isActive(D.sheet.id, `${Ue($ - 1)}${W}`)) return d("#CYCLE!");
+          if (u.isActive(D.sheet.id, `${Ue($ - 1)}${W}`))
+            return issue("#CYCLE!");
     let y = 0,
       v = 0,
       k = 1 / 0,
@@ -9181,13 +9183,13 @@ function Y5(e, t = {}) {
       N = 0,
       F = [],
       z = (D) => {
-        if (f(D)) {
+        if (isIssue(D)) {
           if (["#LIMIT!", "#CYCLE!"].includes(D.error)) return D;
           if (O) return;
           if (w !== 2 && w !== 3) return D;
         }
         if ((D != null && v++, typeof D != "number")) return;
-        if (!Number.isFinite(D)) return d("#NUM!");
+        if (!Number.isFinite(D)) return issue("#NUM!");
         (y++, (k = Math.min(k, D)), (x = Math.max(x, D)));
         let W = D - C;
         ((C += W / y),
@@ -9197,20 +9199,20 @@ function Y5(e, t = {}) {
     if (T) {
       let D = u.retrieve(U[0]),
         W = Array.isArray(D) ? D : [[D]];
-      if (!W.length || W.length > 1e4) return d("#LIMIT!");
+      if (!W.length || W.length > 1e4) return issue("#LIMIT!");
       let $ = W.every(Array.isArray) ? W : [W],
         M = $[0]?.length ?? 0;
       if (!M || $.some((B) => B.length !== M || B.some(Array.isArray)))
-        return d("#VALUE!");
-      if ($.length * M > 1e4) return d("#LIMIT!");
+        return issue("#VALUE!");
+      if ($.length * M > 1e4) return issue("#LIMIT!");
       for (let B of $)
         for (let V of B) {
           if (
             V != null &&
-            !f(V) &&
+            !isIssue(V) &&
             !["number", "string", "boolean"].includes(typeof V)
           )
-            return d("#VALUE!");
+            return issue("#VALUE!");
           let G = z(V);
           if (G) return G;
         }
@@ -9238,9 +9240,9 @@ function Y5(e, t = {}) {
           te;
         for (let Q of F)
           ((K = Q === te ? K + 1 : 1), K > G && ((G = K), (H = Q)), (te = Q));
-        return G > 1 ? H : d("#N/A");
+        return G > 1 ? H : issue("#N/A");
       }
-      if (!F.length) return d("#NUM!");
+      if (!F.length) return issue("#NUM!");
       if (w === 12) {
         let G = Math.floor(F.length / 2);
         return F.length % 2 ? F[G] : F[G - 1] / 2 + F[G] / 2;
@@ -9249,13 +9251,13 @@ function Y5(e, t = {}) {
         let G = I;
         return Number.isInteger(G) && G >= 1 && G <= F.length
           ? F[w === 14 ? F.length - G : G - 1]
-          : d("#NUM!");
+          : issue("#NUM!");
       }
       let D = w >= 18,
         W = w === 17 || w === 19 ? Math.trunc(I) / 4 : I;
-      if (W < 0 || W > 1 || (D && (W === 0 || W === 1))) return d("#NUM!");
+      if (W < 0 || W > 1 || (D && (W === 0 || W === 1))) return issue("#NUM!");
       let $ = D ? W * (F.length + 1) - 1 : W * (F.length - 1);
-      if ($ < 0 || $ > F.length - 1) return d("#NUM!");
+      if ($ < 0 || $ > F.length - 1) return issue("#NUM!");
       let M = Math.floor($),
         B = Math.ceil($),
         V = $ - M;
@@ -9264,12 +9266,12 @@ function Y5(e, t = {}) {
     if (w === 2) return y;
     if (w === 3) return v;
     if (w === 9) return oi(F);
-    if (w === 1) return y ? sn(F) : d("#DIV/0!");
+    if (w === 1) return y ? sn(F) : issue("#DIV/0!");
     if (w === 4) return y ? x : 0;
     if (w === 5) return y ? k : 0;
     if (w === 6) return y ? Nm(F) : 0;
     let j = w === 7 || w === 10;
-    if (y < (j ? 2 : 1)) return d("#DIV/0!");
+    if (y < (j ? 2 : 1)) return issue("#DIV/0!");
     let q = Math.max(0, N / (y - (j ? 1 : 0)));
     return w === 7 || w === 8 ? Math.sqrt(q) : q;
   };
@@ -10194,39 +10196,42 @@ function Hu(e, t = {}, n, i) {
       let V = sW(
         new K2.default({
           onVariable: () => null,
-          onCell: ({ sheet: Z, row: J, col: ee }) => {
-            let re = j(Z);
+          onCell: ({ sheet, row, col }) => {
+            let re = j(sheet);
             if (
-              !Number.isInteger(J) ||
-              !Number.isInteger(ee) ||
-              J < 1 ||
-              ee < 1 ||
-              J > re.rowCount ||
-              ee > re.colCount
+              !Number.isInteger(row) ||
+              !Number.isInteger(col) ||
+              row < 1 ||
+              col < 1 ||
+              row > re.rowCount ||
+              col > re.colCount
             )
               throw f("#REF!");
-            return W(re.id, `${Ue(ee - 1)}${J}`);
+            return W(re.id, `${Ue(col - 1)}${row}`);
           },
-          onRange: ({ sheet: Z, from: J, to: ee }) => {
-            let re = j(Z),
-              oe = ee.row,
-              Y = ee.col;
+          onRange: ({ sheet, from, to }) => {
+            let re = j(sheet),
+              oe = to.row,
+              Y = to.col;
             if (
-              J.row < 1 ||
-              J.col < 1 ||
+              from.row < 1 ||
+              from.col < 1 ||
               oe > re.rowCount ||
               Y > re.colCount ||
-              oe < J.row ||
-              Y < J.col
+              oe < from.row ||
+              Y < from.col
             )
               throw f("#REF!");
-            if ((oe - J.row + 1) * (Y - J.col + 1) > 2e4) throw f("#LIMIT!");
-            let ne = a.reserve((oe - J.row + 1) * (32 + (Y - J.col + 1) * 8));
+            if ((oe - from.row + 1) * (Y - from.col + 1) > 2e4)
+              throw f("#LIMIT!");
+            let ne = a.reserve(
+              (oe - from.row + 1) * (32 + (Y - from.col + 1) * 8),
+            );
             if (ne) throw f(ne);
             let ae = [];
-            for (let le = J.row; le <= oe; le++) {
+            for (let le = from.row; le <= oe; le++) {
               let de = [];
-              for (let Se = J.col; Se <= Y; Se++) {
+              for (let Se = from.col; Se <= Y; Se++) {
                 let ge = W(re.id, `${Ue(Se - 1)}${le}`);
                 if (
                   dt(ge) &&
@@ -10885,9 +10890,9 @@ function Hu(e, t = {}, n, i) {
         let H = `${V}:`;
         return [...m.entries()]
           .filter(([K]) => K.startsWith(H))
-          .map(([K, { anchor: te }]) => ({
+          .map(([K, { anchor }]) => ({
             address: K.slice(H.length),
-            anchor: te,
+            anchor,
           }));
       } finally {
         a.end();
@@ -11255,7 +11260,7 @@ function fR(e) {
 }
 function uW(e, t, n, i) {
   let r = xa(),
-    { formulas: o, settings: a } = t,
+    { formulas, settings } = t,
     s = zu(e.datePolicy),
     l = xp(e);
   l.begin();
@@ -11268,8 +11273,14 @@ function uW(e, t, n, i) {
       : n
         ? "Changed inputs and transitive dependents"
         : "First calculation of this snapshot";
-  if (i || !n || t.metadata !== n.metadata || Y2(e, o) || Y2(e, n.formulas))
-    (o.forEach((j, q) => c.add(q)),
+  if (
+    i ||
+    !n ||
+    t.metadata !== n.metadata ||
+    Y2(e, formulas) ||
+    Y2(e, n.formulas)
+  )
+    (formulas.forEach((j, q) => c.add(q)),
       n &&
         !i &&
         (p =
@@ -11282,7 +11293,7 @@ function uW(e, t, n, i) {
       D = n.inputs();
     for (let M of new Set([...q.keys(), ...D.keys()]))
       q.get(M) !== D.get(M) && j.add(M);
-    (o.forEach((M, B) => {
+    (formulas.forEach((M, B) => {
       (oR.test(M.formula) ||
         !n.values.has(B) ||
         ["#TIMEOUT!", "#LIMIT!"].includes(String(n.values.get(B)?.value))) &&
@@ -11300,10 +11311,10 @@ function uW(e, t, n, i) {
     for (let M = 0; M < $.length; M++)
       for (let B of W.get($[M]) ?? []) j.has(B) || (j.add(B), $.push(B));
     j.forEach((M) => {
-      o.has(M) && c.add(M);
+      formulas.has(M) && c.add(M);
     });
   }
-  o.forEach((j, q) => {
+  formulas.forEach((j, q) => {
     !c.has(q) &&
       n?.values.has(q) &&
       (d.set(q, n.values.get(q)), u.set(q, new Set(n.dependencies.get(q))));
@@ -11316,7 +11327,7 @@ function uW(e, t, n, i) {
     S = [...u.values()].reduce((j, q) => j + q.size, 0),
     O = () => (
       w && !_ && (_ = l.check()),
-      w && !_ && xa() - r > a.timeBudgetMs && (_ = "#TIMEOUT!"),
+      w && !_ && xa() - r > settings.timeBudgetMs && (_ = "#TIMEOUT!"),
       w ? _ : undefined
     ),
     E = (j, q) => {
@@ -11356,26 +11367,26 @@ function uW(e, t, n, i) {
         },
       });
     },
-    R = a.mode === "manual" && !i;
+    R = settings.mode === "manual" && !i;
   R &&
     c.forEach((j) => {
       (d.set(j, Jm), m.set(j, Jm), u.set(j, new Set(n?.dependencies.get(j))));
     });
   let I = E(m),
     U = () => {
-      for (let [j, q] of o)
+      for (let [j, q] of formulas)
         d.set(j, m.get(j) ?? I.getTypedValue(q.sheetId, q.address));
     };
   R || U();
   let P = {
-    status: a.iterative ? "not-needed" : "off",
+    status: settings.iterative ? "not-needed" : "off",
     passes: 0,
     maxDelta: null,
-    message: a.iterative
+    message: settings.iterative
       ? "No circular calculation was required."
       : "Iteration is disabled. Circular references return #CYCLE!.",
   };
-  if (!R && b.size && a.iterative) {
+  if (!R && b.size && settings.iterative) {
     let j = new Set(b),
       q = new Map();
     u.forEach((W, $) =>
@@ -11392,22 +11403,22 @@ function uW(e, t, n, i) {
         j.has($) || m.set($, W);
       }),
       (P.status = "failed"),
-      Y2(e, o) ||
-        [...o.values()].some((W) => oR.test(W.formula)) ||
+      Y2(e, formulas) ||
+        [...formulas.values()].some((W) => oR.test(W.formula)) ||
         b.size > 1e3)
     )
       P.message =
         "Iteration supports at most 1,000 deterministic scalar cycle cells. Names, arrays, dynamic references and volatile formulas must be removed from this calculation.";
     else {
       let W = new Map([...b].map(($) => [$, { type: "number", value: 0 }]));
-      P.message = `No convergence within ${a.maxIterations} simultaneous passes from zero.`;
-      for (let $ = 0; $ < a.maxIterations && !O(); $++) {
+      P.message = `No convergence within ${settings.maxIterations} simultaneous passes from zero.`;
+      for (let $ = 0; $ < settings.maxIterations && !O(); $++) {
         I = E(m, W);
         let M = new Map(),
           B = 0,
           V = true;
         for (let G of b) {
-          let H = o.get(G),
+          let H = formulas.get(G),
             K = I.getTypedValue(H.sheetId, H.address);
           if ((M.set(G, K), K.type !== "number" || !Number.isFinite(K.value))) {
             V = false;
@@ -11422,7 +11433,7 @@ function uW(e, t, n, i) {
             "The circular calculation produced a nonnumeric value or calculation error.";
           break;
         }
-        if (((W = M), B <= a.maxChange)) {
+        if (((W = M), B <= settings.maxChange)) {
           ((P.status = "converged"),
             (P.message = `Converged from zero in ${$ + 1} simultaneous passes; maximum change ${B}.`));
           break;
@@ -11440,7 +11451,7 @@ function uW(e, t, n, i) {
       (c.forEach((j) => d.set(j, iR(_))),
       P.status === "converged" && (P.status = "failed"),
       b.size &&
-        a.iterative &&
+        settings.iterative &&
         (P.message = `Calculation stopped with ${_}; no intermediate result is current.`)),
     (w = false),
     l.end());
@@ -11509,7 +11520,7 @@ function uW(e, t, n, i) {
       ...j.filter(
         (D) =>
           !c.has(`${D.sheetId}:${D.address}`) &&
-          o.has(`${D.sheetId}:${D.address}`),
+          formulas.has(`${D.sheetId}:${D.address}`),
       ),
       ...q,
     ],
@@ -11523,11 +11534,11 @@ function uW(e, t, n, i) {
       v(x, I.getNamedFormulaDiagnostics())));
   let N = new Map(n?.report.cells.map((j) => [`${j.sheetId}:${j.address}`, j])),
     F = new Map();
-  for (let { sheetId: j, address: q, ...D } of T.getFinancialDiagnostics()) {
-    let W = `${j}:${q}`;
+  for (let { sheetId, address, ...D } of T.getFinancialDiagnostics()) {
+    let W = `${sheetId}:${address}`;
     F.set(W, [...(F.get(W) ?? []), D]);
   }
-  let z = [...o].map(([j, q]) => {
+  let z = [...formulas].map(([j, q]) => {
     let D = d.get(j) ?? Jm,
       W = n?.values.get(j);
     return {
@@ -11562,7 +11573,7 @@ function uW(e, t, n, i) {
       volatile: {
         functions: [
           ...new Set(
-            [...o.values()]
+            [...formulas.values()]
               .flatMap((j) => Cs(j.formula))
               .concat((e.definedNames ?? []).flatMap((j) => Cs(j.refersTo))),
           ),
@@ -11587,11 +11598,11 @@ function uW(e, t, n, i) {
       workbookId: e.id,
       revision: e.revision,
       run: (n?.report.run ?? 0) + 1,
-      settings: a,
+      settings,
       reason: p,
-      formulaCount: o.size,
+      formulaCount: formulas.size,
       evaluated: z.filter((j) => j.evaluations > 0).length,
-      reused: o.size - c.size,
+      reused: formulas.size - c.size,
       pending: z.filter((j) => j.status === "pending").length,
       elapsedMs: Math.max(0, xa() - r),
       dependencyEdges: [...u.values()].reduce((j, q) => j + q.size, 0),
@@ -11600,7 +11611,7 @@ function uW(e, t, n, i) {
       cells: z,
       limits: {
         dependencyEdges: nR,
-        cooperativeTimeBudgetMs: a.timeBudgetMs,
+        cooperativeTimeBudgetMs: settings.timeBudgetMs,
         hardInterrupt: false,
       },
     },
@@ -12669,7 +12680,7 @@ function qW(e) {
   return t;
 }
 var AR = (e) => {
-  let { hash: t, ...n } = e;
+  let { hash, ...n } = e;
   return Jr(n);
 };
 function XW(e) {
@@ -14660,13 +14671,13 @@ function yN(e, t = true) {
           r.format ||
           Object.keys(r.style ?? {}).length);
     if (!o && !a) continue;
-    let { row: s, col: l } = tt(i);
+    let { row, col } = tt(i);
     n
-      ? ((n.firstRow = Math.min(n.firstRow, s)),
-        (n.lastRow = Math.max(n.lastRow, s)),
-        (n.firstCol = Math.min(n.firstCol, l)),
-        (n.lastCol = Math.max(n.lastCol, l)))
-      : (n = { firstRow: s, lastRow: s, firstCol: l, lastCol: l });
+      ? ((n.firstRow = Math.min(n.firstRow, row)),
+        (n.lastRow = Math.max(n.lastRow, row)),
+        (n.firstCol = Math.min(n.firstCol, col)),
+        (n.lastCol = Math.max(n.lastCol, col)))
+      : (n = { firstRow: row, lastRow: row, firstCol: col, lastCol: col });
   }
   return n;
 }
@@ -15186,17 +15197,17 @@ function FV(e, t, n) {
   return i;
 }
 function zV(e, t) {
-  let { bytes: n } = Ha(e),
-    i = W2(n);
+  let { bytes } = Ha(e),
+    i = W2(bytes);
   return EN(
     {
       ...t,
       version: 1,
       sourceReference: `sha256:${i}`,
       sha256: i,
-      byteLength: n.length,
+      byteLength: bytes.length,
     },
-    n,
+    bytes,
   );
 }
 function EN(e, t) {
@@ -17858,40 +17869,44 @@ function YN(e, t, n = {}, i = []) {
       l.get(w).addresses.push(h));
   }
   let c = [];
-  for (let { rule: h, addresses: m, area: g } of l.values()) {
-    let b = !["list", "custom"].includes(h.type),
-      w = g?.operands.every((S) =>
+  for (let { rule, addresses, area } of l.values()) {
+    let b = !["list", "custom"].includes(rule.type),
+      w = area?.operands.every((S) =>
         /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(S),
       ),
       _ =
-        b && g && !w
+        b && area && !w
           ? null
-          : uq(b && g ? { ...h, formulae: g.operands.map(Number) } : h);
+          : uq(
+              b && area
+                ? { ...rule, formulae: area.operands.map(Number) }
+                : rule,
+            );
     if (!_) {
       r.push(
         "An unsupported validation formula, operator or external list was omitted; source cells were retained.",
       );
       continue;
     }
-    g &&
-      !g.alert &&
+    area &&
+      !area.alert &&
       r.push(
         "An imported validation has error alerts disabled. Local validation requires Stop or explicit Warning/Information review; source values were retained.",
       );
-    for (let S of lq(m)) {
+    for (let S of lq(addresses)) {
       if (c.length >= 100) {
         r.push(
           "Additional validation areas beyond the 100-rule limit were omitted; source cells were retained.",
         );
         break;
       }
-      let O = tt(g?.anchor ?? S.split(":")[0]),
+      let O = tt(area?.anchor ?? S.split(":")[0]),
         E = tt(S.split(":")[0]);
       c.push({
         ..._,
         id: GN(),
         range: S,
-        ...(g ? { showDropdown: g.dropdown } : {}),
+        ...(area ? { showDropdown: area.dropdown } : {}),
         ...(_.formula
           ? { formula: bi(_.formula, E.row - O.row, E.col - O.col) }
           : {}),
@@ -19031,10 +19046,10 @@ function b8(e, t, n = {}) {
   return g8(e, t, n, false).r;
 }
 function Eg(e, t, n = {}) {
-  let { r: i, cells: r } = g8(e, t, n, true);
-  if (!i.valid)
+  let { r, cells } = g8(e, t, n, true);
+  if (!r.valid)
     throw Error(
-      `Unable to read delimited data: ${i.issues[0]?.message ?? "Incomplete preview."} Review the import schema; no rows were imported.`,
+      `Unable to read delimited data: ${r.issues[0]?.message ?? "Incomplete preview."} Review the import schema; no rows were imported.`,
     );
   let o = Q6(
       t
@@ -19045,19 +19060,19 @@ function Eg(e, t, n = {}) {
     a = o.sheets[0];
   return (
     (a.name = "Imported data"),
-    (a.cells = r),
-    (a.frozenRows = i.options.hasHeader ? 1 : 0),
+    (a.cells = cells),
+    (a.frozenRows = r.options.hasHeader ? 1 : 0),
     (a.delimitedSource = {
-      records: i.records,
-      columns: i.columns,
-      hasHeader: i.options.hasHeader,
+      records: r.records,
+      columns: r.columns,
+      hasHeader: r.options.hasHeader,
     }),
     {
       workbook: gi(
         Wm(o, { id: crypto.randomUUID(), name: t.slice(0, 255), kind: "file" }),
       ),
-      warnings: i.warnings,
-      delimitedReport: i,
+      warnings: r.warnings,
+      delimitedReport: r,
     }
   );
 }
@@ -22614,14 +22629,14 @@ function Sg(e, t = 0) {
       let n = Sg(e.slice(0, -Ok.length), t + 1);
       if (n) return n + Ok;
     }
-    for (let { parts: n, expression: i } of jq) {
-      let r = i.exec(e);
+    for (let { parts, expression } of jq) {
+      let r = expression.exec(e);
       if (r)
-        return n
+        return parts
           .map(
             (o, a) =>
               o +
-              (a < n.length - 1
+              (a < parts.length - 1
                 ? (Sg(r[a + 1], t + 1) ?? "[source detail omitted]")
                 : ""),
           )
@@ -22645,8 +22660,8 @@ function Wq(e) {
   return new An(n, Sg(t) ?? Mk[n]);
 }
 function _8(e) {
-  let { code: t, message: n } = Wq(e);
-  return { code: t, message: n };
+  let { code, message } = Wq(e);
+  return { code, message };
 }
 var Nc = Object.freeze({
   maxFileBytes: Ne.maxFileBytes,
@@ -22743,46 +22758,46 @@ function S8(e) {
 }
 var Pk = self,
   C8 = false;
-Pk.onmessage = async ({ data: e }) => {
+Pk.onmessage = async ({ data }) => {
   if (C8) return;
   C8 = true;
-  let t = e?.id;
+  let t = data?.id;
   try {
     if (
       typeof t != "string" ||
       t.length > 100 ||
-      !(e.bytes instanceof Uint8Array)
+      !(data.bytes instanceof Uint8Array)
     )
       throw new An("FILE_INVALID");
-    E8(e.operation, e.fileName, e.bytes.length);
+    E8(data.operation, data.fileName, data.bytes.length);
     let n;
-    switch (e.operation) {
+    switch (data.operation) {
       case "source":
-        n = gk(e.bytes, e.fileName);
+        n = gk(data.bytes, data.fileName);
         break;
       case "formats":
-        n = Vd(e.bytes, e.fileName);
+        n = Vd(data.bytes, data.fileName);
         break;
       case "workbook": {
-        /\.json$/i.test(e.fileName) && S8(e.bytes);
-        let i = e.bytes,
+        /\.json$/i.test(data.fileName) && S8(data.bytes);
+        let i = data.bytes,
           r = await kg({
-            name: e.fileName,
+            name: data.fileName,
             size: i.length,
             arrayBuffer: async () => i.buffer,
             text: async () =>
               new TextDecoder("utf-8", { fatal: true }).decode(i),
           });
         if (
-          (/\.json$/i.test(e.fileName) &&
+          (/\.json$/i.test(data.fileName) &&
             r.workbook.xlsxSource &&
             w8(r.workbook),
-          /\.json$/i.test(e.fileName) && r.workbook.alternateSource)
+          /\.json$/i.test(data.fileName) && r.workbook.alternateSource)
         ) {
           let o = r.workbook.alternateSource;
           Vd(lg(o), o.fileName);
         }
-        if (/\.json$/i.test(e.fileName))
+        if (/\.json$/i.test(data.fileName))
           for (let o of r.workbook.sourceImports ?? []) {
             let a = gk(ck(o.original), o.original.fileName);
             if (
@@ -22798,25 +22813,25 @@ Pk.onmessage = async ({ data: e }) => {
         break;
       }
       case "delimited": {
-        let i = b8(e.bytes, e.fileName, e.options);
+        let i = b8(data.bytes, data.fileName, data.options);
         n = {
           report: i,
           ...(i.valid
-            ? { workbook: Eg(e.bytes, e.fileName, e.options).workbook }
+            ? { workbook: Eg(data.bytes, data.fileName, data.options).workbook }
             : {}),
         };
         break;
       }
       case "automation":
-        n = o8(e.bytes, e.fileName);
+        n = o8(data.bytes, data.fileName);
         break;
       case "json":
-        n = S8(e.bytes);
+        n = S8(data.bytes);
         break;
       case "picture": {
         let i = "";
-        for (let a of e.bytes) i += String.fromCharCode(a);
-        let r = `data:image/${/\.png$/i.test(e.fileName.trim()) ? "png" : "jpeg"};base64,${btoa(i)}`,
+        for (let a of data.bytes) i += String.fromCharCode(a);
+        let r = `data:image/${/\.png$/i.test(data.fileName.trim()) ? "png" : "jpeg"};base64,${btoa(i)}`,
           o = Ha(r);
         n = { dataURL: r, width: o.width, height: o.height };
         break;

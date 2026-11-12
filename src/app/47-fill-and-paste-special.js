@@ -35,7 +35,7 @@ import { b4e, pj } from "./46-workbook-manager.js";
 
 function y4e(e) {
   var at;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
@@ -272,9 +272,9 @@ function y4e(e) {
             i.jsxs("h2", { id: n, children: [i.jsx(ze, { size: 19 }), Je] }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close editing tools"),
+              "aria-label": text("Close editing tools"),
               onClick: e.onClose,
-              lang: t("Close editing tools"),
+              lang: language("Close editing tools"),
               "data-ui-label": "Close editing tools",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -442,7 +442,7 @@ function y4e(e) {
                   i.jsxs("div", {
                     className: "et-tabs",
                     role: "tablist",
-                    "aria-label": r("Fill options"),
+                    "aria-label": text("Fill options"),
                     onKeyDown: (Ze) => {
                       var be;
                       if (
@@ -463,7 +463,7 @@ function y4e(e) {
                           `[data-fill-tab="${lt}"]`,
                         )) == null || be.focus());
                     },
-                    lang: t("Fill options"),
+                    lang: language("Fill options"),
                     "data-ui-label": "Fill options",
                     children: [
                       i.jsx("button", {
@@ -507,18 +507,20 @@ function y4e(e) {
                               }),
                               i.jsx("div", {
                                 className: "et-direction-grid",
-                                children: b4e.map(
-                                  ({ value: Ze, label: lt, icon: be }) =>
-                                    i.jsxs(
-                                      "button",
-                                      {
-                                        type: "button",
-                                        "aria-pressed": k === Ze,
-                                        onClick: () => F(Ze),
-                                        children: [i.jsx(be, { size: 18 }), lt],
-                                      },
-                                      Ze,
-                                    ),
+                                children: b4e.map(({ value, label, icon }) =>
+                                  i.jsxs(
+                                    "button",
+                                    {
+                                      type: "button",
+                                      "aria-pressed": k === value,
+                                      onClick: () => F(value),
+                                      children: [
+                                        i.jsx(icon, { size: 18 }),
+                                        label,
+                                      ],
+                                    },
+                                    value,
+                                  ),
                                 ),
                               }),
                               i.jsx("p", {
@@ -545,10 +547,10 @@ function y4e(e) {
                                     children: [
                                       i.jsx(M, { children: "Series in" }),
                                       i.jsxs("select", {
-                                        "aria-label": r("Series in"),
+                                        "aria-label": text("Series in"),
                                         value: I,
                                         onChange: (Ze) => O(Ze.target.value),
-                                        lang: t("Series in"),
+                                        lang: language("Series in"),
                                         "data-ui-label": "Series in",
                                         children: [
                                           i.jsx("option", {
@@ -567,11 +569,11 @@ function y4e(e) {
                                     children: [
                                       i.jsx(M, { children: "Order" }),
                                       i.jsxs("select", {
-                                        "aria-label": r("Series order"),
+                                        "aria-label": text("Series order"),
                                         value: j ? "backward" : "forward",
                                         onChange: (Ze) =>
                                           z(Ze.target.value === "backward"),
-                                        lang: t("Series order"),
+                                        lang: language("Series order"),
                                         "data-ui-label": "Series order",
                                         children: [
                                           i.jsxs("option", {
@@ -598,12 +600,12 @@ function y4e(e) {
                                     children: [
                                       i.jsx(M, { children: "Type" }),
                                       i.jsxs("select", {
-                                        "aria-label": r("Series type"),
+                                        "aria-label": text("Series type"),
                                         value: V,
                                         onChange: (Ze) => {
                                           (D(Ze.target.value), _(""), R(""));
                                         },
-                                        lang: t("Series type"),
+                                        lang: language("Series type"),
                                         "data-ui-label": "Series type",
                                         children: [
                                           i.jsx("option", {
@@ -622,13 +624,13 @@ function y4e(e) {
                                     children: [
                                       i.jsx(M, { children: "Start value" }),
                                       i.jsx("input", {
-                                        "aria-label": r("Start value"),
+                                        "aria-label": text("Start value"),
                                         type: V === "date" ? "date" : "number",
                                         step: "any",
                                         value: B,
-                                        placeholder: r("Use first cell"),
+                                        placeholder: text("Use first cell"),
                                         onChange: (Ze) => _(Ze.target.value),
-                                        lang: t("Start value"),
+                                        lang: language("Start value"),
                                         "data-ui-label": "Start value",
                                       }),
                                     ],
@@ -637,11 +639,11 @@ function y4e(e) {
                                     children: [
                                       i.jsx(M, { children: "Step value" }),
                                       i.jsx(ci, {
-                                        "aria-label": r("Step value"),
+                                        "aria-label": text("Step value"),
                                         step: V === "date" ? "1" : "any",
                                         value: C,
                                         onValueChange: (Ze) => T(Ze),
-                                        lang: t("Step value"),
+                                        lang: language("Step value"),
                                         "data-ui-label": "Step value",
                                       }),
                                     ],
@@ -652,12 +654,12 @@ function y4e(e) {
                                         children: "Stop value (optional)",
                                       }),
                                       i.jsx("input", {
-                                        "aria-label": r("Stop value"),
+                                        "aria-label": text("Stop value"),
                                         type: V === "date" ? "date" : "number",
                                         step: "any",
                                         value: N,
                                         onChange: (Ze) => R(Ze.target.value),
-                                        lang: t("Stop value"),
+                                        lang: language("Stop value"),
                                         "data-ui-label": "Stop value",
                                       }),
                                     ],
@@ -672,10 +674,10 @@ function y4e(e) {
                                       children: [
                                         i.jsx(M, { children: "Date unit" }),
                                         i.jsxs("select", {
-                                          "aria-label": r("Date unit"),
+                                          "aria-label": text("Date unit"),
                                           value: L,
                                           onChange: (Ze) => $(Ze.target.value),
-                                          lang: t("Date unit"),
+                                          lang: language("Date unit"),
                                           "data-ui-label": "Date unit",
                                           children: [
                                             i.jsx("option", {
@@ -703,11 +705,11 @@ function y4e(e) {
                                         children: [
                                           i.jsx(M, { children: "Month dates" }),
                                           i.jsxs("select", {
-                                            "aria-label": r("Month dates"),
+                                            "aria-label": text("Month dates"),
                                             value: U,
                                             onChange: (Ze) =>
                                               G(Ze.target.value),
-                                            lang: t("Month dates"),
+                                            lang: language("Month dates"),
                                             "data-ui-label": "Month dates",
                                             children: [
                                               i.jsx("option", {
@@ -762,7 +764,7 @@ function y4e(e) {
                             children: [
                               i.jsx(M, { children: "Default row height (px)" }),
                               i.jsx(ci, {
-                                "aria-label": r("Default row height (px)"),
+                                "aria-label": text("Default row height (px)"),
                                 min: b1,
                                 max: Ig,
                                 step: "any",
@@ -777,7 +779,7 @@ function y4e(e) {
                                 children: "Default column width (px)",
                               }),
                               i.jsx(ci, {
-                                "aria-label": r("Default column width (px)"),
+                                "aria-label": text("Default column width (px)"),
                                 min: ux,
                                 max: cx,
                                 step: "any",
@@ -822,8 +824,8 @@ function y4e(e) {
                       }),
                       i.jsxs("div", {
                         className: "et-size-summary",
-                        "aria-label": r("Default size preview"),
-                        lang: t("Default size preview"),
+                        "aria-label": text("Default size preview"),
+                        lang: language("Default size preview"),
                         "data-ui-label": "Default size preview",
                         children: [
                           i.jsxs("p", {
@@ -1102,8 +1104,8 @@ function y4e(e) {
                   }),
                   i.jsxs("section", {
                     className: "et-hidden",
-                    "aria-label": r("Hidden rows and columns"),
-                    lang: t("Hidden rows and columns"),
+                    "aria-label": text("Hidden rows and columns"),
+                    lang: language("Hidden rows and columns"),
                     "data-ui-label": "Hidden rows and columns",
                     children: [
                       i.jsxs("div", {
@@ -1115,12 +1117,12 @@ function y4e(e) {
                             }),
                           }),
                           i.jsxs("select", {
-                            "aria-label": r("Hidden items"),
+                            "aria-label": text("Hidden items"),
                             value: H,
                             onChange: (Ze) => {
                               (Q(Ze.target.value), J(0));
                             },
-                            lang: t("Hidden items"),
+                            lang: language("Hidden items"),
                             "data-ui-label": "Hidden items",
                             children: [
                               i.jsx("option", {
@@ -1240,8 +1242,8 @@ function y4e(e) {
             Te.plan &&
               i.jsxs("section", {
                 className: "et-preview",
-                "aria-label": r("Change preview"),
-                lang: t("Change preview"),
+                "aria-label": text("Change preview"),
+                lang: language("Change preview"),
                 "data-ui-label": "Change preview",
                 children: [
                   i.jsxs("h3", {
@@ -1358,8 +1360,8 @@ function y4e(e) {
                           ht > 1 &&
                             i.jsxs("div", {
                               className: "et-pagination",
-                              "aria-label": r("Preview pages"),
-                              lang: t("Preview pages"),
+                              "aria-label": text("Preview pages"),
+                              lang: language("Preview pages"),
                               "data-ui-label": "Preview pages",
                               children: [
                                 i.jsx("button", {
@@ -1438,7 +1440,7 @@ function y4e(e) {
 }
 function w4e(e) {
   var b;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.workbook),
@@ -1517,9 +1519,9 @@ function w4e(e) {
               children: i.jsx(M, { children: "Fill selection" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close fill preview"),
+              "aria-label": text("Close fill preview"),
               onClick: e.onClose,
-              lang: t("Close fill preview"),
+              lang: language("Close fill preview"),
               "data-ui-label": "Close fill preview",
               children: "×",
             }),
@@ -1546,13 +1548,13 @@ function w4e(e) {
               children: [
                 i.jsx(M, { children: "Fill method" }),
                 i.jsxs("select", {
-                  "aria-label": r("Fill method"),
+                  "aria-label": text("Fill method"),
                   value: d,
                   disabled: g,
                   onChange: (y) => {
                     (u(y.target.value), f(0), c(""));
                   },
-                  lang: t("Fill method"),
+                  lang: language("Fill method"),
                   "data-ui-label": "Fill method",
                   children: [
                     i.jsx("option", {
@@ -1577,8 +1579,8 @@ function w4e(e) {
             v &&
               i.jsxs("section", {
                 className: "et-preview",
-                "aria-label": r("Fill preview"),
-                lang: t("Fill preview"),
+                "aria-label": text("Fill preview"),
+                lang: language("Fill preview"),
                 "data-ui-label": "Fill preview",
                 children: [
                   i.jsxs("h3", {

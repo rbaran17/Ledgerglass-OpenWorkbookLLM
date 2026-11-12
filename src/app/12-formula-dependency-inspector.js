@@ -1347,34 +1347,34 @@ function J$(e, r, t = {}) {
   return { grids: g, dependencyCells: b };
 }
 function X1(e, r, t = {}) {
-  const { grids: n, dependencyCells: o } = J$(e, r, t);
+  const { grids, dependencyCells } = J$(e, r, t);
   return {
-    snapshots: n.map(({ source: s, sheetName: d, values: u }) => {
-      const l = ct(s.range);
-      u[0].some(
+    snapshots: grids.map(({ source, sheetName, values }) => {
+      const l = ct(source.range);
+      values[0].some(
         (h) =>
           typeof h != "string" || !h.trim() || h.length > Wu.headerCharacters,
       ) &&
         Kn(
           "Every source column needs a nonblank text header of at most 128 characters.",
         );
-      const c = u[0];
+      const c = values[0];
       return (
         new Set(c.map((h) => h.toLowerCase())).size !== c.length &&
           Kn("Source headers must be unique, including case variants."),
         {
-          source: s,
-          sheetName: d,
+          source,
+          sheetName,
           headers: c,
-          records: u.slice(1).map((h, f) => ({
+          records: values.slice(1).map((h, f) => ({
             row: l.firstRow + f + 2,
-            locator: `'${d.replace(/'/g, "''")}'!${dh(l.firstRow + f + 1, l.firstCol)}:${dh(l.firstRow + f + 1, l.lastCol)}`,
+            locator: `'${sheetName.replace(/'/g, "''")}'!${dh(l.firstRow + f + 1, l.firstCol)}:${dh(l.firstRow + f + 1, l.lastCol)}`,
             values: h,
           })),
         }
       );
     }),
-    dependencyCells: o,
+    dependencyCells,
   };
 }
 function Q$(e, r, t = {}) {
@@ -1456,8 +1456,8 @@ function Q$(e, r, t = {}) {
       (new Set(o.keys.map((z) => z.left)).size !== o.keys.length ||
         new Set(o.keys.map((z) => z.right)).size !== o.keys.length) &&
         Kn("A join header cannot be repeated in the key pairs."));
-  const { snapshots: a } = X1(e, [o.left, o.right], t),
-    [s, d] = a,
+  const { snapshots } = X1(e, [o.left, o.right], t),
+    [s, d] = snapshots,
     u = [],
     l = [],
     c = [],
@@ -1753,10 +1753,10 @@ function Jue(e, r, t = {}) {
   for (const d of n.sources)
     try {
       const u = ez(e, d, t),
-        { snapshot: l } = u,
-        c = ct(l.source.range),
+        { snapshot } = u,
+        c = ct(snapshot.source.range),
         h = (y) => {
-          const w = l.headers.indexOf(y);
+          const w = snapshot.headers.indexOf(y);
           if (w < 0)
             throw Error(
               `Required field “${y}” is missing. Review the source schema.`,
@@ -1775,9 +1775,9 @@ function Jue(e, r, t = {}) {
         workbookName: u.book.name,
         sheetId: u.sheet.id,
         sheetName: u.sheet.name,
-        range: l.source.range,
+        range: snapshot.source.range,
         fingerprint: u.fingerprint,
-        records: l.records.length,
+        records: snapshot.records.length,
         acceptedRecords: 0,
         amount: 0,
         periods: [],
@@ -1787,7 +1787,7 @@ function Jue(e, r, t = {}) {
       o.sources.push(v);
       const g = new Map(),
         b = [];
-      for (const y of l.records) {
+      for (const y of snapshot.records) {
         let w = false;
         const E = (V, D) => {
             (s(d.id, V, D, y.row), (w = true));
@@ -1862,7 +1862,7 @@ function Jue(e, r, t = {}) {
               sheetName: u.sheet.name,
               row: y.row,
               address: F,
-              locator: `${u.book.name} / ${l.sheetName}!${F}`,
+              locator: `${u.book.name} / ${snapshot.sheetName}!${F}`,
               categories: A,
               amount: k,
               period: O.period,

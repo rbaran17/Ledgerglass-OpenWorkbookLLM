@@ -43,37 +43,31 @@ import { jI } from "./22-themes-and-cell-styles.js";
 import { Fz } from "./23-format-cells-dialog.js";
 import { LI, wfe, xfe, yfe } from "./31-pivot-explore-and-slicers.js";
 
-function Efe({
-  report: e,
-  error: r,
-  revision: t,
-  workbookId: n,
-  onExport: o = wfe,
-}) {
-  const { text: a, language: s } = Dr(),
+function Efe({ report, error, revision, workbookId, onExport = wfe }) {
+  const { text, language } = Dr(),
     [d, u] = ne.useState(0),
     [l, c] = ne.useState(""),
     h = ne.useRef(null),
-    f = e?.points ?? [],
+    f = report?.points ?? [],
     p = Math.min(d, Math.max(0, Math.ceil(f.length / 20) - 1)),
     m = (v = false) => {
       try {
-        if ((c(""), !e)) throw Error(r);
+        if ((c(""), !report)) throw Error(error);
         if (v) {
           const b = h.current?.querySelector("svg");
           if (!b)
             throw Error("Resolve chart errors before exporting the visual.");
-          o({
+          onExport({
             filename: "Chart.svg",
             mime: "image/svg+xml",
             content: new XMLSerializer().serializeToString(b),
           });
         } else
-          o({
+          onExport({
             filename: "Chart-inspection.json",
             mime: "application/json",
             content: JSON.stringify(
-              { workbookId: n, revision: t, draft: true, ...e },
+              { workbookId, revision, draft: true, ...report },
               null,
               2,
             ),
@@ -84,43 +78,43 @@ function Efe({
     };
   return i.jsxs("section", {
     className: "dg-chart-inspection",
-    "aria-label": a("Chart inspection"),
-    lang: s("Chart inspection"),
+    "aria-label": text("Chart inspection"),
+    lang: language("Chart inspection"),
     "data-ui-label": "Chart inspection",
     children: [
       i.jsx("h3", {
         children: i.jsx(M, { children: "Preview and source inspection" }),
       }),
-      r && i.jsx("p", { className: "dg-error", children: r }),
-      e &&
+      error && i.jsx("p", { className: "dg-error", children: error }),
+      report &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsx("div", {
               ref: h,
               className:
-                e.kind === "sparkline"
+                report.kind === "sparkline"
                   ? "dg-spark-preview"
                   : "dg-chart-preview",
-              children: i.jsx(LI, { report: e }),
+              children: i.jsx(LI, { report }),
             }),
-            i.jsx("p", { children: e.scope }),
+            i.jsx("p", { children: report.scope }),
             i.jsxs("p", {
               className: "dg-muted",
               children: [
-                e.population.policy,
+                report.population.policy,
                 " ",
                 i.jsx(M, {
                   children:
                     "Exports contain this complete draft configuration and source inspection at revision ",
                 }),
-                t,
+                revision,
                 i.jsx(M, { children: ". Source cells are unchanged." }),
               ],
             }),
-            e.diagnostics.length > 0 &&
+            report.diagnostics.length > 0 &&
               i.jsx("ul", {
                 className: "dg-chart-diagnostics",
-                children: e.diagnostics.map((v, g) =>
+                children: report.diagnostics.map((v, g) =>
                   i.jsxs("li", { children: [v.severity, ": ", v.message] }, g),
                 ),
               }),
@@ -131,7 +125,7 @@ function Efe({
             }),
             i.jsx("button", {
               type: "button",
-              disabled: e.diagnostics.some((v) => v.severity === "error"),
+              disabled: report.diagnostics.some((v) => v.severity === "error"),
               onClick: () => m(true),
               children: i.jsx(M, { children: "Export chart SVG" }),
             }),
@@ -147,28 +141,30 @@ function Efe({
                     i.jsx("dt", {
                       children: i.jsx(M, { children: "Title / alt text" }),
                     }),
-                    i.jsxs("dd", { children: [e.title, " / ", e.altText] }),
+                    i.jsxs("dd", {
+                      children: [report.title, " / ", report.altText],
+                    }),
                     i.jsx("dt", {
                       children: i.jsx(M, { children: "Axes and units" }),
                     }),
                     i.jsxs("dd", {
                       children: [
                         i.jsx(M, { children: "X: " }),
-                        e.axes.x.title || "(automatic)",
+                        report.axes.x.title || "(automatic)",
                         " (",
-                        e.axes.x.scale,
+                        report.axes.x.scale,
                         i.jsx(M, { children: "); Y: " }),
-                        e.axes.y.title || "(automatic)",
+                        report.axes.y.title || "(automatic)",
                         " (",
-                        e.axes.y.scale,
+                        report.axes.y.scale,
                         i.jsx(M, { children: "); units:" }),
                         " ",
-                        e.axes.units || "not specified",
+                        report.axes.units || "not specified",
                       ],
                     }),
                     i.jsx("dt", { children: i.jsx(M, { children: "Series" }) }),
                     i.jsx("dd", {
-                      children: e.series
+                      children: report.series
                         .map(
                           (v) =>
                             `${v.name} (column ${v.column}, ${v.kind}, ${v.included ? "included" : "excluded"})`,
@@ -193,7 +189,7 @@ function Efe({
                             i.jsx("th", {
                               children: i.jsx(M, { children: "Category / X" }),
                             }),
-                            e.series.map((v) =>
+                            report.series.map((v) =>
                               i.jsx("th", { children: v.name }, v.column),
                             ),
                           ],
@@ -274,12 +270,12 @@ function Efe({
                   onClick: () => u(p + 1),
                   children: i.jsx(M, { children: "Next chart source rows" }),
                 }),
-                e.histogram &&
+                report.histogram &&
                   i.jsxs("p", {
                     children: [
                       i.jsx(M, { children: "Bins:" }),
                       " ",
-                      e.histogram
+                      report.histogram
                         .map(
                           (v) =>
                             `${v.lower}–${v.upper}: ${v.count} rows ${v.upperInclusive ? "(upper inclusive)" : "(upper exclusive)"}`,
@@ -287,12 +283,12 @@ function Efe({
                         .join("; "),
                     ],
                   }),
-                e.waterfall &&
+                report.waterfall &&
                   i.jsxs("p", {
                     children: [
                       i.jsx(M, { children: "Waterfall:" }),
                       " ",
-                      e.waterfall
+                      report.waterfall
                         .map((v) => `${v.label}: ${v.start} → ${v.end}`)
                         .join("; "),
                     ],
@@ -307,7 +303,7 @@ function Efe({
 }
 function Wz(e) {
   var N;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = e.workbook.sheets
       .find((L) => L.id === e.sheetId)
@@ -391,13 +387,13 @@ function Wz(e) {
           !["image/png", "image/jpeg"].includes(L.type))
       )
         throw Error("Choose a PNG or JPEG picture no larger than 2 MB.");
-      const { dataURL: U } = await lle(L, n.begin());
+      const { dataURL } = await lle(L, n.begin());
       if (!f.current || $ !== p.current) return;
       I();
-      const G = P1(U);
+      const G = P1(dataURL);
       if (G.bytes.length !== L.size)
         throw Error("The file bytes changed while reading the picture.");
-      const H = ek(U, {
+      const H = ek(dataURL, {
           origin: "local-file",
           filename: L.name,
           ...(g ? { sourceLocator: g } : {}),
@@ -407,7 +403,7 @@ function Wz(e) {
           ((W.onload = () =>
             J({ width: W.naturalWidth, height: W.naturalHeight })),
             (W.onerror = () => q(Error("The picture could not be decoded."))),
-            (W.src = U));
+            (W.src = dataURL));
         });
       if (!f.current || $ !== p.current) return;
       if ((I(), Q.width !== G.width || Q.height !== G.height))
@@ -417,7 +413,7 @@ function Wz(e) {
       const X = Math.min(1, 400 / G.width, 250 / G.height);
       v((J) => ({
         ...J,
-        dataURL: U,
+        dataURL,
         evidence: H,
         label: L.name.slice(0, 500),
         width: Math.max(24, Math.round(G.width * X)),
@@ -530,9 +526,9 @@ function Wz(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close drawing tools"),
+              "aria-label": text("Close drawing tools"),
               onClick: e.onClose,
-              lang: t("Close drawing tools"),
+              lang: language("Close drawing tools"),
               "data-ui-label": "Close drawing tools",
               children: i.jsx(X, { size: 17 }),
             }),
@@ -582,12 +578,12 @@ function Wz(e) {
                           i.jsx("input", {
                             type: "file",
                             accept: "image/png,image/jpeg",
-                            "aria-label": r("Picture file"),
+                            "aria-label": text("Picture file"),
                             disabled: F || E,
                             onChange: (L) => {
                               return void j(L.target.files?.[0]);
                             },
-                            lang: t("Picture file"),
+                            lang: language("Picture file"),
                             "data-ui-label": "Picture file",
                           }),
                         ],
@@ -603,11 +599,11 @@ function Wz(e) {
                         children: [
                           i.jsx(M, { children: "Source locator (plain text)" }),
                           i.jsx("input", {
-                            "aria-label": r("Picture source locator"),
+                            "aria-label": text("Picture source locator"),
                             value: g,
                             maxLength: 2e3,
                             onChange: (L) => b(L.target.value),
-                            lang: t("Picture source locator"),
+                            lang: language("Picture source locator"),
                             "data-ui-label": "Picture source locator",
                           }),
                         ],
@@ -625,10 +621,10 @@ function Wz(e) {
                     children: [
                       i.jsx(M, { children: "Shape" }),
                       i.jsxs("select", {
-                        "aria-label": r("Shape type"),
+                        "aria-label": text("Shape type"),
                         value: m.shape,
                         onChange: (L) => O({ shape: L.target.value }),
-                        lang: t("Shape type"),
+                        lang: language("Shape type"),
                         "data-ui-label": "Shape type",
                         children: [
                           i.jsx("option", {
@@ -657,11 +653,11 @@ function Wz(e) {
                   children: [
                     a === "chart" ? "Chart title" : "Label",
                     i.jsx("input", {
-                      "aria-label": r("Object label"),
+                      "aria-label": text("Object label"),
                       value: m.label,
                       maxLength: 500,
                       onChange: (L) => O({ label: L.target.value }),
-                      lang: t("Object label"),
+                      lang: language("Object label"),
                       "data-ui-label": "Object label",
                     }),
                   ],
@@ -676,10 +672,10 @@ function Wz(e) {
                           i.jsx(ci, {
                             min: 24,
                             max: 4e3,
-                            "aria-label": r("Object width"),
+                            "aria-label": text("Object width"),
                             value: m.width,
                             onValueChange: (L) => O({ width: Number(L) }),
-                            lang: t("Object width"),
+                            lang: language("Object width"),
                             "data-ui-label": "Object width",
                           }),
                         ],
@@ -690,10 +686,10 @@ function Wz(e) {
                           i.jsx(ci, {
                             min: 24,
                             max: 4e3,
-                            "aria-label": r("Object height"),
+                            "aria-label": text("Object height"),
                             value: m.height,
                             onValueChange: (L) => O({ height: Number(L) }),
-                            lang: t("Object height"),
+                            lang: language("Object height"),
                             "data-ui-label": "Object height",
                           }),
                         ],
@@ -709,10 +705,10 @@ function Wz(e) {
                           i.jsx(M, { children: "Fill" }),
                           i.jsx("input", {
                             type: "color",
-                            "aria-label": r("Object fill"),
+                            "aria-label": text("Object fill"),
                             value: m.fill,
                             onChange: (L) => O({ fill: L.target.value }),
-                            lang: t("Object fill"),
+                            lang: language("Object fill"),
                             "data-ui-label": "Object fill",
                           }),
                         ],
@@ -722,10 +718,10 @@ function Wz(e) {
                           i.jsx(M, { children: "Outline" }),
                           i.jsx("input", {
                             type: "color",
-                            "aria-label": r("Object outline"),
+                            "aria-label": text("Object outline"),
                             value: m.stroke,
                             onChange: (L) => O({ stroke: L.target.value }),
-                            lang: t("Object outline"),
+                            lang: language("Object outline"),
                             "data-ui-label": "Object outline",
                           }),
                         ],
@@ -756,8 +752,8 @@ function Wz(e) {
               V &&
               i.jsxs("dl", {
                 className: "dg-evidence-properties",
-                "aria-label": r("Picture evidence properties"),
-                lang: t("Picture evidence properties"),
+                "aria-label": text("Picture evidence properties"),
+                lang: language("Picture evidence properties"),
                 "data-ui-label": "Picture evidence properties",
                 children: [
                   i.jsx("dt", { children: i.jsx(M, { children: "Origin" }) }),
@@ -838,16 +834,16 @@ function Wz(e) {
     }),
   });
 }
-function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
+function Hz({ object, sheet, calc, textScale = 1 }) {
   const o = ne.useMemo(() => {
-    if (e.kind !== "picture") return "";
+    if (object.kind !== "picture") return "";
     try {
-      return (P1(e.dataURL ?? ""), "");
+      return (P1(object.dataURL ?? ""), "");
     } catch (a) {
       return a instanceof Error ? a.message : "Invalid picture.";
     }
-  }, [e.kind, e.dataURL]);
-  return e.kind === "picture"
+  }, [object.kind, object.dataURL]);
+  return object.kind === "picture"
     ? o
       ? i.jsxs("span", {
           role: "img",
@@ -857,11 +853,15 @@ function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
             o,
           ],
         })
-      : i.jsx("img", { src: e.dataURL, alt: e.label, draggable: false })
-    : e.kind === "shape"
+      : i.jsx("img", {
+          src: object.dataURL,
+          alt: object.label,
+          draggable: false,
+        })
+    : object.kind === "shape"
       ? i.jsxs("div", {
           role: "img",
-          "aria-label": e.label,
+          "aria-label": object.label,
           style: {
             position: "relative",
             display: "block",
@@ -882,20 +882,20 @@ function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
                 height: "100%",
               },
               children: i.jsx("g", {
-                fill: e.fill,
-                stroke: e.stroke,
+                fill: object.fill,
+                stroke: object.stroke,
                 strokeWidth: "2",
                 children:
-                  e.shape === "ellipse"
+                  object.shape === "ellipse"
                     ? i.jsx("ellipse", {
                         cx: "120",
                         cy: "70",
                         rx: "116",
                         ry: "66",
                       })
-                    : e.shape === "arrow"
+                    : object.shape === "arrow"
                       ? i.jsx("path", { d: "M4 45H158V8L235 70 158 132V95H4Z" })
-                      : e.shape !== "text"
+                      : object.shape !== "text"
                         ? i.jsx("rect", {
                             x: "2",
                             y: "2",
@@ -911,14 +911,14 @@ function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
               "aria-hidden": "true",
               style: {
                 position: "absolute",
-                inset: 8 * n,
+                inset: 8 * textScale,
                 width: "auto",
                 height: "auto",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                font: `${15 * n}px Arial, sans-serif`,
-                color: e.stroke,
+                font: `${15 * textScale}px Arial, sans-serif`,
+                color: object.stroke,
                 whiteSpace: "pre-wrap",
                 textAlign: "center",
                 overflow: "hidden",
@@ -929,16 +929,16 @@ function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
                   maxWidth: "100%",
                   overflowWrap: "anywhere",
                 },
-                children: e.label,
+                children: object.label,
               }),
             }),
           ],
         })
-      : i.jsx(yfe, { object: e, sheet: r, calc: t });
+      : i.jsx(yfe, { object, sheet, calc });
 }
 function Cfe(e) {
   var y;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = e.workbook.sheets.find((E) => E.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
@@ -1098,8 +1098,8 @@ function Cfe(e) {
         i.jsxs("div", {
           className: "dg-drawing-overlay",
           role: "group",
-          "aria-label": r("Worksheet drawings"),
-          lang: t("Worksheet drawings"),
+          "aria-label": text("Worksheet drawings"),
+          lang: language("Worksheet drawings"),
           "data-ui-label": "Worksheet drawings",
           children: [
             (n?.objects ?? []).map((E) => {
@@ -1177,7 +1177,7 @@ function Cfe(e) {
                                           children: i.jsx(Move, { size: 14 }),
                                         }),
                                         i.jsx("input", {
-                                          "aria-label": r(
+                                          "aria-label": text(
                                             "Selected object label",
                                           ),
                                           value: A.label,
@@ -1186,7 +1186,9 @@ function Cfe(e) {
                                               { ...A, label: O.target.value },
                                               "Rename drawing",
                                             ),
-                                          lang: t("Selected object label"),
+                                          lang: language(
+                                            "Selected object label",
+                                          ),
                                           "data-ui-label":
                                             "Selected object label",
                                         }),
@@ -1244,38 +1246,38 @@ function Cfe(e) {
 const qz =
   ".dg-print-paper{box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact;color:#000;background:white;position:relative;overflow:hidden;break-after:page;page-break-after:always}.dg-print-paper:last-child{break-after:auto;page-break-after:auto}.dg-print-content{position:relative;overflow:hidden}.dg-print-table{border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;font-size:14px}.dg-print-table td,.dg-print-table th{box-sizing:border-box;padding:0 3px;overflow:hidden;white-space:nowrap;font-weight:400}.dg-print-table th{font:11px Arial;background:#f3f3f3}.dg-print-table thead tr{height:22px}.dg-print-table td>div{overflow:hidden;line-height:1.35}.dg-print-header,.dg-print-footer{position:absolute;left:0;right:0;text-align:center;font:11px Arial;color:#444;white-space:pre-wrap;line-height:1.3;overflow-wrap:anywhere}.dg-print-object{position:absolute;overflow:hidden}.dg-print-object>img,.dg-print-object>svg{width:100%;height:100%;object-fit:contain}.dg-shape-label{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font:15px Arial;white-space:pre-wrap;text-align:center;overflow:hidden}@media print{.dg-print-paper{margin:0!important;box-shadow:none!important;zoom:1!important}}";
 function Xz({
-  workbook: e,
-  sheet: r,
-  layout: t,
-  page: n,
-  index: o,
-  total: a,
-  scale: s,
-  calc: d,
-  ruleStyles: u,
+  workbook,
+  sheet,
+  layout,
+  page,
+  index,
+  total,
+  scale,
+  calc,
+  ruleStyles,
 }) {
-  const l = ul(r.rowCount, cn(r, "row")),
-    c = ul(r.colCount, cn(r, "column")),
-    h = KR(t),
-    f = ct(t.printArea),
+  const l = ul(sheet.rowCount, cn(sheet, "row")),
+    c = ul(sheet.colCount, cn(sheet, "column")),
+    h = KR(layout),
+    f = ct(layout.printArea),
     p =
-      n.rows ??
+      page.rows ??
       Array.from(
-        { length: n.lastRow - n.firstRow + 1 },
-        (E, A) => n.firstRow + A,
+        { length: page.lastRow - page.firstRow + 1 },
+        (E, A) => page.firstRow + A,
       ).filter((E) => !l.isHidden(E)),
     m =
-      n.columns ??
+      page.columns ??
       Array.from(
-        { length: n.lastCol - n.firstCol + 1 },
-        (E, A) => n.firstCol + A,
+        { length: page.lastCol - page.firstCol + 1 },
+        (E, A) => page.firstCol + A,
       ).filter((E) => !c.isHidden(E)),
-    v = m.reduce((E, A) => E + Ip(r, A), t.headings ? 32 : 0),
+    v = m.reduce((E, A) => E + Ip(sheet, A), layout.headings ? 32 : 0),
     g = new Map(p.map((E, A) => [E, A])),
     b = [0];
-  for (const E of p) b.push(b.at(-1) + gg(r, E));
+  for (const E of p) b.push(b.at(-1) + gg(sheet, E));
   const y = new Map();
-  for (const E of r.merges ?? []) {
+  for (const E of sheet.merges ?? []) {
     const A = ct(E),
       k = p.filter((O) => O >= A.firstRow && O <= A.lastRow),
       F = m.filter((O) => O >= A.firstCol && O <= A.lastCol);
@@ -1293,38 +1295,38 @@ function Xz({
     if (!(I.firstRow > I.lastRow || I.firstCol > I.lastCol))
       for (const O of k) for (const j of F) y.set(O * 16384 + j, I);
   }
-  const w = (E) => rae(E, e, r, o + 1, a);
+  const w = (E) => rae(E, workbook, sheet, index + 1, total);
   return i.jsxs("article", {
     className: "dg-print-paper",
-    "aria-label": `Print page ${o + 1}`,
+    "aria-label": `Print page ${index + 1}`,
     style: {
       boxSizing: "border-box",
       width: h.width,
       height: h.height,
-      paddingTop: t.margins.top * 96,
-      paddingBottom: t.margins.bottom * 96,
-      paddingLeft: t.margins.left * 96,
-      paddingRight: t.margins.right * 96,
+      paddingTop: layout.margins.top * 96,
+      paddingBottom: layout.margins.bottom * 96,
+      paddingLeft: layout.margins.left * 96,
+      paddingRight: layout.margins.right * 96,
     },
     children: [
       i.jsx("div", {
         className: "dg-print-header",
         style: {
-          top: t.margins.header * 96,
-          left: t.margins.left * 96,
-          right: t.margins.right * 96,
+          top: layout.margins.header * 96,
+          left: layout.margins.left * 96,
+          right: layout.margins.right * 96,
         },
-        children: w(t.header),
+        children: w(layout.header),
       }),
       i.jsx("div", {
         className: "dg-print-content",
         style: {
-          width: h.width - (t.margins.left + t.margins.right) * 96,
-          height: h.height - (t.margins.top + t.margins.bottom) * 96,
+          width: h.width - (layout.margins.left + layout.margins.right) * 96,
+          height: h.height - (layout.margins.top + layout.margins.bottom) * 96,
         },
         children: i.jsxs("div", {
           style: {
-            transform: `scale(${s})`,
+            transform: `scale(${scale})`,
             transformOrigin: "top left",
             width: v,
           },
@@ -1335,13 +1337,13 @@ function Xz({
               children: [
                 i.jsxs("colgroup", {
                   children: [
-                    t.headings && i.jsx("col", { style: { width: 32 } }),
+                    layout.headings && i.jsx("col", { style: { width: 32 } }),
                     m.map((E) =>
-                      i.jsx("col", { style: { width: Ip(r, E) } }, E),
+                      i.jsx("col", { style: { width: Ip(sheet, E) } }, E),
                     ),
                   ],
                 }),
-                t.headings &&
+                layout.headings &&
                   i.jsx("thead", {
                     children: i.jsxs("tr", {
                       children: [
@@ -1355,9 +1357,9 @@ function Xz({
                     i.jsxs(
                       "tr",
                       {
-                        style: { height: gg(r, E) },
+                        style: { height: gg(sheet, E) },
                         children: [
-                          t.headings && i.jsx("th", { children: E + 1 }),
+                          layout.headings && i.jsx("th", { children: E + 1 }),
                           m.map((A) => {
                             const k = y.get(E * 16384 + A);
                             if (k && (E !== k.firstRow || A !== k.firstCol))
@@ -1366,7 +1368,7 @@ function Xz({
                               I =
                                 k != null && k.suppressContent
                                   ? undefined
-                                  : r.cells[F],
+                                  : sheet.cells[F],
                               O = {
                                 ...I,
                                 raw: I?.raw ?? null,
@@ -1375,13 +1377,13 @@ function Xz({
                                     ? {}
                                     : {
                                         ...I?.style,
-                                        ...u(F).style,
+                                        ...ruleStyles(F).style,
                                       },
                               },
                               j =
                                 k != null && k.suppressContent
                                   ? null
-                                  : d(r.id, F),
+                                  : calc(sheet.id, F),
                               z = b[g.get(k?.lastRow ?? E) + 1] - b[g.get(E)];
                             return i.jsx(
                               "td",
@@ -1399,7 +1401,7 @@ function Xz({
                                 colSpan: k?.colSpan ?? 1,
                                 rowSpan: k?.rowSpan ?? 1,
                                 style: Dw(O.style, j, {
-                                  defaultBorder: t.gridlines
+                                  defaultBorder: layout.gridlines
                                     ? "1px solid #d4d4d4"
                                     : "none",
                                 }),
@@ -1413,11 +1415,12 @@ function Xz({
                                     decoration:
                                       k != null && k.suppressContent
                                         ? undefined
-                                        : u(F),
+                                        : ruleStyles(F),
                                     children: i.jsx(jI, {
                                       value: j,
                                       cell: O,
-                                      dateSystem: e.datePolicy?.dateSystem,
+                                      dateSystem:
+                                        workbook.datePolicy?.dateSystem,
                                     }),
                                   }),
                                 }),
@@ -1433,9 +1436,9 @@ function Xz({
                 }),
               ],
             }),
-            (r.objects ?? []).map((E) => {
+            (sheet.objects ?? []).map((E) => {
               const A = ct(E.anchor),
-                k = XR(r, E);
+                k = XR(sheet, E);
               if (
                 l.isHidden(A.firstRow) ||
                 c.isHidden(A.firstCol) ||
@@ -1443,10 +1446,12 @@ function Xz({
                 !m.includes(A.firstCol)
               )
                 return null;
-              let F = t.headings ? 32 : 0,
-                I = t.headings ? 22 : 0;
-              for (const O of m.slice(0, m.indexOf(A.firstCol))) F += Ip(r, O);
-              for (const O of p.slice(0, p.indexOf(A.firstRow))) I += gg(r, O);
+              let F = layout.headings ? 32 : 0,
+                I = layout.headings ? 22 : 0;
+              for (const O of m.slice(0, m.indexOf(A.firstCol)))
+                F += Ip(sheet, O);
+              for (const O of p.slice(0, p.indexOf(A.firstRow)))
+                I += gg(sheet, O);
               return i.jsx(
                 "div",
                 {
@@ -1466,7 +1471,7 @@ function Xz({
                     width: k.width,
                     height: k.height,
                   },
-                  children: i.jsx(Hz, { object: E, sheet: r, calc: d }),
+                  children: i.jsx(Hz, { object: E, sheet, calc }),
                 },
                 E.id,
               );
@@ -1477,11 +1482,11 @@ function Xz({
       i.jsx("div", {
         className: "dg-print-footer",
         style: {
-          bottom: t.margins.footer * 96,
-          left: t.margins.left * 96,
-          right: t.margins.right * 96,
+          bottom: layout.margins.footer * 96,
+          left: layout.margins.left * 96,
+          right: layout.margins.right * 96,
         },
-        children: w(t.footer),
+        children: w(layout.footer),
       }),
     ],
   });
@@ -1729,8 +1734,9 @@ function k3(e) {
 }
 async function gw(e, r = {}) {
   const t = e.ownerDocument ?? e,
-    { signal: n, timeoutMs: o = 1e4 } = r;
-  if (n != null && n.aborted) throw Error("Print preparation was cancelled.");
+    { signal, timeoutMs = 1e4 } = r;
+  if (signal != null && signal.aborted)
+    throw Error("Print preparation was cancelled.");
   const a = [];
   try {
     const d = Promise.all([
@@ -1775,12 +1781,13 @@ async function gw(e, r = {}) {
                   "Print assets did not finish loading within 10 seconds. Check the pictures and fonts, then retry.",
                 ),
               ),
-            o,
+            timeoutMs,
           ),
           h = () => l(Error("Print preparation was cancelled."));
-        (n == null || n.addEventListener("abort", h, { once: true }),
+        (signal == null || signal.addEventListener("abort", h, { once: true }),
           a.push(() => {
-            (clearTimeout(c), n == null || n.removeEventListener("abort", h));
+            (clearTimeout(c),
+              signal == null || signal.removeEventListener("abort", h));
           }));
       }),
     ]);

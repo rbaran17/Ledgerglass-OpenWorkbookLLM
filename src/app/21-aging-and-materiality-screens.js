@@ -12,8 +12,8 @@ import { Ez, RI, cf, ede, lde } from "./20-calculation-options-and-sources.js";
 async function Sz(e, r, t, n = {}) {
   var d, u;
   if (n.reliability) {
-    const { reliability: l, ...c } = n;
-    return l.run("provider", "request", () => Sz(e, r, t, c));
+    const { reliability, ...c } = n;
+    return reliability.run("provider", "request", () => Sz(e, r, t, c));
   }
   if (
     typeof r != "string" ||
@@ -463,8 +463,8 @@ function l3(e, r, t = {}) {
 }
 function pde(e, r, t = {}) {
   const n = Nz(e, r, t),
-    { request: o, context: a } = n,
-    s = ct(o.range),
+    { request, context } = n,
+    s = ct(request.range),
     d = [],
     u = {
       population: 0,
@@ -484,9 +484,9 @@ function pde(e, r, t = {}) {
     h = 0;
   for (const m of n.rows) {
     const v = (I) => m.values[I - s.firstCol],
-      g = v(o.amountColumn),
-      b = v(o.currencyColumn),
-      y = v(o.dateColumn),
+      g = v(request.amountColumn),
+      b = v(request.currencyColumn),
+      y = v(request.dateColumn),
       w = typeof g == "number" && Number.isFinite(g) ? g : null,
       E =
         typeof b == "string" && /^[A-Za-z]{3}$/.test(b)
@@ -499,23 +499,24 @@ function pde(e, r, t = {}) {
         "Amount is missing or is not a finite numeric value (numeric text is not coerced).",
       ),
       u.invalidAmounts++),
-      (!E || E !== o.currency) &&
+      (!E || E !== request.currency) &&
         (k.push(
           E
-            ? `Currency ${E} differs from the declared ${o.currency}; conversion is unsupported.`
+            ? `Currency ${E} differs from the declared ${request.currency}; conversion is unsupported.`
             : "Currency is missing or is not a three-letter identifier.",
         ),
         u.currencyExceptions++),
       A
-        ? (A < o.effectiveFrom || A > o.effectiveTo) &&
+        ? (A < request.effectiveFrom || A > request.effectiveTo) &&
           (k.push("Date is outside the inclusive effective period."),
           u.outsidePeriod++)
         : (k.push(
             "Date is missing or invalid; use ISO YYYY-MM-DD or an integer Excel 1900-system date serial (except 60).",
           ),
           u.invalidDates++));
-    const F = w === null ? null : o.amountMode === "absolute" ? Math.abs(w) : w;
-    (w !== null && E === o.currency ? (l += w) : h++,
+    const F =
+      w === null ? null : request.amountMode === "absolute" ? Math.abs(w) : w;
+    (w !== null && E === request.currency ? (l += w) : h++,
       k.length || (u.eligible++, (c += w)),
       d.push({
         ...m,
@@ -525,7 +526,7 @@ function pde(e, r, t = {}) {
         comparedAmount: F,
         disposition: k.length
           ? "excluded"
-          : hde(F, o.threshold, o.comparator)
+          : hde(F, request.threshold, request.comparator)
             ? "flagged"
             : "not-flagged",
         reasons: k,
@@ -566,8 +567,8 @@ function pde(e, r, t = {}) {
     sheetId: n.sheetId,
     sheetName: n.sheetName,
     generatedAt: new Date().toISOString(),
-    request: structuredClone(o),
-    context: a,
+    request: structuredClone(request),
+    context,
     status: u.currencyExceptions
       ? "blocked"
       : u.excluded
@@ -577,7 +578,7 @@ function pde(e, r, t = {}) {
     rows: d,
     counts: u,
     totals: {
-      currency: o.currency,
+      currency: request.currency,
       knownSourceAmount: l,
       eligibleAmount: c,
       excludedKnownAmount: l - c,
@@ -600,8 +601,8 @@ function pde(e, r, t = {}) {
       ),
     Tz.set(p, {
       snapshot: JSON.stringify(e),
-      request: JSON.stringify(o),
-      context: JSON.stringify(a),
+      request: JSON.stringify(request),
+      context: JSON.stringify(context),
       content: JSON.stringify(p),
     }),
     p
@@ -1057,7 +1058,7 @@ const P7 = (e) => {
     { label: "91+ days", from: 91, to: null },
   ];
 function Ede(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -1273,9 +1274,9 @@ function Ede(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close aging schedule"),
+              "aria-label": text("Close aging schedule"),
               onClick: e.onClose,
-              lang: t("Close aging schedule"),
+              lang: language("Close aging schedule"),
               "data-ui-label": "Close aging schedule",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1302,10 +1303,10 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Aging source range"),
+                  "aria-label": text("Aging source range"),
                   value: de ? c : "",
                   onChange: (Me) => h(Me.target.value),
-                  lang: t("Aging source range"),
+                  lang: language("Aging source range"),
                   "data-ui-label": "Aging source range",
                 }),
               ],
@@ -1348,11 +1349,11 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Declared currency" }),
                 i.jsx("input", {
-                  "aria-label": r("Declared currency"),
+                  "aria-label": text("Declared currency"),
                   maxLength: 3,
                   value: E,
                   onChange: (Me) => A(Me.target.value),
-                  lang: t("Declared currency"),
+                  lang: language("Declared currency"),
                   "data-ui-label": "Declared currency",
                 }),
               ],
@@ -1361,10 +1362,10 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Date basis" }),
                 i.jsxs("select", {
-                  "aria-label": r("Date basis"),
+                  "aria-label": text("Date basis"),
                   value: k,
                   onChange: (Me) => F(Me.target.value),
-                  lang: t("Date basis"),
+                  lang: language("Date basis"),
                   "data-ui-label": "Date basis",
                   children: [
                     i.jsx("option", { value: "due", children: "Due date" }),
@@ -1380,11 +1381,11 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Fixed as-of date" }),
                 i.jsx("input", {
-                  "aria-label": r("Fixed as-of date"),
+                  "aria-label": text("Fixed as-of date"),
                   type: "date",
                   value: j,
                   onChange: (Me) => z(Me.target.value),
-                  lang: t("Fixed as-of date"),
+                  lang: language("Fixed as-of date"),
                   "data-ui-label": "Fixed as-of date",
                 }),
               ],
@@ -1393,10 +1394,10 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Numeric serial date system" }),
                 i.jsxs("select", {
-                  "aria-label": r("Numeric serial date system"),
+                  "aria-label": text("Numeric serial date system"),
                   value: I,
                   onChange: (Me) => O(Me.target.value),
-                  lang: t("Numeric serial date system"),
+                  lang: language("Numeric serial date system"),
                   "data-ui-label": "Numeric serial date system",
                   children: [
                     i.jsx("option", {
@@ -1483,7 +1484,7 @@ function Ede(e) {
                                 "aria-label": `Bucket ${ke + 1} to`,
                                 min: "0",
                                 step: "1",
-                                placeholder: r("Open-ended"),
+                                placeholder: text("Open-ended"),
                                 value:
                                   Me.to === null
                                     ? ""
@@ -1492,7 +1493,7 @@ function Ede(e) {
                                       : "",
                                 onValueChange: (je) =>
                                   ht(ke, { to: je === "" ? null : Number(je) }),
-                                lang: t("Open-ended"),
+                                lang: language("Open-ended"),
                               }),
                             }),
                             i.jsx("td", {
@@ -1538,11 +1539,11 @@ function Ede(e) {
             className: "aging-check",
             children: [
               i.jsx("input", {
-                "aria-label": r("Include hidden content"),
+                "aria-label": text("Include hidden content"),
                 type: "checkbox",
                 checked: B,
                 onChange: (Me) => _(Me.target.checked),
-                lang: t("Include hidden content"),
+                lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
               i.jsx(M, {
@@ -1570,14 +1571,14 @@ function Ede(e) {
               children: [
                 i.jsx(M, { children: "Load saved configuration/report" }),
                 i.jsx("input", {
-                  "aria-label": r("Load aging configuration"),
+                  "aria-label": text("Load aging configuration"),
                   type: "file",
                   accept: "application/json,.json",
                   onChange: (Me) => {
                     const ke = Me.target.files?.[0];
                     ((Me.target.value = ""), qe(ke));
                   },
-                  lang: t("Load aging configuration"),
+                  lang: language("Load aging configuration"),
                   "data-ui-label": "Load aging configuration",
                 }),
               ],
@@ -1603,8 +1604,8 @@ function Ede(e) {
         ge &&
           i.jsxs("section", {
             className: "aging-result",
-            "aria-label": r("Aging schedule results"),
-            lang: t("Aging schedule results"),
+            "aria-label": text("Aging schedule results"),
+            lang: language("Aging schedule results"),
             "data-ui-label": "Aging schedule results",
             children: [
               i.jsx("h3", {
@@ -1670,8 +1671,8 @@ function Ede(e) {
                 ],
               }),
               i.jsxs("table", {
-                "aria-label": r("Aging bucket totals"),
-                lang: t("Aging bucket totals"),
+                "aria-label": text("Aging bucket totals"),
+                lang: language("Aging bucket totals"),
                 "data-ui-label": "Aging bucket totals",
                 children: [
                   i.jsx("thead", {
@@ -1763,12 +1764,12 @@ function Ede(e) {
                 children: [
                   i.jsx(M, { children: "Rows to review" }),
                   i.jsxs("select", {
-                    "aria-label": r("Aging rows to review"),
+                    "aria-label": text("Aging rows to review"),
                     value: q,
                     onChange: (Me) => {
                       (W(Me.target.value), J(0));
                     },
-                    lang: t("Aging rows to review"),
+                    lang: language("Aging rows to review"),
                     "data-ui-label": "Aging rows to review",
                     children: [
                       i.jsx("option", {
@@ -1807,8 +1808,8 @@ function Ede(e) {
               i.jsx("div", {
                 className: "aging-scroll",
                 children: i.jsxs("table", {
-                  "aria-label": r("Aging source rows"),
-                  lang: t("Aging source rows"),
+                  "aria-label": text("Aging source rows"),
+                  lang: language("Aging source rows"),
                   "data-ui-label": "Aging source rows",
                   children: [
                     i.jsx("thead", {
@@ -1924,8 +1925,8 @@ function Ede(e) {
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Aging result pages"),
-                lang: t("Aging result pages"),
+                "aria-label": text("Aging result pages"),
+                lang: language("Aging result pages"),
                 "data-ui-label": "Aging result pages",
                 children: [
                   i.jsx("button", {

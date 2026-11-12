@@ -611,8 +611,8 @@ function Z2e(e) {
     }),
   });
 }
-function K2e({ workbook: e, sheetId: r, onReview: t }) {
-  const n = e.sheets.find((s) => s.id === r),
+function K2e({ workbook, sheetId, onReview }) {
+  const n = workbook.sheets.find((s) => s.id === sheetId),
     o = n?.externalConnection;
   if (!n || !o) return null;
   let a = true;
@@ -648,7 +648,7 @@ function K2e({ workbook: e, sheetId: r, onReview: t }) {
       }),
       i.jsx("button", {
         type: "button",
-        onClick: t,
+        onClick: onReview,
         children: i.jsx(M, { children: "Connections & Refresh" }),
       }),
     ],

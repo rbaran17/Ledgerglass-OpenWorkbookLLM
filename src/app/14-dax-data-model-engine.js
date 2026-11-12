@@ -454,16 +454,16 @@ function ace(e) {
       case "AVERAGE":
       case "MIN":
       case "MAX": {
-        const { f: U, values: G } = _(L[0], R);
+        const { f, values } = _(L[0], R);
         if (
-          t.get(U.tableId).columns.find((Q) => Q.name === U.column).type !==
+          t.get(f.tableId).columns.find((Q) => Q.name === f.column).type !==
           "number"
         )
           return on(
             "DAX_TYPE",
             `${N.name} requires a number column in this subset.`,
           );
-        const H = G.filter((Q) => typeof Q == "number");
+        const H = values.filter((Q) => typeof Q == "number");
         return H.length
           ? N.name === "SUM"
             ? ny(H)
@@ -475,12 +475,12 @@ function ace(e) {
           : null;
       }
       case "DISTINCTCOUNT": {
-        const { values: U } = _(L[0], R);
-        return U.length ? new Set(U.map(ry)).size : null;
+        const { values } = _(L[0], R);
+        return values.length ? new Set(values.map(ry)).size : null;
       }
       case "SELECTEDVALUE": {
-        const { values: U } = _(L[0], R),
-          G = new Map(U.map((H) => [ry(H), H]));
+        const { values } = _(L[0], R),
+          G = new Map(values.map((H) => [ry(H), H]));
         return G.size === 1 ? [...G.values()][0] : L[1] ? $(1) : null;
       }
       case "COUNTROWS":
@@ -1572,8 +1572,8 @@ function mce(e, r, t = {}) {
     };
   }
 }
-function uz({ label: e, value: r, onChange: t }) {
-  const { text: n } = Dr(),
+function uz({ label, value, onChange }) {
+  const { text } = Dr(),
     o = ne.useId(),
     a = ne.useRef(null);
   return i.jsxs("div", {
@@ -1581,16 +1581,16 @@ function uz({ label: e, value: r, onChange: t }) {
     children: [
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: e }),
+          i.jsx(M, { children: label }),
           i.jsx("textarea", {
             ref: a,
-            "aria-label": n(e),
+            "aria-label": text(label),
             "aria-describedby": o,
-            value: r,
+            value,
             maxLength: t0.expressionCharacters,
             rows: 3,
             spellCheck: false,
-            onChange: (d) => t(d.target.value),
+            onChange: (d) => onChange(d.target.value),
           }),
         ],
       }),
@@ -1600,14 +1600,14 @@ function uz({ label: e, value: r, onChange: t }) {
           children: [
             i.jsx(M, { children: "Insert DAX function" }),
             i.jsxs("select", {
-              "aria-label": n(`${e} insert function`),
+              "aria-label": text(`${label} insert function`),
               value: "",
               onChange: (d) => {
                 if (!d.target.value) return;
-                const u = a.current?.selectionStart ?? r.length,
+                const u = a.current?.selectionStart ?? value.length,
                   l = a.current?.selectionEnd ?? u,
                   c = d.target.value + "(";
-                (t(r.slice(0, u) + c + r.slice(l)),
+                (onChange(value.slice(0, u) + c + value.slice(l)),
                   requestAnimationFrame(() => {
                     var p, m;
                     ((p = a.current) == null || p.focus(),
@@ -1618,7 +1618,7 @@ function uz({ label: e, value: r, onChange: t }) {
               children: [
                 i.jsx("option", {
                   value: "",
-                  children: n("Choose a function"),
+                  children: text("Choose a function"),
                 }),
                 Object.keys(H5).map((d) =>
                   i.jsx("option", { value: d, children: d }, d),
@@ -1643,16 +1643,16 @@ function uz({ label: e, value: r, onChange: t }) {
     ],
   });
 }
-function gce({ definition: e, onChange: r }) {
-  const { text: t } = Dr(),
-    n = e.tables.reduce(
+function gce({ definition, onChange }) {
+  const { text } = Dr(),
+    n = definition.tables.reduce(
       (a, s) => a + s.columns.filter((d) => d.expression !== undefined).length,
       0,
     ),
     o = (a, s) =>
-      r({
-        ...e,
-        tables: e.tables.map((d) => (d.id === a ? { ...d, ...s } : d)),
+      onChange({
+        ...definition,
+        tables: definition.tables.map((d) => (d.id === a ? { ...d, ...s } : d)),
       });
   return i.jsxs(i.Fragment, {
     children: [
@@ -1663,7 +1663,7 @@ function gce({ definition: e, onChange: r }) {
             "Calculated columns are evaluated for every source row before query filters. Sources remain unchanged. Preview is required before saving or publishing.",
         }),
       }),
-      e.tables.map((a) =>
+      definition.tables.map((a) =>
         i.jsxs(
           "fieldset",
           {
@@ -1673,14 +1673,14 @@ function gce({ definition: e, onChange: r }) {
                 children: [
                   i.jsx(M, { children: "Calendar date column" }),
                   i.jsxs("select", {
-                    "aria-label": t(`${a.name} calendar date column`),
+                    "aria-label": text(`${a.name} calendar date column`),
                     value: a.dateColumn ?? "",
                     onChange: (s) =>
                       o(a.id, { dateColumn: s.target.value || undefined }),
                     children: [
                       i.jsx("option", {
                         value: "",
-                        children: t("Not a marked calendar"),
+                        children: text("Not a marked calendar"),
                       }),
                       a.columns
                         .filter(
@@ -1731,7 +1731,7 @@ function gce({ definition: e, onChange: r }) {
                                 children: [
                                   i.jsx(M, { children: "Name" }),
                                   i.jsx("input", {
-                                    "aria-label": t(
+                                    "aria-label": text(
                                       `${a.name} calculated column ${u} name`,
                                     ),
                                     value: s.name,
@@ -1750,7 +1750,7 @@ function gce({ definition: e, onChange: r }) {
                                 children: [
                                   i.jsx(M, { children: "Type" }),
                                   i.jsx("select", {
-                                    "aria-label": t(
+                                    "aria-label": text(
                                       `${a.name} calculated column ${u} type`,
                                     ),
                                     value: s.type,
@@ -1770,7 +1770,7 @@ function gce({ definition: e, onChange: r }) {
                                     ].map((l) =>
                                       i.jsx(
                                         "option",
-                                        { value: l, children: t(l) },
+                                        { value: l, children: text(l) },
                                         l,
                                       ),
                                     ),
@@ -1781,7 +1781,7 @@ function gce({ definition: e, onChange: r }) {
                                 children: [
                                   i.jsx("input", {
                                     type: "checkbox",
-                                    "aria-label": t(
+                                    "aria-label": text(
                                       `${a.name} calculated column ${u} nullable`,
                                     ),
                                     checked: s.nullable,
@@ -1801,7 +1801,7 @@ function gce({ definition: e, onChange: r }) {
                                 ],
                               }),
                               i.jsx("button", {
-                                "aria-label": t(
+                                "aria-label": text(
                                   `Remove ${a.name} calculated column ${u}`,
                                 ),
                                 onClick: () =>
@@ -1830,7 +1830,7 @@ function gce({ definition: e, onChange: r }) {
                     );
               }),
               i.jsx("button", {
-                "aria-label": t(`Add calculated column to ${a.name}`),
+                "aria-label": text(`Add calculated column to ${a.name}`),
                 disabled:
                   n >= t0.calculatedColumns || a.columns.length >= ta.columns,
                 onClick: () => {
@@ -1861,7 +1861,7 @@ function gce({ definition: e, onChange: r }) {
           a.id,
         ),
       ),
-      !e.tables.length &&
+      !definition.tables.length &&
         i.jsx("p", {
           children: i.jsx(M, { children: "Add a source in Tables first." }),
         }),

@@ -20,7 +20,7 @@ import { BI } from "./29-conditional-formatting-dialog.js";
 import { Vz, gfe, mfe } from "./30-table-and-pivot-builder.js";
 
 function vfe(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = e.workbook.sheets.flatMap((u) =>
       (u.pivots ?? []).map((l) => ({ sheet: u, definition: l })),
     ),
@@ -46,12 +46,12 @@ function vfe(e) {
   return i.jsxs("div", {
     role: "dialog",
     "aria-modal": "false",
-    "aria-label": r("Explore PivotTable"),
+    "aria-label": text("Explore PivotTable"),
     className: "lg-table-tools lg-pivot-explore",
     onKeyDown: (u) => {
       u.key === "Escape" && e.onClose();
     },
-    lang: t("Explore PivotTable"),
+    lang: language("Explore PivotTable"),
     "data-ui-label": "Explore PivotTable",
     children: [
       i.jsxs("header", {
@@ -70,9 +70,9 @@ function vfe(e) {
             ],
           }),
           i.jsx("button", {
-            "aria-label": r("Close Explore PivotTable"),
+            "aria-label": text("Close Explore PivotTable"),
             onClick: e.onClose,
-            lang: t("Close Explore PivotTable"),
+            lang: language("Close Explore PivotTable"),
             "data-ui-label": "Close Explore PivotTable",
             children: "×",
           }),
@@ -957,14 +957,14 @@ function J7(e, r = false, t = true) {
     ),
   };
 }
-function yfe({ object: e, sheet: r, calc: t }) {
+function yfe({ object, sheet, calc }) {
   let n;
   try {
-    n = Ww(r, e, t);
+    n = Ww(sheet, object, calc);
   } catch (o) {
     return i.jsxs("div", {
       role: "img",
-      "aria-label": `${e.label}: chart unavailable`,
+      "aria-label": `${object.label}: chart unavailable`,
       style: {
         background: "white",
         padding: 8,
@@ -980,15 +980,15 @@ function yfe({ object: e, sheet: r, calc: t }) {
   }
   return i.jsx(LI, { report: n });
 }
-function LI({ report: e }) {
-  const r = e.diagnostics.filter((B) => B.severity === "error"),
-    t = e.kind === "sparkline",
+function LI({ report }) {
+  const r = report.diagnostics.filter((B) => B.severity === "error"),
+    t = report.kind === "sparkline",
     n = t ? 200 : 640,
     o = t ? 40 : 380;
   if (r.length)
     return i.jsxs("div", {
       role: "img",
-      "aria-label": `${e.title}: chart unavailable`,
+      "aria-label": `${report.title}: chart unavailable`,
       style: {
         background: "white",
         padding: 8,
@@ -998,7 +998,10 @@ function LI({ report: e }) {
       },
       children: [
         i.jsxs("strong", {
-          children: [e.title, i.jsx(M, { children: ": chart unavailable" })],
+          children: [
+            report.title,
+            i.jsx(M, { children: ": chart unavailable" }),
+          ],
         }),
         i.jsx("p", {
           children: r
@@ -1006,11 +1009,13 @@ function LI({ report: e }) {
             .map((B) => B.message)
             .join(" "),
         }),
-        i.jsx("p", { children: e.scope }),
+        i.jsx("p", { children: report.scope }),
       ],
     });
-  const a = e.points.filter((B) => B.included),
-    s = e.series.map((B, _) => ({ ...B, index: _ })).filter((B) => B.included),
+  const a = report.points.filter((B) => B.included),
+    s = report.series
+      .map((B, _) => ({ ...B, index: _ }))
+      .filter((B) => B.included),
     d = s.flatMap((B) =>
       a.map((_) => _.values[B.index].value).filter((_) => typeof _ == "number"),
     ),
@@ -1021,24 +1026,24 @@ function LI({ report: e }) {
     f = l - u,
     p = h - c,
     m =
-      e.kind === "histogram"
-        ? e.histogram.map((B) => B.count)
-        : e.kind === "waterfall"
-          ? e.waterfall.flatMap((B) => [B.start, B.end])
+      report.kind === "histogram"
+        ? report.histogram.map((B) => B.count)
+        : report.kind === "waterfall"
+          ? report.waterfall.flatMap((B) => [B.start, B.end])
           : d,
-    v = J7(m, e.axes.y.scale === "log"),
+    v = J7(m, report.axes.y.scale === "log"),
     g = (B) => h - v.fraction(B) * p,
-    b = e.axes.y.scale === "log" ? v.min : 0,
+    b = report.axes.y.scale === "log" ? v.min : 0,
     y = J7(
       a.map((B) => Number(B.category.value)).filter(Number.isFinite),
-      e.axes.x.scale === "log",
+      report.axes.x.scale === "log",
       false,
     ),
     w = (B, _ = a.length) => u + ((B + 0.5) * f) / Math.max(1, _),
     E = (B) => u + y.fraction(B) * f,
     A = [],
     k = (B, _) =>
-      `${B}: ${$f(_)}${e.kind === "histogram" ? " records" : e.axes.units ? " " + e.axes.units : ""}`,
+      `${B}: ${$f(_)}${report.kind === "histogram" ? " records" : report.axes.units ? " " + report.axes.units : ""}`,
     F = (B, _, C, T, N = false) =>
       B.forEach((R, L) => {
         if (R === null) return;
@@ -1124,7 +1129,7 @@ function LI({ report: e }) {
       }),
         N());
     };
-  if (e.kind === "pie" || e.kind === "donut") {
+  if (report.kind === "pie" || report.kind === "donut") {
     const B = a.map((T) => Number(T.values[s[0].index].value ?? 0)),
       _ = B.reduce((T, N) => T + N, 0);
     let C = -Math.PI / 2;
@@ -1163,7 +1168,7 @@ function LI({ report: e }) {
             ),
       );
     }),
-      e.kind === "donut" &&
+      report.kind === "donut" &&
         A.push(
           i.jsx(
             "circle",
@@ -1172,17 +1177,17 @@ function LI({ report: e }) {
           ),
         ));
   } else
-    e.kind === "histogram"
+    report.kind === "histogram"
       ? F(
-          e.histogram.map((B) => B.count),
-          e.histogram.map((B) => `${$f(B.lower)}–${$f(B.upper)}`),
+          report.histogram.map((B) => B.count),
+          report.histogram.map((B) => `${$f(B.lower)}–${$f(B.upper)}`),
           0,
           1,
         )
-      : e.kind === "waterfall"
-        ? e.waterfall.forEach((B, _) => {
-            const C = w(_, e.waterfall.length),
-              T = f / e.waterfall.length;
+      : report.kind === "waterfall"
+        ? report.waterfall.forEach((B, _) => {
+            const C = w(_, report.waterfall.length),
+              T = f / report.waterfall.length;
             (A.push(
               i.jsx(
                 "rect",
@@ -1205,7 +1210,7 @@ function LI({ report: e }) {
                 _,
               ),
             ),
-              _ < e.waterfall.length - 1 &&
+              _ < report.waterfall.length - 1 &&
                 A.push(
                   i.jsx(
                     "line",
@@ -1228,11 +1233,11 @@ function LI({ report: e }) {
                   : null,
               ),
               T =
-                e.kind === "combo"
+                report.kind === "combo"
                   ? B.kind
-                  : e.kind === "sparkline"
-                    ? (e.options.sparklineKind ?? "line")
-                    : e.kind;
+                  : report.kind === "sparkline"
+                    ? (report.options.sparklineKind ?? "line")
+                    : report.kind;
             T === "scatter"
               ? C.forEach((N, R) => {
                   N !== null &&
@@ -1285,13 +1290,13 @@ function LI({ report: e }) {
                       T === "bar",
                     );
           });
-  const O = ["pie", "donut"].includes(e.kind),
-    j = e.kind === "bar",
+  const O = ["pie", "donut"].includes(report.kind),
+    j = report.kind === "bar",
     z =
-      e.kind === "histogram"
-        ? e.histogram.map((B) => `${$f(B.lower)}–${$f(B.upper)}`)
-        : e.kind === "waterfall"
-          ? e.waterfall.map((B) => B.label)
+      report.kind === "histogram"
+        ? report.histogram.map((B) => `${$f(B.lower)}–${$f(B.upper)}`)
+        : report.kind === "waterfall"
+          ? report.waterfall.map((B) => B.label)
           : a.map((B) => B.label),
     V = O
       ? a
@@ -1307,8 +1312,8 @@ function LI({ report: e }) {
     viewBox: `0 0 ${n} ${o}`,
     preserveAspectRatio: t ? "none" : "xMidYMid meet",
     role: "img",
-    "aria-label": e.altText,
-    "data-chart-kind": e.kind,
+    "aria-label": report.altText,
+    "data-chart-kind": report.kind,
     style: {
       width: "100%",
       height: "100%",
@@ -1317,26 +1322,28 @@ function LI({ report: e }) {
       fontFamily: "Arial,sans-serif",
     },
     children: [
-      i.jsx("title", { children: `${e.title}${t ? `. ${e.scope}` : ""}` }),
+      i.jsx("title", {
+        children: `${report.title}${t ? `. ${report.scope}` : ""}`,
+      }),
       i.jsxs("desc", {
         children: [
-          e.altText,
+          report.altText,
           " ",
-          e.scope,
+          report.scope,
           ". ",
-          e.axes.units && `Units: ${e.axes.units}.`,
+          report.axes.units && `Units: ${report.axes.units}.`,
           " ",
           i.jsx(M, { children: "X:" }),
           " ",
-          e.axes.x.title,
+          report.axes.x.title,
           " (",
-          e.axes.x.scale,
+          report.axes.x.scale,
           i.jsx(M, { children: "); Y: " }),
-          e.axes.y.title,
+          report.axes.y.title,
           " (",
-          e.axes.y.scale,
+          report.axes.y.scale,
           "). ",
-          e.population.policy,
+          report.population.policy,
           " ",
           V.join("; "),
         ],
@@ -1350,7 +1357,7 @@ function LI({ report: e }) {
               textAnchor: "middle",
               fontSize: "17",
               fill: "#222",
-              children: e.title.slice(0, 65),
+              children: report.title.slice(0, 65),
             }),
             i.jsxs("text", {
               x: "320",
@@ -1359,8 +1366,10 @@ function LI({ report: e }) {
               fontSize: "10",
               fill: "#444",
               children: [
-                e.axes.units ? `Units: ${e.axes.units}` : "",
-                e.axes.y.scale === "log" ? " · Logarithmic value axis" : "",
+                report.axes.units ? `Units: ${report.axes.units}` : "",
+                report.axes.y.scale === "log"
+                  ? " · Logarithmic value axis"
+                  : "",
               ],
             }),
           ],
@@ -1394,7 +1403,7 @@ function LI({ report: e }) {
                 _,
               ),
             ),
-            e.kind === "scatter"
+            report.kind === "scatter"
               ? y.ticks.map((B, _) =>
                   i.jsx(
                     "text",
@@ -1430,13 +1439,13 @@ function LI({ report: e }) {
               y: "305",
               textAnchor: "middle",
               fontSize: "11",
-              children: j ? e.axes.y.title : e.axes.x.title,
+              children: j ? report.axes.y.title : report.axes.x.title,
             }),
             i.jsx("text", {
               transform: "translate(14 168) rotate(-90)",
               textAnchor: "middle",
               fontSize: "11",
-              children: j ? e.axes.x.title : e.axes.y.title,
+              children: j ? report.axes.x.title : report.axes.y.title,
             }),
           ],
         }),
@@ -1444,7 +1453,7 @@ function LI({ report: e }) {
       !t &&
         i.jsxs(i.Fragment, {
           children: [
-            e.options.showLegend !== false &&
+            report.options.showLegend !== false &&
               V.slice(0, 6).map((B, _) =>
                 i.jsxs(
                   "g",
@@ -1476,18 +1485,18 @@ function LI({ report: e }) {
               fontSize: "10",
               fill: "#444",
               children: [
-                e.source.sheetName,
+                report.source.sheetName,
                 "!",
-                e.source.range,
+                report.source.range,
                 " · ",
-                e.population.includedRows,
+                report.population.includedRows,
                 "/",
-                e.population.sourceRows,
+                report.population.sourceRows,
                 " ",
                 i.jsx(M, { children: "rows · " }),
-                e.population.selectedSeries,
+                report.population.selectedSeries,
                 "/",
-                e.population.availableSeries,
+                report.population.availableSeries,
                 " ",
                 i.jsx(M, { children: "series" }),
               ],
@@ -1499,12 +1508,12 @@ function LI({ report: e }) {
               fontSize: "9",
               fill: "#555",
               children: [
-                e.population.hiddenRows,
+                report.population.hiddenRows,
                 " ",
                 i.jsx(M, { children: "hidden source rows ·" }),
                 " ",
-                e.diagnostics.length
-                  ? `${e.diagnostics.length} diagnostics · `
+                report.diagnostics.length
+                  ? `${report.diagnostics.length} diagnostics · `
                   : "",
                 V.length > 6 ? "Full legend and " : "",
                 i.jsx(M, {
@@ -1526,11 +1535,11 @@ function wfe(e) {
     t.click(),
     setTimeout(() => URL.revokeObjectURL(r), 1e3));
 }
-function xfe({ object: e, report: r, update: t }) {
-  const { text: n, language: o } = Dr(),
-    a = e.chartOptions ?? {},
-    s = (l) => t({ chartOptions: { ...a, ...l } }),
-    d = r?.series ?? [],
+function xfe({ object, report, update }) {
+  const { text, language } = Dr(),
+    a = object.chartOptions ?? {},
+    s = (l) => update({ chartOptions: { ...a, ...l } }),
+    d = report?.series ?? [],
     u = () =>
       d
         .filter((l) => l.included)
@@ -1541,8 +1550,8 @@ function xfe({ object: e, report: r, update: t }) {
         children: [
           i.jsx(M, { children: "Chart type" }),
           i.jsx("select", {
-            "aria-label": n("Chart type"),
-            value: e.chart,
+            "aria-label": text("Chart type"),
+            value: object.chart,
             onChange: (l) => {
               const c = l.target.value,
                 h = [
@@ -1552,7 +1561,7 @@ function xfe({ object: e, report: r, update: t }) {
                   "histogram",
                   "sparkline",
                 ].includes(c);
-              t({
+              update({
                 chart: c,
                 chartOptions: {
                   ...a,
@@ -1571,7 +1580,7 @@ function xfe({ object: e, report: r, update: t }) {
                 },
               });
             },
-            lang: o("Chart type"),
+            lang: language("Chart type"),
             "data-ui-label": "Chart type",
             children: oR.map((l) =>
               i.jsx(
@@ -1587,10 +1596,10 @@ function xfe({ object: e, report: r, update: t }) {
         children: [
           i.jsx(M, { children: "Source range" }),
           i.jsx("input", {
-            "aria-label": n("Chart source range"),
-            value: e.range,
+            "aria-label": text("Chart source range"),
+            value: object.range,
             onChange: (l) =>
-              t({
+              update({
                 range: l.target.value.toUpperCase(),
                 chartOptions: {
                   ...a,
@@ -1598,7 +1607,7 @@ function xfe({ object: e, report: r, update: t }) {
                   includedRows: undefined,
                 },
               }),
-            lang: o("Chart source range"),
+            lang: language("Chart source range"),
             "data-ui-label": "Chart source range",
           }),
         ],
@@ -1608,9 +1617,9 @@ function xfe({ object: e, report: r, update: t }) {
         children: [
           i.jsx("input", {
             type: "checkbox",
-            checked: e.headers,
+            checked: object.headers,
             onChange: (l) =>
-              t({
+              update({
                 headers: l.target.checked,
                 chartOptions: {
                   ...a,
@@ -1633,15 +1642,15 @@ function xfe({ object: e, report: r, update: t }) {
         children: [
           i.jsx(M, { children: "Chart anchor cell" }),
           i.jsx("input", {
-            "aria-label": n("Chart anchor cell"),
-            value: e.anchor,
-            onChange: (l) => t({ anchor: l.target.value.toUpperCase() }),
-            lang: o("Chart anchor cell"),
+            "aria-label": text("Chart anchor cell"),
+            value: object.anchor,
+            onChange: (l) => update({ anchor: l.target.value.toUpperCase() }),
+            lang: language("Chart anchor cell"),
             "data-ui-label": "Chart anchor cell",
           }),
         ],
       }),
-      e.chart === "sparkline" &&
+      object.chart === "sparkline" &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsx("p", {
@@ -1654,10 +1663,10 @@ function xfe({ object: e, report: r, update: t }) {
               children: [
                 i.jsx(M, { children: "Sparkline style" }),
                 i.jsxs("select", {
-                  "aria-label": n("Sparkline style"),
+                  "aria-label": text("Sparkline style"),
                   value: a.sparklineKind ?? "line",
                   onChange: (l) => s({ sparklineKind: l.target.value }),
-                  lang: o("Sparkline style"),
+                  lang: language("Sparkline style"),
                   "data-ui-label": "Sparkline style",
                   children: [
                     i.jsx("option", { value: "line", children: "Line" }),
@@ -1708,10 +1717,10 @@ function xfe({ object: e, report: r, update: t }) {
                 children: [
                   i.jsx(M, { children: "Value axis scale" }),
                   i.jsxs("select", {
-                    "aria-label": n("Chart Y scale"),
+                    "aria-label": text("Chart Y scale"),
                     value: a.yScale ?? "linear",
                     onChange: (l) => s({ yScale: l.target.value }),
-                    lang: o("Chart Y scale"),
+                    lang: language("Chart Y scale"),
                     "data-ui-label": "Chart Y scale",
                     children: [
                       i.jsx("option", { value: "linear", children: "Linear" }),
@@ -1723,15 +1732,15 @@ function xfe({ object: e, report: r, update: t }) {
                   }),
                 ],
               }),
-              e.chart === "scatter" &&
+              object.chart === "scatter" &&
                 i.jsxs("label", {
                   children: [
                     i.jsx(M, { children: "X axis scale" }),
                     i.jsxs("select", {
-                      "aria-label": n("Chart X scale"),
+                      "aria-label": text("Chart X scale"),
                       value: a.xScale ?? "linear",
                       onChange: (l) => s({ xScale: l.target.value }),
-                      lang: o("Chart X scale"),
+                      lang: language("Chart X scale"),
                       "data-ui-label": "Chart X scale",
                       children: [
                         i.jsx("option", {
@@ -1761,22 +1770,22 @@ function xfe({ object: e, report: r, update: t }) {
           }),
         ],
       }),
-      e.chart === "histogram" &&
+      object.chart === "histogram" &&
         i.jsxs("label", {
           children: [
             i.jsx(M, { children: "Histogram bins" }),
             i.jsx(ci, {
-              "aria-label": n("Histogram bins"),
+              "aria-label": text("Histogram bins"),
               min: 1,
               max: 50,
               value:
                 a.histogramBins ??
                 Math.min(
                   50,
-                  Math.max(1, Math.ceil(Math.sqrt(r?.points.length ?? 1))),
+                  Math.max(1, Math.ceil(Math.sqrt(report?.points.length ?? 1))),
                 ),
               onValueChange: (l) => s({ histogramBins: Number(l) }),
-              lang: o("Histogram bins"),
+              lang: language("Histogram bins"),
               "data-ui-label": "Histogram bins",
             }),
           ],
@@ -1851,7 +1860,7 @@ function xfe({ object: e, report: r, update: t }) {
                               }),
                             ],
                           }),
-                          e.chart === "combo" &&
+                          object.chart === "combo" &&
                             i.jsxs("label", {
                               children: [
                                 i.jsx(M, { children: "Series rendering" }),
@@ -1894,7 +1903,7 @@ function xfe({ object: e, report: r, update: t }) {
           i.jsx("summary", {
             children: i.jsx(M, { children: "Chart row filter" }),
           }),
-          i.jsx("p", { children: r?.scope }),
+          i.jsx("p", { children: report?.scope }),
           i.jsx("button", {
             type: "button",
             onClick: () => s({ includedRows: undefined }),
@@ -1907,7 +1916,7 @@ function xfe({ object: e, report: r, update: t }) {
           }),
           i.jsx("div", {
             className: "dg-chart-row-list",
-            children: r?.points.map((l) =>
+            children: report?.points.map((l) =>
               i.jsxs(
                 "label",
                 {
@@ -1918,7 +1927,8 @@ function xfe({ object: e, report: r, update: t }) {
                       "aria-label": `Include chart row ${l.row}`,
                       checked: l.included,
                       onChange: (c) => {
-                        const h = a.includedRows ?? r.points.map((f) => f.row);
+                        const h =
+                          a.includedRows ?? report.points.map((f) => f.row);
                         s({
                           includedRows: c.target.checked
                             ? [...h, l.row]

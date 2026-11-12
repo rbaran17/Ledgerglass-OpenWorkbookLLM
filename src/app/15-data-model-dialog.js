@@ -17,7 +17,7 @@ import {
 
 function vce(e) {
   var oe, Se;
-  const { text: r } = Dr(),
+  const { text } = Dr(),
     t = ne.useRef(e);
   t.current = e;
   const n = ne.useId(),
@@ -98,17 +98,21 @@ function vce(e) {
     },
     R = (le, ce, ge) =>
       i.jsx("input", {
-        "aria-label": r(le),
+        "aria-label": text(le),
         value: ce,
         onChange: (se) => ge(se.target.value),
       }),
     L = (le, ce, ge, se) =>
       i.jsx("select", {
-        "aria-label": r(le),
+        "aria-label": text(le),
         value: ce,
         onChange: (we) => se(we.target.value),
         children: ge.map((we) =>
-          i.jsx("option", { value: we.value, children: r(we.label) }, we.value),
+          i.jsx(
+            "option",
+            { value: we.value, children: text(we.label) },
+            we.value,
+          ),
         ),
       }),
     $ = (le) => le.map((ce) => ({ value: ce, label: ce })),
@@ -253,14 +257,14 @@ function vce(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close data model"),
+              "aria-label": text("Close data model"),
               onClick: e.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
         i.jsx("nav", {
-          "aria-label": r("Data model sections"),
+          "aria-label": text("Data model sections"),
           children: [
             "Tables",
             "Calculated columns",
@@ -287,7 +291,7 @@ function vce(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "lg-model-error",
-                children: r(w),
+                children: text(w),
               }),
             e.readOnly &&
               i.jsx("p", {
@@ -406,7 +410,7 @@ function vce(e) {
                                 children: [
                                   e.workbook.sheets.find(
                                     (ge) => ge.id === le.sheetId,
-                                  )?.name ?? r("Missing worksheet"),
+                                  )?.name ?? text("Missing worksheet"),
                                   " ",
                                   "· ",
                                   le.range,
@@ -1056,27 +1060,27 @@ function vce(e) {
                     children: [
                       i.jsxs("div", {
                         role: "status",
-                        "aria-label": r("Model preview status"),
+                        "aria-label": text("Model preview status"),
                         className: "lg-model-summary",
                         children: [
                           W.complete
-                            ? r("Model checks passed")
-                            : r("Model blocked"),
+                            ? text("Model checks passed")
+                            : text("Model blocked"),
                           " ",
                           "· ",
                           W.tables.length,
                           " ",
-                          r("tables"),
+                          text("tables"),
                           " ·",
                           " ",
                           W.operations.toLocaleString(),
                           " ",
-                          r("operations"),
+                          text("operations"),
                         ],
                       }),
                       W.diagnostics.length > 0 &&
                         i.jsxs("table", {
-                          "aria-label": r("Model diagnostics"),
+                          "aria-label": text("Model diagnostics"),
                           children: [
                             i.jsx("thead", {
                               children: i.jsxs("tr", {
@@ -1111,7 +1115,9 @@ function vce(e) {
                                           le.row ?? "",
                                         ],
                                       }),
-                                      i.jsx("td", { children: r(le.message) }),
+                                      i.jsx("td", {
+                                        children: text(le.message),
+                                      }),
                                     ],
                                   },
                                   ce,
@@ -1121,7 +1127,7 @@ function vce(e) {
                           ],
                         }),
                       i.jsxs("table", {
-                        "aria-label": r("Model source controls"),
+                        "aria-label": text("Model source controls"),
                         children: [
                           i.jsx("thead", {
                             children: i.jsx("tr", {
@@ -1189,7 +1195,7 @@ function vce(e) {
                               }),
                             }),
                             i.jsxs("table", {
-                              "aria-label": r("Calculated column results"),
+                              "aria-label": text("Calculated column results"),
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsxs("tr", {
@@ -1226,7 +1232,7 @@ function vce(e) {
                                               .slice(0, 25)
                                               .map((ge) =>
                                                 ge === null
-                                                  ? r("Blank")
+                                                  ? text("Blank")
                                                   : String(ge),
                                               )
                                               .join(", "),
@@ -1246,7 +1252,7 @@ function vce(e) {
                         i.jsxs(i.Fragment, {
                           children: [
                             i.jsxs("table", {
-                              "aria-label": r("Model measure results"),
+                              "aria-label": text("Model measure results"),
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsx("tr", {
@@ -1271,7 +1277,7 @@ function vce(e) {
                                               {
                                                 children:
                                                   ge === null
-                                                    ? r("Blank")
+                                                    ? text("Blank")
                                                     : String(ge),
                                               },
                                               se,
@@ -1297,7 +1303,9 @@ function vce(e) {
                                             "td",
                                             {
                                               children:
-                                                le === null ? r("Blank") : le,
+                                                le === null
+                                                  ? text("Blank")
+                                                  : le,
                                             },
                                             ce,
                                           ),
@@ -1395,10 +1403,10 @@ function vce(e) {
     }),
   });
 }
-function bce({ workbook: e, sheetId: r, options: t, onReview: n }) {
+function bce({ workbook, sheetId, options, onReview }) {
   const o = ne.useMemo(
-    () => mce(e, r, t),
-    [e, r, t?.includeHidden, t?.allowedSheetIds],
+    () => mce(workbook, sheetId, options),
+    [workbook, sheetId, options?.includeHidden, options?.allowedSheetIds],
   );
   return o.status === "none"
     ? null
@@ -1420,7 +1428,7 @@ function bce({ workbook: e, sheetId: r, options: t, onReview: n }) {
             ],
           }),
           i.jsx("button", {
-            onClick: n,
+            onClick: onReview,
             children: i.jsx(M, { children: "Review model" }),
           }),
         ],

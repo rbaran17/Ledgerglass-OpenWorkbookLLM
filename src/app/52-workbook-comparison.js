@@ -790,7 +790,7 @@ const l2e = [
           ? String(e).toUpperCase()
           : String(e);
 function u2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -987,9 +987,9 @@ function u2e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close workbook comparison"),
+              "aria-label": text("Close workbook comparison"),
               onClick: ae,
-              lang: t("Close workbook comparison"),
+              lang: language("Close workbook comparison"),
               "data-ui-label": "Close workbook comparison",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1008,13 +1008,13 @@ function u2e(e) {
               children: [
                 i.jsx(M, { children: "Comparison baseline file" }),
                 i.jsx("input", {
-                  "aria-label": r("Comparison baseline file"),
+                  "aria-label": text("Comparison baseline file"),
                   type: "file",
                   accept: ".json,.xlsx",
                   onChange: (oe) => {
                     (J(oe.target.files?.[0]), (oe.target.value = ""));
                   },
-                  lang: t("Comparison baseline file"),
+                  lang: language("Comparison baseline file"),
                   "data-ui-label": "Comparison baseline file",
                 }),
               ],
@@ -1386,9 +1386,9 @@ function u2e(e) {
               }),
             G &&
               i.jsxs("section", {
-                "aria-label": r("Workbook audit comparison report"),
+                "aria-label": text("Workbook audit comparison report"),
                 className: "wc-report",
-                lang: t("Workbook audit comparison report"),
+                lang: language("Workbook audit comparison report"),
                 "data-ui-label": "Workbook audit comparison report",
                 children: [
                   i.jsx("h3", {
@@ -1535,8 +1535,8 @@ function u2e(e) {
                     className: "wc-scroll",
                     tabIndex: 0,
                     role: "region",
-                    "aria-label": r("Scrollable comparison findings"),
-                    lang: t("Scrollable comparison findings"),
+                    "aria-label": text("Scrollable comparison findings"),
+                    lang: language("Scrollable comparison findings"),
                     "data-ui-label": "Scrollable comparison findings",
                     children: [
                       i.jsxs("table", {
@@ -1846,11 +1846,11 @@ function cH(e, r) {
     for (const g of p) {
       ++n.scanned > Mt.maxCells &&
         Eo("This search exceeds 100,000 populated cells. Narrow its scope.");
-      const { row: b, col: y } = _t(g),
-        w = m(b, y),
+      const { row, col } = _t(g),
+        w = m(row, col),
         E = f.cells[g];
       if (
-        (t.scope === "selection" && !u.some((O) => uH(b, y, O))) ||
+        (t.scope === "selection" && !u.some((O) => uH(row, col, O))) ||
         (w && !t.includeHidden)
       )
         continue;
@@ -1873,8 +1873,8 @@ function cH(e, r) {
           sheetId: f.id,
           sheetName: f.name,
           address: g,
-          row: b,
-          col: y,
+          row,
+          col,
           text: F,
           raw: E?.raw ?? null,
           isFormula: A,

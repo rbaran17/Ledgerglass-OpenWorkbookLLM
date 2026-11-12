@@ -649,7 +649,7 @@ function wj(e) {
 const xj =
   "The workbook or destination changed. Cancel and cut the current cells again.";
 function I4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
@@ -781,9 +781,9 @@ function I4e(e) {
             }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close move preview"),
+              "aria-label": text("Close move preview"),
               onClick: e.onClose,
-              lang: t("Close move preview"),
+              lang: language("Close move preview"),
               "data-ui-label": "Close move preview",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -818,8 +818,8 @@ function I4e(e) {
             f.plan &&
               i.jsxs("section", {
                 className: "et-preview",
-                "aria-label": r("Move preview"),
-                lang: t("Move preview"),
+                "aria-label": text("Move preview"),
+                lang: language("Move preview"),
                 "data-ui-label": "Move preview",
                 children: [
                   i.jsxs("p", {
@@ -989,7 +989,7 @@ function O4e(e) {
 }
 function M4e(e) {
   var q;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -1139,9 +1139,9 @@ function M4e(e) {
                 children: i.jsx(M, { children: "Format Cells" }),
               }),
               i.jsx("button", {
-                "aria-label": r("Close number formats"),
+                "aria-label": text("Close number formats"),
                 onClick: e.onClose,
-                lang: t("Close number formats"),
+                lang: language("Close number formats"),
                 "data-ui-label": "Close number formats",
                 children: i.jsx(X, { size: 18 }),
               }),
@@ -1165,8 +1165,8 @@ function M4e(e) {
               i.jsx("div", {
                 className: "nf-category",
                 role: "listbox",
-                "aria-label": r("Number format category"),
-                lang: t("Number format category"),
+                "aria-label": text("Number format category"),
+                lang: language("Number format category"),
                 "data-ui-label": "Number format category",
                 children: Uv.map((te, ae) =>
                   i.jsx(
@@ -1271,8 +1271,8 @@ function M4e(e) {
                   C && i.jsx("p", { className: "nf-notice", children: C }),
                   i.jsxs("section", {
                     className: "nf-preview",
-                    "aria-label": r("Number format preview"),
-                    lang: t("Number format preview"),
+                    "aria-label": text("Number format preview"),
+                    lang: language("Number format preview"),
                     "data-ui-label": "Number format preview",
                     children: [
                       i.jsx("h3", {
@@ -1367,10 +1367,10 @@ function M4e(e) {
                     children: [
                       i.jsx(M, { children: "Locale" }),
                       i.jsx("select", {
-                        "aria-label": r("Number format locale"),
+                        "aria-label": text("Number format locale"),
                         value: c,
                         onChange: (te) => h(te.target.value),
-                        lang: t("Number format locale"),
+                        lang: language("Number format locale"),
                         "data-ui-label": "Number format locale",
                         children: PB.map((te) =>
                           i.jsx("option", { value: te, children: D4e[te] }, te),
@@ -1386,13 +1386,13 @@ function M4e(e) {
                           children: [
                             i.jsx(M, { children: "Decimal places" }),
                             i.jsx(ci, {
-                              "aria-label": r("Decimal places"),
+                              "aria-label": text("Decimal places"),
                               min: 0,
                               max: 12,
                               step: 1,
                               value: m,
                               onValueChange: (te) => v(te),
-                              lang: t("Decimal places"),
+                              lang: language("Decimal places"),
                               "data-ui-label": "Decimal places",
                             }),
                           ],
@@ -1402,12 +1402,12 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Currency" }),
                               i.jsx("select", {
-                                "aria-label": r("Currency"),
+                                "aria-label": text("Currency"),
                                 value: f,
                                 onChange: (te) => {
                                   p(te.target.value);
                                 },
-                                lang: t("Currency"),
+                                lang: language("Currency"),
                                 "data-ui-label": "Currency",
                                 children: UB.map((te) =>
                                   i.jsx(
@@ -1424,10 +1424,10 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Display scale" }),
                               i.jsxs("select", {
-                                "aria-label": r("Display scale"),
+                                "aria-label": text("Display scale"),
                                 value: y,
                                 onChange: (te) => w(te.target.value),
-                                lang: t("Display scale"),
+                                lang: language("Display scale"),
                                 "data-ui-label": "Display scale",
                                 children: [
                                   i.jsx("option", {
@@ -1451,10 +1451,10 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Negative numbers" }),
                               i.jsxs("select", {
-                                "aria-label": r("Negative numbers"),
+                                "aria-label": text("Negative numbers"),
                                 value: E,
                                 onChange: (te) => A(te.target.value),
-                                lang: t("Negative numbers"),
+                                lang: language("Negative numbers"),
                                 "data-ui-label": "Negative numbers",
                                 children: [
                                   i.jsx("option", {
@@ -1474,10 +1474,10 @@ function M4e(e) {
                           children: [
                             i.jsx("input", {
                               type: "checkbox",
-                              "aria-label": r("Use thousands separator"),
+                              "aria-label": text("Use thousands separator"),
                               checked: g,
                               onChange: (te) => b(te.target.checked),
-                              lang: t("Use thousands separator"),
+                              lang: language("Use thousands separator"),
                               "data-ui-label": "Use thousands separator",
                             }),
                             i.jsx(M, { children: "Use thousands separator" }),
@@ -1490,10 +1490,10 @@ function M4e(e) {
                       children: [
                         i.jsx(M, { children: "Type" }),
                         i.jsxs("select", {
-                          "aria-label": r("Date or time format"),
+                          "aria-label": text("Date or time format"),
                           value: k,
                           onChange: (te) => F(te.target.value),
-                          lang: t("Date or time format"),
+                          lang: language("Date or time format"),
                           "data-ui-label": "Date or time format",
                           children: [
                             !Ay[u].some((te) => te === k) &&
@@ -1512,11 +1512,11 @@ function M4e(e) {
                           children: [
                             i.jsx(M, { children: "Type" }),
                             i.jsx("input", {
-                              "aria-label": r("Custom number format"),
+                              "aria-label": text("Custom number format"),
                               value: k,
                               maxLength: 200,
                               onChange: (te) => F(te.target.value),
-                              lang: t("Custom number format"),
+                              lang: language("Custom number format"),
                               "data-ui-label": "Custom number format",
                             }),
                           ],

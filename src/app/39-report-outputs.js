@@ -38,7 +38,7 @@ import {
 } from "./38-data-analysis-dialog.js";
 
 function Fxe(e) {
-  const { text: r } = Dr(),
+  const { text } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = yh(),
@@ -201,14 +201,14 @@ function Fxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close report outputs"),
+              "aria-label": text("Close report outputs"),
               onClick: e.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
         i.jsx("nav", {
-          "aria-label": r("Report workflow"),
+          "aria-label": text("Report workflow"),
           children: ["Publish", "Saved outputs", "Object inventory"].map((ae) =>
             i.jsx(
               "button",
@@ -217,7 +217,7 @@ function Fxe(e) {
                 onClick: () => {
                   (d(ae), F(""));
                 },
-                children: r(ae),
+                children: text(ae),
               },
               ae,
             ),
@@ -707,7 +707,7 @@ function Fxe(e) {
     }),
   });
 }
-function lj({ items: e }) {
+function lj({ items }) {
   return i.jsx("div", {
     className: "lg-reports-inventory",
     children: i.jsxs("table", {
@@ -724,7 +724,7 @@ function lj({ items: e }) {
           }),
         }),
         i.jsx("tbody", {
-          children: e.map((r, t) =>
+          children: items.map((r, t) =>
             i.jsxs(
               "tr",
               {
@@ -1047,7 +1047,7 @@ function CW(e, r, t) {
   return n;
 }
 function AW(e, r, t = {}) {
-  const { snapshot: n, requestSnapshot: o, context: a, ...s } = CW(e, r, t);
+  const { snapshot, requestSnapshot, context, ...s } = CW(e, r, t);
   return s;
 }
 function Lxe(e, r, t, n = {}) {
@@ -1116,10 +1116,13 @@ function kW(e) {
       (n.push([r[0], ...e.request.values]),
         t.forEach((a, s) => n.push([a, ...e.trials.map((d) => o(d)[s])])));
   else {
-    const { rowValues: a, columnValues: s } = e.request;
-    (n.push([`Down: ${r[1]} / Across: ${r[0]}`, ...a]),
-      s.forEach((d, u) =>
-        n.push([d, ...a.map((l, c) => o(e.trials[u * a.length + c])[0])]),
+    const { rowValues, columnValues } = e.request;
+    (n.push([`Down: ${r[1]} / Across: ${r[0]}`, ...rowValues]),
+      columnValues.forEach((d, u) =>
+        n.push([
+          d,
+          ...rowValues.map((l, c) => o(e.trials[u * rowValues.length + c])[0]),
+        ]),
       ));
   }
   return (

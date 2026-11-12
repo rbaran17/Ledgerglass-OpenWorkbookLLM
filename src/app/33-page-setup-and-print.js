@@ -32,7 +32,7 @@ import {
 
 function Bme(e) {
   var X$1, q;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useRef(e);
   n.current = e;
   const o = ne.useRef(null),
@@ -305,9 +305,9 @@ function Bme(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close page setup"),
+              "aria-label": text("Close page setup"),
               onClick: Q,
-              lang: t("Close page setup"),
+              lang: language("Close page setup"),
               "data-ui-label": "Close page setup",
               children: i.jsx(X, { size: 17 }),
             }),
@@ -328,10 +328,10 @@ function Bme(e) {
                   children: [
                     i.jsx(M, { children: "Theme" }),
                     i.jsxs("select", {
-                      "aria-label": r("Theme"),
+                      "aria-label": text("Theme"),
                       value: F,
                       onChange: (W) => I(W.target.value),
-                      lang: t("Theme"),
+                      lang: language("Theme"),
                       "data-ui-label": "Theme",
                       children: [
                         i.jsx("option", {
@@ -369,11 +369,11 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Orientation" }),
                             i.jsxs("select", {
-                              "aria-label": r("Page orientation"),
+                              "aria-label": text("Page orientation"),
                               value: w.orientation,
                               onChange: (W) =>
                                 L({ orientation: W.target.value }),
-                              lang: t("Page orientation"),
+                              lang: language("Page orientation"),
                               "data-ui-label": "Page orientation",
                               children: [
                                 i.jsx("option", {
@@ -392,10 +392,10 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Paper" }),
                             i.jsxs("select", {
-                              "aria-label": r("Paper size"),
+                              "aria-label": text("Paper size"),
                               value: w.paper,
                               onChange: (W) => L({ paper: W.target.value }),
-                              lang: t("Paper size"),
+                              lang: language("Paper size"),
                               "data-ui-label": "Paper size",
                               children: [
                                 i.jsx("option", {
@@ -420,11 +420,11 @@ function Bme(e) {
                       children: [
                         i.jsx(M, { children: "Print area" }),
                         i.jsx("input", {
-                          "aria-label": r("Print area"),
+                          "aria-label": text("Print area"),
                           value: w.printArea,
                           onChange: (W) =>
                             L({ printArea: W.target.value.toUpperCase() }),
-                          lang: t("Print area"),
+                          lang: language("Print area"),
                           "data-ui-label": "Print area",
                         }),
                       ],
@@ -445,12 +445,12 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Rows to repeat at top" }),
                             i.jsx("input", {
-                              "aria-label": r("Rows to repeat at top"),
+                              "aria-label": text("Rows to repeat at top"),
                               placeholder: "1:2",
                               value: w.repeatRows ?? "",
                               onChange: (W) =>
                                 L({ repeatRows: W.target.value }),
-                              lang: t("Rows to repeat at top"),
+                              lang: language("Rows to repeat at top"),
                               "data-ui-label": "Rows to repeat at top",
                             }),
                           ],
@@ -459,14 +459,14 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Columns to repeat at left" }),
                             i.jsx("input", {
-                              "aria-label": r("Columns to repeat at left"),
-                              placeholder: r("A:B"),
+                              "aria-label": text("Columns to repeat at left"),
+                              placeholder: text("A:B"),
                               value: w.repeatColumns ?? "",
                               onChange: (W) =>
                                 L({
                                   repeatColumns: W.target.value.toUpperCase(),
                                 }),
-                              lang: t("Columns to repeat at left"),
+                              lang: language("Columns to repeat at left"),
                               "data-ui-label": "Columns to repeat at left",
                             }),
                           ],
@@ -491,10 +491,10 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Page order" }),
                             i.jsxs("select", {
-                              "aria-label": r("Page order"),
+                              "aria-label": text("Page order"),
                               value: w.pageOrder ?? "overThenDown",
                               onChange: (W) => L({ pageOrder: W.target.value }),
-                              lang: t("Page order"),
+                              lang: language("Page order"),
                               "data-ui-label": "Page order",
                               children: [
                                 i.jsx("option", {
@@ -520,11 +520,11 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Break before rows" }),
                             i.jsx("input", {
-                              "aria-label": r("Break before rows"),
+                              "aria-label": text("Break before rows"),
                               placeholder: "25, 50",
                               value: O,
                               onChange: (W) => j(W.target.value),
-                              lang: t("Break before rows"),
+                              lang: language("Break before rows"),
                               "data-ui-label": "Break before rows",
                             }),
                           ],
@@ -533,11 +533,11 @@ function Bme(e) {
                           children: [
                             i.jsx(M, { children: "Break before columns" }),
                             i.jsx("input", {
-                              "aria-label": r("Break before columns"),
-                              placeholder: r("D, H"),
+                              "aria-label": text("Break before columns"),
+                              placeholder: text("D, H"),
                               value: z,
                               onChange: (W) => V(W.target.value.toUpperCase()),
-                              lang: t("Break before columns"),
+                              lang: language("Break before columns"),
                               "data-ui-label": "Break before columns",
                             }),
                           ],
@@ -623,11 +623,11 @@ function Bme(e) {
                                 i.jsx(ci, {
                                   min: 0,
                                   max: 10,
-                                  "aria-label": r("Pages wide"),
+                                  "aria-label": text("Pages wide"),
                                   value: w.fitToWidth,
                                   onValueChange: (W) =>
                                     L({ fitToWidth: Number(W) }),
-                                  lang: t("Pages wide"),
+                                  lang: language("Pages wide"),
                                   "data-ui-label": "Pages wide",
                                 }),
                               ],
@@ -638,11 +638,11 @@ function Bme(e) {
                                 i.jsx(ci, {
                                   min: 0,
                                   max: 10,
-                                  "aria-label": r("Pages tall"),
+                                  "aria-label": text("Pages tall"),
                                   value: w.fitToHeight,
                                   onValueChange: (W) =>
                                     L({ fitToHeight: Number(W) }),
-                                  lang: t("Pages tall"),
+                                  lang: language("Pages tall"),
                                   "data-ui-label": "Pages tall",
                                 }),
                               ],
@@ -655,10 +655,10 @@ function Bme(e) {
                             i.jsx(ci, {
                               min: 10,
                               max: 400,
-                              "aria-label": r("Print scale"),
+                              "aria-label": text("Print scale"),
                               value: w.scale,
                               onValueChange: (W) => L({ scale: Number(W) }),
-                              lang: t("Print scale"),
+                              lang: language("Print scale"),
                               "data-ui-label": "Print scale",
                             }),
                           ],
@@ -696,12 +696,12 @@ function Bme(e) {
                       children: [
                         i.jsx(M, { children: "Header" }),
                         i.jsx("textarea", {
-                          "aria-label": r("Print header"),
+                          "aria-label": text("Print header"),
                           rows: 3,
                           maxLength: 255,
                           value: w.header,
                           onChange: (W) => L({ header: W.target.value }),
-                          lang: t("Print header"),
+                          lang: language("Print header"),
                           "data-ui-label": "Print header",
                         }),
                       ],
@@ -710,12 +710,12 @@ function Bme(e) {
                       children: [
                         i.jsx(M, { children: "Footer" }),
                         i.jsx("textarea", {
-                          "aria-label": r("Print footer"),
+                          "aria-label": text("Print footer"),
                           rows: 2,
                           maxLength: 255,
                           value: w.footer,
                           onChange: (W) => L({ footer: W.target.value }),
-                          lang: t("Print footer"),
+                          lang: language("Print footer"),
                           "data-ui-label": "Print footer",
                         }),
                       ],
@@ -777,8 +777,8 @@ function Bme(e) {
                     }),
                     i.jsxs("div", {
                       className: "dg-print-check",
-                      "aria-label": r("Print output checks"),
-                      lang: t("Print output checks"),
+                      "aria-label": text("Print output checks"),
+                      lang: language("Print output checks"),
                       "data-ui-label": "Print output checks",
                       children: [
                         i.jsx("p", {

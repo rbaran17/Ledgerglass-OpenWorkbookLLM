@@ -315,7 +315,7 @@ const rj = (e) =>
         ? String(e).toUpperCase()
         : String(e);
 function fxe(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -464,9 +464,9 @@ function fxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Watch Window"),
+              "aria-label": text("Close Watch Window"),
               onClick: e.onClose,
-              lang: t("Close Watch Window"),
+              lang: language("Close Watch Window"),
               "data-ui-label": "Close Watch Window",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -643,8 +643,8 @@ function fxe(e) {
         c &&
           i.jsxs("section", {
             className: "fw-preview",
-            "aria-label": r("Watch action preview"),
-            lang: t("Watch action preview"),
+            "aria-label": text("Watch action preview"),
+            lang: language("Watch action preview"),
             "data-ui-label": "Watch action preview",
             children: [
               i.jsx("h3", {
@@ -680,23 +680,23 @@ function fxe(e) {
                 children: [
                   ...c.added.map((z) => ({ watch: z, action: "Add" })),
                   ...c.removed.map((z) => ({ watch: z, action: "Remove" })),
-                ].map(({ watch: z, action: V }) => {
-                  const D = F.find((_) => _.id === z.id),
+                ].map(({ watch, action }) => {
+                  const D = F.find((_) => _.id === watch.id),
                     B =
-                      I && (V === "Add" || (D != null && D.anchor))
-                        ? `${z.anchor.sheetName}!${z.anchor.address}`
+                      I && (action === "Add" || (D != null && D.anchor))
+                        ? `${watch.anchor.sheetName}!${watch.anchor.address}`
                         : "Watch outside current context";
                   return i.jsxs(
                     "li",
                     {
                       children: [
-                        V,
+                        action,
                         ": ",
                         B,
-                        z.orphaned ? ` (${z.orphaned})` : "",
+                        watch.orphaned ? ` (${watch.orphaned})` : "",
                       ],
                     },
-                    z.id,
+                    watch.id,
                   );
                 }),
               }),
@@ -1220,7 +1220,7 @@ function mxe(e) {
   const r = Dr(),
     [t] = ne.useState(r.entryLocale),
     n = (W, K) => sI(W, K, t),
-    { text: o, language: a } = Dr(),
+    { text, language } = Dr(),
     s = ne.useId(),
     d = ne.useRef(null),
     u = ne.useRef(e.onClose);
@@ -1356,9 +1356,9 @@ function mxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": o("Close Goal Seek"),
+              "aria-label": text("Close Goal Seek"),
               onClick: e.onClose,
-              lang: a("Close Goal Seek"),
+              lang: language("Close Goal Seek"),
               "data-ui-label": "Close Goal Seek",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1377,11 +1377,11 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Formula worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": o("Formula worksheet"),
+                  "aria-label": text("Formula worksheet"),
                   value: L ? l : "",
                   disabled: e.readOnly,
                   onChange: (W) => G(c, W.target.value),
-                  lang: a("Formula worksheet"),
+                  lang: language("Formula worksheet"),
                   "data-ui-label": "Formula worksheet",
                   children: [
                     i.jsx("option", {
@@ -1400,12 +1400,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Set cell" }),
                 i.jsx("input", {
-                  "aria-label": o("Set cell"),
+                  "aria-label": text("Set cell"),
                   value: L ? h : "",
-                  placeholder: o("B1"),
+                  placeholder: text("B1"),
                   readOnly: e.readOnly,
                   onChange: (W) => G(f, W.target.value),
-                  lang: a("Set cell"),
+                  lang: language("Set cell"),
                   "data-ui-label": "Set cell",
                 }),
               ],
@@ -1414,11 +1414,11 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Changing worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": o("Changing worksheet"),
+                  "aria-label": text("Changing worksheet"),
                   value: $ ? p : "",
                   disabled: e.readOnly,
                   onChange: (W) => G(m, W.target.value),
-                  lang: a("Changing worksheet"),
+                  lang: language("Changing worksheet"),
                   "data-ui-label": "Changing worksheet",
                   children: [
                     i.jsx("option", {
@@ -1437,12 +1437,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "By changing cell" }),
                 i.jsx("input", {
-                  "aria-label": o("By changing cell"),
+                  "aria-label": text("By changing cell"),
                   value: $ ? v : "",
-                  placeholder: o("A1"),
+                  placeholder: text("A1"),
                   readOnly: e.readOnly,
                   onChange: (W) => G(g, W.target.value),
-                  lang: a("By changing cell"),
+                  lang: language("By changing cell"),
                   "data-ui-label": "By changing cell",
                 }),
               ],
@@ -1451,12 +1451,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "To value" }),
                 i.jsx("input", {
-                  "aria-label": o("Target value"),
+                  "aria-label": text("Target value"),
                   value: b,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(y, W.target.value),
-                  lang: a("Target value"),
+                  lang: language("Target value"),
                   "data-ui-label": "Target value",
                 }),
               ],
@@ -1465,12 +1465,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Absolute tolerance" }),
                 i.jsx("input", {
-                  "aria-label": o("Absolute tolerance"),
+                  "aria-label": text("Absolute tolerance"),
                   value: F,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(I, W.target.value),
-                  lang: a("Absolute tolerance"),
+                  lang: language("Absolute tolerance"),
                   "data-ui-label": "Absolute tolerance",
                 }),
               ],
@@ -1479,12 +1479,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Lower bound" }),
                 i.jsx("input", {
-                  "aria-label": o("Lower bound"),
+                  "aria-label": text("Lower bound"),
                   value: w,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(E, W.target.value),
-                  lang: a("Lower bound"),
+                  lang: language("Lower bound"),
                   "data-ui-label": "Lower bound",
                 }),
               ],
@@ -1493,12 +1493,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Upper bound" }),
                 i.jsx("input", {
-                  "aria-label": o("Upper bound"),
+                  "aria-label": text("Upper bound"),
                   value: A,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(k, W.target.value),
-                  lang: a("Upper bound"),
+                  lang: language("Upper bound"),
                   "data-ui-label": "Upper bound",
                 }),
               ],
@@ -1507,12 +1507,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Maximum iterations" }),
                 i.jsx("input", {
-                  "aria-label": o("Maximum iterations"),
+                  "aria-label": text("Maximum iterations"),
                   value: O,
                   inputMode: "numeric",
                   readOnly: e.readOnly,
                   onChange: (W) => G(j, W.target.value),
-                  lang: a("Maximum iterations"),
+                  lang: language("Maximum iterations"),
                   "data-ui-label": "Maximum iterations",
                 }),
               ],
@@ -1543,8 +1543,8 @@ function mxe(e) {
         D &&
           i.jsxs("section", {
             className: "gs-preview",
-            "aria-label": o("Goal Seek result"),
-            lang: a("Goal Seek result"),
+            "aria-label": text("Goal Seek result"),
+            lang: language("Goal Seek result"),
             "data-ui-label": "Goal Seek result",
             children: [
               U

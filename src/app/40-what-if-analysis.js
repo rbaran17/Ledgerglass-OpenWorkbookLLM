@@ -11,8 +11,8 @@ import { AW, EW, Lxe, Pxe, Uxe, kW, v_, y2 } from "./39-report-outputs.js";
 
 function $xe(e) {
   var ce;
-  const { text: r, language: t, entryLocale: n } = Dr(),
-    o = ne.useRef(n).current,
+  const { text, language, entryLocale } = Dr(),
+    o = ne.useRef(entryLocale).current,
     a = o === "de-DE" || o === "fr-FR",
     s = (ge) => ge.map((se) => Xh(se, o)).join(a ? "; " : ", "),
     d = ne.useId(),
@@ -264,9 +264,9 @@ function $xe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close What-if Analysis"),
+              "aria-label": text("Close What-if Analysis"),
               onClick: e.onClose,
-              lang: t("Close What-if Analysis"),
+              lang: language("Close What-if Analysis"),
               "data-ui-label": "Close What-if Analysis",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -277,16 +277,16 @@ function $xe(e) {
           children: [
             i.jsx("p", {
               role: "note",
-              children: r(
+              children: text(
                 a
                   ? "Separate numeric assumptions with semicolons or new lines. Use a comma for decimals."
                   : "Separate numeric assumptions with commas, semicolons or new lines.",
               ),
             }),
-            n !== o &&
+            entryLocale !== o &&
               i.jsx("p", {
                 role: "status",
-                children: r(
+                children: text(
                   "The current edit keeps its original numeric locale until you apply or cancel it.",
                 ),
               }),
@@ -294,11 +294,11 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Analysis name" }),
                 i.jsx("input", {
-                  "aria-label": r("Analysis name"),
+                  "aria-label": text("Analysis name"),
                   value: h,
                   maxLength: 100,
                   onChange: (ge) => q(() => f(ge.target.value)),
-                  lang: t("Analysis name"),
+                  lang: language("Analysis name"),
                   "data-ui-label": "Analysis name",
                 }),
               ],
@@ -307,13 +307,13 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Analysis type" }),
                 i.jsxs("select", {
-                  "aria-label": r("Analysis type"),
+                  "aria-label": text("Analysis type"),
                   value: l,
                   onChange: (ge) =>
                     q(() => {
                       (c(ge.target.value), B(""));
                     }),
-                  lang: t("Analysis type"),
+                  lang: language("Analysis type"),
                   "data-ui-label": "Analysis type",
                   children: [
                     i.jsx("option", {
@@ -336,10 +336,10 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Default worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": r("Default worksheet"),
+                  "aria-label": text("Default worksheet"),
                   value: G.some((ge) => ge.id === p) ? p : "",
                   onChange: (ge) => q(() => m(ge.target.value)),
-                  lang: t("Default worksheet"),
+                  lang: language("Default worksheet"),
                   "data-ui-label": "Default worksheet",
                   children: [
                     i.jsx("option", {
@@ -362,10 +362,10 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Saved analyses" }),
                 i.jsxs("select", {
-                  "aria-label": r("Saved analyses"),
+                  "aria-label": text("Saved analyses"),
                   value: J.some((ge) => ge.id === D) ? D : "",
                   onChange: (ge) => ae(ge.target.value),
-                  lang: t("Saved analyses"),
+                  lang: language("Saved analyses"),
                   "data-ui-label": "Saved analyses",
                   children: [
                     i.jsx("option", { value: "", children: "New analysis" }),
@@ -384,14 +384,14 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Changing cells" }),
                 i.jsx("input", {
-                  "aria-label": r("Changing cells"),
+                  "aria-label": text("Changing cells"),
                   placeholder:
                     l === "two-variable"
                       ? "B2, B3 — across first, down second"
                       : "B2, B3",
                   value: v,
                   onChange: (ge) => q(() => g(ge.target.value)),
-                  lang: t("Changing cells"),
+                  lang: language("Changing cells"),
                   "data-ui-label": "Changing cells",
                 }),
               ],
@@ -400,11 +400,11 @@ function $xe(e) {
               children: [
                 i.jsx(M, { children: "Result cells" }),
                 i.jsx("input", {
-                  "aria-label": r("Result cells"),
-                  placeholder: r("B5, B6"),
+                  "aria-label": text("Result cells"),
+                  placeholder: text("B5, B6"),
                   value: b,
                   onChange: (ge) => q(() => y(ge.target.value)),
-                  lang: t("Result cells"),
+                  lang: language("Result cells"),
                   "data-ui-label": "Result cells",
                 }),
               ],
@@ -564,13 +564,13 @@ function $xe(e) {
                             "Down-column input values (second changing cell)",
                         }),
                         i.jsx("textarea", {
-                          "aria-label": r("Down-column input values"),
+                          "aria-label": text("Down-column input values"),
                           placeholder: a
                             ? "40000; 50000; 60000"
                             : "40000, 50000, 60000",
                           value: F,
                           onChange: (ge) => q(() => I(ge.target.value)),
-                          lang: t("Down-column input values"),
+                          lang: language("Down-column input values"),
                           "data-ui-label": "Down-column input values",
                         }),
                       ],
@@ -579,10 +579,10 @@ function $xe(e) {
                       children: [
                         i.jsx(M, { children: "Values arranged" }),
                         i.jsxs("select", {
-                          "aria-label": r("Values arranged"),
+                          "aria-label": text("Values arranged"),
                           value: w,
                           onChange: (ge) => q(() => E(ge.target.value)),
-                          lang: t("Values arranged"),
+                          lang: language("Values arranged"),
                           "data-ui-label": "Values arranged",
                           children: [
                             i.jsx("option", {
@@ -620,8 +620,8 @@ function $xe(e) {
         T &&
           i.jsxs("section", {
             className: "gs-preview",
-            "aria-label": r("What-if results"),
-            lang: t("What-if results"),
+            "aria-label": text("What-if results"),
+            lang: language("What-if results"),
             "data-ui-label": "What-if results",
             children: [
               X$1
@@ -665,8 +665,8 @@ function $xe(e) {
                       i.jsx("div", {
                         className: "wi-scroll",
                         children: i.jsx("table", {
-                          "aria-label": r("Sensitivity results"),
-                          lang: t("Sensitivity results"),
+                          "aria-label": text("Sensitivity results"),
+                          lang: language("Sensitivity results"),
                           "data-ui-label": "Sensitivity results",
                           children: i.jsx("tbody", {
                             children: Se.slice(4, le - 1).map((ge, se) =>
@@ -707,8 +707,8 @@ function $xe(e) {
                           i.jsx("div", {
                             className: "wi-scroll",
                             children: i.jsxs("table", {
-                              "aria-label": r("Source assumptions"),
-                              lang: t("Source assumptions"),
+                              "aria-label": text("Source assumptions"),
+                              lang: language("Source assumptions"),
                               "data-ui-label": "Source assumptions",
                               children: [
                                 i.jsx("thead", {
@@ -789,10 +789,10 @@ function $xe(e) {
                               children: [
                                 i.jsx(M, { children: "Scenario to apply" }),
                                 i.jsx("select", {
-                                  "aria-label": r("Scenario to apply"),
+                                  "aria-label": text("Scenario to apply"),
                                   value: _,
                                   onChange: (ge) => C(ge.target.value),
-                                  lang: t("Scenario to apply"),
+                                  lang: language("Scenario to apply"),
                                   "data-ui-label": "Scenario to apply",
                                   children: T.trials.map((ge, se) =>
                                     i.jsxs(
@@ -869,16 +869,9 @@ function $xe(e) {
     }),
   });
 }
-function zxe({
-  source: e,
-  blocked: r,
-  onClose: t,
-  onImport: n,
-  onExport: o,
-  onReport: a,
-}) {
-  const { text: s, language: d } = Dr(),
-    u = "bytes" in e,
+function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
+  const { text, language } = Dr(),
+    u = "bytes" in source,
     l = ne.useId(),
     c = ne.useRef(null),
     h = FC(),
@@ -899,13 +892,19 @@ function zxe({
               encoding: "utf-8",
               newline: `\r
 `,
-              range: e.population?.range ?? z$(e.snapshot, e.sheetId),
-              ...(e.population
-                ? { population: { definition: e.population, scope: "full" } }
+              range:
+                source.population?.range ?? z$(source.snapshot, source.sheetId),
+              ...(source.population
+                ? {
+                    population: {
+                      definition: source.population,
+                      scope: "full",
+                    },
+                  }
                 : {}),
-              hasHeader: e.population
+              hasHeader: source.population
                 ? true
-                : (e.snapshot.sheets.find((U) => U.id === e.sheetId)
+                : (source.snapshot.sheets.find((U) => U.id === source.sheetId)
                     ?.delimitedSource?.hasHeader ?? true),
             }),
       };
@@ -913,7 +912,7 @@ function zxe({
     g = (R) => {
       try {
         return {
-          result: u ? undefined : V$(e.snapshot, e.sheetId, R),
+          result: u ? undefined : V$(source.snapshot, source.sheetId, R),
           error: "",
         };
       } catch (L) {
@@ -924,9 +923,9 @@ function zxe({
       }
     },
     [b, y] = ne.useState(() =>
-      u && e.initial ? { result: e.initial, error: "" } : g(m),
+      u && source.initial ? { result: source.initial, error: "" } : g(m),
     ),
-    [w, E] = ne.useState(u && !e.initial),
+    [w, E] = ne.useState(u && !source.initial),
     [A, k] = ne.useState(false),
     [F, I] = ne.useState(0),
     [O, j] = ne.useState(""),
@@ -949,10 +948,14 @@ function zxe({
     if (((p.current = L), u)) {
       E(true);
       try {
-        const U = await _$(e.file ?? new File([e.bytes], e.fileName), m, {
-          ...h,
-          signal: h.signal ? AbortSignal.any([L.signal, h.signal]) : L.signal,
-        });
+        const U = await _$(
+          source.file ?? new File([source.bytes], source.fileName),
+          m,
+          {
+            ...h,
+            signal: h.signal ? AbortSignal.any([L.signal, h.signal]) : L.signal,
+          },
+        );
         if (f.current !== R) return;
         y({ result: U, error: "" });
       } catch (U) {
@@ -966,13 +969,13 @@ function zxe({
   }
   (ne.useEffect(
     () => (
-      u && !e.initial && B(),
+      u && !source.initial && B(),
       () => {
         var R;
         (f.current++, (R = p.current) == null || R.abort());
       }
     ),
-    [e],
+    [source],
   ),
     ne.useEffect(() => {
       var L;
@@ -992,7 +995,7 @@ function zxe({
             value: String(m[L]),
             onChange: (U) => D(L, U.target.value),
             children: $.map(([U, G]) =>
-              i.jsx("option", { value: U, children: s(G) }, U),
+              i.jsx("option", { value: U, children: text(G) }, U),
             ),
           }),
         ],
@@ -1021,7 +1024,7 @@ function zxe({
       onKeyDown: (R) => {
         if (
           (R.stopPropagation(),
-          R.key === "Escape" && (R.preventDefault(), t()),
+          R.key === "Escape" && (R.preventDefault(), onClose()),
           R.key === "Tab")
         ) {
           const $ = [
@@ -1052,7 +1055,7 @@ function zxe({
             }),
             i.jsxs("p", {
               children: [
-                u ? e.fileName : e.snapshot.name,
+                u ? source.fileName : source.snapshot.name,
                 " ",
                 i.jsx(M, { children: "· CSV / TSV" }),
               ],
@@ -1065,22 +1068,22 @@ function zxe({
             i.jsx("p", {
               children: u
                 ? "Opening replaces the workbook after review. Cancel keeps it unchanged; Undo restores it after importing."
-                : `Export calculated values from revision ${e.snapshot.revision}. Choose full or visible scope when a column filter is active; otherwise the rectangle includes hidden and filtered rows. CSV/TSV cannot retain workbook formatting or formulas.`,
+                : `Export calculated values from revision ${source.snapshot.revision}. Choose full or visible scope when a column filter is active; otherwise the rectangle includes hidden and filtered rows. CSV/TSV cannot retain workbook formatting or formulas.`,
             }),
             !u &&
-              e.population &&
+              source.population &&
               i.jsxs("label", {
                 children: [
                   i.jsx(M, { children: "Export population" }),
                   i.jsxs("select", {
-                    "aria-label": s("Export population"),
+                    "aria-label": text("Export population"),
                     value: m.population?.scope ?? "full",
                     onChange: (R) =>
                       D("population", {
-                        definition: e.population,
+                        definition: source.population,
                         scope: R.target.value,
                       }),
-                    lang: d("Export population"),
+                    lang: language("Export population"),
                     "data-ui-label": "Export population",
                     children: [
                       i.jsx("option", {
@@ -1340,8 +1343,8 @@ function zxe({
                   i.jsx("div", {
                     className: "lg-delimited-table",
                     children: i.jsxs("table", {
-                      "aria-label": s("Delimited data preview"),
-                      lang: d("Delimited data preview"),
+                      "aria-label": text("Delimited data preview"),
+                      lang: language("Delimited data preview"),
                       "data-ui-label": "Delimited data preview",
                       children: [
                         i.jsx("thead", {
@@ -1455,8 +1458,8 @@ function zxe({
                         }),
                       }),
                       i.jsxs("table", {
-                        "aria-label": s("Delimited changes"),
-                        lang: d("Delimited changes"),
+                        "aria-label": text("Delimited changes"),
+                        lang: language("Delimited changes"),
                         "data-ui-label": "Delimited changes",
                         children: [
                           i.jsx("thead", {
@@ -1509,31 +1512,31 @@ function zxe({
               }),
           ],
         }),
-        (r || O) && i.jsx("p", { role: "alert", children: r || O }),
+        (blocked || O) && i.jsx("p", { role: "alert", children: blocked || O }),
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: t,
+              onClick: onClose,
               children: i.jsx(M, { children: "Cancel" }),
             }),
             i.jsx("button", {
               disabled: !z || A || w,
-              onClick: () => z && a(z),
+              onClick: () => z && onReport(z),
               children: i.jsx(M, { children: "Save schema and changes" }),
             }),
             i.jsx("button", {
-              disabled: A || w || !!r || !(z != null && z.valid),
+              disabled: A || w || !!blocked || !(z != null && z.valid),
               onClick: () => {
                 var R, L;
-                if (!(A || w || r || !(z != null && z.valid)))
+                if (!(A || w || blocked || !(z != null && z.valid)))
                   try {
                     u
                       ? (R = b.result) != null &&
                         R.workbook &&
-                        n(b.result.workbook, z)
+                        onImport(b.result.workbook, z)
                       : (L = b.result) != null &&
                         L.bytes &&
-                        o(b.result.bytes, z);
+                        onExport(b.result.bytes, z);
                   } catch ($) {
                     j($ instanceof Error ? $.message : "Exchange failed.");
                   }

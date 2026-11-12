@@ -11,7 +11,7 @@ import { yh } from "./09-workbook-links.js";
 import { Bue, Lue, Uue, X$ } from "./10-source-import-dialog.js";
 
 function $ue(e) {
-  const { text: r } = Dr(),
+  const { text } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = yh(),
@@ -207,7 +207,7 @@ function $ue(e) {
                   ],
                 }),
                 i.jsx("button", {
-                  "aria-label": r("Close workbook formats"),
+                  "aria-label": text("Close workbook formats"),
                   onClick: e.onClose,
                   children: i.jsx(X, { size: 20 }),
                 }),
@@ -242,7 +242,7 @@ function $ue(e) {
                         i.jsx("input", {
                           type: "file",
                           accept: ".xls,.xlsb,.xlsm,.xltx,.xltm,.ods",
-                          "aria-label": r("Inspect alternate workbook"),
+                          "aria-label": text("Inspect alternate workbook"),
                           disabled: m,
                           onChange: (V) => {
                             const D = V.target.files?.[0];
@@ -391,7 +391,7 @@ function $ue(e) {
                               i.jsx("input", {
                                 type: "file",
                                 accept: ".xlsx",
-                                "aria-label": r("Choose converted XLSX"),
+                                "aria-label": text("Choose converted XLSX"),
                                 disabled: m || e.readOnly || !f,
                                 onChange: (V) => {
                                   const D = V.target.files?.[0];
@@ -901,17 +901,17 @@ function BC(e, r, t = {}) {
         checkpoints: A,
       };
     }
-    const { workbook: g, view: b } = p.current;
+    const { workbook, view } = p.current;
     return {
       envelope: p,
       result: {
-        workbook: dd(g),
-        view: dd(b),
+        workbook: dd(workbook),
+        view: dd(view),
         guard: {
           namespace: r,
           generation: p.generation,
-          workbookId: g.id,
-          revision: g.revision,
+          workbookId: workbook.id,
+          revision: workbook.revision,
           digest: i3(h),
         },
         recovered: m,
@@ -1106,7 +1106,7 @@ function BC(e, r, t = {}) {
             action: `Restored checkpoint “${b.label}” from revision ${b.snapshot.workbook.revision}${A > 1 ? ` (${O + 1}/${A})` : ""}`,
             changes: y.cellChanges
               .slice(O * 500, (O + 1) * 500)
-              .map(({ attribution: j, ...z }) => z),
+              .map(({ attribution, ...z }) => z),
           })),
         ]),
         (E = Ag(E)),

@@ -35,14 +35,14 @@ function Yw(e, r = 0) {
       const t = Yw(e.slice(0, -pk.length), r + 1);
       if (t) return t + pk;
     }
-    for (const { parts: t, expression: n } of tle) {
-      const o = n.exec(e);
+    for (const { parts, expression } of tle) {
+      const o = expression.exec(e);
       if (o)
-        return t
+        return parts
           .map(
             (a, s) =>
               a +
-              (s < t.length - 1
+              (s < parts.length - 1
                 ? (Yw(o[s + 1], r + 1) ?? "[source detail omitted]")
                 : ""),
           )
@@ -167,8 +167,8 @@ function nle(e = {}) {
 }
 async function ile() {
   const e = "node:worker_threads",
-    { Worker: r } = await import(e),
-    t = new r(
+    { Worker } = await import(e),
+    t = new Worker(
       `const {parentPort}=require("node:worker_threads");globalThis.self=globalThis;globalThis.postMessage=v=>parentPort.postMessage(v);parentPort.on("message",data=>globalThis.onmessage({data}));
 ` + R$,
       {
@@ -244,8 +244,8 @@ function sle(e, r) {
 async function im(e, r, t = {}, n) {
   var a;
   if (t.reliability) {
-    const { reliability: s, ...d } = t;
-    return s.run("file", e, () => im(e, r, d, n));
+    const { reliability, ...d } = t;
+    return reliability.run("file", e, () => im(e, r, d, n));
   }
   c7(e, r.name, r.size);
   const o = t.timeoutMs ?? u1.defaultTimeoutMs;
@@ -325,9 +325,9 @@ async function im(e, r, t = {}, n) {
           }
           ((l = E),
             (l.onerror = () => p(new La("FILE_WORKER"))),
-            (l.onmessage = ({ data: A }) => {
+            (l.onmessage = ({ data }) => {
               if (u) return;
-              const k = A;
+              const k = data;
               if (!(!k || k.id !== h)) {
                 if (performance.now() - f > o) {
                   p(new La("FILE_TIMEOUT"));

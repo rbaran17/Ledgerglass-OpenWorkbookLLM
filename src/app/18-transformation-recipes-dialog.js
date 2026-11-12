@@ -18,7 +18,7 @@ import {
 } from "./17-recipe-step-editors.js";
 
 function Hce(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useRef(null),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -196,7 +196,7 @@ function Hce(e) {
   }
   function Ee() {
     if (!W || !j) return;
-    const { snapshot: ye, ...Te } = j.plan,
+    const { snapshot, ...Te } = j.plan,
       Pe = URL.createObjectURL(
         new Blob([JSON.stringify(Te, null, 2)], { type: "application/json" }),
       ),
@@ -257,9 +257,9 @@ function Hce(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close transformation recipes"),
+              "aria-label": text("Close transformation recipes"),
               onClick: e.onClose,
-              lang: t("Close transformation recipes"),
+              lang: language("Close transformation recipes"),
               "data-ui-label": "Close transformation recipes",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -270,15 +270,15 @@ function Hce(e) {
           children: [
             i.jsxs("section", {
               className: "recipe-saved",
-              "aria-label": r("Saved transformation recipes"),
-              lang: t("Saved transformation recipes"),
+              "aria-label": text("Saved transformation recipes"),
+              lang: language("Saved transformation recipes"),
               "data-ui-label": "Saved transformation recipes",
               children: [
                 i.jsxs("label", {
                   children: [
                     i.jsx(M, { children: "Saved recipe" }),
                     i.jsxs("select", {
-                      "aria-label": r("Saved recipe"),
+                      "aria-label": text("Saved recipe"),
                       value: m,
                       onChange: (ye) => {
                         (v(ye.target.value),
@@ -287,7 +287,7 @@ function Hce(e) {
                               .length ?? 1,
                           ));
                       },
-                      lang: t("Saved recipe"),
+                      lang: language("Saved recipe"),
                       "data-ui-label": "Saved recipe",
                       children: [
                         i.jsx("option", {
@@ -309,10 +309,10 @@ function Hce(e) {
                   children: [
                     i.jsx(M, { children: "Version" }),
                     i.jsx("select", {
-                      "aria-label": r("Saved recipe version"),
+                      "aria-label": text("Saved recipe version"),
                       value: g,
                       onChange: (ye) => b(Number(ye.target.value)),
-                      lang: t("Saved recipe version"),
+                      lang: language("Saved recipe version"),
                       "data-ui-label": "Saved recipe version",
                       children: (H?.versions ?? []).map((ye) =>
                         i.jsx(
@@ -368,11 +368,11 @@ function Hce(e) {
                   children: [
                     i.jsx(M, { children: "Recipe name" }),
                     i.jsx("input", {
-                      "aria-label": r("Recipe name"),
+                      "aria-label": text("Recipe name"),
                       value: u,
                       onChange: (ye) => l(ye.target.value),
                       maxLength: 128,
-                      lang: t("Recipe name"),
+                      lang: language("Recipe name"),
                       "data-ui-label": "Recipe name",
                     }),
                   ],
@@ -391,7 +391,7 @@ function Hce(e) {
               ],
             }),
             i.jsx(CT, {
-              label: r("Primary source"),
+              label: text("Primary source"),
               source: s.source,
               sheets: U,
               onChange: (ye) => ae({ ...s, source: ye }),
@@ -423,8 +423,8 @@ function Hce(e) {
               className: "recipe-layout",
               children: [
                 i.jsxs("aside", {
-                  "aria-label": r("Ordered recipe steps"),
-                  lang: t("Ordered recipe steps"),
+                  "aria-label": text("Ordered recipe steps"),
+                  lang: language("Ordered recipe steps"),
                   "data-ui-label": "Ordered recipe steps",
                   children: [
                     i.jsx("h3", {
@@ -496,10 +496,10 @@ function Hce(e) {
                       children: [
                         i.jsx(M, { children: "Add transformation" }),
                         i.jsx("select", {
-                          "aria-label": r("New transformation type"),
+                          "aria-label": text("New transformation type"),
                           value: E,
                           onChange: (ye) => A(ye.target.value),
-                          lang: t("New transformation type"),
+                          lang: language("New transformation type"),
                           "data-ui-label": "New transformation type",
                           children: Object.entries(Q4).map(([ye, Te]) =>
                             i.jsx("option", { value: ye, children: Te }, ye),
@@ -532,8 +532,8 @@ function Hce(e) {
                 }),
                 i.jsx("section", {
                   className: "recipe-editor",
-                  "aria-label": r("Recipe step editor"),
-                  lang: t("Recipe step editor"),
+                  "aria-label": text("Recipe step editor"),
+                  lang: language("Recipe step editor"),
                   "data-ui-label": "Recipe step editor",
                   children: he
                     ? i.jsxs(i.Fragment, {
@@ -583,13 +583,13 @@ function Hce(e) {
                   children: [
                     i.jsx(M, { children: "New output worksheet" }),
                     i.jsx("input", {
-                      "aria-label": r("Recipe output worksheet"),
+                      "aria-label": text("Recipe output worksheet"),
                       value: k,
                       onChange: (ye) => {
                         (F(ye.target.value), te());
                       },
                       maxLength: 31,
-                      lang: t("Recipe output worksheet"),
+                      lang: language("Recipe output worksheet"),
                       "data-ui-label": "Recipe output worksheet",
                     }),
                   ],
@@ -657,9 +657,9 @@ function Hce(e) {
             K &&
               i.jsxs("section", {
                 className: "recipe-review",
-                "aria-label": r("Recipe execution preview"),
+                "aria-label": text("Recipe execution preview"),
                 ref: o,
-                lang: t("Recipe execution preview"),
+                lang: language("Recipe execution preview"),
                 "data-ui-label": "Recipe execution preview",
                 children: [
                   i.jsx("h3", {
@@ -701,8 +701,8 @@ function Hce(e) {
                     ],
                   }),
                   i.jsx("nav", {
-                    "aria-label": r("Recipe review views"),
-                    lang: t("Recipe review views"),
+                    "aria-label": text("Recipe review views"),
+                    lang: language("Recipe review views"),
                     "data-ui-label": "Recipe review views",
                     children: [
                       ["output", "Output records"],
@@ -728,8 +728,8 @@ function Hce(e) {
                         i.jsxs("div", {
                           className: "recipe-table",
                           tabIndex: 0,
-                          "aria-label": r("Complete recipe output"),
-                          lang: t("Complete recipe output"),
+                          "aria-label": text("Complete recipe output"),
+                          lang: language("Complete recipe output"),
                           "data-ui-label": "Complete recipe output",
                           children: [
                             i.jsxs("table", {
@@ -846,8 +846,8 @@ function Hce(e) {
                     }),
                   C === "steps" &&
                     i.jsx("div", {
-                      "aria-label": r("Recipe step trace"),
-                      lang: t("Recipe step trace"),
+                      "aria-label": text("Recipe step trace"),
+                      lang: language("Recipe step trace"),
                       "data-ui-label": "Recipe step trace",
                       children: K.steps.map((ye) => {
                         return i.jsxs(
@@ -969,8 +969,8 @@ function Hce(e) {
                     }),
                   C === "sources" &&
                     i.jsxs("div", {
-                      "aria-label": r("Recipe sources and totals"),
-                      lang: t("Recipe sources and totals"),
+                      "aria-label": text("Recipe sources and totals"),
+                      lang: language("Recipe sources and totals"),
                       "data-ui-label": "Recipe sources and totals",
                       children: [
                         K.sources.map((ye, Te) =>

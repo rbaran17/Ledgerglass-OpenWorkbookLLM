@@ -31,7 +31,7 @@ import { lm } from "./36-watch-window-and-goal-seek.js";
 import { Axe, Cxe, Exe, Oi, aj } from "./37-linear-solver-engine.js";
 
 function kxe(e) {
-  const { text: r } = Dr(),
+  const { text } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = e.workbook.sheets.find((te) => te.id === e.sheetId),
@@ -127,7 +127,7 @@ function kxe(e) {
     ),
     X$1 = (te, ae, oe) =>
       i.jsx("select", {
-        "aria-label": r(oe),
+        "aria-label": text(oe),
         value: te,
         onChange: (de) => ae(de.target.value),
         children: Q.map((de) =>
@@ -136,7 +136,7 @@ function kxe(e) {
       }),
     J = (te, ae, oe) =>
       i.jsx(ci, {
-        "aria-label": r(te),
+        "aria-label": text(te),
         value: ae === undefined || !Number.isFinite(ae) ? "" : ae,
         onValueChange: (de) => oe(aj(de)),
       });
@@ -248,14 +248,14 @@ function kxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close analysis"),
+              "aria-label": text("Close analysis"),
               onClick: e.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
         i.jsxs("nav", {
-          "aria-label": r("Analysis sections"),
+          "aria-label": text("Analysis sections"),
           children: [
             ["Setup", "Results"].map((te) =>
               i.jsx(
@@ -536,7 +536,7 @@ function kxe(e) {
                                           }),
                                         ),
                                         i.jsx("button", {
-                                          "aria-label": r(
+                                          "aria-label": text(
                                             `Remove variable ${ae + 1}`,
                                           ),
                                           onClick: () =>
@@ -784,7 +784,7 @@ function kxe(e) {
                                               ],
                                             }),
                                         i.jsx("button", {
-                                          "aria-label": r(
+                                          "aria-label": text(
                                             `Remove constraint ${ae + 1}`,
                                           ),
                                           onClick: () =>
@@ -1185,7 +1185,7 @@ function kxe(e) {
                                 i.jsx("div", {
                                   className: "lg-analysis-results",
                                   tabIndex: 0,
-                                  "aria-label": r("Analysis results"),
+                                  "aria-label": text("Analysis results"),
                                   children: i.jsx("table", {
                                     children: i.jsx("tbody", {
                                       children: f.result.rows
@@ -1338,10 +1338,10 @@ function kxe(e) {
     }),
   });
 }
-function Sxe({ workbook: e, sheetId: r, onReview: t }) {
-  const n = e.sheets.find((s) => s.id === r)?.analysisReport;
+function Sxe({ workbook, sheetId, onReview }) {
+  const n = workbook.sheets.find((s) => s.id === sheetId)?.analysisReport;
   if (!n) return null;
-  const o = Axe(e, r, { includeHidden: n.includeHidden });
+  const o = Axe(workbook, sheetId, { includeHidden: n.includeHidden });
   return i.jsxs("div", {
     className: "lg-notice",
     role: "status",
@@ -1349,7 +1349,7 @@ function Sxe({ workbook: e, sheetId: r, onReview: t }) {
       i.jsxs("strong", { children: ["Analysis snapshot · ", o.status] }),
       i.jsx("span", { children: o.message }),
       i.jsx("button", {
-        onClick: t,
+        onClick: onReview,
         children: i.jsx(M, { children: "Review analysis" }),
       }),
     ],
@@ -1826,8 +1826,8 @@ function Oxe(e) {
     content: JSON.stringify(r, null, 2),
   };
 }
-function XT({ snapshot: e, showData: r = true }) {
-  const t = Wg(e);
+function XT({ snapshot, showData = true }) {
+  const t = Wg(snapshot);
   let n,
     o = "";
   try {
@@ -1872,7 +1872,7 @@ function XT({ snapshot: e, showData: r = true }) {
             style: { maxWidth: "100%", height: "auto", display: "block" },
           })
         : i.jsx("p", { role: "status", children: o }),
-      r &&
+      showData &&
         i.jsxs("details", {
           open: !n,
           children: [
@@ -1995,11 +1995,11 @@ async function jxe(e) {
     URL.revokeObjectURL(t);
   }
 }
-const sj = ({ filename: e, blob: r }) => {
-  const t = URL.createObjectURL(r),
+const sj = ({ filename, blob }) => {
+  const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
-    (n.download = e),
+    (n.download = filename),
     n.click(),
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };

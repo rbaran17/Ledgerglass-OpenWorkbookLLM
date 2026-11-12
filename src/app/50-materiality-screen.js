@@ -27,7 +27,7 @@ import {
 import { Aj, L4e, kj } from "./49-outlines-and-comments.js";
 
 function P4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -242,9 +242,9 @@ function P4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close materiality screen"),
+              "aria-label": text("Close materiality screen"),
               onClick: e.onClose,
-              lang: t("Close materiality screen"),
+              lang: language("Close materiality screen"),
               "data-ui-label": "Close materiality screen",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -271,10 +271,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: Se ? c : "",
                   onChange: (Me) => h(Me.target.value),
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -317,11 +317,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Declared currency" }),
                 i.jsx("input", {
-                  "aria-label": r("Declared currency"),
+                  "aria-label": text("Declared currency"),
                   value: E,
                   maxLength: 3,
                   onChange: (Me) => A(Me.target.value),
-                  lang: t("Declared currency"),
+                  lang: language("Declared currency"),
                   "data-ui-label": "Declared currency",
                 }),
               ],
@@ -330,12 +330,12 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Threshold" }),
                 i.jsx(ci, {
-                  "aria-label": r("Threshold"),
+                  "aria-label": text("Threshold"),
                   min: "0",
                   step: "any",
                   value: k,
                   onValueChange: (Me) => F(Me),
-                  lang: t("Threshold"),
+                  lang: language("Threshold"),
                   "data-ui-label": "Threshold",
                 }),
               ],
@@ -344,10 +344,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Amount comparison" }),
                 i.jsxs("select", {
-                  "aria-label": r("Amount comparison"),
+                  "aria-label": text("Amount comparison"),
                   value: I,
                   onChange: (Me) => O(Me.target.value),
-                  lang: t("Amount comparison"),
+                  lang: language("Amount comparison"),
                   "data-ui-label": "Amount comparison",
                   children: [
                     i.jsx("option", {
@@ -366,10 +366,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Comparison rule" }),
                 i.jsxs("select", {
-                  "aria-label": r("Comparison rule"),
+                  "aria-label": text("Comparison rule"),
                   value: j,
                   onChange: (Me) => z(Me.target.value),
-                  lang: t("Comparison rule"),
+                  lang: language("Comparison rule"),
                   "data-ui-label": "Comparison rule",
                   children: [
                     i.jsx("option", {
@@ -397,11 +397,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Effective from (inclusive)" }),
                 i.jsx("input", {
-                  "aria-label": r("Effective from"),
+                  "aria-label": text("Effective from"),
                   type: "date",
                   value: V,
                   onChange: (Me) => D(Me.target.value),
-                  lang: t("Effective from"),
+                  lang: language("Effective from"),
                   "data-ui-label": "Effective from",
                 }),
               ],
@@ -410,11 +410,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Effective to (inclusive)" }),
                 i.jsx("input", {
-                  "aria-label": r("Effective to"),
+                  "aria-label": text("Effective to"),
                   type: "date",
                   value: B,
                   onChange: (Me) => _(Me.target.value),
-                  lang: t("Effective to"),
+                  lang: language("Effective to"),
                   "data-ui-label": "Effective to",
                 }),
               ],
@@ -426,11 +426,11 @@ function P4e(e) {
             className: "materiality-check",
             children: [
               i.jsx("input", {
-                "aria-label": r("Include hidden content"),
+                "aria-label": text("Include hidden content"),
                 type: "checkbox",
                 checked: C,
                 onChange: (Me) => T(Me.target.checked),
-                lang: t("Include hidden content"),
+                lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
               i.jsx(M, {
@@ -458,14 +458,14 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Load saved configuration/report" }),
                 i.jsx("input", {
-                  "aria-label": r("Load saved configuration"),
+                  "aria-label": text("Load saved configuration"),
                   type: "file",
                   accept: "application/json,.json",
                   onChange: (Me) => {
                     const ke = Me.target.files?.[0];
                     ((Me.target.value = ""), Re(ke));
                   },
-                  lang: t("Load saved configuration"),
+                  lang: language("Load saved configuration"),
                   "data-ui-label": "Load saved configuration",
                 }),
               ],
@@ -495,8 +495,8 @@ function P4e(e) {
         Ee &&
           i.jsxs("section", {
             className: "materiality-result",
-            "aria-label": r("Materiality screen results"),
-            lang: t("Materiality screen results"),
+            "aria-label": text("Materiality screen results"),
+            lang: language("Materiality screen results"),
             "data-ui-label": "Materiality screen results",
             children: [
               i.jsx("h3", {
@@ -624,12 +624,12 @@ function P4e(e) {
                 children: [
                   i.jsx(M, { children: "Rows to review" }),
                   i.jsxs("select", {
-                    "aria-label": r("Rows to review"),
+                    "aria-label": text("Rows to review"),
                     value: K,
                     onChange: (Me) => {
                       (te(Me.target.value), W(0));
                     },
-                    lang: t("Rows to review"),
+                    lang: language("Rows to review"),
                     "data-ui-label": "Rows to review",
                     children: [
                       i.jsx("option", {
@@ -789,8 +789,8 @@ function P4e(e) {
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Screen result pages"),
-                lang: t("Screen result pages"),
+                "aria-label": text("Screen result pages"),
+                lang: language("Screen result pages"),
                 "data-ui-label": "Screen result pages",
                 children: [
                   i.jsx("button", {

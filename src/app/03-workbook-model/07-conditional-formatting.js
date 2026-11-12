@@ -112,21 +112,21 @@ function Die(e, r = {}) {
   return (u, l, c) => {
     var Q, X;
     if (!iU.includes(u)) return oU;
-    const { issue: h, isIssue: f } = c,
+    const { issue, isIssue } = c,
       p = (J) => {
-        if (f(J)) throw J;
-        if (!ip(J) || !ip(J.ref)) throw h("#VALUE!");
+        if (isIssue(J)) throw J;
+        if (!ip(J) || !ip(J.ref)) throw issue("#VALUE!");
         const q = J.ref;
         if (q.sheet !== undefined && typeof q.sheet != "string")
-          throw h("#REF!");
+          throw issue("#REF!");
         const W = o.get(
           String(q.sheet ?? c.currentSheetName ?? "").toLowerCase(),
         );
-        if (!W) throw h("#REF!");
+        if (!W) throw issue("#REF!");
         const K = ip(q.from) ? q.from : q,
           te = ip(q.to) ? q.to : q,
           ae = [K.row, K.col, te.row, te.col];
-        if (ae.some((le) => !Number.isInteger(le))) throw h("#REF!");
+        if (ae.some((le) => !Number.isInteger(le))) throw issue("#REF!");
         const [oe, de, he, Se] = ae;
         if (
           oe < 1 ||
@@ -136,7 +136,7 @@ function Die(e, r = {}) {
           he > W.rowCount ||
           Se > W.colCount
         )
-          throw h("#REF!");
+          throw issue("#REF!");
         return {
           sheet: W,
           firstRow: oe,
@@ -146,7 +146,7 @@ function Die(e, r = {}) {
         };
       };
     if (u === "FORMULATEXT" || u === "ISFORMULA") {
-      if (l.length !== 1) return h("#VALUE!");
+      if (l.length !== 1) return issue("#VALUE!");
       const J = p(l[0]),
         q = (K, te) => {
           var oe;
@@ -158,11 +158,11 @@ function Die(e, r = {}) {
         };
       if (u === "FORMULATEXT") {
         const K = q(J.firstRow, J.firstCol);
-        return z4(K) && K.raw.length <= 8192 ? K.raw : h("#N/A");
+        return z4(K) && K.raw.length <= 8192 ? K.raw : issue("#N/A");
       }
       const W = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
       return W > 1e4
-        ? h("#LIMIT!")
+        ? issue("#LIMIT!")
         : W === 1
           ? z4(q(J.firstRow, J.firstCol))
           : Array.from({ length: J.lastRow - J.firstRow + 1 }, (K, te) =>
@@ -172,31 +172,31 @@ function Die(e, r = {}) {
             );
     }
     const m = u === "AGGREGATE";
-    if (l.length < (m ? 3 : 2) || l.length > 255) return h("#VALUE!");
+    if (l.length < (m ? 3 : 2) || l.length > 255) return issue("#VALUE!");
     const v = (J) => {
         const q = c.retrieve(J);
-        if (f(q)) throw q;
+        if (isIssue(q)) throw q;
         if (
           Array.isArray(q) ||
           !["number", "string", "boolean"].includes(typeof q) ||
           (typeof q == "string" && q.trim() === "") ||
           !Number.isFinite(Number(q))
         )
-          throw h("#VALUE!");
+          throw issue("#VALUE!");
         return Number(q);
       },
       g = v(l[0]);
-    if (m && !Number.isInteger(g)) return h("#VALUE!");
+    if (m && !Number.isInteger(g)) return issue("#VALUE!");
     const b = Math.trunc(g),
       y = !m && b > 100 ? b - 100 : b;
-    if (y < 1 || y > (m ? 19 : 11)) return h("#VALUE!");
+    if (y < 1 || y > (m ? 19 : 11)) return issue("#VALUE!");
     const w = m ? (l[1] == null ? 0 : v(l[1])) : 0;
-    if (!Number.isInteger(w) || w < 0 || w > 7) return h("#VALUE!");
+    if (!Number.isInteger(w) || w < 0 || w > 7) return issue("#VALUE!");
     const E = m ? w % 2 === 1 : b > 100,
       A = m && [2, 3, 6, 7].includes(w),
       k = !m || w < 4,
       F = m && y >= 14;
-    if (F && (l.length !== 4 || l[3] == null)) return h("#VALUE!");
+    if (F && (l.length !== 4 || l[3] == null)) return issue("#VALUE!");
     const I = F ? v(l[3]) : 0,
       O = F ? [l[2]] : l.slice(m ? 2 : 1),
       z = F && !((J) => ip(J) && ip(J.ref))(O[0]),
@@ -204,12 +204,13 @@ function Die(e, r = {}) {
     let D = 0;
     for (const J of V) {
       const q = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
-      if (((D += q), q > 2e4 || D > 1e5)) return h("#LIMIT!");
+      if (((D += q), q > 2e4 || D > 1e5)) return issue("#LIMIT!");
     }
     for (const J of V)
       for (let q = J.firstRow; q <= J.lastRow; q++)
         for (let W = J.firstCol; W <= J.lastCol; W++)
-          if (c.isActive(J.sheet.id, `${ut(W - 1)}${q}`)) return h("#CYCLE!");
+          if (c.isActive(J.sheet.id, `${ut(W - 1)}${q}`))
+            return issue("#CYCLE!");
     let B = 0,
       _ = 0,
       C = 1 / 0,
@@ -218,13 +219,13 @@ function Die(e, r = {}) {
       R = 0;
     const L = [],
       $ = (J) => {
-        if (f(J)) {
+        if (isIssue(J)) {
           if (["#LIMIT!", "#CYCLE!"].includes(J.error)) return J;
           if (A) return;
           if (y !== 2 && y !== 3) return J;
         }
         if ((J != null && _++, typeof J != "number")) return;
-        if (!Number.isFinite(J)) return h("#NUM!");
+        if (!Number.isFinite(J)) return issue("#NUM!");
         (B++, (C = Math.min(C, J)), (T = Math.max(T, J)));
         const q = J - N;
         ((N += q / B),
@@ -234,20 +235,20 @@ function Die(e, r = {}) {
     if (z) {
       const J = c.retrieve(O[0]),
         q = Array.isArray(J) ? J : [[J]];
-      if (!q.length || q.length > 1e4) return h("#LIMIT!");
+      if (!q.length || q.length > 1e4) return issue("#LIMIT!");
       const W = q.every(Array.isArray) ? q : [q],
         K = W[0]?.length ?? 0;
       if (!K || W.some((te) => te.length !== K || te.some(Array.isArray)))
-        return h("#VALUE!");
-      if (W.length * K > 1e4) return h("#LIMIT!");
+        return issue("#VALUE!");
+      if (W.length * K > 1e4) return issue("#LIMIT!");
       for (const te of W)
         for (const ae of te) {
           if (
             ae != null &&
-            !f(ae) &&
+            !isIssue(ae) &&
             !["number", "string", "boolean"].includes(typeof ae)
           )
-            return h("#VALUE!");
+            return issue("#VALUE!");
           const oe = $(ae);
           if (oe) return oe;
         }
@@ -281,9 +282,9 @@ function Die(e, r = {}) {
           ((he = le === Se ? he + 1 : 1),
             he > oe && ((oe = he), (de = le)),
             (Se = le));
-        return oe > 1 ? de : h("#N/A");
+        return oe > 1 ? de : issue("#N/A");
       }
-      if (!L.length) return h("#NUM!");
+      if (!L.length) return issue("#NUM!");
       if (y === 12) {
         const oe = Math.floor(L.length / 2);
         return L.length % 2 ? L[oe] : L[oe - 1] / 2 + L[oe] / 2;
@@ -292,13 +293,13 @@ function Die(e, r = {}) {
         const oe = I;
         return Number.isInteger(oe) && oe >= 1 && oe <= L.length
           ? L[y === 14 ? L.length - oe : oe - 1]
-          : h("#NUM!");
+          : issue("#NUM!");
       }
       const J = y >= 18,
         q = y === 17 || y === 19 ? Math.trunc(I) / 4 : I;
-      if (q < 0 || q > 1 || (J && (q === 0 || q === 1))) return h("#NUM!");
+      if (q < 0 || q > 1 || (J && (q === 0 || q === 1))) return issue("#NUM!");
       const W = J ? q * (L.length + 1) - 1 : q * (L.length - 1);
-      if (W < 0 || W > L.length - 1) return h("#NUM!");
+      if (W < 0 || W > L.length - 1) return issue("#NUM!");
       const K = Math.floor(W),
         te = Math.ceil(W),
         ae = W - K;
@@ -307,12 +308,12 @@ function Die(e, r = {}) {
     if (y === 2) return B;
     if (y === 3) return _;
     if (y === 9) return Rc(L);
-    if (y === 1) return B ? Us(L) : h("#DIV/0!");
+    if (y === 1) return B ? Us(L) : issue("#DIV/0!");
     if (y === 4) return B ? T : 0;
     if (y === 5) return B ? C : 0;
     if (y === 6) return B ? WL(L) : 0;
     const U = y === 7 || y === 10;
-    if (B < (U ? 2 : 1)) return h("#DIV/0!");
+    if (B < (U ? 2 : 1)) return issue("#DIV/0!");
     const G = Math.max(0, R / (B - (U ? 1 : 0)));
     return y === 7 || y === 8 ? Math.sqrt(G) : G;
   };
@@ -629,13 +630,13 @@ function eie(e, r, t) {
       );
       continue;
     }
-    const { extension: d } = P1(s.dataURL);
+    const { extension } = P1(s.dataURL);
     s.evidence &&
       n.push(
         `${s.label || "Picture"}: XLSX retains the image bytes and placement, but original filename, source reference and evidence provenance require native JSON; a later XLSX import records only observed media.`,
       );
     const u = _t(s.anchor),
-      l = e.addImage({ base64: s.dataURL, extension: d });
+      l = e.addImage({ base64: s.dataURL, extension });
     r.addImage(l, {
       tl: {
         col: u.col + s.offsetX / (t.columnWidths?.[u.col] ?? 84),
@@ -938,21 +939,23 @@ function iae(e, r, t, n, o, a) {
     u = { ...e },
     l = Fg(e[s], t, r);
   if (l) {
-    let { start: f, end: p } = l;
-    if (!a) (n <= f && (f += o), n <= p && (p += o));
+    let { start, end } = l;
+    if (!a) (n <= start && (start += o), n <= end && (end += o));
     else {
       const m = n + o - 1,
         v = [
-          f < n ? { start: f, end: Math.min(p, n - 1) } : undefined,
-          p > m ? { start: Math.max(f, m + 1) - o, end: p - o } : undefined,
+          start < n ? { start, end: Math.min(end, n - 1) } : undefined,
+          end > m
+            ? { start: Math.max(start, m + 1) - o, end: end - o }
+            : undefined,
         ].filter(Boolean);
       if (!v.length)
         throw Error(
           "This edit removes every repeated print title. Clear or change print titles first.",
         );
-      ((f = v[0].start), (p = v.at(-1).end));
+      ((start = v[0].start), (end = v.at(-1).end));
     }
-    ((u[s] = G5({ start: f, end: p }, t)), Fg(u[s], t, r));
+    ((u[s] = G5({ start, end }, t)), Fg(u[s], t, r));
   }
   const c = t === "row" ? r.rowCount : r.colCount,
     h = (e[d] ?? [])
@@ -1656,14 +1659,14 @@ function Fw(e, r, t) {
         ))
       ) {
         u && (b = u);
-        for (const { address: y, point: w } of l) {
+        for (const { address, point } of l) {
           if (++a > 1e6) {
             b =
               "Conditional statistics exceed 1,000,000 inspected cells; narrow the rule ranges or remove rules.";
             break;
           }
-          if (!n5(p, w)) continue;
-          const E = r(e.id, y);
+          if (!n5(p, point)) continue;
+          const E = r(e.id, address);
           if (
             (typeof E == "number" &&
               Number.isFinite(E) &&
@@ -1685,22 +1688,15 @@ function Fw(e, r, t) {
       const p = _t(f),
         m = { style: {}, errors: [] },
         v = r(e.id, f);
-      for (const {
-        rule: g,
-        bounds: b,
-        counts: y,
-        min: w,
-        max: E,
-        failure: A,
-      } of c) {
-        if (!n5(b, p)) continue;
-        if (A) {
-          m.errors.push(d(g.id, f, A));
+      for (const { rule, bounds, counts, min, max, failure } of c) {
+        if (!n5(bounds, p)) continue;
+        if (failure) {
+          m.errors.push(d(rule.id, f, failure));
           continue;
         }
         let k = false,
           F = {};
-        if (g.kind === "formula") {
+        if (rule.kind === "formula") {
           let I;
           try {
             if (++s > 5e3)
@@ -1711,7 +1707,11 @@ function Fw(e, r, t) {
               throw Error(
                 "This calculator cannot evaluate conditional formulas.",
               );
-            const O = xd(g.formula, p.row - b.firstRow, p.col - b.firstCol);
+            const O = xd(
+              rule.formula,
+              p.row - bounds.firstRow,
+              p.col - bounds.firstCol,
+            );
             if (((I = r.evaluateFormula(e.id, f, O)), UQ(I)))
               throw Error(`Formula returned ${I}.`);
             if (typeof I != "number" && typeof I != "boolean")
@@ -1720,16 +1720,16 @@ function Fw(e, r, t) {
           } catch (O) {
             m.errors.push(
               d(
-                g.id,
+                rule.id,
                 f,
                 O instanceof Error ? O.message : "Formula evaluation failed.",
               ),
             );
             continue;
           }
-        } else if (g.kind === "blank" || g.kind === "notBlank")
-          k = (v === null || v === "") == (g.kind === "blank");
-        else if (g.kind === "error" || g.kind === "notError")
+        } else if (rule.kind === "blank" || rule.kind === "notBlank")
+          k = (v === null || v === "") == (rule.kind === "blank");
+        else if (rule.kind === "error" || rule.kind === "notError")
           try {
             if (++s > 5e3)
               throw Error(
@@ -1742,11 +1742,11 @@ function Fw(e, r, t) {
             const I = r.evaluateFormula(e.id, f, "=ISERROR(" + f + ")");
             if (typeof I != "boolean")
               throw Error("Error rule could not evaluate: " + String(I) + ".");
-            k = I === (g.kind === "error");
+            k = I === (rule.kind === "error");
           } catch (I) {
             m.errors.push(
               d(
-                g.id,
+                rule.id,
                 f,
                 I instanceof Error
                   ? I.message
@@ -1755,29 +1755,31 @@ function Fw(e, r, t) {
             );
             continue;
           }
-        else if (g.kind === "duplicate" || g.kind === "unique")
+        else if (rule.kind === "duplicate" || rule.kind === "unique")
           k =
             v !== null &&
             v !== "" &&
-            (y.get(String(v).toLowerCase()) ?? 0) > 1 ==
-              (g.kind === "duplicate");
-        else if (g.kind === "contains")
+            (counts.get(String(v).toLowerCase()) ?? 0) > 1 ==
+              (rule.kind === "duplicate");
+        else if (rule.kind === "contains")
           k = String(v ?? "")
             .toLowerCase()
-            .includes(g.value.toLowerCase());
-        else if (g.kind === "equal")
-          k = String(v ?? "").toLowerCase() === g.value.toLowerCase();
+            .includes(rule.value.toLowerCase());
+        else if (rule.kind === "equal")
+          k = String(v ?? "").toLowerCase() === rule.value.toLowerCase();
         else if (typeof v == "number") {
-          if (g.kind === "greater") k = v > Number(g.value);
-          else if (g.kind === "less") k = v < Number(g.value);
-          else if (g.kind === "between")
-            k = v >= Number(g.value) && v <= Number(g.second);
-          else if (Number.isFinite(w) && Number.isFinite(E)) {
+          if (rule.kind === "greater") k = v > Number(rule.value);
+          else if (rule.kind === "less") k = v < Number(rule.value);
+          else if (rule.kind === "between")
+            k = v >= Number(rule.value) && v <= Number(rule.second);
+          else if (Number.isFinite(min) && Number.isFinite(max)) {
             const I =
-              E === w ? 0.5 : Math.max(0, Math.min(1, (v - w) / (E - w)));
-            if (g.kind === "colorScale") {
-              const O = g.minColor ?? "#f8e99b",
-                j = g.maxColor ?? "#63be7b";
+              max === min
+                ? 0.5
+                : Math.max(0, Math.min(1, (v - min) / (max - min)));
+            if (rule.kind === "colorScale") {
+              const O = rule.minColor ?? "#f8e99b",
+                j = rule.maxColor ?? "#63be7b";
               ((F.fill =
                 "#" +
                 [1, 3, 5]
@@ -1793,9 +1795,9 @@ function Fw(e, r, t) {
                   )
                   .join("")),
                 (k = true));
-            } else if (g.kind === "dataBar" && !m.dataBar) {
-              const O = Math.min(0, w),
-                j = Math.max(0, E),
+            } else if (rule.kind === "dataBar" && !m.dataBar) {
+              const O = Math.min(0, min),
+                j = Math.max(0, max),
                 z = j - O || 1,
                 V = (-O / z) * 100,
                 D = ((v - O) / z) * 100;
@@ -1803,13 +1805,14 @@ function Fw(e, r, t) {
                 start: Math.min(V, D),
                 width: Math.abs(D - V),
                 axis: V,
-                color: v < 0 ? "#d13438" : g.fill,
+                color: v < 0 ? "#d13438" : rule.fill,
                 negative: v < 0,
               }),
                 (k = true));
-            } else if (g.kind === "iconSet" && !m.icon) {
-              const O = g.iconThresholds ?? [33, 67],
-                j = (g.thresholdType ?? "percent") === "percent" ? I * 100 : v;
+            } else if (rule.kind === "iconSet" && !m.icon) {
+              const O = rule.iconThresholds ?? [33, 67],
+                j =
+                  (rule.thresholdType ?? "percent") === "percent" ? I * 100 : v;
               ((m.icon =
                 j < O[0]
                   ? { symbol: "▼", color: "#c42b1c", label: "Low" }
@@ -1822,10 +1825,10 @@ function Fw(e, r, t) {
         }
         if (
           k &&
-          (["colorScale", "dataBar", "iconSet"].includes(g.kind) ||
-            (F = { fill: g.fill, color: g.color }),
+          (["colorScale", "dataBar", "iconSet"].includes(rule.kind) ||
+            (F = { fill: rule.fill, color: rule.color }),
           (m.style = { ...F, ...m.style }),
-          g.stopIfTrue)
+          rule.stopIfTrue)
         )
           break;
       }
@@ -1933,9 +1936,9 @@ function kE(e, r, t, n = false) {
 }
 function oP(e) {
   let r = 0;
-  for (const { refersTo: t } of e) {
+  for (const { refersTo } of e) {
     const n = Vg(
-      t.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
+      refersTo.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
     );
     for (const o of n.matchAll(
       /(?:^|[^A-Za-z0-9_.])((?:\$?[A-Za-z]{1,3}\$?[1-9]\d*)(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?)(?![A-Za-z0-9_.])/g,

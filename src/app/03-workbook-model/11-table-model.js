@@ -216,7 +216,7 @@ function yR(e, r) {
     o = jP(t, n.fields, mR(n, t.filters ?? [])),
     a = OP(t, n.fields, o),
     s = gR(e, t.name, a.matrix, t.destination),
-    { destination: d, ...u } = t,
+    { destination, ...u } = t,
     l = _t(t.destination?.address ?? "A1");
   for (let f = 1; f < a.matrix.length; f++)
     for (let p = Math.max(1, t.rowFields.length); p < a.matrix[0].length; p++) {
@@ -295,13 +295,13 @@ function NO(e, r, t, n) {
       Xt(
         "Pivot view changes can only set filters, sorting, value display and chart settings.",
       ));
-  const { owner: o, definition: a } = Sx(e, r);
+  const { owner, definition } = Sx(e, r);
   return (
-    jn(o),
+    jn(owner),
     yR(e, {
-      ...a,
+      ...definition,
       ...t,
-      name: `${a.name.slice(0, 88)} filtered`,
+      name: `${definition.name.slice(0, 88)} filtered`,
       destination: undefined,
     })
   );
@@ -311,8 +311,8 @@ function bie(e, r, t, n) {
     n.snapshot !== JSON.stringify(e) &&
       Xt("The workbook changed. Preview drill-through again."));
   const o = O5(e, r, t),
-    { owner: a } = Sx(e, r);
-  jn(a);
+    { owner } = Sx(e, r);
+  jn(owner);
   const s = JSON.stringify({ ...o, records: undefined });
   s.length > 32700 &&
     Xt(
@@ -359,11 +359,13 @@ function bie(e, r, t, n) {
           Xt("Row provenance exceeds its 100,000 identity budget."),
         u.workbook.rowOrigins.push(h)),
         (u.sheet.rowOriginIds[c + 1] = h.id),
-        l.cells.forEach(({ cell: f }, p) => {
+        l.cells.forEach(({ cell }, p) => {
           const m = [
-            f.note,
-            typeof f.raw == "string" && f.raw.startsWith("=") && !f.literal
-              ? `Source formula at extraction: ${f.raw}`
+            cell.note,
+            typeof cell.raw == "string" &&
+            cell.raw.startsWith("=") &&
+            !cell.literal
+              ? `Source formula at extraction: ${cell.raw}`
               : undefined,
           ].filter(Boolean).join(`
 `);
@@ -451,7 +453,7 @@ function ZP(e, r) {
       u.push(p));
   }
   const l = gR(e, t.name, u, t.destination),
-    { destination: c, ...h } = t;
+    { destination, ...h } = t;
   return (
     (l.sheet.queries = [
       ...(l.sheet.queries ?? []),

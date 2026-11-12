@@ -116,10 +116,10 @@ function EI(e, r, t) {
         })),
     },
     c = Vn(l);
-  for (const { sheet: h, anchor: f } of n) {
-    const p = c.getSpillRange(h.id, f);
+  for (const { sheet, anchor } of n) {
+    const p = c.getSpillRange(sheet.id, anchor);
     p &&
-      r.some((m) => m.sheet.id === h.id && hp(m.range, p)) &&
+      r.some((m) => m.sheet.id === sheet.id && hp(m.range, p)) &&
       Nn(
         "The selected source or destination intersects a generated array. Convert its results to ordinary values explicitly before splitting.",
       );
@@ -940,45 +940,38 @@ function M7(e, r, t) {
   });
 }
 function a3(e, r, t = {}) {
-  const {
-    request: n,
-    context: o,
-    source: a,
-    sources: s,
-    rows: d,
-    headers: u,
-  } = mz(e, r, t);
-  if (!n.steps.length)
+  const { request, context, source, sources, rows, headers } = mz(e, r, t);
+  if (!request.steps.length)
     throw Error("Add at least one transformation step before previewing.");
-  const { exceptions: l, stages: c } = gz(
-      d,
-      u,
-      n.steps,
+  const { exceptions, stages } = gz(
+      rows,
+      headers,
+      request.steps,
       e.datePolicy?.dateSystem,
     ),
     h = [],
     f = {};
   if (
-    (u.forEach((v, g) => {
+    (headers.forEach((v, g) => {
       f[Gh(0, g)] = { raw: v, literal: true, style: { bold: true } };
     }),
-    d.forEach((v, g) =>
+    rows.forEach((v, g) =>
       v.fields.forEach((b, y) => {
         const w = Gh(g + 1, y);
-        h.push({ address: w, row: v.row, field: u[y], ...b });
+        h.push({ address: w, row: v.row, field: headers[y], ...b });
         const E = `Clean & Reshape derivation
 Workbook: ${JSON.stringify(e.id)}
 Source revision: ${e.revision}
-Worksheet: ${JSON.stringify(a.name)} (${JSON.stringify(a.id)})
+Worksheet: ${JSON.stringify(source.name)} (${JSON.stringify(source.id)})
 Original cells: ${b.sources.join(", ")}
 Result type: ${b.type}
 ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Original source values are retained."}`;
         f[w] = M7(b.value, E, b.type);
       }),
     ),
-    l.length)
+    exceptions.length)
   ) {
-    const v = d.length + 3;
+    const v = rows.length + 3;
     ((f[Gh(v, 0)] = {
       raw: "Transformation exceptions",
       style: { bold: true },
@@ -993,13 +986,13 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
       ].forEach(
         (b, y) => (f[Gh(v + 1, y)] = { raw: b, style: { bold: true } }),
       ),
-      l.forEach((b, y) =>
+      exceptions.forEach((b, y) =>
         [
           b.row,
           b.field,
           b.step,
           b.raw,
-          b.sources.map((w) => `${a.name}!${w}`).join(", "),
+          b.sources.map((w) => `${source.name}!${w}`).join(", "),
           b.reason,
         ].forEach(
           (w, E) =>
@@ -1023,30 +1016,31 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
     );
   const p = {
     snapshot: JSON.stringify(e),
-    context: o,
-    request: n,
-    sourceSheetName: a.name,
-    sources: s,
-    headers: u,
+    context,
+    request,
+    sourceSheetName: source.name,
+    sources,
+    headers,
     outputs: h,
-    exceptions: l,
-    stages: c,
+    exceptions,
+    stages,
     cells: f,
-    targetRange: `A1:${Gh(l.length ? d.length + 4 + l.length : d.length, Math.max(u.length, l.length ? 6 : 0) - 1)}`,
+    targetRange: `A1:${Gh(exceptions.length ? rows.length + 4 + exceptions.length : rows.length, Math.max(headers.length, exceptions.length ? 6 : 0) - 1)}`,
     counts: {
-      sourceRows: d.length,
-      sourceCells: s.length,
+      sourceRows: rows.length,
+      sourceCells: sources.length,
       outputCells: Object.keys(f).length,
       changedCells: h.filter((v) => {
         return (
           v.sources.length !== 1 ||
           JSON.stringify(
-            s.find((y) => y.address === v.sources[0])?.original?.raw ?? null,
+            sources.find((y) => y.address === v.sources[0])?.original?.raw ??
+              null,
           ) !== JSON.stringify(v.value)
         );
       }).length,
-      exceptions: l.length,
-      exceptionRows: new Set(l.map((v) => v.row)).size,
+      exceptions: exceptions.length,
+      exceptionRows: new Set(exceptions.map((v) => v.row)).size,
     },
   };
   return (
@@ -1121,7 +1115,7 @@ function Mce(e, r, t = {}) {
     throw Error(
       "The transformation preview is stale or altered. Preview again.",
     );
-  const { snapshot: n, context: o, cells: a, ...s } = r;
+  const { snapshot, context, cells, ...s } = r;
   return JSON.stringify(
     {
       schemaVersion: 1,
@@ -1792,14 +1786,14 @@ function Bce(e, r, t, n) {
       };
     }
     case "group": {
-      const { indices: s, groups: d } = F7(o, t.keys),
+      const { indices, groups } = F7(o, t.keys),
         u = t.values.map((l) => ({ ...l, i: Hf(o, l.field) }));
       return {
         data: {
           fields: [...t.keys, ...u.map((l) => l.name)],
-          rows: [...d.values()].map((l) => ({
+          rows: [...groups.values()].map((l) => ({
             values: [
-              ...s.map((c) => l[0].values[c]),
+              ...indices.map((c) => l[0].values[c]),
               ...u.map((c) => j7(l, c.i, c.operation)),
             ],
             sources: jk(l),
@@ -1817,7 +1811,7 @@ function Bce(e, r, t, n) {
         throw Error("Pivot keys, attribute and value fields must be distinct.");
       const s = Hf(o, t.column),
         d = Hf(o, t.value),
-        { indices: u, groups: l } = F7(o, t.keys),
+        { indices, groups } = F7(o, t.keys),
         c = [
           ...new Map(
             o.rows.map((p) => [AI([p.values[s]]), p.values[s]]),
@@ -1829,9 +1823,9 @@ function Bce(e, r, t, n) {
         );
       if (t.keys.length + h.length > 50)
         throw Error("Pivot exceeds 50 output columns.");
-      const f = [...l.values()].map((p) => ({
+      const f = [...groups.values()].map((p) => ({
         values: [
-          ...u.map((m) => p[0].values[m]),
+          ...indices.map((m) => p[0].values[m]),
           ...c.map((m) =>
             j7(
               p.filter((v) => v.values[s] === m),

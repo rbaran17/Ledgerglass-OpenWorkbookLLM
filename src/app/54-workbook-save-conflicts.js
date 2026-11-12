@@ -348,7 +348,7 @@ function L2e(e) {
   return (t(e.path.split("."), e.before, e.after, 0), r);
 }
 function P2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(null),
     [d, u] = ne.useState(""),
@@ -416,7 +416,7 @@ function P2e(e) {
       className: "wm-dialog pc-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": r("Workbook save conflict"),
+      "aria-label": text("Workbook save conflict"),
       onKeyDown: (w) => {
         if (
           (w.key === "Escape" &&
@@ -437,7 +437,7 @@ function P2e(e) {
               (w.preventDefault(), k == null || k.focus());
         }
       },
-      lang: t("Workbook save conflict"),
+      lang: language("Workbook save conflict"),
       "data-ui-label": "Workbook save conflict",
       children: [
         i.jsxs("header", {
@@ -446,9 +446,9 @@ function P2e(e) {
               children: i.jsx(M, { children: "Workbook save conflict" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close save conflict"),
+              "aria-label": text("Close save conflict"),
               onClick: e.onClose,
-              lang: t("Close save conflict"),
+              lang: language("Close save conflict"),
               "data-ui-label": "Close save conflict",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -512,8 +512,8 @@ function P2e(e) {
               }),
             a &&
               i.jsxs("section", {
-                "aria-label": r("Conflicting workbook changes"),
-                lang: t("Conflicting workbook changes"),
+                "aria-label": text("Conflicting workbook changes"),
+                lang: language("Conflicting workbook changes"),
                 "data-ui-label": "Conflicting workbook changes",
                 children: [
                   i.jsx("h3", {
@@ -825,14 +825,14 @@ const kS = {
 function U2e(e) {
   try {
     if (e && typeof e == "object") {
-      const { code: r, name: t } = e;
-      if (typeof r == "string") {
-        if (wH.has(r)) return r;
-        if (Object.hasOwn($j, r)) return $j[r];
+      const { code, name } = e;
+      if (typeof code == "string") {
+        if (wH.has(code)) return code;
+        if (Object.hasOwn($j, code)) return $j[code];
       }
-      if (t === "AbortError") return "cancelled";
-      if (t === "TimeoutError") return "timeout";
-      if (t === "QuotaExceededError") return "quota";
+      if (name === "AbortError") return "cancelled";
+      if (name === "TimeoutError") return "timeout";
+      if (name === "QuotaExceededError") return "quota";
     }
   } catch {}
   return "unknown";
@@ -1128,8 +1128,12 @@ const zj = {
   source: "External sources",
   host: "Application callbacks",
 };
-function V2e({ monitor: e, onClose: r }) {
-  const t = ne.useSyncExternalStore(e.subscribe, e.getSnapshot, e.getSnapshot),
+function V2e({ monitor, onClose }) {
+  const t = ne.useSyncExternalStore(
+      monitor.subscribe,
+      monitor.getSnapshot,
+      monitor.getSnapshot,
+    ),
     n = ne.useId(),
     o = ne.useRef(null),
     a = Dr();
@@ -1148,7 +1152,10 @@ function V2e({ monitor: e, onClose: r }) {
         new Blob(
           [
             JSON.stringify(
-              { format: "ledgerglass-reliability-v1", ...e.getSnapshot() },
+              {
+                format: "ledgerglass-reliability-v1",
+                ...monitor.getSnapshot(),
+              },
               null,
               2,
             ),
@@ -1172,7 +1179,8 @@ function V2e({ monitor: e, onClose: r }) {
       onKeyDown: (d) => {
         var u, l;
         if (
-          (d.key === "Escape" && (d.stopPropagation(), r()), d.key === "Tab")
+          (d.key === "Escape" && (d.stopPropagation(), onClose()),
+          d.key === "Tab")
         ) {
           const c = [
             ...d.currentTarget.querySelectorAll("button:not(:disabled)"),
@@ -1195,7 +1203,7 @@ function V2e({ monitor: e, onClose: r }) {
               ref: o,
               type: "button",
               "aria-label": a.text("Close workbook health"),
-              onClick: r,
+              onClick: onClose,
               children: i.jsx(M, { children: "Close" }),
             }),
           ],
@@ -1301,7 +1309,7 @@ function V2e({ monitor: e, onClose: r }) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: () => e.clearEvents(),
+              onClick: () => monitor.clearEvents(),
               children: i.jsx(M, { children: "Clear diagnostic history" }),
             }),
           ],
@@ -1701,9 +1709,9 @@ async function X2e(e, r, t, n = {}) {
         });
     return s === "limit"
       ? {
-          entries: o.map(({ sheetId: d, sourceId: u }) => ({
-            sheetId: d,
-            sourceId: u,
+          entries: o.map(({ sheetId, sourceId }) => ({
+            sheetId,
+            sourceId,
             error: s,
           })),
           error: s,

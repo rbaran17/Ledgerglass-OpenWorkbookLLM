@@ -10,7 +10,7 @@ import { EI, Nce, dz } from "./16-text-split-tools.js";
 import { Qxe, w2 } from "./41-automation-and-scripts.js";
 
 function e4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -242,9 +242,9 @@ function e4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Combine populations"),
+              "aria-label": text("Close Combine populations"),
               onClick: e.onClose,
-              lang: t("Close Combine populations"),
+              lang: language("Close Combine populations"),
               "data-ui-label": "Close Combine populations",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -260,13 +260,13 @@ function e4e(e) {
                   children: [
                     i.jsx(M, { children: "Operation" }),
                     i.jsxs("select", {
-                      "aria-label": r("Combine operation"),
+                      "aria-label": text("Combine operation"),
                       disabled: e.readOnly,
                       value: v,
                       onChange: (Re) => {
                         (g(Re.target.value), de());
                       },
-                      lang: t("Combine operation"),
+                      lang: language("Combine operation"),
                       "data-ui-label": "Combine operation",
                       children: [
                         i.jsx("option", {
@@ -305,11 +305,11 @@ function e4e(e) {
                   children: [
                     i.jsx(M, { children: "New worksheet name" }),
                     i.jsx("input", {
-                      "aria-label": r("Combined worksheet name"),
+                      "aria-label": text("Combined worksheet name"),
                       value: b,
                       disabled: e.readOnly,
                       onChange: (Re) => he(y, Re.target.value),
-                      lang: t("Combined worksheet name"),
+                      lang: language("Combined worksheet name"),
                       "data-ui-label": "Combined worksheet name",
                     }),
                   ],
@@ -363,10 +363,10 @@ function e4e(e) {
                           i.jsx("input", {
                             "aria-label": `${Re === "left" ? "Left" : "Right"} source range`,
                             value: ke,
-                            placeholder: r("A1:D20"),
+                            placeholder: text("A1:D20"),
                             onChange: (je) =>
                               he(Re === "left" ? f : m, je.target.value),
-                            lang: t("A1:D20"),
+                            lang: language("A1:D20"),
                           }),
                         ],
                       }),
@@ -500,7 +500,7 @@ function e4e(e) {
                         children: [
                           i.jsx(M, { children: "Unicode normalization" }),
                           i.jsxs("select", {
-                            "aria-label": r("Key Unicode normalization"),
+                            "aria-label": text("Key Unicode normalization"),
                             value: A.unicode ?? "",
                             onChange: (Re) => {
                               (k({
@@ -511,7 +511,7 @@ function e4e(e) {
                               }),
                                 de());
                             },
-                            lang: t("Key Unicode normalization"),
+                            lang: language("Key Unicode normalization"),
                             "data-ui-label": "Key Unicode normalization",
                             children: [
                               i.jsx("option", { value: "", children: "None" }),
@@ -550,12 +550,12 @@ function e4e(e) {
                           children: [
                             i.jsx(M, { children: "Fuzzy key pair" }),
                             i.jsx("select", {
-                              "aria-label": r("Fuzzy key pair"),
+                              "aria-label": text("Fuzzy key pair"),
                               value: O,
                               onChange: (Re) => {
                                 (j(Number(Re.target.value)), de());
                               },
-                              lang: t("Fuzzy key pair"),
+                              lang: language("Fuzzy key pair"),
                               "data-ui-label": "Fuzzy key pair",
                               children: w.map((Re, Me) =>
                                 i.jsxs(
@@ -582,7 +582,7 @@ function e4e(e) {
                           children: [
                             i.jsx(M, { children: "Minimum similarity (0–1)" }),
                             i.jsx(ci, {
-                              "aria-label": r("Fuzzy similarity threshold"),
+                              "aria-label": text("Fuzzy similarity threshold"),
                               min: "0",
                               max: "1",
                               step: "0.01",
@@ -590,7 +590,7 @@ function e4e(e) {
                               onValueChange: (Re) => {
                                 (V(Re), de());
                               },
-                              lang: t("Fuzzy similarity threshold"),
+                              lang: language("Fuzzy similarity threshold"),
                               "data-ui-label": "Fuzzy similarity threshold",
                             }),
                           ],
@@ -619,13 +619,13 @@ function e4e(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    "aria-label": r("Include hidden source records"),
+                    "aria-label": text("Include hidden source records"),
                     checked: D,
                     disabled: e.readOnly,
                     onChange: (Re) => {
                       (B(Re.target.checked), de());
                     },
-                    lang: t("Include hidden source records"),
+                    lang: language("Include hidden source records"),
                     "data-ui-label": "Include hidden source records",
                   }),
                   i.jsx(M, {
@@ -674,8 +674,8 @@ function e4e(e) {
               i.jsxs("section", {
                 className: "pc-review",
                 ref: a,
-                "aria-label": r("Population combination preview"),
-                lang: t("Population combination preview"),
+                "aria-label": text("Population combination preview"),
+                lang: language("Population combination preview"),
                 "data-ui-label": "Population combination preview",
                 children: [
                   i.jsxs("h3", {
@@ -822,12 +822,12 @@ function e4e(e) {
                     children: [
                       i.jsx(M, { children: "Review records" }),
                       i.jsxs("select", {
-                        "aria-label": r("Population review view"),
+                        "aria-label": text("Population review view"),
                         value: G,
                         onChange: (Re) => {
                           (H(Re.target.value), X$1(0));
                         },
-                        lang: t("Population review view"),
+                        lang: language("Population review view"),
                         "data-ui-label": "Population review view",
                         children: [
                           i.jsx("option", {
@@ -886,8 +886,8 @@ function e4e(e) {
                   i.jsx("div", {
                     className: "pc-table",
                     tabIndex: 0,
-                    "aria-label": r("Scrollable population records"),
-                    lang: t("Scrollable population records"),
+                    "aria-label": text("Scrollable population records"),
+                    lang: language("Scrollable population records"),
                     "data-ui-label": "Scrollable population records",
                     children: i.jsxs("table", {
                       children: [
@@ -1021,7 +1021,7 @@ function e4e(e) {
 const Fv = 20,
   uj = (e) => JSON.stringify(e);
 function t4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
@@ -1190,9 +1190,9 @@ function t4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Text to Columns"),
+              "aria-label": text("Close Text to Columns"),
               onClick: e.onClose,
-              lang: t("Close Text to Columns"),
+              lang: language("Close Text to Columns"),
               "data-ui-label": "Close Text to Columns",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1215,12 +1215,12 @@ function t4e(e) {
               children: [
                 i.jsx(M, { children: "Source worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": r("Source worksheet"),
+                  "aria-label": text("Source worksheet"),
                   value: te(s) ? s : "",
                   onChange: (ae) => {
                     (J(d, ae.target.value), z([]), D(0));
                   },
-                  lang: t("Source worksheet"),
+                  lang: language("Source worksheet"),
                   "data-ui-label": "Source worksheet",
                   children: [
                     i.jsx("option", {
@@ -1243,12 +1243,12 @@ function t4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: u,
                   onChange: (ae) => {
                     (J(l, ae.target.value), z([]), D(0));
                   },
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -1257,12 +1257,12 @@ function t4e(e) {
               children: [
                 i.jsx(M, { children: "Delimiter" }),
                 i.jsxs("select", {
-                  "aria-label": r("Delimiter"),
+                  "aria-label": text("Delimiter"),
                   value: c,
                   onChange: (ae) => {
                     (J(h, ae.target.value), z([]), D(0));
                   },
-                  lang: t("Delimiter"),
+                  lang: language("Delimiter"),
                   "data-ui-label": "Delimiter",
                   children: [
                     i.jsx("option", { value: "	", children: "Tab" }),
@@ -1282,12 +1282,12 @@ function t4e(e) {
                 children: [
                   i.jsx(M, { children: "Custom delimiter" }),
                   i.jsx("input", {
-                    "aria-label": r("Custom delimiter"),
+                    "aria-label": text("Custom delimiter"),
                     value: f,
                     onChange: (ae) => {
                       (J(p, ae.target.value), z([]), D(0));
                     },
-                    lang: t("Custom delimiter"),
+                    lang: language("Custom delimiter"),
                     "data-ui-label": "Custom delimiter",
                   }),
                 ],
@@ -1323,10 +1323,10 @@ function t4e(e) {
               children: [
                 i.jsx(M, { children: "Output destination" }),
                 i.jsxs("select", {
-                  "aria-label": r("Output destination"),
+                  "aria-label": text("Output destination"),
                   value: g,
                   onChange: (ae) => J(b, ae.target.value),
-                  lang: t("Output destination"),
+                  lang: language("Output destination"),
                   "data-ui-label": "Output destination",
                   children: [
                     i.jsx("option", {
@@ -1347,10 +1347,10 @@ function t4e(e) {
                   children: [
                     i.jsx(M, { children: "Output worksheet name" }),
                     i.jsx("input", {
-                      "aria-label": r("Output worksheet name"),
+                      "aria-label": text("Output worksheet name"),
                       value: k,
                       onChange: (ae) => J(F, ae.target.value),
-                      lang: t("Output worksheet name"),
+                      lang: language("Output worksheet name"),
                       "data-ui-label": "Output worksheet name",
                     }),
                   ],
@@ -1361,10 +1361,10 @@ function t4e(e) {
                       children: [
                         i.jsx(M, { children: "Output worksheet" }),
                         i.jsxs("select", {
-                          "aria-label": r("Output worksheet"),
+                          "aria-label": text("Output worksheet"),
                           value: te(y) ? y : "",
                           onChange: (ae) => J(w, ae.target.value),
-                          lang: t("Output worksheet"),
+                          lang: language("Output worksheet"),
                           "data-ui-label": "Output worksheet",
                           children: [
                             i.jsx("option", {
@@ -1387,11 +1387,11 @@ function t4e(e) {
                       children: [
                         i.jsx(M, { children: "Output starting cell" }),
                         i.jsx("input", {
-                          "aria-label": r("Output starting cell"),
+                          "aria-label": text("Output starting cell"),
                           value: E,
-                          placeholder: r("For example D1"),
+                          placeholder: text("For example D1"),
                           onChange: (ae) => J(A, ae.target.value),
-                          lang: t("Output starting cell"),
+                          lang: language("Output starting cell"),
                           "data-ui-label": "Output starting cell",
                         }),
                       ],
@@ -1476,8 +1476,8 @@ function t4e(e) {
         Q &&
           i.jsxs("section", {
             className: "ttc-preview",
-            "aria-label": r("Text to Columns preview"),
-            lang: t("Text to Columns preview"),
+            "aria-label": text("Text to Columns preview"),
+            lang: language("Text to Columns preview"),
             "data-ui-label": "Text to Columns preview",
             children: [
               i.jsxs("h3", {

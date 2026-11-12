@@ -753,13 +753,14 @@ function Iae(e, r, t, n, o = {}) {
           for (let O = F; O <= I; O++) yield { row: k, col: O };
   }
   if (p)
-    for (const { row: k, col: F } of A()) {
-      const I = u === "series" ? s.firstRow : s.firstRow + E(k - s.firstRow, l),
-        O = u === "series" ? s.firstCol : s.firstCol + E(F - s.firstCol, c),
+    for (const { row, col } of A()) {
+      const I =
+          u === "series" ? s.firstRow : s.firstRow + E(row - s.firstRow, l),
+        O = u === "series" ? s.firstCol : s.firstCol + E(col - s.firstCol, c),
         j = a$(a, nh(I, O), b, s),
-        z = nh(k, F);
+        z = nh(row, col);
       if (u === "series") {
-        const D = y + (h ? k - s.firstRow : F - s.firstCol) * w;
+        const D = y + (h ? row - s.firstRow : col - s.firstCol) * w;
         (Number.isFinite(D) || Mo("The handle series would overflow."),
           (j.raw = D),
           delete j.literal);
@@ -767,7 +768,7 @@ function Iae(e, r, t, n, o = {}) {
         typeof j.raw == "string" &&
           j.raw.startsWith("=") &&
           !j.literal &&
-          (j.raw = xd(j.raw, k - I, F - O));
+          (j.raw = xd(j.raw, row - I, col - O));
       const V = hi(rI(j, a.cells[z]));
       (g.push(z),
         nI(a.cells[z], V) && v.push({ sheetId: r, address: z, cell: V }));
@@ -1282,47 +1283,49 @@ function d$(e = {}) {
   };
 }
 const f$ = ne.createContext(d$());
-function Bae({ options: e, children: r }) {
-  const t = ne.useMemo(() => d$(e), [e?.locale, e?.messages]);
-  return i.jsx(f$.Provider, { value: t, children: r });
+function Bae({ options, children }) {
+  const t = ne.useMemo(() => d$(options), [options?.locale, options?.messages]);
+  return i.jsx(f$.Provider, { value: t, children });
 }
 const Dr = () => ne.useContext(f$);
-function M({ children: e }) {
+function M({ children }) {
   const r = Dr(),
-    t = ne.Children.toArray(e);
+    t = ne.Children.toArray(children);
   if (!t.every((o) => typeof o == "string"))
-    return i.jsx(i.Fragment, { children: e });
+    return i.jsx(i.Fragment, { children });
   const n = t.join("");
   return r.locale.startsWith("en") && r.text(n) === n
-    ? i.jsx(i.Fragment, { children: e })
+    ? i.jsx(i.Fragment, { children })
     : i.jsx("span", { lang: r.language(n), children: r.text(n) });
 }
 function ci({
-  value: e,
-  onValueChange: r,
-  allowEmpty: t = false,
-  min: n,
-  max: o,
-  step: a,
-  onFocus: s,
-  onBlur: d,
-  onKeyDown: u,
-  className: l,
+  value,
+  onValueChange,
+  allowEmpty = false,
+  min,
+  max,
+  step,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  className,
   ...c
 }) {
   const h = Dr(),
     f = ne.useId(),
     [p, m] = ne.useState(() =>
-      e === "" || e === undefined ? "" : Xh(Number(e), h.entryLocale),
+      value === "" || value === undefined
+        ? ""
+        : Xh(Number(value), h.entryLocale),
     ),
     [v, g] = ne.useState(false),
     [b, y] = ne.useState(false),
     w = ne.useRef(h.entryLocale),
     E = ne.useRef(undefined),
-    A = n === undefined ? undefined : Number(n),
-    k = o === undefined ? undefined : Number(o),
+    A = min === undefined ? undefined : Number(min),
+    k = max === undefined ? undefined : Number(max),
     F = (V) => {
-      if (!V.trim() && t) return;
+      if (!V.trim() && allowEmpty) return;
       const D = sI(V, "Value", w.current);
       if ((A !== undefined && D < A) || (k !== undefined && D > k))
         throw Error("bounds");
@@ -1342,13 +1345,17 @@ function ci({
         : h.text("Enter a valid number using the selected locale.");
   }
   (ne.useLayoutEffect(() => {
-    const V = e === "" || e === undefined ? "" : String(Number(e));
+    const V = value === "" || value === undefined ? "" : String(Number(value));
     (E.current !== undefined &&
       (V === E.current || (V === "" && E.current === "NaN"))) ||
       ((w.current = h.entryLocale),
-      m(e === "" || e === undefined ? "" : Xh(Number(e), h.entryLocale)),
+      m(
+        value === "" || value === undefined
+          ? ""
+          : Xh(Number(value), h.entryLocale),
+      ),
       y(false));
-  }, [e]),
+  }, [value]),
     ne.useLayoutEffect(() => {
       v ||
         O ||
@@ -1364,7 +1371,7 @@ function ci({
       } catch {
         D = "NaN";
       }
-      ((E.current = D), r(D));
+      ((E.current = D), onValueChange(D));
     },
     z =
       [
@@ -1379,7 +1386,7 @@ function ci({
     children: [
       i.jsx("input", {
         ...c,
-        className: l,
+        className,
         type: "text",
         inputMode: "decimal",
         role: "spinbutton",
@@ -1392,14 +1399,16 @@ function ci({
         "aria-describedby": z,
         onChange: (V) => j(V.target.value),
         onFocus: (V) => {
-          (O || (w.current = h.entryLocale), g(true), s == null || s(V));
+          (O || (w.current = h.entryLocale),
+            g(true),
+            onFocus == null || onFocus(V));
         },
         onBlur: (V) => {
-          (y(true), g(false), d == null || d(V));
+          (y(true), g(false), onBlur == null || onBlur(V));
         },
         onKeyDown: (V) => {
           if (
-            (u == null || u(V),
+            (onKeyDown == null || onKeyDown(V),
             !(
               V.defaultPrevented ||
               c.readOnly ||
@@ -1412,7 +1421,7 @@ function ci({
               (V.key === "ArrowUp" || V.key === "ArrowDown"))
           ) {
             V.preventDefault();
-            const D = a === undefined || a === "any" ? 1 : Number(a);
+            const D = step === undefined || step === "any" ? 1 : Number(step);
             if (!Number.isFinite(D) || D <= 0) return;
             const B = Math.min(
               k ?? 1 / 0,

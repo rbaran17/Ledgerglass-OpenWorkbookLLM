@@ -285,20 +285,20 @@ function Z4(e, r, t, n) {
   }
   return o;
 }
-function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
-  const { text: o, language: a } = Dr(),
-    s = e.sheets.find((l) => l.id === r),
-    d = s != null && s.consolidation ? JSON.stringify([e, t]) : "",
+function nce({ workbook, sheetId, options = {}, onReview }) {
+  const { text, language } = Dr(),
+    s = workbook.sheets.find((l) => l.id === sheetId),
+    d = s != null && s.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
-      () => (s != null && s.consolidation ? tce(e, s, t) : null),
-      [d, r],
+      () => (s != null && s.consolidation ? tce(workbook, s, options) : null),
+      [d, sheetId],
     );
   return u
     ? i.jsxs("div", {
         className: `lg-consolidation-status ${u.state}`,
         role: "status",
-        "aria-label": o("Consolidation source status"),
-        lang: a("Consolidation source status"),
+        "aria-label": text("Consolidation source status"),
+        lang: language("Consolidation source status"),
         "data-ui-label": "Consolidation source status",
         children: [
           i.jsxs("span", {
@@ -318,7 +318,7 @@ function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
             ],
           }),
           i.jsx("button", {
-            onClick: n,
+            onClick: onReview,
             children: i.jsx(M, { children: "Review / refresh" }),
           }),
         ],
@@ -327,7 +327,7 @@ function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
 }
 function ice(e) {
   var W;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -533,9 +533,9 @@ function ice(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close consolidation"),
+              "aria-label": text("Close consolidation"),
               onClick: e.onClose,
-              lang: t("Close consolidation"),
+              lang: language("Close consolidation"),
               "data-ui-label": "Close consolidation",
               children: i.jsx(X, { size: 20 }),
             }),
@@ -546,21 +546,21 @@ function ice(e) {
           children: [
             i.jsxs("section", {
               className: "lg-consolidation-settings",
-              "aria-label": r("Consolidation settings"),
-              lang: t("Consolidation settings"),
+              "aria-label": text("Consolidation settings"),
+              lang: language("Consolidation settings"),
               "data-ui-label": "Consolidation settings",
               children: [
                 i.jsxs("label", {
                   children: [
                     i.jsx(M, { children: "Output worksheet" }),
                     i.jsx("input", {
-                      "aria-label": r("Output worksheet"),
+                      "aria-label": text("Output worksheet"),
                       value: p,
                       maxLength: 31,
                       onChange: (K) => {
                         (m(K.target.value), j(null));
                       },
-                      lang: t("Output worksheet"),
+                      lang: language("Output worksheet"),
                       "data-ui-label": "Output worksheet",
                     }),
                   ],
@@ -586,7 +586,7 @@ function ice(e) {
                   children: [
                     i.jsx(M, { children: "Category levels" }),
                     i.jsx("select", {
-                      "aria-label": r("Category levels"),
+                      "aria-label": text("Category levels"),
                       value: h.categoryLabels.length,
                       onChange: (K) => {
                         const te = Number(K.target.value),
@@ -606,7 +606,7 @@ function ice(e) {
                           })),
                         });
                       },
-                      lang: t("Category levels"),
+                      lang: language("Category levels"),
                       "data-ui-label": "Category levels",
                       children: [1, 2, 3].map((K) =>
                         i.jsx("option", { children: K }, K),
@@ -691,8 +691,8 @@ function ice(e) {
               }),
             }),
             i.jsxs("section", {
-              "aria-label": r("Consolidation sources"),
-              lang: t("Consolidation sources"),
+              "aria-label": text("Consolidation sources"),
+              lang: language("Consolidation sources"),
               "data-ui-label": "Consolidation sources",
               children: [
                 h.sources.map((K, te) => {
@@ -855,7 +855,7 @@ function ice(e) {
                                   "aria-label": `Source ${te + 1} Source type`,
                                   value: K.tableId ?? "",
                                   onChange: (se) => {
-                                    const { tableId: we, ...Ee } = K;
+                                    const { tableId, ...Ee } = K;
                                     U(te, {
                                       ...Ee,
                                       ...(se.target.value
@@ -1058,12 +1058,12 @@ function ice(e) {
                       i.jsx("input", {
                         type: "file",
                         accept: ".json,.xlsx",
-                        "aria-label": r("Inspect consolidation workbook"),
+                        "aria-label": text("Inspect consolidation workbook"),
                         disabled: A || _.length >= 8,
                         onChange: (K) => {
                           (H(K.target.files?.[0]), (K.target.value = ""));
                         },
-                        lang: t("Inspect consolidation workbook"),
+                        lang: language("Inspect consolidation workbook"),
                         "data-ui-label": "Inspect consolidation workbook",
                       }),
                     ],
@@ -1075,8 +1075,8 @@ function ice(e) {
                     }),
                   w?.stamp === c &&
                     i.jsxs("div", {
-                      "aria-label": r("Pending workbook approval"),
-                      lang: t("Pending workbook approval"),
+                      "aria-label": text("Pending workbook approval"),
+                      lang: language("Pending workbook approval"),
                       "data-ui-label": "Pending workbook approval",
                       children: [
                         i.jsx("strong", { children: w.workbook.name }),
@@ -1161,9 +1161,9 @@ function ice(e) {
             R &&
               i.jsxs("section", {
                 ref: o,
-                "aria-label": r("Consolidation preview"),
+                "aria-label": text("Consolidation preview"),
                 className: "lg-consolidation-preview",
-                lang: t("Consolidation preview"),
+                lang: language("Consolidation preview"),
                 "data-ui-label": "Consolidation preview",
                 children: [
                   i.jsx("h3", {

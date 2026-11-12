@@ -214,41 +214,42 @@ function Cf(e, r = {}, t, n) {
       const te = Fie(
         new JN({
           onVariable: () => null,
-          onCell: ({ sheet: le, row: ce, col: ge }) => {
-            const se = U(le);
+          onCell: ({ sheet, row, col }) => {
+            const se = U(sheet);
             if (
-              !Number.isInteger(ce) ||
-              !Number.isInteger(ge) ||
-              ce < 1 ||
-              ge < 1 ||
-              ce > se.rowCount ||
-              ge > se.colCount
+              !Number.isInteger(row) ||
+              !Number.isInteger(col) ||
+              row < 1 ||
+              col < 1 ||
+              row > se.rowCount ||
+              col > se.colCount
             )
               throw f("#REF!");
-            return Q(se.id, `${ut(ge - 1)}${ce}`);
+            return Q(se.id, `${ut(col - 1)}${row}`);
           },
-          onRange: ({ sheet: le, from: ce, to: ge }) => {
-            const se = U(le),
-              we = ge.row,
-              Ee = ge.col;
+          onRange: ({ sheet, from, to }) => {
+            const se = U(sheet),
+              we = to.row,
+              Ee = to.col;
             if (
-              ce.row < 1 ||
-              ce.col < 1 ||
+              from.row < 1 ||
+              from.col < 1 ||
               we > se.rowCount ||
               Ee > se.colCount ||
-              we < ce.row ||
-              Ee < ce.col
+              we < from.row ||
+              Ee < from.col
             )
               throw f("#REF!");
-            if ((we - ce.row + 1) * (Ee - ce.col + 1) > 2e4) throw f("#LIMIT!");
+            if ((we - from.row + 1) * (Ee - from.col + 1) > 2e4)
+              throw f("#LIMIT!");
             const Ae = s.reserve(
-              (we - ce.row + 1) * (32 + (Ee - ce.col + 1) * 8),
+              (we - from.row + 1) * (32 + (Ee - from.col + 1) * 8),
             );
             if (Ae) throw f(Ae);
             const ye = [];
-            for (let Te = ce.row; Te <= we; Te++) {
+            for (let Te = from.row; Te <= we; Te++) {
               const Pe = [];
-              for (let qe = ce.col; qe <= Ee; qe++) {
+              for (let qe = from.col; qe <= Ee; qe++) {
                 const ht = Q(se.id, `${ut(qe - 1)}${Te}`);
                 if (
                   wn(ht) &&
@@ -928,9 +929,9 @@ function Cf(e, r = {}, t, n) {
         const de = `${te}:`;
         return [...v.entries()]
           .filter(([he]) => he.startsWith(de))
-          .map(([he, { anchor: Se }]) => ({
+          .map(([he, { anchor }]) => ({
             address: he.slice(de.length),
-            anchor: Se,
+            anchor,
           }));
       } finally {
         s.end();
@@ -1115,7 +1116,7 @@ function cU(e, r, t, n) {
       getSpillEntries: (c) =>
         n.spills
           .filter((h) => h.sheetId === c)
-          .map(({ address: h, anchor: f }) => ({ address: h, anchor: f })),
+          .map(({ address, anchor }) => ({ address, anchor })),
       getSpillAnchor: (c, h) => {
         return o.get(s(c, h))?.anchor;
       },
@@ -1336,7 +1337,7 @@ function Xie(e, r, t, n, o) {
 }
 function dU(e, r, t, n) {
   const o = pd(),
-    { formulas: a, settings: s } = r,
+    { formulas, settings } = r,
     d = lx(e.datePolicy),
     u = SN(e);
   u.begin();
@@ -1349,8 +1350,14 @@ function dU(e, r, t, n) {
     : t
       ? "Changed inputs and transitive dependents"
       : "First calculation of this snapshot";
-  if (n || !t || r.metadata !== t.metadata || ik(e, a) || ik(e, t.formulas))
-    (a.forEach((U, G) => l.add(G)),
+  if (
+    n ||
+    !t ||
+    r.metadata !== t.metadata ||
+    ik(e, formulas) ||
+    ik(e, t.formulas)
+  )
+    (formulas.forEach((U, G) => l.add(G)),
       t &&
         !n &&
         (p =
@@ -1363,7 +1370,7 @@ function dU(e, r, t, n) {
       H = t.inputs();
     for (const J of new Set([...G.keys(), ...H.keys()]))
       G.get(J) !== H.get(J) && U.add(J);
-    (a.forEach((J, q) => {
+    (formulas.forEach((J, q) => {
       (_O.test(J.formula) ||
         !t.values.has(q) ||
         ["#TIMEOUT!", "#LIMIT!"].includes(String(t.values.get(q)?.value))) &&
@@ -1381,10 +1388,10 @@ function dU(e, r, t, n) {
     for (let J = 0; J < X.length; J++)
       for (const q of Q.get(X[J]) ?? []) U.has(q) || (U.add(q), X.push(q));
     U.forEach((J) => {
-      a.has(J) && l.add(J);
+      formulas.has(J) && l.add(J);
     });
   }
-  a.forEach((U, G) => {
+  formulas.forEach((U, G) => {
     !l.has(G) &&
       t != null &&
       t.values.has(G) &&
@@ -1398,7 +1405,7 @@ function dU(e, r, t, n) {
     E = [...c.values()].reduce((U, G) => U + G.size, 0);
   const A = () => (
       y && !w && (w = u.check()),
-      y && !w && pd() - o > s.timeBudgetMs && (w = "#TIMEOUT!"),
+      y && !w && pd() - o > settings.timeBudgetMs && (w = "#TIMEOUT!"),
       y ? w : undefined
     ),
     k = (U, G) => {
@@ -1438,26 +1445,26 @@ function dU(e, r, t, n) {
         },
       });
     },
-    F = s.mode === "manual" && !n;
+    F = settings.mode === "manual" && !n;
   F &&
     l.forEach((U) => {
       (h.set(U, ng), v.set(U, ng), c.set(U, new Set(t?.dependencies.get(U))));
     });
   let I = k(v);
   const O = () => {
-    for (const [U, G] of a)
+    for (const [U, G] of formulas)
       h.set(U, v.get(U) ?? I.getTypedValue(G.sheetId, G.address));
   };
   F || O();
   const j = {
-    status: s.iterative ? "not-needed" : "off",
+    status: settings.iterative ? "not-needed" : "off",
     passes: 0,
     maxDelta: null,
-    message: s.iterative
+    message: settings.iterative
       ? "No circular calculation was required."
       : "Iteration is disabled. Circular references return #CYCLE!.",
   };
-  if (!F && b.size && s.iterative) {
+  if (!F && b.size && settings.iterative) {
     const U = new Set(b),
       G = new Map();
     c.forEach((Q, X) =>
@@ -1474,22 +1481,22 @@ function dU(e, r, t, n) {
         U.has(X) || v.set(X, Q);
       }),
       (j.status = "failed"),
-      ik(e, a) ||
-        [...a.values()].some((Q) => _O.test(Q.formula)) ||
+      ik(e, formulas) ||
+        [...formulas.values()].some((Q) => _O.test(Q.formula)) ||
         b.size > 1e3)
     )
       j.message =
         "Iteration supports at most 1,000 deterministic scalar cycle cells. Names, arrays, dynamic references and volatile formulas must be removed from this calculation.";
     else {
       let Q = new Map([...b].map((X) => [X, { type: "number", value: 0 }]));
-      j.message = `No convergence within ${s.maxIterations} simultaneous passes from zero.`;
-      for (let X = 0; X < s.maxIterations && !A(); X++) {
+      j.message = `No convergence within ${settings.maxIterations} simultaneous passes from zero.`;
+      for (let X = 0; X < settings.maxIterations && !A(); X++) {
         I = k(v, Q);
         const J = new Map();
         let q = 0,
           W = true;
         for (const K of b) {
-          const te = a.get(K),
+          const te = formulas.get(K),
             ae = I.getTypedValue(te.sheetId, te.address);
           if (
             (J.set(K, ae), ae.type !== "number" || !Number.isFinite(ae.value))
@@ -1506,7 +1513,7 @@ function dU(e, r, t, n) {
             "The circular calculation produced a nonnumeric value or calculation error.";
           break;
         }
-        if (((Q = J), q <= s.maxChange)) {
+        if (((Q = J), q <= settings.maxChange)) {
           ((j.status = "converged"),
             (j.message = `Converged from zero in ${X + 1} simultaneous passes; maximum change ${q}.`));
           break;
@@ -1524,7 +1531,7 @@ function dU(e, r, t, n) {
       (l.forEach((U) => h.set(U, F5(w))),
       j.status === "converged" && (j.status = "failed"),
       b.size &&
-        s.iterative &&
+        settings.iterative &&
         (j.message = `Calculation stopped with ${w}; no intermediate result is current.`)),
     (y = false),
     u.end());
@@ -1593,7 +1600,7 @@ function dU(e, r, t, n) {
       ...U.filter(
         (H) =>
           !l.has(`${H.sheetId}:${H.address}`) &&
-          a.has(`${H.sheetId}:${H.address}`),
+          formulas.has(`${H.sheetId}:${H.address}`),
       ),
       ...G,
     ],
@@ -1609,11 +1616,11 @@ function dU(e, r, t, n) {
       t?.report.cells.map((U) => [`${U.sheetId}:${U.address}`, U]),
     ),
     L = new Map();
-  for (const { sheetId: U, address: G, ...H } of z.getFinancialDiagnostics()) {
-    const Q = `${U}:${G}`;
+  for (const { sheetId, address, ...H } of z.getFinancialDiagnostics()) {
+    const Q = `${sheetId}:${address}`;
     L.set(Q, [...(L.get(Q) ?? []), H]);
   }
-  const $ = [...a].map(([U, G]) => {
+  const $ = [...formulas].map(([U, G]) => {
     var X;
     const H = h.get(U) ?? ng,
       Q = t?.values.get(U);
@@ -1650,7 +1657,7 @@ function dU(e, r, t, n) {
       volatile: {
         functions: [
           ...new Set(
-            [...a.values()]
+            [...formulas.values()]
               .flatMap((U) => Rg(U.formula))
               .concat((e.definedNames ?? []).flatMap((U) => Rg(U.refersTo))),
           ),
@@ -1675,11 +1682,11 @@ function dU(e, r, t, n) {
       workbookId: e.id,
       revision: e.revision,
       run: (t?.report.run ?? 0) + 1,
-      settings: s,
+      settings,
       reason: p,
-      formulaCount: a.size,
+      formulaCount: formulas.size,
       evaluated: $.filter((U) => U.evaluations > 0).length,
-      reused: a.size - l.size,
+      reused: formulas.size - l.size,
       pending: $.filter((U) => U.status === "pending").length,
       elapsedMs: Math.max(0, pd() - o),
       dependencyEdges: [...c.values()].reduce((U, G) => U + G.size, 0),
@@ -1688,7 +1695,7 @@ function dU(e, r, t, n) {
       cells: $,
       limits: {
         dependencyEdges: j5,
-        cooperativeTimeBudgetMs: s.timeBudgetMs,
+        cooperativeTimeBudgetMs: settings.timeBudgetMs,
         hardInterrupt: false,
       },
     },

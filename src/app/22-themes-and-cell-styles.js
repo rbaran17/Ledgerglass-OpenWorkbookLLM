@@ -24,7 +24,7 @@ import {
 import { Dr, M, lI } from "./04-cell-input-paste-and-fill.js";
 
 function Cde() {
-  const { text: e, language: r } = Dr(),
+  const { text, language } = Dr(),
     [t, n] = ne.useState(
       () => typeof navigator > "u" || navigator.onLine !== false,
     );
@@ -46,8 +46,8 @@ function Cde() {
       : i.jsx("div", {
           className: "lg-notice",
           role: "status",
-          "aria-label": e("Connection status"),
-          lang: r("Connection status"),
+          "aria-label": text("Connection status"),
+          lang: language("Connection status"),
           "data-ui-label": "Connection status",
           children: i.jsx(M, {
             children:
@@ -182,8 +182,8 @@ const jz = {
   wrap: "Wrap",
   border: "Legacy border",
 };
-function kT({ style: e }) {
-  const r = ys(e);
+function kT({ style }) {
+  const r = ys(style);
   return i.jsxs("dl", {
     className: "ts-detail-fields",
     children: [
@@ -234,14 +234,14 @@ function kT({ style: e }) {
     ],
   });
 }
-function z7({ style: e, catalog: r }) {
-  const t = e?.binding,
-    { binding: n, ...o } = e ?? {};
+function z7({ style, catalog }) {
+  const t = style?.binding,
+    { binding, ...o } = style ?? {};
   return i.jsxs("details", {
     children: [
       i.jsx("summary", { children: i.jsx(M, { children: "Full formatting" }) }),
       i.jsx("h4", { children: i.jsx(M, { children: "Displayed formatting" }) }),
-      i.jsx(kT, { style: e }),
+      i.jsx(kT, { style }),
       t &&
         i.jsxs(i.Fragment, {
           children: [
@@ -249,7 +249,7 @@ function z7({ style: e, catalog: r }) {
               children: [
                 i.jsx(M, { children: "Named style:" }),
                 " ",
-                r?.styles.find((s) => s.id === t.styleId)?.name ??
+                catalog?.styles.find((s) => s.id === t.styleId)?.name ??
                   "Missing style",
               ],
             }),
@@ -297,11 +297,11 @@ function z7({ style: e, catalog: r }) {
     ],
   });
 }
-function V7({ definition: e }) {
-  return e
+function V7({ definition }) {
+  return definition
     ? i.jsxs(i.Fragment, {
         children: [
-          i.jsx(kT, { style: e.base }),
+          i.jsx(kT, { style: definition.base }),
           i.jsxs("dl", {
             className: "ts-detail-fields",
             children: [
@@ -310,7 +310,9 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme font role" }),
                   }),
-                  i.jsx("dd", { children: e.fontRole ?? "Stored font" }),
+                  i.jsx("dd", {
+                    children: definition.fontRole ?? "Stored font",
+                  }),
                 ],
               }),
               i.jsxs("div", {
@@ -318,7 +320,9 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme fill role" }),
                   }),
-                  i.jsx("dd", { children: e.fillRole ?? "Stored fill" }),
+                  i.jsx("dd", {
+                    children: definition.fillRole ?? "Stored fill",
+                  }),
                 ],
               }),
               i.jsxs("div", {
@@ -326,7 +330,9 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme text role" }),
                   }),
-                  i.jsx("dd", { children: e.colorRole ?? "Stored text color" }),
+                  i.jsx("dd", {
+                    children: definition.colorRole ?? "Stored text color",
+                  }),
                 ],
               }),
               ["top", "right", "bottom", "left"].map((r) => {
@@ -342,7 +348,8 @@ function V7({ definition: e }) {
                         ],
                       }),
                       i.jsx("dd", {
-                        children: e.borderRoles?.[r] ?? "Stored border color",
+                        children:
+                          definition.borderRoles?.[r] ?? "Stored border color",
                       }),
                     ],
                   },
@@ -355,9 +362,9 @@ function V7({ definition: e }) {
       })
     : i.jsx("p", { children: i.jsx(M, { children: "No style" }) });
 }
-function kde({ plan: e }) {
-  const r = e.catalogBefore,
-    t = e.catalogAfter;
+function kde({ plan }) {
+  const r = plan.catalogBefore,
+    t = plan.catalogAfter;
   if (JSON.stringify(r) === JSON.stringify(t)) return null;
   const n = [
       {
@@ -484,7 +491,7 @@ function kde({ plan: e }) {
 }
 function Sde(e) {
   var ae;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -623,9 +630,9 @@ function Sde(e) {
               children: i.jsx(M, { children: "Themes & Cell Styles" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close Themes and Cell Styles"),
+              "aria-label": text("Close Themes and Cell Styles"),
               onClick: e.onClose,
-              lang: t("Close Themes and Cell Styles"),
+              lang: language("Close Themes and Cell Styles"),
               "data-ui-label": "Close Themes and Cell Styles",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -647,8 +654,8 @@ function Sde(e) {
         i.jsx("div", {
           className: "ts-tabs",
           role: "tablist",
-          "aria-label": r("Theme settings"),
-          lang: t("Theme settings"),
+          "aria-label": text("Theme settings"),
+          lang: language("Theme settings"),
           "data-ui-label": "Theme settings",
           children: ["Theme", "Cell Styles"].map((de, he) =>
             i.jsx(
@@ -712,7 +719,7 @@ function Sde(e) {
                               children: [
                                 i.jsx(M, { children: "Theme preset" }),
                                 i.jsxs("select", {
-                                  "aria-label": r("Theme preset"),
+                                  "aria-label": text("Theme preset"),
                                   value: c6.some(
                                     (de) =>
                                       JSON.stringify(de) === JSON.stringify(y),
@@ -726,7 +733,7 @@ function Sde(e) {
                                     );
                                     he && L(Tv(he));
                                   },
-                                  lang: t("Theme preset"),
+                                  lang: language("Theme preset"),
                                   "data-ui-label": "Theme preset",
                                   children: [
                                     i.jsx("option", {
@@ -854,11 +861,11 @@ function Sde(e) {
                               children: [
                                 i.jsx(M, { children: "Named style" }),
                                 i.jsxs("select", {
-                                  "aria-label": r("Named style"),
+                                  "aria-label": text("Named style"),
                                   value: p,
                                   disabled: T || !d.styles.length,
                                   onChange: (de) => H(de.target.value),
-                                  lang: t("Named style"),
+                                  lang: language("Named style"),
                                   "data-ui-label": "Named style",
                                   children: [
                                     !d.styles.length &&
@@ -971,7 +978,7 @@ function Sde(e) {
                                   children: [
                                     i.jsx(M, { children: "Style font" }),
                                     i.jsxs("select", {
-                                      "aria-label": r("Style font"),
+                                      "aria-label": text("Style font"),
                                       value: E.fontRole ?? "fixed",
                                       onChange: (de) =>
                                         $({
@@ -981,7 +988,7 @@ function Sde(e) {
                                               ? undefined
                                               : de.target.value,
                                         }),
-                                      lang: t("Style font"),
+                                      lang: language("Style font"),
                                       "data-ui-label": "Style font",
                                       children: [
                                         i.jsx("option", {
@@ -1188,8 +1195,8 @@ function Sde(e) {
             j &&
               i.jsxs("section", {
                 className: "ts-preview",
-                "aria-label": r("Theme change preview"),
-                lang: t("Theme change preview"),
+                "aria-label": text("Theme change preview"),
+                lang: language("Theme change preview"),
                 "data-ui-label": "Theme change preview",
                 children: [
                   i.jsx("h3", { children: j.summary }),
@@ -1338,12 +1345,15 @@ function Sde(e) {
     }),
   });
 }
-function jI({ value: e, cell: r, dateSystem: t }) {
+function jI({ value, cell, dateSystem }) {
   const n = Dr(),
-    o = r != null && r.numberFormat ? vg(e, r.numberFormat, t) : undefined,
-    a = r ? SE(r) : undefined;
+    o =
+      cell != null && cell.numberFormat
+        ? vg(value, cell.numberFormat, dateSystem)
+        : undefined,
+    a = cell ? SE(cell) : undefined;
   if (o != null && o.accounting) {
-    const { symbol: s, amount: d, symbolPosition: u } = o.accounting;
+    const { symbol, amount, symbolPosition } = o.accounting;
     return i.jsxs("span", {
       title: a || undefined,
       "aria-label": o.text,
@@ -1356,19 +1366,21 @@ function jI({ value: e, cell: r, dateSystem: t }) {
         fontVariantNumeric: "tabular-nums",
       },
       children: [
-        u === "start" && i.jsx("span", { "aria-hidden": "true", children: s }),
+        symbolPosition === "start" &&
+          i.jsx("span", { "aria-hidden": "true", children: symbol }),
         i.jsx("span", {
           "aria-hidden": "true",
           style: { textAlign: "right", flex: 1 },
-          children: d,
+          children: amount,
         }),
-        u === "end" && i.jsx("span", { "aria-hidden": "true", children: s }),
+        symbolPosition === "end" &&
+          i.jsx("span", { "aria-hidden": "true", children: symbol }),
       ],
     });
   }
   return i.jsx("span", {
     title: a || undefined,
-    children: o?.text ?? lI(e, r, t, n.entryLocale),
+    children: o?.text ?? lI(value, cell, dateSystem, n.entryLocale),
   });
 }
 const oy = ["Font", "Alignment", "Border"],

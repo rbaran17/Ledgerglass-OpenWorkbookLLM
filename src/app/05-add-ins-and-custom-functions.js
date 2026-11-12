@@ -266,24 +266,27 @@ function Vse(e, r, t = {}) {
   return (rT.delete(r), rn(n.candidate));
 }
 const Wse = [];
-function Hse({ workbook: e, extensions: r, onReview: t }) {
+function Hse({ workbook, extensions, onReview }) {
   const n = ne.useMemo(() => {
     try {
-      const o = A$(e, { extensions: r });
+      const o = A$(workbook, { extensions });
       return o.cells.length
         ? `${o.cells.length} custom-function cells · ${o.cells.filter((a) => a.functions.some((s) => s.state !== "reviewed-cache")).length} need review. Extension results refresh only after approval.`
         : null;
     } catch {
       return "Custom-function inventory needs review.";
     }
-  }, [e, r]);
+  }, [workbook, extensions]);
   return n
     ? i.jsxs("div", {
         className: "lg-workbook-link-status",
         role: "status",
         children: [
           i.jsx("span", { children: n }),
-          i.jsx("button", { onClick: t, children: "Review custom functions" }),
+          i.jsx("button", {
+            onClick: onReview,
+            children: "Review custom functions",
+          }),
         ],
       })
     : null;

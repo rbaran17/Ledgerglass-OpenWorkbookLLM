@@ -24,7 +24,7 @@ import {
 } from "./50-materiality-screen.js";
 
 function Z4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -258,9 +258,9 @@ function Z4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close pattern checks"),
+              "aria-label": text("Close pattern checks"),
               onClick: e.onClose,
-              lang: t("Close pattern checks"),
+              lang: language("Close pattern checks"),
               "data-ui-label": "Close pattern checks",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -279,10 +279,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: C.range,
                   onChange: (ce) => W({ range: ce.target.value }),
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -291,10 +291,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Compare" }),
                 i.jsxs("select", {
-                  "aria-label": r("Comparison basis"),
+                  "aria-label": text("Comparison basis"),
                   value: C.comparison,
                   onChange: (ce) => W({ comparison: ce.target.value }),
-                  lang: t("Comparison basis"),
+                  lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
                   children: [
                     i.jsx("option", {
@@ -313,7 +313,7 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Exclude row numbers (comma separated)" }),
                 i.jsx("input", {
-                  "aria-label": r("Excluded rows"),
+                  "aria-label": text("Excluded rows"),
                   value: f,
                   onChange: (ce) => {
                     (p(ce.target.value),
@@ -323,7 +323,7 @@ function Z4e(e) {
                           : [],
                       }));
                   },
-                  lang: t("Excluded rows"),
+                  lang: language("Excluded rows"),
                   "data-ui-label": "Excluded rows",
                 }),
               ],
@@ -682,10 +682,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Add a rule" }),
                 i.jsx("select", {
-                  "aria-label": r("New rule type"),
+                  "aria-label": text("New rule type"),
                   value: g,
                   onChange: (ce) => b(ce.target.value),
-                  lang: t("New rule type"),
+                  lang: language("New rule type"),
                   "data-ui-label": "New rule type",
                   children: Object.entries(iN).map(([ce, ge]) =>
                     i.jsx("option", { value: ce, children: ge }, ce),
@@ -723,13 +723,13 @@ function Z4e(e) {
                 i.jsx(M, { children: "Match" }),
                 " ",
                 i.jsxs("select", {
-                  "aria-label": r("Combination mode"),
+                  "aria-label": text("Combination mode"),
                   value: C.combination.mode,
                   onChange: (ce) =>
                     W({
                       combination: { ...C.combination, mode: ce.target.value },
                     }),
-                  lang: t("Combination mode"),
+                  lang: language("Combination mode"),
                   "data-ui-label": "Combination mode",
                   children: [
                     i.jsx("option", {
@@ -836,13 +836,13 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Load configuration" }),
                 i.jsx("input", {
-                  "aria-label": r("Load pattern configuration"),
+                  "aria-label": text("Load pattern configuration"),
                   type: "file",
                   accept: ".json,application/json",
                   onChange: (ce) => {
                     (de(ce.target.files?.[0]), (ce.target.value = ""));
                   },
-                  lang: t("Load pattern configuration"),
+                  lang: language("Load pattern configuration"),
                   "data-ui-label": "Load pattern configuration",
                 }),
               ],
@@ -867,8 +867,8 @@ function Z4e(e) {
         U &&
           i.jsxs("section", {
             className: "materiality-result",
-            "aria-label": r("Pattern report"),
-            lang: t("Pattern report"),
+            "aria-label": text("Pattern report"),
+            lang: language("Pattern report"),
             "data-ui-label": "Pattern report",
             children: [
               i.jsxs("h3", {
@@ -951,12 +951,12 @@ function Z4e(e) {
                 children: [
                   i.jsx(M, { children: "Evidence ledger" }),
                   i.jsxs("select", {
-                    "aria-label": r("Evidence rule"),
+                    "aria-label": text("Evidence rule"),
                     value: V,
                     onChange: (ce) => {
                       (D(ce.target.value), _(0));
                     },
-                    lang: t("Evidence rule"),
+                    lang: language("Evidence rule"),
                     "data-ui-label": "Evidence rule",
                     children: [
                       U.results.map((ce) =>
@@ -1034,8 +1034,8 @@ function Z4e(e) {
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Evidence pages"),
-                lang: t("Evidence pages"),
+                "aria-label": text("Evidence pages"),
+                lang: language("Evidence pages"),
                 "data-ui-label": "Evidence pages",
                 children: [
                   i.jsx("button", {
@@ -1164,10 +1164,10 @@ function JW(e) {
       sheetName: e.sheetName,
       range: e.range,
       ...PJ(e),
-      cells: e.cells.map(({ address: r, raw: t, value: n }) => ({
-        address: r,
-        raw: t,
-        value: n,
+      cells: e.cells.map(({ address, raw, value }) => ({
+        address,
+        raw,
+        value,
       })),
     }),
   );
@@ -1356,7 +1356,7 @@ function J4e(e, r, t) {
 const jj = (e) =>
   e === null ? "(blank)" : typeof e == "string" ? JSON.stringify(e) : String(e);
 function Q4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(""),
     [d, u] = ne.useState(""),
@@ -1388,8 +1388,8 @@ function Q4e(e) {
     };
   return i.jsxs("section", {
     className: "lg-answer-evidence",
-    "aria-label": r("Assistant answer evidence"),
-    lang: t("Assistant answer evidence"),
+    "aria-label": text("Assistant answer evidence"),
+    lang: language("Assistant answer evidence"),
     "data-ui-label": "Assistant answer evidence",
     children: [
       f.mode === "legacy-unverified" &&
@@ -1493,8 +1493,8 @@ function Q4e(e) {
       p &&
         i.jsxs("section", {
           className: "lg-citation-inspector",
-          "aria-label": r("Citation source details"),
-          lang: t("Citation source details"),
+          "aria-label": text("Citation source details"),
+          lang: language("Citation source details"),
           "data-ui-label": "Citation source details",
           children: [
             i.jsxs("h4", { children: [p.sheetName, "!", p.range] }),
@@ -1594,8 +1594,8 @@ function Q4e(e) {
               ),
             ),
             i.jsxs("nav", {
-              "aria-label": r("Citation evidence pages"),
-              lang: t("Citation evidence pages"),
+              "aria-label": text("Citation evidence pages"),
+              lang: language("Citation evidence pages"),
               "data-ui-label": "Citation evidence pages",
               children: [
                 i.jsx("button", {

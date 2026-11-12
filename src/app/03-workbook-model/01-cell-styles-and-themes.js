@@ -146,9 +146,9 @@ function NN(e) {
 }
 function ys(e) {
   if (!e) return {};
-  const { binding: r, ...t } = e;
-  if (!r) return t;
-  const n = r.missing ? {} : r.base,
+  const { binding, ...t } = e;
+  if (!binding) return t;
+  const n = binding.missing ? {} : binding.base,
     o = { ...n, ...t };
   return (
     Object.hasOwn(t, "border")
@@ -631,14 +631,14 @@ function Jf(e, r) {
     return e >= r.index && e < r.index + r.count
       ? r.permutation[e - r.index]
       : e;
-  const { index: t, count: n, moveBefore: o } = r,
-    a = o < t ? o : o - n;
-  return e >= t && e < t + n
-    ? a + e - t
-    : o < t && e >= o && e < t
-      ? e + n
-      : o > t && e >= t + n && e < o
-        ? e - n
+  const { index, count, moveBefore } = r,
+    a = moveBefore < index ? moveBefore : moveBefore - count;
+  return e >= index && e < index + count
+    ? a + e - index
+    : moveBefore < index && e >= moveBefore && e < index
+      ? e + count
+      : moveBefore > index && e >= index + count && e < moveBefore
+        ? e - count
         : e;
 }
 function wB(e, r, t) {
@@ -1146,7 +1146,7 @@ function cn(e, r) {
       ...Ad(r === "row" ? e.hiddenRows : e.hiddenCols, t),
       ...(e.outlineGroups ?? [])
         .filter((a) => a.axis === r && a.collapsed)
-        .map(({ start: a, end: s }) => ({ start: a, end: s })),
+        .map(({ start, end }) => ({ start, end })),
     ].sort((a, s) => a.start - s.start || a.end - s.end),
     o = [];
   for (const a of n) {
@@ -1418,7 +1418,8 @@ function vx(e, r) {
   const t = r.getSpillEntries(e.id);
   if (!t.length) return e.cells;
   const n = { ...e.cells };
-  for (const { address: o } of t) n[o] = { ...e.cells[o], raw: r(e.id, o) };
+  for (const { address } of t)
+    n[address] = { ...e.cells[address], raw: r(e.id, address) };
   return n;
 }
 const BB = [

@@ -23,10 +23,10 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
       if (!Vh(p)) return Hn("Invalid cell patch.");
       const m = Nr(e, p.sheetId);
       jn(m);
-      const { row: v, col: g } = _t(p.address);
-      if (v >= m.rowCount || g >= m.colCount)
+      const { row, col } = _t(p.address);
+      if (row >= m.rowCount || col >= m.colCount)
         return Hn(`Cell ${p.address} is outside sheet dimensions.`);
-      const b = `${ut(g)}${v + 1}`;
+      const b = `${ut(col)}${row + 1}`;
       _N(e, hi(p.cell).style);
       const y = m.cells[b];
       if (

@@ -1236,39 +1236,42 @@ function txe() {
   }));
 }
 function rxe({
-  mode: e,
-  workbook: r,
-  sheetId: t,
-  range: n,
-  readOnly: o,
-  onClose: a,
-  onWorkbookChange: s,
-  onInsertFormula: d,
+  mode,
+  workbook,
+  sheetId,
+  range,
+  readOnly,
+  onClose,
+  onWorkbookChange,
+  onInsertFormula,
 }) {
   var de, he;
-  const { text: u, language: l } = Dr(),
-    c = r.sheets.find((se) => se.id === t),
+  const { text, language } = Dr(),
+    c = workbook.sheets.find((se) => se.id === sheetId),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState("SUM"),
-    [v, g] = ne.useState(n),
+    [v, g] = ne.useState(range),
     [b, y] = ne.useState(""),
     [w, E] = ne.useState(
-      `='${(c?.name ?? "Sheet1").replace(/'/g, "''")}'!${n}`,
+      `='${(c?.name ?? "Sheet1").replace(/'/g, "''")}'!${range}`,
     ),
     [A, k] = ne.useState(""),
     [F, I] = ne.useState(""),
     [O, j] = ne.useState(null),
     [z, V] = ne.useState(""),
-    [D, B] = ne.useState(JSON.stringify(r)),
+    [D, B] = ne.useState(JSON.stringify(workbook)),
     [_, C] = ne.useState(false),
     [T, N] = ne.useState(null),
     [R, L] = ne.useState("100,0.2"),
     [$, U] = ne.useState(""),
     G = $p(w),
     H = (se, we) => {
-      (_ || B(JSON.stringify(r)), C(true), N(null), U(""), se(we));
+      (_ || B(JSON.stringify(workbook)), C(true), N(null), U(""), se(we));
     },
-    Q = o || !c || !!((de = r.structureProtection) != null && de.enabled),
+    Q =
+      readOnly ||
+      !c ||
+      !!((de = workbook.structureProtection) != null && de.enabled),
     X$1 = (se) =>
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
@@ -1278,22 +1281,22 @@ function rxe({
     q = `=${p}(${v})`,
     W = d_(p),
     K = ne.useMemo(() => {
-      if (e !== "function") return "";
-      const se = n.split(":")[0].replace(/\$/g, "").toUpperCase(),
+      if (mode !== "function") return "";
+      const se = range.split(":")[0].replace(/\$/g, "").toUpperCase(),
         we = {
-          ...r,
-          sheets: r.sheets.map((Ee) =>
-            Ee.id === t
+          ...workbook,
+          sheets: workbook.sheets.map((Ee) =>
+            Ee.id === sheetId
               ? { ...Ee, cells: { ...Ee.cells, [se]: { raw: q } } }
               : Ee,
           ),
         };
       try {
-        return String(Vn(we)(t, se) ?? "");
+        return String(Vn(we)(sheetId, se) ?? "");
       } catch {
         return "Check the function arguments.";
       }
-    }, [q, e, r, t, n]),
+    }, [q, mode, workbook, sheetId, range]),
     te = () => {
       (y(""),
         I(""),
@@ -1302,14 +1305,14 @@ function rxe({
         U(""),
         C(false),
         N(null),
-        B(JSON.stringify(r)),
+        B(JSON.stringify(workbook)),
         k(""));
     },
     ae = () => {
       var se;
       try {
         if (Q) throw Error("This workbook is read-only or protected.");
-        if (_ && D !== JSON.stringify(r))
+        if (_ && D !== JSON.stringify(workbook))
           throw Error(
             "The workbook changed while this name was being edited. Choose New name or reopen Edit to review current content.",
           );
@@ -1319,7 +1322,10 @@ function rxe({
             ...(A ? { scopeSheetId: A } : {}),
             ...(F ? { comment: F } : {}),
           },
-          Ee = O === null || (se = r.definedNames) == null ? undefined : se[O];
+          Ee =
+            O === null || (se = workbook.definedNames) == null
+              ? undefined
+              : se[O];
         if (O !== null && !Ee)
           throw Error("The defined name no longer exists.");
         if (Ee && Ee.name !== we.name) {
@@ -1333,21 +1339,21 @@ function rxe({
             );
           (N(
             Ty(
-              r,
+              workbook,
               {
                 kind: "rename",
                 name: Ee.name,
                 ...(Ee.scopeSheetId ? { scopeSheetId: Ee.scopeSheetId } : {}),
                 newName: we.name,
               },
-              { readOnly: o },
+              { readOnly },
             ),
           ),
             V(""));
           return;
         }
         const Ae = Ty(
-            r,
+            workbook,
             Ee
               ? {
                   kind: "update",
@@ -1356,18 +1362,20 @@ function rxe({
                   definition: we,
                 }
               : { kind: "create", definition: we },
-            { readOnly: o },
+            { readOnly },
           ),
-          ye = q6(r, Ae, { readOnly: o });
-        (ye !== r && s(ye, `${Ee ? "Edit" : "Define"} name: ${we.name}`), te());
+          ye = q6(workbook, Ae, { readOnly });
+        (ye !== workbook &&
+          onWorkbookChange(ye, `${Ee ? "Edit" : "Define"} name: ${we.name}`),
+          te());
       } catch (we) {
         X$1(we);
       }
     },
     oe = () => {
       try {
-        const se = n.split(":")[0].replace(/\$/g, "").toUpperCase(),
-          we = structuredClone(r),
+        const se = range.split(":")[0].replace(/\$/g, "").toUpperCase(),
+          we = structuredClone(workbook),
           Ee = {
             name: b.trim(),
             refersTo: w.trim(),
@@ -1381,7 +1389,7 @@ function rxe({
             ),
         );
         const Ae = Ty(we, { kind: "create", definition: Ee }).next,
-          ye = A || t,
+          ye = A || sheetId,
           Te = Ae.sheets.find((Me) => Me.id === ye);
         Te.cells[se] = { raw: `=${b.trim()}${G ? `(${R})` : ""}` };
         const Pe = Vn(Ae),
@@ -1401,32 +1409,33 @@ function rxe({
   return i.jsx("div", {
     className: "formula-tool-backdrop",
     onMouseDown: (se) => {
-      se.target === se.currentTarget && a();
+      se.target === se.currentTarget && onClose();
     },
     onKeyDown: (se) => {
-      se.key === "Escape" && a();
+      se.key === "Escape" && onClose();
     },
     children: i.jsxs("section", {
       className: "formula-tools",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": e === "function" ? "Insert Function" : "Name Manager",
+      "aria-label": mode === "function" ? "Insert Function" : "Name Manager",
       children: [
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              children: e === "function" ? "Insert Function" : "Name Manager",
+              children:
+                mode === "function" ? "Insert Function" : "Name Manager",
             }),
             i.jsx("button", {
-              "aria-label": u("Close formula tools"),
-              onClick: a,
-              lang: l("Close formula tools"),
+              "aria-label": text("Close formula tools"),
+              onClick: onClose,
+              lang: language("Close formula tools"),
               "data-ui-label": "Close formula tools",
               children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
-        e === "function"
+        mode === "function"
           ? i.jsxs(i.Fragment, {
               children: [
                 i.jsxs("label", {
@@ -1434,11 +1443,11 @@ function rxe({
                     i.jsx(M, { children: "Search functions" }),
                     i.jsx("input", {
                       autoFocus: true,
-                      "aria-label": u("Search functions"),
+                      "aria-label": text("Search functions"),
                       value: h,
                       onChange: (se) => f(se.target.value),
-                      placeholder: u("SUM, lookup, text…"),
-                      lang: l("Search functions"),
+                      placeholder: text("SUM, lookup, text…"),
+                      lang: language("Search functions"),
                       "data-ui-label": "Search functions",
                     }),
                   ],
@@ -1447,14 +1456,14 @@ function rxe({
                   className: "formula-function-layout",
                   children: [
                     i.jsx("select", {
-                      "aria-label": u("Available functions"),
+                      "aria-label": text("Available functions"),
                       size: 11,
                       value: p,
                       onChange: (se) => {
                         (m(se.target.value),
                           UT[se.target.value] === "" && g(""));
                       },
-                      lang: l("Available functions"),
+                      lang: language("Available functions"),
                       "data-ui-label": "Available functions",
                       children: J.map((se) =>
                         i.jsx("option", { children: se }, se),
@@ -1471,11 +1480,11 @@ function rxe({
                           children: [
                             i.jsx(M, { children: "Arguments" }),
                             i.jsx("input", {
-                              "aria-label": u("Function arguments"),
+                              "aria-label": text("Function arguments"),
                               value: v,
                               onChange: (se) => g(se.target.value),
                               readOnly: Q,
-                              lang: l("Function arguments"),
+                              lang: language("Function arguments"),
                               "data-ui-label": "Function arguments",
                             }),
                           ],
@@ -1494,8 +1503,8 @@ function rxe({
                             }),
                           }),
                         i.jsxs("output", {
-                          "aria-label": u("Formula preview"),
-                          lang: l("Formula preview"),
+                          "aria-label": text("Formula preview"),
+                          lang: language("Formula preview"),
                           "data-ui-label": "Formula preview",
                           children: [
                             i.jsx("code", { children: q }),
@@ -1542,14 +1551,14 @@ function rxe({
                 i.jsxs("footer", {
                   children: [
                     i.jsx("button", {
-                      onClick: a,
+                      onClick: onClose,
                       children: i.jsx(M, { children: "Cancel" }),
                     }),
                     i.jsx("button", {
                       className: "formula-primary",
                       disabled: Q,
                       onClick: () => {
-                        Q || (d(q), a());
+                        Q || (onInsertFormula(q), onClose());
                       },
                       children: i.jsx(M, { children: "Insert formula" }),
                     }),
@@ -1583,99 +1592,106 @@ function rxe({
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: (r.definedNames ?? []).map((se, we) => {
-                            return i.jsxs(
-                              "tr",
-                              {
-                                children: [
-                                  i.jsxs("td", {
-                                    children: [
-                                      se.name,
-                                      $p(se.refersTo) &&
-                                        i.jsxs("small", {
-                                          children: [
-                                            " ",
-                                            i.jsx(M, {
-                                              children: "· Reusable formula",
-                                            }),
-                                          ],
-                                        }),
-                                    ],
-                                  }),
-                                  i.jsx("td", {
-                                    children: i.jsx("code", {
-                                      children: se.refersTo,
+                          children: (workbook.definedNames ?? []).map(
+                            (se, we) => {
+                              return i.jsxs(
+                                "tr",
+                                {
+                                  children: [
+                                    i.jsxs("td", {
+                                      children: [
+                                        se.name,
+                                        $p(se.refersTo) &&
+                                          i.jsxs("small", {
+                                            children: [
+                                              " ",
+                                              i.jsx(M, {
+                                                children: "· Reusable formula",
+                                              }),
+                                            ],
+                                          }),
+                                      ],
                                     }),
-                                  }),
-                                  i.jsx("td", {
-                                    children: se.scopeSheetId
-                                      ? r.sheets.find(
-                                          (Ae) => Ae.id === se.scopeSheetId,
-                                        )?.name
-                                      : "Workbook",
-                                  }),
-                                  i.jsxs("td", {
-                                    children: [
-                                      i.jsx("button", {
-                                        disabled: Q,
-                                        onClick: () => {
-                                          (j(we),
-                                            B(JSON.stringify(r)),
-                                            C(true),
-                                            N(null),
-                                            V(""),
-                                            U(""),
-                                            y(se.name),
-                                            E(se.refersTo),
-                                            k(se.scopeSheetId ?? ""),
-                                            I(se.comment ?? ""));
-                                        },
-                                        children: i.jsx(M, {
-                                          children: "Edit",
-                                        }),
+                                    i.jsx("td", {
+                                      children: i.jsx("code", {
+                                        children: se.refersTo,
                                       }),
-                                      i.jsx("button", {
-                                        disabled: Q,
-                                        "aria-label": `Delete name ${se.name}`,
-                                        onClick: () => {
-                                          try {
-                                            const Ae = Ty(
-                                                r,
-                                                {
-                                                  kind: "delete",
-                                                  name: se.name,
-                                                  ...(se.scopeSheetId
-                                                    ? {
-                                                        scopeSheetId:
-                                                          se.scopeSheetId,
-                                                      }
-                                                    : {}),
-                                                },
-                                                { readOnly: Q },
-                                              ),
-                                              ye = q6(r, Ae, { readOnly: Q });
-                                            (ye !== r &&
-                                              s(ye, `Delete name: ${se.name}`),
-                                              te());
-                                          } catch (Ae) {
-                                            X$1(Ae);
-                                          }
-                                        },
-                                        children: i.jsx(M, {
-                                          children: "Delete",
+                                    }),
+                                    i.jsx("td", {
+                                      children: se.scopeSheetId
+                                        ? workbook.sheets.find(
+                                            (Ae) => Ae.id === se.scopeSheetId,
+                                          )?.name
+                                        : "Workbook",
+                                    }),
+                                    i.jsxs("td", {
+                                      children: [
+                                        i.jsx("button", {
+                                          disabled: Q,
+                                          onClick: () => {
+                                            (j(we),
+                                              B(JSON.stringify(workbook)),
+                                              C(true),
+                                              N(null),
+                                              V(""),
+                                              U(""),
+                                              y(se.name),
+                                              E(se.refersTo),
+                                              k(se.scopeSheetId ?? ""),
+                                              I(se.comment ?? ""));
+                                          },
+                                          children: i.jsx(M, {
+                                            children: "Edit",
+                                          }),
                                         }),
-                                      }),
-                                    ],
-                                  }),
-                                ],
-                              },
-                              `${se.scopeSheetId}:${se.name}`,
-                            );
-                          }),
+                                        i.jsx("button", {
+                                          disabled: Q,
+                                          "aria-label": `Delete name ${se.name}`,
+                                          onClick: () => {
+                                            try {
+                                              const Ae = Ty(
+                                                  workbook,
+                                                  {
+                                                    kind: "delete",
+                                                    name: se.name,
+                                                    ...(se.scopeSheetId
+                                                      ? {
+                                                          scopeSheetId:
+                                                            se.scopeSheetId,
+                                                        }
+                                                      : {}),
+                                                  },
+                                                  { readOnly: Q },
+                                                ),
+                                                ye = q6(workbook, Ae, {
+                                                  readOnly: Q,
+                                                });
+                                              (ye !== workbook &&
+                                                onWorkbookChange(
+                                                  ye,
+                                                  `Delete name: ${se.name}`,
+                                                ),
+                                                te());
+                                            } catch (Ae) {
+                                              X$1(Ae);
+                                            }
+                                          },
+                                          children: i.jsx(M, {
+                                            children: "Delete",
+                                          }),
+                                        }),
+                                      ],
+                                    }),
+                                  ],
+                                },
+                                `${se.scopeSheetId}:${se.name}`,
+                              );
+                            },
+                          ),
                         }),
                       ],
                     }),
-                    !((he = r.definedNames) != null && he.length) &&
+                    !((he = workbook.definedNames) != null && he.length) &&
                       i.jsx("p", {
                         children: i.jsx(M, {
                           children:
@@ -1692,11 +1708,11 @@ function rxe({
                         i.jsx(M, { children: "Name" }),
                         i.jsx("input", {
                           autoFocus: true,
-                          "aria-label": u("Defined name"),
+                          "aria-label": text("Defined name"),
                           value: b,
                           onChange: (se) => H(y, se.target.value),
                           readOnly: Q,
-                          lang: l("Defined name"),
+                          lang: language("Defined name"),
                           "data-ui-label": "Defined name",
                         }),
                       ],
@@ -1705,18 +1721,18 @@ function rxe({
                       children: [
                         i.jsx(M, { children: "Scope" }),
                         i.jsxs("select", {
-                          "aria-label": u("Name scope"),
+                          "aria-label": text("Name scope"),
                           value: A,
                           onChange: (se) => H(k, se.target.value),
                           disabled: Q || O !== null,
-                          lang: l("Name scope"),
+                          lang: language("Name scope"),
                           "data-ui-label": "Name scope",
                           children: [
                             i.jsx("option", {
                               value: "",
                               children: "Workbook",
                             }),
-                            r.sheets.map((se) =>
+                            workbook.sheets.map((se) =>
                               i.jsx(
                                 "option",
                                 { value: se.id, children: se.name },
@@ -1732,11 +1748,11 @@ function rxe({
                       children: [
                         i.jsx(M, { children: "Refers to" }),
                         i.jsx("input", {
-                          "aria-label": u("Name refers to"),
+                          "aria-label": text("Name refers to"),
                           value: w,
                           onChange: (se) => H(E, se.target.value),
                           readOnly: Q,
-                          lang: l("Name refers to"),
+                          lang: language("Name refers to"),
                           "data-ui-label": "Name refers to",
                         }),
                       ],
@@ -1746,11 +1762,11 @@ function rxe({
                       children: [
                         i.jsx(M, { children: "Comment" }),
                         i.jsx("input", {
-                          "aria-label": u("Name comment"),
+                          "aria-label": text("Name comment"),
                           value: F,
                           onChange: (se) => H(I, se.target.value),
                           readOnly: Q,
-                          lang: l("Name comment"),
+                          lang: language("Name comment"),
                           "data-ui-label": "Name comment",
                         }),
                       ],
@@ -1779,12 +1795,12 @@ function rxe({
                         children: [
                           i.jsx(M, { children: "Test arguments" }),
                           i.jsx("input", {
-                            "aria-label": u("Name test arguments"),
+                            "aria-label": text("Name test arguments"),
                             value: R,
                             onChange: (se) => {
                               (L(se.target.value), U(""));
                             },
-                            lang: l("Name test arguments"),
+                            lang: language("Name test arguments"),
                             "data-ui-label": "Name test arguments",
                           }),
                         ],
@@ -1799,8 +1815,8 @@ function rxe({
                 $ &&
                   i.jsxs("p", {
                     role: "status",
-                    "aria-label": u("Name test result"),
-                    lang: l("Name test result"),
+                    "aria-label": text("Name test result"),
+                    lang: language("Name test result"),
                     "data-ui-label": "Name test result",
                     children: [
                       $,
@@ -1813,8 +1829,8 @@ function rxe({
                   }),
                 T &&
                   i.jsxs("section", {
-                    "aria-label": u("Name migration preview"),
-                    lang: l("Name migration preview"),
+                    "aria-label": text("Name migration preview"),
+                    lang: language("Name migration preview"),
                     "data-ui-label": "Name migration preview",
                     children: [
                       i.jsxs("h3", {
@@ -1927,9 +1943,9 @@ function rxe({
                         disabled: Q,
                         onClick: () => {
                           try {
-                            const Ee = q6(r, T, { readOnly: Q });
-                            (Ee !== r &&
-                              s(
+                            const Ee = q6(workbook, T, { readOnly: Q });
+                            (Ee !== workbook &&
+                              onWorkbookChange(
                                 Ee,
                                 `Rename name: ${T.before?.name} → ${T.after?.name}`,
                               ),
@@ -1956,7 +1972,7 @@ function rxe({
                         children: i.jsx(M, { children: "New name" }),
                       }),
                     i.jsx("button", {
-                      onClick: a,
+                      onClick: onClose,
                       children: i.jsx(M, { children: "Close" }),
                     }),
                     i.jsx("button", {

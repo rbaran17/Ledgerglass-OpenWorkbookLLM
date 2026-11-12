@@ -507,13 +507,13 @@ function RC(e, r = true) {
           o.format ||
           Object.keys(o.style ?? {}).length);
     if (!a && !s) continue;
-    const { row: d, col: u } = _t(n);
+    const { row, col } = _t(n);
     t
-      ? ((t.firstRow = Math.min(t.firstRow, d)),
-        (t.lastRow = Math.max(t.lastRow, d)),
-        (t.firstCol = Math.min(t.firstCol, u)),
-        (t.lastCol = Math.max(t.lastCol, u)))
-      : (t = { firstRow: d, lastRow: d, firstCol: u, lastCol: u });
+      ? ((t.firstRow = Math.min(t.firstRow, row)),
+        (t.lastRow = Math.max(t.lastRow, row)),
+        (t.firstCol = Math.min(t.firstCol, col)),
+        (t.lastCol = Math.max(t.lastCol, col)))
+      : (t = { firstRow: row, lastRow: row, firstCol: col, lastCol: col });
   }
   return t;
 }
@@ -549,20 +549,20 @@ function ZR(e) {
   };
 }
 function Ix(e) {
-  const { firstRow: r, lastRow: t, firstCol: n, lastCol: o } = ct(e);
-  if ((t - r + 1) * (o - n + 1) > Mt.maxCells)
+  const { firstRow, lastRow, firstCol, lastCol } = ct(e);
+  if ((lastRow - firstRow + 1) * (lastCol - firstCol + 1) > Mt.maxCells)
     return Hn("Range is too large. Select at most 100,000 cells.");
   const a = [];
-  for (let s = r; s <= t; s++)
-    for (let d = n; d <= o; d++) a.push(`${ut(d)}${s + 1}`);
+  for (let s = firstRow; s <= lastRow; s++)
+    for (let d = firstCol; d <= lastCol; d++) a.push(`${ut(d)}${s + 1}`);
   return a;
 }
 function OQ(e, r) {
   const t = Ix(r);
   if (
     t.some((n) => {
-      const { row: o, col: a } = _t(n);
-      return o >= e.rowCount || a >= e.colCount;
+      const { row, col } = _t(n);
+      return row >= e.rowCount || col >= e.colCount;
     })
   )
     throw new Error("Selection exceeds worksheet dimensions.");
@@ -1250,7 +1250,7 @@ function vR(e, r, t) {
       })
       .sort(([u], [l]) => u.localeCompare(l))
       .map(([u, l]) => [u, l.raw, !!l.literal]),
-    { destination: s, ...d } = wC(r);
+    { destination, ...d } = wC(r);
   return WP({
     source: t.source,
     fields: t.fields,
@@ -1297,14 +1297,14 @@ function HP(e, r) {
   }
 }
 function gie(e, r) {
-  const { definition: t } = Sx(e, r),
+  const { definition } = Sx(e, r),
     n = HP(e, r);
-  return qP(e, t, n);
+  return qP(e, definition, n);
 }
 function XP(e, r, t) {
   t.length > 30 && Xt("Inspect at most 30 pivot control fields together.");
-  const { definition: n } = Sx(e, r),
-    o = V1(e, n.source);
+  const { definition } = Sx(e, r),
+    o = V1(e, definition.source);
   return new Map(
     [...new Set(t)].map((a) => {
       const s = o.fields.indexOf(a),
@@ -1336,21 +1336,22 @@ function nk(e, r, t) {
   return (n.error && Xt(n.error), n.items);
 }
 function GP(e, r) {
-  const { owner: t, definition: n } = Sx(e, r),
-    o = wC(n),
-    a = V1(e, n.source);
+  const { owner, definition } = Sx(e, r),
+    o = wC(definition),
+    a = V1(e, definition.source);
   uR(o, a.fields);
   const s = jP(o, a.fields, mR(a, o.filters ?? []));
   return (
-    (!n.refresh ||
-      vR(e, o, a) !== n.refresh.sourceFingerprint ||
-      bR(t, n.outputRange) !== n.refresh.outputFingerprint) &&
+    (!definition.refresh ||
+      vR(e, o, a) !== definition.refresh.sourceFingerprint ||
+      bR(owner, definition.outputRange) !==
+        definition.refresh.outputFingerprint) &&
       Xt(
         "This PivotTable is stale or unverified. Refresh it before drilling or charting; historical totals cannot be matched to current source rows.",
       ),
     {
-      owner: t,
-      definition: n,
+      owner,
+      definition,
       config: o,
       data: a,
       rows: s,
@@ -1359,57 +1360,62 @@ function GP(e, r) {
   );
 }
 function vie(e, r) {
-  const { definition: t, built: n } = GP(e, r),
-    o = t.chart?.valueIndex ?? 0;
-  n.chartRows.length > 200 &&
+  const { definition, built } = GP(e, r),
+    o = definition.chart?.valueIndex ?? 0;
+  built.chartRows.length > 200 &&
     Xt(
       "PivotCharts are limited to 200 leaf groups. Filter or regroup before charting.",
     );
-  const a = n.chartRows.map((u) => ({ label: u.label, value: u.values[o] }));
+  const a = built.chartRows.map((u) => ({
+    label: u.label,
+    value: u.values[o],
+  }));
   return (
     a.some((u) => u.value !== null && typeof u.value != "number") &&
       Xt(
         "The PivotChart contains a calculation error. Resolve zero denominators or invalid source calculations.",
       ),
     {
-      kind: t.chart?.kind ?? "column",
-      measure: n.measures[o].name,
-      showAs: t.values[o].showAs ?? "value",
+      kind: definition.chart?.kind ?? "column",
+      measure: built.measures[o].name,
+      showAs: definition.values[o].showAs ?? "value",
       points: a,
-      sourceRevision: t.sourceRevision,
+      sourceRevision: definition.sourceRevision,
     }
   );
 }
 function O5(e, r, t) {
-  const { definition: n, config: o, data: a, rows: s, built: d } = GP(e, r),
+  const { definition, config, data, rows, built } = GP(e, r),
     u = _t(t),
-    l = ct(n.outputRange),
+    l = ct(definition.outputRange),
     c = u.row - l.firstRow - 1,
-    h = u.col - l.firstCol - Math.max(1, o.rowFields.length);
+    h = u.col - l.firstCol - Math.max(1, config.rowFields.length);
   (c < 0 ||
-    c >= d.rowAxes.length ||
+    c >= built.rowAxes.length ||
     h < 0 ||
     u.col > l.lastCol ||
     u.row > l.lastRow) &&
     Xt(
       "Choose a PivotTable value cell, subtotal or grand total; headers and group labels cannot be drilled.",
     );
-  const f = d.rowAxes[c],
-    p = d.columnAxes[Math.floor(h / o.values.length)],
-    m = h % o.values.length,
+  const f = built.rowAxes[c],
+    p = built.columnAxes[Math.floor(h / config.values.length)],
+    m = h % config.values.length,
     v = (E, A, k) =>
       !A ||
       A.parts.every((F, I) => {
-        const O = E.values[Yv(a.fields, k[I])],
-          j = o.dateGroups?.find((V) => V.field === k[I]);
+        const O = E.values[Yv(data.fields, k[I])],
+          j = config.dateGroups?.find((V) => V.field === k[I]);
         return (
           JSON.stringify(j ? DP(O, j, E.index) : Mg(O) ? null : O) ===
           JSON.stringify(F)
         );
       }),
-    g = s.filter((E) => v(E, f, o.rowFields) && v(E, p, o.columnFields)),
-    b = Nr(e, a.source.sheetId),
-    y = ct(a.source.range),
+    g = rows.filter(
+      (E) => v(E, f, config.rowFields) && v(E, p, config.columnFields),
+    ),
+    b = Nr(e, data.source.sheetId),
+    y = ct(data.source.range),
     w = g.map((E) => ({
       locator: {
         workbookId: e.id,
@@ -1420,7 +1426,7 @@ function O5(e, r, t) {
         original: U1(e, b.id, E.index),
       },
       values: [...E.values],
-      cells: a.fields.map((A, k) => ({
+      cells: data.fields.map((A, k) => ({
         address: Cn(E.index, y.firstCol + k),
         cell: structuredClone(
           b.cells[Cn(E.index, y.firstCol + k)] ?? { raw: null },
@@ -1428,18 +1434,18 @@ function O5(e, r, t) {
       })),
     }));
   return {
-    context: qP(e, n, {
+    context: qP(e, definition, {
       state: "current",
       reason: "Source and output fingerprints match the saved calculation.",
     }),
     address: `${ut(u.col)}${u.row + 1}`,
     valueIndex: m,
-    measure: o.values[m],
-    underlyingValue: d.baseMatrix[c + 1][u.col - l.firstCol],
-    displayedValue: d.matrix[c + 1][u.col - l.firstCol],
+    measure: config.values[m],
+    underlyingValue: built.baseMatrix[c + 1][u.col - l.firstCol],
+    displayedValue: built.matrix[c + 1][u.col - l.firstCol],
     rowGroup: f?.parts ?? null,
     columnGroup: p?.parts ?? null,
-    fields: [...a.fields],
+    fields: [...data.fields],
     records: w,
   };
 }

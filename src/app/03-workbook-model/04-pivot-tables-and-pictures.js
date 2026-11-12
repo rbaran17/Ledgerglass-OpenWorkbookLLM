@@ -222,17 +222,17 @@ function _P(e, r) {
   return n;
 }
 function ek(e, r) {
-  const { bytes: t } = P1(e),
-    n = FE(t);
+  const { bytes } = P1(e),
+    n = FE(bytes);
   return _P(
     {
       ...r,
       version: 1,
       sourceReference: `sha256:${n}`,
       sha256: n,
-      byteLength: t.length,
+      byteLength: bytes.length,
     },
-    t,
+    bytes,
   );
 }
 function F2(e, r, t) {

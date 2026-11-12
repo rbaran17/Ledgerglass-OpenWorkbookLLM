@@ -41,7 +41,7 @@ import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { Bz, _de } from "./23-format-cells-dialog.js";
 
 function Dde(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef({
@@ -144,9 +144,9 @@ function Dde(e) {
               children: d ? "Unmerge cells" : "Merge & Center",
             }),
             i.jsx("button", {
-              "aria-label": r("Close merge preview"),
+              "aria-label": text("Close merge preview"),
               onClick: e.onClose,
-              lang: t("Close merge preview"),
+              lang: language("Close merge preview"),
               "data-ui-label": "Close merge preview",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -187,8 +187,8 @@ function Dde(e) {
             }),
             g &&
               i.jsxs("section", {
-                "aria-label": r("Merge preview"),
-                lang: t("Merge preview"),
+                "aria-label": text("Merge preview"),
+                lang: language("Merge preview"),
                 "data-ui-label": "Merge preview",
                 children: [
                   i.jsxs("p", {
@@ -574,7 +574,7 @@ class Mde {
     const n = L5(r).report,
       o = ++this.nextId,
       a = pd(),
-      { memoryBudgetBytes: s } = JF(r.calculation),
+      { memoryBudgetBytes } = JF(r.calculation),
       d = this.reliability?.start("calculation", "run");
     return new Promise((l) => {
       var v, g;
@@ -626,7 +626,7 @@ class Mde {
       if (
         ((g = t.signal) == null ||
           g.addEventListener("abort", m, { once: true }),
-        QF(r, s) > s)
+        QF(r, memoryBudgetBytes) > memoryBudgetBytes)
       ) {
         p(
           "#LIMIT!",
@@ -644,10 +644,10 @@ class Mde {
       );
       try {
         (this.worker ?? (this.worker = this.factory()),
-          (this.worker.onmessage = ({ data: y }) => {
+          (this.worker.onmessage = ({ data }) => {
             var F;
             if (c) return;
-            const w = y;
+            const w = data;
             if (!(!w || w.id !== o)) {
               if (pd() - a > (r.calculation?.timeBudgetMs ?? 2500)) {
                 p(
@@ -665,7 +665,7 @@ class Mde {
                 );
                 return;
               }
-              if (kN(w.result, s) > s) {
+              if (kN(w.result, memoryBudgetBytes) > memoryBudgetBytes) {
                 p(
                   "#LIMIT!",
                   "Calculation results exceed the working-data budget; no partial results were published.",
@@ -1316,14 +1316,14 @@ function Pde(e, r, t, n = {}) {
       throw new Error(
         "No numeric amount column found. Include a Debit/Credit, Amount, Net, or Balance column.",
       );
-    for (const { row: G, amount: H } of C)
-      Math.abs(H) >= U &&
+    for (const { row, amount } of C)
+      Math.abs(amount) >= U &&
         j.push({
-          id: `materiality-${G.row + 1}`,
-          title: `Row ${G.row + 1} · ${ap(H)}`,
-          detail: `Absolute row amount ${ap(Math.abs(H))} meets or exceeds the screening threshold ${ap(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
+          id: `materiality-${row.row + 1}`,
+          title: `Row ${row.row + 1} · ${ap(amount)}`,
+          detail: `Absolute row amount ${ap(Math.abs(amount))} meets or exceeds the screening threshold ${ap(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
           severity: "high",
-          citations: b(G),
+          citations: b(row),
         });
     return {
       title: "Materiality screen",
@@ -1381,11 +1381,11 @@ function Pde(e, r, t, n = {}) {
       );
     const U = y("account", "account name", "gl account", "category"),
       G = new Map();
-    for (const { row: H, amount: Q } of C) {
-      const X = U < 0 ? "All rows" : String(H.values[U] ?? "(blank account)");
+    for (const { row, amount } of C) {
+      const X = U < 0 ? "All rows" : String(row.values[U] ?? "(blank account)");
       G.has(X) || G.set(X, { total: 0, rows: [] });
       const J = G.get(X);
-      ((J.total += Q), J.rows.push(H));
+      ((J.total += amount), J.rows.push(row));
     }
     return (
       [...G]
@@ -1431,8 +1431,8 @@ function Pde(e, r, t, n = {}) {
         ].map((X) => [X, { total: 0, rows: [] }]),
       );
     let Q = 0;
-    for (const { row: X, amount: J } of C) {
-      const q = X.values[U],
+    for (const { row, amount } of C) {
+      const q = row.values[U],
         W =
           typeof q == "number"
             ? Date.UTC(1899, 11, 31) +
@@ -1456,7 +1456,7 @@ function Pde(e, r, t, n = {}) {
                   ? "61–90 days"
                   : "Over 90 days",
         ae = H.get(te);
-      ((ae.total += J), ae.rows.push(X));
+      ((ae.total += amount), ae.rows.push(row));
     }
     return (
       [...H].forEach(([X, J], q) =>
@@ -1599,7 +1599,7 @@ function zde(e, r) {
     }
   }
 }
-function Vde({ commands: e, onClose: r, onLocate: t }) {
+function Vde({ commands, onClose, onLocate }) {
   const [n, o] = ne.useState(""),
     a = ne.useRef(null),
     s = ne.useId();
@@ -1614,7 +1614,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
     );
   }, []);
   const d = (c) => c.toLowerCase().includes(n.trim().toLowerCase()),
-    u = e.filter((c) => d(`${c.name} ${c.location} ${c.reason ?? ""}`)),
+    u = commands.filter((c) => d(`${c.name} ${c.location} ${c.reason ?? ""}`)),
     l = $de.filter((c) => d(c.join(" ")));
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -1623,7 +1623,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": s,
-      onKeyDown: (c) => zde(c, r),
+      onKeyDown: (c) => zde(c, onClose),
       children: [
         i.jsxs("header", {
           children: [
@@ -1633,7 +1633,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: r,
+              onClick: onClose,
               children: i.jsx(M, { children: "Close command reference" }),
             }),
           ],
@@ -1737,7 +1737,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
                               i.jsx("button", {
                                 type: "button",
                                 "aria-label": `Show ${c.name} in ${c.location}`,
-                                onClick: () => t(c),
+                                onClick: () => onLocate(c),
                                 children: i.jsx(M, {
                                   children: "Show command",
                                 }),
@@ -1889,33 +1889,33 @@ const Uh = [
       "Ask AI Assistant": "AI assistant",
     })[e] ?? e.replace(/ \(Ctrl\+[A-Z]\)$/, "");
 function Mn({
-  commandId: e,
-  reason: r,
-  label: t,
-  children: n,
-  className: o = "",
-  onDialog: a,
-  dialogLabel: s,
-  dialogDisabled: d,
+  commandId,
+  reason,
+  label,
+  children,
+  className = "",
+  onDialog,
+  dialogLabel,
+  dialogDisabled,
 }) {
   return i.jsxs("div", {
-    className: `xl-ribbon-group ${o}`,
+    className: `xl-ribbon-group ${className}`,
     children: [
-      i.jsx("div", { className: "xl-group-commands", children: n }),
+      i.jsx("div", { className: "xl-group-commands", children }),
       i.jsxs("div", {
         className: "xl-group-label",
         style: { position: "relative" },
         children: [
-          t,
-          a &&
+          label,
+          onDialog &&
             i.jsx("button", {
-              "data-workbook-command": e,
-              "aria-description": r,
+              "data-workbook-command": commandId,
+              "aria-description": reason,
               type: "button",
-              title: r ? `${s}: ${r}` : s,
-              "aria-label": s,
-              disabled: d,
-              onClick: a,
+              title: reason ? `${dialogLabel}: ${reason}` : dialogLabel,
+              "aria-label": dialogLabel,
+              disabled: dialogDisabled,
+              onClick: onDialog,
               style: {
                 position: "absolute",
                 right: 0,
@@ -1934,56 +1934,57 @@ function Mn({
   });
 }
 function lr({
-  commandId: e,
-  reason: r,
-  icon: t,
-  label: n,
-  onClick: o,
-  disabled: a,
-  large: s,
-  active: d,
-  title: u,
-  className: l = "",
-  dropdown: c = false,
+  commandId,
+  reason,
+  icon,
+  label,
+  onClick,
+  disabled,
+  large,
+  active,
+  title,
+  className = "",
+  dropdown = false,
 }) {
   return i.jsxs("button", {
-    "data-workbook-command": e,
-    "aria-description": r,
+    "data-workbook-command": commandId,
+    "aria-description": reason,
     type: "button",
-    className: `xl-command ${s ? "xl-command-large" : ""} ${d ? "xl-command-active" : ""} ${l}`,
-    onClick: o,
-    disabled: a,
-    title: r ? `${n}: ${r}` : (u ?? n),
-    "aria-label": Lz(n),
-    "aria-pressed": d === undefined ? undefined : d,
+    className: `xl-command ${large ? "xl-command-large" : ""} ${active ? "xl-command-active" : ""} ${className}`,
+    onClick,
+    disabled,
+    title: reason ? `${label}: ${reason}` : (title ?? label),
+    "aria-label": Lz(label),
+    "aria-pressed": active === undefined ? undefined : active,
     children: [
-      i.jsx("span", { className: "xl-command-icon", children: t }),
-      i.jsx("span", { className: "xl-command-label", children: n }),
-      c && i.jsx(ChevronDown, { className: "xl-command-chevron", size: 10 }),
+      i.jsx("span", { className: "xl-command-icon", children: icon }),
+      i.jsx("span", { className: "xl-command-label", children: label }),
+      dropdown &&
+        i.jsx(ChevronDown, { className: "xl-command-chevron", size: 10 }),
     ],
   });
 }
 function Xl({
-  commandId: e,
-  reason: r,
-  icon: t,
-  label: n,
-  onClick: o,
-  disabled: a,
-  active: s,
-  className: d = "",
+  commandId,
+  reason,
+  icon,
+  label,
+  onClick,
+  disabled,
+  active,
+  className = "",
 }) {
   return i.jsx("button", {
-    "data-workbook-command": e,
-    "aria-description": r,
+    "data-workbook-command": commandId,
+    "aria-description": reason,
     type: "button",
-    className: `xl-icon-button ${s ? "xl-command-active" : ""} ${d}`,
-    "aria-label": Lz(n),
-    title: r ? `${n}: ${r}` : n,
-    onClick: o,
-    disabled: a,
-    "aria-pressed": s === undefined ? undefined : s,
-    children: t,
+    className: `xl-icon-button ${active ? "xl-command-active" : ""} ${className}`,
+    "aria-label": Lz(label),
+    title: reason ? `${label}: ${reason}` : label,
+    onClick,
+    disabled,
+    "aria-pressed": active === undefined ? undefined : active,
+    children: icon,
   });
 }
 

@@ -35,25 +35,25 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { m0 } from "./12-formula-dependency-inspector.js";
 
 function qde({
-  workbook: e,
-  sheetId: r,
-  range: t,
-  readOnly: n,
-  onClose: o,
-  onWorkbookChange: a,
-  onNavigate: s,
+  workbook,
+  sheetId,
+  range,
+  readOnly,
+  onClose,
+  onWorkbookChange,
+  onNavigate,
 }) {
   var he;
-  const { text: d, language: u } = Dr(),
-    l = e.sheets.find((ce) => ce.id === r),
+  const { text, language } = Dr(),
+    l = workbook.sheets.find((ce) => ce.id === sheetId),
     [c, h] = ne.useState(),
-    [f, p] = ne.useState(t),
+    [f, p] = ne.useState(range),
     [m, v] = ne.useState("list"),
     [g, b] = ne.useState("between"),
     [y, w] = ne.useState("Pending,Complete,Reviewed"),
     [E, A] = ne.useState("0"),
     [k, F] = ne.useState("100"),
-    [I, O] = ne.useState(`=LEN(${t.split(":")[0]})>0`),
+    [I, O] = ne.useState(`=LEN(${range.split(":")[0]})>0`),
     [j, z] = ne.useState(true),
     [V, D] = ne.useState(true),
     [B, _] = ne.useState(true),
@@ -73,7 +73,7 @@ function qde({
       () => ce?.focus()
     );
   }, []);
-  const te = n || !!((he = l.protection) != null && he.enabled),
+  const te = readOnly || !!((he = l.protection) != null && he.enabled),
     ae = (ce) => {
       J("");
       try {
@@ -121,16 +121,16 @@ function qde({
               ? (l.validations ?? []).map((se) => (se.id === c ? ce : se))
               : [...(l.validations ?? []), ce],
           );
-        (a(
+        (onWorkbookChange(
           {
-            ...e,
-            sheets: e.sheets.map((se) =>
-              se.id === r ? { ...se, validations: ge } : se,
+            ...workbook,
+            sheets: workbook.sheets.map((se) =>
+              se.id === sheetId ? { ...se, validations: ge } : se,
             ),
           },
           c ? "Update data validation" : "Add data validation",
         ),
-          o());
+          onClose());
       }),
     de = (ce) => {
       (h(ce.id),
@@ -154,7 +154,8 @@ function qde({
     className: "wt-backdrop",
     onKeyDown: (ce) => {
       if (
-        (ce.key === "Escape" && (ce.stopPropagation(), o()), ce.key === "Tab")
+        (ce.key === "Escape" && (ce.stopPropagation(), onClose()),
+        ce.key === "Tab")
       ) {
         const se = [
             ...(K.current?.querySelectorAll(
@@ -174,10 +175,10 @@ function qde({
       className: "wt-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": d("Data Validation"),
+      "aria-label": text("Data Validation"),
       ref: K,
       style: { width: "min(760px, 100%)" },
-      lang: u("Data Validation"),
+      lang: language("Data Validation"),
       "data-ui-label": "Data Validation",
       children: [
         i.jsxs("header", {
@@ -186,9 +187,9 @@ function qde({
               children: i.jsx(M, { children: "Data Validation" }),
             }),
             i.jsx("button", {
-              "aria-label": d("Close data validation"),
-              onClick: o,
-              lang: u("Close data validation"),
+              "aria-label": text("Close data validation"),
+              onClick: onClose,
+              lang: language("Close data validation"),
               "data-ui-label": "Close data validation",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -205,20 +206,25 @@ function qde({
             }),
             i.jsx("button", {
               onClick: () =>
-                ae(() => W({ value: LQ(e, r), snapshot: JSON.stringify(e) })),
+                ae(() =>
+                  W({
+                    value: LQ(workbook, sheetId),
+                    snapshot: JSON.stringify(workbook),
+                  }),
+                ),
               children: i.jsx(M, { children: "Inspect existing values" }),
             }),
             q &&
               i.jsxs("section", {
-                "aria-label": d("Existing validation findings"),
-                lang: u("Existing validation findings"),
+                "aria-label": text("Existing validation findings"),
+                lang: language("Existing validation findings"),
                 "data-ui-label": "Existing validation findings",
                 children: [
                   i.jsx("button", {
-                    disabled: q.snapshot !== JSON.stringify(e),
+                    disabled: q.snapshot !== JSON.stringify(workbook),
                     onClick: () =>
                       ae(() => {
-                        const ce = BQ(e, q.value),
+                        const ce = BQ(workbook, q.value),
                           ge = URL.createObjectURL(
                             new Blob([ce], { type: "application/json" }),
                           ),
@@ -235,7 +241,7 @@ function qde({
                   i.jsx("p", {
                     role: "status",
                     children:
-                      q.snapshot === JSON.stringify(e)
+                      q.snapshot === JSON.stringify(workbook)
                         ? q.value.message
                         : "Workbook changed. Inspect existing values again.",
                   }),
@@ -245,7 +251,7 @@ function qde({
                         "Inspection recalculates locally, including in Manual mode; it does not publish current calculation results or change source data.",
                     }),
                   }),
-                  q.snapshot === JSON.stringify(e) &&
+                  q.snapshot === JSON.stringify(workbook) &&
                     i.jsx("div", {
                       style: { maxHeight: 200, overflow: "auto" },
                       children: q.value.issues.map((ce, ge) =>
@@ -255,10 +261,11 @@ function qde({
                             children: [
                               i.jsxs("button", {
                                 onClick: () => {
-                                  (s == null || s(ce.sheetId, ce.address),
-                                    s && o());
+                                  (onNavigate == null ||
+                                    onNavigate(ce.sheetId, ce.address),
+                                    onNavigate && onClose());
                                 },
-                                disabled: !s,
+                                disabled: !onNavigate,
                                 children: [ce.sheetName, "!", ce.address],
                               }),
                               " ",
@@ -309,11 +316,11 @@ function qde({
                           onClick: () =>
                             ae(() => {
                               (jn(l),
-                                a(
+                                onWorkbookChange(
                                   {
-                                    ...e,
-                                    sheets: e.sheets.map((ge) => {
-                                      return ge.id === r
+                                    ...workbook,
+                                    sheets: workbook.sheets.map((ge) => {
+                                      return ge.id === sheetId
                                         ? {
                                             ...ge,
                                             validations: ge.validations?.filter(
@@ -325,7 +332,7 @@ function qde({
                                   },
                                   "Remove data validation",
                                 ),
-                                o());
+                                onClose());
                             }),
                           children: [
                             i.jsx(M, { children: "Remove " }),
@@ -348,10 +355,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Apply to" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation range"),
+                      "aria-label": text("Validation range"),
                       value: f,
                       onChange: (ce) => p(ce.target.value),
-                      lang: u("Validation range"),
+                      lang: language("Validation range"),
                       "data-ui-label": "Validation range",
                     }),
                   ],
@@ -363,10 +370,10 @@ function qde({
                       children: [
                         i.jsx(M, { children: "Allow" }),
                         i.jsx("select", {
-                          "aria-label": d("Validation type"),
+                          "aria-label": text("Validation type"),
                           value: m,
                           onChange: (ce) => v(ce.target.value),
-                          lang: u("Validation type"),
+                          lang: language("Validation type"),
                           "data-ui-label": "Validation type",
                           children: [
                             ["list", "List"],
@@ -387,10 +394,10 @@ function qde({
                         children: [
                           i.jsx(M, { children: "Condition" }),
                           i.jsx("select", {
-                            "aria-label": d("Validation operator"),
+                            "aria-label": text("Validation operator"),
                             value: g,
                             onChange: (ce) => b(ce.target.value),
-                            lang: u("Validation operator"),
+                            lang: language("Validation operator"),
                             "data-ui-label": "Validation operator",
                             children: [
                               ["between", "Between"],
@@ -417,10 +424,10 @@ function qde({
                             "Values, separated by commas (or a JSON array for exact text)",
                         }),
                         i.jsx("input", {
-                          "aria-label": d("Validation values"),
+                          "aria-label": text("Validation values"),
                           value: y,
                           onChange: (ce) => w(ce.target.value),
-                          lang: u("Validation values"),
+                          lang: language("Validation values"),
                           "data-ui-label": "Validation values",
                         }),
                       ],
@@ -432,10 +439,10 @@ function qde({
                             children: "Formula relative to the top-left cell",
                           }),
                           i.jsx("input", {
-                            "aria-label": d("Validation formula"),
+                            "aria-label": text("Validation formula"),
                             value: I,
                             onChange: (ce) => O(ce.target.value),
-                            lang: u("Validation formula"),
+                            lang: language("Validation formula"),
                             "data-ui-label": "Validation formula",
                           }),
                           i.jsx("small", {
@@ -455,10 +462,10 @@ function qde({
                                 children: "Minimum / comparison value",
                               }),
                               i.jsx(ci, {
-                                "aria-label": d("Validation values"),
+                                "aria-label": text("Validation values"),
                                 value: E,
                                 onValueChange: A,
-                                lang: u("Validation values"),
+                                lang: language("Validation values"),
                                 "data-ui-label": "Validation values",
                               }),
                             ],
@@ -468,10 +475,10 @@ function qde({
                               children: [
                                 i.jsx(M, { children: "Maximum" }),
                                 i.jsx(ci, {
-                                  "aria-label": d("Validation maximum"),
+                                  "aria-label": text("Validation maximum"),
                                   value: k,
                                   onValueChange: F,
-                                  lang: u("Validation maximum"),
+                                  lang: language("Validation maximum"),
                                   "data-ui-label": "Validation maximum",
                                 }),
                               ],
@@ -523,11 +530,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Input title" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation input title"),
+                      "aria-label": text("Validation input title"),
                       maxLength: 100,
                       value: C,
                       onChange: (ce) => T(ce.target.value),
-                      lang: u("Validation input title"),
+                      lang: language("Validation input title"),
                       "data-ui-label": "Validation input title",
                     }),
                   ],
@@ -536,11 +543,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Input message" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation input message"),
+                      "aria-label": text("Validation input message"),
                       maxLength: 500,
                       value: N,
                       onChange: (ce) => R(ce.target.value),
-                      lang: u("Validation input message"),
+                      lang: language("Validation input message"),
                       "data-ui-label": "Validation input message",
                     }),
                   ],
@@ -549,10 +556,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error style" }),
                     i.jsxs("select", {
-                      "aria-label": d("Validation error style"),
+                      "aria-label": text("Validation error style"),
                       value: L,
                       onChange: (ce) => $(ce.target.value),
-                      lang: u("Validation error style"),
+                      lang: language("Validation error style"),
                       "data-ui-label": "Validation error style",
                       children: [
                         i.jsx("option", { value: "stop", children: "Stop" }),
@@ -572,10 +579,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error title" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation error title"),
+                      "aria-label": text("Validation error title"),
                       value: U,
                       onChange: (ce) => G(ce.target.value),
-                      lang: u("Validation error title"),
+                      lang: language("Validation error title"),
                       "data-ui-label": "Validation error title",
                     }),
                   ],
@@ -584,11 +591,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error message" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation message"),
+                      "aria-label": text("Validation message"),
                       maxLength: 500,
                       value: H,
                       onChange: (ce) => Q(ce.target.value),
-                      lang: u("Validation message"),
+                      lang: language("Validation message"),
                       "data-ui-label": "Validation message",
                     }),
                   ],
@@ -601,7 +608,7 @@ function qde({
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: o,
+              onClick: onClose,
               children: i.jsx(M, { children: "Cancel" }),
             }),
             i.jsx("button", {

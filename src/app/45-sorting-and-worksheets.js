@@ -297,7 +297,7 @@ const dj = (e) => ({
     }
   };
 function p4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -356,9 +356,9 @@ function p4e(e) {
             sheetId: e.sheetId,
             range: s,
             headers: u,
-            keys: c.map(({ customText: J, useCustom: q, ...W }) => ({
+            keys: c.map(({ customText, useCustom, ...W }) => ({
               ...W,
-              ...(q ? { customOrder: J.split(/\r?\n/) } : {}),
+              ...(useCustom ? { customOrder: customText.split(/\r?\n/) } : {}),
             })),
             expandSelection: f,
             includeHidden: m,
@@ -455,9 +455,9 @@ function p4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close custom sort"),
+              "aria-label": text("Close custom sort"),
               onClick: e.onClose,
-              lang: t("Close custom sort"),
+              lang: language("Close custom sort"),
               "data-ui-label": "Close custom sort",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -478,12 +478,12 @@ function p4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: s,
                   onChange: (X) => {
                     (R(), p(false), d(X.target.value));
                   },
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -810,10 +810,10 @@ Low`,
           B &&
           i.jsxs("div", {
             className: "dup-preview",
-            "aria-label": r("Sort preview"),
+            "aria-label": text("Sort preview"),
             ref: a,
             tabIndex: -1,
-            lang: t("Sort preview"),
+            lang: language("Sort preview"),
             "data-ui-label": "Sort preview",
             children: [
               i.jsxs("h3", {
@@ -911,8 +911,8 @@ Low`,
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Sort preview pages"),
-                lang: t("Sort preview pages"),
+                "aria-label": text("Sort preview pages"),
+                lang: language("Sort preview pages"),
                 "data-ui-label": "Sort preview pages",
                 children: [
                   i.jsx("button", {
@@ -1031,7 +1031,7 @@ const x2 = (e) =>
       : "The worksheet operation could not be completed.";
 function m4e(e) {
   var K;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState(e.sheetId),
     a = e.workbook.sheets.find((ae) => ae.id === n) ?? e.workbook.sheets[0],
     [s, d] = ne.useState(a.name),
@@ -1223,9 +1223,9 @@ function m4e(e) {
             }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close worksheet manager"),
+              "aria-label": text("Close worksheet manager"),
               onClick: e.onClose,
-              lang: t("Close worksheet manager"),
+              lang: language("Close worksheet manager"),
               "data-ui-label": "Close worksheet manager",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1236,8 +1236,8 @@ function m4e(e) {
           children: [
             i.jsxs("aside", {
               className: "sm-sheet-list",
-              "aria-label": r("Workbook worksheets"),
-              lang: t("Workbook worksheets"),
+              "aria-label": text("Workbook worksheets"),
+              lang: language("Workbook worksheets"),
               "data-ui-label": "Workbook worksheets",
               children: [
                 i.jsxs("div", {
@@ -1252,13 +1252,13 @@ function m4e(e) {
                     }),
                     i.jsx("button", {
                       type: "button",
-                      "aria-label": r("Add worksheet"),
+                      "aria-label": text("Add worksheet"),
                       title: _
                         ? "Unprotect workbook structure to add worksheets"
                         : "Add worksheet",
                       disabled: N,
                       onClick: H,
-                      lang: t("Add worksheet"),
+                      lang: language("Add worksheet"),
                       "data-ui-label": "Add worksheet",
                       children: i.jsx(Plus, { size: 16 }),
                     }),
@@ -1348,8 +1348,8 @@ function m4e(e) {
                   }),
                 i.jsxs("section", {
                   className: "sm-inspection",
-                  "aria-label": r("Worksheet inspection metadata"),
-                  lang: t("Worksheet inspection metadata"),
+                  "aria-label": text("Worksheet inspection metadata"),
+                  lang: language("Worksheet inspection metadata"),
                   "data-ui-label": "Worksheet inspection metadata",
                   children: [
                     i.jsx("h4", {
@@ -1436,11 +1436,11 @@ function m4e(e) {
                           children: [
                             i.jsx(M, { children: "Sheet name" }),
                             i.jsx("input", {
-                              "aria-label": r("Sheet name"),
+                              "aria-label": text("Sheet name"),
                               value: s,
                               maxLength: 31,
                               onChange: (ae) => d(ae.target.value),
-                              lang: t("Sheet name"),
+                              lang: language("Sheet name"),
                               "data-ui-label": "Sheet name",
                             }),
                           ],
@@ -1473,27 +1473,27 @@ function m4e(e) {
                           children: [
                             i.jsx("button", {
                               type: "button",
-                              "aria-label": r("Move worksheet up"),
-                              title: r("Move worksheet earlier"),
+                              "aria-label": text("Move worksheet up"),
+                              title: text("Move worksheet earlier"),
                               disabled: R === 0,
                               onClick: () =>
                                 G(`Move worksheet: ${a.name}`, (ae) =>
                                   xO(ae, a.id, R - 1),
                                 ),
-                              lang: t("Move worksheet up"),
+                              lang: language("Move worksheet up"),
                               "data-ui-label": "Move worksheet up",
                               children: i.jsx(ArrowUp, { size: 15 }),
                             }),
                             i.jsx("button", {
                               type: "button",
-                              "aria-label": r("Move worksheet down"),
-                              title: r("Move worksheet later"),
+                              "aria-label": text("Move worksheet down"),
+                              title: text("Move worksheet later"),
                               disabled: R === e.workbook.sheets.length - 1,
                               onClick: () =>
                                 G(`Move worksheet: ${a.name}`, (ae) =>
                                   xO(ae, a.id, R + 1),
                                 ),
-                              lang: t("Move worksheet down"),
+                              lang: language("Move worksheet down"),
                               "data-ui-label": "Move worksheet down",
                               children: i.jsx(ArrowDown, { size: 15 }),
                             }),
@@ -1508,10 +1508,10 @@ function m4e(e) {
                           children: [
                             i.jsx(M, { children: "Visibility" }),
                             i.jsxs("select", {
-                              "aria-label": r("Worksheet visibility"),
+                              "aria-label": text("Worksheet visibility"),
                               value: u,
                               onChange: (ae) => l(ae.target.value),
-                              lang: t("Worksheet visibility"),
+                              lang: language("Worksheet visibility"),
                               "data-ui-label": "Worksheet visibility",
                               children: [
                                 i.jsx("option", {
@@ -1555,11 +1555,11 @@ function m4e(e) {
                           children: [
                             i.jsx(M, { children: "Tab color" }),
                             i.jsx("input", {
-                              "aria-label": r("Worksheet tab color"),
+                              "aria-label": text("Worksheet tab color"),
                               type: "color",
                               value: c,
                               onChange: (ae) => h(ae.target.value),
-                              lang: t("Worksheet tab color"),
+                              lang: language("Worksheet tab color"),
                               "data-ui-label": "Worksheet tab color",
                             }),
                           ],
@@ -1613,8 +1613,8 @@ function m4e(e) {
                 E &&
                   i.jsxs("section", {
                     className: "sm-deletion",
-                    "aria-label": r("Delete worksheet confirmation"),
-                    lang: t("Delete worksheet confirmation"),
+                    "aria-label": text("Delete worksheet confirmation"),
+                    lang: language("Delete worksheet confirmation"),
                     "data-ui-label": "Delete worksheet confirmation",
                     children: [
                       i.jsxs("h4", {
@@ -1671,10 +1671,10 @@ function m4e(e) {
                           children: [
                             i.jsx("button", {
                               type: "button",
-                              "aria-label": r("Previous references"),
+                              "aria-label": text("Previous references"),
                               disabled: I === 0,
                               onClick: () => O((ae) => ae - 1),
-                              lang: t("Previous references"),
+                              lang: language("Previous references"),
                               "data-ui-label": "Previous references",
                               children: i.jsx(M, { children: "Previous" }),
                             }),
@@ -1693,10 +1693,10 @@ function m4e(e) {
                             }),
                             i.jsx("button", {
                               type: "button",
-                              "aria-label": r("Next references"),
+                              "aria-label": text("Next references"),
                               disabled: (I + 1) * 200 >= E.dependencies.length,
                               onClick: () => O((ae) => ae + 1),
-                              lang: t("Next references"),
+                              lang: language("Next references"),
                               "data-ui-label": "Next references",
                               children: i.jsx(M, { children: "Next" }),
                             }),
@@ -1771,8 +1771,8 @@ function m4e(e) {
         }),
         i.jsxs("section", {
           className: "sm-protection",
-          "aria-label": r("Workbook structure protection"),
-          lang: t("Workbook structure protection"),
+          "aria-label": text("Workbook structure protection"),
+          lang: language("Workbook structure protection"),
           "data-ui-label": "Workbook structure protection",
           children: [
             i.jsxs("div", {
@@ -1808,14 +1808,14 @@ function m4e(e) {
                   children: [
                     _ ? "Password to unlock" : "Password (optional)",
                     i.jsx("input", {
-                      "aria-label": r("Structure password"),
+                      "aria-label": text("Structure password"),
                       type: "password",
                       autoComplete: "off",
                       value: f,
                       maxLength: 200,
                       disabled: e.readOnly || y,
                       onChange: (ae) => p(ae.target.value),
-                      lang: t("Structure password"),
+                      lang: language("Structure password"),
                       "data-ui-label": "Structure password",
                     }),
                   ],

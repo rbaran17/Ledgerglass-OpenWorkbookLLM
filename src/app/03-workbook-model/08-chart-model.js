@@ -39,8 +39,8 @@ import { _t, aP, ct, oP } from "./07-conditional-formatting.js";
 function dne(e, r) {
   const t = eg(r.definedNames, r);
   oP(t);
-  const { builtinXml: n } = aP(e);
-  let o = n;
+  const { builtinXml } = aP(e);
+  let o = builtinXml;
   for (const a of t) {
     if (a.name.toLowerCase().startsWith("_xlnm."))
       return Pi(
@@ -792,7 +792,7 @@ function Ax(e, r) {
               Number(a.sourceRevision) < 0) &&
               Xt("Invalid analysis identity or source revision."),
             n.add(d));
-          const { destination: l, ...c } = s;
+          const { destination, ...c } = s;
           return {
             ...c,
             id: d,
@@ -915,9 +915,9 @@ function z1(e, r, t, n) {
     b && w && (a = { sheet: b, table: w });
   }
   if (!a) return null;
-  const { sheet: s, table: d } = a,
-    u = ct(d.range),
-    l = Gp(d),
+  const { sheet, table } = a,
+    u = ct(table.range),
+    l = Gp(table),
     c = o[2]
       .replace(/^\[|\]$/g, "")
       .replace(/[\[\]]/g, "")
@@ -940,11 +940,11 @@ function z1(e, r, t, n) {
     h === "#headers" && Object.assign(l, u, { lastRow: u.firstRow }),
     h === "#totals")
   ) {
-    if (!d.showTotals) return null;
+    if (!table.showTotals) return null;
     Object.assign(l, u, { firstRow: u.lastRow });
   }
   if (f) {
-    if (!n || s.id !== r) return null;
+    if (!n || sheet.id !== r) return null;
     const b = _t(n);
     if (b.row < l.firstRow || b.row > l.lastRow) return null;
     ((l.firstRow = b.row), (l.lastRow = b.row));
@@ -953,7 +953,7 @@ function z1(e, r, t, n) {
   if (p.length) {
     if (p.length > 2) return null;
     const b = p.map((y) =>
-      d.columns.findIndex((w) => w.name.toLowerCase() === y.toLowerCase()),
+      table.columns.findIndex((w) => w.name.toLowerCase() === y.toLowerCase()),
     );
     if (b.some((y) => y < 0)) return null;
     ((l.firstCol = u.firstCol + Math.min(...b)),
@@ -962,7 +962,7 @@ function z1(e, r, t, n) {
   return l.firstRow > l.lastRow
     ? null
     : {
-        sheetId: s.id,
+        sheetId: sheet.id,
         range: `${Cn(l.firstRow, l.firstCol)}:${Cn(l.lastRow, l.lastCol)}`,
       };
 }

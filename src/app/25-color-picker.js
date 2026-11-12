@@ -4,17 +4,10 @@ import ne from "react";
 import { M } from "./04-cell-input-paste-and-fill.js";
 import { Wde } from "./24-merge-and-audit-analysis.js";
 
-function Hk({
-  commandId: e,
-  reason: r,
-  kind: t,
-  value: n,
-  onChange: o,
-  disabled: a,
-}) {
+function Hk({ commandId, reason, kind, value, onChange, disabled }) {
   const [s, d] = ne.useState(false),
     u = ne.useRef(null),
-    l = t === "fill" ? "Fill Color" : "Font Color";
+    l = kind === "fill" ? "Fill Color" : "Font Color";
   return (
     ne.useEffect(() => {
       if (!s) return;
@@ -32,21 +25,21 @@ function Hk({
       ref: u,
       children: [
         i.jsxs("button", {
-          "data-workbook-command": e,
-          "aria-description": r,
+          "data-workbook-command": commandId,
+          "aria-description": reason,
           type: "button",
           className: "xl-icon-button xl-color-button",
-          disabled: a,
+          disabled,
           "aria-label": l,
-          title: r ? `${l}: ${r}` : l,
+          title: reason ? `${l}: ${reason}` : l,
           "aria-expanded": s,
           onClick: () => d(!s),
           children: [
             i.jsx("span", {
               className: "xl-color-glyph",
-              style: { "--swatch-color": n },
+              style: { "--swatch-color": value },
               children:
-                t === "fill"
+                kind === "fill"
                   ? i.jsx(PaintBucket, { size: 15 })
                   : i.jsx("span", {
                       className: "xl-font-color-glyph",
@@ -57,7 +50,7 @@ function Hk({
           ],
         }),
         s &&
-          !a &&
+          !disabled &&
           i.jsxs("div", {
             className: "xl-color-palette",
             role: "dialog",
@@ -85,7 +78,7 @@ function Hk({
                       title: c,
                       style: { background: c },
                       onClick: () => {
-                        (o(c), d(false));
+                        (onChange(c), d(false));
                       },
                     },
                     `${c}-${h}`,
@@ -99,8 +92,8 @@ function Hk({
                   i.jsx("input", {
                     type: "color",
                     "aria-label": `Custom ${l}`,
-                    value: n,
-                    onChange: (c) => o(c.target.value),
+                    value,
+                    onChange: (c) => onChange(c.target.value),
                   }),
                 ],
               }),

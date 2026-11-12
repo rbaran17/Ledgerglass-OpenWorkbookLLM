@@ -241,7 +241,7 @@ const CU = "ledgerglass-report-output-v1",
   zE = string().regex(/^[a-f0-9]{64}$/),
   AU = string().datetime();
 const W5 = (e) => {
-  const { hash: r, ...t } = e;
+  const { hash, ...t } = e;
   return hr(t);
 };
 const t0 = Object.freeze({

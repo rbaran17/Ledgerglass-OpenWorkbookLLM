@@ -34,7 +34,7 @@ const iEe = "embedded-excel-demo-v1",
   T_ = (e) => `embedded-excel-demo-v2:${e}`,
   xp = ["ledger", "draft"],
   Wf = { ledger: "General ledger", draft: "Draft workbook" };
-function RS({ label: e, trigger: r, children: t, className: n = "" }) {
+function RS({ label, trigger, children, className = "" }) {
   const o = ne.useRef(null);
   return (
     ne.useEffect(() => {
@@ -53,7 +53,7 @@ function RS({ label: e, trigger: r, children: t, className: n = "" }) {
     }, []),
     i.jsxs("details", {
       ref: o,
-      className: `emb-header-menu ${n}`,
+      className: `emb-header-menu ${className}`,
       onKeyDown: (a) => {
         var s;
         a.key === "Escape" &&
@@ -64,18 +64,22 @@ function RS({ label: e, trigger: r, children: t, className: n = "" }) {
           (s = a.currentTarget.querySelector("summary")) == null || s.focus());
       },
       children: [
-        i.jsx("summary", { "aria-label": e, title: e, children: r }),
+        i.jsx("summary", {
+          "aria-label": label,
+          title: label,
+          children: trigger,
+        }),
         i.jsx("div", {
           className: "emb-menu-panel",
           role: "region",
-          "aria-label": e,
+          "aria-label": label,
           onClick: (a) => {
             var d;
             a.target.closest("button") &&
               (o.current && (o.current.open = false),
               (d = o.current?.querySelector("summary")) == null || d.focus());
           },
-          children: t,
+          children,
         }),
       ],
     })
@@ -220,9 +224,9 @@ async function aEe(e) {
     }),
   );
   return {
-    documents: Object.fromEntries(r.map(({ id: t, workbook: n }) => [t, n])),
-    stores: Object.fromEntries(r.map(({ id: t, store: n }) => [t, n])),
-    problems: Object.fromEntries(r.map(({ id: t, problem: n }) => [t, n])),
+    documents: Object.fromEntries(r.map(({ id, workbook }) => [id, workbook])),
+    stores: Object.fromEntries(r.map(({ id, store }) => [id, store])),
+    problems: Object.fromEntries(r.map(({ id, problem }) => [id, problem])),
   };
 }
 function sEe() {

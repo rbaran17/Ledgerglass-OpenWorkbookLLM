@@ -19,12 +19,12 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { Ek } from "./08-xlsx-export-and-preservation.js";
 
 function Zce(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     [, a] = ne.useState(0),
-    { report: s } = Gw(e.workbook),
-    [d, u] = ne.useState(s.settings),
+    { report } = Gw(e.workbook),
+    [d, u] = ne.useState(report.settings),
     [l, c] = ne.useState(""),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState(0),
@@ -75,7 +75,7 @@ function Zce(e) {
       }),
     E = () =>
       b(() => {
-        const j = Wie(e.workbook, s);
+        const j = Wie(e.workbook, report);
         if (e.onExport) {
           e.onExport(j);
           return;
@@ -89,7 +89,7 @@ function Zce(e) {
           V.click(),
           setTimeout(() => URL.revokeObjectURL(z), 1e3));
       }),
-    A = s.cells.filter((j) => {
+    A = report.cells.filter((j) => {
       return `${e.workbook.sheets.find((V) => V.id === j.sheetId)?.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
         .toLowerCase()
         .includes(h.toLowerCase());
@@ -140,9 +140,9 @@ function Zce(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Calculation Options"),
+              "aria-label": text("Close Calculation Options"),
               onClick: e.onClose,
-              lang: t("Close Calculation Options"),
+              lang: language("Close Calculation Options"),
               "data-ui-label": "Close Calculation Options",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -159,10 +159,10 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Calculation mode" }),
                 i.jsxs("select", {
-                  "aria-label": r("Calculation mode"),
+                  "aria-label": text("Calculation mode"),
                   value: d.mode,
                   onChange: (j) => u({ ...d, mode: j.target.value }),
-                  lang: t("Calculation mode"),
+                  lang: language("Calculation mode"),
                   "data-ui-label": "Calculation mode",
                   children: [
                     i.jsx("option", {
@@ -188,7 +188,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Maximum iterations" }),
                 i.jsx(ci, {
-                  "aria-label": r("Maximum iterations"),
+                  "aria-label": text("Maximum iterations"),
                   min: 1,
                   max: 1e3,
                   value: d.maxIterations,
@@ -200,7 +200,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Maximum change" }),
                 i.jsx(ci, {
-                  "aria-label": r("Maximum change"),
+                  "aria-label": text("Maximum change"),
                   min: 0,
                   max: 1,
                   step: "0.000001",
@@ -213,7 +213,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Time budget (ms)" }),
                 i.jsx(ci, {
-                  "aria-label": r("Time budget (ms)"),
+                  "aria-label": text("Time budget (ms)"),
                   min: 1,
                   max: 1e4,
                   value: d.timeBudgetMs,
@@ -225,7 +225,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Working-data budget (MiB)" }),
                 i.jsx(ci, {
-                  "aria-label": r("Working-data budget (MiB)"),
+                  "aria-label": text("Working-data budget (MiB)"),
                   min: 1,
                   max: 128,
                   value: d.memoryBudgetMiB ?? Iw.defaultMemoryBudgetMiB,
@@ -237,7 +237,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Calculation work budget" }),
                 i.jsx(ci, {
-                  "aria-label": r("Calculation work budget"),
+                  "aria-label": text("Calculation work budget"),
                   min: 1e3,
                   max: 1e7,
                   step: 1e3,
@@ -250,10 +250,10 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Workbook date system" }),
                 i.jsxs("select", {
-                  "aria-label": r("Workbook date system"),
+                  "aria-label": text("Workbook date system"),
                   value: v.dateSystem,
                   onChange: (j) => g({ ...v, dateSystem: j.target.value }),
-                  lang: t("Workbook date system"),
+                  lang: language("Workbook date system"),
                   "data-ui-label": "Workbook date system",
                   children: [
                     i.jsx("option", {
@@ -268,7 +268,7 @@ function Zce(e) {
                 }),
               ],
             }),
-            v.dateSystem !== s.dateContext.dateSystem &&
+            v.dateSystem !== report.dateContext.dateSystem &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(M, {
@@ -280,10 +280,10 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Text date order" }),
                 i.jsxs("select", {
-                  "aria-label": r("Text date order"),
+                  "aria-label": text("Text date order"),
                   value: v.textDateOrder,
                   onChange: (j) => g({ ...v, textDateOrder: j.target.value }),
-                  lang: t("Text date order"),
+                  lang: language("Text date order"),
                   "data-ui-label": "Text date order",
                   children: [
                     i.jsx("option", {
@@ -302,11 +302,11 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Calculation time zone" }),
                 i.jsx("input", {
-                  "aria-label": r("Calculation time zone"),
+                  "aria-label": text("Calculation time zone"),
                   value: v.timeZone,
                   onChange: (j) => g({ ...v, timeZone: j.target.value }),
-                  placeholder: r("UTC or America/New_York"),
-                  lang: t("Calculation time zone"),
+                  placeholder: text("UTC or America/New_York"),
+                  lang: language("Calculation time zone"),
                   "data-ui-label": "Calculation time zone",
                 }),
               ],
@@ -331,8 +331,8 @@ function Zce(e) {
               onClick: y,
               children: i.jsx(M, { children: "Calculate Now" }),
             }),
-            s.execution?.mode === "worker" &&
-              s.execution.state === "pending" &&
+            report.execution?.mode === "worker" &&
+              report.execution.state === "pending" &&
               e.onCancelCalculation &&
               i.jsx("button", {
                 onClick: e.onCancelCalculation,
@@ -346,12 +346,12 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Find formula" }),
                 i.jsx("input", {
-                  "aria-label": r("Find formula results"),
+                  "aria-label": text("Find formula results"),
                   value: h,
                   onChange: (j) => {
                     (f(j.target.value), m(0));
                   },
-                  lang: t("Find formula results"),
+                  lang: language("Find formula results"),
                   "data-ui-label": "Find formula results",
                 }),
               ],
@@ -363,30 +363,32 @@ function Zce(e) {
           role: "status",
           children: [
             i.jsx(M, { children: "Revision " }),
-            s.revision,
+            report.revision,
             " · ",
-            s.settings.mode,
+            report.settings.mode,
             " · ",
-            s.formulaCount,
+            report.formulaCount,
             " ",
             i.jsx(M, { children: "formulas · " }),
-            s.evaluated,
+            report.evaluated,
             " ",
             i.jsx(M, { children: "evaluated ·" }),
             " ",
-            s.reused,
+            report.reused,
             " ",
             i.jsx(M, { children: "reused · " }),
-            s.pending,
+            report.pending,
             " ",
             i.jsx(M, { children: "pending ·" }),
             " ",
-            s.dependencyEdges,
+            report.dependencyEdges,
             " ",
             i.jsx(M, { children: "dependency edges" }),
           ],
         }),
-        i.jsxs("p", { children: [s.reason, ". ", s.iteration.message] }),
+        i.jsxs("p", {
+          children: [report.reason, ". ", report.iteration.message],
+        }),
         i.jsxs("details", {
           className: "rc-date-evidence",
           open: true,
@@ -399,9 +401,9 @@ function Zce(e) {
             i.jsxs("p", {
               role: "status",
               children: [
-                s.execution?.message,
+                report.execution?.message,
                 " ",
-                s.limits.hardInterrupt
+                report.limits.hardInterrupt
                   ? "Worker deadline and cancellation are enabled."
                   : "Cooperative execution: this host does not interrupt an individual running function.",
               ],
@@ -410,29 +412,29 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Working data:" }),
                 " ",
-                (s.resources.accountedBytes / 1048576).toFixed(2),
+                (report.resources.accountedBytes / 1048576).toFixed(2),
                 " /",
                 " ",
-                (s.resources.memoryBudgetBytes / 1048576).toFixed(0),
+                (report.resources.memoryBudgetBytes / 1048576).toFixed(0),
                 " ",
                 i.jsx(M, { children: "MiB accounted. Work: " }),
-                s.resources.workUnits.toLocaleString(),
+                report.resources.workUnits.toLocaleString(),
                 " /",
                 " ",
-                s.resources.workBudget.toLocaleString(),
+                report.resources.workBudget.toLocaleString(),
                 " ",
                 i.jsx(M, { children: "units. Time budget:" }),
                 " ",
-                s.settings.timeBudgetMs,
+                report.settings.timeBudgetMs,
                 " ",
                 i.jsx(M, { children: "ms." }),
               ],
             }),
-            s.resources.reason &&
+            report.resources.reason &&
               i.jsxs("p", {
                 role: "alert",
                 children: [
-                  s.resources.reason,
+                  report.resources.reason,
                   i.jsx(M, {
                     children:
                       ". Committed inputs remain intact. Adjust the data or budget and choose Calculate Now to retry.",
@@ -451,7 +453,7 @@ function Zce(e) {
               children: [
                 i.jsx(M, { children: "Volatile functions in this workbook:" }),
                 " ",
-                s.volatile.functions.join(", ") || "None",
+                report.volatile.functions.join(", ") || "None",
                 i.jsx(M, {
                   children:
                     ". Unsupported volatile functions require a compatibility review.",
@@ -499,13 +501,13 @@ function Zce(e) {
             i.jsxs("p", {
               children: [
                 i.jsx(M, { children: "Gregorian calendar · " }),
-                s.dateContext.dateSystem,
+                report.dateContext.dateSystem,
                 " ",
                 i.jsx(M, {
                   children:
                     "serial system · ISO YYYY-MM-DD within the supported date range accepted · slash dates use ",
                 }),
-                s.dateContext.textDateOrder,
+                report.dateContext.textDateOrder,
                 i.jsx(M, {
                   children:
                     ". Other calendars are unsupported. XLSX retains the selected serial system; native JSON also retains text order and time zone. Holiday ranges and weekend masks are supplied in WORKDAY / NETWORKDAYS formulas.",
@@ -517,20 +519,20 @@ function Zce(e) {
                 i.jsx(M, { children: "Calculation snapshot:" }),
                 " ",
                 i.jsx("time", {
-                  dateTime: s.dateContext.calculatedAt,
-                  children: s.dateContext.calculatedAt,
+                  dateTime: report.dateContext.calculatedAt,
+                  children: report.dateContext.calculatedAt,
                 }),
                 " ",
                 i.jsx(M, { children: "· time zone " }),
-                s.dateContext.timeZone,
+                report.dateContext.timeZone,
                 " ",
                 i.jsx(M, { children: "· UTC offset" }),
                 " ",
-                s.dateContext.utcOffsetMinutes,
+                report.dateContext.utcOffsetMinutes,
                 " ",
                 i.jsx(M, { children: "minutes · local clock" }),
                 " ",
-                s.dateContext.localDateTime,
+                report.dateContext.localDateTime,
                 ".",
               ],
             }),
@@ -542,13 +544,13 @@ function Zce(e) {
             }),
           ],
         }),
-        !!s.cycles.length &&
+        !!report.cycles.length &&
           i.jsxs("p", {
             role: "alert",
             children: [
               i.jsx(M, { children: "Circular references:" }),
               " ",
-              s.cycles
+              report.cycles
                 .slice(0, 10)
                 .map((j) =>
                   j
@@ -559,10 +561,10 @@ function Zce(e) {
                     .join(" → "),
                 )
                 .join("; "),
-              s.cycles.length > 10 ? " (more in evidence)" : "",
+              report.cycles.length > 10 ? " (more in evidence)" : "",
             ],
           }),
-        !!s.pending &&
+        !!report.pending &&
           i.jsx("p", {
             children: i.jsx(M, {
               children:
@@ -802,22 +804,14 @@ function Zce(e) {
     }),
   });
 }
-function Kce({
-  x: e,
-  y: r,
-  label: t,
-  actions: n,
-  workbook: o,
-  selection: a,
-  onClose: s,
-}) {
+function Kce({ x, y, label, actions, workbook, selection, onClose }) {
   const d = ne.useRef(null),
-    u = ne.useRef({ workbook: o, snapshot: JSON.stringify(o), selection: a }),
-    [l, c] = ne.useState({ left: e, top: r }),
+    u = ne.useRef({ workbook, snapshot: JSON.stringify(workbook), selection }),
+    [l, c] = ne.useState({ left: x, top: y }),
     f =
-      u.current.workbook !== o ||
-      u.current.snapshot !== JSON.stringify(o) ||
-      u.current.selection !== a
+      u.current.workbook !== workbook ||
+      u.current.snapshot !== JSON.stringify(workbook) ||
+      u.current.selection !== selection
         ? "The workbook or selection changed. Close and reopen this menu."
         : undefined;
   return (
@@ -825,10 +819,10 @@ function Kce({
       const p = d.current?.getBoundingClientRect();
       p &&
         c({
-          left: Math.max(8, Math.min(e, window.innerWidth - p.width - 8)),
-          top: Math.max(8, Math.min(r, window.innerHeight - p.height - 8)),
+          left: Math.max(8, Math.min(x, window.innerWidth - p.width - 8)),
+          top: Math.max(8, Math.min(y, window.innerHeight - p.height - 8)),
         });
-    }, [e, r]),
+    }, [x, y]),
     ne.useEffect(() => {
       let p = false;
       const m = requestAnimationFrame(() => {
@@ -838,7 +832,7 @@ function Kce({
           var b;
           (b = d.current) != null && b.contains(g.target)
             ? (p = true)
-            : (g.type !== "focusin" || p) && s(false);
+            : (g.type !== "focusin" || p) && onClose(false);
         };
       return (
         document.addEventListener("pointerdown", v),
@@ -849,12 +843,12 @@ function Kce({
             document.removeEventListener("focusin", v));
         }
       );
-    }, [s]),
+    }, [onClose]),
     i.jsxs("div", {
       ref: d,
       className: "lg-grid-context",
       role: "menu",
-      "aria-label": `${t} commands`,
+      "aria-label": `${label} commands`,
       style: l,
       onContextMenu: (p) => p.preventDefault(),
       onKeyDown: (p) => {
@@ -875,11 +869,11 @@ function Kce({
           (g = m[b]) == null || g.focus();
         } else
           (p.key === "Escape" || p.key === "Tab") &&
-            (p.preventDefault(), p.stopPropagation(), s(true));
+            (p.preventDefault(), p.stopPropagation(), onClose(true));
       },
       children: [
-        i.jsx("strong", { children: t }),
-        n.map((p, m) => {
+        i.jsx("strong", { children: label }),
+        actions.map((p, m) => {
           const v = f ?? p.reason;
           return i.jsxs(
             "button",
@@ -892,7 +886,7 @@ function Kce({
               "aria-description": v,
               title: v ? `${p.name}: ${v}` : p.name,
               onClick: () => {
-                v || (s(true), p.run());
+                v || (onClose(true), p.run());
               },
               children: [p.name, v && i.jsx("small", { children: v })],
             },
@@ -904,10 +898,10 @@ function Kce({
   );
 }
 function Yce() {
-  const { text: e, language: r } = Dr();
+  const { text, language } = Dr();
   return i.jsxs("section", {
-    "aria-label": e("Workbook capacity limits"),
-    lang: r("Workbook capacity limits"),
+    "aria-label": text("Workbook capacity limits"),
+    lang: language("Workbook capacity limits"),
     "data-ui-label": "Workbook capacity limits",
     children: [
       i.jsx("h4", { children: i.jsx(M, { children: "Capacity" }) }),

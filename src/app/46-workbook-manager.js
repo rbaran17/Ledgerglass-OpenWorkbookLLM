@@ -7,7 +7,7 @@ import { QT, g4e, hj, ox } from "./45-sorting-and-worksheets.js";
 
 function v4e(e) {
   var N, R, L;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useRef(null),
     o = ne.useRef(e.onClose);
   o.current = e.onClose;
@@ -159,9 +159,9 @@ function v4e(e) {
                     : "Workbook properties",
             }),
             i.jsx("button", {
-              "aria-label": r("Close workbook manager"),
+              "aria-label": text("Close workbook manager"),
               onClick: e.onClose,
-              lang: t("Close workbook manager"),
+              lang: language("Close workbook manager"),
               "data-ui-label": "Close workbook manager",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -209,13 +209,13 @@ function v4e(e) {
                       children: [
                         i.jsx(M, { children: "Workbook name" }),
                         i.jsx("input", {
-                          "aria-label": r("Workbook name"),
+                          "aria-label": text("Workbook name"),
                           required: true,
                           maxLength: 200,
                           value: a,
                           disabled: e.readOnly || A,
                           onChange: (U) => s(U.target.value),
-                          lang: t("Workbook name"),
+                          lang: language("Workbook name"),
                           "data-ui-label": "Workbook name",
                         }),
                       ],
@@ -228,13 +228,13 @@ function v4e(e) {
                             i.jsx(M, { children: "Engagement" }),
                             e.mode === "template" ? " *" : "",
                             i.jsx("input", {
-                              "aria-label": r("Engagement"),
+                              "aria-label": text("Engagement"),
                               required: e.mode === "template",
                               value: d,
                               maxLength: 200,
                               disabled: e.readOnly || A,
                               onChange: (U) => u(U.target.value),
-                              lang: t("Engagement"),
+                              lang: language("Engagement"),
                               "data-ui-label": "Engagement",
                             }),
                           ],
@@ -244,14 +244,14 @@ function v4e(e) {
                             i.jsx(M, { children: "Period" }),
                             e.mode === "template" ? " *" : "",
                             i.jsx("input", {
-                              "aria-label": r("Period"),
+                              "aria-label": text("Period"),
                               required: e.mode === "template",
                               value: l,
                               maxLength: 100,
-                              placeholder: r("For example, FY2026"),
+                              placeholder: text("For example, FY2026"),
                               disabled: e.readOnly || A,
                               onChange: (U) => c(U.target.value),
-                              lang: t("Period"),
+                              lang: language("Period"),
                               "data-ui-label": "Period",
                             }),
                           ],
@@ -354,13 +354,13 @@ function v4e(e) {
                           children: [
                             i.jsx(M, { children: "Checkpoint name" }),
                             i.jsx("input", {
-                              "aria-label": r("Checkpoint name"),
+                              "aria-label": text("Checkpoint name"),
                               value: h,
                               required: true,
                               maxLength: 100,
                               disabled: e.readOnly || A,
                               onChange: (U) => f(U.target.value),
-                              lang: t("Checkpoint name"),
+                              lang: language("Checkpoint name"),
                               "data-ui-label": "Checkpoint name",
                             }),
                           ],
@@ -383,8 +383,8 @@ function v4e(e) {
                     e.checkpoints.length
                       ? i.jsx("div", {
                           className: "wm-versions",
-                          "aria-label": r("Saved checkpoints"),
-                          lang: t("Saved checkpoints"),
+                          "aria-label": text("Saved checkpoints"),
+                          lang: language("Saved checkpoints"),
                           "data-ui-label": "Saved checkpoints",
                           children: [...e.checkpoints].reverse().map((U) =>
                             i.jsxs(
@@ -423,8 +423,8 @@ function v4e(e) {
                     v &&
                       i.jsxs("section", {
                         className: "wm-comparison",
-                        "aria-label": r("Version comparison"),
-                        lang: t("Version comparison"),
+                        "aria-label": text("Version comparison"),
+                        lang: language("Version comparison"),
                         "data-ui-label": "Version comparison",
                         children: [
                           i.jsx("h3", {

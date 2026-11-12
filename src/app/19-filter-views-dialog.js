@@ -7,7 +7,7 @@ import { Bk, qce } from "./18-transformation-recipes-dialog.js";
 
 function Xce(e) {
   var L, U, G, Q;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -312,9 +312,9 @@ function Xce(e) {
                 ],
               }),
               i.jsx("button", {
-                "aria-label": r("Close population filter"),
+                "aria-label": text("Close population filter"),
                 onClick: e.onClose,
-                lang: t("Close population filter"),
+                lang: language("Close population filter"),
                 "data-ui-label": "Close population filter",
                 children: "×",
               }),
@@ -353,7 +353,7 @@ function Xce(e) {
                         children: [
                           i.jsx(M, { children: "Saved view" }),
                           i.jsxs("select", {
-                            "aria-label": r("Saved filter view"),
+                            "aria-label": text("Saved filter view"),
                             value: g,
                             onChange: (oe) => {
                               (b(oe.target.value),
@@ -365,7 +365,7 @@ function Xce(e) {
                                 A(""),
                                 v(""));
                             },
-                            lang: t("Saved filter view"),
+                            lang: language("Saved filter view"),
                             "data-ui-label": "Saved filter view",
                             children: [
                               i.jsx("option", {
@@ -398,11 +398,11 @@ function Xce(e) {
                         children: [
                           i.jsx(M, { children: "View name" }),
                           i.jsx("input", {
-                            "aria-label": r("Filter view name"),
+                            "aria-label": text("Filter view name"),
                             maxLength: 80,
                             value: y,
                             onChange: (oe) => w(oe.target.value),
-                            lang: t("Filter view name"),
+                            lang: language("Filter view name"),
                             "data-ui-label": "Filter view name",
                           }),
                         ],
@@ -546,7 +546,7 @@ function Xce(e) {
                     children: [
                       i.jsx(M, { children: "Population range" }),
                       i.jsx("input", {
-                        "aria-label": r("Population range"),
+                        "aria-label": text("Population range"),
                         value: s.range,
                         onChange: (oe) =>
                           d((de) => ({
@@ -556,7 +556,7 @@ function Xce(e) {
                             advanced: [],
                             unique: false,
                           })),
-                        lang: t("Population range"),
+                        lang: language("Population range"),
                         "data-ui-label": "Population range",
                       }),
                     ],
@@ -565,12 +565,12 @@ function Xce(e) {
                     children: [
                       i.jsx(M, { children: "Column" }),
                       i.jsx("select", {
-                        "aria-label": r("Filter column"),
+                        "aria-label": text("Filter column"),
                         value: u,
                         onChange: (oe) => {
                           (l(Number(oe.target.value)), h(""));
                         },
-                        lang: t("Filter column"),
+                        lang: language("Filter column"),
                         "data-ui-label": "Filter column",
                         children: O.map((oe) =>
                           i.jsx(
@@ -607,11 +607,11 @@ function Xce(e) {
                         children: i.jsx(M, { children: "Values / slicer" }),
                       }),
                       i.jsx("input", {
-                        "aria-label": r("Search filter values"),
-                        placeholder: r("Search available values"),
+                        "aria-label": text("Search filter values"),
+                        placeholder: text("Search available values"),
                         value: c,
                         onChange: (oe) => h(oe.target.value),
-                        lang: t("Search filter values"),
+                        lang: language("Search filter values"),
                         "data-ui-label": "Search filter values",
                       }),
                       i.jsxs("div", {
@@ -655,8 +655,8 @@ function Xce(e) {
                       i.jsx("div", {
                         className: "lg-filter-values",
                         role: "group",
-                        "aria-label": r("Value slicer"),
-                        lang: t("Value slicer"),
+                        "aria-label": text("Value slicer"),
+                        lang: language("Value slicer"),
                         "data-ui-label": "Value slicer",
                         children: j.result?.values.map((oe) => {
                           var he;
@@ -770,11 +770,11 @@ function Xce(e) {
                           children: [
                             i.jsx(M, { children: "Combine conditions" }),
                             i.jsxs("select", {
-                              "aria-label": r("Combine column conditions"),
+                              "aria-label": text("Combine column conditions"),
                               value: z.join ?? "and",
                               onChange: (oe) =>
                                 _({ ...z, join: oe.target.value }),
-                              lang: t("Combine column conditions"),
+                              lang: language("Combine column conditions"),
                               "data-ui-label": "Combine column conditions",
                               children: [
                                 i.jsx("option", {
@@ -1048,9 +1048,9 @@ function Xce(e) {
     })
   );
 }
-function Gce({ error: e, readOnly: r, onAccept: t, onCancel: n, onRetry: o }) {
+function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
   const a = ne.useRef(null),
-    s = e.issues.some((d) => d.style === "stop" || d.evaluationError);
+    s = error.issues.some((d) => d.style === "stop" || d.evaluationError);
   return (
     ne.useEffect(() => {
       var u;
@@ -1060,7 +1060,11 @@ function Gce({ error: e, readOnly: r, onAccept: t, onCancel: n, onRetry: o }) {
       className: "wt-backdrop",
       style: { zIndex: 900 },
       onKeyDown: (d) => {
-        if ((d.stopPropagation(), d.key === "Escape" && n(), d.key === "Tab")) {
+        if (
+          (d.stopPropagation(),
+          d.key === "Escape" && onCancel(),
+          d.key === "Tab")
+        ) {
           const l = [
               ...(a.current?.querySelectorAll("button:not(:disabled)") ?? []),
             ],
@@ -1103,12 +1107,12 @@ function Gce({ error: e, readOnly: r, onAccept: t, onCancel: n, onRetry: o }) {
               }),
               i.jsxs("p", {
                 children: [
-                  e.issues.length,
+                  error.issues.length,
                   " ",
                   i.jsx(M, { children: "rule violations" }),
                 ],
               }),
-              e.issues.slice(0, 500).map((d, u) =>
+              error.issues.slice(0, 500).map((d, u) =>
                 i.jsxs(
                   "div",
                   {
@@ -1134,17 +1138,17 @@ function Gce({ error: e, readOnly: r, onAccept: t, onCancel: n, onRetry: o }) {
           i.jsxs("footer", {
             children: [
               i.jsx("button", {
-                onClick: o,
+                onClick: onRetry,
                 children: i.jsx(M, { children: "Return to edit" }),
               }),
               i.jsx("button", {
-                onClick: n,
+                onClick: onCancel,
                 children: i.jsx(M, { children: "Discard changes" }),
               }),
               !s &&
                 i.jsx("button", {
-                  disabled: r,
-                  onClick: t,
+                  disabled: readOnly,
+                  onClick: onAccept,
                   children: i.jsx(M, {
                     children: "Accept warnings and apply batch",
                   }),
