@@ -18,32 +18,26 @@ import {
   y0,
   z1,
 } from "./03-workbook-model.js";
-import { G4, Hue, Qb, T7, Wue, Xue, ey, o3, que } from "./11-workbook-formats-dialog.js";
+import {
+  G4,
+  Hue,
+  Qb,
+  T7,
+  Wue,
+  Xue,
+  ey,
+  o3,
+  que,
+} from "./11-workbook-formats-dialog.js";
 
 function m0(e, r) {
-  var $, U, G, H;
   if (!["precedents", "dependents"].includes(r.direction))
     throw Error("Choose precedents or dependents.");
   const t = G4(r.depth, 1, 8, "Inspection depth"),
-    n = G4(
-      ($ = r.limits) == null ? void 0 : $.maxFormulaCells,
-      5e3,
-      1e4,
-      "Formula scan limit",
-    ),
-    o = G4(
-      (U = r.limits) == null ? void 0 : U.maxNodes,
-      500,
-      1e3,
-      "Result cell limit",
-    ),
-    a = G4(
-      (G = r.limits) == null ? void 0 : G.maxReferences,
-      1e4,
-      5e4,
-      "Reference scan limit",
-    );
-  if (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+    n = G4(r.limits?.maxFormulaCells, 5e3, 1e4, "Formula scan limit"),
+    o = G4(r.limits?.maxNodes, 500, 1e3, "Result cell limit"),
+    a = G4(r.limits?.maxReferences, 1e4, 5e4, "Reference scan limit");
+  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
     r.allowedSheetIds &&
@@ -187,7 +181,6 @@ function m0(e, r) {
         }
       },
       W = (K, te, ae = [], oe) => {
-        var Se, le, ce, ge, se, we, Ee;
         if (++J > 64 || ae.length > 16) {
           ((y = true),
             A(
@@ -264,8 +257,7 @@ function m0(e, r) {
           }
           const Pe = que.exec(Ae);
           if (Pe || /^'(?:[^']|'')*:(?:[^']|'')*'\s*!/.test(Ae)) {
-            const Je =
-              (Pe == null ? void 0 : Pe[0]) ?? /^[^+*/(),;]+/.exec(Ae)[0];
+            const Je = Pe?.[0] ?? /^[^+*/(),;]+/.exec(Ae)[0];
             (A(
               Q.key,
               "unsupported",
@@ -331,20 +323,16 @@ function m0(e, r) {
               );
             else {
               const Ze =
-                ((Se = e.definedNames) == null
-                  ? void 0
-                  : Se.find(
-                      (lt) =>
-                        lt.scopeSheetId === ze.id &&
-                        lt.name.toLowerCase() === _e.toLowerCase(),
-                    )) ??
-                ((le = e.definedNames) == null
-                  ? void 0
-                  : le.find(
-                      (lt) =>
-                        !lt.scopeSheetId &&
-                        lt.name.toLowerCase() === _e.toLowerCase(),
-                    ));
+                e.definedNames?.find(
+                  (lt) =>
+                    lt.scopeSheetId === ze.id &&
+                    lt.name.toLowerCase() === _e.toLowerCase(),
+                ) ??
+                e.definedNames?.find(
+                  (lt) =>
+                    !lt.scopeSheetId &&
+                    lt.name.toLowerCase() === _e.toLowerCase(),
+                );
               if (!Ze)
                 A(
                   Q.key,
@@ -387,17 +375,13 @@ function m0(e, r) {
               );
             else if (!Xue.has(Je)) {
               const ze =
-                ((ce = e.definedNames) == null
-                  ? void 0
-                  : ce.find(
-                      (at) =>
-                        at.scopeSheetId === te && at.name.toUpperCase() === Je,
-                    )) ??
-                ((ge = e.definedNames) == null
-                  ? void 0
-                  : ge.find(
-                      (at) => !at.scopeSheetId && at.name.toUpperCase() === Je,
-                    ));
+                e.definedNames?.find(
+                  (at) =>
+                    at.scopeSheetId === te && at.name.toUpperCase() === Je,
+                ) ??
+                e.definedNames?.find(
+                  (at) => !at.scopeSheetId && at.name.toUpperCase() === Je,
+                );
               if (ze) {
                 const at = `${ze.scopeSheetId ?? ""}:${ze.name.toLowerCase()}`;
                 ae.includes(at)
@@ -426,16 +410,10 @@ function m0(e, r) {
           }
           const ke = Hue.exec(Ae);
           if (ke && !/[A-Za-z0-9_.!:]/.test(Ae[ke[0].length] ?? "")) {
-            const Je =
-                (se = ke[1]) == null
-                  ? void 0
-                  : se.trim().replace(/!\s*$/, "").trim(),
-              ze =
-                Je == null
-                  ? void 0
-                  : Je.replace(/^'|'$/g, "").replace(/''/g, "'"),
+            const Je = ke[1]?.trim().replace(/!\s*$/, "").trim(),
+              ze = Je?.replace(/^'|'$/g, "").replace(/''/g, "'"),
               at =
-                ze === void 0
+                ze === undefined
                   ? s.get(te)
                   : e.sheets.find(
                       (_e) => _e.name.toLowerCase() === ze.toLowerCase(),
@@ -484,20 +462,16 @@ function m0(e, r) {
               continue;
             }
             const at =
-              ((we = e.definedNames) == null
-                ? void 0
-                : we.find(
-                    (_e) =>
-                      _e.scopeSheetId === te &&
-                      _e.name.toLowerCase() === Je.toLowerCase(),
-                  )) ??
-              ((Ee = e.definedNames) == null
-                ? void 0
-                : Ee.find(
-                    (_e) =>
-                      !_e.scopeSheetId &&
-                      _e.name.toLowerCase() === Je.toLowerCase(),
-                  ));
+              e.definedNames?.find(
+                (_e) =>
+                  _e.scopeSheetId === te &&
+                  _e.name.toLowerCase() === Je.toLowerCase(),
+              ) ??
+              e.definedNames?.find(
+                (_e) =>
+                  !_e.scopeSheetId &&
+                  _e.name.toLowerCase() === Je.toLowerCase(),
+              );
             if (at) {
               const _e = `${at.scopeSheetId ?? ""}:${at.name.toLowerCase()}`;
               ae.includes(_e)
@@ -595,7 +569,7 @@ function m0(e, r) {
     const X = I.get(Q);
     (r.direction === "precedents"
       ? ey(X.sheet.cells[X.address]) &&
-        ((((H = v.get(Q)) == null ? void 0 : H.length) ?? 0) > 0 || !v.has(Q))
+        ((v.get(Q)?.length ?? 0) > 0 || !v.has(Q))
       : m.some((J) => {
           const q = _t(X.address),
             W = ct(J.range);
@@ -663,13 +637,13 @@ function m0(e, r) {
           sheetId: X.sheet.id,
           sheetName: X.sheet.name,
           address: X.address,
-          raw: (J == null ? void 0 : J.raw) ?? null,
+          raw: J?.raw ?? null,
           depth: X.depth,
         };
       if (!ey(J))
         return {
           ...q,
-          result: (J == null ? void 0 : J.raw) ?? null,
+          result: J?.raw ?? null,
           resultStatus: "literal",
         };
       if (!C(Q))
@@ -754,16 +728,16 @@ const Ik = Object.freeze({
     Object.keys(e).every((t) => r.includes(t));
 function K$(e, r, t) {
   if (
-    e !== void 0 &&
+    e !== undefined &&
     (!N7(e, ["trim", "collapseWhitespace", "ignoreCase", "unicode"]) ||
       [e.trim, e.collapseWhitespace, e.ignoreCase].some(
-        (n) => n !== void 0 && typeof n != "boolean",
+        (n) => n !== undefined && typeof n != "boolean",
       ) ||
-      (e.unicode !== void 0 && !["NFC", "NFKC"].includes(e.unicode)))
+      (e.unicode !== undefined && !["NFC", "NFKC"].includes(e.unicode)))
   )
     throw Error("Invalid explicit key normalization options.");
   if (
-    r !== void 0 &&
+    r !== undefined &&
     (!N7(r, ["key", "threshold"]) ||
       !Number.isInteger(r.key) ||
       r.key < 0 ||
@@ -828,7 +802,7 @@ function Y$(e, r, t, n, o, a) {
             normalized: $,
           });
         const U = $.some(Zue),
-          G = a ? $[a.key] : void 0,
+          G = a ? $[a.key] : undefined,
           H = !!a && !U && typeof G != "string";
         H &&
           s.exceptions.push({
@@ -849,7 +823,7 @@ function Y$(e, r, t, n, o, a) {
           valid: !U && !H,
           isBlank: U,
           key: ty($),
-          block: ty($.filter((X, J) => J !== (a == null ? void 0 : a.key))),
+          block: ty($.filter((X, J) => J !== a?.key)),
           chars: Q,
         };
       }),
@@ -942,7 +916,7 @@ function Y$(e, r, t, n, o, a) {
         ? "Blank join key; blanks do not match."
         : C.valid
           ? a
-            ? T === void 0
+            ? T === undefined
               ? "No eligible text candidate with matching exact keys."
               : `Best eligible similarity ${T.toFixed(6)} is below threshold ${a.threshold}.`
             : N.has(A(C.values))
@@ -1143,10 +1117,10 @@ function J$(e, r, t = {}) {
   (!Array.isArray(r) || !r.length || r.length > 8) &&
     Kn("Read one to eight explicit source rectangles.");
   const n = r.map(mT);
-  (t.includeHidden !== void 0 &&
+  (t.includeHidden !== undefined &&
     typeof t.includeHidden != "boolean" &&
     Kn("Include hidden must be boolean."),
-    t.allowedSheetIds !== void 0 &&
+    t.allowedSheetIds !== undefined &&
       (!Array.isArray(t.allowedSheetIds) ||
         t.allowedSheetIds.some(
           (y) => typeof y != "string" || !e.sheets.some((w) => w.id === y),
@@ -1335,7 +1309,7 @@ function J$(e, r, t = {}) {
       for (let O = A.firstCol; O <= A.lastCol; O++) {
         const j = dh(F, O),
           z = E.cells[j],
-          V = Wv(z) ? p(E.id, j) : ((z == null ? void 0 : z.raw) ?? null);
+          V = Wv(z) ? p(E.id, j) : (z?.raw ?? null);
         (((Wv(z) && typeof V == "string" && m.test(V)) ||
           (typeof V == "number" && !Number.isFinite(V)) ||
           (typeof V == "string" && V.length > Wu.textCharacters)) &&
@@ -1363,15 +1337,11 @@ function J$(e, r, t = {}) {
       "A source encountered an operational calculation failure, including an error hidden by a formula handler.",
     );
   const b = [...s].sort().map((y) => {
-    var A;
     const [w, E] = JSON.parse(y);
     return {
       sheetId: w,
       address: E,
-      cell:
-        ((A = e.sheets.find((k) => k.id === w)) == null
-          ? void 0
-          : A.cells[E]) ?? null,
+      cell: e.sheets.find((k) => k.id === w)?.cells[E] ?? null,
     };
   });
   return { grids: g, dependencyCells: b };
@@ -1442,10 +1412,10 @@ function Q$(e, r, t = {}) {
       (z) => z.name.toLowerCase() === r.outputSheetName.toLowerCase(),
     ) && Kn("The output sheet name already exists. Choose a new sheet name."),
     q1(e, r.outputSheetName),
-    t.includeHidden !== void 0 &&
+    t.includeHidden !== undefined &&
       typeof t.includeHidden != "boolean" &&
       Kn("Include hidden must be boolean."),
-    t.allowedSheetIds !== void 0 &&
+    t.allowedSheetIds !== undefined &&
       (!Array.isArray(t.allowedSheetIds) ||
         t.allowedSheetIds.some(
           (z) => typeof z != "string" || !e.sheets.some((V) => V.id === z),
@@ -1464,11 +1434,11 @@ function Q$(e, r, t = {}) {
       outputSheetName: r.outputSheetName,
     };
   o.mode === "append"
-    ? ((r.normalization !== void 0 || r.fuzzy !== void 0) &&
+    ? ((r.normalization !== undefined || r.fuzzy !== undefined) &&
         Kn(
           "Append aligns headers; key normalization and fuzzy matching apply only to joins.",
         ),
-      r.keys !== void 0 &&
+      r.keys !== undefined &&
         (!Array.isArray(r.keys) || r.keys.length) &&
         Kn("Append matches headers; it does not accept join keys."))
     : ((!Array.isArray(r.keys) ||
@@ -1624,16 +1594,15 @@ function Q$(e, r, t = {}) {
         style: { bold: true, fill: "#E2F0D9" },
       };
     }),
-    (k.cells.A1.note = `Reviewed ${o.mode} values snapshot; source workbook ${e.id}, revision ${e.revision}. Left: '${s.sheetName}'!${s.source.range} (${s.records.length} records); right: '${d.sheetName}'!${d.source.range} (${d.records.length} records). Keys: ${o.keys ? JSON.stringify(o.keys) : "exact matching headers"}. ${(f == null ? void 0 : f.policy) ?? "Append by exact headers."} Normalization: ${JSON.stringify(o.normalization ?? {})}; blank keys do not match. Matched left/right: ${m}/${v}; match pairs: ${g}; unmatched left/right: ${l.length}/${c.length}; output records: ${u.length}. Duplicate key groups left/right: ${b}/${y}; many-to-many groups: ${w}; extra many-to-many pairs: ${E}. Hidden sources explicitly included: ${n.includeHidden}. Filter views do not exclude records. This snapshot does not automatically refresh.`),
+    (k.cells.A1.note = `Reviewed ${o.mode} values snapshot; source workbook ${e.id}, revision ${e.revision}. Left: '${s.sheetName}'!${s.source.range} (${s.records.length} records); right: '${d.sheetName}'!${d.source.range} (${d.records.length} records). Keys: ${o.keys ? JSON.stringify(o.keys) : "exact matching headers"}. ${f?.policy ?? "Append by exact headers."} Normalization: ${JSON.stringify(o.normalization ?? {})}; blank keys do not match. Matched left/right: ${m}/${v}; match pairs: ${g}; unmatched left/right: ${l.length}/${c.length}; output records: ${u.length}. Duplicate key groups left/right: ${b}/${y}; many-to-many groups: ${w}; extra many-to-many pairs: ${E}. Hidden sources explicitly included: ${n.includeHidden}. Filter views do not exclude records. This snapshot does not automatically refresh.`),
     u.forEach((z, V) =>
       [...z.values, z.left, z.right].forEach((D, B) => {
-        var _;
         k.cells[dh(V + 1, B)] = {
           raw: D,
           ...(typeof D == "string" && D.startsWith("=")
             ? { literal: true }
             : {}),
-          note: `Combined values snapshot. Left source: ${z.left ?? "unmatched / not applicable"}. Right source: ${z.right ?? "unmatched / not applicable"}. Workbook ${e.id}; revision ${e.revision}. ${((_ = z.match) == null ? void 0 : _.explanation) ?? "No matched pair / append source record."}`,
+          note: `Combined values snapshot. Left source: ${z.left ?? "unmatched / not applicable"}. Right source: ${z.right ?? "unmatched / not applicable"}. Workbook ${e.id}; revision ${e.revision}. ${z.match?.explanation ?? "No matched pair / append source record."}`,
         };
       }),
     ));
@@ -1686,8 +1655,8 @@ function Yue(e, r, t = {}) {
 }
 function vI(e, r) {
   if (
-    (r.readOnly !== void 0 && typeof r.readOnly != "boolean") ||
-    (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+    (r.readOnly !== undefined && typeof r.readOnly != "boolean") ||
+    (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
   )
     throw Error("Host read-only and hidden-source policies must be boolean.");
   const t = r.allowedSheetIds ?? e.sheets.map((o) => o.id);
@@ -1708,7 +1677,7 @@ function vI(e, r) {
         o.allowedSheetIds.some(
           (a) => !o.workbook.sheets.some((s) => s.id === a),
         ) ||
-        (o.includeHidden !== void 0 && typeof o.includeHidden != "boolean"),
+        (o.includeHidden !== undefined && typeof o.includeHidden != "boolean"),
     )
   )
     throw Error(
@@ -1717,11 +1686,10 @@ function vI(e, r) {
   return { allowed: t, external: n };
 }
 function ez(e, r, t) {
-  var f;
   const n = vI(e, t),
     o = n.external.find((p) => p.workbook.id === r.workbookId),
     a = r.workbookId === e.id,
-    s = a ? e : o == null ? void 0 : o.workbook;
+    s = a ? e : o?.workbook;
   if (!s)
     throw Error(
       "Source workbook is missing or has not been approved. Attach and approve the exact workbook identity before refreshing.",
@@ -1734,8 +1702,7 @@ function ez(e, r, t) {
     );
   let l = r.range;
   if (r.tableId) {
-    const p =
-      (f = u.tables) == null ? void 0 : f.find((v) => v.id === r.tableId);
+    const p = u.tables?.find((v) => v.id === r.tableId);
     if (!p) throw Error("Source table is missing. Review the source mapping.");
     const m = ct(p.range);
     l = `${ut(m.firstCol)}${m.firstRow + 1}:${ut(m.lastCol)}${m.lastRow + 1 - (p.showTotals ? 1 : 0)}`;
@@ -1821,9 +1788,9 @@ function Jue(e, r, t = {}) {
       const g = new Map(),
         b = [];
       for (const y of l.records) {
-        let w = !1;
+        let w = false;
         const E = (V, D) => {
-            (s(d.id, V, D, y.row), (w = !0));
+            (s(d.id, V, D, y.row), (w = true));
           },
           A = f.map((V) => y.values[V]),
           k = y.values[p],
@@ -1876,7 +1843,7 @@ function Jue(e, r, t = {}) {
         }
         const j = DR(A),
           z = g.get(j);
-        (z !== void 0
+        (z !== undefined
           ? (s(
               d.id,
               "duplicate-category",
@@ -1884,7 +1851,7 @@ function Jue(e, r, t = {}) {
               y.row,
               d.duplicatePolicy === "sum" ? "warning" : "error",
             ),
-            d.duplicatePolicy === "reject" && (w = !0))
+            d.duplicatePolicy === "reject" && (w = true))
           : g.set(j, y.row),
           w ||
             b.push({
@@ -2002,9 +1969,9 @@ function nz(e, r) {
     for (let s = t.firstCol; s <= t.lastCol; s++) {
       const d = e.cells[`${ut(s)}${o + 1}`];
       a.push({
-        raw: (d == null ? void 0 : d.raw) ?? null,
+        raw: d?.raw ?? null,
         literal: !!(d != null && d.literal),
-        note: (d == null ? void 0 : d.note) ?? "",
+        note: d?.note ?? "",
       });
     }
     n.push(a);

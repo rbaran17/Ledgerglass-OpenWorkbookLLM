@@ -6,7 +6,7 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { Bk, qce } from "./18-transformation-recipes-dialog.js";
 
 function Xce(e) {
-  var R, L, $, U, G, H, Q, X, J, q, W, K, te, ae;
+  var L, U, G, Q;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -23,19 +23,14 @@ function Xce(e) {
     [g, b] = ne.useState(""),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(""),
-    k =
-      (R = e.workbook.savedFilterViews) == null
-        ? void 0
-        : R.find((oe) => oe.id === g),
+    k = e.workbook.savedFilterViews?.find((oe) => oe.id === g),
     F =
       !!e.onWorkbookChange &&
       !e.readOnly &&
       !((L = e.workbook.structureProtection) != null && L.enabled) &&
       !(
-        (U =
-          ($ = e.workbook.sheets.find((oe) => oe.id === e.sheetId)) == null
-            ? void 0
-            : $.protection) != null && U.enabled
+        (U = e.workbook.sheets.find((oe) => oe.id === e.sheetId)?.protection) !=
+          null && U.enabled
       ),
     I =
       !!e.onWorkbookChange &&
@@ -43,10 +38,8 @@ function Xce(e) {
       !((G = e.workbook.structureProtection) != null && G.enabled) &&
       !!k &&
       !(
-        (Q =
-          (H = e.workbook.sheets.find((oe) => oe.id === k.sheetId)) == null
-            ? void 0
-            : H.protection) != null && Q.enabled
+        (Q = e.workbook.sheets.find((oe) => oe.id === k.sheetId)?.protection) !=
+          null && Q.enabled
       ),
     O = ne.useMemo(() => {
       try {
@@ -54,11 +47,10 @@ function Xce(e) {
         return Array.from(
           { length: Math.min(64, oe.lastCol - oe.firstCol + 1) },
           (de, he) => {
-            var le, ce;
             const Se = oe.firstCol + he;
             return {
               column: Se,
-              label: `${ut(Se)} · ${String(((ce = (le = e.workbook.sheets.find((ge) => ge.id === e.sheetId)) == null ? void 0 : le.cells[`${ut(Se)}${oe.firstRow + 1}`]) == null ? void 0 : ce.raw) ?? "Column")}`,
+              label: `${ut(Se)} · ${String(e.workbook.sheets.find((ge) => ge.id === e.sheetId)?.cells[`${ut(Se)}${oe.firstRow + 1}`]?.raw ?? "Column")}`,
             };
           },
         );
@@ -71,15 +63,14 @@ function Xce(e) {
         return { result: FO(e.workbook, e.sheetId, s, u, c), error: "" };
       } catch (oe) {
         return {
-          result: void 0,
+          result: undefined,
           error: oe instanceof Error ? oe.message : "Cannot inspect values.",
         };
       }
     }, [e.workbook, e.sheetId, s, u, c]),
     z = s.columns.find((oe) => oe.column === u) ?? { column: u },
     V =
-      (f == null ? void 0 : f.book) === e.workbook &&
-      f.definition === JSON.stringify(s)
+      f?.book === e.workbook && f.definition === JSON.stringify(s)
         ? f.result
         : null;
   function D() {
@@ -104,7 +95,7 @@ function Xce(e) {
           e.sheetId,
           de.context.definition,
           y,
-          oe ? g : void 0,
+          oe ? g : undefined,
         );
       (e.onWorkbookChange(
         he,
@@ -123,7 +114,8 @@ function Xce(e) {
   ne.useEffect(() => {
     var oe, de;
     f &&
-      ((de = (oe = a.current) == null ? void 0 : oe.scrollIntoView) == null ||
+      ((de = (oe = a.current) == null ? undefined : oe.scrollIntoView) ==
+        null ||
         de.call(oe, { block: "nearest" }));
   }, [f]);
   function _(oe) {
@@ -135,7 +127,7 @@ function Xce(e) {
   }
   function C(oe) {
     const de = FO(e.workbook, e.sheetId, s, u);
-    if (z.values === void 0 && de.truncated) {
+    if (z.values === undefined && de.truncated) {
       v(
         "Choose Select no values first, then select specific values, or use a custom condition.",
       );
@@ -153,15 +145,11 @@ function Xce(e) {
   }
   function T(oe, de, he) {
     d((Se) => {
-      var le;
       return {
         ...Se,
-        advanced:
-          (le = Se.advanced) == null
-            ? void 0
-            : le.map((ce, ge) =>
-                ge === oe ? ce.map((se, we) => (we === de ? he : se)) : ce,
-              ),
+        advanced: Se.advanced?.map((ce, ge) =>
+          ge === oe ? ce.map((se, we) => (we === de ? he : se)) : ce,
+        ),
       };
     });
   }
@@ -288,18 +276,16 @@ function Xce(e) {
         ref: o,
         tabIndex: -1,
         onKeyDown: (oe) => {
-          var de, he, Se;
+          var he, Se;
           if (
             (oe.stopPropagation(),
             oe.key === "Escape" && (oe.preventDefault(), e.onClose()),
             oe.key === "Tab")
           ) {
             const le = [
-              ...(((de = o.current) == null
-                ? void 0
-                : de.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
-                  )) ?? []),
+              ...(o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
+              ) ?? []),
             ];
             oe.shiftKey && [le[0], o.current].includes(document.activeElement)
               ? (oe.preventDefault(), (he = le.at(-1)) == null || he.focus())
@@ -350,9 +336,7 @@ function Xce(e) {
                   i.jsxs("summary", {
                     children: [
                       i.jsx(M, { children: "Saved filter views (" }),
-                      ((X = e.workbook.savedFilterViews) == null
-                        ? void 0
-                        : X.length) ?? 0,
+                      e.workbook.savedFilterViews?.length ?? 0,
                       ")",
                     ],
                   }),
@@ -372,17 +356,11 @@ function Xce(e) {
                             "aria-label": r("Saved filter view"),
                             value: g,
                             onChange: (oe) => {
-                              var de, he;
                               (b(oe.target.value),
                                 w(
-                                  ((he =
-                                    (de = e.workbook.savedFilterViews) == null
-                                      ? void 0
-                                      : de.find(
-                                          (Se) => Se.id === oe.target.value,
-                                        )) == null
-                                    ? void 0
-                                    : he.name) ?? "",
+                                  e.workbook.savedFilterViews?.find(
+                                    (Se) => Se.id === oe.target.value,
+                                  )?.name ?? "",
                                 ),
                                 A(""),
                                 v(""));
@@ -394,29 +372,24 @@ function Xce(e) {
                                 value: "",
                                 children: "Choose a saved view",
                               }),
-                              (J = e.workbook.savedFilterViews) == null
-                                ? void 0
-                                : J.map((oe) => {
-                                    var de;
-                                    return i.jsxs(
-                                      "option",
-                                      {
-                                        value: oe.id,
-                                        children: [
-                                          oe.name,
-                                          " ·",
-                                          " ",
-                                          ((de = e.workbook.sheets.find(
-                                            (he) => he.id === oe.sheetId,
-                                          )) == null
-                                            ? void 0
-                                            : de.name) ??
-                                            `${oe.sheetName} (sheet missing)`,
-                                        ],
-                                      },
-                                      oe.id,
-                                    );
-                                  }),
+                              e.workbook.savedFilterViews?.map((oe) => {
+                                return i.jsxs(
+                                  "option",
+                                  {
+                                    value: oe.id,
+                                    children: [
+                                      oe.name,
+                                      " ·",
+                                      " ",
+                                      e.workbook.sheets.find(
+                                        (he) => he.id === oe.sheetId,
+                                      )?.name ??
+                                        `${oe.sheetName} (sheet missing)`,
+                                    ],
+                                  },
+                                  oe.id,
+                                );
+                              }),
                             ],
                           }),
                         ],
@@ -645,7 +618,7 @@ function Xce(e) {
                         className: "lg-filter-actions",
                         children: [
                           i.jsx("button", {
-                            onClick: () => _({ ...z, values: void 0 }),
+                            onClick: () => _({ ...z, values: undefined }),
                             children: i.jsx(M, {
                               children: "Select all values",
                             }),
@@ -666,7 +639,7 @@ function Xce(e) {
                       }),
                       j.error &&
                         i.jsx("p", { role: "alert", children: j.error }),
-                      ((q = j.result) == null ? void 0 : q.truncated) &&
+                      j.result?.truncated &&
                         i.jsxs("p", {
                           role: "status",
                           children: [
@@ -685,48 +658,42 @@ function Xce(e) {
                         "aria-label": r("Value slicer"),
                         lang: t("Value slicer"),
                         "data-ui-label": "Value slicer",
-                        children:
-                          (W = j.result) == null
-                            ? void 0
-                            : W.values.map((oe) => {
-                                var he;
-                                const de =
-                                  z.values === void 0 ||
-                                  z.values.some(
-                                    (Se) => eh(Se, s.caseSensitive) === oe.key,
-                                  );
-                                return i.jsxs(
-                                  "button",
-                                  {
-                                    "aria-pressed": de,
-                                    disabled:
-                                      z.values === void 0 &&
-                                      !!(
-                                        (he = j.result) != null && he.truncated
-                                      ),
-                                    onClick: () => C(oe.value),
-                                    children: [
-                                      i.jsxs("span", {
-                                        children: [
-                                          oe.value === null || oe.value === ""
-                                            ? "(Blanks)"
-                                            : String(oe.value),
-                                          " ",
-                                          i.jsx("small", {
-                                            children:
-                                              oe.value === null ||
-                                              oe.value === ""
-                                                ? ""
-                                                : typeof oe.value,
-                                          }),
-                                        ],
-                                      }),
-                                      i.jsx("span", { children: oe.count }),
-                                    ],
-                                  },
-                                  oe.key,
-                                );
-                              }),
+                        children: j.result?.values.map((oe) => {
+                          var he;
+                          const de =
+                            z.values === undefined ||
+                            z.values.some(
+                              (Se) => eh(Se, s.caseSensitive) === oe.key,
+                            );
+                          return i.jsxs(
+                            "button",
+                            {
+                              "aria-pressed": de,
+                              disabled:
+                                z.values === undefined &&
+                                !!((he = j.result) != null && he.truncated),
+                              onClick: () => C(oe.value),
+                              children: [
+                                i.jsxs("span", {
+                                  children: [
+                                    oe.value === null || oe.value === ""
+                                      ? "(Blanks)"
+                                      : String(oe.value),
+                                    " ",
+                                    i.jsx("small", {
+                                      children:
+                                        oe.value === null || oe.value === ""
+                                          ? ""
+                                          : typeof oe.value,
+                                    }),
+                                  ],
+                                }),
+                                i.jsx("span", { children: oe.count }),
+                              ],
+                            },
+                            oe.key,
+                          );
+                        }),
                       }),
                       i.jsx("button", {
                         onClick: () =>
@@ -759,28 +726,22 @@ function Xce(e) {
                               N(
                                 oe,
                                 (he) => {
-                                  var Se;
                                   return _({
                                     ...z,
-                                    conditions:
-                                      (Se = z.conditions) == null
-                                        ? void 0
-                                        : Se.map((le, ce) =>
-                                            ce === de ? he : le,
-                                          ),
+                                    conditions: z.conditions?.map((le, ce) =>
+                                      ce === de ? he : le,
+                                    ),
                                   });
                                 },
                                 `Column condition ${de + 1}`,
                               ),
                               i.jsxs("button", {
                                 onClick: () => {
-                                  var he;
                                   return _({
                                     ...z,
-                                    conditions:
-                                      (he = z.conditions) == null
-                                        ? void 0
-                                        : he.filter((Se, le) => le !== de),
+                                    conditions: z.conditions?.filter(
+                                      (Se, le) => le !== de,
+                                    ),
                                   });
                                 },
                                 children: [
@@ -794,9 +755,7 @@ function Xce(e) {
                         ),
                       ),
                       i.jsx("button", {
-                        disabled:
-                          (((K = z.conditions) == null ? void 0 : K.length) ??
-                            0) >= 2,
+                        disabled: (z.conditions?.length ?? 0) >= 2,
                         onClick: () =>
                           _({
                             ...z,
@@ -806,8 +765,7 @@ function Xce(e) {
                           children: "Add column condition",
                         }),
                       }),
-                      (((te = z.conditions) == null ? void 0 : te.length) ??
-                        0) > 1 &&
+                      (z.conditions?.length ?? 0) > 1 &&
                         i.jsxs("label", {
                           children: [
                             i.jsx(M, { children: "Combine conditions" }),
@@ -852,112 +810,97 @@ function Xce(e) {
                         "Meet every condition within a group (AND), and at least one group (OR). These groups also intersect with all column filters.",
                     }),
                   }),
-                  (ae = s.advanced) == null
-                    ? void 0
-                    : ae.map((oe, de) =>
-                        i.jsxs(
-                          "div",
-                          {
-                            className: "lg-filter-group",
+                  s.advanced?.map((oe, de) =>
+                    i.jsxs(
+                      "div",
+                      {
+                        className: "lg-filter-group",
+                        children: [
+                          i.jsxs("strong", {
                             children: [
-                              i.jsxs("strong", {
-                                children: [
-                                  i.jsx(M, { children: "OR group " }),
-                                  de + 1,
-                                ],
-                              }),
-                              oe.map((he, Se) =>
-                                i.jsxs(
-                                  "div",
-                                  {
-                                    children: [
-                                      N(
-                                        he,
-                                        (le) => T(de, Se, le),
-                                        `Group ${de + 1} condition ${Se + 1}`,
-                                        true,
-                                      ),
-                                      i.jsxs("button", {
-                                        onClick: () =>
-                                          d((le) => {
-                                            var ce;
-                                            return {
-                                              ...le,
-                                              advanced:
-                                                (ce = le.advanced) == null
-                                                  ? void 0
-                                                  : ce
-                                                      .map((ge, se) =>
-                                                        se === de
-                                                          ? ge.filter(
-                                                              (we, Ee) =>
-                                                                Ee !== Se,
-                                                            )
-                                                          : ge,
-                                                      )
-                                                      .filter(
-                                                        (ge) => ge.length,
-                                                      ),
-                                            };
-                                          }),
-                                        children: [
-                                          i.jsx(M, {
-                                            children: "Remove group ",
-                                          }),
-                                          de + 1,
-                                          " ",
-                                          i.jsx(M, { children: "condition " }),
-                                          Se + 1,
-                                        ],
-                                      }),
-                                    ],
-                                  },
-                                  Se,
-                                ),
-                              ),
-                              i.jsxs("button", {
-                                onClick: () =>
-                                  d((he) => {
-                                    var Se;
-                                    return {
-                                      ...he,
-                                      advanced:
-                                        (Se = he.advanced) == null
-                                          ? void 0
-                                          : Se.map((le, ce) =>
-                                              ce === de ? [...le, Bk(u)] : le,
-                                            ),
-                                    };
-                                  }),
-                                children: [
-                                  i.jsx(M, {
-                                    children: "Add AND condition to group ",
-                                  }),
-                                  de + 1,
-                                ],
-                              }),
-                              i.jsxs("button", {
-                                onClick: () =>
-                                  d((he) => {
-                                    var Se;
-                                    return {
-                                      ...he,
-                                      advanced:
-                                        (Se = he.advanced) == null
-                                          ? void 0
-                                          : Se.filter((le, ce) => ce !== de),
-                                    };
-                                  }),
-                                children: [
-                                  i.jsx(M, { children: "Remove group " }),
-                                  de + 1,
-                                ],
-                              }),
+                              i.jsx(M, { children: "OR group " }),
+                              de + 1,
                             ],
-                          },
-                          de,
-                        ),
-                      ),
+                          }),
+                          oe.map((he, Se) =>
+                            i.jsxs(
+                              "div",
+                              {
+                                children: [
+                                  N(
+                                    he,
+                                    (le) => T(de, Se, le),
+                                    `Group ${de + 1} condition ${Se + 1}`,
+                                    true,
+                                  ),
+                                  i.jsxs("button", {
+                                    onClick: () =>
+                                      d((le) => {
+                                        return {
+                                          ...le,
+                                          advanced: le.advanced
+                                            ?.map((ge, se) =>
+                                              se === de
+                                                ? ge.filter(
+                                                    (we, Ee) => Ee !== Se,
+                                                  )
+                                                : ge,
+                                            )
+                                            .filter((ge) => ge.length),
+                                        };
+                                      }),
+                                    children: [
+                                      i.jsx(M, {
+                                        children: "Remove group ",
+                                      }),
+                                      de + 1,
+                                      " ",
+                                      i.jsx(M, { children: "condition " }),
+                                      Se + 1,
+                                    ],
+                                  }),
+                                ],
+                              },
+                              Se,
+                            ),
+                          ),
+                          i.jsxs("button", {
+                            onClick: () =>
+                              d((he) => {
+                                return {
+                                  ...he,
+                                  advanced: he.advanced?.map((le, ce) =>
+                                    ce === de ? [...le, Bk(u)] : le,
+                                  ),
+                                };
+                              }),
+                            children: [
+                              i.jsx(M, {
+                                children: "Add AND condition to group ",
+                              }),
+                              de + 1,
+                            ],
+                          }),
+                          i.jsxs("button", {
+                            onClick: () =>
+                              d((he) => {
+                                return {
+                                  ...he,
+                                  advanced: he.advanced?.filter(
+                                    (le, ce) => ce !== de,
+                                  ),
+                                };
+                              }),
+                            children: [
+                              i.jsx(M, { children: "Remove group " }),
+                              de + 1,
+                            ],
+                          }),
+                        ],
+                      },
+                      de,
+                    ),
+                  ),
                   i.jsx("button", {
                     onClick: () =>
                       d((oe) => ({
@@ -1110,20 +1053,16 @@ function Gce({ error: e, readOnly: r, onAccept: t, onCancel: n, onRetry: o }) {
     s = e.issues.some((d) => d.style === "stop" || d.evaluationError);
   return (
     ne.useEffect(() => {
-      var d, u;
-      (u = (d = a.current) == null ? void 0 : d.querySelector("button")) ==
-        null || u.focus();
+      var u;
+      (u = a.current?.querySelector("button")) == null || u.focus();
     }, []),
     i.jsx("div", {
       className: "wt-backdrop",
       style: { zIndex: 900 },
       onKeyDown: (d) => {
-        var u;
         if ((d.stopPropagation(), d.key === "Escape" && n(), d.key === "Tab")) {
           const l = [
-              ...(((u = a.current) == null
-                ? void 0
-                : u.querySelectorAll("button:not(:disabled)")) ?? []),
+              ...(a.current?.querySelectorAll("button:not(:disabled)") ?? []),
             ],
             c = l[0],
             h = l.at(-1);

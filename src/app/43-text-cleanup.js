@@ -7,7 +7,6 @@ import { hz } from "./16-text-split-tools.js";
 import { Hi, IW, mS, o4e, vy } from "./42-combine-populations.js";
 
 function s4e(e) {
-  var U, G;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -20,11 +19,7 @@ function s4e(e) {
     [g, b] = ne.useState(null),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(0),
-    [k, F] = ne.useState(
-      ((G = (U = e.workbook.textCleanups) == null ? void 0 : U.at(-1)) == null
-        ? void 0
-        : G.id) ?? "",
-    ),
+    [k, F] = ne.useState(e.workbook.textCleanups?.at(-1)?.id ?? ""),
     [I, O] = ne.useState(0),
     j = [
       ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((H) => H.id)),
@@ -43,10 +38,7 @@ function s4e(e) {
       selection: [e.sheetId, e.range],
     }),
     D = JSON.stringify(e.workbook),
-    B =
-      (g == null ? void 0 : g.key) === V && g.plan.snapshot === D
-        ? g.plan
-        : null,
+    B = g?.key === V && g.plan.snapshot === D ? g.plan : null,
     _ = ne.useRef({ p: e, key: V, options: z });
   _.current = { p: e, key: V, options: z };
   const C = () => {
@@ -56,13 +48,10 @@ function s4e(e) {
     (d(e.range), b(null), w(""), (a.current = false));
   }, [e.sheetId, e.range]),
     ne.useEffect(() => {
-      var Q, X;
+      var X;
       const H = document.activeElement;
       return (
-        (X =
-          (Q = o.current) == null
-            ? void 0
-            : Q.querySelector("input:not(:disabled),button")) == null ||
+        (X = o.current?.querySelector("input:not(:disabled),button")) == null ||
           X.focus(),
         () => {
           H != null && H.isConnected && H.focus();
@@ -112,10 +101,10 @@ function s4e(e) {
     R = () => {
       if (!(!B || a.current))
         try {
-          if (_.current.key !== (g == null ? void 0 : g.key))
+          if (_.current.key !== g?.key)
             throw Error("The cleanup settings changed. Preview again.");
           const H = o4e(_.current.p.workbook, B, _.current.options);
-          ((a.current = !0),
+          ((a.current = true),
             _.current.p.onWorkbookChange(
               H,
               `Text cleanup: ${B.sourceSheetName}!${B.request.sourceRange} → ${B.request.outputName}`,
@@ -130,7 +119,7 @@ function s4e(e) {
     L = (e.workbook.textCleanups ?? []).filter((H) => {
       const Q = e.workbook.sheets.find((X) => X.id === H.sourceSheetId);
       return (
-        (e.allowedSheetIds === void 0 || j.includes(H.sourceSheetId)) &&
+        (e.allowedSheetIds === undefined || j.includes(H.sourceSheetId)) &&
         (z.includeHidden ||
           !Q ||
           (!Q.hidden &&
@@ -152,16 +141,15 @@ function s4e(e) {
       className: "ttc-dialog cleanup-dialog",
       ref: o,
       onKeyDown: (H) => {
-        var Q, X, J;
+        var X, J;
         if (
           (H.stopPropagation(),
           H.key === "Escape" && (H.preventDefault(), e.onClose()),
           H.key === "Tab")
         ) {
           const q = [
-            ...(((Q = o.current) == null
-              ? void 0
-              : Q.querySelectorAll("button,input,select,summary")) ?? []),
+            ...(o.current?.querySelectorAll("button,input,select,summary") ??
+              []),
           ].filter(
             (W) =>
               !W.matches(":disabled") &&
@@ -473,7 +461,6 @@ function s4e(e) {
                     }),
                     i.jsx("tbody", {
                       children: B.rows.slice(E * 20, E * 20 + 20).map((H) => {
-                        var Q, X;
                         return i.jsxs(
                           "tr",
                           {
@@ -481,11 +468,7 @@ function s4e(e) {
                               i.jsx("td", { children: H.sourceAddress }),
                               i.jsx("td", {
                                 children: i.jsx("code", {
-                                  children: vy(
-                                    ((Q = H.original) == null
-                                      ? void 0
-                                      : Q.raw) ?? null,
-                                  ),
+                                  children: vy(H.original?.raw ?? null),
                                 }),
                               }),
                               i.jsx("td", {
@@ -495,11 +478,9 @@ function s4e(e) {
                               }),
                               i.jsx("td", {
                                 children:
-                                  ((X = B.errors.find(
+                                  B.errors.find(
                                     (J) => J.sourceAddress === H.sourceAddress,
-                                  )) == null
-                                    ? void 0
-                                    : X.error) ?? typeof H.result,
+                                  )?.error ?? typeof H.result,
                               }),
                             ],
                           },
@@ -558,7 +539,7 @@ function s4e(e) {
                 children: [
                   i.jsx(M, { children: "Cleanup record" }),
                   i.jsx("select", {
-                    value: ($ == null ? void 0 : $.id) ?? "",
+                    value: $?.id ?? "",
                     onChange: (H) => {
                       (F(H.target.value), O(0));
                     },
@@ -732,13 +713,12 @@ const DW = [
   },
   vS = (e) => JSON.stringify(e);
 function cj(e) {
-  var t;
   if (e.kind === "pattern")
     return `Infer “${e.name}”: ${hz(e.pattern)} (${e.examples.length} examples)`;
   if (e.kind === "split")
     return `Split field ${e.column + 1}: ${e.mode === "fixed" ? "breaks " + e.breaks.join(", ") : "delimiters " + JSON.stringify(e.delimiters) + (e.collapse ? ", collapse consecutive" : "")}`;
   const r = e.columns.map((n) => n + 1).join(", ");
-  return `${(t = DW.find((n) => n[0] === e.kind)) == null ? void 0 : t[1]} · fields ${r}${e.kind === "convert" ? ` → ${e.to} (decimal ${e.decimal}, groups ${e.group || "none"}, dates ${e.dateOrder})` : e.kind === "fill" ? ` → ${e.direction}${e.groupColumns.length ? " within fields " + e.groupColumns.map((n) => n + 1).join(", ") : ""}` : e.kind === "concat" ? ` → ${e.name}; separator ${JSON.stringify(e.separator)}` : e.kind === "case" || e.kind === "trim" ? ` → ${e.mode}` : e.kind === "replace" ? ` ${JSON.stringify(e.find)} → ${JSON.stringify(e.replacement)}` : ""}`;
+  return `${DW.find((n) => n[0] === e.kind)?.[1]} · fields ${r}${e.kind === "convert" ? ` → ${e.to} (decimal ${e.decimal}, groups ${e.group || "none"}, dates ${e.dateOrder})` : e.kind === "fill" ? ` → ${e.direction}${e.groupColumns.length ? " within fields " + e.groupColumns.map((n) => n + 1).join(", ") : ""}` : e.kind === "concat" ? ` → ${e.name}; separator ${JSON.stringify(e.separator)}` : e.kind === "case" || e.kind === "trim" ? ` → ${e.mode}` : e.kind === "replace" ? ` ${JSON.stringify(e.find)} → ${JSON.stringify(e.replacement)}` : ""}`;
 }
 
 export { DW, cj, gS, s4e, vS };

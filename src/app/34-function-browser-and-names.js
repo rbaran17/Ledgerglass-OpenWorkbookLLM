@@ -1055,7 +1055,6 @@ const Ume = { family: "local", signature: "number" },
     "REGISTER.ID": "actuarial",
   });
 function Qwe(e) {
-  var t;
   if (((e = e.toUpperCase()), S3(e, AR))) return "database";
   if (Kwe.includes(e)) return "regression";
   if (Ywe.includes(e)) return "matrix";
@@ -1064,7 +1063,7 @@ function Qwe(e) {
   if (S3(e, QN)) return "statistics";
   if (zT[e]) return zT[e];
   if (e.startsWith("CUBE")) return "cube";
-  const r = (t = dW[e]) == null ? void 0 : t.family;
+  const r = dW[e]?.family;
   return r === "statistical"
     ? "statistics"
     : r === "distribution" || r === "engineering" || r === "financial"
@@ -1168,7 +1167,6 @@ const exe = {
   },
 };
 function d_(e) {
-  var a;
   const r = e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
     t = Qwe(r),
     n = exe[t],
@@ -1182,7 +1180,7 @@ function d_(e) {
         ? "connector-required"
         : "unimplemented",
     inputs:
-      ((a = dW[r]) == null ? void 0 : a.signature) ??
+      dW[r]?.signature ??
       "Not adopted; consult the source function or add-in contract.",
     outputs: o ? ($T[r] ?? n.output) : "No local implementation",
     errors: [
@@ -1247,7 +1245,7 @@ function rxe({
   onWorkbookChange: s,
   onInsertFormula: d,
 }) {
-  var de, he, Se, le, ce, ge;
+  var de, he;
   const { text: u, language: l } = Dr(),
     c = r.sheets.find((se) => se.id === t),
     [h, f] = ne.useState(""),
@@ -1255,7 +1253,7 @@ function rxe({
     [v, g] = ne.useState(n),
     [b, y] = ne.useState(""),
     [w, E] = ne.useState(
-      `='${((c == null ? void 0 : c.name) ?? "Sheet1").replace(/'/g, "''")}'!${n}`,
+      `='${(c?.name ?? "Sheet1").replace(/'/g, "''")}'!${n}`,
     ),
     [A, k] = ne.useState(""),
     [F, I] = ne.useState(""),
@@ -1321,7 +1319,7 @@ function rxe({
             ...(A ? { scopeSheetId: A } : {}),
             ...(F ? { comment: F } : {}),
           },
-          Ee = O === null || (se = r.definedNames) == null ? void 0 : se[O];
+          Ee = O === null || (se = r.definedNames) == null ? undefined : se[O];
         if (O !== null && !Ee)
           throw Error("The defined name no longer exists.");
         if (Ee && Ee.name !== we.name) {
@@ -1586,7 +1584,6 @@ function rxe({
                         }),
                         i.jsx("tbody", {
                           children: (r.definedNames ?? []).map((se, we) => {
-                            var Ee;
                             return i.jsxs(
                               "tr",
                               {
@@ -1612,11 +1609,9 @@ function rxe({
                                   }),
                                   i.jsx("td", {
                                     children: se.scopeSheetId
-                                      ? (Ee = r.sheets.find(
+                                      ? r.sheets.find(
                                           (Ae) => Ae.id === se.scopeSheetId,
-                                        )) == null
-                                        ? void 0
-                                        : Ee.name
+                                        )?.name
                                       : "Workbook",
                                   }),
                                   i.jsxs("td", {
@@ -1825,10 +1820,10 @@ function rxe({
                       i.jsxs("h3", {
                         children: [
                           i.jsx(M, { children: "Rename " }),
-                          (Se = T.before) == null ? void 0 : Se.name,
+                          T.before?.name,
                           " ",
                           i.jsx(M, { children: "to " }),
-                          (le = T.after) == null ? void 0 : le.name,
+                          T.after?.name,
                         ],
                       }),
                       i.jsxs("p", {
@@ -1854,14 +1849,12 @@ function rxe({
                           }),
                           " ",
                           i.jsx("code", {
-                            children:
-                              (ce = T.before) == null ? void 0 : ce.refersTo,
+                            children: T.before?.refersTo,
                           }),
                           " →",
                           " ",
                           i.jsx("code", {
-                            children:
-                              (ge = T.after) == null ? void 0 : ge.refersTo,
+                            children: T.after?.refersTo,
                           }),
                         ],
                       }),
@@ -1933,13 +1926,12 @@ function rxe({
                       i.jsx("button", {
                         disabled: Q,
                         onClick: () => {
-                          var se, we;
                           try {
                             const Ee = q6(r, T, { readOnly: Q });
                             (Ee !== r &&
                               s(
                                 Ee,
-                                `Rename name: ${(se = T.before) == null ? void 0 : se.name} → ${(we = T.after) == null ? void 0 : we.name}`,
+                                `Rename name: ${T.before?.name} → ${T.after?.name}`,
                               ),
                               te());
                           } catch (Ee) {

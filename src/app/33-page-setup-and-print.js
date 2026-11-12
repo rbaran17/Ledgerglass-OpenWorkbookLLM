@@ -18,10 +18,20 @@ import {
   ut,
 } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { Fme, Mme, Xz, cW, gw, k3, mw, qz, uW } from "./32-drawing-and-chart-export.js";
+import {
+  Fme,
+  Mme,
+  Xz,
+  cW,
+  gw,
+  k3,
+  mw,
+  qz,
+  uW,
+} from "./32-drawing-and-chart-export.js";
 
 function Bme(e) {
-  var X$1, J, q;
+  var X$1, q;
   const { text: r, language: t } = Dr(),
     n = ne.useRef(e);
   n.current = e;
@@ -40,8 +50,7 @@ function Bme(e) {
   ),
     ne.useEffect(
       () => () => {
-        var W;
-        return (W = a.current) == null ? void 0 : W.abort();
+        return a.current?.abort();
       },
       [],
     ));
@@ -72,16 +81,12 @@ function Bme(e) {
     [A, k] = ne.useState(""),
     [F, I] = ne.useState("office"),
     [O, j] = ne.useState(() => {
-      var W;
-      return (((W = b.pageLayout) == null ? void 0 : W.rowBreaks) ?? [])
+      return (b.pageLayout?.rowBreaks ?? [])
         .map((K) => String(K + 1))
         .join(", ");
     }),
     [z, V] = ne.useState(() => {
-      var W;
-      return (((W = b.pageLayout) == null ? void 0 : W.columnBreaks) ?? [])
-        .map(ut)
-        .join(", ");
+      return (b.pageLayout?.columnBreaks ?? []).map(ut).join(", ");
     });
   function D() {
     const W = (K, te) => {
@@ -144,7 +149,7 @@ function Bme(e) {
   const L = (W) => E((K) => ({ ...K, ...W }));
   function $() {
     try {
-      if ((y(!0), C.error)) throw Error(C.error);
+      if ((y(true), C.error)) throw Error(C.error);
       const W = oae(e.workbook, e.sheetId, C.layout, {
         readOnly: e.readOnly,
         expectedSnapshot: g.snapshot,
@@ -156,9 +161,8 @@ function Bme(e) {
     }
   }
   function U() {
-    var W, K;
     try {
-      y(!0);
+      y(true);
       const te = ct(e.range);
       if ((te.lastRow - te.firstRow + 1) * (te.lastCol - te.firstCol + 1) > 500)
         throw new Error("Select at most 500 cells to apply a theme.");
@@ -175,9 +179,9 @@ function Bme(e) {
         const he = ct(de).firstRow === te.firstRow;
         oe[de] = {
           ...oe[de],
-          raw: ((W = oe[de]) == null ? void 0 : W.raw) ?? null,
+          raw: oe[de]?.raw ?? null,
           style: {
-            ...((K = oe[de]) == null ? void 0 : K.style),
+            ...oe[de]?.style,
             fontFamily: "Calibri",
             fill: he ? ae[0] : ae[1],
             color: he ? "#FFFFFF" : "#242424",
@@ -884,11 +888,9 @@ function Bme(e) {
                           }),
                       ],
                     }),
-                    (J = C.notices) == null
-                      ? void 0
-                      : J.map((W) =>
-                          i.jsx("p", { className: "dg-muted", children: W }, W),
-                        ),
+                    C.notices?.map((W) =>
+                      i.jsx("p", { className: "dg-muted", children: W }, W),
+                    ),
                     C.ruleStyles.errors().length > 0 &&
                       i.jsxs("p", {
                         role: "alert",
@@ -1215,7 +1217,6 @@ const UT = {
     MIRR: "Calculates modified return using explicit finance and reinvestment rates",
   };
 function Lme(e, r, t, n) {
-  var k, F;
   if (!e.startsWith("=")) return { items: [] };
   const o = e.slice(0, r);
   let a = false;
@@ -1232,12 +1233,9 @@ function Lme(e, r, t, n) {
     if (!a)
       if (o[I] === "(") {
         const O =
-          ((F =
-            (k = /([A-Za-z][A-Za-z0-9_.]*)\s*$/.exec(o.slice(0, I))) == null
-              ? void 0
-              : k[1]) == null
-            ? void 0
-            : F.toUpperCase()) ?? "";
+          /([A-Za-z][A-Za-z0-9_.]*)\s*$/
+            .exec(o.slice(0, I))?.[1]
+            ?.toUpperCase() ?? "";
         s.push({ name: O, argumentIndex: 0 });
       } else
         o[I] === ")"
@@ -1247,15 +1245,15 @@ function Lme(e, r, t, n) {
   if (a) return { items: [] };
   const d = z3(t),
     u = s.at(-1),
-    l = d.find((I) => I.name === (u == null ? void 0 : u.name)),
+    l = d.find((I) => I.name === u?.name),
     c =
       u != null && u.name
         ? [
             ...(t.definedNames ?? []).filter((I) => I.scopeSheetId === n),
             ...(t.definedNames ?? []).filter((I) => !I.scopeSheetId),
           ].find((I) => I.name.toUpperCase() === u.name)
-        : void 0,
-    h = c ? $p(c.refersTo) : void 0,
+        : undefined,
+    h = c ? $p(c.refersTo) : undefined,
     f =
       u != null && u.name && (Fc.includes(u.name) || h || l)
         ? {
@@ -1267,11 +1265,11 @@ function Lme(e, r, t, n) {
                   ? h.join(", ")
                   : UT[u.name]) ?? "value1, [value2], …",
           }
-        : void 0,
+        : undefined,
     p = /([A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?)$/.exec(o),
     m = /^=\s*$/.test(o);
   if (!p && !m) return { items: [], hint: f };
-  const v = (p == null ? void 0 : p[1]) ?? "",
+  const v = p?.[1] ?? "",
     g = p ? r - v.length : r;
   if (g > 0 && /[A-Za-z0-9_$!']/.test(e[g - 1])) return { items: [], hint: f };
   const b = v.toLowerCase(),

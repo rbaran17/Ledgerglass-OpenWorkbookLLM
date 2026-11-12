@@ -17,7 +17,7 @@ function ane(e, r, t) {
     },
     o = (h, f) => {
       if (t.isIssue(h)) throw h;
-      if (h === void 0 && f !== void 0) return f;
+      if (h === undefined && f !== undefined) return f;
       if (Array.isArray(h) || (typeof h == "string" && !h.trim())) return n();
       const p = Number(h);
       return Number.isFinite(p) ? p : n();
@@ -69,7 +69,7 @@ function ane(e, r, t) {
     }[e];
   if (
     (c && (r.length < c[0] || r.length > c[1]) && n(),
-    c && e !== "SEQUENCE" && u[0] === void 0 && n(),
+    c && e !== "SEQUENCE" && u[0] === undefined && n(),
     c && !["HSTACK", "VSTACK"].includes(e) && t.isIssue(u[0]))
   )
     throw u[0];
@@ -210,9 +210,9 @@ function ane(e, r, t) {
     ((r.length < (e === "XMATCH" ? 2 : 3) ||
       r.length > (e === "XMATCH" ? 4 : 6)) &&
       n(),
-      (u[0] === void 0 ||
-        u[1] === void 0 ||
-        (e === "XLOOKUP" && u[2] === void 0)) &&
+      (u[0] === undefined ||
+        u[1] === undefined ||
+        (e === "XLOOKUP" && u[2] === undefined)) &&
         n());
     const h = u[0],
       f = Ya(u[1]);
@@ -260,12 +260,12 @@ function ane(e, r, t) {
               w > 1e5 && n("#LIMIT!"),
               t.matches(p[A], `=${h}`)),
       );
-    if (E === void 0 && (m === -1 || m === 1)) {
+    if (E === undefined && (m === -1 || m === 1)) {
       const A = y.filter((k) => Math.sign(j2(p[k], h)) === m);
       (A.sort((k, F) => j2(p[k], p[F]) * m), (E = A[0]));
     }
-    return E === void 0
-      ? e === "XLOOKUP" && u[3] !== void 0
+    return E === undefined
+      ? e === "XLOOKUP" && u[3] !== undefined
         ? (u[3] ?? 0)
         : n("#N/A")
       : e === "XMATCH"
@@ -279,7 +279,7 @@ function ane(e, r, t) {
             : b.map((A) => [A[E]]);
   }
   if (e === "SEQUENCE") {
-    u[0] === void 0 && u[1] === void 0 && n();
+    u[0] === undefined && u[1] === undefined && n();
     const h = a(u[0], 1),
       f = a(u[1], 1),
       p = o(u[2], 1),
@@ -294,7 +294,7 @@ function ane(e, r, t) {
   if (e === "FILTER") {
     const h = Ya(u[0]),
       f = Ya(u[1]);
-    u[1] === void 0 && n();
+    u[1] === undefined && n();
     const p = Ec(f).find(t.isIssue);
     if (p) throw p;
     let m;
@@ -304,7 +304,7 @@ function ane(e, r, t) {
       m = h.map((v) => v.filter((g, b) => d(f[0][b])));
     else return n();
     return !m.length || !m[0].length
-      ? u[2] !== void 0
+      ? u[2] !== undefined
         ? Ya(u[2])
         : n("#CALC!")
       : m;
@@ -315,7 +315,7 @@ function ane(e, r, t) {
     const h = Ya(u[0]).map((b) => [...b]);
     if (e === "SORTBY") {
       const b = Ya(u[1]);
-      u[1] === void 0 && n();
+      u[1] === undefined && n();
       const y =
           b.length === 1 &&
           b[0].length === h[0].length &&
@@ -323,7 +323,7 @@ function ane(e, r, t) {
         w = y ? h[0].length : h.length,
         E = [];
       for (let k = 1; k < u.length; k += 2) {
-        u[k] === void 0 && n();
+        u[k] === undefined && n();
         const F = Ya(u[k]),
           I = o(u[k + 1], 1);
         ((y
@@ -347,7 +347,7 @@ function ane(e, r, t) {
     }
     const f = a(u[1], 1) - 1,
       p = o(u[2], 1),
-      m = u[3] === void 0 ? false : d(u[3]);
+      m = u[3] === undefined ? false : d(u[3]);
     [-1, 1].includes(p) || n();
     const v = m ? h[0].map((b, y) => h.map((w) => w[y])) : h;
     (f < 0 || f >= v[0].length) && n();
@@ -360,8 +360,8 @@ function ane(e, r, t) {
   }
   if (e === "UNIQUE") {
     const h = Ya(u[0]),
-      f = u[1] === void 0 ? false : d(u[1]),
-      p = u[2] === void 0 ? false : d(u[2]),
+      f = u[1] === undefined ? false : d(u[1]),
+      p = u[2] === undefined ? false : d(u[2]),
       m = f ? h[0].map((w, E) => h.map((A) => A[E])) : h,
       v = (w) =>
         JSON.stringify(
@@ -381,10 +381,10 @@ function ane(e, r, t) {
   }
   if (e === "TAKE" || e === "DROP") {
     const h = Ya(u[0]),
-      f = u[1] === void 0 ? void 0 : a(u[1]),
-      p = u[2] === void 0 ? void 0 : a(u[2]),
+      f = u[1] === undefined ? undefined : a(u[1]),
+      p = u[2] === undefined ? undefined : a(u[2]),
       m = (g, b) =>
-        b === void 0
+        b === undefined
           ? g
           : e === "TAKE"
             ? b > 0
@@ -393,7 +393,8 @@ function ane(e, r, t) {
             : b >= 0
               ? g.slice(b)
               : g.slice(0, b);
-    (f === void 0 && p === void 0 && n(), (f === 0 || p === 0) && n("#CALC!"));
+    (f === undefined && p === undefined && n(),
+      (f === 0 || p === 0) && n("#CALC!"));
     const v = m(h, f).map((g) => m(g, p));
     return ((!v.length || !v[0].length) && n("#CALC!"), v);
   }
@@ -445,7 +446,7 @@ function ane(e, r, t) {
   if (e === "TOCOL" || e === "TOROW") {
     const h = Ya(u[0]),
       f = a(u[1], 0),
-      p = u[2] === void 0 ? false : d(u[2]);
+      p = u[2] === undefined ? false : d(u[2]);
     [0, 1, 2, 3].includes(f) || n();
     const m = (
       p ? h[0].flatMap((v, g) => h.map((b) => b[g])) : h.flat()
@@ -489,7 +490,7 @@ function ane(e, r, t) {
       (y.push(A), (E = A + b.length));
     }
     const w = y[p > 0 ? p - 1 : y.length + p];
-    return w === void 0
+    return w === undefined
       ? v && Math.abs(p) === y.length + 1
         ? e === "TEXTBEFORE"
           ? p > 0
@@ -498,7 +499,7 @@ function ane(e, r, t) {
           : p > 0
             ? ""
             : h
-        : u[5] !== void 0
+        : u[5] !== undefined
           ? u[5]
           : n("#N/A")
       : e === "TEXTBEFORE"
@@ -510,7 +511,7 @@ function ane(e, r, t) {
     const h = u.slice(0, 5).flatMap(Ec).find(t.isIssue);
     if (h) return h;
     const f = zh(u[0]),
-      p = u[3] === void 0 ? false : d(u[3]),
+      p = u[3] === undefined ? false : d(u[3]),
       m = o(u[4], 0);
     (Array.isArray(u[0]) || ![0, 1].includes(m)) && n();
     const v = (A) =>
@@ -549,7 +550,7 @@ function ane(e, r, t) {
   return p5;
 }
 function eg(e, r) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (!Array.isArray(e) || e.length > 1e3)
     throw new Error("A workbook may contain at most 1,000 defined names.");
   const t = new Set();
@@ -581,13 +582,13 @@ function eg(e, r) {
         "A name must refer to a formula beginning with = (up to 4,096 characters).",
       );
     if (
-      o.scopeSheetId !== void 0 &&
+      o.scopeSheetId !== undefined &&
       (typeof o.scopeSheetId != "string" ||
         !r.sheets.some((s) => s.id === o.scopeSheetId))
     )
       throw new Error("Defined-name worksheet scope was not found.");
     if (
-      o.comment !== void 0 &&
+      o.comment !== undefined &&
       (typeof o.comment != "string" || o.comment.length > 1e3)
     )
       throw new Error(
@@ -677,7 +678,7 @@ function lne(e, r = false) {
       const m = /^([A-Za-z0-9_\\][A-Za-z0-9_.\\]*)!/.exec(e.slice(n));
       m && ((l = m[1]), (n += m[0].length));
     }
-    if (l === void 0 && d === "[") {
+    if (l === undefined && d === "[") {
       (e.startsWith("[@", n) ||
         o(
           "External or unqualified bracket references cannot be safely migrated.",
@@ -701,7 +702,7 @@ function lne(e, r = false) {
         }));
       continue;
     }
-    if (l === void 0 && /[0-9.]/.test(d)) {
+    if (l === undefined && /[0-9.]/.test(d)) {
       const m = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(e.slice(n));
       if (m) {
         n += m[0].length;
@@ -763,8 +764,7 @@ function m5(e, r = false) {
       return !((a = n.get(o.start)) != null && a.excluded);
     })
     .map((o) => {
-      var a;
-      return { ...o, bound: (a = n.get(o.start)) == null ? void 0 : a.bound };
+      return { ...o, bound: n.get(o.start)?.bound };
     });
 }
 function g5(e, r, t) {
@@ -1013,12 +1013,11 @@ function pC(e) {
   if (!a.trim()) return Pi("An empty formula is not supported.");
 }
 function cne(e, r) {
-  var n;
   const t = Vg(e.replace(/"(?:[^"]|"")*"/g, '""'));
   for (const o of t.matchAll(
     /(?:'((?:[^']|'')+)'|([A-Za-z_\\][A-Za-z0-9_.\\]*))!/g,
   )) {
-    const a = ((n = o[1]) == null ? void 0 : n.replace(/''/g, "'")) ?? o[2];
+    const a = o[1]?.replace(/''/g, "'") ?? o[2];
     if (!r.sheets.some((s) => s.name.toLowerCase() === a.toLowerCase()))
       return Pi(`A name refers to an unknown worksheet "${a}".`);
   }
@@ -1118,33 +1117,28 @@ function pne(e, r, t, n) {
       return A;
     },
     p = (E, A) => {
-      var O, j, z;
       const k = E.qualifier
-        ? (O = r.sheets.find(
+        ? r.sheets.find(
             (V) => V.name.toLowerCase() === E.qualifier.toLowerCase(),
-          )) == null
-          ? void 0
-          : O.id
+          )?.id
         : A;
       if (!k) return;
       const F = lf(E.name),
         I =
-          ((j = r.definedNames) == null
-            ? void 0
-            : j.find(
-                (V) => V.scopeSheetId === k && V.name.toLowerCase() === F,
-              )) ??
-          ((z = r.definedNames) == null
-            ? void 0
-            : z.find((V) => !V.scopeSheetId && V.name.toLowerCase() === F));
-      return I ? { found: I, sheetId: I.scopeSheetId ?? k } : void 0;
+          r.definedNames?.find(
+            (V) => V.scopeSheetId === k && V.name.toLowerCase() === F,
+          ) ??
+          r.definedNames?.find(
+            (V) => !V.scopeSheetId && V.name.toLowerCase() === F,
+          );
+      return I ? { found: I, sheetId: I.scopeSheetId ?? k } : undefined;
     },
     m = (E, A, k) => {
       try {
         return n.parse(E, A, k);
       } catch (F) {
         const I =
-          F && typeof F == "object" && "details" in F ? F.details : void 0;
+          F && typeof F == "object" && "details" in F ? F.details : undefined;
         return n.isIssue(I) ? I : n.isIssue(F) ? F : n.issue("#ERROR!");
       }
     },
@@ -1401,7 +1395,7 @@ function yP(e) {
 }
 function wP(e, r) {
   (bP(r.name),
-    e.veryHidden !== void 0 &&
+    e.veryHidden !== undefined &&
       (typeof e.veryHidden != "boolean" &&
         ea("The very-hidden flag must be boolean."),
       e.veryHidden &&
@@ -1409,19 +1403,19 @@ function wP(e, r) {
         ea("A very-hidden worksheet must also be hidden."),
       (r.veryHidden = e.veryHidden),
       e.veryHidden && (r.hidden = true)),
-    e.tabColor !== void 0 && (r.tabColor = yP(e.tabColor)));
+    e.tabColor !== undefined && (r.tabColor = yP(e.tabColor)));
 }
 function nR(e, r) {
   const t = e;
-  if (t !== void 0) {
+  if (t !== undefined) {
     (!Fne(t) ||
       t.enabled !== true ||
       Object.keys(t).some(
         (a) => !["enabled", "passwordHash", "salt"].includes(a),
       )) &&
       ea("Invalid workbook structure protection.");
-    const n = t.passwordHash !== void 0,
-      o = t.salt !== void 0;
+    const n = t.passwordHash !== undefined,
+      o = t.salt !== undefined;
     ((n !== o ||
       (n &&
         (typeof t.passwordHash != "string" ||
@@ -1473,8 +1467,7 @@ function Q6(e, r) {
       /^\$?[1-9]\d*:\$?[1-9]\d*/,
       /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
     ].map((o) => {
-      var a;
-      return ((a = o.exec(e.slice(r))) == null ? void 0 : a[0].length) ?? 0;
+      return o.exec(e.slice(r))?.[0].length ?? 0;
     }),
   );
   if (!t) return r;
@@ -1603,7 +1596,7 @@ function e0(e, r, t, n, o = false) {
     (u.unsupported && l && ea(u.unsupported),
       !(!l && !c) &&
         ((s += e.slice(d, u.start)),
-        (s += n !== void 0 ? `${Lne(n)}!${u.reference}` : "#REF!"),
+        (s += n !== undefined ? `${Lne(n)}!${u.reference}` : "#REF!"),
         (d = u.end)));
   }
   return s + e.slice(d);
@@ -1628,7 +1621,7 @@ function EP(e, r, t) {
           r(a.raw, n.id, o);
     }
   for (const n of e.definedNames ?? [])
-    r(n.refersTo, n.scopeSheetId ?? "", void 0);
+    r(n.refersTo, n.scopeSheetId ?? "", undefined);
 }
 function $ne(e, r) {
   for (let t = 2; t < Number.MAX_SAFE_INTEGER; t++) {
@@ -1843,7 +1836,7 @@ function Rl(e) {
 }
 const CO = (e) => !!e && typeof e == "object" && !Array.isArray(e);
 function IP(e) {
-  if (e === void 0) return {};
+  if (e === undefined) return {};
   (!CO(e) ||
     Object.keys(e).some(
       (t) =>
@@ -1864,31 +1857,31 @@ function IP(e) {
     Rl("Invalid or unknown chart settings.");
   const r = {};
   for (const t of ["altText", "xTitle", "yTitle", "units"])
-    e[t] !== void 0 &&
+    e[t] !== undefined &&
       ((typeof e[t] != "string" ||
         e[t].length > (t === "altText" ? 2e3 : 200)) &&
         Rl(`Invalid chart ${t}.`),
       (r[t] = e[t]));
   for (const t of ["xScale", "yScale"])
-    e[t] !== void 0 &&
+    e[t] !== undefined &&
       (["linear", "log"].includes(String(e[t])) ||
         Rl("Chart scales must be linear or log."),
       (r[t] = e[t]));
   if (
-    (e.showLegend !== void 0 &&
+    (e.showLegend !== undefined &&
       (typeof e.showLegend != "boolean" && Rl("Invalid chart legend setting."),
       (r.showLegend = e.showLegend)),
-    e.histogramBins !== void 0 &&
+    e.histogramBins !== undefined &&
       ((!Number.isInteger(e.histogramBins) ||
         Number(e.histogramBins) < 1 ||
         Number(e.histogramBins) > 50) &&
         Rl("Choose 1 to 50 histogram bins."),
       (r.histogramBins = Number(e.histogramBins))),
-    e.sparklineKind !== void 0 &&
+    e.sparklineKind !== undefined &&
       (["line", "column", "winLoss"].includes(String(e.sparklineKind)) ||
         Rl("Invalid sparkline style."),
       (r.sparklineKind = e.sparklineKind)),
-    e.series !== void 0)
+    e.series !== undefined)
   ) {
     (!Array.isArray(e.series) || e.series.length > 20) &&
       Rl("Select at most 20 chart series.");
@@ -1904,13 +1897,13 @@ function IP(e) {
         t.add(Number(n.column)));
       const o = { column: Number(n.column) };
       return (
-        n.name !== void 0 &&
+        n.name !== undefined &&
           ((typeof n.name != "string" ||
             !n.name.trim() ||
             n.name.length > 200) &&
             Rl("Chart series names require 1 to 200 characters."),
           (o.name = n.name)),
-        n.kind !== void 0 &&
+        n.kind !== undefined &&
           (["column", "line"].includes(String(n.kind)) ||
             Rl("Combo series must be column or line."),
           (o.kind = n.kind)),
@@ -1919,7 +1912,7 @@ function IP(e) {
     });
   }
   return (
-    e.includedRows !== void 0 &&
+    e.includedRows !== undefined &&
       ((!Array.isArray(e.includedRows) ||
         e.includedRows.length > 500 ||
         e.includedRows.some(

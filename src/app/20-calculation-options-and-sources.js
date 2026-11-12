@@ -2,14 +2,23 @@ import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { string, array, discriminatedUnion, literal, object } from "zod";
-import { Gf, Iw, Pg, eB, lf, lx, ts, yE, yc } from "./01-core-schemas-and-hashing.js";
+import {
+  Gf,
+  Iw,
+  Pg,
+  eB,
+  lf,
+  lx,
+  ts,
+  yE,
+  yc,
+} from "./01-core-schemas-and-hashing.js";
 import { HJ, Mt, dx } from "./02-financial-functions.js";
 import { Cf, Fc, Gw, Vie, Vn, Wie, ct, sU, ut } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { Ek } from "./08-xlsx-export-and-preservation.js";
 
 function Zce(e) {
-  var I, O;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -24,14 +33,12 @@ function Zce(e) {
     (u(Gw(e.workbook).report.settings), g(ts(e.workbook.datePolicy)), m(0));
   }, [e.workbook]),
     ne.useEffect(() => {
-      var z, V;
+      var V;
       const j = document.activeElement;
       return (
-        (V =
-          (z = o.current) == null
-            ? void 0
-            : z.querySelector('[data-ui-label="Close Calculation Options"]')) ==
-          null || V.focus(),
+        (V = o.current?.querySelector(
+          '[data-ui-label="Close Calculation Options"]',
+        )) == null || V.focus(),
         () => {
           j != null && j.isConnected && j.focus();
         }
@@ -83,8 +90,7 @@ function Zce(e) {
           setTimeout(() => URL.revokeObjectURL(z), 1e3));
       }),
     A = s.cells.filter((j) => {
-      var z;
-      return `${(z = e.workbook.sheets.find((V) => V.id === j.sheetId)) == null ? void 0 : z.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
+      return `${e.workbook.sheets.find((V) => V.id === j.sheetId)?.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
         .toLowerCase()
         .includes(h.toLowerCase());
     }),
@@ -325,7 +331,7 @@ function Zce(e) {
               onClick: y,
               children: i.jsx(M, { children: "Calculate Now" }),
             }),
-            ((I = s.execution) == null ? void 0 : I.mode) === "worker" &&
+            s.execution?.mode === "worker" &&
               s.execution.state === "pending" &&
               e.onCancelCalculation &&
               i.jsx("button", {
@@ -393,7 +399,7 @@ function Zce(e) {
             i.jsxs("p", {
               role: "status",
               children: [
-                (O = s.execution) == null ? void 0 : O.message,
+                s.execution?.message,
                 " ",
                 s.limits.hardInterrupt
                   ? "Worker deadline and cancellation are enabled."
@@ -547,9 +553,8 @@ function Zce(e) {
                 .map((j) =>
                   j
                     .map((z) => {
-                      var D;
                       const V = z.lastIndexOf(":");
-                      return `${((D = e.workbook.sheets.find((B) => B.id === z.slice(0, V))) == null ? void 0 : D.name) ?? "(removed sheet)"}!${z.slice(V + 1)}`;
+                      return `${e.workbook.sheets.find((B) => B.id === z.slice(0, V))?.name ?? "(removed sheet)"}!${z.slice(V + 1)}`;
                     })
                     .join(" → "),
                 )
@@ -589,7 +594,6 @@ function Zce(e) {
               }),
               i.jsx("tbody", {
                 children: k.map((j) => {
-                  var z, V;
                   return i.jsxs(
                     "tr",
                     {
@@ -603,11 +607,8 @@ function Zce(e) {
                                 e.onClose());
                             },
                             children: [
-                              (z = e.workbook.sheets.find(
-                                (D) => D.id === j.sheetId,
-                              )) == null
-                                ? void 0
-                                : z.name,
+                              e.workbook.sheets.find((D) => D.id === j.sheetId)
+                                ?.name,
                               "!",
                               j.address,
                             ],
@@ -627,97 +628,94 @@ function Zce(e) {
                             j.status,
                             " / ",
                             j.evaluations,
-                            (V = j.financial) == null
-                              ? void 0
-                              : V.map((D, B) =>
-                                  i.jsxs(
-                                    "details",
-                                    {
+                            j.financial?.map((D, B) =>
+                              i.jsxs(
+                                "details",
+                                {
+                                  children: [
+                                    i.jsxs("summary", {
                                       children: [
-                                        i.jsxs("summary", {
-                                          children: [
-                                            D.functionName,
-                                            " ",
-                                            i.jsx(M, {
-                                              children: "financial details — ",
-                                            }),
-                                            D.status,
-                                          ],
+                                        D.functionName,
+                                        " ",
+                                        i.jsx(M, {
+                                          children: "financial details — ",
                                         }),
-                                        i.jsx("p", { children: D.message }),
-                                        i.jsx("p", { children: D.convention }),
-                                        D.solver &&
-                                          i.jsxs(i.Fragment, {
+                                        D.status,
+                                      ],
+                                    }),
+                                    i.jsx("p", { children: D.message }),
+                                    i.jsx("p", { children: D.convention }),
+                                    D.solver &&
+                                      i.jsxs(i.Fragment, {
+                                        children: [
+                                          i.jsxs("p", {
                                             children: [
-                                              i.jsxs("p", {
-                                                children: [
-                                                  i.jsx(M, {
-                                                    children: "Guess ",
-                                                  }),
-                                                  D.guess,
-                                                  "; ",
-                                                  D.solver.evaluations,
-                                                  " ",
-                                                  i.jsx(M, {
-                                                    children:
-                                                      "equation evaluations. Bounded search: ",
-                                                  }),
-                                                  D.solver.status,
-                                                  i.jsx(M, {
-                                                    children:
-                                                      ". Candidate roots:",
-                                                  }),
-                                                  " ",
-                                                  D.solver.candidates
-                                                    .map((_) =>
-                                                      _.rate.toPrecision(12),
-                                                    )
-                                                    .join(", ") || "None",
-                                                  ".",
-                                                ],
+                                              i.jsx(M, {
+                                                children: "Guess ",
                                               }),
-                                              D.solver.selected &&
-                                                i.jsxs("p", {
-                                                  children: [
-                                                    i.jsx(M, {
-                                                      children: "Selected rate",
-                                                    }),
-                                                    " ",
-                                                    D.solver.selected.rate.toPrecision(
-                                                      12,
-                                                    ),
-                                                    i.jsx(M, {
-                                                      children:
-                                                        "; equation residual",
-                                                    }),
-                                                    " ",
-                                                    D.solver.selected.residual.toPrecision(
-                                                      6,
-                                                    ),
-                                                    i.jsx(M, {
-                                                      children:
-                                                        "; relative residual",
-                                                    }),
-                                                    " ",
-                                                    D.solver.selected.relativeResidual.toExponential(
-                                                      3,
-                                                    ),
-                                                    ".",
-                                                  ],
-                                                }),
-                                              i.jsx("p", {
-                                                children: i.jsx(M, {
-                                                  children:
-                                                    "Root discovery is not exhaustive. Repeated calls of the same function in this cell retain the last diagnostic; use Evaluate Formula for the expression trace.",
-                                                }),
+                                              D.guess,
+                                              "; ",
+                                              D.solver.evaluations,
+                                              " ",
+                                              i.jsx(M, {
+                                                children:
+                                                  "equation evaluations. Bounded search: ",
                                               }),
+                                              D.solver.status,
+                                              i.jsx(M, {
+                                                children: ". Candidate roots:",
+                                              }),
+                                              " ",
+                                              D.solver.candidates
+                                                .map((_) =>
+                                                  _.rate.toPrecision(12),
+                                                )
+                                                .join(", ") || "None",
+                                              ".",
                                             ],
                                           }),
-                                      ],
-                                    },
-                                    `${D.functionName}-${B}`,
-                                  ),
-                                ),
+                                          D.solver.selected &&
+                                            i.jsxs("p", {
+                                              children: [
+                                                i.jsx(M, {
+                                                  children: "Selected rate",
+                                                }),
+                                                " ",
+                                                D.solver.selected.rate.toPrecision(
+                                                  12,
+                                                ),
+                                                i.jsx(M, {
+                                                  children:
+                                                    "; equation residual",
+                                                }),
+                                                " ",
+                                                D.solver.selected.residual.toPrecision(
+                                                  6,
+                                                ),
+                                                i.jsx(M, {
+                                                  children:
+                                                    "; relative residual",
+                                                }),
+                                                " ",
+                                                D.solver.selected.relativeResidual.toExponential(
+                                                  3,
+                                                ),
+                                                ".",
+                                              ],
+                                            }),
+                                          i.jsx("p", {
+                                            children: i.jsx(M, {
+                                              children:
+                                                "Root discovery is not exhaustive. Repeated calls of the same function in this cell retain the last diagnostic; use Evaluate Formula for the expression trace.",
+                                            }),
+                                          }),
+                                        ],
+                                      }),
+                                  ],
+                                },
+                                `${D.functionName}-${B}`,
+                              ),
+                            ),
                           ],
                         }),
                         i.jsx("td", {
@@ -821,11 +819,10 @@ function Kce({
       u.current.snapshot !== JSON.stringify(o) ||
       u.current.selection !== a
         ? "The workbook or selection changed. Close and reopen this menu."
-        : void 0;
+        : undefined;
   return (
     ne.useLayoutEffect(() => {
-      var m;
-      const p = (m = d.current) == null ? void 0 : m.getBoundingClientRect();
+      const p = d.current?.getBoundingClientRect();
       p &&
         c({
           left: Math.max(8, Math.min(e, window.innerWidth - p.width - 8)),
@@ -835,12 +832,7 @@ function Kce({
     ne.useEffect(() => {
       let p = false;
       const m = requestAnimationFrame(() => {
-          var g, b;
-          return (b =
-            (g = d.current) == null ? void 0 : g.querySelector("button")) ==
-            null
-            ? void 0
-            : b.focus();
+          return d.current?.querySelector("button")?.focus();
         }),
         v = (g) => {
           var b;
@@ -992,8 +984,7 @@ const Zm = Object.freeze({
     .join(","),
   SI = new Set(["txt", "md", "csv", "tsv", "json"]),
   jy = (e) => {
-    var r;
-    return ((r = e.split(".").pop()) == null ? void 0 : r.toLowerCase()) ?? "";
+    return e.split(".").pop()?.toLowerCase() ?? "";
   };
 function js(e, r) {
   if (!e) throw new Error(r);
@@ -1034,14 +1025,14 @@ function Jce(e, r) {
       },
       d = () => {
         (s(
-          void 0,
+          undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         ),
           o.abort());
       },
       u = setTimeout(() => {
         (s(
-          void 0,
+          undefined,
           new Error("Reading the attachment timed out. Try a smaller file."),
         ),
           o.abort());
@@ -1049,12 +1040,12 @@ function Jce(e, r) {
     ((o.onload = () => s(o.result)),
       (o.onerror = () =>
         s(
-          void 0,
+          undefined,
           new Error("The attachment could not be read. Select it again."),
         )),
       (o.onabort = () =>
         s(
-          void 0,
+          undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         )),
       r == null || r.addEventListener("abort", d, { once: true }),
@@ -1084,7 +1075,7 @@ async function dEe(e, r) {
   const a = SI.has(t) ? "utf8" : "base64";
   if (a === "utf8") {
     try {
-      o = new TextDecoder("utf-8", { fatal: !0, ignoreBOM: !0 }).decode(n);
+      o = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(n);
     } catch {
       throw new Error(
         "Text attachments must use UTF-8 encoding. Save the file as UTF-8 and try again.",
@@ -1205,7 +1196,7 @@ function Ez(e) {
           "Invalid chat history message.",
         ),
         js(
-          a.role === "user" || a.attachments === void 0,
+          a.role === "user" || a.attachments === undefined,
           "Assistant messages cannot attach files.",
         ),
         (t += a.text.length),
@@ -1506,10 +1497,9 @@ function s3(e, r) {
     sheetName: n.name,
     range: r.range.toUpperCase(),
     cells: t.map((a) => {
-      var s;
       return {
         address: a,
-        raw: ((s = n.cells[a]) == null ? void 0 : s.raw) ?? null,
+        raw: n.cells[a]?.raw ?? null,
         value: o(n.id, a),
       };
     }),
@@ -1579,14 +1569,14 @@ function sde(e, r) {
         e.raw.length <= (e.raw.startsWith("=") ? 4096 : 32767),
         "Proposed cell text is too long.",
       ),
-    e.literal !== void 0 &&
+    e.literal !== undefined &&
       Zr(typeof e.literal == "boolean", "Cell literal must be boolean."),
-    e.numFmt !== void 0 &&
+    e.numFmt !== undefined &&
       Zr(
         typeof e.numFmt == "string" && e.numFmt.length <= 200,
         "Invalid number format.",
       ),
-    e.format !== void 0 &&
+    e.format !== undefined &&
       Zr(
         ["general", "number", "currency", "percent", "date"].includes(
           String(e.format),
@@ -1594,13 +1584,13 @@ function sde(e, r) {
         "Unsupported cell format.",
       ));
   for (const t of ["note", "tickmark"])
-    e[t] !== void 0 &&
+    e[t] !== undefined &&
       Zr(
         typeof e[t] == "string" &&
           String(e[t]).length <= (t === "note" ? 1e4 : 40),
         `Invalid cell ${t}.`,
       );
-  if (e.style !== void 0) {
+  if (e.style !== undefined) {
     (Zr(kg(e.style), "Cell style must be an object."),
       Sg(e.style, [
         "bold",
@@ -1615,11 +1605,11 @@ function sde(e, r) {
         "align",
       ]));
     for (const t of ["bold", "italic", "underline", "wrap"])
-      e.style[t] !== void 0 &&
+      e.style[t] !== undefined &&
         Zr(typeof e.style[t] == "boolean", "Invalid font style.");
-    (e.style.fontFamily !== void 0 &&
+    (e.style.fontFamily !== undefined &&
       Zr(dx.includes(e.style.fontFamily), "Unsupported font family."),
-      e.style.fontSize !== void 0 &&
+      e.style.fontSize !== undefined &&
         Zr(
           typeof e.style.fontSize == "number" &&
             Number.isInteger(e.style.fontSize) &&
@@ -1627,19 +1617,19 @@ function sde(e, r) {
             e.style.fontSize <= 72,
           "Font size must be an integer between 8 and 72.",
         ),
-      e.style.border !== void 0 &&
+      e.style.border !== undefined &&
         Zr(
           ["all", "bottom", "none"].includes(String(e.style.border)),
           "Unsupported cell border.",
         ));
     for (const t of ["fill", "color"])
-      e.style[t] !== void 0 &&
+      e.style[t] !== undefined &&
         Zr(
           typeof e.style[t] == "string" &&
             /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(e.style[t])),
           "Use hexadecimal colors.",
         );
-    e.style.align !== void 0 &&
+    e.style.align !== undefined &&
       Zr(
         ["left", "center", "right"].includes(String(e.style.align)),
         "Invalid alignment.",
@@ -1714,7 +1704,7 @@ function RI(e, r) {
     explanation: e.explanation,
     citations: [...e.citations],
     patches: o,
-    ...(e.grounding !== void 0 ? { grounding: ide(e.grounding, r) } : {}),
+    ...(e.grounding !== undefined ? { grounding: ide(e.grounding, r) } : {}),
   };
 }
 function X2(e, r, t) {
@@ -1735,16 +1725,16 @@ function X2(e, r, t) {
             ...c.cell,
             ...((h != null && h.style) || c.cell.style
               ? {
-                  style: { ...(h == null ? void 0 : h.style), ...c.cell.style },
+                  style: { ...h?.style, ...c.cell.style },
                 }
               : {}),
           };
-        ((h == null ? void 0 : h.raw) !== c.cell.raw &&
-          c.cell.literal === void 0 &&
+        (h?.raw !== c.cell.raw &&
+          c.cell.literal === undefined &&
           delete f.literal,
           c.cell.format &&
-            c.cell.format !== (h == null ? void 0 : h.format) &&
-            c.cell.numFmt === void 0 &&
+            c.cell.format !== h?.format &&
+            c.cell.numFmt === undefined &&
             delete f.numFmt);
         const p = Zf(c.address),
           m = (a.tables ?? []).some((v) => {
@@ -1756,8 +1746,7 @@ function X2(e, r, t) {
         return (
           Zr(
             !m ||
-              ((h == null ? void 0 : h.raw) === f.raw &&
-                !!(h != null && h.literal) == !!f.literal),
+              (h?.raw === f.raw && !!(h != null && h.literal) == !!f.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
           ),
           { ...c, cell: f }
@@ -1789,7 +1778,7 @@ function X2(e, r, t) {
         allowDatabaseCriterion: (c, h) => {
           if (c !== a.id) return false;
           try {
-            return (NI(h, d), !0);
+            return (NI(h, d), true);
           } catch {
             return false;
           }
@@ -1953,7 +1942,7 @@ function lde(e) {
         "calculationClock",
       ]));
     const r = ts(e.datePolicy);
-    if (e.calculationClock !== void 0) {
+    if (e.calculationClock !== undefined) {
       const d = e.calculationClock;
       (Zr(kg(d), "clock"),
         Zr(

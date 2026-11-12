@@ -115,8 +115,7 @@ function mb(t) {
     [x, y] = r.useState("");
   (r.useEffect(
     () => () => {
-      var v;
-      return (v = c.current) == null ? void 0 : v.abort();
+      return c.current?.abort();
     },
     [],
   ),
@@ -255,11 +254,10 @@ function mb(t) {
                   id: crypto.randomUUID(),
                   role: "assistant",
                   text:
-                    (N == null ? void 0 : N.explanation) ??
-                    "Request stopped. No changes were made.",
+                    N?.explanation ?? "Request stopped. No changes were made.",
                   scope: K,
                   label: X.label,
-                  proposalId: N == null ? void 0 : N.id,
+                  proposalId: N?.id,
                   outcome: N ? "complete" : "stopped",
                 },
               ],
@@ -454,7 +452,6 @@ function mb(t) {
               }),
             j.jsx(ThreadPrimitive.Messages, {
               children: ({ message: v }) => {
-                var K;
                 const D = v.metadata.custom.source;
                 if (!D) return null;
                 const $ = D.scope === t.scope,
@@ -485,9 +482,9 @@ function mb(t) {
                       className: `lg-chat-bubble ${$ ? "" : "archived"}`,
                       children: [
                         $ &&
-                          ((K = D.attachments) == null
-                            ? void 0
-                            : K.map((F) => j.jsx(ai, { file: F }, F.id))),
+                          D.attachments?.map((F) =>
+                            j.jsx(ai, { file: F }, F.id),
+                          ),
                         U
                           ? t.review
                           : j.jsx(AssistantChatMarkdown, {
@@ -684,8 +681,7 @@ function mb(t) {
                             t.busy ||
                             l$1,
                           onClick: () => {
-                            var v;
-                            return (v = o.current) == null ? void 0 : v.click();
+                            return o.current?.click();
                           },
                           children: j.jsx(Paperclip, { size: 18 }),
                         }),

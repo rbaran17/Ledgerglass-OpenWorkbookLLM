@@ -124,7 +124,6 @@ function XW(e, r, t = new Set()) {
       }));
 }
 function yS(e, r, t, n, o = false) {
-  var u;
   ((e.characters += r.length),
     e.characters > D1.formulaCharacters &&
       zn(
@@ -176,11 +175,9 @@ function yS(e, r, t, n, o = false) {
     }
     if (l.kind === "reference") {
       const h = l.sheet
-        ? (u = e.book.sheets.find(
+        ? e.book.sheets.find(
             (f) => f.name.toLowerCase() === l.sheet.toLowerCase(),
-          )) == null
-          ? void 0
-          : u.id
+          )?.id
         : t;
       if (!h)
         !l.sheet &&
@@ -354,10 +351,7 @@ function ZW(e, r, t, n, o, a = {}) {
   if (
     (!y &&
       e.sheets.some((B) => {
-        var _;
-        return (_ = B.conditionalFormats) == null
-          ? void 0
-          : _.some((C) => C.kind === "formula");
+        return B.conditionalFormats?.some((C) => C.kind === "formula");
       }) &&
       zn(
         "Range moves cannot repair formula-based conditional rules yet. Remove those rules before moving cells.",
@@ -406,11 +400,7 @@ function ZW(e, r, t, n, o, a = {}) {
           G !== L.raw && ((L.raw = G), k++);
         }
         const U = L.hyperlink;
-        if (
-          (U == null ? void 0 : U.kind) === "internal" &&
-          U.sheetId === r &&
-          pp(u, _t(U.address))
-        ) {
+        if (U?.kind === "internal" && U.sheetId === r && pp(u, _t(U.address))) {
           const G = _t(U.address),
             H = `${s.name}!${U.address}`;
           ((L.hyperlink = {
@@ -555,12 +545,9 @@ function ZW(e, r, t, n, o, a = {}) {
     v0(
       w,
       I.filter((B) => {
-        var _, C, T, N;
         return (
-          ((_ = B.before) == null ? void 0 : _.raw) !==
-            ((C = B.after) == null ? void 0 : C.raw) ||
-          ((T = B.before) == null ? void 0 : T.literal) !==
-            ((N = B.after) == null ? void 0 : N.literal)
+          B.before?.raw !== B.after?.raw ||
+          B.before?.literal !== B.after?.literal
         );
       }),
     ));
@@ -629,8 +616,8 @@ function wj(e) {
   const r = [String(e.raw ?? "(empty)")];
   return (
     e.literal && r.push("Literal text"),
-    e.note !== void 0 && r.push("Note: " + e.note),
-    e.tickmark !== void 0 && r.push("Tickmark: " + e.tickmark),
+    e.note !== undefined && r.push("Note: " + e.note),
+    e.tickmark !== undefined && r.push("Tickmark: " + e.tickmark),
     e.hyperlink &&
       r.push(
         "Link: " +
@@ -662,7 +649,6 @@ function wj(e) {
 const xj =
   "The workbook or destination changed. Cancel and cut the current cells again.";
 function I4e(e) {
-  var b, y, w, E, A;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -673,13 +659,11 @@ function I4e(e) {
       range: e.range,
       source: e.source,
       sourceName:
-        ((b = e.workbook.sheets.find((k) => k.id === e.source.sheetId)) == null
-          ? void 0
-          : b.name) ?? "Deleted worksheet",
+        e.workbook.sheets.find((k) => k.id === e.source.sheetId)?.name ??
+        "Deleted worksheet",
       targetName:
-        ((y = e.workbook.sheets.find((k) => k.id === e.sheetId)) == null
-          ? void 0
-          : y.name) ?? "Deleted worksheet",
+        e.workbook.sheets.find((k) => k.id === e.sheetId)?.name ??
+        "Deleted worksheet",
       book: JSON.stringify(e.workbook),
     }),
     [d, u] = ne.useState(""),
@@ -710,27 +694,25 @@ function I4e(e) {
       }
     }),
     p = [
-      ...(((w = f.plan) == null ? void 0 : w.previewChanges) ?? []).map(
-        (k) => ({
-          label: `${k.sheetName}!${k.address}`,
-          before: wj(k.before),
-          after: wj(k.after),
-        }),
-      ),
-      ...(((E = f.plan) == null ? void 0 : E.metadataChanges) ?? []).map(
-        (k) => ({ label: k.label, before: k.before, after: k.after }),
-      ),
+      ...(f.plan?.previewChanges ?? []).map((k) => ({
+        label: `${k.sheetName}!${k.address}`,
+        before: wj(k.before),
+        after: wj(k.after),
+      })),
+      ...(f.plan?.metadataChanges ?? []).map((k) => ({
+        label: k.label,
+        before: k.before,
+        after: k.after,
+      })),
     ],
     m = Math.max(1, Math.ceil(p.length / 15)),
     v = Math.min(l, m - 1);
   ne.useEffect(() => {
-    var F, I;
+    var I;
     const k = document.activeElement;
     return (
-      (I =
-        (F = o.current) == null
-          ? void 0
-          : F.querySelector("button:not(:disabled)")) == null || I.focus(),
+      (I = o.current?.querySelector("button:not(:disabled)")) == null ||
+        I.focus(),
       () => {
         k != null && k.isConnected && k.focus();
       }
@@ -767,18 +749,15 @@ function I4e(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (k) => {
-        var F;
         if (
           (k.key === "Escape" &&
             (k.preventDefault(), k.stopPropagation(), a.current.onClose()),
           k.key === "Tab")
         ) {
           const I = Array.from(
-              ((F = o.current) == null
-                ? void 0
-                : F.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ),
             O = I[0],
             j = I.at(-1);
@@ -831,8 +810,7 @@ function I4e(e) {
                   children: [
                     s.current.targetName,
                     "!",
-                    ((A = f.plan) == null ? void 0 : A.targetRange) ??
-                      s.current.range,
+                    f.plan?.targetRange ?? s.current.range,
                   ],
                 }),
               ],
@@ -988,25 +966,21 @@ const _4e = {
     "en-IN": "English (India)",
   };
 function O4e(e) {
-  var s;
   const r = ct(e.range),
     t = `${ut(r.firstCol)}${r.firstRow + 1}`,
     n = e.active && W3(e.ranges ?? [e.range], e.active) ? e.active : t,
-    o =
-      (s = e.workbook.sheets.find((d) => d.id === e.sheetId)) == null
-        ? void 0
-        : s.cells[n];
+    o = e.workbook.sheets.find((d) => d.id === e.sheetId)?.cells[n];
   if (o != null && o.numberFormat)
     try {
       return l0(o.numberFormat);
     } catch {}
-  const a = (o == null ? void 0 : o.format) ?? "general";
+  const a = o?.format ?? "general";
   return l0({
     category: a,
     locale: "en-US",
     ...(["number", "currency", "percent"].includes(a)
       ? {
-          decimals: Math.min(12, $B(o == null ? void 0 : o.numFmt) ?? 2),
+          decimals: Math.min(12, $B(o?.numFmt) ?? 2),
           useGrouping:
             o != null && o.numFmt ? o.numFmt.includes(",") : a !== "percent",
         }
@@ -1014,7 +988,7 @@ function O4e(e) {
   });
 }
 function M4e(e) {
-  var q, W, K;
+  var q;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -1045,7 +1019,7 @@ function M4e(e) {
       e.active && W3(z, e.active)
         ? e.active
         : `${ut(V.firstCol)}${V.firstRow + 1}`,
-    B = j == null ? void 0 : j.cells[D],
+    B = j?.cells[D],
     _ = y1(z),
     C = SE(B),
     T =
@@ -1058,7 +1032,7 @@ function M4e(e) {
     N =
       e.readOnly ||
       T ||
-      !!((q = j == null ? void 0 : j.protection) != null && q.enabled) ||
+      !!((q = j?.protection) != null && q.enabled) ||
       !j ||
       _ > 500,
     R = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
@@ -1090,7 +1064,7 @@ function M4e(e) {
   }
   const X$1 = [
       {
-        name: `${(j == null ? void 0 : j.name) ?? "Worksheet"}!${D}`,
+        name: `${j?.name ?? "Worksheet"}!${D}`,
         value: Q,
       },
       ...(U || (u === "custom" && /[ymdhs]/i.test(k.replace(/"[^"]*"/g, "")))
@@ -1105,29 +1079,24 @@ function M4e(e) {
           ]),
     ],
     J = (te) => {
-      var ae;
       (l(te),
         O(""),
         te in Ay && F(Ay[te][0]),
         te === "custom" &&
           F(
-            ((ae = B == null ? void 0 : B.numberFormat) == null
-              ? void 0
-              : ae.category) === "custom"
+            B?.numberFormat?.category === "custom"
               ? B.numberFormat.pattern
               : '#,##0.00;(#,##0.00);"-"',
           ));
     };
   return (
     ne.useEffect(() => {
-      var ae, oe;
+      var oe;
       const te = document.activeElement;
       return (
-        (oe =
-          (ae = o.current) == null
-            ? void 0
-            : ae.querySelector('[role="option"][aria-selected="true"]')) ==
-          null || oe.focus(),
+        (oe = o.current?.querySelector(
+          '[role="option"][aria-selected="true"]',
+        )) == null || oe.focus(),
         () => {
           te != null && te.isConnected && te.focus();
         }
@@ -1142,18 +1111,15 @@ function M4e(e) {
         "aria-labelledby": `${n}-title`,
         ref: o,
         onKeyDown: (te) => {
-          var ae;
           if (
             (te.stopPropagation(),
             te.key === "Escape" && (te.preventDefault(), a.current()),
             te.key === "Tab")
           ) {
             const oe = [
-                ...(((ae = o.current) == null
-                  ? void 0
-                  : ae.querySelectorAll(
-                      'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                    )) ?? []),
+                ...(o.current?.querySelectorAll(
+                  'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+                ) ?? []),
               ],
               de = oe[0],
               he = oe.at(-1);
@@ -1211,7 +1177,7 @@ function M4e(e) {
                       tabIndex: u === te ? 0 : -1,
                       onClick: () => J(te),
                       onKeyDown: (oe) => {
-                        var de, he;
+                        var he;
                         if (
                           ["ArrowUp", "ArrowDown", "Home", "End"].includes(
                             oe.key,
@@ -1230,9 +1196,8 @@ function M4e(e) {
                                   Uv.length;
                           (J(Uv[Se]),
                             (he =
-                              (de = oe.currentTarget.parentElement) == null
-                                ? void 0
-                                : de.children[Se]) == null || he.focus());
+                              oe.currentTarget.parentElement?.children[Se]) ==
+                              null || he.focus());
                         }
                       },
                       children: _4e[te],
@@ -1286,9 +1251,7 @@ function M4e(e) {
                           "This workbook is read-only. You can inspect format previews.",
                       }),
                     }),
-                  ((W = j == null ? void 0 : j.protection) == null
-                    ? void 0
-                    : W.enabled) &&
+                  j?.protection?.enabled &&
                     i.jsx("p", {
                       className: "nf-notice",
                       children: i.jsx(M, {
@@ -1336,16 +1299,13 @@ function M4e(e) {
                           }),
                           i.jsx("tbody", {
                             children: X$1.map((te) => {
-                              var oe;
                               const ae = G
                                 ? vg(
                                     te.value,
                                     G,
-                                    (oe = e.workbook.datePolicy) == null
-                                      ? void 0
-                                      : oe.dateSystem,
+                                    e.workbook.datePolicy?.dateSystem,
                                   )
-                                : void 0;
+                                : undefined;
                               return i.jsxs(
                                 "tr",
                                 {
@@ -1376,8 +1336,7 @@ function M4e(e) {
                                                 }),
                                               ],
                                             })
-                                          : ((ae == null ? void 0 : ae.text) ??
-                                            "Unsupported pattern"),
+                                          : (ae?.text ?? "Unsupported pattern"),
                                     }),
                                   ],
                                 },
@@ -1393,13 +1352,8 @@ function M4e(e) {
                           " ",
                           i.jsx("strong", {
                             children:
-                              Af(
-                                Q,
-                                B,
-                                (K = e.workbook.datePolicy) == null
-                                  ? void 0
-                                  : K.dateSystem,
-                              ) || "Blank",
+                              Af(Q, B, e.workbook.datePolicy?.dateSystem) ||
+                              "Blank",
                           }),
                           i.jsx(M, {
                             children:

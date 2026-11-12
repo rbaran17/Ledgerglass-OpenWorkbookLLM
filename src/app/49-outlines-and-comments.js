@@ -53,9 +53,7 @@ function j4e(e) {
     v = ct(e.range),
     g = d === "row" ? v.firstRow : v.firstCol,
     b = d === "row" ? v.lastRow : v.lastCol,
-    y =
-      e.readOnly ||
-      !!((z = p == null ? void 0 : p.protection) != null && z.enabled),
+    y = e.readOnly || !!((z = p?.protection) != null && z.enabled),
     w = s.current,
     E = ne.useMemo(
       () => JSON.stringify(e.workbook) !== w.snapshot,
@@ -73,28 +71,24 @@ function j4e(e) {
     I = Math.max(1, Math.ceil(m.length / wS)),
     O = Math.min(l, I - 1);
   ne.useEffect(() => {
-    var D, B;
+    var B;
     const V = document.activeElement;
     return (
-      (B =
-        (D = o.current) == null
-          ? void 0
-          : D.querySelector("button:not(:disabled)")) == null || B.focus(),
+      (B = o.current?.querySelector("button:not(:disabled)")) == null ||
+        B.focus(),
       () => {
         V != null && V.isConnected && V.focus();
       }
     );
   }, []);
   function j(V, D) {
-    var B, _;
+    var _;
     try {
       const C = a.current;
       if (
         C.readOnly ||
-        ((_ =
-          (B = C.workbook.sheets.find((N) => N.id === C.sheetId)) == null
-            ? void 0
-            : B.protection) != null &&
+        ((_ = C.workbook.sheets.find((N) => N.id === C.sheetId)?.protection) !=
+          null &&
           _.enabled)
       )
         throw Error(
@@ -124,18 +118,15 @@ function j4e(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (V) => {
-        var D;
         if (
           (V.key === "Escape" &&
             (V.preventDefault(), V.stopPropagation(), a.current.onClose()),
           V.key === "Tab")
         ) {
           const B = Array.from(
-              ((D = o.current) == null
-                ? void 0
-                : D.querySelectorAll(
-                    "button:not(:disabled),select:not(:disabled),input:not(:disabled),[tabindex='0']",
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                "button:not(:disabled),select:not(:disabled),input:not(:disabled),[tabindex='0']",
+              ) ?? [],
             ),
             _ = B[0],
             C = B.at(-1);
@@ -437,7 +428,7 @@ function F4e(e) {
 }
 const Cj = (e) => new Date(e).toLocaleString();
 function B4e(e) {
-  var ae, oe, de, he, Se, le, ce, ge;
+  var he, Se;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -453,38 +444,27 @@ function B4e(e) {
     }),
     d = e.workbook.sheets.find((se) => se.id === e.sheetId),
     u = F4e(e),
-    l = (ae = d == null ? void 0 : d.cells[u]) == null ? void 0 : ae.hyperlink,
+    l = d?.cells[u]?.hyperlink,
     [c, h] = ne.useState(e.mode ?? "comments"),
     [f, p] = ne.useState("cell"),
     [m, v] = ne.useState(0),
     [g, b] = ne.useState(
-      ((de =
-        (oe = e.workbook.reviewThreads) == null
-          ? void 0
-          : oe.find(
-              (se) =>
-                !se.orphaned &&
-                se.anchor.sheetId === e.sheetId &&
-                se.anchor.address === u,
-            )) == null
-        ? void 0
-        : de.id) ?? "",
+      e.workbook.reviewThreads?.find(
+        (se) =>
+          !se.orphaned &&
+          se.anchor.sheetId === e.sheetId &&
+          se.anchor.address === u,
+      )?.id ?? "",
     ),
     [y, w] = ne.useState(0),
     [E, A] = ne.useState(""),
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(""),
-    [j, z] = ne.useState((l == null ? void 0 : l.kind) ?? "external"),
-    [V, D] = ne.useState(
-      (l == null ? void 0 : l.kind) === "external" ? l.url : "",
-    ),
-    [B, _] = ne.useState(
-      (l == null ? void 0 : l.kind) === "internal" ? l.sheetId : e.sheetId,
-    ),
-    [C, T] = ne.useState(
-      (l == null ? void 0 : l.kind) === "internal" ? l.address : "A1",
-    ),
-    [N, R] = ne.useState((l == null ? void 0 : l.label) ?? ""),
+    [j, z] = ne.useState(l?.kind ?? "external"),
+    [V, D] = ne.useState(l?.kind === "external" ? l.url : ""),
+    [B, _] = ne.useState(l?.kind === "internal" ? l.sheetId : e.sheetId),
+    [C, T] = ne.useState(l?.kind === "internal" ? l.address : "A1"),
+    [N, R] = ne.useState(l?.label ?? ""),
     L =
       s.current.id !== e.workbook.id ||
       s.current.revision !== e.workbook.revision ||
@@ -492,11 +472,7 @@ function B4e(e) {
       s.current.range !== e.range ||
       s.current.active !== e.active ||
       s.current.content !== JSON.stringify(e.workbook),
-    $ =
-      e.readOnly ||
-      !!((he = d == null ? void 0 : d.protection) != null && he.enabled) ||
-      L ||
-      !d,
+    $ = e.readOnly || !!((he = d?.protection) != null && he.enabled) || L || !d,
     G = [...(e.workbook.reviewThreads ?? [])]
       .sort((se, we) => we.updatedAt.localeCompare(se.updatedAt))
       .filter(
@@ -511,24 +487,20 @@ function B4e(e) {
                 se.anchor.address === u),
       ),
     H = G.find((se) => se.id === g),
-    Q = e.workbook.sheets.find(
-      (se) => se.id === (H == null ? void 0 : H.anchor.sheetId),
-    ),
+    Q = e.workbook.sheets.find((se) => se.id === H?.anchor.sheetId),
     X$1 =
       e.readOnly ||
       L ||
       !!(H != null && H.orphaned) ||
       !Q ||
       !!((Se = Q.protection) != null && Se.enabled),
-    J = ((le = e.actor) == null ? void 0 : le.trim()) || "Reviewer";
+    J = e.actor?.trim() || "Reviewer";
   ne.useEffect(() => {
-    var we, Ee;
+    var Ee;
     const se = document.activeElement;
     return (
-      (Ee =
-        (we = o.current) == null
-          ? void 0
-          : we.querySelector("button:not(:disabled)")) == null || Ee.focus(),
+      (Ee = o.current?.querySelector("button:not(:disabled)")) == null ||
+        Ee.focus(),
       () => {
         se != null && se.isConnected && se.focus();
       }
@@ -586,18 +558,15 @@ function B4e(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (se) => {
-        var we;
         if (
           (se.stopPropagation(),
           se.key === "Escape" && (se.preventDefault(), a.current()),
           se.key === "Tab")
         ) {
           const Ee = [
-              ...(((we = o.current) == null
-                ? void 0
-                : we.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
-                  )) ?? []),
+              ...(o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
+              ) ?? []),
             ],
             Ae = Ee[0],
             ye = Ee.at(-1);
@@ -619,11 +588,7 @@ function B4e(e) {
                   children: i.jsx(M, { children: "Comments & links" }),
                 }),
                 i.jsxs("p", {
-                  children: [
-                    (d == null ? void 0 : d.name) ?? "Worksheet unavailable",
-                    "!",
-                    u,
-                  ],
+                  children: [d?.name ?? "Worksheet unavailable", "!", u],
                 }),
               ],
             }),
@@ -705,9 +670,7 @@ function B4e(e) {
                 }),
               }),
             !e.readOnly &&
-              ((ce = d == null ? void 0 : d.protection) == null
-                ? void 0
-                : ce.enabled) &&
+              d?.protection?.enabled &&
               i.jsx("p", {
                 className: "rv-muted",
                 children: i.jsx(M, {
@@ -1076,7 +1039,7 @@ function B4e(e) {
                         i.jsxs("label", {
                           children: [
                             i.jsx(M, { children: "New comment on " }),
-                            d == null ? void 0 : d.name,
+                            d?.name,
                             "!",
                             u,
                             i.jsx("textarea", {
@@ -1264,7 +1227,7 @@ function B4e(e) {
                                   K.label ||
                                   (K.kind === "external"
                                     ? K.url
-                                    : `${((ge = e.workbook.sheets.find((se) => se.id === K.sheetId)) == null ? void 0 : ge.name) ?? "Missing worksheet"}!${K.address}`),
+                                    : `${e.workbook.sheets.find((se) => se.id === K.sheetId)?.name ?? "Missing worksheet"}!${K.address}`),
                               }),
                               K.kind === "external"
                                 ? i.jsxs("a", {

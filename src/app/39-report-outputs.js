@@ -38,7 +38,6 @@ import {
 } from "./38-data-analysis-dialog.js";
 
 function Fxe(e) {
-  var q, W, K, te;
   const { text: r } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
@@ -73,29 +72,21 @@ function Fxe(e) {
     T = JSON.stringify([C, e.filter]),
     N = !!m && y === e.workbook && E === T,
     R = e.workbook.sheets.find((ae) => ae.id === u.sheetId),
-    L =
-      (q = e.workbook.reportOutputs) == null
-        ? void 0
-        : q.find((ae) => ae.id === j),
+    L = e.workbook.reportOutputs?.find((ae) => ae.id === j),
     $ = L ? Dxe(e.workbook, L.id, C) : null,
     U =
       s === "Saved outputs"
-        ? ($ == null ? void 0 : $.status) !== "unavailable"
-          ? L == null
-            ? void 0
-            : L.snapshot
-          : void 0
+        ? $?.status !== "unavailable"
+          ? L?.snapshot
+          : undefined
         : N
-          ? m == null
-            ? void 0
-            : m.snapshot
-          : void 0;
+          ? m?.snapshot
+          : undefined;
   ne.useEffect(() => {
-    var oe, de;
+    var de;
     const ae = document.activeElement;
     return (
-      (de = (oe = n.current) == null ? void 0 : oe.querySelector("button")) ==
-        null || de.focus(),
+      (de = n.current?.querySelector("button")) == null || de.focus(),
       () => {
         ae != null && ae.isConnected && ae.focus();
       }
@@ -109,11 +100,11 @@ function Fxe(e) {
       }
     },
     H = (ae) => {
-      (l((oe) => ({ ...oe, ...ae })), b(void 0), v(null), F(""));
+      (l((oe) => ({ ...oe, ...ae })), b(undefined), v(null), F(""));
     },
     Q = (ae, oe) =>
       G(() => {
-        var he, Se, le;
+        var Se, le;
         const de = Rxe(e.workbook, ae, C, oe);
         (v(de),
           b(oe),
@@ -122,11 +113,8 @@ function Fxe(e) {
           A(T),
           d("Publish"),
           (le =
-            (Se =
-              (he = n.current) == null
-                ? void 0
-                : he.querySelector(".lg-reports-scroll")) == null
-              ? void 0
+            (Se = n.current?.querySelector(".lg-reports-scroll")) == null
+              ? undefined
               : Se.scrollTo) == null || le.call(Se, 0, 0));
       }),
     X$1 = async (ae, oe) => {
@@ -267,7 +255,7 @@ function Fxe(e) {
                               (H({
                                 sheetId: ae.target.value,
                                 kind: "range",
-                                objectId: void 0,
+                                objectId: undefined,
                               }),
                                 p(false));
                             },
@@ -295,11 +283,9 @@ function Fxe(e) {
                           i.jsxs("select", {
                             value: u.kind === "range" ? "range" : u.objectId,
                             onChange: (ae) => {
-                              var de;
-                              const oe =
-                                (de = R == null ? void 0 : R.objects) == null
-                                  ? void 0
-                                  : de.find((he) => he.id === ae.target.value);
+                              const oe = R?.objects?.find(
+                                (he) => he.id === ae.target.value,
+                              );
                               H(
                                 oe
                                   ? {
@@ -310,7 +296,7 @@ function Fxe(e) {
                                           ? oe.range
                                           : oe.anchor,
                                     }
-                                  : { kind: "range", objectId: void 0 },
+                                  : { kind: "range", objectId: undefined },
                               );
                             },
                             children: [
@@ -318,18 +304,16 @@ function Fxe(e) {
                                 value: "range",
                                 children: "Cell range / table",
                               }),
-                              (W = R == null ? void 0 : R.objects) == null
-                                ? void 0
-                                : W.map((ae) =>
-                                    i.jsxs(
-                                      "option",
-                                      {
-                                        value: ae.id,
-                                        children: [ae.kind, ": ", ae.label],
-                                      },
-                                      ae.id,
-                                    ),
-                                  ),
+                              R?.objects?.map((ae) =>
+                                i.jsxs(
+                                  "option",
+                                  {
+                                    value: ae.id,
+                                    children: [ae.kind, ": ", ae.label],
+                                  },
+                                  ae.id,
+                                ),
+                              ),
                             ],
                           }),
                         ],
@@ -400,7 +384,7 @@ function Fxe(e) {
                                   H({
                                     filter: ae.target.checked
                                       ? e.filter
-                                      : void 0,
+                                      : undefined,
                                     ...(ae.target.checked
                                       ? { range: e.filter.range }
                                       : {}),
@@ -441,7 +425,7 @@ function Fxe(e) {
                             ? u.filter
                             : f
                               ? (e.filter ?? u.filter)
-                              : void 0,
+                              : undefined,
                         },
                         g,
                       ),
@@ -508,22 +492,20 @@ function Fxe(e) {
                             value: "",
                             children: "Choose a saved output",
                           }),
-                          (K = e.workbook.reportOutputs) == null
-                            ? void 0
-                            : K.map((ae) =>
-                                i.jsxs(
-                                  "option",
-                                  {
-                                    value: ae.id,
-                                    children: [
-                                      ae.snapshot.request.name,
-                                      " · v",
-                                      ae.version,
-                                    ],
-                                  },
-                                  ae.id,
-                                ),
-                              ),
+                          e.workbook.reportOutputs?.map((ae) =>
+                            i.jsxs(
+                              "option",
+                              {
+                                value: ae.id,
+                                children: [
+                                  ae.snapshot.request.name,
+                                  " · v",
+                                  ae.version,
+                                ],
+                              },
+                              ae.id,
+                            ),
+                          ),
                         ],
                       }),
                     ],
@@ -533,14 +515,14 @@ function Fxe(e) {
                       children: [
                         i.jsxs("p", {
                           role: "status",
-                          className: `lg-reports-status ${$ == null ? void 0 : $.status}`,
+                          className: `lg-reports-status ${$?.status}`,
                           children: [
-                            $ == null ? void 0 : $.status.toUpperCase(),
+                            $?.status.toUpperCase(),
                             " · ",
-                            $ == null ? void 0 : $.message,
+                            $?.message,
                           ],
                         }),
-                        ($ == null ? void 0 : $.status) !== "unavailable" &&
+                        $?.status !== "unavailable" &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("div", {
@@ -596,9 +578,7 @@ function Fxe(e) {
                         disabled: B,
                         accept: ".xlsx,.xlsm,.xlam,.xltm,.xltx,.xls,.bin",
                         onChange: (ae) => {
-                          var de;
-                          const oe =
-                            (de = ae.target.files) == null ? void 0 : de[0];
+                          const oe = ae.target.files?.[0];
                           (oe && J(oe), (ae.target.value = ""));
                         },
                       }),
@@ -627,39 +607,36 @@ function Fxe(e) {
                         }),
                       ],
                     }),
-                  (te = e.workbook.embeddedObjectInventories) == null
-                    ? void 0
-                    : te.map((ae) =>
-                        i.jsxs(
-                          "section",
-                          {
+                  e.workbook.embeddedObjectInventories?.map((ae) =>
+                    i.jsxs(
+                      "section",
+                      {
+                        children: [
+                          i.jsx("h3", { children: ae.fileName }),
+                          i.jsxs("p", {
                             children: [
-                              i.jsx("h3", { children: ae.fileName }),
-                              i.jsxs("p", {
-                                children: [
-                                  "Inspected ",
-                                  ae.inspectedAt,
-                                  " · execution: never",
-                                ],
-                              }),
-                              i.jsx(lj, { items: ae.items }),
-                              i.jsx("button", {
-                                disabled: B,
-                                onClick: () =>
-                                  void (e.onDownload ?? sj)({
-                                    filename: "Embedded-object-inventory.json",
-                                    blob: new Blob(
-                                      [JSON.stringify(ae, null, 2)],
-                                      { type: "application/json" },
-                                    ),
-                                  }),
-                                children: "Export inventory JSON",
-                              }),
+                              "Inspected ",
+                              ae.inspectedAt,
+                              " · execution: never",
                             ],
-                          },
-                          ae.id,
-                        ),
-                      ),
+                          }),
+                          i.jsx(lj, { items: ae.items }),
+                          i.jsx("button", {
+                            disabled: B,
+                            onClick: () =>
+                              void (e.onDownload ?? sj)({
+                                filename: "Embedded-object-inventory.json",
+                                blob: new Blob([JSON.stringify(ae, null, 2)], {
+                                  type: "application/json",
+                                }),
+                              }),
+                            children: "Export inventory JSON",
+                          }),
+                        ],
+                      },
+                      ae.id,
+                    ),
+                  ),
                 ],
               }),
             k &&
@@ -707,11 +684,8 @@ function Fxe(e) {
                             ? "Refresh linked report output"
                             : "Publish report output",
                         ),
-                          z(
-                            (m == null ? void 0 : m.refreshId) ??
-                              oe.reportOutputs.at(-1).id,
-                          ),
-                          b(void 0),
+                          z(m?.refreshId ?? oe.reportOutputs.at(-1).id),
+                          b(undefined),
                           v(null),
                           O(
                             ae
@@ -781,10 +755,10 @@ const b2 = (e, r) => {
   );
 };
 function xW(e, r) {
-  if (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
         (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
@@ -932,7 +906,7 @@ function EW(e, r, t = {}) {
     const b = m.issues.find((y) => g.has(y.from));
     if (b || m.cycles.length)
       throw Error(
-        `What-if analysis requires supported static dependencies: ${(b == null ? void 0 : b.message) ?? "a cycle was found."}`,
+        `What-if analysis requires supported static dependencies: ${b?.message ?? "a cycle was found."}`,
       );
     for (const y of v) d.set(y.key, { sheetId: y.sheetId, address: y.address });
   }
@@ -979,7 +953,7 @@ function EW(e, r, t = {}) {
         ...f,
         sheetName: p.name,
         raw: m.raw,
-        ...(m.literal === void 0 ? {} : { literal: m.literal }),
+        ...(m.literal === undefined ? {} : { literal: m.literal }),
       };
     }),
     l = d.size * (a.length + 1);
@@ -1010,7 +984,7 @@ function EW(e, r, t = {}) {
             cells: Object.fromEntries(
               Object.entries(y.cells).map(([w, E]) => {
                 const A = m.get(Vu({ sheetId: y.id, address: w }));
-                return [w, A === void 0 ? E : { ...E, raw: A }];
+                return [w, A === undefined ? E : { ...E, raw: A }];
               }),
             ),
           })),
@@ -1110,8 +1084,7 @@ function Lxe(e, r, t, n = {}) {
       };
 }
 const hS = (e, r) => {
-  var t;
-  return `${((t = e.assumptions.find((n) => Vu(n) === Vu(r))) == null ? void 0 : t.sheetName) ?? r.sheetId}!${r.address}`;
+  return `${e.assumptions.find((n) => Vu(n) === Vu(r))?.sheetName ?? r.sheetId}!${r.address}`;
 };
 function kW(e) {
   const r = e.request.inputs.map((a) => hS(e, a)),
@@ -1234,15 +1207,15 @@ function v_(e, r, t = {}) {
   return r.assumptions.every((o) =>
     e.sheets.some((a) => a.id === o.sheetId)
       ? GT(e, o, n)
-      : t.allowedSheetIds === void 0,
+      : t.allowedSheetIds === undefined,
   );
 }
 function Uxe(e, r, t = {}) {
-  var o, a;
+  var o;
   if (t.readOnly) throw Error("This workbook is read-only.");
   if ((o = e.structureProtection) != null && o.enabled)
     throw Error("Workbook structure is protected.");
-  const n = (a = e.whatIfAnalyses) == null ? void 0 : a.find((s) => s.id === r);
+  const n = e.whatIfAnalyses?.find((s) => s.id === r);
   if (!n || !v_(e, n, t))
     throw Error(
       "The saved analysis is missing or outside the authorized context.",

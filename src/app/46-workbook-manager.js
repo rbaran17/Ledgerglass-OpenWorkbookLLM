@@ -6,7 +6,7 @@ import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { QT, g4e, hj, ox } from "./45-sorting-and-worksheets.js";
 
 function v4e(e) {
-  var C, T, N, R, L, $;
+  var N, R, L;
   const { text: r, language: t } = Dr(),
     n = ne.useRef(null),
     o = ne.useRef(e.onClose);
@@ -16,12 +16,8 @@ function v4e(e) {
         ? `${e.workbook.name.slice(0, 185)} — copy`
         : e.workbook.name,
     ),
-    [d, u] = ne.useState(
-      ((C = e.workbook.metadata) == null ? void 0 : C.engagement) ?? "",
-    ),
-    [l, c] = ne.useState(
-      ((T = e.workbook.metadata) == null ? void 0 : T.period) ?? "",
-    ),
+    [d, u] = ne.useState(e.workbook.metadata?.engagement ?? ""),
+    [l, c] = ne.useState(e.workbook.metadata?.period ?? ""),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState(""),
     [v, g] = ne.useState(null),
@@ -43,17 +39,14 @@ function v4e(e) {
     V = !!(
       ((N = e.workbook.structureProtection) != null && N.enabled) ||
       e.workbook.sheets.some((U) => {
-        var G;
-        return (G = U.protection) == null ? void 0 : G.enabled;
+        return U.protection?.enabled;
       })
     );
   (ne.useEffect(() => {
-    var G, H;
+    var H;
     const U = document.activeElement;
     return (
-      (H =
-        (G = n.current) == null ? void 0 : G.querySelector("input, button")) ==
-        null || H.focus(),
+      (H = n.current?.querySelector("input, button")) == null || H.focus(),
       () => {
         U != null && U.isConnected && U.focus();
       }
@@ -63,21 +56,10 @@ function v4e(e) {
       (g(null), O(false), z(0));
     }, [e.workbook.revision, e.workbook.id]));
   const D = (U) => {
-      var G, H, Q;
       return (
-        ((G = e.workbook.sheets.find((X) => X.id === U)) == null
-          ? void 0
-          : G.name) ??
-        ((Q =
-          (H =
-            v == null
-              ? void 0
-              : v.structuralChanges.find((X) => X.path === `sheets.${U}`)) ==
-          null
-            ? void 0
-            : H.before) == null
-          ? void 0
-          : Q.name) ??
+        e.workbook.sheets.find((X) => X.id === U)?.name ??
+        v?.structuralChanges.find((X) => X.path === `sheets.${U}`)?.before
+          ?.name ??
         "Removed worksheet"
       );
     },
@@ -117,7 +99,7 @@ function v4e(e) {
         const G = U();
         G &&
           typeof G.then == "function" &&
-          (k(!0),
+          (k(true),
           G.catch((H) => {
             F.current &&
               y(
@@ -126,7 +108,7 @@ function v4e(e) {
                   : "The workbook operation could not be completed.",
               );
           }).finally(() => {
-            F.current && k(!1);
+            F.current && k(false);
           }));
       } catch (G) {
         y(
@@ -145,18 +127,15 @@ function v4e(e) {
       "aria-labelledby": "wm-title",
       className: "wm-dialog",
       onKeyDown: (U) => {
-        var G;
         if (
           (U.key === "Escape" &&
             (U.preventDefault(), U.stopPropagation(), o.current()),
           U.key === "Tab")
         ) {
           const H = Array.from(
-              ((G = n.current) == null
-                ? void 0
-                : G.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              n.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ),
             Q = H[0],
             X = H.at(-1);
@@ -308,9 +287,7 @@ function v4e(e) {
                             children: i.jsx(M, { children: "Revision" }),
                           }),
                           i.jsx("dd", { children: e.workbook.revision }),
-                          (($ = e.workbook.metadata) == null
-                            ? void 0
-                            : $.template) &&
+                          e.workbook.metadata?.template &&
                             i.jsxs(i.Fragment, {
                               children: [
                                 i.jsx("dt", {
@@ -324,7 +301,7 @@ function v4e(e) {
                                     " ",
                                     e.workbook.metadata.template.version,
                                     e.workbook.metadata.template
-                                      .sourceRevision !== void 0
+                                      .sourceRevision !== undefined
                                       ? ` · source revision ${e.workbook.metadata.template.sourceRevision}`
                                       : "",
                                   ],
@@ -417,7 +394,7 @@ function v4e(e) {
                                 onClick: () =>
                                   _(() => {
                                     (m(U.id),
-                                      O(!1),
+                                      O(false),
                                       z(0),
                                       g(e.onCompare(U.id)));
                                   }),
@@ -551,7 +528,7 @@ function v4e(e) {
                                   G = () => {
                                     F.current &&
                                       (g(null),
-                                      O(!1),
+                                      O(false),
                                       E(
                                         "Checkpoint restored as a new revision.",
                                       ));

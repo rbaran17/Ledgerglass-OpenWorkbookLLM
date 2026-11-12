@@ -43,7 +43,7 @@ function qde({
   onWorkbookChange: a,
   onNavigate: s,
 }) {
-  var he, Se, le;
+  var he;
   const { text: d, language: u } = Dr(),
     l = e.sheets.find((ce) => ce.id === r),
     [c, h] = ne.useState(),
@@ -66,13 +66,11 @@ function qde({
     [q, W] = ne.useState(),
     K = ne.useRef(null);
   ne.useEffect(() => {
-    var ge, se;
+    var se;
     const ce = document.activeElement;
     return (
-      (se =
-        (ge = K.current) == null ? void 0 : ge.querySelector("button,input")) ==
-        null || se.focus(),
-      () => (ce == null ? void 0 : ce.focus())
+      (se = K.current?.querySelector("button,input")) == null || se.focus(),
+      () => ce?.focus()
     );
   }, []);
   const te = n || !!((he = l.protection) != null && he.enabled),
@@ -155,16 +153,13 @@ function qde({
   return i.jsx("div", {
     className: "wt-backdrop",
     onKeyDown: (ce) => {
-      var ge;
       if (
         (ce.key === "Escape" && (ce.stopPropagation(), o()), ce.key === "Tab")
       ) {
         const se = [
-            ...(((ge = K.current) == null
-              ? void 0
-              : ge.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)",
-                )) ?? []),
+            ...(K.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)",
+            ) ?? []),
           ],
           we = se[0],
           Ee = se.at(-1);
@@ -284,73 +279,64 @@ function qde({
               children: [
                 i.jsxs("summary", {
                   children: [
-                    ((Se = l.validations) == null ? void 0 : Se.length) ?? 0,
+                    l.validations?.length ?? 0,
                     " ",
                     i.jsx(M, { children: "existing rules" }),
                   ],
                 }),
-                (le = l.validations) == null
-                  ? void 0
-                  : le.map((ce) =>
-                      i.jsxs(
-                        "div",
-                        {
-                          className: "wt-existing",
+                l.validations?.map((ce) =>
+                  i.jsxs(
+                    "div",
+                    {
+                      className: "wt-existing",
+                      children: [
+                        i.jsxs("span", {
                           children: [
-                            i.jsxs("span", {
-                              children: [
-                                ce.range,
-                                " · ",
-                                ce.kind,
-                                " · ",
-                                ce.errorStyle ?? "stop",
-                              ],
-                            }),
-                            i.jsxs("button", {
-                              disabled: te,
-                              onClick: () => de(ce),
-                              children: [
-                                i.jsx(M, { children: "Edit " }),
-                                ce.range,
-                              ],
-                            }),
-                            i.jsxs("button", {
-                              disabled: te,
-                              onClick: () =>
-                                ae(() => {
-                                  (jn(l),
-                                    a(
-                                      {
-                                        ...e,
-                                        sheets: e.sheets.map((ge) => {
-                                          var se;
-                                          return ge.id === r
-                                            ? {
-                                                ...ge,
-                                                validations:
-                                                  (se = ge.validations) == null
-                                                    ? void 0
-                                                    : se.filter(
-                                                        (we) => we.id !== ce.id,
-                                                      ),
-                                              }
-                                            : ge;
-                                        }),
-                                      },
-                                      "Remove data validation",
-                                    ),
-                                    o());
-                                }),
-                              children: [
-                                i.jsx(M, { children: "Remove " }),
-                                ce.range,
-                              ],
-                            }),
+                            ce.range,
+                            " · ",
+                            ce.kind,
+                            " · ",
+                            ce.errorStyle ?? "stop",
                           ],
-                        },
-                        ce.id,
-                      ),
-                    ),
+                        }),
+                        i.jsxs("button", {
+                          disabled: te,
+                          onClick: () => de(ce),
+                          children: [i.jsx(M, { children: "Edit " }), ce.range],
+                        }),
+                        i.jsxs("button", {
+                          disabled: te,
+                          onClick: () =>
+                            ae(() => {
+                              (jn(l),
+                                a(
+                                  {
+                                    ...e,
+                                    sheets: e.sheets.map((ge) => {
+                                      return ge.id === r
+                                        ? {
+                                            ...ge,
+                                            validations: ge.validations?.filter(
+                                              (we) => we.id !== ce.id,
+                                            ),
+                                          }
+                                        : ge;
+                                    }),
+                                  },
+                                  "Remove data validation",
+                                ),
+                                o());
+                            }),
+                          children: [
+                            i.jsx(M, { children: "Remove " }),
+                            ce.range,
+                          ],
+                        }),
+                      ],
+                    },
+                    ce.id,
+                  ),
+                ),
               ],
             }),
             i.jsxs("fieldset", {
@@ -695,20 +681,16 @@ function Xde(e, r, t) {
   return a;
 }
 function Gde(e, r) {
-  var u;
   const t = r.axis,
     n = r,
     o = t === "row" ? "hiddenRows" : "hiddenCols",
     a = t === "row" ? e.rowCount : e.colCount,
     s = (e[o] ?? []).flatMap((l) => xB(l.start, l.end, n)),
-    d =
-      (u = e.outlineGroups) == null
-        ? void 0
-        : u.map((l) =>
-            l.axis !== t
-              ? l
-              : { ...l, ...H3(l.start, l.end, n, "outline group", true) },
-          );
+    d = e.outlineGroups?.map((l) =>
+      l.axis !== t
+        ? l
+        : { ...l, ...H3(l.start, l.end, n, "outline group", true) },
+    );
   return { [o]: Ad(s, a), ...(d ? { outlineGroups: d } : {}) };
 }
 function Zde(e, r) {
@@ -733,7 +715,7 @@ function Zde(e, r) {
   );
 }
 function Kf(e, r) {
-  return r.moveBefore !== void 0
+  return r.moveBefore !== undefined
     ? Jf(e, r)
     : r.remove && e >= r.index && e < r.index + r.count
       ? null
@@ -758,7 +740,7 @@ function Zh(e, r) {
   const t = ct(e);
   let n = r.axis === "row" ? t.firstRow : t.firstCol,
     o = r.axis === "row" ? t.lastRow : t.lastCol;
-  if (r.moveBefore !== void 0) {
+  if (r.moveBefore !== undefined) {
     const d = H3(n, o, r, `reference ${e}`);
     ((n = d.start), (o = d.end));
   } else if (r.remove) {
@@ -877,11 +859,11 @@ function ay(e, r, t, n) {
                     _ = F.row <= I.row === V ? k.firstRow : k.lastRow;
                   return `${D[1]}${ut(B)}${D[2]}${_ + 1}`;
                 };
-              v = p + z(!0, O) + ":" + z(!1, j);
+              v = p + z(true, O) + ":" + z(false, j);
             }
           } else v = p + (cg(g, n) ?? "#REF!");
         } catch (w) {
-          if (n.moveBefore !== void 0) throw w;
+          if (n.moveBefore !== undefined) throw w;
           v = p + "#REF!";
         }
       }
@@ -893,8 +875,7 @@ function ay(e, r, t, n) {
   return d;
 }
 function LC(e, r, t) {
-  var l;
-  if (t.permutation !== void 0 && t.moveBefore === void 0)
+  if (t.permutation !== undefined && t.moveBefore === undefined)
     throw Error(
       "A structural permutation requires an explicit move operation.",
     );
@@ -908,7 +889,7 @@ function LC(e, r, t) {
     t.index + t.count > (t.axis === "row" ? Mt.maxRows : Mt.maxCols)
   )
     throw Error("Choose a valid position and 1–10,000 rows or columns.");
-  if (t.moveBefore !== void 0) {
+  if (t.moveBefore !== undefined) {
     if (t.remove)
       throw Error(
         "A structural operation cannot delete and move at the same time.",
@@ -919,12 +900,11 @@ function LC(e, r, t) {
   if (!n) throw Error("The worksheet was not found.");
   jn(n);
   const o =
-    t.moveBefore !== void 0
+    t.moveBefore !== undefined
       ? Xde(e, r, t)
       : cie(e, r, t.axis, t.index, t.count, t.remove);
   let a = 0;
   const s = o.sheets.map((c) => {
-      var k, F, I;
       const h = {};
       for (const [O, j] of Object.entries(c.cells)) {
         const z = c.id === r ? cg(O, t) : O;
@@ -998,8 +978,8 @@ function LC(e, r, t) {
           }
           return (V !== O.formula && jn(c), { ...O, formula: V });
         },
-        p = (k = c.conditionalFormats) == null ? void 0 : k.map(f),
-        m = (F = c.validations) == null ? void 0 : F.map(f);
+        p = c.conditionalFormats?.map(f),
+        m = c.validations?.map(f);
       if (c.id !== r)
         return {
           ...c,
@@ -1021,7 +1001,9 @@ function LC(e, r, t) {
       }
       const b = (c.merges ?? [])
           .map((O) =>
-            t.moveBefore !== void 0 ? G2(O, t, "merged range", true) : Zh(O, t),
+            t.moveBefore !== undefined
+              ? G2(O, t, "merged range", true)
+              : Zh(O, t),
           )
           .filter((O) => !!O),
         y = (m ?? []).flatMap((O) => {
@@ -1032,100 +1014,95 @@ function LC(e, r, t) {
           const j = Zh(O.range, t);
           return j ? [{ ...O, range: j }] : [];
         }),
-        E =
-          (I = c.objects) == null
-            ? void 0
-            : I.map((O) => {
-                const j = cg(O.anchor, t);
-                if (!j)
-                  throw Error(
-                    `This edit would remove the anchor of ${O.label || O.kind}. Move or delete that drawing first.`,
-                  );
-                if (O.kind !== "chart" || !O.range) return { ...O, anchor: j };
-                const z = ct(O.range),
-                  V = t.index + t.count - 1;
-                if (
-                  t.remove &&
-                  t.axis === "row" &&
-                  O.headers &&
-                  t.index <= z.firstRow &&
-                  V >= z.firstRow
-                )
-                  throw Error(
-                    "This edit would remove a chart header row. Adjust or delete the chart first.",
-                  );
-                if (
-                  t.remove &&
-                  t.axis === "column" &&
-                  z.lastCol > z.firstCol &&
-                  t.index <= z.firstCol &&
-                  V >= z.firstCol
-                )
-                  throw Error(
-                    "This edit would remove chart category labels. Adjust or delete the chart first.",
-                  );
-                const D = Zh(O.range, t);
-                if (!D)
-                  throw Error(
-                    "This edit would remove the entire chart source. Adjust or delete the chart first.",
-                  );
-                const B = sR(D, c);
-                if (
-                  t.moveBefore !== void 0 &&
-                  ((t.axis === "row" &&
-                    O.headers &&
-                    Kf(z.firstRow, t) !== B.firstRow) ||
-                    (t.axis === "column" &&
-                      z.lastCol > z.firstCol &&
-                      Kf(z.firstCol, t) !== B.firstCol))
-                )
-                  throw Error(
-                    "This move would displace chart headers or category labels. Move the complete chart source or only its data rows or value columns.",
-                  );
-                if (
-                  (O.headers && B.lastRow === B.firstRow) ||
-                  (z.lastCol > z.firstCol && B.lastCol === B.firstCol)
-                )
-                  throw Error(
-                    "This edit would remove all chart data. Adjust or delete the chart first.",
-                  );
-                const _ = O.chartOptions
-                  ? structuredClone(O.chartOptions)
-                  : void 0;
-                if (_) {
-                  const C = (T, N) => {
-                    const R = Kf(T - 1, t);
-                    if (R === null)
-                      throw Error(
-                        `This edit would remove a selected chart ${N}. Reset the chart selection before deleting it.`,
-                      );
-                    return R + 1;
-                  };
-                  (t.axis === "row" &&
-                    _.includedRows &&
-                    (_.includedRows = _.includedRows.map((T) =>
-                      C(T, "filter row"),
-                    )),
-                    t.axis === "column" &&
-                      _.series &&
-                      (_.series = _.series.map((T) => ({
-                        ...T,
-                        column: C(T.column, "series"),
-                      }))));
-                }
-                return {
-                  ...O,
-                  anchor: j,
-                  range: D,
-                  ...(_ ? { chartOptions: _ } : {}),
-                };
-              }),
+        E = c.objects?.map((O) => {
+          const j = cg(O.anchor, t);
+          if (!j)
+            throw Error(
+              `This edit would remove the anchor of ${O.label || O.kind}. Move or delete that drawing first.`,
+            );
+          if (O.kind !== "chart" || !O.range) return { ...O, anchor: j };
+          const z = ct(O.range),
+            V = t.index + t.count - 1;
+          if (
+            t.remove &&
+            t.axis === "row" &&
+            O.headers &&
+            t.index <= z.firstRow &&
+            V >= z.firstRow
+          )
+            throw Error(
+              "This edit would remove a chart header row. Adjust or delete the chart first.",
+            );
+          if (
+            t.remove &&
+            t.axis === "column" &&
+            z.lastCol > z.firstCol &&
+            t.index <= z.firstCol &&
+            V >= z.firstCol
+          )
+            throw Error(
+              "This edit would remove chart category labels. Adjust or delete the chart first.",
+            );
+          const D = Zh(O.range, t);
+          if (!D)
+            throw Error(
+              "This edit would remove the entire chart source. Adjust or delete the chart first.",
+            );
+          const B = sR(D, c);
+          if (
+            t.moveBefore !== undefined &&
+            ((t.axis === "row" &&
+              O.headers &&
+              Kf(z.firstRow, t) !== B.firstRow) ||
+              (t.axis === "column" &&
+                z.lastCol > z.firstCol &&
+                Kf(z.firstCol, t) !== B.firstCol))
+          )
+            throw Error(
+              "This move would displace chart headers or category labels. Move the complete chart source or only its data rows or value columns.",
+            );
+          if (
+            (O.headers && B.lastRow === B.firstRow) ||
+            (z.lastCol > z.firstCol && B.lastCol === B.firstCol)
+          )
+            throw Error(
+              "This edit would remove all chart data. Adjust or delete the chart first.",
+            );
+          const _ = O.chartOptions
+            ? structuredClone(O.chartOptions)
+            : undefined;
+          if (_) {
+            const C = (T, N) => {
+              const R = Kf(T - 1, t);
+              if (R === null)
+                throw Error(
+                  `This edit would remove a selected chart ${N}. Reset the chart selection before deleting it.`,
+                );
+              return R + 1;
+            };
+            (t.axis === "row" &&
+              _.includedRows &&
+              (_.includedRows = _.includedRows.map((T) => C(T, "filter row"))),
+              t.axis === "column" &&
+                _.series &&
+                (_.series = _.series.map((T) => ({
+                  ...T,
+                  column: C(T.column, "series"),
+                }))));
+          }
+          return {
+            ...O,
+            anchor: j,
+            range: D,
+            ...(_ ? { chartOptions: _ } : {}),
+          };
+        }),
         A =
-          t.moveBefore !== void 0
+          t.moveBefore !== undefined
             ? Zde(c, t)
             : c.pageLayout
               ? iae(c.pageLayout, c, t.axis, t.index, t.count, t.remove)
-              : void 0;
+              : undefined;
       if (A) {
         const O = Zh(A.printArea, t);
         if (!O)
@@ -1137,7 +1114,7 @@ function LC(e, r, t) {
       return {
         ...c,
         cells: h,
-        ...(t.moveBefore !== void 0
+        ...(t.moveBefore !== undefined
           ? Gde(c, t)
           : xQ({ ...c, merges: b }, t.axis, t.index, t.count, t.remove)),
         ...(t.axis === "row" && c.rowOriginIds
@@ -1163,23 +1140,17 @@ function LC(e, r, t) {
         ...(A ? { pageLayout: A } : {}),
       };
     }),
-    d =
-      (l = o.definedNames) == null
-        ? void 0
-        : l.map((c) => {
-            var p;
-            const h = c.scopeSheetId
-                ? (((p = o.sheets.find((m) => m.id === c.scopeSheetId)) == null
-                    ? void 0
-                    : p.name) ?? "")
-                : "",
-              f = ay(c.refersTo, h, n.name, t);
-            if (!c.scopeSheetId && ay(c.refersTo, n.name, n.name, t) !== f)
-              throw Error(
-                `Workbook-scoped name ${c.name} has ambiguous unqualified worksheet references. Qualify those references before inserting or deleting rows or columns.`,
-              );
-            return { ...c, refersTo: f };
-          }),
+    d = o.definedNames?.map((c) => {
+      const h = c.scopeSheetId
+          ? (o.sheets.find((m) => m.id === c.scopeSheetId)?.name ?? "")
+          : "",
+        f = ay(c.refersTo, h, n.name, t);
+      if (!c.scopeSheetId && ay(c.refersTo, n.name, n.name, t) !== f)
+        throw Error(
+          `Workbook-scoped name ${c.name} has ambiguous unqualified worksheet references. Qualify those references before inserting or deleting rows or columns.`,
+        );
+      return { ...c, refersTo: f };
+    }),
     u = sQ(
       dQ({ ...o, sheets: s, ...(d ? { definedNames: d } : {}) }, r, t),
       r,
@@ -1207,10 +1178,10 @@ const Kde = (e, r) => JSON.stringify([e, r]),
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("=");
 function Yde(e, r) {
   return (
-    r.includeHidden !== void 0 &&
+    r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
       qi("Include hidden must be boolean."),
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),

@@ -4,7 +4,18 @@ import ne from "react";
 import { Yl, hr, pg } from "./01-core-schemas-and-hashing.js";
 import { Ta } from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { CT, ET, Lce, Pce, Q4, Uce, Vce, Wce, yz, zce } from "./17-recipe-step-editors.js";
+import {
+  CT,
+  ET,
+  Lce,
+  Pce,
+  Q4,
+  Uce,
+  Vce,
+  Wce,
+  yz,
+  zce,
+} from "./17-recipe-step-editors.js";
 
 function Hce(e) {
   const { text: r, language: t } = Dr(),
@@ -52,11 +63,11 @@ function Hce(e) {
     G = e.workbook.transformationRecipes ?? [],
     H = G.find((ye) => ye.id === m),
     Q = G.find((ye) => ye.id === c),
-    X$1 = Q == null ? void 0 : Q.versions.find((ye) => ye.version === f),
+    X$1 = Q?.versions.find((ye) => ye.version === f),
     J = !X$1 || X$1.definitionHash !== hr(s),
     q = JSON.stringify([e.workbook, e.sheetId, e.range, s, c, f, k, $]),
-    W = (j == null ? void 0 : j.stamp) === q,
-    K = W ? j.plan.run : void 0;
+    W = j?.stamp === q,
+    K = W ? j.plan.run : undefined;
   function te() {
     (z(null), D(null), R(0));
   }
@@ -95,13 +106,11 @@ function Hce(e) {
       }
     }, [e.workbook, he, JSON.stringify($)]);
   (ne.useEffect(() => {
-    var Te, Pe;
+    var Pe;
     const ye = document.activeElement;
     return (
-      (Pe =
-        (Te = n.current) == null
-          ? void 0
-          : Te.querySelector("input,select,button")) == null || Pe.focus(),
+      (Pe = n.current?.querySelector("input,select,button")) == null ||
+        Pe.focus(),
       () => {
         ye != null && ye.isConnected && ye.focus();
       }
@@ -110,7 +119,8 @@ function Hce(e) {
     ne.useEffect(() => {
       var ye, Te;
       W &&
-        ((Te = (ye = o.current) == null ? void 0 : ye.scrollIntoView) == null ||
+        ((Te = (ye = o.current) == null ? undefined : ye.scrollIntoView) ==
+          null ||
           Te.call(ye, { block: "start" }));
     }, [j, W]));
   const le = (ye) => {
@@ -123,7 +133,7 @@ function Hce(e) {
   function ce() {
     le(() => {
       const ye = G.find((Pe) => Pe.id === m),
-        Te = ye == null ? void 0 : ye.versions.find((Pe) => Pe.version === g);
+        Te = ye?.versions.find((Pe) => Pe.version === g);
       if (!ye || !Te) throw Error("Choose a saved recipe version.");
       (h(ye.id),
         p(Te.version),
@@ -138,7 +148,7 @@ function Hce(e) {
   }
   function ge() {
     le(() => {
-      const ye = Lce(e.workbook, u, s, c || void 0, $),
+      const ye = Lce(e.workbook, u, s, c || undefined, $),
         Te = ye.transformationRecipes.find((Pe) =>
           c ? Pe.id === c : Pe.name === u.trim(),
         );
@@ -197,8 +207,7 @@ function Hce(e) {
       setTimeout(() => URL.revokeObjectURL(Pe), 5e3));
   }
   const Ae = e.workbook.sheets.filter((ye) => {
-    var Te;
-    return ((Te = ye.transformationRun) == null ? void 0 : Te.recipeId) === c;
+    return ye.transformationRun?.recipeId === c;
   });
   return i.jsx("div", {
     className: "recipe-backdrop",
@@ -209,17 +218,14 @@ function Hce(e) {
       className: "recipe-dialog",
       ref: n,
       onKeyDown: (ye) => {
-        var Te;
         if (
           (ye.key === "Escape" && (ye.preventDefault(), a.current()),
           ye.key === "Tab")
         ) {
           const Pe = Array.from(
-              ((Te = n.current) == null
-                ? void 0
-                : Te.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]',
-                  )) ?? [],
+              n.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]',
+              ) ?? [],
             ).filter(
               (Re) =>
                 !Re.closest("details:not([open])") || Re.tagName === "SUMMARY",
@@ -275,13 +281,10 @@ function Hce(e) {
                       "aria-label": r("Saved recipe"),
                       value: m,
                       onChange: (ye) => {
-                        var Te;
                         (v(ye.target.value),
                           b(
-                            ((Te = G.find((Pe) => Pe.id === ye.target.value)) ==
-                            null
-                              ? void 0
-                              : Te.versions.length) ?? 1,
+                            G.find((Pe) => Pe.id === ye.target.value)?.versions
+                              .length ?? 1,
                           ));
                       },
                       lang: t("Saved recipe"),
@@ -311,13 +314,12 @@ function Hce(e) {
                       onChange: (ye) => b(Number(ye.target.value)),
                       lang: t("Saved recipe version"),
                       "data-ui-label": "Saved recipe version",
-                      children: ((H == null ? void 0 : H.versions) ?? []).map(
-                        (ye) =>
-                          i.jsx(
-                            "option",
-                            { value: ye.version, children: ye.version },
-                            ye.version,
-                          ),
+                      children: (H?.versions ?? []).map((ye) =>
+                        i.jsx(
+                          "option",
+                          { value: ye.version, children: ye.version },
+                          ye.version,
+                        ),
                       ),
                     }),
                   ],
@@ -600,7 +602,7 @@ function Hce(e) {
               ],
             }),
             B && i.jsx("p", { role: "status", children: B }),
-            (V == null ? void 0 : V.stamp) === q &&
+            V?.stamp === q &&
               i.jsx("p", {
                 role: "alert",
                 className: "recipe-error",
@@ -848,7 +850,6 @@ function Hce(e) {
                       lang: t("Recipe step trace"),
                       "data-ui-label": "Recipe step trace",
                       children: K.steps.map((ye) => {
-                        var Te;
                         return i.jsxs(
                           "details",
                           {
@@ -914,9 +915,7 @@ function Hce(e) {
                                       .join(" · "),
                                   ],
                                 }),
-                              ((Te = ye.details) == null
-                                ? void 0
-                                : Te.matchPairs) !== void 0 &&
+                              ye.details?.matchPairs !== undefined &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(M, { children: "Merge: " }),
@@ -1082,11 +1081,7 @@ function Hce(e) {
             }),
             i.jsx("button", {
               className: "recipe-primary",
-              disabled:
-                e.readOnly ||
-                !W ||
-                J ||
-                (K == null ? void 0 : K.status) !== "complete",
+              disabled: e.readOnly || !W || J || K?.status !== "complete",
               onClick: we,
               children: i.jsx(M, { children: "Publish recipe output" }),
             }),

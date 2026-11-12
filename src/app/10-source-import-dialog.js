@@ -5,10 +5,21 @@ import { Cd, FU, ut } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { oT } from "./05-add-ins-and-custom-functions.js";
 import { H1, MC } from "./07-xlsx-archive-reader.js";
-import { Due, H$, Iue, Mue, Oue, Rue, _ue, jue, q$, yh } from "./09-workbook-links.js";
+import {
+  Due,
+  H$,
+  Iue,
+  Mue,
+  Oue,
+  Rue,
+  _ue,
+  jue,
+  q$,
+  yh,
+} from "./09-workbook-links.js";
 
 function Fue(e) {
-  var we, Ee;
+  var Ee;
   const r = ne.useId(),
     t = ne.useRef(null),
     n = ne.useRef(e),
@@ -63,9 +74,8 @@ function Fue(e) {
       }
     },
     H = (Ae) => {
-      var ye;
       (u(Ae),
-        c(((ye = Ae.tables[0]) == null ? void 0 : ye.id) ?? ""),
+        c(Ae.tables[0]?.id ?? ""),
         E(null),
         y({}),
         N({}),
@@ -108,25 +118,20 @@ function Fue(e) {
         );
       }),
     K = () => E(null),
-    te = d == null ? void 0 : d.tables.find((Ae) => Ae.id === l),
+    te = d?.tables.find((Ae) => Ae.id === l),
     ae =
-      (te == null
-        ? void 0
-        : te.rows
-            .flatMap((Ae, ye) =>
-              Ae.map((Te, Pe) => ({
-                cell: Te,
-                row: ye,
-                column: Pe,
-                key: `${ye}:${Pe}`,
-              })),
-            )
-            .filter((Ae) => Ae.cell.confidence < Cd.confidence)) ?? [],
+      te?.rows
+        .flatMap((Ae, ye) =>
+          Ae.map((Te, Pe) => ({
+            cell: Te,
+            row: ye,
+            column: Pe,
+            key: `${ye}:${Pe}`,
+          })),
+        )
+        .filter((Ae) => Ae.cell.confidence < Cd.confidence) ?? [],
     oe = ae.filter((Ae) => !b[Ae.key]).length,
-    de =
-      (we = e.workbook.sourceImports) == null
-        ? void 0
-        : we.find((Ae) => Ae.id === R),
+    de = e.workbook.sourceImports?.find((Ae) => Ae.id === R),
     [he, Se] = $.split(":").map(Number),
     le = de ? Mue(e.workbook, de.id, he, Se) : null,
     ce = () => {
@@ -247,9 +252,7 @@ function Fue(e) {
                       accept: ".json,.xml,.pdf,.png,.jpg,.jpeg,.html,.htm",
                       disabled: F,
                       onChange: (Ae) => {
-                        var Te;
-                        const ye =
-                          (Te = Ae.target.files) == null ? void 0 : Te[0];
+                        const ye = Ae.target.files?.[0];
                         ((Ae.target.value = ""), ye && Q(ye));
                       },
                     }),
@@ -367,11 +370,7 @@ function Fue(e) {
                               disabled: F,
                               "aria-label": "Load extraction JSON",
                               onChange: (Ae) => {
-                                var Te;
-                                const ye =
-                                  (Te = Ae.target.files) == null
-                                    ? void 0
-                                    : Te[0];
+                                const ye = Ae.target.files?.[0];
                                 ((Ae.target.value = ""), ye && X$1(ye));
                               },
                             }),
@@ -582,7 +581,6 @@ function Fue(e) {
                         ae
                           .slice(_ * 10, _ * 10 + 10)
                           .map(({ cell: Ae, row: ye, column: Te, key: Pe }) => {
-                            var qe, ht;
                             return i.jsxs(
                               "div",
                               {
@@ -620,10 +618,7 @@ function Fue(e) {
                                       Pe,
                                       i.jsxs("select", {
                                         "aria-label": "Review " + Pe,
-                                        value:
-                                          ((qe = b[Pe]) == null
-                                            ? void 0
-                                            : qe.decision) ?? "",
+                                        value: b[Pe]?.decision ?? "",
                                         onChange: (Re) => {
                                           Re.target.value
                                             ? se(Pe, {
@@ -660,15 +655,13 @@ function Fue(e) {
                                       }),
                                     ],
                                   }),
-                                  ((ht = b[Pe]) == null
-                                    ? void 0
-                                    : ht.decision) === "correct" &&
+                                  b[Pe]?.decision === "correct" &&
                                     i.jsxs("label", {
                                       children: [
                                         "Corrected value (JSON scalar)",
                                         i.jsx("input", {
                                           "aria-label": "Corrected value " + Pe,
-                                          "aria-invalid": T[Pe] || void 0,
+                                          "aria-invalid": T[Pe] || undefined,
                                           defaultValue: JSON.stringify(
                                             Ae.value,
                                           ),
@@ -1318,17 +1311,14 @@ function X$({
       tabIndex: -1,
       className: "lg-xlsx-review",
       onKeyDown: (v) => {
-        var g;
         if (
           (v.key === "Escape" && (v.preventDefault(), v.stopPropagation(), n()),
           v.key === "Tab")
         ) {
           const b = [
-              ...(((g = h.current) == null
-                ? void 0
-                : g.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]',
-                  )) ?? []),
+              ...(h.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]',
+              ) ?? []),
             ],
             y = b[0],
             w = b.at(-1);

@@ -19,7 +19,20 @@ import {
   v0,
   xR,
 } from "./03-workbook-model.js";
-import { A$, C$, E$, IC, Pse, Use, hI, k$, mf, pI, x$, y$ } from "./04-cell-input-paste-and-fill.js";
+import {
+  A$,
+  C$,
+  E$,
+  IC,
+  Pse,
+  Use,
+  hI,
+  k$,
+  mf,
+  pI,
+  x$,
+  y$,
+} from "./04-cell-input-paste-and-fill.js";
 
 function $se(e, r, t = {}) {
   const n = mf(e, t),
@@ -40,13 +53,7 @@ function $se(e, r, t = {}) {
       const p = C$(s, h, f, o);
       if (
         ((l += p.reduce((v, g) => {
-          var b;
-          return (
-            v +
-            (Array.isArray(g)
-              ? g.length * (((b = g[0]) == null ? void 0 : b.length) ?? 0)
-              : 1)
-          );
+          return v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1);
         }, 0)),
         l > Nc.inputCells || d.length >= Nc.calls)
       )
@@ -123,7 +130,7 @@ async function zse(e, r, t = {}, n = { approved: false }) {
         (d.signal.addEventListener(
           "abort",
           () => j(Error("Extension processing cancelled or timed out.")),
-          { once: !0 },
+          { once: true },
         ),
           (l = setTimeout(() => d.abort(), s)));
       }),
@@ -282,7 +289,6 @@ function Hse({ workbook: e, extensions: r, onReview: t }) {
     : null;
 }
 function qse(e) {
-  var G, H, Q, X$1, J, q;
   const r = ne.useRef(null),
     t = ne.useRef(e),
     n = ne.useRef(null),
@@ -306,19 +312,12 @@ function qse(e) {
       }
     }, [e.workbook, a]),
     O = new Map(
-      (((G = I.data) == null ? void 0 : G.available) ?? []).map((W) => [
-        W.manifest.id,
-        W.manifest,
-      ]),
+      (I.data?.available ?? []).map((W) => [W.manifest.id, W.manifest]),
     );
-  for (const W of ((H = I.data) == null ? void 0 : H.installed) ?? [])
-    O.set(W.manifest.id, W.manifest);
+  for (const W of I.data?.installed ?? []) O.set(W.manifest.id, W.manifest);
   const j = O.has(s) ? s : (O.keys().next().value ?? ""),
     z = O.get(j),
-    V =
-      (Q = e.workbook.extensions) == null
-        ? void 0
-        : Q.installed.find((W) => W.manifest.id === j),
+    V = e.workbook.extensions?.installed.find((W) => W.manifest.id === j),
     D = () => ({
       extensions: t.current.extensions,
       readOnly: t.current.readOnly,
@@ -377,7 +376,7 @@ function qse(e) {
           approved: m,
           signal: K.signal,
         });
-        W === o.current && (p(te), h(null), v(!1));
+        W === o.current && (p(te), h(null), v(false));
       } catch (te) {
         W === o.current && (w(te.message), h(null));
       } finally {
@@ -398,7 +397,7 @@ function qse(e) {
           B(),
           A("Reviewed changes applied. Raw formulas are preserved."));
       }),
-    L = ((X$1 = I.data) == null ? void 0 : X$1.cells) ?? [],
+    L = I.data?.cells ?? [],
     $ = Math.max(1, Math.ceil(L.length / 10)),
     U = Math.min(k, $ - 1);
   return i.jsx("div", {
@@ -459,7 +458,7 @@ function qse(e) {
                 i.jsx("strong", { children: "Manual, reviewed execution" }),
                 i.jsxs("span", {
                   children: [
-                    ((J = I.data) == null ? void 0 : J.installed.length) ?? 0,
+                    I.data?.installed.length ?? 0,
                     " installed extensions",
                   ],
                 }),
@@ -468,7 +467,7 @@ function qse(e) {
             }),
             i.jsx("p", {
               children:
-                ((q = I.data) == null ? void 0 : q.policy) ??
+                I.data?.policy ??
                 "Only host-approved adapters can process reviewed inputs.",
             }),
             i.jsx("p", {
@@ -673,18 +672,15 @@ function qse(e) {
                         }),
                         i.jsx("tbody", {
                           children: c.requests.map((W) => {
-                            var K;
                             return i.jsxs(
                               "tr",
                               {
                                 children: [
                                   i.jsxs("td", {
                                     children: [
-                                      (K = e.workbook.sheets.find(
+                                      e.workbook.sheets.find(
                                         (te) => te.id === W.sheetId,
-                                      )) == null
-                                        ? void 0
-                                        : K.name,
+                                      )?.name,
                                       "!",
                                       W.address,
                                     ],
@@ -992,7 +988,7 @@ function qse(e) {
   });
 }
 function _C(e, r) {
-  if (r.readOnly !== void 0 && typeof r.readOnly != "boolean")
+  if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
   const t = r.sources ?? [],
     n = r.allowedSheetIds ?? e.sheets.map((o) => o.id);
@@ -1010,7 +1006,7 @@ function _C(e, r) {
         o.allowedSheetIds.some(
           (a) => !o.workbook.sheets.some((s) => s.id === a),
         ) ||
-        (o.includeHidden !== void 0 && typeof o.includeHidden != "boolean"))
+        (o.includeHidden !== undefined && typeof o.includeHidden != "boolean"))
     )
       throw Error("Invalid approved workbook identity or worksheet scope.");
   if (!Array.isArray(n) || n.some((o) => !e.sheets.some((a) => a.id === o)))
@@ -1040,7 +1036,7 @@ function Oy(e) {
         s = xR(o.raw, () => "0"),
         d = CR(s, e, t.id, n, false);
       if (
-        ((a.length || (d == null ? void 0 : d.kind) === "external") &&
+        ((a.length || d?.kind === "external") &&
           r.push({
             sheetId: t.id,
             sheetName: t.name,
@@ -1048,7 +1044,7 @@ function Oy(e) {
             formula: o.raw,
             literal: !!o.literal,
             references: a,
-            ...((d == null ? void 0 : d.kind) === "external"
+            ...(d?.kind === "external"
               ? {
                   unsupported:
                     "Unsupported external syntax. Static A1 cells and rectangles only; DDE, whole axes, external names and 3-D links remain blocked.",
@@ -1070,12 +1066,8 @@ function nT(e, r = {}) {
     links: [
       ...new Set(n.flatMap((s) => s.references.map((d) => d.target))),
     ].map((s) => {
-      var p, m, v, g;
       const d = t.sources.find((b) => b.target === s),
-        u =
-          (p = e.workbookLinks) == null
-            ? void 0
-            : p.sources.find((b) => b.target === s),
+        u = e.workbookLinks?.sources.find((b) => b.target === s),
         l = n.flatMap((b) =>
           b.references
             .filter((y) => y.target === s)
@@ -1125,20 +1117,14 @@ function nT(e, r = {}) {
           : "unapproved-or-missing";
       return {
         target: s,
-        packageTarget:
-          (g =
-            (v = (m = e.workbookLinks) == null ? void 0 : m.packageTargets) ==
-            null
-              ? void 0
-              : v.find((b) => b.key === s)) == null
-            ? void 0
-            : g.target,
+        packageTarget: e.workbookLinks?.packageTargets?.find((b) => b.key === s)
+          ?.target,
         status: f,
         references: l,
-        lastResolvedRevision: u == null ? void 0 : u.sourceRevision,
-        lastResolvedAt: u == null ? void 0 : u.resolvedAt,
-        sourceName: u == null ? void 0 : u.sourceName,
-        sourceFingerprint: u == null ? void 0 : u.sourceFingerprint,
+        lastResolvedRevision: u?.sourceRevision,
+        lastResolvedAt: u?.resolvedAt,
+        sourceName: u?.sourceName,
+        sourceFingerprint: u?.sourceFingerprint,
         cached: !!u,
       };
     }),
@@ -1232,7 +1218,7 @@ function Zse(e, r, t = {}) {
   if (!["refresh", "replace", "break"].includes(r.action))
     throw Error("Unknown link operation.");
   if (
-    (r.target !== void 0 && Xw.parse(r.target),
+    (r.target !== undefined && Xw.parse(r.target),
     r.action !== "refresh" && !r.target)
   )
     throw Error("Choose a target workbook link.");
@@ -1273,7 +1259,7 @@ function Zse(e, r, t = {}) {
           ? xR(p.formula, (v) =>
               v.target === r.target
                 ? Aie(r.replacementTarget, v.sheet, v.range)
-                : void 0,
+                : undefined,
             )
           : p.formula,
     }),

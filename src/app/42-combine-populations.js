@@ -10,7 +10,6 @@ import { EI, Nce, dz } from "./16-text-split-tools.js";
 import { Qxe, w2 } from "./41-automation-and-scripts.js";
 
 function e4e(e) {
-  var Ae, ye, Te, Pe, qe, ht;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -62,18 +61,17 @@ function e4e(e) {
     var Re, Me;
     _ &&
       oe &&
-      ((Me = (Re = a.current) == null ? void 0 : Re.scrollIntoView) == null ||
+      ((Me = (Re = a.current) == null ? undefined : Re.scrollIntoView) ==
+        null ||
         Me.call(Re, { block: "start" }));
   }, [_, oe]),
     ne.useEffect(() => {
-      var Me, ke;
+      var ke;
       const Re = document.activeElement;
       return (
-        (ke =
-          (Me = o.current) == null
-            ? void 0
-            : Me.querySelector('[data-ui-label="Combine operation"]')) ==
-          null || ke.focus(),
+        (ke = o.current?.querySelector(
+          '[data-ui-label="Combine operation"]',
+        )) == null || ke.focus(),
         () => {
           Re != null && Re.isConnected && Re.focus();
         }
@@ -173,22 +171,25 @@ function e4e(e) {
               ...Re.values,
             ])
           : G === "matches"
-            ? (((Ae = _.matching) == null ? void 0 : Ae.matches) ?? []).map(
-                (Re) => [Re.left, Re.right, Re.score, Re.explanation],
-              )
+            ? (_.matching?.matches ?? []).map((Re) => [
+                Re.left,
+                Re.right,
+                Re.score,
+                Re.explanation,
+              ])
             : G === "normalization"
-              ? (
-                  ((ye = _.matching) == null ? void 0 : ye.normalizedKeys) ?? []
-                ).map((Re) => [
+              ? (_.matching?.normalizedKeys ?? []).map((Re) => [
                   Re.side,
                   Re.locator,
                   JSON.stringify(Re.original),
                   JSON.stringify(Re.normalized),
                 ])
               : G === "exceptions"
-                ? (
-                    ((Te = _.matching) == null ? void 0 : Te.exceptions) ?? []
-                  ).map((Re) => [Re.side, Re.locator, Re.reason])
+                ? (_.matching?.exceptions ?? []).map((Re) => [
+                    Re.side,
+                    Re.locator,
+                    Re.reason,
+                  ])
                 : _.rows.map((Re) => [...Re.values, Re.left, Re.right])
       : [],
     we = Math.max(1, Math.ceil(se.length / w2)),
@@ -205,18 +206,16 @@ function e4e(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (Re) => {
-        var Me, ke, je;
+        var ke, je;
         if (
           (Re.stopPropagation(),
           Re.key === "Escape" && (Re.preventDefault(), s.current()),
           Re.key === "Tab")
         ) {
           const $e = [
-            ...(((Me = o.current) == null
-              ? void 0
-              : Me.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
-                )) ?? []),
+            ...(o.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
+            ) ?? []),
           ].filter((Je) => !Je.hidden);
           Re.shiftKey && document.activeElement === $e[0]
             ? (Re.preventDefault(), (ke = $e.at(-1)) == null || ke.focus())
@@ -508,7 +507,7 @@ function e4e(e) {
                                 ...A,
                                 unicode: Re.target.value
                                   ? Re.target.value
-                                  : void 0,
+                                  : undefined,
                               }),
                                 de());
                             },
@@ -858,9 +857,7 @@ function e4e(e) {
                                   value: "matches",
                                   children: [
                                     "All match scores and explanations (",
-                                    ((Pe = _.matching) == null
-                                      ? void 0
-                                      : Pe.matches.length) ?? 0,
+                                    _.matching?.matches.length ?? 0,
                                     ")",
                                   ],
                                 }),
@@ -868,9 +865,7 @@ function e4e(e) {
                                   value: "normalization",
                                   children: [
                                     "Changed keys (",
-                                    ((qe = _.matching) == null
-                                      ? void 0
-                                      : qe.normalizedKeys.length) ?? 0,
+                                    _.matching?.normalizedKeys.length ?? 0,
                                     ")",
                                   ],
                                 }),
@@ -878,9 +873,7 @@ function e4e(e) {
                                   value: "exceptions",
                                   children: [
                                     "Match exceptions (",
-                                    ((ht = _.matching) == null
-                                      ? void 0
-                                      : ht.exceptions.length) ?? 0,
+                                    _.matching?.exceptions.length ?? 0,
                                     ")",
                                   ],
                                 }),
@@ -1075,24 +1068,17 @@ function t4e(e) {
       options: $,
       selection: [e.sheetId, e.range],
     }),
-    H =
-      (B == null ? void 0 : B.key) === G &&
-      B.plan.snapshot === JSON.stringify(e.workbook),
+    H = B?.key === G && B.plan.snapshot === JSON.stringify(e.workbook),
     Q = H ? B.plan : null;
   (ne.useEffect(() => {
-    var de, he, Se;
+    var Se;
     const ae = document.activeElement,
-      oe =
-        (de = o.current) == null
-          ? void 0
-          : de.querySelector('[data-ui-label="Source range"]');
+      oe = o.current?.querySelector('[data-ui-label="Source range"]');
     return (
       (Se =
         oe && !oe.matches(":disabled")
           ? oe
-          : (he = o.current) == null
-            ? void 0
-            : he.querySelector("button")) == null || Se.focus(),
+          : o.current?.querySelector("button")) == null || Se.focus(),
       () => {
         ae != null && ae.isConnected && ae.focus();
       }
@@ -1140,7 +1126,7 @@ function t4e(e) {
       if (!(!Q || a.current || e.readOnly))
         try {
           const ae = Nce(e.workbook, Q, $);
-          ((a.current = !0),
+          ((a.current = true),
             e.onWorkbookChange(
               ae,
               `Text to Columns: ${Q.sourceSheetName}!${Q.request.sourceRange} → ${Q.targetSheetName}!${Q.targetRange}`,
@@ -1164,16 +1150,15 @@ function t4e(e) {
       "aria-labelledby": `${n}-title`,
       className: "ttc-dialog",
       onKeyDown: (ae) => {
-        var oe, de, he;
+        var de, he;
         if (
           (ae.stopPropagation(),
           ae.key === "Escape" && (ae.preventDefault(), e.onClose()),
           ae.key === "Tab")
         ) {
           const Se = [
-            ...(((oe = o.current) == null
-              ? void 0
-              : oe.querySelectorAll("button,input,select,summary")) ?? []),
+            ...(o.current?.querySelectorAll("button,input,select,summary") ??
+              []),
           ].filter(
             (le) =>
               !le.matches(":disabled") &&
@@ -1472,7 +1457,7 @@ function t4e(e) {
             role: "status",
             children: i.jsx(M, { children: "This workbook is read-only." }),
           }),
-        (N == null ? void 0 : N.key) === G &&
+        N?.key === G &&
           N.snapshot === JSON.stringify(e.workbook) &&
           i.jsx("p", {
             className: "ttc-error",
@@ -1809,12 +1794,12 @@ function IW(e, r, t = {}) {
       throw Error(
         `Source ${y} is a formula. Create a reviewed values snapshot before cleanup.`,
       );
-    if ((f += String((w == null ? void 0 : w.raw) ?? "").length) > 2e5)
+    if ((f += String(w?.raw ?? "").length) > 2e5)
       throw Error(
         "Source text exceeds the 200,000-character processing budget.",
       );
     h.cells[`A${b + 1}`] = {
-      raw: (w == null ? void 0 : w.raw) ?? null,
+      raw: w?.raw ?? null,
       literal: true,
     };
     const E = n4e(o.steps, `A${b + 1}`);

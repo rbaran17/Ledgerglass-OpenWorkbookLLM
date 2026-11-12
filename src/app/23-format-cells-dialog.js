@@ -32,7 +32,7 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { $k, Tde, jI, oy } from "./22-themes-and-cell-styles.js";
 
 function Nde(e) {
-  var $, U, G;
+  var $;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -54,10 +54,7 @@ function Nde(e) {
       active: e.active,
     }),
     [h] = ne.useState(() => {
-      var H;
-      return oh(
-        ys((H = s == null ? void 0 : s.cells[l]) == null ? void 0 : H.style),
-      );
+      return oh(ys(s?.cells[l]?.style));
     }),
     [f, p] = ne.useState(
       e.mode === "alignment"
@@ -70,7 +67,7 @@ function Nde(e) {
     [g, b] = ne.useState(""),
     [y, w] = ne.useState(),
     [E, A] = ne.useState({ style: "thin", color: "#000000" }),
-    [k, F] = ne.useState(h.fontSize === void 0 ? "" : String(h.fontSize)),
+    [k, F] = ne.useState(h.fontSize === undefined ? "" : String(h.fontSize)),
     [I, O] = ne.useState(String(h.indent ?? 0)),
     j = y1(d),
     z = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
@@ -85,7 +82,7 @@ function Nde(e) {
     B =
       e.readOnly ||
       D ||
-      !!(($ = s == null ? void 0 : s.protection) != null && $.enabled) ||
+      !!(($ = s?.protection) != null && $.enabled) ||
       !s ||
       j > 500;
   let _ = h,
@@ -123,14 +120,11 @@ function Nde(e) {
   });
   return (
     ne.useEffect(() => {
-      var Q, X;
+      var X;
       const H = document.activeElement;
       return (
-        (X =
-          (Q = o.current) == null
-            ? void 0
-            : Q.querySelector('[role="tab"][aria-selected="true"]')) == null ||
-          X.focus(),
+        (X = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
+          null || X.focus(),
         () => {
           H != null && H.isConnected && H.focus();
         }
@@ -145,18 +139,15 @@ function Nde(e) {
         "aria-modal": "true",
         "aria-labelledby": `${n}-title`,
         onKeyDown: (H) => {
-          var Q;
           if (
             (H.stopPropagation(),
             H.key === "Escape" && (H.preventDefault(), a.current()),
             H.key === "Tab")
           ) {
             const X = [
-                ...(((Q = o.current) == null
-                  ? void 0
-                  : Q.querySelectorAll(
-                      'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                    )) ?? []),
+                ...(o.current?.querySelectorAll(
+                  'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+                ) ?? []),
               ],
               J = X[0],
               q = X.at(-1);
@@ -201,7 +192,7 @@ function Nde(e) {
                   tabIndex: f === H ? 0 : -1,
                   onClick: () => p(H),
                   onKeyDown: (X) => {
-                    var J, q;
+                    var q;
                     if (
                       ["ArrowLeft", "ArrowRight", "Home", "End"].includes(X.key)
                     ) {
@@ -215,10 +206,8 @@ function Nde(e) {
                                 (X.key === "ArrowRight" ? 1 : oy.length - 1)) %
                               oy.length;
                       (p(oy[W]),
-                        (q =
-                          (J = X.currentTarget.parentElement) == null
-                            ? void 0
-                            : J.children[W]) == null || q.focus());
+                        (q = X.currentTarget.parentElement?.children[W]) ==
+                          null || q.focus());
                     }
                   },
                   children: H,
@@ -279,9 +268,7 @@ function Nde(e) {
                           "This workbook is read-only. You can inspect style previews.",
                       }),
                     }),
-                  ((U = s == null ? void 0 : s.protection) == null
-                    ? void 0
-                    : U.enabled) &&
+                  s?.protection?.enabled &&
                     i.jsx("p", {
                       className: "cs-notice",
                       children: i.jsx(M, {
@@ -327,7 +314,8 @@ function Nde(e) {
                                       value: _.fontFamily ?? "",
                                       onChange: (H) =>
                                         T({
-                                          fontFamily: H.target.value || void 0,
+                                          fontFamily:
+                                            H.target.value || undefined,
                                         }),
                                       lang: t("Font family"),
                                       "data-ui-label": "Font family",
@@ -358,7 +346,7 @@ function Nde(e) {
                                         (F(H),
                                           T({
                                             fontSize:
-                                              H === "" ? void 0 : Number(H),
+                                              H === "" ? undefined : Number(H),
                                           }));
                                       },
                                       lang: t("Font size"),
@@ -419,7 +407,8 @@ function Nde(e) {
                                         }),
                                         i.jsx("button", {
                                           type: "button",
-                                          onClick: () => T({ color: void 0 }),
+                                          onClick: () =>
+                                            T({ color: undefined }),
                                           children: i.jsx(M, {
                                             children: "Automatic",
                                           }),
@@ -445,7 +434,7 @@ function Nde(e) {
                                         }),
                                         i.jsx("button", {
                                           type: "button",
-                                          onClick: () => T({ fill: void 0 }),
+                                          onClick: () => T({ fill: undefined }),
                                           children: i.jsx(M, {
                                             children: "No fill",
                                           }),
@@ -471,7 +460,9 @@ function Nde(e) {
                                       "aria-label": r("Horizontal alignment"),
                                       value: _.align ?? "",
                                       onChange: (H) =>
-                                        T({ align: H.target.value || void 0 }),
+                                        T({
+                                          align: H.target.value || undefined,
+                                        }),
                                       lang: t("Horizontal alignment"),
                                       "data-ui-label": "Horizontal alignment",
                                       children: [
@@ -504,7 +495,7 @@ function Nde(e) {
                                       onChange: (H) =>
                                         T({
                                           verticalAlign:
-                                            H.target.value || void 0,
+                                            H.target.value || undefined,
                                         }),
                                       lang: t("Vertical alignment"),
                                       "data-ui-label": "Vertical alignment",
@@ -633,7 +624,7 @@ function Nde(e) {
                                 i.jsx("button", {
                                   type: "button",
                                   onClick: () => {
-                                    (w(void 0),
+                                    (w(undefined),
                                       v((H) => {
                                         const Q = { ...H };
                                         return (delete Q.borders, Q);
@@ -718,7 +709,7 @@ function Nde(e) {
                       i.jsxs("h3", {
                         children: [
                           i.jsx(M, { children: "Preview · " }),
-                          s == null ? void 0 : s.name,
+                          s?.name,
                           "!",
                           l,
                         ],
@@ -773,14 +764,10 @@ function Nde(e) {
                                     },
                                     children: i.jsx(jI, {
                                       dateSystem:
-                                        (G = e.workbook.datePolicy) == null
-                                          ? void 0
-                                          : G.dateSystem,
+                                        e.workbook.datePolicy?.dateSystem,
                                       value: V === null ? "Audit evidence" : V,
                                       cell: {
-                                        ...((s == null
-                                          ? void 0
-                                          : s.cells[l]) ?? { raw: null }),
+                                        ...(s?.cells[l] ?? { raw: null }),
                                         style: _,
                                       },
                                     }),
@@ -870,7 +857,7 @@ function W7(e) {
     .join("; ");
 }
 function Rde(e) {
-  var O, j, z, V;
+  var O;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -881,11 +868,9 @@ function Rde(e) {
       guard: JSON.stringify(e.workbook),
     }),
     [s, d] = ne.useState(() => {
-      var D;
       return structuredClone(
-        ((D = e.workbook.sheets.find((B) => B.id === e.sheetId)) == null
-          ? void 0
-          : D.conditionalFormats) ?? [],
+        e.workbook.sheets.find((B) => B.id === e.sheetId)?.conditionalFormats ??
+          [],
       );
     }),
     [u, l] = ne.useState(() => t2(e.range)),
@@ -901,11 +886,10 @@ function Rde(e) {
     w = J3(s),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
-    var B, _;
+    var _;
     const D = document.activeElement;
     return (
-      (_ = (B = o.current) == null ? void 0 : B.querySelector("button")) ==
-        null || _.focus(),
+      (_ = o.current?.querySelector("button")) == null || _.focus(),
       () => {
         D != null && D.isConnected && D.focus();
       }
@@ -923,7 +907,7 @@ function Rde(e) {
         const D = {
             ...u,
             id: u.id || crypto.randomUUID(),
-            ...(E ? { stopIfTrue: !1 } : {}),
+            ...(E ? { stopIfTrue: false } : {}),
           },
           B = u.id ? w.map((C) => (C.id === u.id ? D : C)) : [D, ...w],
           _ = FN(B.map((C, T) => ({ ...C, priority: T + 1 })));
@@ -951,18 +935,15 @@ function Rde(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (D) => {
-        var B;
         if (
           (D.stopPropagation(),
           D.key === "Escape" && (D.preventDefault(), e.onClose()),
           D.key === "Tab")
         ) {
           const _ = [
-              ...(((B = o.current) == null
-                ? void 0
-                : B.querySelectorAll(
-                    "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
-                  )) ?? []),
+              ...(o.current?.querySelectorAll(
+                "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
+              ) ?? []),
             ],
             C = _[0],
             T = _.at(-1);
@@ -993,7 +974,7 @@ function Rde(e) {
         }),
         i.jsxs("p", {
           children: [
-            (g == null ? void 0 : g.name) ?? "Worksheet removed",
+            g?.name ?? "Worksheet removed",
             " ",
             i.jsx(M, {
               children:
@@ -1014,16 +995,14 @@ function Rde(e) {
             role: "alert",
             children: i.jsx(M, { children: "This workbook is read-only." }),
           }),
-        ((j = g == null ? void 0 : g.protection) == null
-          ? void 0
-          : j.enabled) &&
+        g?.protection?.enabled &&
           i.jsx("p", {
             role: "alert",
             children: i.jsx(M, {
               children: "Unprotect this worksheet before changing rules.",
             }),
           }),
-        s.some((D) => D.priority === void 0) &&
+        s.some((D) => D.priority === undefined) &&
           i.jsx("p", {
             children: i.jsx(M, {
               children:
@@ -1302,18 +1281,12 @@ function Rde(e) {
                               i.jsx(M, { children: "Middle icon starts at" }),
                               i.jsx(ci, {
                                 "aria-label": r("Middle icon starts at"),
-                                value:
-                                  ((z = u.iconThresholds) == null
-                                    ? void 0
-                                    : z[0]) ?? 33,
+                                value: u.iconThresholds?.[0] ?? 33,
                                 onValueChange: (D) => {
-                                  var B;
                                   return k({
                                     iconThresholds: [
                                       Number(D),
-                                      ((B = u.iconThresholds) == null
-                                        ? void 0
-                                        : B[1]) ?? 67,
+                                      u.iconThresholds?.[1] ?? 67,
                                     ],
                                   });
                                 },
@@ -1325,17 +1298,11 @@ function Rde(e) {
                               i.jsx(M, { children: "High icon starts at" }),
                               i.jsx(ci, {
                                 "aria-label": r("High icon starts at"),
-                                value:
-                                  ((V = u.iconThresholds) == null
-                                    ? void 0
-                                    : V[1]) ?? 67,
+                                value: u.iconThresholds?.[1] ?? 67,
                                 onValueChange: (D) => {
-                                  var B;
                                   return k({
                                     iconThresholds: [
-                                      ((B = u.iconThresholds) == null
-                                        ? void 0
-                                        : B[0]) ?? 33,
+                                      u.iconThresholds?.[0] ?? 33,
                                       Number(D),
                                     ],
                                   });
@@ -1687,7 +1654,6 @@ const r2 = (e, r) => {
     return (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1);
   };
 function Bz(e, r, t, n = false, o = {}) {
-  var f;
   if (o.readOnly) throw Error("This workbook is read-only.");
   const a = Nr(e, r);
   jn(a);
@@ -1749,11 +1715,7 @@ function Bz(e, r, t, n = false, o = {}) {
           c.push({
             address: y,
             cell: structuredClone(w ?? { raw: null }),
-            display: Af(
-              l(r, y),
-              w,
-              (f = e.datePolicy) == null ? void 0 : f.dateSystem,
-            ),
+            display: Af(l(r, y), w, e.datePolicy?.dateSystem),
             discussions: E,
             effect:
               y === v

@@ -19,7 +19,16 @@ import {
 } from "./03-workbook-model.js";
 import { M } from "./04-cell-input-paste-and-fill.js";
 import { X1, q1 } from "./12-formula-dependency-inspector.js";
-import { Xv, bw, gW, gxe, lm, lp, p_, vw } from "./36-watch-window-and-goal-seek.js";
+import {
+  Xv,
+  bw,
+  gW,
+  gxe,
+  lm,
+  lp,
+  p_,
+  vw,
+} from "./36-watch-window-and-goal-seek.js";
 
 function vxe(e, r, t) {
   gW(e);
@@ -106,11 +115,9 @@ function vxe(e, r, t) {
       let I = 0,
         O = 0;
       const j = () => {
-          var _;
-          return (_ = k[I]) == null ? void 0 : _.text;
+          return k[I]?.text;
         },
         z = () => {
-          var T, N, R, L;
           if (++O > 32)
             throw Error("Solver expression nesting limit exceeded.");
           let _;
@@ -129,16 +136,14 @@ function vxe(e, r, t) {
               H =
                 U === null
                   ? w
-                  : (T = e.sheets.find(
-                        (Q) =>
-                          Q.name.toLowerCase() ===
-                          (U.startsWith("'")
-                            ? U.slice(1, -1).replace(/''/g, "'")
-                            : U
-                          ).toLowerCase(),
-                      )) == null
-                    ? void 0
-                    : T.id;
+                  : e.sheets.find(
+                      (Q) =>
+                        Q.name.toLowerCase() ===
+                        (U.startsWith("'")
+                          ? U.slice(1, -1).replace(/''/g, "'")
+                          : U
+                        ).toLowerCase(),
+                    )?.id;
             if (!H) throw Error("A Solver worksheet reference is missing.");
             if (G.includes(":")) {
               const Q = ct(G);
@@ -157,18 +162,18 @@ function vxe(e, r, t) {
               });
             } else _ = h(H, G, E);
           } else if (C.text === "(") {
-            if (((_ = D()), ((N = k[I++]) == null ? void 0 : N.text) !== ")"))
+            if (((_ = D()), k[I++]?.text !== ")"))
               throw Error("Unbalanced Solver parentheses.");
           } else if (C.type === 3) {
             const $ = C.text.toUpperCase();
             if (
               !["SUM", "AVERAGE", "SUMPRODUCT"].includes($) ||
-              ((R = k[I++]) == null ? void 0 : R.text) !== "("
+              k[I++]?.text !== "("
             )
               throw Error(`Unsupported Solver function or name: ${C.text}.`);
             const U = [];
             if (j() !== ")") for (U.push(D()); j() === ",";) (I++, U.push(D()));
-            if (((L = k[I++]) == null ? void 0 : L.text) !== ")" || !U.length)
+            if (k[I++]?.text !== ")" || !U.length)
               throw Error("Invalid Solver function arguments.");
             if ($ === "SUMPRODUCT") {
               const G = U.map((H) => (Array.isArray(H) ? H : [H]));
@@ -781,7 +786,7 @@ function xxe(e, r, t = {}) {
     const y = r.distribution ?? "normal";
     let w, E;
     if (y === "normal") {
-      if (r.mean === void 0 || r.standardDeviation === void 0)
+      if (r.mean === undefined || r.standardDeviation === undefined)
         throw Error(
           "Normal distribution needs a finite mean and positive standard deviation.",
         );
@@ -792,8 +797,8 @@ function xxe(e, r, t = {}) {
         ));
     } else if (y === "binomial") {
       if (
-        r.trials === void 0 ||
-        r.probability === void 0 ||
+        r.trials === undefined ||
+        r.probability === undefined ||
         b.some((A) => !Number.isInteger(A) || A < 0 || A > r.trials)
       )
         throw Error(
@@ -806,7 +811,7 @@ function xxe(e, r, t = {}) {
         ));
     } else {
       if (
-        r.lambda === void 0 ||
+        r.lambda === undefined ||
         b.some((A) => !Number.isInteger(A) || A < 0 || A > 1e3)
       )
         throw Error(
@@ -979,7 +984,7 @@ function HT(e, r) {
     for (let a = t.firstCol; a <= t.lastCol; a++) {
       const s = e.cells[`${ut(a)}${o + 1}`];
       n.push({
-        raw: (s == null ? void 0 : s.raw) ?? null,
+        raw: s?.raw ?? null,
         literal: !!(s != null && s.literal),
       });
     }
@@ -1068,7 +1073,7 @@ function Cxe(e, r, t, n = {}) {
 }
 function Axe(e, r, t = {}) {
   const n = e.sheets.find((d) => d.id === r),
-    o = n == null ? void 0 : n.analysisReport;
+    o = n?.analysisReport;
   if (!n || !o)
     return { status: "unavailable", message: "No saved analysis report." };
   const a = lm(e, t);

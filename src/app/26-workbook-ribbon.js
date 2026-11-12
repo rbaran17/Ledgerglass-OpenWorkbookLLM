@@ -61,7 +61,7 @@ import { G7, Mn, Uh, Vde, Xl, lr } from "./24-merge-and-audit-analysis.js";
 import { Hk } from "./25-color-picker.js";
 
 function Hde(e) {
-  var U, G, H, Q, X;
+  var H;
   const { text: r, language: t } = Dr(),
     [n, o] = ne.useState("Home"),
     [a, s] = ne.useState(false),
@@ -75,13 +75,9 @@ function Hde(e) {
     b = ne.useId(),
     y = !c || f,
     w = () => {
-      var J, q;
-      return (q =
-        (J = m.current) == null
-          ? void 0
-          : J.querySelector('[role="tab"][aria-selected="true"]')) == null
-        ? void 0
-        : q.focus();
+      return m.current
+        ?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.focus();
     },
     E = () => {
       var J;
@@ -122,7 +118,7 @@ function Hde(e) {
         const W = q.target;
         if (!(W instanceof Element) || W.closest('[role="dialog"]')) return;
         const K = m.current,
-          te = (K == null ? void 0 : K.closest(".lg-app")) ?? K;
+          te = K?.closest(".lg-app") ?? K;
         !te ||
           (te.classList.contains("lg-app")
             ? W.closest(".lg-app") !== te
@@ -135,16 +131,17 @@ function Hde(e) {
       );
     }, []));
   const k = e.readOnly || e.busy,
-    F = ys((U = e.cell) == null ? void 0 : U.style),
+    F = ys(e.cell?.style),
     I = (J) => e.onFormat({ style: J }),
-    O = (J) => e.onFormat({ format: J, numFmt: void 0, numberFormat: void 0 }),
+    O = (J) =>
+      e.onFormat({ format: J, numFmt: undefined, numberFormat: undefined }),
     j =
-      ((G = e.cell) == null ? void 0 : G.numberFormat) &&
+      e.cell?.numberFormat &&
       !["number", "currency", "accounting", "percent"].includes(
         e.cell.numberFormat.category,
       ),
     z = (J) => {
-      var K, te, ae, oe, de, he, Se;
+      var K;
       if ((K = e.cell) != null && K.numberFormat && !j) {
         const le = l0({
           ...e.cell.numberFormat,
@@ -157,16 +154,16 @@ function Hde(e) {
         return;
       }
       const q =
-          $B((te = e.cell) == null ? void 0 : te.numFmt) ??
-          (((ae = e.cell) == null ? void 0 : ae.format) === "currency" ||
-          ((oe = e.cell) == null ? void 0 : oe.format) === "number" ||
-          ((de = e.cell) == null ? void 0 : de.format) === "percent"
+          $B(e.cell?.numFmt) ??
+          (e.cell?.format === "currency" ||
+          e.cell?.format === "number" ||
+          e.cell?.format === "percent"
             ? 2
             : 0),
         W = Math.max(0, Math.min(10, q + J));
       e.onFormat({
-        numberFormat: void 0,
-        numFmt: `${((he = e.cell) == null ? void 0 : he.format) === "currency" ? "$" : ""}#,##0${W ? `.${"0".repeat(W)}` : ""}${((Se = e.cell) == null ? void 0 : Se.format) === "percent" ? "%" : ""}`,
+        numberFormat: undefined,
+        numFmt: `${e.cell?.format === "currency" ? "$" : ""}#,##0${W ? `.${"0".repeat(W)}` : ""}${e.cell?.format === "percent" ? "%" : ""}`,
       });
     };
   ne.useEffect(() => {
@@ -188,7 +185,7 @@ function Hde(e) {
       value:
         (H = e.cell) != null && H.numberFormat
           ? "advanced"
-          : (((Q = e.cell) == null ? void 0 : Q.format) ?? "general"),
+          : (e.cell?.format ?? "general"),
       disabled: k,
       onChange: (J) =>
         J.target.value === "advanced"
@@ -197,7 +194,7 @@ function Hde(e) {
       lang: t("Number format"),
       "data-ui-label": "Number format",
       children: [
-        ((X = e.cell) == null ? void 0 : X.numberFormat) &&
+        e.cell?.numberFormat &&
           i.jsxs("option", {
             value: "advanced",
             children: [
@@ -415,7 +412,7 @@ function Hde(e) {
                           value: F.border ?? "none",
                           disabled: k,
                           onChange: (q) =>
-                            I({ border: q.target.value, borders: void 0 }),
+                            I({ border: q.target.value, borders: undefined }),
                           lang: t("Borders"),
                           "data-ui-label": "Borders",
                           children: [
@@ -527,7 +524,7 @@ function Hde(e) {
                             e.onFormat({
                               format: "number",
                               numFmt: "#,##0.00",
-                              numberFormat: void 0,
+                              numberFormat: undefined,
                             }),
                           disabled: k,
                         }),
@@ -1979,13 +1976,13 @@ function Hde(e) {
         id: "quick-undo",
         name: "Undo",
         location: "Quick access",
-        reason: k || !e.canUndo ? _("Undo") : void 0,
+        reason: k || !e.canUndo ? _("Undo") : undefined,
       },
       {
         id: "quick-redo",
         name: "Redo",
         location: "Quick access",
-        reason: k || !e.canRedo ? _("Redo") : void 0,
+        reason: k || !e.canRedo ? _("Redo") : undefined,
       },
     ],
     $ = (J) => {
@@ -1998,13 +1995,10 @@ function Hde(e) {
     };
   return (
     ne.useEffect(() => {
-      var W;
       const J = d.current;
       if (!J) return;
       const q = Array.from(
-        ((W = m.current) == null
-          ? void 0
-          : W.querySelectorAll("[data-workbook-command]")) ?? [],
+        m.current?.querySelectorAll("[data-workbook-command]") ?? [],
       ).find((K) => K.dataset.workbookCommand === J);
       q && (q.focus(), (d.current = null));
     }),
@@ -2068,7 +2062,7 @@ function Hde(e) {
                   className: "xl-file-control",
                   ref: g,
                   onKeyDown: (J) => {
-                    var q, W, K, te;
+                    var W, te;
                     if (!(
                       J.altKey ||
                       J.ctrlKey ||
@@ -2085,11 +2079,9 @@ function Hde(e) {
                           return;
                         }
                         const ae = Array.from(
-                            ((q = g.current) == null
-                              ? void 0
-                              : q.querySelectorAll(
-                                  '[role="menuitem"]:not(:disabled)',
-                                )) ?? [],
+                            g.current?.querySelectorAll(
+                              '[role="menuitem"]:not(:disabled)',
+                            ) ?? [],
                           ),
                           oe = ae.indexOf(document.activeElement),
                           de =
@@ -2108,10 +2100,7 @@ function Hde(e) {
                           (J.preventDefault(),
                           J.stopPropagation(),
                           l(false),
-                          (te =
-                            (K = g.current) == null
-                              ? void 0
-                              : K.querySelector("button")) == null ||
+                          (te = g.current?.querySelector("button")) == null ||
                             te.focus());
                   },
                   children: [

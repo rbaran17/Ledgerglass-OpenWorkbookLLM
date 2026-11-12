@@ -112,12 +112,12 @@ function Lce(e, r, t, n, o = {}) {
   if (((r = r.trim()), !r || r.length > 128))
     throw Error("Use a recipe name of 1–128 characters.");
   const s = structuredClone(e.transformationRecipes ?? []),
-    d = n ? s.find((c) => c.id === n) : void 0;
+    d = n ? s.find((c) => c.id === n) : undefined;
   if (n && !d) throw Error("Saved recipe no longer exists.");
   if (s.some((c) => c.id !== n && c.name.toLowerCase() === r.toLowerCase()))
     throw Error("A recipe with this name already exists.");
   const u = {
-    version: ((d == null ? void 0 : d.versions.length) ?? 0) + 1,
+    version: (d?.versions.length ?? 0) + 1,
     definition: a,
     definitionHash: hr(a),
     createdAt: new Date().toISOString(),
@@ -145,7 +145,6 @@ function Pce(e, r, t = {}) {
   };
 }
 function yz(e, r, t = {}) {
-  var a, s;
   const n = CN(r.definition);
   if (
     Object.keys(r).some(
@@ -153,16 +152,12 @@ function yz(e, r, t = {}) {
     )
   )
     throw Error("Unknown recipe request field.");
-  if ((r.recipeId === void 0) != (r.version === void 0))
+  if ((r.recipeId === undefined) != (r.version === undefined))
     throw Error("Choose a saved recipe ID and version together.");
   if (r.recipeId) {
-    const d =
-      (s =
-        (a = e.transformationRecipes) == null
-          ? void 0
-          : a.find((u) => u.id === r.recipeId)) == null
-        ? void 0
-        : s.versions.find((u) => u.version === r.version);
+    const d = e.transformationRecipes
+      ?.find((u) => u.id === r.recipeId)
+      ?.versions.find((u) => u.version === r.version);
     if (!d || d.definitionHash !== hr(n))
       throw Error(
         "The recipe differs from the saved version. Save a new version or reload the selected version.",
@@ -309,7 +304,6 @@ function $ce({ label: e, fields: r, selected: t, onChange: n }) {
   });
 }
 function CT({ label: e, source: r, sheets: t, onChange: n }) {
-  var a;
   const o = t.find((s) => s.id === r.sheetId);
   return i.jsxs("fieldset", {
     className: "recipe-source",
@@ -340,21 +334,19 @@ function CT({ label: e, source: r, sheets: t, onChange: n }) {
           i.jsxs("select", {
             "aria-label": `${e} table`,
             value: r.tableId ?? "",
-            onChange: (s) => n({ ...r, tableId: s.target.value || void 0 }),
+            onChange: (s) => n({ ...r, tableId: s.target.value || undefined }),
             children: [
               i.jsx("option", { value: "", children: "Explicit headed range" }),
-              (a = o == null ? void 0 : o.tables) == null
-                ? void 0
-                : a.map((s) =>
-                    i.jsxs(
-                      "option",
-                      {
-                        value: s.id,
-                        children: [s.name, " · current table body"],
-                      },
-                      s.id,
-                    ),
-                  ),
+              o?.tables?.map((s) =>
+                i.jsxs(
+                  "option",
+                  {
+                    value: s.id,
+                    children: [s.name, " · current table body"],
+                  },
+                  s.id,
+                ),
+              ),
             ],
           }),
         ],
@@ -454,7 +446,6 @@ function Fk({ label: e, value: r, onChange: t }) {
 }
 const B7 = ["sum", "count", "average", "min", "max", "distinctCount"];
 function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
-  var h;
   const { text: a, language: s } = Dr(),
     d = (f) => o({ ...e, ...f }),
     u = (f, p, m, v) =>
@@ -1092,13 +1083,12 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
               i.jsx(M, { children: "Unicode normalization" }),
               i.jsxs("select", {
                 "aria-label": a("Recipe Unicode normalization"),
-                value:
-                  ((h = e.normalization) == null ? void 0 : h.unicode) ?? "",
+                value: e.normalization?.unicode ?? "",
                 onChange: (f) =>
                   d({
                     normalization: {
                       ...e.normalization,
-                      unicode: f.target.value || void 0,
+                      unicode: f.target.value || undefined,
                     },
                   }),
                 lang: s("Recipe Unicode normalization"),
@@ -1121,7 +1111,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   d({
                     fuzzy: f.target.checked
                       ? { key: 0, threshold: 0.8 }
-                      : void 0,
+                      : undefined,
                   }),
               }),
               i.jsx(M, { children: "Fuzzy text key" }),

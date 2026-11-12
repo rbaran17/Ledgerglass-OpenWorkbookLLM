@@ -56,7 +56,15 @@ import {
 } from "./01-cell-styles-and-themes.js";
 import { Rc, Us, WL } from "./02-number-formats.js";
 import { Pi, Uw, Vg, Yy, b5, eg, iP, nP, pC, une } from "./03-defined-names.js";
-import { Iie, P1, _ie, iU, ip, oU, z4 } from "./04-pivot-tables-and-pictures.js";
+import {
+  Iie,
+  P1,
+  _ie,
+  iU,
+  ip,
+  oU,
+  z4,
+} from "./04-pivot-tables-and-pictures.js";
 import {
   B2,
   Ep,
@@ -82,7 +90,7 @@ function Die(e, r = {}) {
   if (!ip(r) || Object.keys(r).some((u) => u !== "filteredRowsBySheet"))
     throw Error("Calculation options support only filteredRowsBySheet.");
   const t = r.filteredRowsBySheet;
-  if (t !== void 0 && !ip(t))
+  if (t !== undefined && !ip(t))
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
@@ -102,14 +110,15 @@ function Die(e, r = {}) {
   const d = new Map();
   for (const u of e.sheets) d.set(u.id, ul(u.rowCount, cn(u, "row")));
   return (u, l, c) => {
-    var H, Q, X;
+    var Q, X;
     if (!iU.includes(u)) return oU;
     const { issue: h, isIssue: f } = c,
       p = (J) => {
         if (f(J)) throw J;
         if (!ip(J) || !ip(J.ref)) throw h("#VALUE!");
         const q = J.ref;
-        if (q.sheet !== void 0 && typeof q.sheet != "string") throw h("#REF!");
+        if (q.sheet !== undefined && typeof q.sheet != "string")
+          throw h("#REF!");
         const W = o.get(
           String(q.sheet ?? c.currentSheetName ?? "").toLowerCase(),
         );
@@ -227,7 +236,7 @@ function Die(e, r = {}) {
         q = Array.isArray(J) ? J : [[J]];
       if (!q.length || q.length > 1e4) return h("#LIMIT!");
       const W = q.every(Array.isArray) ? q : [q],
-        K = ((H = W[0]) == null ? void 0 : H.length) ?? 0;
+        K = W[0]?.length ?? 0;
       if (!K || W.some((te) => te.length !== K || te.some(Array.isArray)))
         return h("#VALUE!");
       if (W.length * K > 1e4) return h("#LIMIT!");
@@ -352,8 +361,8 @@ function q3(e) {
 function X3(e) {
   const r = Xm(e, "Hyperlink"),
     t =
-      r.label === void 0 || r.label === ""
-        ? void 0
+      r.label === undefined || r.label === ""
+        ? undefined
         : kc(r.label, "Link display text", Jl.labelLength);
   if (r.kind === "internal")
     return {
@@ -406,7 +415,7 @@ function X3(e) {
 }
 function EB(e, r) {
   const t = Xm(e, "Workbook review metadata");
-  if (t.reviewThreads !== void 0) {
+  if (t.reviewThreads !== undefined) {
     (!Array.isArray(t.reviewThreads) || t.reviewThreads.length > Jl.threads) &&
       ji(`A workbook can contain at most ${Jl.threads} review threads.`);
     const n = new Set(),
@@ -453,7 +462,7 @@ function EB(e, r) {
           );
         }),
         g = { id: c, anchor: p, messages: v, createdAt: h, updatedAt: f };
-      if (u.resolved !== void 0) {
+      if (u.resolved !== undefined) {
         const b = Xm(u.resolved, "Review resolution"),
           y = Lv(b.createdAt);
         ((y < v.at(-1).createdAt || y > f) &&
@@ -463,7 +472,7 @@ function EB(e, r) {
             createdAt: y,
           }));
       }
-      if (u.orphaned !== void 0) {
+      if (u.orphaned !== undefined) {
         const b = Xm(u.orphaned, "Orphaned review target"),
           y = Lv(b.createdAt);
         ((!["worksheet-deleted", "cell-deleted"].includes(String(b.reason)) ||
@@ -485,7 +494,7 @@ function EB(e, r) {
   }
   for (const n of r.sheets)
     for (const o of qj(n.cells) ? Object.values(n.cells) : []) {
-      if (o.hyperlink === void 0) continue;
+      if (o.hyperlink === undefined) continue;
       const a = X3(o.hyperlink);
       (a.kind === "internal" &&
         !r.sheets.some((s) => s.id === a.sheetId) &&
@@ -507,7 +516,6 @@ function ON(e, r) {
   return (EB(t, n), n);
 }
 function sQ(e, r, t, n) {
-  var l;
   const o = t.axis === "row" ? Mt.maxRows : Mt.maxCols;
   (!["row", "column"].includes(t.axis) ||
     !Number.isInteger(t.index) ||
@@ -519,11 +527,13 @@ function sQ(e, r, t, n) {
   const a = (c) => {
     const h = _t(c),
       f = t.axis === "row" ? h.row : h.col;
-    if (t.moveBefore === void 0 && f < t.index) return c;
-    if (t.moveBefore === void 0 && t.remove && f < t.index + t.count)
+    if (t.moveBefore === undefined && f < t.index) return c;
+    if (t.moveBefore === undefined && t.remove && f < t.index + t.count)
       return null;
     const p =
-      t.moveBefore !== void 0 ? Jf(f, t) : f + (t.remove ? -t.count : t.count);
+      t.moveBefore !== undefined
+        ? Jf(f, t)
+        : f + (t.remove ? -t.count : t.count);
     return (
       p >= o &&
         ji(
@@ -533,28 +543,23 @@ function sQ(e, r, t, n) {
     );
   };
   let s = false;
-  const d =
-      (l = e.reviewThreads) == null
-        ? void 0
-        : l.map((c) => {
-            if (c.orphaned || c.anchor.sheetId !== r) return c;
-            const h = a(c.anchor.address);
-            if (h === c.anchor.address) return c;
-            if (((s = true), h))
-              return { ...c, anchor: { ...c.anchor, address: h } };
-            const f = fx({ timestamp: n }, c.updatedAt);
-            return {
-              ...c,
-              updatedAt: f,
-              orphaned: { reason: "cell-deleted", createdAt: f },
-            };
-          }),
+  const d = e.reviewThreads?.map((c) => {
+      if (c.orphaned || c.anchor.sheetId !== r) return c;
+      const h = a(c.anchor.address);
+      if (h === c.anchor.address) return c;
+      if (((s = true), h)) return { ...c, anchor: { ...c.anchor, address: h } };
+      const f = fx({ timestamp: n }, c.updatedAt);
+      return {
+        ...c,
+        updatedAt: f,
+        orphaned: { reason: "cell-deleted", createdAt: f },
+      };
+    }),
     u = e.sheets.map((c) => {
       let h;
       for (const [f, p] of Object.entries(c.cells)) {
         const m = p.hyperlink;
-        if ((m == null ? void 0 : m.kind) !== "internal" || m.sheetId !== r)
-          continue;
+        if (m?.kind !== "internal" || m.sheetId !== r) continue;
         const v = a(m.address);
         v !== m.address &&
           (h ?? (h = { ...c.cells }),
@@ -576,14 +581,14 @@ function dQ(e, r, t) {
           const a = _t(o.anchor.address),
             s = t.axis === "row" ? a.row : a.col;
           if (
-            t.moveBefore === void 0 &&
+            t.moveBefore === undefined &&
             t.remove &&
             s >= t.index &&
             s < t.index + t.count
           )
             return { ...o, orphaned: "deleted-cells" };
           const d =
-            t.moveBefore !== void 0
+            t.moveBefore !== undefined
               ? Jf(s, t)
               : s >= t.index + (t.remove ? t.count : 0)
                 ? s + (t.remove ? -t.count : t.count)
@@ -616,7 +621,6 @@ function Qne(e, r) {
   };
 }
 function eie(e, r, t) {
-  var o, a;
   const n = [];
   for (const s of t.objects ?? []) {
     if (s.kind !== "picture") {
@@ -634,13 +638,8 @@ function eie(e, r, t) {
       l = e.addImage({ base64: s.dataURL, extension: d });
     r.addImage(l, {
       tl: {
-        col:
-          u.col +
-          s.offsetX /
-            (((o = t.columnWidths) == null ? void 0 : o[u.col]) ?? 84),
-        row:
-          u.row +
-          s.offsetY / (((a = t.rowHeights) == null ? void 0 : a[u.row]) ?? 21),
+        col: u.col + s.offsetX / (t.columnWidths?.[u.col] ?? 84),
+        row: u.row + s.offsetY / (t.rowHeights?.[u.row] ?? 21),
       },
       ext: { width: s.width, height: s.height },
       editAs: "oneCell",
@@ -657,7 +656,7 @@ function eae(e) {
   return `${ut(r.col)}${r.row + 1}`;
 }
 function TC(e, r) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (!Array.isArray(e) || e.length > B2)
     throw Error("A workbook may contain at most 100 formula watches.");
   const t = new Set(),
@@ -674,12 +673,12 @@ function TC(e, r) {
     )
       throw Error("Invalid formula watch metadata.");
     if (t.has(o.id)) throw Error("Formula watch IDs must be unique.");
-    if ((t.add(o.id), o.orphaned !== void 0 && !Qoe.includes(o.orphaned)))
+    if ((t.add(o.id), o.orphaned !== undefined && !Qoe.includes(o.orphaned)))
       throw Error("Invalid formula watch orphan reason.");
     const a = o.anchor,
       s = eae(a.address),
       d = r.sheets.find((c) => c.id === a.sheetId),
-      u = o.orphaned ?? (d ? void 0 : "missing-sheet"),
+      u = o.orphaned ?? (d ? undefined : "missing-sheet"),
       l = JSON.stringify([o.anchor.sheetId, s]);
     if (!u && n.has(l))
       throw Error("Active formula watches must not repeat the same cell.");
@@ -840,24 +839,20 @@ function tae(e) {
             qE(m.raw) ||
             (typeof m.raw == "string" && m.raw.length <= 32767)
           ) ||
-            (m.literal !== void 0 && typeof m.literal != "boolean"))
+            (m.literal !== undefined && typeof m.literal != "boolean"))
         )
           throw Error("Invalid saved what-if assumption.");
         return {
           ...v,
           sheetName: Ep(m.sheetName, 31),
           raw: m.raw,
-          ...(m.literal === void 0 ? {} : { literal: m.literal }),
+          ...(m.literal === undefined ? {} : { literal: m.literal }),
         };
       });
     if (
       [...s.inputs, ...s.outputs].some((p) => !h.has(Vu(p))) ||
       s.inputs.some((p, m) => {
-        var v;
-        return (
-          ((v = f.find((g) => Vu(g) === Vu(p))) == null ? void 0 : v.raw) !==
-          u.inputs[m]
-        );
+        return f.find((g) => Vu(g) === Vu(p))?.raw !== u.inputs[m];
       })
     )
       throw Error(
@@ -906,7 +901,7 @@ function XR(e, r) {
   };
 }
 function Fg(e, r, t) {
-  if (e === void 0 || e === "") return;
+  if (e === undefined || e === "") return;
   if (typeof e != "string")
     throw Error("Print titles must be a single row or column interval.");
   const n = (
@@ -948,8 +943,8 @@ function iae(e, r, t, n, o, a) {
     else {
       const m = n + o - 1,
         v = [
-          f < n ? { start: f, end: Math.min(p, n - 1) } : void 0,
-          p > m ? { start: Math.max(f, m + 1) - o, end: p - o } : void 0,
+          f < n ? { start: f, end: Math.min(p, n - 1) } : undefined,
+          p > m ? { start: Math.max(f, m + 1) - o, end: p - o } : undefined,
         ].filter(Boolean);
       if (!v.length)
         throw Error(
@@ -1109,7 +1104,6 @@ function Np(e, r = Mt.maxPatches) {
   return [...o];
 }
 function pQ(e, r, t, n, o) {
-  var h;
   const a = ct(t),
     s = ct(o),
     d = (f, p) => {
@@ -1124,39 +1118,36 @@ function pQ(e, r, t, n, o) {
     u = [],
     l = e.sheets.find((f) => f.id === n);
   return {
-    watches:
-      (h = e.formulaWatches) == null
-        ? void 0
-        : h.map((f) => {
-            if (f.orphaned) return f;
-            const p = `${f.anchor.sheetName}!${f.anchor.address}`;
-            if (f.anchor.sheetId === r && d(a, f.anchor.address)) {
-              const m = _t(f.anchor.address),
-                v = `${ut(m.col + s.firstCol - a.firstCol)}${m.row + s.firstRow - a.firstRow + 1}`,
-                g = `${l.name}!${v}`;
-              return p === g && r === n
-                ? f
-                : (u.push({
-                    kind: "formula-watch",
-                    label: f.id,
-                    before: p,
-                    after: g,
-                  }),
-                  {
-                    ...f,
-                    anchor: { sheetId: n, sheetName: l.name, address: v },
-                  });
-            }
-            return f.anchor.sheetId === n && d(s, f.anchor.address)
-              ? (u.push({
-                  kind: "formula-watch",
-                  label: f.id,
-                  before: p,
-                  after: `${p} — watched source overwritten`,
-                }),
-                { ...f, orphaned: "overwritten" })
-              : f;
+    watches: e.formulaWatches?.map((f) => {
+      if (f.orphaned) return f;
+      const p = `${f.anchor.sheetName}!${f.anchor.address}`;
+      if (f.anchor.sheetId === r && d(a, f.anchor.address)) {
+        const m = _t(f.anchor.address),
+          v = `${ut(m.col + s.firstCol - a.firstCol)}${m.row + s.firstRow - a.firstRow + 1}`,
+          g = `${l.name}!${v}`;
+        return p === g && r === n
+          ? f
+          : (u.push({
+              kind: "formula-watch",
+              label: f.id,
+              before: p,
+              after: g,
+            }),
+            {
+              ...f,
+              anchor: { sheetId: n, sheetName: l.name, address: v },
+            });
+      }
+      return f.anchor.sheetId === n && d(s, f.anchor.address)
+        ? (u.push({
+            kind: "formula-watch",
+            label: f.id,
+            before: p,
+            after: `${p} — watched source overwritten`,
           }),
+          { ...f, orphaned: "overwritten" })
+        : f;
+    }),
     changes: u,
   };
 }
@@ -1173,8 +1164,8 @@ function K3(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
     u = ul(r.colCount, cn(s, "column"));
   if (!d.count || !u.count)
     throw Error("At least one row and one column must remain visible.");
-  const l = e.frozenRows === void 0 ? 0 : e.frozenRows,
-    c = e.frozenCols === void 0 ? 0 : e.frozenCols;
+  const l = e.frozenRows === undefined ? 0 : e.frozenRows,
+    c = e.frozenCols === undefined ? 0 : e.frozenCols;
   if (
     !Number.isInteger(l) ||
     !Number.isInteger(c) ||
@@ -1204,10 +1195,10 @@ function K3(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
         "Freeze panes cannot cross a merged range. Unmerge those cells first.",
       );
   }
-  (e.hiddenRows !== void 0 && (r.hiddenRows = o),
-    e.hiddenCols !== void 0 && (r.hiddenCols = a),
-    e.frozenRows !== void 0 && (r.frozenRows = l),
-    e.frozenCols !== void 0 && (r.frozenCols = c));
+  (e.hiddenRows !== undefined && (r.hiddenRows = o),
+    e.hiddenCols !== undefined && (r.hiddenCols = a),
+    e.frozenRows !== undefined && (r.frozenRows = l),
+    e.frozenCols !== undefined && (r.frozenCols = c));
 }
 function Y3(e, r, t) {
   const n = e.sheets.find((a) => a.id === r);
@@ -1264,7 +1255,7 @@ function JS(e, r, t) {
     e,
     r,
     (n) => (
-      t === void 0
+      t === undefined
         ? delete n.splitPanes
         : ((n.splitPanes = AB(t, { rows: n.rowCount, cols: n.colCount })),
           (n.frozenRows = 0),
@@ -1331,7 +1322,7 @@ function xQ(e, r, t, n, o) {
   );
 }
 function hx(e, r, t, n = {}) {
-  if (n.readOnly !== void 0 && typeof n.readOnly != "boolean")
+  if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = e.sheets.find((s) => s.id === r);
@@ -1388,9 +1379,7 @@ function AQ(e, r, t, n, o) {
     e,
     r,
     (a) => {
-      var d;
-      const s =
-        (d = a.outlineGroups) == null ? void 0 : d.find((u) => u.id === t);
+      const s = a.outlineGroups?.find((u) => u.id === t);
       if (!s) throw Error("Outline group not found.");
       s.collapsed = n;
     },
@@ -1404,18 +1393,14 @@ function kQ(e, r, t, n, o) {
       e,
       r,
       (a) => {
-        var l;
         const s = NB(a, t),
           d = Math.max(0, ...s.map((c) => c.depth)) + 1;
         if (!Number.isInteger(n) || n < 1 || n > d)
           throw Error("Choose an available outline level.");
         const u = new Map(s.map((c) => [c.id, c.depth]));
-        a.outlineGroups =
-          (l = a.outlineGroups) == null
-            ? void 0
-            : l.map((c) =>
-                c.axis === t ? { ...c, collapsed: u.get(c.id) >= n } : c,
-              );
+        a.outlineGroups = a.outlineGroups?.map((c) =>
+          c.axis === t ? { ...c, collapsed: u.get(c.id) >= n } : c,
+        );
       },
       o,
     )
@@ -1428,11 +1413,7 @@ function SQ(e, r, t, n) {
       e,
       r,
       (o) => {
-        var a;
-        o.outlineGroups =
-          (a = o.outlineGroups) == null
-            ? void 0
-            : a.filter((s) => s.axis !== t);
+        o.outlineGroups = o.outlineGroups?.filter((s) => s.axis !== t);
       },
       n,
     )
@@ -1505,7 +1486,7 @@ function _B(e) {
         "Time bounds must be fractions from 0 up to, but excluding, 1.",
       );
     if (
-      t.formula !== void 0 &&
+      t.formula !== undefined &&
       ((a.formula = yv(t.formula, 8192, "formula")),
       !a.formula.startsWith("=") || a.formula.length < 2)
     )
@@ -1514,13 +1495,13 @@ function _B(e) {
       throw Error(
         "A custom rule requires a formula relative to the range's top-left cell.",
       );
-    if (t.errorStyle !== void 0) {
+    if (t.errorStyle !== undefined) {
       if (!["stop", "warning", "information"].includes(String(t.errorStyle)))
         throw Error("Invalid validation error style.");
       a.errorStyle = t.errorStyle;
     }
     for (const s of ["showInputMessage", "showDropdown"])
-      if (t[s] !== void 0) {
+      if (t[s] !== undefined) {
         if (typeof t[s] != "boolean")
           throw Error("Invalid validation display setting.");
         a[s] = t[s];
@@ -1530,17 +1511,13 @@ function _B(e) {
       ["inputMessage", 500],
       ["errorTitle", 100],
     ])
-      t[s] !== void 0 && (a[s] = yv(t[s], d, s));
+      t[s] !== undefined && (a[s] = yv(t[s], d, s));
     return a;
   });
 }
 function DB(e, r, t) {
-  var o;
   const n = _t(t);
-  return (
-    ((o = e.sheets.find((a) => a.id === r)) == null ? void 0 : o.validations) ??
-    []
-  ).filter((a) => {
+  return (e.sheets.find((a) => a.id === r)?.validations ?? []).filter((a) => {
     const s = ct(a.range);
     return (
       n.row >= s.firstRow &&
@@ -1573,7 +1550,7 @@ function FN(e) {
         fill: m6(n.fill),
         color: m6(n.color),
       };
-    if (n.priority !== void 0) {
+    if (n.priority !== undefined) {
       if (
         !Number.isInteger(n.priority) ||
         Number(n.priority) < 1 ||
@@ -1585,7 +1562,7 @@ function FN(e) {
         );
       ((s.priority = Number(n.priority)), t.add(s.priority));
     }
-    if (n.stopIfTrue !== void 0) {
+    if (n.stopIfTrue !== undefined) {
       if (typeof n.stopIfTrue != "boolean")
         throw Error("Stop if true must be boolean.");
       if (n.stopIfTrue && ["colorScale", "dataBar", "iconSet"].includes(s.kind))
@@ -1595,7 +1572,7 @@ function FN(e) {
       s.stopIfTrue = n.stopIfTrue;
     }
     if (
-      (n.formula !== void 0 &&
+      (n.formula !== undefined &&
         (s.formula = Ub(n.formula, 4096, "conditional formula")),
       s.kind === "formula" &&
         (!((d = s.formula) != null && d.startsWith("=")) ||
@@ -1603,13 +1580,13 @@ function FN(e) {
     )
       throw Error("A formula rule requires a formula beginning with =.");
     for (const u of ["minColor", "maxColor"])
-      n[u] !== void 0 && (s[u] = m6(n[u]));
-    if (n.thresholdType !== void 0) {
+      n[u] !== undefined && (s[u] = m6(n[u]));
+    if (n.thresholdType !== undefined) {
       if (n.thresholdType !== "percent" && n.thresholdType !== "number")
         throw Error("Invalid icon threshold type.");
       s.thresholdType = n.thresholdType;
     }
-    if (n.iconThresholds !== void 0) {
+    if (n.iconThresholds !== undefined) {
       if (
         !Array.isArray(n.iconThresholds) ||
         n.iconThresholds.length !== 2 ||
@@ -1886,7 +1863,7 @@ const zQ = (e, r = 200) =>
   };
 function VQ(e, r) {
   if (sD(e)) {
-    if (e.merges !== void 0) {
+    if (e.merges !== undefined) {
       (!Array.isArray(e.merges) || e.merges.length > 1e3) &&
         al("At most1,000 merged ranges are supported.");
       const t = [];
@@ -1901,15 +1878,15 @@ function VQ(e, r) {
       r.merges = t;
     }
     if (
-      (e.validations !== void 0 && (r.validations = _B(e.validations)),
-      e.conditionalFormats !== void 0 &&
+      (e.validations !== undefined && (r.validations = _B(e.validations)),
+      e.conditionalFormats !== undefined &&
         (r.conditionalFormats = FN(e.conditionalFormats)),
-      e.protection !== void 0)
+      e.protection !== undefined)
     ) {
       const t = e.protection;
       ((!sD(t) ||
         typeof t.enabled != "boolean" ||
-        (t.hash !== void 0 &&
+        (t.hash !== undefined &&
           (!/^[a-f\d]{64}$/i.test(String(t.hash)) ||
             typeof t.salt != "string" ||
             t.salt.length > 100))) &&
@@ -1922,7 +1899,6 @@ function VQ(e, r) {
   }
 }
 function kE(e, r, t, n = false) {
-  var l, c;
   const o = e.sheets.find((h) => h.id === r);
   jn(o);
   const a = CE(t),
@@ -1936,8 +1912,8 @@ function kE(e, r, t, n = false) {
     const h = `${ut(s.firstCol)}${s.firstRow + 1}`;
     u[h] = {
       ...u[h],
-      raw: ((l = u[h]) == null ? void 0 : l.raw) ?? null,
-      style: { ...((c = u[h]) == null ? void 0 : c.style), align: "center" },
+      raw: u[h]?.raw ?? null,
+      style: { ...u[h]?.style, align: "center" },
     };
   }
   return {
@@ -2003,7 +1979,10 @@ function aP(e) {
     for (const v of Object.keys(u))
       if (v.startsWith("xmlns") && u[v] !== Uw)
         return Pi("Unsupported definedName namespace.");
-    if (c !== void 0 && (!/^\d+$/.test(c) || !Number.isSafeInteger(Number(c))))
+    if (
+      c !== undefined &&
+      (!/^\d+$/.test(c) || !Number.isSafeInteger(Number(c)))
+    )
       return Pi(`Name "${l}" has an invalid localSheetId.`);
     const p = `=${nP(
       (d[3] ?? "").replace(
@@ -2012,9 +1991,9 @@ function aP(e) {
 `,
       ),
     ).replace(/^=/, "")}`;
-    if ((pC(p), c !== void 0 && Number(c) >= s))
+    if ((pC(p), c !== undefined && Number(c) >= s))
       return Pi(`Name "${l}" has an out-of-range localSheetId.`);
-    const m = `${c === void 0 ? "workbook" : Number(c)}:${l.toLowerCase()}`;
+    const m = `${c === undefined ? "workbook" : Number(c)}:${l.toLowerCase()}`;
     if (a.has(m)) return Pi(`Duplicate name "${l}" in the same scope.`);
     if ((a.add(m), une.has(l.toLowerCase())))
       t.builtinXml += `<definedName${Object.entries(u)
@@ -2031,7 +2010,7 @@ function aP(e) {
       if (++o > 1e3)
         return Pi("The workbook exceeds the 1,000-defined-name limit.");
       for (const g of ["function", "vbProcedure", "xlm"])
-        if (u[g] !== void 0 && !["0", "false"].includes(u[g]))
+        if (u[g] !== undefined && !["0", "false"].includes(u[g]))
           return Pi(`Name "${l}" has an executable ${g} attribute.`);
       const v = Object.keys(u).filter(
         (g) =>
@@ -2045,8 +2024,8 @@ function aP(e) {
         t.names.push({
           name: l,
           refersTo: p,
-          ...(c !== void 0 ? { localSheetId: Number(c) } : {}),
-          ...(u.comment !== void 0 ? { comment: u.comment } : {}),
+          ...(c !== undefined ? { localSheetId: Number(c) } : {}),
+          ...(u.comment !== undefined ? { comment: u.comment } : {}),
         }));
     }
     n = n.slice(d[0].length);
@@ -2057,16 +2036,16 @@ function aP(e) {
       t.names.map((d) => ({
         name: d.name,
         refersTo: d.refersTo,
-        ...(d.localSheetId !== void 0
+        ...(d.localSheetId !== undefined
           ? { scopeSheetId: String(d.localSheetId) }
           : {}),
-        ...(d.comment !== void 0 ? { comment: d.comment } : {}),
+        ...(d.comment !== undefined ? { comment: d.comment } : {}),
       })),
       {
         sheets: [
           ...new Set(
             t.names.flatMap((d) =>
-              d.localSheetId === void 0 ? [] : [d.localSheetId],
+              d.localSheetId === undefined ? [] : [d.localSheetId],
             ),
           ),
         ].map((d) => ({ id: String(d) })),

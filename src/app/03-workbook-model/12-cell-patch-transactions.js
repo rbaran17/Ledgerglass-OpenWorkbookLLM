@@ -19,7 +19,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
   const a = new Set();
   let s;
   const d = r.map((p) => {
-      var E, A;
+      var A;
       if (!Vh(p)) return Hn("Invalid cell patch.");
       const m = Nr(e, p.sheetId);
       jn(m);
@@ -30,8 +30,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
       _N(e, hi(p.cell).style);
       const y = m.cells[b];
       if (
-        ((y == null ? void 0 : y.raw) ?? null) !==
-          ((E = p.cell) == null ? void 0 : E.raw) ||
+        (y?.raw ?? null) !== p.cell?.raw ||
         !!(y != null && y.literal) != !!((A = p.cell) != null && A.literal)
       ) {
         s ?? (s = Vn(e));
@@ -56,7 +55,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
           {
             sheetId: m.id,
             address: b,
-            before: m.cells[b] ? hi(m.cells[b]) : void 0,
+            before: m.cells[b] ? hi(m.cells[b]) : undefined,
             after: hi(p.cell),
           });
     }),
@@ -97,7 +96,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
           (d.push({
             sheetId: p.id,
             address: v,
-            before: m.cells[v] ? hi(m.cells[v]) : void 0,
+            before: m.cells[v] ? hi(m.cells[v]) : undefined,
             after: hi(g),
           }),
           d.length > Mt.maxPatches)
@@ -110,10 +109,8 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
   const h = v0(
     c,
     d.filter((p) => {
-      var m, v;
       return (
-        ((m = p.before) == null ? void 0 : m.raw) !== p.after.raw ||
-        ((v = p.before) == null ? void 0 : v.literal) !== p.after.literal
+        p.before?.raw !== p.after.raw || p.before?.literal !== p.after.literal
       );
     }),
     o.validationApproval,
@@ -188,22 +185,17 @@ function KJ(e, r, t, n, o = {}) {
       );
   }
   const l = d.flatMap((h) => {
-    var g, b;
     const f = a.cells[h],
-      p = { ...(f == null ? void 0 : f.style), ...n, ...s };
+      p = { ...f?.style, ...n, ...s };
     (Object.hasOwn(n, "border") && delete p.borders,
       o.borders &&
         (p.borders = {
-          ...((g = f == null ? void 0 : f.style) == null ? void 0 : g.borders),
+          ...f?.style?.borders,
           ...pB(h, u, o.borders.preset, o.borders.line),
         }),
-      n.borders !== void 0 &&
+      n.borders !== undefined &&
         (p.borders = {
-          ...(o.borders
-            ? p.borders
-            : (b = f == null ? void 0 : f.style) == null
-              ? void 0
-              : b.borders),
+          ...(o.borders ? p.borders : f?.style?.borders),
           ...s.borders,
         }));
     const m = oh(p),
@@ -215,8 +207,7 @@ function KJ(e, r, t, n, o = {}) {
       Object.keys(m).length || delete v.style,
       !f && !Object.keys(m).length
         ? []
-        : JSON.stringify(oh((f == null ? void 0 : f.style) ?? {})) ===
-            JSON.stringify(m)
+        : JSON.stringify(oh(f?.style ?? {})) === JSON.stringify(m)
           ? []
           : JSON.stringify(f) === JSON.stringify(v)
             ? []

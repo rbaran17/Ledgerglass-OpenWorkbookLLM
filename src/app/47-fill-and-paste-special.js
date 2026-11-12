@@ -20,11 +20,21 @@ import {
   wQ,
   yQ,
 } from "./03-workbook-model.js";
-import { $2, Dr, Iae, M, Qy, Rae, ci, i$, kae } from "./04-cell-input-paste-and-fill.js";
+import {
+  $2,
+  Dr,
+  Iae,
+  M,
+  Qy,
+  Rae,
+  ci,
+  i$,
+  kae,
+} from "./04-cell-input-paste-and-fill.js";
 import { b4e, pj } from "./46-workbook-manager.js";
 
 function y4e(e) {
-  var at, _e;
+  var at;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -137,26 +147,18 @@ function y4e(e) {
     ]),
     Pe = e.mode === "viewSettings" ? E1(d, H) : [],
     qe = Math.max(1, Math.ceil(Pe.length / 20)),
-    ht = Math.max(
-      1,
-      Math.ceil(
-        (((_e = Te.plan) == null ? void 0 : _e.previewPatches.length) ?? 0) /
-          12,
-      ),
-    ),
+    ht = Math.max(1, Math.ceil((Te.plan?.previewPatches.length ?? 0) / 12)),
     Re = Math.min(q, ht - 1);
   (ne.useEffect(() => {
     W(0);
   }, [Te.plan]),
     ne.useEffect(() => {
-      var lt, be;
+      var be;
       const Ze = document.activeElement;
       return (
-        (be =
-          (lt = o.current) == null
-            ? void 0
-            : lt.querySelector("button:not(:disabled),input:not(:disabled)")) ==
-          null || be.focus(),
+        (be = o.current?.querySelector(
+          "button:not(:disabled),input:not(:disabled)",
+        )) == null || be.focus(),
         () => {
           Ze != null && Ze.isConnected && Ze.focus();
         }
@@ -244,18 +246,15 @@ function y4e(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (Ze) => {
-        var lt;
         if (
           (Ze.stopPropagation(),
           Ze.key === "Escape" && (Ze.preventDefault(), a.current.onClose()),
           Ze.key === "Tab")
         ) {
           const be = Array.from(
-              ((lt = o.current) == null
-                ? void 0
-                : lt.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ),
             ft = be[0],
             pt = be.at(-1);
@@ -1070,7 +1069,7 @@ function y4e(e) {
                                     "row",
                                     u.firstRow,
                                     u.lastRow,
-                                    !0,
+                                    true,
                                   ),
                                 "Hide selected rows",
                               ),
@@ -1089,7 +1088,7 @@ function y4e(e) {
                                     "column",
                                     u.firstCol,
                                     u.lastCol,
-                                    !0,
+                                    true,
                                   ),
                                 "Hide selected columns",
                               ),
@@ -1164,7 +1163,7 @@ function y4e(e) {
                                                   H,
                                                   Ze.start,
                                                   Ze.end,
-                                                  !1,
+                                                  false,
                                                 ),
                                               `Unhide ${H === "row" ? "rows" : "columns"}`,
                                             ),
@@ -1305,7 +1304,6 @@ function y4e(e) {
                                   children: Te.plan.previewPatches
                                     .slice(Re * 12, (Re + 1) * 12)
                                     .map((Ze) => {
-                                      var be, ft, pt;
                                       const lt = Nr(e.workbook, Ze.sheetId);
                                       return i.jsxs(
                                         "tr",
@@ -1322,11 +1320,8 @@ function y4e(e) {
                                                 Af(
                                                   ye(Ze.sheetId, Ze.address),
                                                   lt.cells[Ze.address],
-                                                  (be =
-                                                    e.workbook.datePolicy) ==
-                                                    null
-                                                    ? void 0
-                                                    : be.dateSystem,
+                                                  e.workbook.datePolicy
+                                                    ?.dateSystem,
                                                 ) || "(blank)",
                                             }),
                                             i.jsxs("td", {
@@ -1334,21 +1329,14 @@ function y4e(e) {
                                                 Af(
                                                   Ze.cell.raw,
                                                   Ze.cell,
-                                                  (ft =
-                                                    e.workbook.datePolicy) ==
-                                                    null
-                                                    ? void 0
-                                                    : ft.dateSystem,
+                                                  e.workbook.datePolicy
+                                                    ?.dateSystem,
                                                 ) || "(blank)",
                                                 JSON.stringify(
                                                   Ze.cell.style,
                                                 ) !==
                                                   JSON.stringify(
-                                                    (pt =
-                                                      lt.cells[Ze.address]) ==
-                                                      null
-                                                      ? void 0
-                                                      : pt.style,
+                                                    lt.cells[Ze.address]?.style,
                                                   ) &&
                                                   i.jsx("small", {
                                                     children: i.jsx(M, {
@@ -1500,17 +1488,14 @@ function w4e(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (y) => {
-        var w;
         if (
           (y.key === "Escape" && (y.preventDefault(), e.onClose()),
           y.key === "Tab")
         ) {
           const E = Array.from(
-              ((w = o.current) == null
-                ? void 0
-                : w.querySelectorAll(
-                    "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                "button:not(:disabled),select:not(:disabled),input:not(:disabled)",
+              ) ?? [],
             ),
             A = E[0],
             k = E.at(-1);
@@ -1624,7 +1609,6 @@ function w4e(e) {
                           children: v.previewPatches
                             .slice(h * 25, (h + 1) * 25)
                             .map((y) => {
-                              var w;
                               return i.jsxs(
                                 "tr",
                                 {
@@ -1640,9 +1624,7 @@ function w4e(e) {
                                         Af(
                                           y.cell.raw,
                                           y.cell,
-                                          (w = e.workbook.datePolicy) == null
-                                            ? void 0
-                                            : w.dateSystem,
+                                          e.workbook.datePolicy?.dateSystem,
                                         ) || "(blank)",
                                     }),
                                   ],
@@ -1777,7 +1759,7 @@ function UW(e) {
   );
 }
 function $W(e) {
-  (e !== void 0 && typeof e != "boolean" && zn("Read-only must be boolean."),
+  (e !== undefined && typeof e != "boolean" && zn("Read-only must be boolean."),
     e && zn("This workbook is read-only."));
 }
 function zW(e, r) {

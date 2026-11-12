@@ -20,16 +20,14 @@ import { BI } from "./29-conditional-formatting-dialog.js";
 import { Vz, gfe, mfe } from "./30-table-and-pivot-builder.js";
 
 function vfe(e) {
-  var d;
   const { text: r, language: t } = Dr(),
     n = e.workbook.sheets.flatMap((u) =>
       (u.pivots ?? []).map((l) => ({ sheet: u, definition: l })),
     ),
     [o, a] = ne.useState(() => {
-      var l, c, h;
       const u = _t(e.range.split(":")[0]);
       return (
-        ((l = n.find((f) => {
+        n.find((f) => {
           const p = ct(f.definition.outputRange);
           return (
             f.sheet.id === e.sheetId &&
@@ -38,20 +36,13 @@ function vfe(e) {
             u.col >= p.firstCol &&
             u.col <= p.lastCol
           );
-        })) == null
-          ? void 0
-          : l.definition.id) ??
-        ((c = n.find((f) => f.sheet.id === e.sheetId)) == null
-          ? void 0
-          : c.definition.id) ??
-        ((h = n[0]) == null ? void 0 : h.definition.id) ??
+        })?.definition.id ??
+        n.find((f) => f.sheet.id === e.sheetId)?.definition.id ??
+        n[0]?.definition.id ??
         ""
       );
     }),
-    s =
-      (d = n.find((u) => u.definition.id === o)) == null
-        ? void 0
-        : d.definition;
+    s = n.find((u) => u.definition.id === o)?.definition;
   return i.jsxs("div", {
     role: "dialog",
     "aria-modal": "false",
@@ -145,10 +136,8 @@ function bfe(e) {
     }),
     g = JSON.stringify(e.workbook),
     b = JSON.stringify(o),
-    y = (f == null ? void 0 : f.snapshot) === g && f.request === b,
-    w =
-      (m == null ? void 0 : m.snapshot) === g &&
-      m.report.address === u.toUpperCase(),
+    y = f?.snapshot === g && f.request === b,
+    w = m?.snapshot === g && m.report.address === u.toUpperCase(),
     E = ne.useMemo(() => {
       try {
         return pR(e.workbook, r.source.sheetId, r.source.range);
@@ -157,9 +146,8 @@ function bfe(e) {
       }
     }, [e.workbook, r.source.sheetId, r.source.range]);
   ne.useEffect(() => {
-    var D, B;
-    (B = (D = n.current) == null ? void 0 : D.querySelector("input")) == null ||
-      B.focus();
+    var B;
+    (B = n.current?.querySelector("input")) == null || B.focus();
   }, []);
   const A = (D) => {
       try {
@@ -199,12 +187,10 @@ function bfe(e) {
       }
     }, [e.workbook, t, F]),
     O = (D) => {
-      var B;
-      return ((B = I.get(D)) == null ? void 0 : B.items) ?? [];
+      return I.get(D)?.items ?? [];
     },
     j = (D) => {
-      var B;
-      return ((B = I.get(D)) == null ? void 0 : B.error) ?? "";
+      return I.get(D)?.error ?? "";
     },
     z = (D, B) => a((_) => ({ ..._, [D]: B })),
     V = y ? f.book.sheets.flatMap((D) => D.pivots ?? []).at(-1) : null;
@@ -587,7 +573,6 @@ function bfe(e) {
                 children: i.jsx(M, { children: "Sort pivot fields" }),
               }),
               [...new Set([...r.rowFields, ...r.columnFields])].map((D) => {
-                var B, _;
                 return i.jsxs(
                   "label",
                   {
@@ -596,12 +581,7 @@ function bfe(e) {
                       D,
                       i.jsxs("select", {
                         value:
-                          ((_ =
-                            (B = o.sorts) == null
-                              ? void 0
-                              : B.find((C) => C.field === D)) == null
-                            ? void 0
-                            : _.direction) ?? "",
+                          o.sorts?.find((C) => C.field === D)?.direction ?? "",
                         onChange: (C) =>
                           z("sorts", [
                             ...(o.sorts ?? []).filter((T) => T.field !== D),
@@ -679,7 +659,7 @@ function bfe(e) {
                         "chart",
                         D.target.checked
                           ? { kind: "column", valueIndex: 0 }
-                          : void 0,
+                          : undefined,
                       ),
                   }),
                   i.jsx(M, { children: "Show PivotChart" }),
@@ -802,7 +782,7 @@ function bfe(e) {
       (V ? V.chart : r.chart) &&
         i.jsx(gfe, {
           book: V ? f.book : e.workbook,
-          id: (V == null ? void 0 : V.id) ?? t,
+          id: V?.id ?? t,
         }),
       i.jsxs("fieldset", {
         className: "lg-table-list",
@@ -1550,7 +1530,7 @@ function xfe({ object: e, report: r, update: t }) {
   const { text: n, language: o } = Dr(),
     a = e.chartOptions ?? {},
     s = (l) => t({ chartOptions: { ...a, ...l } }),
-    d = (r == null ? void 0 : r.series) ?? [],
+    d = r?.series ?? [],
     u = () =>
       d
         .filter((l) => l.included)
@@ -1564,7 +1544,6 @@ function xfe({ object: e, report: r, update: t }) {
             "aria-label": n("Chart type"),
             value: e.chart,
             onChange: (l) => {
-              var f;
               const c = l.target.value,
                 h = [
                   "pie",
@@ -1582,9 +1561,7 @@ function xfe({ object: e, report: r, update: t }) {
                   ...(c === "histogram"
                     ? {
                         xTitle:
-                          ((f = d.find((p) => p.included)) == null
-                            ? void 0
-                            : f.name) ?? "Source value",
+                          d.find((p) => p.included)?.name ?? "Source value",
                         yTitle: "Frequency (records)",
                       }
                     : {}),
@@ -1615,7 +1592,11 @@ function xfe({ object: e, report: r, update: t }) {
             onChange: (l) =>
               t({
                 range: l.target.value.toUpperCase(),
-                chartOptions: { ...a, series: void 0, includedRows: void 0 },
+                chartOptions: {
+                  ...a,
+                  series: undefined,
+                  includedRows: undefined,
+                },
               }),
             lang: o("Chart source range"),
             "data-ui-label": "Chart source range",
@@ -1631,7 +1612,11 @@ function xfe({ object: e, report: r, update: t }) {
             onChange: (l) =>
               t({
                 headers: l.target.checked,
-                chartOptions: { ...a, series: void 0, includedRows: void 0 },
+                chartOptions: {
+                  ...a,
+                  series: undefined,
+                  includedRows: undefined,
+                },
               }),
           }),
           i.jsx(M, { children: "First row contains series names" }),
@@ -1788,12 +1773,7 @@ function xfe({ object: e, report: r, update: t }) {
                 a.histogramBins ??
                 Math.min(
                   50,
-                  Math.max(
-                    1,
-                    Math.ceil(
-                      Math.sqrt((r == null ? void 0 : r.points.length) ?? 1),
-                    ),
-                  ),
+                  Math.max(1, Math.ceil(Math.sqrt(r?.points.length ?? 1))),
                 ),
               onValueChange: (l) => s({ histogramBins: Number(l) }),
               lang: o("Histogram bins"),
@@ -1808,7 +1788,7 @@ function xfe({ object: e, report: r, update: t }) {
           }),
           i.jsx("button", {
             type: "button",
-            onClick: () => s({ series: void 0 }),
+            onClick: () => s({ series: undefined }),
             children: i.jsx(M, { children: "Use all source series" }),
           }),
           i.jsx("div", {
@@ -1863,7 +1843,7 @@ function xfe({ object: e, report: r, update: t }) {
                                       h.column === l.column
                                         ? {
                                             ...h,
-                                            name: c.target.value || void 0,
+                                            name: c.target.value || undefined,
                                           }
                                         : h,
                                     ),
@@ -1914,10 +1894,10 @@ function xfe({ object: e, report: r, update: t }) {
           i.jsx("summary", {
             children: i.jsx(M, { children: "Chart row filter" }),
           }),
-          i.jsx("p", { children: r == null ? void 0 : r.scope }),
+          i.jsx("p", { children: r?.scope }),
           i.jsx("button", {
             type: "button",
-            onClick: () => s({ includedRows: void 0 }),
+            onClick: () => s({ includedRows: undefined }),
             children: i.jsx(M, { children: "Include all chart rows" }),
           }),
           i.jsx("button", {
@@ -1927,38 +1907,34 @@ function xfe({ object: e, report: r, update: t }) {
           }),
           i.jsx("div", {
             className: "dg-chart-row-list",
-            children:
-              r == null
-                ? void 0
-                : r.points.map((l) =>
-                    i.jsxs(
-                      "label",
-                      {
-                        className: "dg-check",
-                        children: [
-                          i.jsx("input", {
-                            type: "checkbox",
-                            "aria-label": `Include chart row ${l.row}`,
-                            checked: l.included,
-                            onChange: (c) => {
-                              const h =
-                                a.includedRows ?? r.points.map((f) => f.row);
-                              s({
-                                includedRows: c.target.checked
-                                  ? [...h, l.row]
-                                  : h.filter((f) => f !== l.row),
-                              });
-                            },
-                          }),
-                          l.row,
-                          ": ",
-                          l.label,
-                          l.hidden ? " (hidden worksheet row)" : "",
-                        ],
+            children: r?.points.map((l) =>
+              i.jsxs(
+                "label",
+                {
+                  className: "dg-check",
+                  children: [
+                    i.jsx("input", {
+                      type: "checkbox",
+                      "aria-label": `Include chart row ${l.row}`,
+                      checked: l.included,
+                      onChange: (c) => {
+                        const h = a.includedRows ?? r.points.map((f) => f.row);
+                        s({
+                          includedRows: c.target.checked
+                            ? [...h, l.row]
+                            : h.filter((f) => f !== l.row),
+                        });
                       },
-                      l.row,
-                    ),
-                  ),
+                    }),
+                    l.row,
+                    ": ",
+                    l.label,
+                    l.hidden ? " (hidden worksheet row)" : "",
+                  ],
+                },
+                l.row,
+              ),
+            ),
           }),
         ],
       }),

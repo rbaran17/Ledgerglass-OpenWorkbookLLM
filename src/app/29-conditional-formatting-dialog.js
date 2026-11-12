@@ -40,7 +40,7 @@ function lfe({
   onClose: a,
   onWorkbookChange: s,
 }) {
-  var Ee, Ae, ye, Te, Pe, qe, ht;
+  var Ae, Pe, qe, ht;
   const { text: d, language: u } = Dr(),
     l = r.sheets.find((Re) => Re.id === t),
     c = n.split(":")[0],
@@ -82,17 +82,14 @@ function lfe({
       })
       .slice(0, 500),
     [oe, de] = ne.useState(0),
-    [he, Se] = ne.useState(((Ee = ae[0]) == null ? void 0 : Ee[1].raw) ?? "");
+    [he, Se] = ne.useState(ae[0]?.[1].raw ?? "");
   ne.useEffect(() => {
-    var Me, ke;
+    var ke;
     const Re = document.activeElement;
     return (
-      (ke =
-        (Me = te.current) == null
-          ? void 0
-          : Me.querySelector("input,textarea,select,button")) == null ||
-        ke.focus(),
-      () => (Re == null ? void 0 : Re.focus())
+      (ke = te.current?.querySelector("input,textarea,select,button")) ==
+        null || ke.focus(),
+      () => Re?.focus()
     );
   }, []);
   const le = {
@@ -117,7 +114,7 @@ function lfe({
     (H(""), q(true));
     try {
       if (o && e !== "spelling") throw Error("This workbook is read-only.");
-      if (e === "merge") ce(kE(r, t, h, !1), "Merge cells");
+      if (e === "merge") ce(kE(r, t, h, false), "Merge cells");
       else if (e === "paint") ce(qQ(r, t, c, W), "Paint cell formatting");
       else if (e === "protection") {
         const ke = await HQ(
@@ -265,16 +262,13 @@ function lfe({
       "aria-modal": "true",
       "aria-label": le[e] ?? e,
       onKeyDown: (Re) => {
-        var Me;
         if (
           (Re.key === "Escape" && (Re.stopPropagation(), a()), Re.key === "Tab")
         ) {
           const ke = Array.from(
-              ((Me = te.current) == null
-                ? void 0
-                : Me.querySelectorAll(
-                    "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
-                  )) ?? [],
+              te.current?.querySelectorAll(
+                "button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])",
+              ) ?? [],
             ),
             je = ke[0],
             $e = ke.at(-1);
@@ -371,7 +365,7 @@ function lfe({
                     disabled: o,
                     onClick: () => {
                       try {
-                        ce(kE(r, t, h, !0), "Unmerge cells");
+                        ce(kE(r, t, h, true), "Unmerge cells");
                       } catch (Re) {
                         H(String(Re));
                       }
@@ -489,48 +483,42 @@ function lfe({
                         "Rules update when calculated cell values change.",
                     }),
                   }),
-                  (ye = l.conditionalFormats) == null
-                    ? void 0
-                    : ye.map((Re) =>
-                        i.jsxs(
-                          "div",
-                          {
-                            className: "wt-existing",
-                            children: [
-                              i.jsxs("span", {
-                                children: [Re.range, " · ", Re.kind],
-                              }),
-                              i.jsx("button", {
-                                disabled: o,
-                                onClick: () =>
-                                  ce(
-                                    {
-                                      ...r,
-                                      sheets: r.sheets.map((Me) => {
-                                        var ke;
-                                        return Me.id === t
-                                          ? {
-                                              ...Me,
-                                              conditionalFormats:
-                                                (ke = Me.conditionalFormats) ==
-                                                null
-                                                  ? void 0
-                                                  : ke.filter(
-                                                      (je) => je.id !== Re.id,
-                                                    ),
-                                            }
-                                          : Me;
-                                      }),
-                                    },
-                                    "Remove conditional formatting",
-                                  ),
-                                children: i.jsx(M, { children: "Remove rule" }),
-                              }),
-                            ],
-                          },
-                          Re.id,
-                        ),
-                      ),
+                  l.conditionalFormats?.map((Re) =>
+                    i.jsxs(
+                      "div",
+                      {
+                        className: "wt-existing",
+                        children: [
+                          i.jsxs("span", {
+                            children: [Re.range, " · ", Re.kind],
+                          }),
+                          i.jsx("button", {
+                            disabled: o,
+                            onClick: () =>
+                              ce(
+                                {
+                                  ...r,
+                                  sheets: r.sheets.map((Me) => {
+                                    return Me.id === t
+                                      ? {
+                                          ...Me,
+                                          conditionalFormats:
+                                            Me.conditionalFormats?.filter(
+                                              (je) => je.id !== Re.id,
+                                            ),
+                                        }
+                                      : Me;
+                                  }),
+                                },
+                                "Remove conditional formatting",
+                              ),
+                            children: i.jsx(M, { children: "Remove rule" }),
+                          }),
+                        ],
+                      },
+                      Re.id,
+                    ),
+                  ),
                 ],
               }),
             e === "validation" &&
@@ -651,47 +639,41 @@ function lfe({
                       }),
                     ],
                   }),
-                  (Te = l.validations) == null
-                    ? void 0
-                    : Te.map((Re) =>
-                        i.jsxs(
-                          "div",
-                          {
-                            className: "wt-existing",
-                            children: [
-                              i.jsxs("span", {
-                                children: [Re.range, " · ", Re.kind],
-                              }),
-                              i.jsx("button", {
-                                disabled: o,
-                                onClick: () =>
-                                  ce(
-                                    {
-                                      ...r,
-                                      sheets: r.sheets.map((Me) => {
-                                        var ke;
-                                        return Me.id === t
-                                          ? {
-                                              ...Me,
-                                              validations:
-                                                (ke = Me.validations) == null
-                                                  ? void 0
-                                                  : ke.filter(
-                                                      (je) => je.id !== Re.id,
-                                                    ),
-                                            }
-                                          : Me;
-                                      }),
-                                    },
-                                    "Remove data validation",
-                                  ),
-                                children: i.jsx(M, { children: "Remove rule" }),
-                              }),
-                            ],
-                          },
-                          Re.id,
-                        ),
-                      ),
+                  l.validations?.map((Re) =>
+                    i.jsxs(
+                      "div",
+                      {
+                        className: "wt-existing",
+                        children: [
+                          i.jsxs("span", {
+                            children: [Re.range, " · ", Re.kind],
+                          }),
+                          i.jsx("button", {
+                            disabled: o,
+                            onClick: () =>
+                              ce(
+                                {
+                                  ...r,
+                                  sheets: r.sheets.map((Me) => {
+                                    return Me.id === t
+                                      ? {
+                                          ...Me,
+                                          validations: Me.validations?.filter(
+                                            (je) => je.id !== Re.id,
+                                          ),
+                                        }
+                                      : Me;
+                                  }),
+                                },
+                                "Remove data validation",
+                              ),
+                            children: i.jsx(M, { children: "Remove rule" }),
+                          }),
+                        ],
+                      },
+                      Re.id,
+                    ),
+                  ),
                 ],
               }),
             e === "duplicates" &&
@@ -716,7 +698,6 @@ function lfe({
                         }),
                       }),
                       we.map((Re) => {
-                        var Me;
                         return i.jsxs(
                           "label",
                           {
@@ -736,11 +717,8 @@ function lfe({
                               " ·",
                               " ",
                               String(
-                                ((Me =
-                                  l.cells[`${ut(Re)}${se.firstRow + 1}`]) ==
-                                null
-                                  ? void 0
-                                  : Me.raw) ?? "",
+                                l.cells[`${ut(Re)}${se.firstRow + 1}`]?.raw ??
+                                  "",
                               ),
                             ],
                           },
@@ -947,7 +925,6 @@ function ufe({
   readOnly: o,
   onWorkbookChange: a,
 }) {
-  var C;
   const { text: s, language: d } = Dr(),
     u = e.sheets.find((T) => T.id === r).tables.find((T) => T.id === t),
     [l, c] = ne.useState(u.columns[0].id),
@@ -969,10 +946,7 @@ function ufe({
         return null;
       }
     }, [e, r, t, l]),
-    _ =
-      ((C = e.tableEvidence) == null
-        ? void 0
-        : C.filter((T) => T.tableId === t)) ?? [];
+    _ = e.tableEvidence?.filter((T) => T.tableId === t) ?? [];
   return i.jsxs("details", {
     children: [
       i.jsx("summary", {
@@ -993,13 +967,10 @@ function ufe({
                 "aria-label": s("Typed column"),
                 value: l,
                 onChange: (T) => {
-                  var N;
                   (c(T.target.value),
                     f(
-                      ((N = u.columns.find((R) => R.id === T.target.value)) ==
-                      null
-                        ? void 0
-                        : N.dataType) ?? "any",
+                      u.columns.find((R) => R.id === T.target.value)
+                        ?.dataType ?? "any",
                     ),
                     k(null));
                 },
@@ -1017,12 +988,12 @@ function ufe({
             "data-ui-label": "Current column type",
             children: [
               i.jsx(M, { children: "Saved type: " }),
-              (B == null ? void 0 : B.dataType) ?? "unknown",
+              B?.dataType ?? "unknown",
               "; ",
-              (B == null ? void 0 : B.checked) ?? 0,
+              B?.checked ?? 0,
               " ",
               i.jsx(M, { children: "rows checked; " }),
-              (B == null ? void 0 : B.exceptions.length) ?? 0,
+              B?.exceptions.length ?? 0,
               " ",
               i.jsx(M, { children: "exceptions" }),
               B != null && B.truncated
@@ -1210,10 +1181,9 @@ function ufe({
                   start: O * 20 + 1,
                   children: [
                     ...A.plan.changes.map((T) => {
-                      var N;
                       return {
                         address: T.address,
-                        text: `${JSON.stringify(((N = T.before) == null ? void 0 : N.raw) ?? null)} → ${JSON.stringify(T.after.raw)}`,
+                        text: `${JSON.stringify(T.before?.raw ?? null)} → ${JSON.stringify(T.after.raw)}`,
                       };
                     }),
                     ...A.plan.exceptions.map((T) => ({
@@ -1363,7 +1333,7 @@ function cfe({
                       i.jsx(M, { children: "grouping" }),
                       i.jsxs("select", {
                         "aria-label": `Date grouping ${u}`,
-                        value: (l == null ? void 0 : l.unit) ?? "",
+                        value: l?.unit ?? "",
                         onChange: (c) =>
                           n([
                             ...t.filter((h) => h.field !== u),
@@ -1372,9 +1342,7 @@ function cfe({
                                   {
                                     field: u,
                                     unit: c.target.value,
-                                    dateSystem:
-                                      (l == null ? void 0 : l.dateSystem) ??
-                                      "iso",
+                                    dateSystem: l?.dateSystem ?? "iso",
                                   },
                                 ]
                               : []),
@@ -1604,15 +1572,15 @@ function BI({ workbook: e, pivotId: r, compact: t = false }) {
       }),
       i.jsxs("p", {
         children: [
-          (a == null ? void 0 : a.sourceSheetName) ?? o.source.sheetId,
+          a?.sourceSheetName ?? o.source.sheetId,
           "!",
-          (a == null ? void 0 : a.sourceRange) ?? o.source.range,
+          a?.sourceRange ?? o.source.range,
           " ",
           i.jsx(M, { children: "· Source revision " }),
           o.sourceRevision,
           " ",
           i.jsx(M, { children: "· Refreshed " }),
-          (a == null ? void 0 : a.at) ?? "not recorded",
+          a?.at ?? "not recorded",
         ],
       }),
       n.state !== "current" &&
@@ -1680,11 +1648,8 @@ function BI({ workbook: e, pivotId: r, compact: t = false }) {
   });
 }
 function dfe({ workbook: e, sheetId: r, onOpen: t, onExplore: n }) {
-  var d;
   const { text: o, language: a } = Dr(),
-    s =
-      ((d = e.sheets.find((u) => u.id === r)) == null ? void 0 : d.pivots) ??
-      [];
+    s = e.sheets.find((u) => u.id === r)?.pivots ?? [];
   return s.length
     ? i.jsxs("div", {
         className: "lg-pivot-status-bar",
@@ -1738,10 +1703,7 @@ function Y7(e) {
   for (
     ;
     e.sheets.some((t) => {
-      var n;
-      return (n = t.tables) == null
-        ? void 0
-        : n.some((o) => o.name.toLowerCase() === `table${r}`);
+      return t.tables?.some((o) => o.name.toLowerCase() === `table${r}`);
     });
   )
     r++;

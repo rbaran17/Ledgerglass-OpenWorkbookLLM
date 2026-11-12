@@ -5,7 +5,18 @@ import { X } from "lucide-react";
 import { string, number, array, literal, unknown, object } from "zod";
 import { hr } from "./01-core-schemas-and-hashing.js";
 import { Mt } from "./02-financial-functions.js";
-import { $R, $a, Cd, WR, kC, rn, uh, ut, zR, zoe } from "./03-workbook-model.js";
+import {
+  $R,
+  $a,
+  Cd,
+  WR,
+  kC,
+  rn,
+  uh,
+  ut,
+  zR,
+  zoe,
+} from "./03-workbook-model.js";
 import { DC, Kse, T$, Zse, nT } from "./05-add-ins-and-custom-functions.js";
 import { H1, im } from "./07-xlsx-archive-reader.js";
 import { F$, P$, W2, cT } from "./08-xlsx-export-and-preservation.js";
@@ -22,8 +33,7 @@ function yh() {
   const e = FC(),
     r = ne.useRef(null),
     t = ne.useCallback(() => {
-      var n;
-      return (n = r.current) == null ? void 0 : n.abort();
+      return r.current?.abort();
     }, []);
   return (
     ne.useEffect(() => () => t(), [t]),
@@ -66,7 +76,7 @@ function Tue({ workbook: e, sources: r, onReview: t }) {
     : null;
 }
 function Nue(e) {
-  var ce, ge;
+  var ge;
   const r = ne.useRef(e);
   r.current = e;
   const t = ne.useRef(null),
@@ -99,29 +109,19 @@ function Nue(e) {
       }
     }, [e.workbook, H]),
     X$1 = Q.inventory,
-    J =
-      X$1 == null
-        ? void 0
-        : X$1.links.find((se) => {
-            var we;
-            return (
-              se.target ===
-              (u || ((we = X$1.links[0]) == null ? void 0 : we.target))
-            );
-          }),
-    q = (J == null ? void 0 : J.target) ?? "",
+    J = X$1?.links.find((se) => {
+      return se.target === (u || X$1.links[0]?.target);
+    }),
+    q = J?.target ?? "",
     W =
-      (X$1 == null
-        ? void 0
-        : X$1.cells.filter((se) =>
-            se.references.some((we) => we.target === q),
-          )) ?? [],
+      X$1?.cells.filter((se) => se.references.some((we) => we.target === q)) ??
+      [],
     K = (se) => {
       var we;
-      if (e.approvedSources !== void 0 && !e.onApprovedSourcesChange)
+      if (e.approvedSources !== undefined && !e.onApprovedSourcesChange)
         throw Error("Source approvals are controlled by your host.");
       ((we = e.onApprovedSourcesChange) == null || we.call(e, se),
-        e.approvedSources === void 0 && d(se),
+        e.approvedSources === undefined && d(se),
         w(null));
     },
     te = () => ({
@@ -196,7 +196,7 @@ function Nue(e) {
               .map((Ae) => Ae.id),
           ),
           $(Ee.warnings),
-          G(!1));
+          G(false));
       } catch (Ee) {
         a.current && we === o.current && A(Ee.message);
       } finally {
@@ -205,7 +205,7 @@ function Nue(e) {
     },
     Se =
       e.allowFileSources !== false &&
-      (e.approvedSources === void 0 || !!e.onApprovedSourcesChange),
+      (e.approvedSources === undefined || !!e.onApprovedSourcesChange),
     le = () => {
       (w(null), A(""), F(""), O(0));
     };
@@ -219,17 +219,14 @@ function Nue(e) {
       tabIndex: -1,
       ref: t,
       onKeyDown: (se) => {
-        var we;
         if (
           (se.key === "Escape" && (se.preventDefault(), e.onClose()),
           se.key === "Tab")
         ) {
           const Ee = Array.from(
-              ((we = t.current) == null
-                ? void 0
-                : we.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              t.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ).filter((Te) => !Te.hidden),
             Ae = Ee[0],
             ye = Ee.at(-1);
@@ -277,10 +274,7 @@ function Nue(e) {
               className: "lg-links-summary",
               children: [
                 i.jsxs("strong", {
-                  children: [
-                    (X$1 == null ? void 0 : X$1.links.length) ?? 0,
-                    " linked sources",
-                  ],
+                  children: [X$1?.links.length ?? 0, " linked sources"],
                 }),
                 i.jsx("span", { children: "Manual refresh only" }),
                 i.jsx("span", {
@@ -322,7 +316,7 @@ function Nue(e) {
                           children: [
                             i.jsx("dt", { children: "Target workbook" }),
                             i.jsx("dd", { children: q }),
-                            (J == null ? void 0 : J.packageTarget) &&
+                            J?.packageTarget &&
                               i.jsxs(i.Fragment, {
                                 children: [
                                   i.jsx("dt", {
@@ -333,30 +327,25 @@ function Nue(e) {
                               }),
                             i.jsx("dt", { children: "Status" }),
                             i.jsx("dd", {
-                              children: J == null ? void 0 : J.status,
+                              children: J?.status,
                             }),
                             i.jsx("dt", { children: "Last resolved revision" }),
                             i.jsx("dd", {
                               children:
-                                (J == null ? void 0 : J.lastResolvedRevision) ??
-                                "Never resolved",
+                                J?.lastResolvedRevision ?? "Never resolved",
                             }),
                             i.jsx("dt", { children: "Resolved at" }),
                             i.jsx("dd", {
-                              children:
-                                (J == null ? void 0 : J.lastResolvedAt) ??
-                                "Not available",
+                              children: J?.lastResolvedAt ?? "Not available",
                             }),
                             i.jsx("dt", { children: "Source snapshot" }),
                             i.jsx("dd", {
-                              children:
-                                (J == null ? void 0 : J.sourceName) ??
-                                "No approved result",
+                              children: J?.sourceName ?? "No approved result",
                             }),
                           ],
                         }),
                         i.jsx("p", { children: X$1.cachePolicy }),
-                        (J == null ? void 0 : J.cached) &&
+                        J?.cached &&
                           J.status !== "matches-approved-snapshot" &&
                           i.jsx("p", {
                             className: "lg-links-warning",
@@ -580,10 +569,8 @@ function Nue(e) {
                 ],
               }),
             !!(
-              (ge =
-                (ce = e.workbook.workbookLinks) == null
-                  ? void 0
-                  : ce.packageTargets) != null && ge.length
+              (ge = e.workbook.workbookLinks?.packageTargets) != null &&
+              ge.length
             ) &&
               i.jsxs("details", {
                 children: [
@@ -656,9 +643,7 @@ function Nue(e) {
                           accept: ".xlsx,.xltx,.json,.csv,.tsv",
                           disabled: V,
                           onChange: (se) => {
-                            var Ee;
-                            const we =
-                              (Ee = se.target.files) == null ? void 0 : Ee[0];
+                            const we = se.target.files?.[0];
                             ((se.target.value = ""), we && he(we));
                           },
                         }),
@@ -956,16 +941,16 @@ async function Iue(e, r, t, n = {}) {
   let u;
   try {
     return await new Promise((f, p) => {
-      let m = !1;
+      let m = false;
       const v = (b, y) => {
           m ||
-            ((m = !0),
+            ((m = true),
             s.signal.removeEventListener("abort", g),
             s.abort(),
             b ? p(b) : f(y));
         },
         g = () => v(Error("Document extraction cancelled."));
-      (s.signal.addEventListener("abort", g, { once: !0 }),
+      (s.signal.addEventListener("abort", g, { once: true }),
         (u = setTimeout(
           () => v(Error("Document extraction exceeded its time budget.")),
           a,
@@ -982,7 +967,7 @@ async function Iue(e, r, t, n = {}) {
             (b) => {
               if (!m)
                 try {
-                  v(void 0, q$(e, b));
+                  v(undefined, q$(e, b));
                 } catch {
                   v(
                     Error(
@@ -1039,9 +1024,9 @@ function _ue(e, r, t) {
         s.add(b);
         const y = t.resolutions[b],
           w = zR(v, y);
-        ((y == null ? void 0 : y.decision) === "exclude"
+        (y?.decision === "exclude"
           ? u++
-          : (y == null ? void 0 : y.decision) === "correct"
+          : y?.decision === "correct"
             ? l++
             : d++,
           (a[ut(g) + (m + 2)] = {
@@ -1103,8 +1088,7 @@ function Due(e, r, t = {}) {
   return (dT.delete(r), n);
 }
 function Oue(e, r) {
-  var n;
-  const t = (n = e.sourceImports) == null ? void 0 : n.find((o) => o.id === r);
+  const t = e.sourceImports?.find((o) => o.id === r);
   if (!t) throw Error("Source import is unavailable.");
   return {
     bytes: $R(t.original),
@@ -1113,13 +1097,12 @@ function Oue(e, r) {
   };
 }
 function Mue(e, r, t, n) {
-  var h, f;
-  const o = (h = e.sourceImports) == null ? void 0 : h.find((p) => p.id === r),
-    a = (f = o == null ? void 0 : o.table.rows[t]) == null ? void 0 : f[n];
+  const o = e.sourceImports?.find((p) => p.id === r),
+    a = o?.table.rows[t]?.[n];
   if (!o || !a) throw Error("Imported source cell is unavailable.");
   const s = ut(n) + (t + 2),
     d = e.sheets.find((p) => p.id === o.sheetId),
-    u = d == null ? void 0 : d.cells[s],
+    u = d?.cells[s],
     l = o.resolutions[`${t}:${n}`],
     c = zR(a, l);
   return {
@@ -1127,12 +1110,11 @@ function Mue(e, r, t, n) {
     sheetId: o.sheetId,
     sourceHash: o.original.sha256,
     source: a,
-    decision: (l == null ? void 0 : l.decision) ?? "accepted",
+    decision: l?.decision ?? "accepted",
     importedValue: c,
-    currentValue: (u == null ? void 0 : u.raw) ?? null,
+    currentValue: u?.raw ?? null,
     status: d
-      ? (u == null ? void 0 : u.raw) === c &&
-        (typeof c != "string" || u.literal === true)
+      ? u?.raw === c && (typeof c != "string" || u.literal === true)
         ? "matches-import"
         : "changed"
       : "missing-sheet",

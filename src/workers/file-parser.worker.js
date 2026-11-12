@@ -28,7 +28,7 @@ var Mc = ((e) =>
 });
 var Fe = (e, t) => () => (t || e((t = { exports: {} }).exports, t), t.exports),
   Oo = (e, t) => {
-    for (var n in t) Ag(e, n, { get: t[n], enumerable: !0 });
+    for (var n in t) Ag(e, n, { get: t[n], enumerable: true });
   },
   O8 = (e, t, n, i) => {
     if ((t && typeof t == "object") || typeof t == "function")
@@ -45,7 +45,7 @@ var Bi = (e, t, n) => (
   (n = e != null ? T8(R8(e)) : {}),
   O8(
     t || !e || !e.__esModule
-      ? Ag(n, "default", { value: e, enumerable: !0 })
+      ? Ag(n, "default", { value: e, enumerable: true })
       : n,
     e,
   )
@@ -135,13 +135,13 @@ function rl(e) {
 }
 var h_ = new WeakMap();
 function cf(e) {
-  if (!Hn(e)) return !0;
+  if (!Hn(e)) return true;
   let t = h_.get(e);
-  if (t === void 0) {
-    t = !1;
+  if (t === undefined) {
+    t = false;
     for (let n in e)
       if (e[n].hyperlink || e[n].style?.binding) {
-        t = !0;
+        t = true;
         break;
       }
     h_.set(e, t);
@@ -417,7 +417,7 @@ var Wl = X.string().regex(/^[0-9a-f]{64}$/),
   });
 function y6(e, t) {
   let n = e;
-  if (n.transformationRecipes !== void 0) {
+  if (n.transformationRecipes !== undefined) {
     if (JSON.stringify(n.transformationRecipes).length > Ss.metadataCharacters)
       throw Error("Saved recipe metadata exceeds 2,000,000 characters.");
     let r = wP.safeParse(n.transformationRecipes);
@@ -439,7 +439,7 @@ function y6(e, t) {
   let i = 0;
   for (let r of t.sheets) {
     let o = n.sheets?.find((l) => l.id === r.id);
-    if (o?.transformationRun === void 0) continue;
+    if (o?.transformationRun === undefined) continue;
     if (
       ((i += JSON.stringify(o.transformationRun).length),
       i > Ss.runMetadataCharacters)
@@ -476,7 +476,7 @@ function y6(e, t) {
 }
 var Du = (e) => e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
   mo = (e) => e.replace(/^_xlpm\./i, "").toLowerCase();
-function _P(e, t = !1) {
+function _P(e, t = false) {
   return (
     (e = e.replace(/^_xlpm\./i, "")),
     /^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(e) &&
@@ -572,7 +572,7 @@ function Vl(e) {
   return (t !== e.length && n(), a);
 }
 var ql = (e) => e.filter((t) => t.kind !== "text" || t.text.trim());
-function Xl(e, t = !1) {
+function Xl(e, t = false) {
   let n = ql(e),
     i = n[0];
   if (n.length !== 1 || i?.kind !== "symbol" || i.qualifier || !_P(i.name, t))
@@ -607,7 +607,7 @@ function gp(e) {
 function Fo(e, t, n = new Set()) {
   for (let i of e) {
     if (
-      (i.kind === "symbol" && t(i, n, !1, !1),
+      (i.kind === "symbol" && t(i, n, false, false),
       i.kind === "group" && Fo(i.body, t, n),
       i.kind !== "call")
     )
@@ -615,7 +615,7 @@ function Fo(e, t, n = new Set()) {
     let r = gp(i);
     if (
       (i.callee.kind === "symbol"
-        ? t(i.callee, n, !0, !1)
+        ? t(i.callee, n, true, false)
         : Fo([i.callee], t, n),
       !r)
     ) {
@@ -625,7 +625,7 @@ function Fo(e, t, n = new Set()) {
     let o = new Set(n);
     for (let a = 0; a < i.args.length - 1; a += r === "LET" ? 2 : 1) {
       let s = Xl(i.args[a], r === "LAMBDA");
-      (t(s, o, !1, !0),
+      (t(s, o, false, true),
         r === "LET" && Fo(i.args[a + 1], t, o),
         o.add(mo(s.name)));
     }
@@ -637,8 +637,10 @@ function v6(e) {
     let t = ql(Vl(e)),
       n = t[0];
     return t.length !== 1 || n.kind !== "call" || gp(n) !== "LAMBDA"
-      ? void 0
-      : n.args.slice(0, -1).map((i) => Xl(i, !0).name.replace(/^_xlpm\./i, ""));
+      ? undefined
+      : n.args
+          .slice(0, -1)
+          .map((i) => Xl(i, true).name.replace(/^_xlpm\./i, ""));
   } catch {
     return;
   }
@@ -980,7 +982,7 @@ var Lu = Object.freeze({
     recalculation: X.strictObject({
       mode: X.literal("manual"),
       invalidateOn: X.literal("argument-values"),
-      volatile: X.literal(!1),
+      volatile: X.literal(false),
     }),
     functions: X.array(
       X.strictObject({
@@ -1079,7 +1081,7 @@ function ww(e, t) {
 }
 var w6 = new WeakSet();
 function _6(e, t) {
-  if (e.extensions === void 0) return;
+  if (e.extensions === undefined) return;
   let n = new Set((t.definedNames ?? []).map((l) => l.name.toUpperCase())),
     i = e.extensions;
   if (
@@ -1295,8 +1297,8 @@ function OP(e, t) {
       r.outlineGroups,
     ]);
     let o = Hn(r.cells),
-      a = o ? T6.get(r.cells) : void 0;
-    if (a !== void 0) n += a;
+      a = o ? T6.get(r.cells) : undefined;
+    if (a !== undefined) n += a;
     else {
       let s = n;
       for (let l in r.cells)
@@ -1363,10 +1365,10 @@ function Uu(e) {
   let t = e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'/g, ""),
     n = 0;
   for (let i of t) {
-    if (((i === "(" || i === "{") && n++, n > _w.maxNesting)) return !1;
+    if (((i === "(" || i === "{") && n++, n > _w.maxNesting)) return false;
     (i === ")" || i === "}") && n--;
   }
-  return !0;
+  return true;
 }
 var ka = (e = "1900") => (e === "1904" ? 1462 : 0),
   Xi = (e = "1900") => 2958465 - ka(e),
@@ -1501,7 +1503,7 @@ function Hi(e, t = Hl) {
   )
     return;
   let s = i[7] ? I6(i[7]) : 0;
-  return s === void 0 ? void 0 : Ea(r, o, a, t.dateSystem) + s;
+  return s === undefined ? undefined : Ea(r, o, a, t.dateSystem) + s;
 }
 function zu(e, t = new Date()) {
   let n = go(e),
@@ -1665,10 +1667,10 @@ function Bu(e, t, n) {
         !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(_)
           ? Hi(_, n.clock)
           : p(_);
-      return S === void 0 ? l() : h(S);
+      return S === undefined ? l() : h(S);
     },
     g = (_) => Math.floor(m(_)),
-    b = (_, S, O = !1) => {
+    b = (_, S, O = false) => {
       let E = a(_),
         R = E.year * 12 + E.month - 1 + S,
         I = Math.floor(R / 12),
@@ -1698,7 +1700,7 @@ function Bu(e, t, n) {
     typeof _ != "string" && l();
     let S = Hi(_, n.clock);
     return (
-      S === void 0 && l(),
+      S === undefined && l(),
       e === "DATEVALUE" &&
         !/^(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})(?:[ T]|$)/.test(
           _.trim(),
@@ -1802,7 +1804,7 @@ function Bu(e, t, n) {
     );
   };
   if (e === "DAYS360") {
-    let _ = f(d[2] ?? !1);
+    let _ = f(d[2] ?? false);
     return (
       typeof _ != "boolean" && typeof _ != "number" && l(),
       w(g(d[0]), g(d[1]), !!_)
@@ -1846,7 +1848,7 @@ function Bu(e, t, n) {
       );
     }
     let I = (z) => (Array.isArray(z) ? z.flatMap(I) : [z]),
-      U = d[S ? 3 : 2] === void 0 ? [] : I(d[S ? 3 : 2]);
+      U = d[S ? 3 : 2] === undefined ? [] : I(d[S ? 3 : 2]);
     U.length > _a.holidays && l("#LIMIT!");
     let P = new Set();
     for (let z of U)
@@ -1913,7 +1915,7 @@ function $6(e, t, n = hi.minRate) {
         return { ...b, normalized: b.value / b.scale };
     },
     c = (g, b) => {
-      if (!b || Math.abs(b.normalized) > hi.relativeResidual) return !1;
+      if (!b || Math.abs(b.normalized) > hi.relativeResidual) return false;
       let w = Math.expm1(g);
       return (
         s.some(
@@ -1924,7 +1926,7 @@ function $6(e, t, n = hi.minRate) {
             residual: b.value,
             relativeResidual: Math.abs(b.normalized),
           }),
-        !0
+        true
       );
     };
   if ([0, Math.log1p(0.1), Math.log1p(0.5)].map(l).every((g) => g?.value === 0))
@@ -1932,7 +1934,7 @@ function $6(e, t, n = hi.minRate) {
       status: "indeterminate",
       candidates: s,
       evaluations: a,
-      exhaustive: !1,
+      exhaustive: false,
     };
   let d = o;
   for (let g = 0; g < 60; g++) {
@@ -1979,7 +1981,7 @@ function $6(e, t, n = hi.minRate) {
   for (let g of f) {
     let b = l(g);
     if (!b) {
-      p = void 0;
+      p = undefined;
       continue;
     }
     if ((c(g, b), p && p.y.normalized * b.normalized < 0)) {
@@ -2006,7 +2008,7 @@ function $6(e, t, n = hi.minRate) {
     candidates: s,
     evaluations: a,
     status: m ? "limit" : h ? "converged" : "no-convergence",
-    exhaustive: !1,
+    exhaustive: false,
   };
 }
 var Cw = [
@@ -2073,12 +2075,12 @@ function P6(e, t, n) {
   if (!Cw.includes(e)) return Tw;
   let i =
       "Cash paid out is negative; cash received is positive. Rates and periods must use the same interval. No automatic cent rounding.",
-    r = !1,
+    r = false,
     o = n.clock.dateSystem,
     a = (E, R, I) => Ea(E, R, I, o),
     s = (E) => Ep(E, o),
     l = (E) => {
-      ((r = !0), n.report?.({ functionName: e, convention: i, ...E }));
+      ((r = true), n.report?.({ functionName: e, convention: i, ...E }));
     },
     c = (E, R) => {
       throw (l({ status: "error", error: E, message: R }), n.issue(E));
@@ -2120,7 +2122,7 @@ function P6(e, t, n) {
           "A cash-flow or security date is missing or is not a date.",
         );
       let R = typeof E == "string" ? Hi(E, n.clock) : f(E);
-      return R === void 0 || R < (o === "1904" ? 0 : 1) || R >= Xi(o) + 1
+      return R === undefined || R < (o === "1904" ? 0 : 1) || R >= Xi(o) + 1
         ? c(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
@@ -2142,7 +2144,7 @@ function P6(e, t, n) {
     b = (E, R) => Math.exp(R * Math.log1p(E)),
     w = (E, R) => (E === 0 ? R : Math.expm1(R * Math.log1p(E)) / E),
     _ = (E, R, I, U, P) => -(I * b(E, R) + U) / ((1 + E * P) * w(E, R)),
-    S = (E, R = !1) => {
+    S = (E, R = false) => {
       let I = Sw(E);
       I.length > hi.cashFlows &&
         c("#LIMIT!", "Cash-flow input exceeds 10000 positions.");
@@ -2175,7 +2177,7 @@ function P6(e, t, n) {
           signChanges: I,
           solver: P,
           message: P.selected
-            ? `Residual-checked rate. ${P.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== void 0 && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
+            ? `Residual-checked rate. ${P.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== undefined && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
             : P.status === "indeterminate"
               ? "The equation does not identify a unique rate; no rate has been invented."
               : "No residual-checked rate converged within the supported search interval and evaluation budget. Review signs, timing and guess.",
@@ -2440,7 +2442,7 @@ function P6(e, t, n) {
                   return { value: K - N, scale: Math.abs(K) + N };
                 },
                 0.1,
-                void 0,
+                undefined,
                 0,
               );
       } else if (e === "ACCRINTM") {
@@ -2673,7 +2675,7 @@ function Iw(e, t, n) {
     i();
   let u = (m) => (m.length <= 32767 ? m : i("#LIMIT!")),
     d = (m, g) => {
-      if (m === void 0 && g !== void 0) return g;
+      if (m === undefined && g !== undefined) return g;
       if (Array.isArray(m) || (typeof m == "string" && !m.trim())) return i();
       let b = Number(m ?? 0);
       return Number.isFinite(b) ? b : i();
@@ -2739,10 +2741,10 @@ function Iw(e, t, n) {
           });
     }
     w.length * m.length > 2e6 && i("#LIMIT!");
-    let _ = Array(m.length + 1).fill(!0);
+    let _ = Array(m.length + 1).fill(true);
     for (let O = w.length - 1; O >= 0; O--) {
       let E = w[O],
-        R = Array(m.length + 1).fill(!1);
+        R = Array(m.length + 1).fill(false);
       R[m.length] = E.kind === "many" && _[m.length];
       for (let I = m.length - 1; I >= g - 1; I--)
         R[I] =
@@ -2761,15 +2763,17 @@ function Iw(e, t, n) {
   if (e === "SUBSTITUTE") {
     let m = Gi(s[1]),
       g = Gi(s[2]),
-      b = s[3] === void 0 ? void 0 : f(s[3]);
-    if ((b !== void 0 && b < 1 && i(), !m)) return h;
+      b = s[3] === undefined ? undefined : f(s[3]);
+    if ((b !== undefined && b < 1 && i(), !m)) return h;
     let w = h.split(m),
       _ = w.length - 1;
     return (
-      h.length + (b === void 0 ? _ : b <= _ ? 1 : 0) * (g.length - m.length) >
+      h.length +
+        (b === undefined ? _ : b <= _ ? 1 : 0) * (g.length - m.length) >
         32767 && i("#LIMIT!"),
       w.reduce(
-        (S, O, E) => (E === 0 ? O : S + (b === void 0 || b === E ? g : m) + O),
+        (S, O, E) =>
+          E === 0 ? O : S + (b === undefined || b === E ? g : m) + O,
         "",
       )
     );
@@ -2790,8 +2794,8 @@ function Iw(e, t, n) {
     );
   }
   if (e === "NUMBERVALUE") {
-    let m = [...Gi(s[1] === void 0 ? "." : s[1])][0],
-      g = [...Gi(s[2] === void 0 ? "," : s[2])][0];
+    let m = [...Gi(s[1] === undefined ? "." : s[1])][0],
+      g = [...Gi(s[2] === undefined ? "," : s[2])][0];
     (!m || !g || m === g || /[0-9+\-eE%]/.test(m) || /[0-9+\-eE%]/.test(g)) &&
       i();
     let b = h.replace(/ /g, "");
@@ -2809,12 +2813,12 @@ function Iw(e, t, n) {
   }
   if (e === "VALUE") {
     let m = n.temporal ? n.temporal(h.trim()) : UP(h.trim());
-    if (m !== void 0) return m;
+    if (m !== undefined) return m;
     let g = h.trim(),
-      b = !1;
+      b = false;
     g.startsWith("(") &&
       g.endsWith(")") &&
-      ((b = !0), (g = g.slice(1, -1).trim()));
+      ((b = true), (g = g.slice(1, -1).trim()));
     let w = g.endsWith("%");
     (w && (g = g.slice(0, -1).trim()),
       (g = g.replace(/^\$\s*/, "")),
@@ -2850,12 +2854,12 @@ function Iw(e, t, n) {
       O = R.reverse();
     }
     let E = O[g > 0 ? g - 1 : O.length + g];
-    return E === void 0
+    return E === undefined
       ? w && Math.abs(g) === O.length + 1
         ? (e === "TEXTBEFORE") == g > 0
           ? h
           : ""
-        : s[5] !== void 0
+        : s[5] !== undefined
           ? s[5]
           : i("#N/A")
       : e === "TEXTBEFORE"
@@ -2907,10 +2911,13 @@ function zP(e) {
       Object.keys(e).some((t) => !["style", "color"].includes(t)) ||
       !Nw.includes(e.style)) &&
       fn("Choose a supported border line style and hexadecimal color."),
-    e.color !== void 0 && Rw(e.color),
+    e.color !== undefined && Rw(e.color),
     e.style === "none"
       ? { style: "none" }
-      : { style: e.style, color: e.color === void 0 ? "#000000" : Rw(e.color) }
+      : {
+          style: e.style,
+          color: e.color === undefined ? "#000000" : Rw(e.color),
+        }
   );
 }
 function As(e) {
@@ -2918,48 +2925,48 @@ function As(e) {
   for (let n of Object.keys(e))
     FP.has(n) || fn(`Unsupported cell style setting: ${n}.`);
   let t = {};
-  e.binding !== void 0 && (t.binding = Ow(e.binding));
+  e.binding !== undefined && (t.binding = Ow(e.binding));
   for (let n of ["bold", "italic", "underline", "strikethrough", "wrap"])
-    e[n] !== void 0 &&
+    e[n] !== undefined &&
       (typeof e[n] != "boolean" && fn(`Style ${n} must be boolean.`),
       (t[n] = e[n]));
-  (e.fontFamily !== void 0 &&
+  (e.fontFamily !== undefined &&
     (Ca.includes(e.fontFamily) || fn("Unsupported font family."),
     (t.fontFamily = e.fontFamily)),
-    e.fontSize !== void 0 &&
+    e.fontSize !== undefined &&
       ((typeof e.fontSize != "number" ||
         !Number.isInteger(e.fontSize) ||
         e.fontSize < 8 ||
         e.fontSize > 72) &&
         fn("Font size must be an integer between 8 and 72."),
       (t.fontSize = e.fontSize)));
-  for (let n of ["fill", "color"]) e[n] !== void 0 && (t[n] = Rw(e[n]));
+  for (let n of ["fill", "color"]) e[n] !== undefined && (t[n] = Rw(e[n]));
   if (
-    (e.align !== void 0 &&
+    (e.align !== undefined &&
       (["left", "center", "right"].includes(e.align) ||
         fn("Invalid text alignment."),
       (t.align = e.align)),
-    e.verticalAlign !== void 0 &&
+    e.verticalAlign !== undefined &&
       (["top", "middle", "bottom"].includes(e.verticalAlign) ||
         fn("Choose Top, Center or Bottom vertical alignment."),
       (t.verticalAlign = e.verticalAlign)),
-    e.indent !== void 0 &&
+    e.indent !== undefined &&
       ((typeof e.indent != "number" ||
         !Number.isInteger(e.indent) ||
         e.indent < 0 ||
         e.indent > 15) &&
         fn("Indent must be an integer between 0 and 15."),
       (t.indent = e.indent)),
-    e.border !== void 0 &&
+    e.border !== undefined &&
       (["all", "bottom", "none"].includes(e.border) ||
         fn("Unsupported cell border."),
       (t.border = e.border)),
-    e.borders !== void 0)
+    e.borders !== undefined)
   ) {
     (!ju(e.borders) || Object.keys(e.borders).some((i) => !Ts.includes(i))) &&
       fn("Cell borders support top, right, bottom and left edges only.");
     let n = {};
-    for (let i of Ts) e.borders[i] !== void 0 && (n[i] = zP(e.borders[i]));
+    for (let i of Ts) e.borders[i] !== undefined && (n[i] = zP(e.borders[i]));
     Object.keys(n).length && (t.borders = n);
   }
   return t;
@@ -2986,7 +2993,9 @@ function Ow(e) {
   (!ju(e.base) || Object.hasOwn(e.base, "binding")) &&
     fn("A named style base cannot contain another binding.");
   for (let n of ["missing", "themeFallback"])
-    e[n] !== void 0 && e[n] !== !0 && fn("Invalid named style fallback flag.");
+    e[n] !== undefined &&
+      e[n] !== true &&
+      fn("Invalid named style fallback flag.");
   let t = As(e.base);
   return (
     e.missing &&
@@ -2996,8 +3005,8 @@ function Ow(e) {
       namespace: e.namespace,
       styleId: e.styleId,
       base: t,
-      ...(e.missing ? { missing: !0 } : {}),
-      ...(e.themeFallback ? { themeFallback: !0 } : {}),
+      ...(e.missing ? { missing: true } : {}),
+      ...(e.themeFallback ? { themeFallback: true } : {}),
     }
   );
 }
@@ -3080,7 +3089,7 @@ function Gl(e) {
     ? `[${e.map(Gl).join(",")}]`
     : bo(e)
       ? `{${Object.keys(e)
-          .filter((t) => e[t] !== void 0)
+          .filter((t) => e[t] !== undefined)
           .sort()
           .map((t) => `${JSON.stringify(t)}:${Gl(e[t])}`)
           .join(",")}}`
@@ -3120,20 +3129,20 @@ function WP(e) {
         "A named style definition needs supported formatting without another binding.",
       ));
   let t = { base: As(e.base) };
-  e.fontRole !== void 0 &&
+  e.fontRole !== undefined &&
     (["body", "heading"].includes(e.fontRole) ||
       Fr("Choose Body or Heading theme font."),
     (t.fontRole = e.fontRole));
   for (let n of ["fillRole", "colorRole"])
-    e[n] !== void 0 &&
+    e[n] !== undefined &&
       (Ap.includes(e[n]) || Fr("Choose a supported theme color role."),
       (t[n] = e[n]));
-  if (e.borderRoles !== void 0) {
+  if (e.borderRoles !== undefined) {
     (bo(e.borderRoles) || Fr("Border color roles must be an object."),
       Ta(e.borderRoles, Ts, "border role"));
     let n = {};
     for (let i of Ts)
-      e.borderRoles[i] !== void 0 &&
+      e.borderRoles[i] !== undefined &&
         (Ap.includes(e.borderRoles[i]) ||
           Fr("Choose a supported border color role."),
         (!Wu(t.base, i) || Wu(t.base, i)?.style === "none") &&
@@ -3150,8 +3159,8 @@ function VP(e) {
       ["namespace", "theme", "styles", "missingTheme"],
       "workbook style catalog",
     ),
-    e.missingTheme !== void 0 &&
-      e.missingTheme !== !0 &&
+    e.missingTheme !== undefined &&
+      e.missingTheme !== true &&
       Fr("Invalid missing theme flag."),
     (!Array.isArray(e.styles) || e.styles.length > BP.maxStyles) &&
       Fr("A workbook supports at most 50 named styles."));
@@ -3170,8 +3179,8 @@ function VP(e) {
         { id: s, name: l, definition: WP(a.definition) }
       );
     }),
-    r = e.theme === void 0 || e.missingTheme === !0,
-    o = e.theme === void 0 ? F6(U6) : jP(e.theme);
+    r = e.theme === undefined || e.missingTheme === true,
+    o = e.theme === undefined ? F6(U6) : jP(e.theme);
   return (
     r &&
       Gl(o) !== Gl(U6) &&
@@ -3180,7 +3189,7 @@ function VP(e) {
       namespace: Tp(e.namespace, "Style namespace", 100),
       theme: o,
       styles: i,
-      ...(r ? { missingTheme: !0 } : {}),
+      ...(r ? { missingTheme: true } : {}),
     }
   );
 }
@@ -3208,14 +3217,14 @@ function XP(e, t) {
     namespace: t.namespace,
     styleId: t.styleId,
     base: n && e ? qP(n.definition, e.theme) : {},
-    ...(n ? {} : { missing: !0 }),
-    ...(e?.missingTheme ? { themeFallback: !0 } : {}),
+    ...(n ? {} : { missing: true }),
+    ...(e?.missingTheme ? { themeFallback: true } : {}),
   };
 }
 function z6(e, t) {
-  let n = e === void 0 ? void 0 : VP(e);
+  let n = e === undefined ? undefined : VP(e);
   n ? (t.styleCatalog = n) : delete t.styleCatalog;
-  let i = bo(e) && e.theme === void 0;
+  let i = bo(e) && e.theme === undefined;
   for (let r of t.sheets)
     for (let o of cf(r.cells) ? Object.values(r.cells) : []) {
       if (!o.style?.binding) continue;
@@ -3271,7 +3280,7 @@ function Aa(e, t) {
     e
   );
 }
-function Zi(e, t, n, i = !1) {
+function Zi(e, t, n, i = false) {
   return (
     (typeof e != "string" ||
       !e.trim() ||
@@ -3303,8 +3312,8 @@ function j6(e = "Reviewer") {
 function Pw(e) {
   let t = Aa(e, "Hyperlink"),
     n =
-      t.label === void 0 || t.label === ""
-        ? void 0
+      t.label === undefined || t.label === ""
+        ? undefined
         : Zi(t.label, "Link display text", Bo.labelLength);
   if (t.kind === "internal")
     return {
@@ -3357,7 +3366,7 @@ function Pw(e) {
 }
 function V6(e, t) {
   let n = Aa(e, "Workbook review metadata");
-  if (n.reviewThreads !== void 0) {
+  if (n.reviewThreads !== undefined) {
     (!Array.isArray(n.reviewThreads) || n.reviewThreads.length > Bo.threads) &&
       Er(`A workbook can contain at most ${Bo.threads} review threads.`);
     let i = new Set(),
@@ -3400,13 +3409,13 @@ function V6(e, t) {
               {
                 id: S,
                 author: j6(Zi(_.author, "Reviewer name", 100)),
-                text: Zi(_.text, "Comment", Bo.textLength, !0),
+                text: Zi(_.text, "Comment", Bo.textLength, true),
                 createdAt: O,
               }
             );
           }),
           g = { id: u, anchor: p, messages: m, createdAt: d, updatedAt: f };
-        if (l.resolved !== void 0) {
+        if (l.resolved !== undefined) {
           let b = Aa(l.resolved, "Review resolution"),
             w = Vu(b.createdAt);
           ((w < m.at(-1).createdAt || w > f) &&
@@ -3416,7 +3425,7 @@ function V6(e, t) {
               createdAt: w,
             }));
         }
-        if (l.orphaned !== void 0) {
+        if (l.orphaned !== undefined) {
           let b = Aa(l.orphaned, "Orphaned review target"),
             w = Vu(b.createdAt);
           ((!["worksheet-deleted", "cell-deleted"].includes(String(b.reason)) ||
@@ -3438,7 +3447,7 @@ function V6(e, t) {
   }
   for (let i of t.sheets)
     for (let r of cf(i.cells) ? Object.values(i.cells) : []) {
-      if (r.hyperlink === void 0) continue;
+      if (r.hyperlink === undefined) continue;
       let o = Pw(r.hyperlink);
       (o.kind === "internal" &&
         !t.sheets.some((a) => a.id === o.sheetId) &&
@@ -3447,7 +3456,7 @@ function V6(e, t) {
     }
 }
 function q6(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !e ||
     typeof e != "object" ||
@@ -3462,10 +3471,10 @@ function q6(e, t) {
       "Split panes require divider percentages and valid row/column anchors.",
     );
   let n = e;
-  if (n.horizontal === void 0 && n.vertical === void 0)
+  if (n.horizontal === undefined && n.vertical === undefined)
     throw Error("Choose a horizontal split, vertical split, or both.");
   for (let i of [n.horizontal, n.vertical])
-    if (i !== void 0 && (!Number.isFinite(i) || i < 20 || i > 80))
+    if (i !== undefined && (!Number.isFinite(i) || i < 20 || i > 80))
       throw Error("Split dividers must be between 20% and 80%.");
   if (
     !Number.isInteger(n.row) ||
@@ -3481,8 +3490,8 @@ function q6(e, t) {
   return {
     row: n.row,
     col: n.col,
-    ...(n.horizontal !== void 0 ? { horizontal: n.horizontal } : {}),
-    ...(n.vertical !== void 0 ? { vertical: n.vertical } : {}),
+    ...(n.horizontal !== undefined ? { horizontal: n.horizontal } : {}),
+    ...(n.vertical !== undefined ? { vertical: n.vertical } : {}),
   };
 }
 function X6(e, t) {
@@ -3501,13 +3510,15 @@ function X6(e, t) {
 }
 function H6(e, t) {
   let n =
-      e.defaultRowHeight === void 0 ? void 0 : X6(e.defaultRowHeight, "row"),
+      e.defaultRowHeight === undefined
+        ? undefined
+        : X6(e.defaultRowHeight, "row"),
     i =
-      e.defaultColumnWidth === void 0
-        ? void 0
+      e.defaultColumnWidth === undefined
+        ? undefined
         : X6(e.defaultColumnWidth, "column");
-  (n !== void 0 && (t.defaultRowHeight = n),
-    i !== void 0 && (t.defaultColumnWidth = i));
+  (n !== undefined && (t.defaultRowHeight = n),
+    i !== undefined && (t.defaultColumnWidth = i));
 }
 var Na = {
   maxIntervalsPerAxis: 1e4,
@@ -3520,7 +3531,7 @@ function ZP(e) {
     throw Error("Axis capacity must be a nonnegative integer.");
 }
 function Vo(e, t) {
-  if ((ZP(t), e === void 0)) return [];
+  if ((ZP(t), e === undefined)) return [];
   if (!Array.isArray(e) || e.length > Na.maxIntervalsPerAxis)
     throw Error("Hidden indices require at most 10,000 intervals per axis.");
   let n = e
@@ -3596,7 +3607,7 @@ function Oa(e, t = []) {
     isHidden: s,
     viewIndex: (c) =>
       Number.isInteger(c) && c >= 0 && c < e && !s(c) ? a(c) : null,
-    next: (c, u, d = !1) => {
+    next: (c, u, d = false) => {
       let f = Math.trunc(c) + (d ? 0 : u);
       if (!r || (u === 1 && f >= e) || (u === -1 && f < 0)) return null;
       let p = u === 1 ? a(Math.max(0, f)) : a(Math.min(e, f + 1)) - 1,
@@ -3618,8 +3629,8 @@ function Dw(e, t, n = { rows: t.rowCount, cols: t.colCount }) {
     l = Oa(t.colCount, qo(a, "column"));
   if (!s.count || !l.count)
     throw Error("At least one row and one column must remain visible.");
-  let c = e.frozenRows === void 0 ? 0 : e.frozenRows,
-    u = e.frozenCols === void 0 ? 0 : e.frozenCols;
+  let c = e.frozenRows === undefined ? 0 : e.frozenRows,
+    u = e.frozenCols === undefined ? 0 : e.frozenCols;
   if (
     !Number.isInteger(c) ||
     !Number.isInteger(u) ||
@@ -3649,10 +3660,10 @@ function Dw(e, t, n = { rows: t.rowCount, cols: t.colCount }) {
         "Freeze panes cannot cross a merged range. Unmerge those cells first.",
       );
   }
-  (e.hiddenRows !== void 0 && (t.hiddenRows = r),
-    e.hiddenCols !== void 0 && (t.hiddenCols = o),
-    e.frozenRows !== void 0 && (t.frozenRows = c),
-    e.frozenCols !== void 0 && (t.frozenCols = u));
+  (e.hiddenRows !== undefined && (t.hiddenRows = r),
+    e.hiddenCols !== undefined && (t.hiddenCols = o),
+    e.frozenRows !== undefined && (t.frozenRows = c),
+    e.frozenCols !== undefined && (t.frozenCols = u));
 }
 var Z6 = { maxGroups: 1e3, maxDepth: 8 },
   KP = (e, t) => (t === "row" ? e.rowCount : e.colCount);
@@ -3679,7 +3690,7 @@ function G6(e, t) {
   });
 }
 function K6(e, t, n = { rows: t.rowCount, cols: t.colCount }) {
-  if (e.outlineGroups === void 0) return;
+  if (e.outlineGroups === undefined) return;
   if (!Array.isArray(e.outlineGroups) || e.outlineGroups.length > Z6.maxGroups)
     throw Error("A worksheet supports at most 1,000 outline groups.");
   let i = new Set(),
@@ -3760,7 +3771,7 @@ function Y6(e) {
   return e;
 }
 function Lw(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !J6(e) ||
     Object.keys(e).some(
@@ -3781,10 +3792,10 @@ function Lw(e, t) {
     throw new Error("Workbook modified time cannot precede its creation time.");
   let r = { createdAt: n, modifiedAt: i };
   if (
-    (e.engagement !== void 0 &&
+    (e.engagement !== undefined &&
       (r.engagement = qu(e.engagement, "Engagement", 200)),
-    e.period !== void 0 && (r.period = qu(e.period, "Period", 100)),
-    e.template !== void 0)
+    e.period !== undefined && (r.period = qu(e.period, "Period", 100)),
+    e.template !== undefined)
   ) {
     let o = e.template;
     if (
@@ -3801,7 +3812,7 @@ function Lw(e, t) {
       ) ||
       !Number.isSafeInteger(o.version) ||
       Number(o.version) < 1 ||
-      (o.sourceRevision !== void 0 &&
+      (o.sourceRevision !== undefined &&
         (!Number.isSafeInteger(o.sourceRevision) ||
           Number(o.sourceRevision) < 0))
     )
@@ -3815,7 +3826,7 @@ function Lw(e, t) {
         "Template source workbook ID",
         100,
       ),
-      ...(o.sourceRevision !== void 0
+      ...(o.sourceRevision !== undefined
         ? { sourceRevision: Number(o.sourceRevision) }
         : {}),
     };
@@ -3994,7 +4005,7 @@ function eC(e) {
         "Time bounds must be fractions from 0 up to, but excluding, 1.",
       );
     if (
-      n.formula !== void 0 &&
+      n.formula !== undefined &&
       ((o.formula = Zl(n.formula, 8192, "formula")),
       !o.formula.startsWith("=") || o.formula.length < 2)
     )
@@ -4003,13 +4014,13 @@ function eC(e) {
       throw Error(
         "A custom rule requires a formula relative to the range's top-left cell.",
       );
-    if (n.errorStyle !== void 0) {
+    if (n.errorStyle !== undefined) {
       if (!["stop", "warning", "information"].includes(String(n.errorStyle)))
         throw Error("Invalid validation error style.");
       o.errorStyle = n.errorStyle;
     }
     for (let a of ["showInputMessage", "showDropdown"])
-      if (n[a] !== void 0) {
+      if (n[a] !== undefined) {
         if (typeof n[a] != "boolean")
           throw Error("Invalid validation display setting.");
         o[a] = n[a];
@@ -4019,13 +4030,13 @@ function eC(e) {
       ["inputMessage", 500],
       ["errorTitle", 100],
     ])
-      n[a] !== void 0 && (o[a] = Zl(n[a], s, a));
+      n[a] !== undefined && (o[a] = Zl(n[a], s, a));
     return o;
   });
 }
 function tC(e, t, n = Hl) {
   if (t === null || t === "") return e.allowBlank;
-  if (e.kind === "custom") return !1;
+  if (e.kind === "custom") return false;
   if (e.kind === "list")
     return e.list.some((r) => r.toLowerCase() === String(t).toLowerCase());
   let i =
@@ -4042,7 +4053,7 @@ function tC(e, t, n = Hl) {
           (typeof t == "string" && !/[/-]/.test(t)))) ||
       (e.kind === "time" && (i < 0 || i >= 1)))
   )
-    return !1;
+    return false;
   switch (e.operator) {
     case "between":
       return i >= e.min && i <= e.max;
@@ -4066,10 +4077,10 @@ function nD(e) {
   let t = Hu(e);
   return (n, i, r) => {
     let o = t(n, i),
-      a = !1,
+      a = false,
       s = "Value does not satisfy the rule.",
       l,
-      c = !1;
+      c = false;
     try {
       if (t.getTypedValue(n, i).type === "error")
         throw Error(`Cell calculation returned ${o}.`);
@@ -4089,7 +4100,7 @@ function nD(e) {
         ((a = !!f), (s = "Custom formula returned FALSE or zero."));
       } else a = tC(r, o, e.datePolicy);
     } catch (u) {
-      ((c = !0),
+      ((c = true),
         (s =
           u instanceof Error
             ? u.message
@@ -4121,8 +4132,8 @@ function oD(e, t) {
       invalidCells: 0,
       violations: 0,
       issues: [],
-      complete: !0,
-      detailsTruncated: !1,
+      complete: true,
+      detailsTruncated: false,
       message: "",
     },
     i = nD(e),
@@ -4137,7 +4148,7 @@ function oD(e, t) {
             n.checks >= Xu.checks ||
             (s.kind === "custom" && ++o > Xu.customChecks)
           ) {
-            n.complete = !1;
+            n.complete = false;
             break e;
           }
           let d = `${Ue(u)}${c + 1}`;
@@ -4215,7 +4226,7 @@ function rC(e) {
         fill: jw(i.fill),
         color: jw(i.color),
       };
-    if (i.priority !== void 0) {
+    if (i.priority !== undefined) {
       if (
         !Number.isInteger(i.priority) ||
         Number(i.priority) < 1 ||
@@ -4227,7 +4238,7 @@ function rC(e) {
         );
       ((a.priority = Number(i.priority)), n.add(a.priority));
     }
-    if (i.stopIfTrue !== void 0) {
+    if (i.stopIfTrue !== undefined) {
       if (typeof i.stopIfTrue != "boolean")
         throw Error("Stop if true must be boolean.");
       if (i.stopIfTrue && ["colorScale", "dataBar", "iconSet"].includes(a.kind))
@@ -4237,20 +4248,20 @@ function rC(e) {
       a.stopIfTrue = i.stopIfTrue;
     }
     if (
-      (i.formula !== void 0 &&
+      (i.formula !== undefined &&
         (a.formula = Gu(i.formula, 4096, "conditional formula")),
       a.kind === "formula" &&
         (!a.formula?.startsWith("=") || !a.formula.slice(1).trim()))
     )
       throw Error("A formula rule requires a formula beginning with =.");
     for (let s of ["minColor", "maxColor"])
-      i[s] !== void 0 && (a[s] = jw(i[s]));
-    if (i.thresholdType !== void 0) {
+      i[s] !== undefined && (a[s] = jw(i[s]));
+    if (i.thresholdType !== undefined) {
       if (i.thresholdType !== "percent" && i.thresholdType !== "number")
         throw Error("Invalid icon threshold type.");
       a.thresholdType = i.thresholdType;
     }
-    if (i.iconThresholds !== void 0) {
+    if (i.iconThresholds !== undefined) {
       if (
         !Array.isArray(i.iconThresholds) ||
         i.iconThresholds.length !== 2 ||
@@ -4293,7 +4304,7 @@ var cD = (e) => {
   };
 function Rp(e, t) {
   if (nC(e)) {
-    if (e.merges !== void 0) {
+    if (e.merges !== undefined) {
       (!Array.isArray(e.merges) || e.merges.length > 1e3) &&
         Zu("At most1,000 merged ranges are supported.");
       let n = [];
@@ -4308,15 +4319,15 @@ function Rp(e, t) {
       t.merges = n;
     }
     if (
-      (e.validations !== void 0 && (t.validations = eC(e.validations)),
-      e.conditionalFormats !== void 0 &&
+      (e.validations !== undefined && (t.validations = eC(e.validations)),
+      e.conditionalFormats !== undefined &&
         (t.conditionalFormats = rC(e.conditionalFormats)),
-      e.protection !== void 0)
+      e.protection !== undefined)
     ) {
       let n = e.protection;
       ((!nC(n) ||
         typeof n.enabled != "boolean" ||
-        (n.hash !== void 0 &&
+        (n.hash !== undefined &&
           (!/^[a-f\d]{64}$/i.test(String(n.hash)) ||
             typeof n.salt != "string" ||
             n.salt.length > 100))) &&
@@ -4392,13 +4403,13 @@ function Vw(e) {
       let l = t.currency ?? "USD";
       (fD.includes(l) || Lt("Choose a supported currency."), (r.currency = l));
     } else
-      t.currency !== void 0 &&
+      t.currency !== undefined &&
         Lt("Currency applies only to Currency or Accounting formats.");
     let a = t.decimals ?? (r.currency === "JPY" ? 0 : 2);
     ((typeof a != "number" || !Number.isInteger(a) || a < 0 || a > 12) &&
       Lt("Choose 0\u201312 decimal places."),
       (r.decimals = a),
-      t.useGrouping !== void 0 &&
+      t.useGrouping !== undefined &&
         typeof t.useGrouping != "boolean" &&
         Lt("The grouping option must be true or false."),
       (r.useGrouping = t.useGrouping ?? n !== "percent"));
@@ -4406,21 +4417,21 @@ function Vw(e) {
     ((![1, 1e3, 1e6].includes(s) || (n === "percent" && s !== 1)) &&
       Lt("Choose units, thousands or millions; percentages use units."),
       (r.scale = s),
-      t.negative !== void 0 &&
+      t.negative !== undefined &&
         (typeof t.negative != "string" ||
           !["minus", "parentheses"].includes(t.negative)) &&
         Lt("Choose minus signs or parentheses for negatives."),
       n === "accounting" &&
-        t.negative !== void 0 &&
+        t.negative !== undefined &&
         t.negative !== "parentheses" &&
         Lt("Accounting negatives use parentheses."),
       (r.negative =
         n === "accounting" ? "parentheses" : (t.negative ?? "minus")),
-      t.pattern !== void 0 &&
+      t.pattern !== undefined &&
         Lt("Use the Custom category to enter a format pattern."));
   } else if (
     ([t.currency, t.decimals, t.useGrouping, t.scale, t.negative].some(
-      (o) => o !== void 0,
+      (o) => o !== undefined,
     ) && Lt("These numeric settings do not apply to the chosen category."),
     gD.has(n) || n === "custom")
   ) {
@@ -4445,12 +4456,12 @@ function Vw(e) {
         );
     }
   } else
-    t.pattern !== void 0 && Lt("General does not accept a custom pattern.");
+    t.pattern !== undefined && Lt("General does not accept a custom pattern.");
   return r;
 }
 function yD(e) {
   let t = [""],
-    n = !1;
+    n = false;
   for (let i = 0; i < e.length; i++) {
     let r = e[i];
     if (r === "\\" && i + 1 < e.length) {
@@ -4460,7 +4471,7 @@ function yD(e) {
     (r === '"' && (n = !n),
       r === ";" && !n ? t.push("") : (t[t.length - 1] += r));
   }
-  return n || t.length > 4 ? void 0 : t;
+  return n || t.length > 4 ? undefined : t;
 }
 function vD(e) {
   let t = {
@@ -4469,9 +4480,9 @@ function vD(e) {
       minDecimals: 0,
       maxDecimals: 0,
       minIntegerDigits: 1,
-      grouping: !1,
-      percent: !1,
-      hasNumber: !1,
+      grouping: false,
+      percent: false,
+      hasNumber: false,
     },
     n = (i) => {
       t.hasNumber ? (t.suffix += i) : (t.prefix += i);
@@ -4505,10 +4516,12 @@ function vD(e) {
         t.maxDecimals > 20 || t.minIntegerDigits > 21)
       )
         return;
-      ((t.grouping = a[1].includes(",")), (t.hasNumber = !0), (i += o.length));
+      ((t.grouping = a[1].includes(",")),
+        (t.hasNumber = true),
+        (i += o.length));
     } else if (r === "%") {
       if (t.percent) return;
-      ((t.percent = !0), n(r), i++);
+      ((t.percent = true), n(r), i++);
     } else if (/[$€£¥ ()+\-]/.test(r)) (n(r), i++);
     else return;
   }
@@ -4635,7 +4648,7 @@ function wD(e) {
 function xD(e) {
   let t = "",
     n = 1,
-    i = !1;
+    i = false;
   for (let o = 0; o < e.length;) {
     let a = e.slice(o);
     if (a[0] === '"') {
@@ -4656,7 +4669,7 @@ function xD(e) {
         (n = 1e3 ** l.length),
         (t += s.slice(0, s.length - l.length)),
         (o += s.length),
-        (i = !0));
+        (i = true));
     } else ((t += a[0]), o++);
   }
   /\[/.test(t.replace(/"[^"]*"|\\./g, "")) &&
@@ -4685,7 +4698,7 @@ function Ju(e) {
   let n,
     i = yD(e);
   i || Lt("A format has at most four sections and must close quoted literals.");
-  let r = i.length === 1 ? wD(e) : void 0;
+  let r = i.length === 1 ? wD(e) : undefined;
   return (
     r
       ? (n = r)
@@ -4819,7 +4832,7 @@ function oC(e, t, n = "1900") {
   if (typeof e == "string") {
     if (i.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(e)) {
       let c = Ju(i.pattern);
-      if (c.kind === "numeric" && c.textSection !== void 0)
+      if (c.kind === "numeric" && c.textSection !== undefined)
         return { text: _D(c.textSection, e) };
     }
     return { text: e };
@@ -4829,7 +4842,7 @@ function oC(e, t, n = "1900") {
     return {
       text: new Intl.NumberFormat(i.locale, {
         maximumSignificantDigits: 15,
-        useGrouping: !1,
+        useGrouping: false,
       }).format(e === 0 ? 0 : e),
     };
   if (i.pattern) {
@@ -5093,7 +5106,7 @@ function jI(e, t, n) {
       let ae = n.retrieve(Y);
       if (n.isIssue(ae)) throw ae;
       return ae == null
-        ? !1
+        ? false
         : typeof ae == "boolean"
           ? ae
           : typeof ae == "number"
@@ -5104,8 +5117,8 @@ function jI(e, t, n) {
     },
     l = e === "TREND" || e === "GROWTH",
     c = e === "LOGEST" || e === "GROWTH",
-    u = s(t[l ? 3 : 2], !0),
-    d = !l && s(t[3], !1),
+    u = s(t[l ? 3 : 2], true),
+    d = !l && s(t[3], false),
     f = a(n.retrieve(t[0])),
     p = f.length * f[0].length;
   p > wd.observations && i("#LIMIT!");
@@ -5354,13 +5367,13 @@ function WI(e, t, n) {
   S || i("#DIV/0!");
   let E = r(Math.abs(_) / Math.sqrt(S));
   r(O);
-  let R = n.distribution("BETA.DIST", [O / (O + E * E), O / 2, 0.5, !0]);
+  let R = n.distribution("BETA.DIST", [O / (O + E * E), O / 2, 0.5, true]);
   return (d(R) * h) / 2;
 }
 var m2 = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
   g2 = Symbol("not-specialist"),
   xd = [],
-  Xe = (e, t, n, i = !1, r = 0, o = 1) => {
+  Xe = (e, t, n, i = false, r = 0, o = 1) => {
     for (let a of e.split("|"))
       xd.push({
         symbol: a,
@@ -5371,7 +5384,7 @@ var m2 = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
         power: o,
       });
   };
-Xe("g", "mass", 0.001, !0);
+Xe("g", "mass", 0.001, true);
 Xe("lbm", "mass", 0.45359237);
 Xe("ozm", "mass", 0.45359237 / 16);
 Xe("grain", "mass", 0.45359237 / 7e3);
@@ -5380,43 +5393,43 @@ Xe("ton", "mass", 0.45359237 * 2e3);
 Xe("uk_ton|LTON|brton", "mass", 0.45359237 * 2240);
 Xe("cwt|shweight", "mass", 0.45359237 * 100);
 Xe("uk_cwt|lcwt|hweight", "mass", 0.45359237 * 112);
-Xe("m", "length", 1, !0);
+Xe("m", "length", 1, true);
 Xe("in", "length", 0.0254);
 Xe("ft", "length", 0.3048);
 Xe("yd", "length", 0.9144);
 Xe("mi", "length", 1609.344);
 Xe("Nmi", "length", 1852);
-Xe("ang", "length", 1e-10, !0);
+Xe("ang", "length", 1e-10, true);
 Xe("Picapt|Pica", "length", 0.0254 / 72);
 Xe("pica", "length", 0.0254 / 6);
-Xe("sec|s", "time", 1, !0);
+Xe("sec|s", "time", 1, true);
 Xe("mn|min", "time", 60);
 Xe("hr", "time", 3600);
 Xe("day|d", "time", 86400);
 Xe("yr", "time", 365.25 * 86400);
-Xe("Pa|p", "pressure", 1, !0);
+Xe("Pa|p", "pressure", 1, true);
 Xe("atm|at", "pressure", 101325);
 Xe("psi", "pressure", 6894.757293168361);
-Xe("N", "force", 1, !0);
-Xe("dyn|dy", "force", 1e-5, !0);
+Xe("N", "force", 1, true);
+Xe("dyn|dy", "force", 1e-5, true);
 Xe("lbf", "force", 4.4482216152605);
-Xe("J", "energy", 1, !0);
-Xe("e", "energy", 1e-7, !0);
-Xe("c", "energy", 4.184, !0);
-Xe("cal", "energy", 4.1868, !0);
-Xe("Wh|wh", "energy", 3600, !0);
+Xe("J", "energy", 1, true);
+Xe("e", "energy", 1e-7, true);
+Xe("c", "energy", 4.184, true);
+Xe("cal", "energy", 4.1868, true);
+Xe("Wh|wh", "energy", 3600, true);
 Xe("BTU|btu", "energy", 1055.05585262);
-Xe("W|w", "power", 1, !0);
+Xe("W|w", "power", 1, true);
 Xe("HP|h", "power", 745.6998715822702);
 Xe("PS", "power", 735.49875);
-Xe("T", "magnetism", 1, !0);
-Xe("ga", "magnetism", 1e-4, !0);
-Xe("K|kel", "temperature", 1, !0);
-Xe("C|cel", "temperature", 1, !1, 273.15);
-Xe("F|fah", "temperature", 5 / 9, !1, 273.15 - 160 / 9);
+Xe("T", "magnetism", 1, true);
+Xe("ga", "magnetism", 1e-4, true);
+Xe("K|kel", "temperature", 1, true);
+Xe("C|cel", "temperature", 1, false, 273.15);
+Xe("F|fah", "temperature", 5 / 9, false, 273.15 - 160 / 9);
 Xe("Rank", "temperature", 5 / 9);
-Xe("Reau", "temperature", 1.25, !1, 273.15);
-Xe("l|L|lt", "volume", 0.001, !0);
+Xe("Reau", "temperature", 1.25, false, 273.15);
+Xe("l|L|lt", "volume", 0.001, true);
 Xe("gal", "volume", 0.003785411784);
 Xe("qt", "volume", 0.003785411784 / 4);
 Xe("pt|us_pt", "volume", 0.003785411784 / 8);
@@ -5440,14 +5453,14 @@ for (let [e, t] of [
 ])
   (Xe(`${e}2|${e}^2`, "area", t ** 2, e === "m" || e === "ang", 0, 2),
     Xe(`${e}3|${e}^3`, "volume", t ** 3, e === "m" || e === "ang", 0, 3));
-Xe("ar", "area", 100, !0);
+Xe("ar", "area", 100, true);
 Xe("ha", "area", 1e4);
 Xe("uk_acre", "area", 4046.8564224);
 Xe("us_acre", "area", (1200 / 3937) ** 2 * 43560);
-Xe("bit", "information", 1, !0);
-Xe("byte", "information", 8, !0);
-Xe("m/s|m/sec", "speed", 1, !0);
-Xe("m/h|m/hr", "speed", 1 / 3600, !0);
+Xe("bit", "information", 1, true);
+Xe("byte", "information", 8, true);
+Xe("m/s|m/sec", "speed", 1, true);
+Xe("m/h|m/hr", "speed", 1 / 3600, true);
 Xe("mph", "speed", 1609.344 / 3600);
 Xe("kn", "speed", 1852 / 3600);
 var bQ = Object.freeze(xd.map((e) => Object.freeze(e))),
@@ -5661,7 +5674,7 @@ function HI(e, t, n) {
   for (let U of u) f(U);
   let p = (U) => (Number.isFinite(U) ? U : i("#NUM!")),
     h = (U, P) => {
-      if (U === void 0 && P !== void 0) return P;
+      if (U === undefined && P !== undefined) return P;
       if (n.isIssue(U)) throw U;
       if (U == null) return 0;
       if (Array.isArray(U) || (typeof U == "string" && !U.trim())) return i();
@@ -5811,7 +5824,7 @@ function ZI(e, t, n) {
     },
     o = (m) => {
       if (n.isIssue(m)) throw m;
-      m === void 0 && i();
+      m === undefined && i();
       let g = Array.isArray(m) ? (m.every(Array.isArray) ? m : [m]) : [[m]];
       return (
         (!g.length ||
@@ -5834,11 +5847,11 @@ function ZI(e, t, n) {
     t.length > (e === "LOOKUP" ? 3 : 4)) &&
     i();
   let s = r(n.retrieve(t[0]));
-  s === void 0 && i();
+  s === undefined && i();
   let l = o(n.retrieve(t[1])),
     c,
     u,
-    d = !0;
+    d = true;
   if (e === "LOOKUP")
     t.length === 3
       ? ((c = a(l)), (u = a(o(n.retrieve(t[2])))), c.length !== u.length && i())
@@ -5851,7 +5864,7 @@ function ZI(e, t, n) {
     let g = Math.trunc(Number(m));
     ((!Number.isFinite(g) || g < 1) && i(),
       g > (e === "VLOOKUP" ? l[0].length : l.length) && i("#REF!"));
-    let b = t[3] == null ? !0 : r(n.retrieve(t[3]));
+    let b = t[3] == null ? true : r(n.retrieve(t[3]));
     (typeof b == "string" && !/^(true|false)$/i.test(b) && i(),
       (d = typeof b == "string" ? b.toLowerCase() === "true" : !!b),
       (c = e === "VLOOKUP" ? l.map((w) => w[0]) : l[0]),
@@ -5877,7 +5890,7 @@ function ZI(e, t, n) {
     h = c.findIndex((b) =>
       g
         ? typeof b != "string"
-          ? !1
+          ? false
           : ((m += b.length * s.length),
             m > 1e5 && i("#LIMIT!"),
             n.matches(b, `=${s}`))
@@ -5898,9 +5911,9 @@ function KI(e, t, n) {
     a = (s, l) => {
       if (++o > 1e5) throw n.issue("#LIMIT!");
       if (n.isIssue(s)) throw s;
-      if (Array.isArray(s)) (e === "NOT" && i(), s.forEach((c) => a(c, !0)));
+      if (Array.isArray(s)) (e === "NOT" && i(), s.forEach((c) => a(c, true)));
       else if (typeof s == "boolean" || typeof s == "number") r.push(!!s);
-      else if (s == null) l || r.push(!1);
+      else if (s == null) l || r.push(false);
       else if (typeof s == "string") {
         if (l) return;
         (/^(true|false)$/i.test(s) || i(), r.push(s.toLowerCase() === "true"));
@@ -6016,7 +6029,7 @@ function QI(e, t, n) {
     },
     r = (d, f) => {
       if (n.isIssue(d)) throw d;
-      if (d === void 0 && f !== void 0) return f;
+      if (d === undefined && f !== undefined) return f;
       if (Array.isArray(d) || (typeof d == "string" && !d.trim())) return i();
       let p = Number(d);
       return Number.isFinite(p) ? p : i();
@@ -6068,7 +6081,7 @@ function QI(e, t, n) {
     }[e];
   if (
     (u && (t.length < u[0] || t.length > u[1]) && i(),
-    u && e !== "SEQUENCE" && l[0] === void 0 && i(),
+    u && e !== "SEQUENCE" && l[0] === undefined && i(),
     u && !["HSTACK", "VSTACK"].includes(e) && n.isIssue(l[0]))
   )
     throw l[0];
@@ -6209,9 +6222,9 @@ function QI(e, t, n) {
     ((t.length < (e === "XMATCH" ? 2 : 3) ||
       t.length > (e === "XMATCH" ? 4 : 6)) &&
       i(),
-      (l[0] === void 0 ||
-        l[1] === void 0 ||
-        (e === "XLOOKUP" && l[2] === void 0)) &&
+      (l[0] === undefined ||
+        l[1] === undefined ||
+        (e === "XLOOKUP" && l[2] === undefined)) &&
         i());
     let d = l[0],
       f = Br(l[1]);
@@ -6254,17 +6267,17 @@ function QI(e, t, n) {
         h !== 2 || typeof d != "string"
           ? JI(p[O], d)
           : typeof p[O] != "string"
-            ? !1
+            ? false
             : ((_ += p[O].length * d.length),
               _ > 1e5 && i("#LIMIT!"),
               n.matches(p[O], `=${d}`)),
       );
-    if (S === void 0 && (h === -1 || h === 1)) {
+    if (S === undefined && (h === -1 || h === 1)) {
       let O = w.filter((E) => Math.sign(Mm(p[E], d)) === h);
       (O.sort((E, R) => Mm(p[E], p[R]) * h), (S = O[0]));
     }
-    return S === void 0
-      ? e === "XLOOKUP" && l[3] !== void 0
+    return S === undefined
+      ? e === "XLOOKUP" && l[3] !== undefined
         ? (l[3] ?? 0)
         : i("#N/A")
       : e === "XMATCH"
@@ -6278,7 +6291,7 @@ function QI(e, t, n) {
             : b.map((O) => [O[S]]);
   }
   if (e === "SEQUENCE") {
-    l[0] === void 0 && l[1] === void 0 && i();
+    l[0] === undefined && l[1] === undefined && i();
     let d = o(l[0], 1),
       f = o(l[1], 1),
       p = r(l[2], 1),
@@ -6293,7 +6306,7 @@ function QI(e, t, n) {
   if (e === "FILTER") {
     let d = Br(l[0]),
       f = Br(l[1]);
-    l[1] === void 0 && i();
+    l[1] === undefined && i();
     let p = _i(f).find(n.isIssue);
     if (p) throw p;
     let h;
@@ -6303,7 +6316,7 @@ function QI(e, t, n) {
       h = d.map((m) => m.filter((g, b) => s(f[0][b])));
     else return i();
     return !h.length || !h[0].length
-      ? l[2] !== void 0
+      ? l[2] !== undefined
         ? Br(l[2])
         : i("#CALC!")
       : h;
@@ -6314,7 +6327,7 @@ function QI(e, t, n) {
     let d = Br(l[0]).map((b) => [...b]);
     if (e === "SORTBY") {
       let b = Br(l[1]);
-      l[1] === void 0 && i();
+      l[1] === undefined && i();
       let w =
           b.length === 1 &&
           b[0].length === d[0].length &&
@@ -6322,7 +6335,7 @@ function QI(e, t, n) {
         _ = w ? d[0].length : d.length,
         S = [];
       for (let E = 1; E < l.length; E += 2) {
-        l[E] === void 0 && i();
+        l[E] === undefined && i();
         let R = Br(l[E]),
           I = r(l[E + 1], 1);
         ((w
@@ -6346,7 +6359,7 @@ function QI(e, t, n) {
     }
     let f = o(l[1], 1) - 1,
       p = r(l[2], 1),
-      h = l[3] === void 0 ? !1 : s(l[3]);
+      h = l[3] === undefined ? false : s(l[3]);
     [-1, 1].includes(p) || i();
     let m = h ? d[0].map((b, w) => d.map((_) => _[w])) : d;
     (f < 0 || f >= m[0].length) && i();
@@ -6359,8 +6372,8 @@ function QI(e, t, n) {
   }
   if (e === "UNIQUE") {
     let d = Br(l[0]),
-      f = l[1] === void 0 ? !1 : s(l[1]),
-      p = l[2] === void 0 ? !1 : s(l[2]),
+      f = l[1] === undefined ? false : s(l[1]),
+      p = l[2] === undefined ? false : s(l[2]),
       h = f ? d[0].map((_, S) => d.map((O) => O[S])) : d,
       m = (_) =>
         JSON.stringify(
@@ -6371,7 +6384,7 @@ function QI(e, t, n) {
     let b = new Set(),
       w = h.filter((_) => {
         let S = m(_);
-        return b.has(S) || (p && g.get(S) !== 1) ? !1 : (b.add(S), !0);
+        return b.has(S) || (p && g.get(S) !== 1) ? false : (b.add(S), true);
       });
     return (
       w.length || i("#CALC!"),
@@ -6380,10 +6393,10 @@ function QI(e, t, n) {
   }
   if (e === "TAKE" || e === "DROP") {
     let d = Br(l[0]),
-      f = l[1] === void 0 ? void 0 : o(l[1]),
-      p = l[2] === void 0 ? void 0 : o(l[2]),
+      f = l[1] === undefined ? undefined : o(l[1]),
+      p = l[2] === undefined ? undefined : o(l[2]),
       h = (g, b) =>
-        b === void 0
+        b === undefined
           ? g
           : e === "TAKE"
             ? b > 0
@@ -6392,7 +6405,8 @@ function QI(e, t, n) {
             : b >= 0
               ? g.slice(b)
               : g.slice(0, b);
-    (f === void 0 && p === void 0 && i(), (f === 0 || p === 0) && i("#CALC!"));
+    (f === undefined && p === undefined && i(),
+      (f === 0 || p === 0) && i("#CALC!"));
     let m = h(d, f).map((g) => h(g, p));
     return ((!m.length || !m[0].length) && i("#CALC!"), m);
   }
@@ -6444,7 +6458,7 @@ function QI(e, t, n) {
   if (e === "TOCOL" || e === "TOROW") {
     let d = Br(l[0]),
       f = o(l[1], 0),
-      p = l[2] === void 0 ? !1 : s(l[2]);
+      p = l[2] === undefined ? false : s(l[2]);
     [0, 1, 2, 3].includes(f) || i();
     let h = (p ? d[0].flatMap((m, g) => d.map((b) => b[g])) : d.flat()).filter(
       (m) =>
@@ -6486,7 +6500,7 @@ function QI(e, t, n) {
       (w.push(O), (S = O + b.length));
     }
     let _ = w[p > 0 ? p - 1 : w.length + p];
-    return _ === void 0
+    return _ === undefined
       ? m && Math.abs(p) === w.length + 1
         ? e === "TEXTBEFORE"
           ? p > 0
@@ -6495,7 +6509,7 @@ function QI(e, t, n) {
           : p > 0
             ? ""
             : d
-        : l[5] !== void 0
+        : l[5] !== undefined
           ? l[5]
           : i("#N/A")
       : e === "TEXTBEFORE"
@@ -6507,7 +6521,7 @@ function QI(e, t, n) {
     let d = l.slice(0, 5).flatMap(_i).find(n.isIssue);
     if (d) return d;
     let f = rs(l[0]),
-      p = l[3] === void 0 ? !1 : s(l[3]),
+      p = l[3] === undefined ? false : s(l[3]),
       h = r(l[4], 0);
     (Array.isArray(l[0]) || ![0, 1].includes(h)) && i();
     let m = (O) =>
@@ -6546,7 +6560,7 @@ function QI(e, t, n) {
   return $m;
 }
 function _d(e, t) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (!Array.isArray(e) || e.length > 1e3)
     throw new Error("A workbook may contain at most 1,000 defined names.");
   let n = new Set();
@@ -6578,13 +6592,13 @@ function _d(e, t) {
         "A name must refer to a formula beginning with = (up to 4,096 characters).",
       );
     if (
-      r.scopeSheetId !== void 0 &&
+      r.scopeSheetId !== undefined &&
       (typeof r.scopeSheetId != "string" ||
         !t.sheets.some((a) => a.id === r.scopeSheetId))
     )
       throw new Error("Defined-name worksheet scope was not found.");
     if (
-      r.comment !== void 0 &&
+      r.comment !== undefined &&
       (typeof r.comment != "string" || r.comment.length > 1e3)
     )
       throw new Error(
@@ -6605,7 +6619,7 @@ function _d(e, t) {
 }
 var sj = (e) => `${e.scopeSheetId ?? ""}:${e.name.toLowerCase()}`,
   aj = (e) => `'${e.replace(/'/g, "''")}'!`;
-function lj(e, t = !1) {
+function lj(e, t = false) {
   let n = [],
     i = 0,
     r = (a) => {
@@ -6622,12 +6636,12 @@ function lj(e, t = !1) {
       s = e[i];
     if (s === '"') {
       i++;
-      let h = !1;
+      let h = false;
       for (; i < e.length;)
         if (e[i++] === '"')
           if (e[i] === '"') i++;
           else {
-            h = !0;
+            h = true;
             break;
           }
       h || r("An unterminated formula string cannot be safely migrated.");
@@ -6674,7 +6688,7 @@ function lj(e, t = !1) {
       let h = /^([A-Za-z0-9_\\][A-Za-z0-9_.\\]*)!/.exec(e.slice(i));
       h && ((c = h[1]), (i += h[0].length));
     }
-    if (c === void 0 && s === "[") {
+    if (c === undefined && s === "[") {
       (e.startsWith("[@", i) ||
         r(
           "External or unqualified bracket references cannot be safely migrated.",
@@ -6694,11 +6708,11 @@ function lj(e, t = !1) {
           text: e.slice(a, i),
           name: u[0],
           ...(c ? { qualifier: c } : {}),
-          cell: !0,
+          cell: true,
         }));
       continue;
     }
-    if (c === void 0 && /[0-9.]/.test(s)) {
+    if (c === undefined && /[0-9.]/.test(s)) {
       let h = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(e.slice(i));
       if (h) {
         i += h[0].length;
@@ -6732,14 +6746,14 @@ function lj(e, t = !1) {
           end: i,
           text: e.slice(a, i),
           name: f,
-          ...(p ? { call: !0 } : {}),
+          ...(p ? { call: true } : {}),
           ...(c ? { qualifier: c } : {}),
-          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(f) ? { cell: !0 } : {}),
+          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(f) ? { cell: true } : {}),
         }));
   }
   return n;
 }
-function e5(e, t = !1) {
+function e5(e, t = false) {
   let n = lj(e, t);
   if (!/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(e)) return n;
   let i = new Map();
@@ -6885,7 +6899,7 @@ function n5(e) {
         return _2.test(o) ? Dt("Invalid XML character entity.") : o;
       });
 }
-function r5(e, t = !1) {
+function r5(e, t = false) {
   return _2.test(e)
     ? Dt("A name contains an invalid XML character.")
     : e.replace(
@@ -6961,12 +6975,12 @@ function Cd(e) {
     if (!n && (s === '"' || s === "'")) {
       let l = s,
         c = r++,
-        u = !1;
+        u = false;
       for (; r < e.length;)
         if (e[r++] === l)
           if (e[r] === l) r++;
           else {
-            u = !0;
+            u = true;
             break;
           }
       if (!u) return Dt("Unterminated formula string or worksheet qualifier.");
@@ -7065,7 +7079,10 @@ function o5(e) {
     for (let m of Object.keys(l))
       if (m.startsWith("xmlns") && l[m] !== Sd)
         return Dt("Unsupported definedName namespace.");
-    if (u !== void 0 && (!/^\d+$/.test(u) || !Number.isSafeInteger(Number(u))))
+    if (
+      u !== undefined &&
+      (!/^\d+$/.test(u) || !Number.isSafeInteger(Number(u)))
+    )
       return Dt(`Name "${c}" has an invalid localSheetId.`);
     let p = `=${n5(
       (s[3] ?? "").replace(
@@ -7074,14 +7091,14 @@ function o5(e) {
 `,
       ),
     ).replace(/^=/, "")}`;
-    if ((Cd(p), u !== void 0 && Number(u) >= a))
+    if ((Cd(p), u !== undefined && Number(u) >= a))
       return Dt(`Name "${c}" has an out-of-range localSheetId.`);
-    let h = `${u === void 0 ? "workbook" : Number(u)}:${c.toLowerCase()}`;
+    let h = `${u === undefined ? "workbook" : Number(u)}:${c.toLowerCase()}`;
     if (o.has(h)) return Dt(`Duplicate name "${c}" in the same scope.`);
     if ((o.add(h), uj.has(c.toLowerCase())))
       n.builtinXml += `<definedName${Object.entries(l)
         .filter(([m]) => !m.startsWith("xmlns"))
-        .map(([m, g]) => ` ${m}="${r5(g, !0)}"`)
+        .map(([m, g]) => ` ${m}="${r5(g, true)}"`)
         .join("")}>${r5(p.slice(1))}</definedName>`;
     else if (c.toLowerCase().startsWith("_xlnm.")) {
       if (++r > 1e3)
@@ -7093,7 +7110,7 @@ function o5(e) {
       if (++r > 1e3)
         return Dt("The workbook exceeds the 1,000-defined-name limit.");
       for (let g of ["function", "vbProcedure", "xlm"])
-        if (l[g] !== void 0 && !["0", "false"].includes(l[g]))
+        if (l[g] !== undefined && !["0", "false"].includes(l[g]))
           return Dt(`Name "${c}" has an executable ${g} attribute.`);
       let m = Object.keys(l).filter(
         (g) =>
@@ -7107,8 +7124,8 @@ function o5(e) {
         n.names.push({
           name: c,
           refersTo: p,
-          ...(u !== void 0 ? { localSheetId: Number(u) } : {}),
-          ...(l.comment !== void 0 ? { comment: l.comment } : {}),
+          ...(u !== undefined ? { localSheetId: Number(u) } : {}),
+          ...(l.comment !== undefined ? { comment: l.comment } : {}),
         }));
     }
     i = i.slice(s[0].length);
@@ -7119,16 +7136,16 @@ function o5(e) {
       n.names.map((s) => ({
         name: s.name,
         refersTo: s.refersTo,
-        ...(s.localSheetId !== void 0
+        ...(s.localSheetId !== undefined
           ? { scopeSheetId: String(s.localSheetId) }
           : {}),
-        ...(s.comment !== void 0 ? { comment: s.comment } : {}),
+        ...(s.comment !== undefined ? { comment: s.comment } : {}),
       })),
       {
         sheets: [
           ...new Set(
             n.names.flatMap((s) =>
-              s.localSheetId === void 0 ? [] : [s.localSheetId],
+              s.localSheetId === undefined ? [] : [s.localSheetId],
             ),
           ),
         ].map((s) => ({ id: String(s) })),
@@ -7143,15 +7160,15 @@ function s5(e, t, n) {
   if (new Set(n.map((r) => r.toLowerCase())).size !== n.length)
     return Dt("Duplicate worksheet names make name scopes ambiguous.");
   let i = e.map((r) => {
-    let o = r.localSheetId === void 0 ? void 0 : n[r.localSheetId],
-      a = o === void 0 ? void 0 : t.sheets.find((s) => s.name === o)?.id;
-    return r.localSheetId !== void 0 && !a
+    let o = r.localSheetId === undefined ? undefined : n[r.localSheetId],
+      a = o === undefined ? undefined : t.sheets.find((s) => s.name === o)?.id;
+    return r.localSheetId !== undefined && !a
       ? Dt(`Name "${r.name}" has an invalid or unsupported worksheet scope.`)
       : {
           name: r.name,
           refersTo: r.refersTo,
           ...(a ? { scopeSheetId: a } : {}),
-          ...(r.comment !== void 0 ? { comment: r.comment } : {}),
+          ...(r.comment !== undefined ? { comment: r.comment } : {}),
         };
   });
   for (let r of i) dj(r.refersTo, t);
@@ -7270,14 +7287,14 @@ function c5(e, t, n, i) {
           t.definedNames?.find(
             (U) => !U.scopeSheetId && U.name.toLowerCase() === R,
           );
-      return I ? { found: I, sheetId: I.scopeSheetId ?? E } : void 0;
+      return I ? { found: I, sheetId: I.scopeSheetId ?? E } : undefined;
     },
     h = (S, O, E) => {
       try {
         return i.parse(S, O, E);
       } catch (R) {
         let I =
-          R && typeof R == "object" && "details" in R ? R.details : void 0;
+          R && typeof R == "object" && "details" in R ? R.details : undefined;
         return i.isIssue(I) ? I : i.isIssue(R) ? R : i.issue("#ERROR!");
       }
     },
@@ -7348,7 +7365,7 @@ function c5(e, t, n, i) {
       if (U === "LAMBDA")
         return {
           kind: "formula-closure",
-          parameters: S.args.slice(0, -1).map((v) => mo(Xl(v, !0).name)),
+          parameters: S.args.slice(0, -1).map((v) => mo(Xl(v, true).name)),
           body: S.args.at(-1),
           source: O,
           environment: new Map(E),
@@ -7375,7 +7392,7 @@ function c5(e, t, n, i) {
               `IF: ${k ? "true" : "false"} branch selected`,
               v,
             ),
-            S.args[k ? 1 : 2] ? _(S.args[k ? 1 : 2], O, E, R, I + 1) : !1
+            S.args[k ? 1 : 2] ? _(S.args[k ? 1 : 2], O, E, R, I + 1) : false
           );
         }
       }
@@ -7488,27 +7505,27 @@ function Lj(e) {
 }
 function E5(e, t) {
   (Pj(t.name),
-    e.veryHidden !== void 0 &&
+    e.veryHidden !== undefined &&
       (typeof e.veryHidden != "boolean" &&
         Ba("The very-hidden flag must be boolean."),
       e.veryHidden &&
-        e.hidden === !1 &&
+        e.hidden === false &&
         Ba("A very-hidden worksheet must also be hidden."),
       (t.veryHidden = e.veryHidden),
-      e.veryHidden && (t.hidden = !0)),
-    e.tabColor !== void 0 && (t.tabColor = Lj(e.tabColor)));
+      e.veryHidden && (t.hidden = true)),
+    e.tabColor !== undefined && (t.tabColor = Lj(e.tabColor)));
 }
 function S5(e, t) {
   let n = e;
-  if (n !== void 0) {
+  if (n !== undefined) {
     (!$j(n) ||
-      n.enabled !== !0 ||
+      n.enabled !== true ||
       Object.keys(n).some(
         (o) => !["enabled", "passwordHash", "salt"].includes(o),
       )) &&
       Ba("Invalid workbook structure protection.");
-    let i = n.passwordHash !== void 0,
-      r = n.salt !== void 0;
+    let i = n.passwordHash !== undefined,
+      r = n.salt !== undefined;
     ((i !== r ||
       (i &&
         (typeof n.passwordHash != "string" ||
@@ -7520,7 +7537,7 @@ function S5(e, t) {
         "Workbook structure protection requires a valid salted password hash.",
       ),
       (t.structureProtection = {
-        enabled: !0,
+        enabled: true,
         ...(i
           ? {
               passwordHash: String(n.passwordHash).toLowerCase(),
@@ -7540,7 +7557,7 @@ function Fm(e) {
   return e;
 }
 function zm(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   let n = () => {
       throw Error(
         "Invalid or over-capacity table source evidence. Keep the native backup.",
@@ -7586,7 +7603,7 @@ function zm(e, t) {
             s.columnId.length > 100) &&
             n(),
           Fm(s.dataType))
-        : (s.columnId !== void 0 || s.dataType !== void 0) && n(),
+        : (s.columnId !== undefined || s.dataType !== undefined) && n(),
       r.add(s.id));
     let l = new Set(),
       c = s.changes.map((u) => {
@@ -7604,7 +7621,7 @@ function zm(e, t) {
           l.add(f),
           {
             address: f,
-            ...(d.before !== void 0 ? { before: Oi(d.before) } : {}),
+            ...(d.before !== undefined ? { before: Oi(d.before) } : {}),
             after: Oi(d.after),
           }
         );
@@ -7716,7 +7733,7 @@ var I5 = ["value", "percentGrand", "percentRow", "percentColumn"],
     ]);
 function N5(e) {
   let t = {};
-  (e.slicers !== void 0 &&
+  (e.slicers !== undefined &&
     (t.slicers = jm(e.slicers, 20).map((n) => {
       if (!Bm(n)) return os("Invalid pivot slicer.");
       let i = jm(n.selected, 500).map(
@@ -7735,7 +7752,7 @@ function N5(e) {
         { field: F2(n.field), selected: i }
       );
     })),
-    e.timelines !== void 0 &&
+    e.timelines !== undefined &&
       (t.timelines = jm(e.timelines, 10).map((n) =>
         !Bm(n) ||
         !A5(n.from) ||
@@ -7754,7 +7771,7 @@ function N5(e) {
               dateSystem: n.dateSystem,
             },
       )),
-    e.sorts !== void 0 &&
+    e.sorts !== undefined &&
       (t.sorts = jm(e.sorts, 100).map((n) =>
         !Bm(n) || !["ascending", "descending"].includes(String(n.direction))
           ? os("Pivot field sorting requires ascending or descending order.")
@@ -7764,7 +7781,7 @@ function N5(e) {
     n &&
       new Set(n.map((i) => i.field)).size !== n.length &&
       os("Choose only one control of each kind per field.");
-  if (e.chart !== void 0) {
+  if (e.chart !== undefined) {
     let n = e.chart;
     if (
       !Bm(n) ||
@@ -7789,7 +7806,10 @@ var O5 = (e) =>
   bc = (e, t) => typeof e == "string" && e.length > 0 && e.length <= t;
 function M5(e, t) {
   let n = e.sheets;
-  if (e.rowOrigins === void 0 && !n.some((o) => o.rowOriginIds !== void 0))
+  if (
+    e.rowOrigins === undefined &&
+    !n.some((o) => o.rowOriginIds !== undefined)
+  )
     return;
   if (!Array.isArray(e.rowOrigins) || e.rowOrigins.length > Ne.maxCells)
     throw Error(
@@ -7825,7 +7845,7 @@ function M5(e, t) {
   let r = 0;
   for (let o = 0; o < n.length; o++) {
     let a = n[o].rowOriginIds;
-    if (a === void 0) continue;
+    if (a === undefined) continue;
     if (!O5(a))
       throw Error("Source row associations must be a plain index map.");
     let s = {};
@@ -7961,12 +7981,12 @@ function U5(e) {
   let t = {
     sheetId: yc(e.sheetId),
     range: Vm(oo(e.range, "Source range", 50)),
-    ...(e.tableId !== void 0 ? { tableId: yc(e.tableId) } : {}),
+    ...(e.tableId !== undefined ? { tableId: yc(e.tableId) } : {}),
   };
   return (Xm(t.range), t);
 }
 function F5(e) {
-  return e === void 0
+  return e === undefined
     ? []
     : ((!Array.isArray(e) || e.length > 100) &&
         ut("Use at most 100 source filters."),
@@ -7996,20 +8016,20 @@ function F5(e) {
           {
             field: Bn(t.field),
             operator: t.operator,
-            ...(n !== void 0 ? { value: n } : {}),
+            ...(n !== undefined ? { value: n } : {}),
           }
         );
       }));
 }
 function z5(e) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   Sn(e) || ut("Invalid output destination.");
-  let t = e.address === void 0 ? "A1" : oo(e.address, "Output address", 20),
+  let t = e.address === undefined ? "A1" : oo(e.address, "Output address", 20),
     n = tt(t);
   return {
     address: qm(n.row, n.col),
-    ...(e.sheetId !== void 0 ? { sheetId: yc(e.sheetId) } : {}),
-    ...(e.sheetName !== void 0
+    ...(e.sheetId !== undefined ? { sheetId: yc(e.sheetId) } : {}),
+    ...(e.sheetName !== undefined
       ? { sheetName: oo(e.sheetName, "Output sheet name", 31) }
       : {}),
   };
@@ -8024,24 +8044,24 @@ function qj(e) {
         ut(
           "Invalid pivot aggregation. Choose sum, count, average, min, max or distinctCount.",
         ),
-      r.showAs !== void 0 &&
+      r.showAs !== undefined &&
         !I5.includes(r.showAs) &&
         ut("Choose a supported Show values as setting."),
       {
         field: Bn(r.field),
         operation: r.operation,
-        ...(r.name !== void 0 ? { name: Bn(r.name) } : {}),
-        ...(r.showAs !== void 0 ? { showAs: r.showAs } : {}),
+        ...(r.name !== undefined ? { name: Bn(r.name) } : {}),
+        ...(r.showAs !== undefined ? { showAs: r.showAs } : {}),
       }
     ),
   );
-  (e.grandTotals !== void 0 &&
+  (e.grandTotals !== undefined &&
     typeof e.grandTotals != "boolean" &&
     ut("Grand totals must be boolean."),
-    e.subtotals !== void 0 &&
+    e.subtotals !== undefined &&
       typeof e.subtotals != "boolean" &&
       ut("Subtotals must be boolean."),
-    e.dateGroups !== void 0 &&
+    e.dateGroups !== undefined &&
       (!Array.isArray(e.dateGroups) || e.dateGroups.length > 100) &&
       ut("Use at most 100 date groups."));
   let n = (e.dateGroups ?? []).map(
@@ -8057,7 +8077,7 @@ function qj(e) {
   );
   (new Set(n.map((r) => r.field)).size !== n.length &&
     ut("Choose one date grouping per source field."),
-    e.calculatedFields !== void 0 &&
+    e.calculatedFields !== undefined &&
       (!Array.isArray(e.calculatedFields) || e.calculatedFields.length > 100) &&
       ut("Use at most 100 calculated fields."));
   let i = (e.calculatedFields ?? []).map(
@@ -8066,8 +8086,8 @@ function qj(e) {
         !["add", "subtract", "multiply", "divide"].includes(
           String(r.operation),
         ) ||
-        (r.otherField === void 0) == (r.constant === void 0) ||
-        (r.constant !== void 0 &&
+        (r.otherField === undefined) == (r.constant === undefined) ||
+        (r.constant !== undefined &&
           (typeof r.constant != "number" || !Number.isFinite(r.constant)))) &&
         ut(
           "A calculated field needs add/subtract/multiply/divide and exactly one numeric constant or other source field.",
@@ -8076,7 +8096,7 @@ function qj(e) {
         name: Bn(r.name),
         field: Bn(r.field),
         operation: r.operation,
-        ...(r.otherField !== void 0
+        ...(r.otherField !== undefined
           ? { otherField: Bn(r.otherField) }
           : { constant: r.constant }),
       }
@@ -8092,10 +8112,10 @@ function qj(e) {
       columnFields: z2(e.columnFields, "Column fields"),
       values: t,
       filters: F5(e.filters),
-      grandTotals: e.grandTotals !== !1,
-      ...(e.subtotals !== void 0 ? { subtotals: e.subtotals } : {}),
-      ...(e.dateGroups !== void 0 ? { dateGroups: n } : {}),
-      ...(e.calculatedFields !== void 0 ? { calculatedFields: i } : {}),
+      grandTotals: e.grandTotals !== false,
+      ...(e.subtotals !== undefined ? { subtotals: e.subtotals } : {}),
+      ...(e.dateGroups !== undefined ? { dateGroups: n } : {}),
+      ...(e.calculatedFields !== undefined ? { calculatedFields: i } : {}),
       ...N5(e),
       destination: z5(e.destination),
     }
@@ -8106,24 +8126,24 @@ function Xj(e) {
   let t = z2(e.fields, "Selected fields");
   t.length || ut("Choose at least one output field.");
   let n = {};
-  if (e.rename !== void 0) {
+  if (e.rename !== undefined) {
     Sn(e.rename) || ut("Rename fields must be a name map.");
     for (let [a, s] of Object.entries(e.rename))
       (t.includes(a) || ut("Only selected fields can be renamed."),
         Object.defineProperty(n, a, {
           value: Bn(s),
-          enumerable: !0,
-          writable: !0,
-          configurable: !0,
+          enumerable: true,
+          writable: true,
+          configurable: true,
         }));
   }
   let i;
-  (e.sort !== void 0 &&
+  (e.sort !== undefined &&
     ((!Sn(e.sort) ||
       !["ascending", "descending"].includes(String(e.sort.direction))) &&
       ut("Invalid query sort."),
     (i = { field: Bn(e.sort.field), direction: e.sort.direction })),
-    e.derived !== void 0 &&
+    e.derived !== undefined &&
       (!Array.isArray(e.derived) || e.derived.length > 100) &&
       ut("Use at most 100 derived fields."));
   let r = (e.derived ?? []).map(
@@ -8140,7 +8160,7 @@ function Xj(e) {
             "trim",
           ].includes(String(a.operation))) &&
           ut("Invalid derived operation."),
-        a.constant !== void 0 &&
+        a.constant !== undefined &&
           !(typeof a.constant == "string" && a.constant.length <= 32767) &&
           !(typeof a.constant == "number" && Number.isFinite(a.constant)) &&
           ut("A derived constant must be bounded text or a finite number."),
@@ -8148,8 +8168,10 @@ function Xj(e) {
           name: Bn(a.name),
           field: Bn(a.field),
           operation: a.operation,
-          ...(a.otherField !== void 0 ? { otherField: Bn(a.otherField) } : {}),
-          ...(a.constant !== void 0 ? { constant: a.constant } : {}),
+          ...(a.otherField !== undefined
+            ? { otherField: Bn(a.otherField) }
+            : {}),
+          ...(a.constant !== undefined ? { constant: a.constant } : {}),
         }
       ),
     ),
@@ -8174,7 +8196,7 @@ function Xj(e) {
 }
 function j2(e, t) {
   if (Sn(e)) {
-    if (e.tables !== void 0) {
+    if (e.tables !== undefined) {
       (!Array.isArray(e.tables) || e.tables.length > Ne.maxCells) &&
         ut("Tables must be a bounded list.");
       let n = new Set(),
@@ -8205,9 +8227,9 @@ function j2(e, t) {
             {
               id: yc(p.id),
               name: Bn(p.name),
-              ...(p.dataType !== void 0 ? { dataType: Fm(p.dataType) } : {}),
-              ...(p.calculatedFormula !== void 0
-                ? { calculatedFormula: Zj(p.calculatedFormula, !0) }
+              ...(p.dataType !== undefined ? { dataType: Fm(p.dataType) } : {}),
+              ...(p.calculatedFormula !== undefined
+                ? { calculatedFormula: Zj(p.calculatedFormula, true) }
                 : {}),
             }
           ),
@@ -8221,9 +8243,9 @@ function j2(e, t) {
             ut("Invalid table total field or operation."),
             Object.defineProperty(f, p, {
               value: h,
-              enumerable: !0,
-              writable: !0,
-              configurable: !0,
+              enumerable: true,
+              writable: true,
+              configurable: true,
             }));
         return {
           id: s,
@@ -8249,7 +8271,7 @@ function j2(e, t) {
       }
     }
     for (let n of ["pivots", "queries"]) {
-      if (e[n] === void 0) continue;
+      if (e[n] === undefined) continue;
       (!Array.isArray(e[n]) || e[n].length > Ne.maxCells) &&
         ut("Analysis definitions must be a bounded list.");
       let i = new Set(),
@@ -8270,7 +8292,7 @@ function j2(e, t) {
             id: s,
             outputRange: l,
             sourceRevision: Number(o.sourceRevision),
-            ...(n === "pivots" && o.refresh !== void 0
+            ...(n === "pivots" && o.refresh !== undefined
               ? { refresh: T5(o.refresh) }
               : {}),
           };
@@ -8374,7 +8396,7 @@ function j5(e, t) {
     i = [],
     r = e.model.tables ?? [];
   for (let o of r) {
-    if (o.headerRow === !1) {
+    if (o.headerRow === false) {
       n.push(
         `Table ${o.name} has no header row; its cells were retained without table metadata.`,
       );
@@ -8392,9 +8414,9 @@ function j5(e, t) {
         if (B2.includes(u))
           Object.defineProperty(l, c.name, {
             value: u,
-            enumerable: !0,
-            writable: !0,
-            configurable: !0,
+            enumerable: true,
+            writable: true,
+            configurable: true,
           });
         else if (u === "custom") {
           let d = c.totalsRowFormula ?? "",
@@ -8404,9 +8426,9 @@ function j5(e, t) {
           f &&
             Object.defineProperty(l, c.name, {
               value: f === "counta" ? "count" : f,
-              enumerable: !0,
-              writable: !0,
-              configurable: !0,
+              enumerable: true,
+              writable: true,
+              configurable: true,
             });
         }
       }
@@ -8432,7 +8454,7 @@ function j5(e, t) {
   return (i.length && ((t.tables = i), j2(t, t)), n);
 }
 var Gj = { changedCells: 500, appendedRows: 100, formulaLength: 4096 };
-function Zj(e, t = !1) {
+function Zj(e, t = false) {
   (typeof e != "string" ||
     e.length > Gj.formulaLength ||
     e !== e.trim() ||
@@ -8551,7 +8573,7 @@ function V5(e, t) {
   let n = Jj(e);
   for (let i of n.reverse()) {
     let r = t(i);
-    r !== void 0 && (e = e.slice(0, i.start) + r + e.slice(i.end));
+    r !== undefined && (e = e.slice(0, i.start) + r + e.slice(i.end));
   }
   return e;
 }
@@ -8617,7 +8639,7 @@ var V2 = Object.freeze({
   }),
   q5 = new WeakSet();
 function G5(e, t) {
-  if (e.workbookLinks === void 0) return;
+  if (e.workbookLinks === undefined) return;
   if (
     e.workbookLinks &&
     typeof e.workbookLinks == "object" &&
@@ -8667,7 +8689,7 @@ function Z5(e) {
       for (; e.sheets.some((p) => p.id === d);) d += "_";
       let f = {};
       for (let [p, h] of Object.entries(c.cells))
-        ((f[p] = { raw: h.value, literal: !0 }), n.set(`${d}:${p}`, h));
+        ((f[p] = { raw: h.value, literal: true }), n.set(`${d}:${p}`, h));
       (t.push({ id: d, name: u, rowCount: 1048576, colCount: 16384, cells: f }),
         i.set(JSON.stringify([s.target, c.name.toLowerCase()]), u));
     }
@@ -8685,7 +8707,7 @@ function Z5(e) {
       }),
   };
 }
-function K5(e, t, n, i, r = !0) {
+function K5(e, t, n, i, r = true) {
   let o = "";
   for (let u = 0; u < e.length;) {
     let d = u,
@@ -8895,17 +8917,17 @@ function J5(e, t, n) {
       }
       let z = F.toLowerCase(),
         j = [],
-        q = !1;
+        q = false;
       for (let D = 0; D < z.length; D++) {
         let W = z[D];
         if (W === "~") {
           let $ = z[D + 1];
           $ && ["*", "?", "~"].includes($)
-            ? (j.push({ kind: "literal", char: $ }), D++, (q = !0))
+            ? (j.push({ kind: "literal", char: $ }), D++, (q = true))
             : j.push({ kind: "literal", char: W });
         } else
           W === "*" || W === "?"
-            ? ((q = !0),
+            ? ((q = true),
               (W === "?" || j.at(-1)?.kind !== "many") &&
                 j.push({ kind: W === "*" ? "many" : "one" }))
             : j.push({ kind: "literal", char: W });
@@ -8915,7 +8937,7 @@ function J5(e, t, n) {
           ? i()
           : (D) =>
               typeof D != "string"
-                ? !1
+                ? false
                 : (p(D.length + z.length), h(D.toLowerCase(), z, N))
         : (!C[1] && !q && j.push({ kind: "many" }),
           (D) => {
@@ -8946,7 +8968,7 @@ function J5(e, t, n) {
       .slice(1)
       .map((x, C) =>
         x.map((N, F) =>
-          c[F] < 0 ? n.criterionFormula?.(t[2], C + 1, F) : void 0,
+          c[F] < 0 ? n.criterionFormula?.(t[2], C + 1, F) : undefined,
         ),
       );
   c.forEach((x, C) => {
@@ -8971,27 +8993,27 @@ function J5(e, t, n) {
     A = 0,
     L;
   for (let [x, C] of o.slice(1).entries()) {
-    let N = !1;
+    let N = false;
     for (let [j, q] of w.entries()) {
-      let D = !0;
+      let D = true;
       for (let W = 0; W < q.length; W++) {
         let $ = b[j][W];
         if ($) {
           ++g > zs.formulaEvaluations && i("#LIMIT!");
           let V = $(x);
           if (n.isIssue(V)) throw V;
-          (typeof V != "boolean" && i(), V || (D = !1));
+          (typeof V != "boolean" && i(), V || (D = false));
           continue;
         }
         let M = q[W];
         if (!M) continue;
         let B = C[c[W]];
         if (n.isIssue(B)) throw B;
-        M(B) || (D = !1);
+        M(B) || (D = false);
       }
-      D && (N = !0);
+      D && (N = true);
     }
-    if (!N || (S++, d === void 0)) continue;
+    if (!N || (S++, d === undefined)) continue;
     let F = C[d];
     if (((L = F), F != null && E++, n.isIssue(F))) {
       if (!["DCOUNT", "DCOUNTA", "DGET"].includes(e)) throw F;
@@ -9007,8 +9029,8 @@ function J5(e, t, n) {
     if (n.isIssue(L)) throw L;
     return L ?? 0;
   }
-  if (e === "DCOUNT") return d === void 0 ? S : O;
-  if (e === "DCOUNTA") return d === void 0 ? S : E;
+  if (e === "DCOUNT") return d === undefined ? S : O;
+  if (e === "DCOUNTA") return d === undefined ? S : E;
   let y = (x) => (Number.isFinite(x) ? x : i("#NUM!"));
   if (e === "DSUM") return y(R);
   if (e === "DMAX") return O ? P : 0;
@@ -9042,7 +9064,7 @@ function Y5(e, t = {}) {
   if (!Bs(t) || Object.keys(t).some((l) => l !== "filteredRowsBySheet"))
     throw Error("Calculation options support only filteredRowsBySheet.");
   let n = t.filteredRowsBySheet;
-  if (n !== void 0 && !Bs(n))
+  if (n !== undefined && !Bs(n))
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
@@ -9068,7 +9090,8 @@ function Y5(e, t = {}) {
         if (f(D)) throw D;
         if (!Bs(D) || !Bs(D.ref)) throw d("#VALUE!");
         let W = D.ref;
-        if (W.sheet !== void 0 && typeof W.sheet != "string") throw d("#REF!");
+        if (W.sheet !== undefined && typeof W.sheet != "string")
+          throw d("#REF!");
         let $ = r.get(
           String(W.sheet ?? u.currentSheetName ?? "").toLowerCase(),
         );
@@ -9361,17 +9384,17 @@ function Od(e, t) {
     let l = [];
     for (let d = 0; d < r.length; d++)
       r[d] === "~" && d + 1 < r.length
-        ? l.push({ char: r[++d].toLowerCase(), wildcard: !1 })
+        ? l.push({ char: r[++d].toLowerCase(), wildcard: false })
         : l.push({
             char: r[d].toLowerCase(),
             wildcard: r[d] === "*" || r[d] === "?",
           });
     let c = String(e ?? "").toLowerCase();
     if (l.length * c.length > 1e5) throw oW("#LIMIT!");
-    let u = Array(c.length + 1).fill(!1);
-    u[0] = !0;
+    let u = Array(c.length + 1).fill(false);
+    u[0] = true;
     for (let d of l) {
-      let f = Array(c.length + 1).fill(!1);
+      let f = Array(c.length + 1).fill(false);
       f[0] = d.wildcard && d.char === "*" && u[0];
       for (let p = 1; p <= c.length; p++)
         f[p] =
@@ -9412,7 +9435,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
         typeof b == "string" &&
         typeof w == "string" &&
         ((b = b.toLowerCase()), (w = w.toLowerCase())),
-      a({ val: b, isArray: !1 }, c, { val: w, isArray: !1 })
+      a({ val: b, isArray: false }, c, { val: w, isArray: false })
     );
     if (!Array.isArray(l.val) && !Array.isArray(u.val)) return d(l.val, u.val);
     let f = (b) =>
@@ -9464,7 +9487,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
         .replace(/^_xlfn\./i, "")
         .replace(/^_xlws\./i, "")
         .toUpperCase();
-      let u = (d) => (d == null ? void 0 : e.retrieveRef(d));
+      let u = (d) => (d == null ? undefined : e.retrieveRef(d));
       try {
         if (!iW.has(l)) return n("#NAME?");
         if (l === "RAND") return c.length ? n("#VALUE!") : Math.random();
@@ -9477,7 +9500,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
             A.some(
               (k) =>
                 Array.isArray(k) ||
-                k === void 0 ||
+                k === undefined ||
                 (typeof k == "string" && k.trim() === "") ||
                 !Number.isFinite(Number(k)),
             )
@@ -9609,7 +9632,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
           if (dt(A)) return A;
           if (Array.isArray(A))
             return Sp(
-              [A, u(c[1]), c.length === 3 ? u(c[2]) : !1],
+              [A, u(c[1]), c.length === 3 ? u(c[2]) : false],
               ([y, v, k]) =>
                 dt(y)
                   ? y
@@ -9625,7 +9648,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
           if (typeof A == "string" && !/^(TRUE|FALSE)$/i.test(A))
             return n("#VALUE!");
           let L = typeof A == "string" ? A.toUpperCase() === "TRUE" : !!A;
-          return u(L ? c[1] : c.length === 3 ? c[2] : !1) ?? 0;
+          return u(L ? c[1] : c.length === 3 ? c[2] : false) ?? 0;
         }
         if (l === "IFERROR" || l === "IFNA") {
           if (c.length !== 2) return n("#VALUE!");
@@ -9708,7 +9731,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
         if (l === "N")
           return dt(I[0]) || typeof I[0] == "number"
             ? I[0]
-            : I[0] === !0
+            : I[0] === true
               ? 1
               : 0;
         if (l === "T") return dt(I[0]) || typeof I[0] == "string" ? I[0] : "";
@@ -9829,10 +9852,10 @@ function sW(e, t, n = J2, i = zu(), r, o) {
         if (l === "VALUE") {
           if (I.length !== 1 || Array.isArray(I[0])) return n("#VALUE!");
           let A = String(I[0] ?? "").trim(),
-            L = !1;
+            L = false;
           A.startsWith("(") &&
             A.endsWith(")") &&
-            ((L = !0), (A = A.slice(1, -1).trim()));
+            ((L = true), (A = A.slice(1, -1).trim()));
           let y = A.endsWith("%");
           if (
             (y && (A = A.slice(0, -1).trim()),
@@ -9857,7 +9880,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
             return n("#N/A");
           let L = Cn(A),
             y = I[0],
-            v = I[2] === void 0 ? 1 : Number(I[2]);
+            v = I[2] === undefined ? 1 : Number(I[2]);
           if (![0, -1, 1].includes(v)) return n("#N/A");
           if (v === 0) {
             let F = L.findIndex((z) =>
@@ -9953,18 +9976,19 @@ function sW(e, t, n = J2, i = zu(), r, o) {
             y = String(I[2] ?? ""),
             v = L.length ? A.split(L).length - 1 : 0;
           if (
-            I[3] !== void 0 &&
+            I[3] !== undefined &&
             (!Number.isInteger(Number(I[3])) || Number(I[3]) < 1)
           )
             return n("#VALUE!");
           if (
             A.length +
-              (I[3] === void 0 ? v : Math.min(v, 1)) * (y.length - L.length) >
+              (I[3] === undefined ? v : Math.min(v, 1)) *
+                (y.length - L.length) >
             32767
           )
             return n("#LIMIT!");
           if (!L.length) return A;
-          if (I[3] === void 0) return A.split(L).join(y);
+          if (I[3] === undefined) return A.split(L).join(y);
           let k = 0;
           return A.split(L).reduce(
             (x, C, N) => (N === 0 ? C : x + (++k === Number(I[3]) ? y : L) + C),
@@ -9976,7 +10000,7 @@ function sW(e, t, n = J2, i = zu(), r, o) {
             return n("#VALUE!");
           let A = String(I[0] ?? "").toLowerCase(),
             L = String(I[1] ?? "").toLowerCase(),
-            y = I[2] === void 0 ? 1 : Number(I[2]);
+            y = I[2] === undefined ? 1 : Number(I[2]);
           if (!Number.isInteger(y) || y < 1 || y > L.length)
             return n("#VALUE!");
           if (!/[?*~]/.test(A)) {
@@ -10049,7 +10073,7 @@ function Hu(e, t = {}, n, i) {
           `(?:^|[^A-Za-z0-9_.\\\\])(?:${e.definedNames.map((V) => V.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
           "i",
         )
-      : void 0,
+      : undefined,
     A = (V) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(V) || !!(P && T?.test(V)),
     L = Z5(e),
@@ -10088,12 +10112,12 @@ function Hu(e, t = {}, n, i) {
           return K.row - te.row || K.col - te.col;
         }),
     );
-  let z = (V, G, H, K = !0) => {
-      let te = (ee, re = !0) => {
+  let z = (V, G, H, K = true) => {
+      let te = (ee, re = true) => {
         let oe = K5(ee, e, G, H, re);
         if (oe) throw (c.set(`${G}:${H}`, oe), f(oe.error));
       };
-      ((V = L.rewrite(V)), te(V, !1));
+      ((V = L.rewrite(V)), te(V, false));
       let Q = K ? Ed(V, e, G, [], n?.allowName) : V;
       ((Q = L.rewrite(Q)), te(Q));
       let Z = "",
@@ -10236,7 +10260,7 @@ function Hu(e, t = {}, n, i) {
                       result: null,
                     });
                   }
-                : void 0,
+                : undefined,
             isActive: (re, oe) => w.has(`${re}:${oe}`),
             expandedFormula: (re, oe) => {
               try {
@@ -10258,7 +10282,7 @@ function Hu(e, t = {}, n, i) {
           d.set(oe, { ...Z, sheetId: ee, address: re });
         },
         (Z, J, ee) => {
-          let re = Z && typeof Z == "object" && "ref" in Z ? Z.ref : void 0;
+          let re = Z && typeof Z == "object" && "ref" in Z ? Z.ref : undefined;
           if (!re?.from || !re.to) return;
           let oe = j(re.sheet ?? V.position?.sheet),
             Y = `${Ue(re.from.col + ee - 1)}${re.from.row + J}`;
@@ -10293,7 +10317,7 @@ function Hu(e, t = {}, n, i) {
                       row: re.from.row + J,
                       col: re.from.col + ee,
                     },
-                    !0,
+                    true,
                   );
             } finally {
               U--;
@@ -10399,11 +10423,11 @@ function Hu(e, t = {}, n, i) {
                 operation: te,
                 result: Q,
               })
-          : void 0,
+          : undefined,
         diagnostic: (K, te) =>
           u.set(`${G}:${H}`, { sheetId: G, address: H, error: K, message: te }),
         parse: (K, te, Q) => {
-          let Z = z(K, te, H, !1),
+          let Z = z(K, te, H, false),
             J = Z.replace(/"(?:[^"]|"")*"/g, '""');
           if (/[\[\]|]/.test(J) || /(?:https?:|file:|\\\\)/i.test(J))
             throw f("#BLOCKED!");
@@ -10432,7 +10456,7 @@ function Hu(e, t = {}, n, i) {
             return re.parse(
               Z,
               { sheet: v.get(te).name, row: Y.row + 1, col: Y.col + 1 },
-              !0,
+              true,
             );
           } finally {
             ((re._callFunction = oe), R--);
@@ -10554,7 +10578,11 @@ function Hu(e, t = {}, n, i) {
             let _e = O[Se] ?? (O[Se] = q()),
               Ge = le
                 ? D(ae, V, G)
-                : _e.parse(ae, { sheet: te.name, row: H + 1, col: K + 1 }, !0);
+                : _e.parse(
+                    ae,
+                    { sheet: te.name, row: H + 1, col: K + 1 },
+                    true,
+                  );
             if (dt(Ge)) ge = f(Ge.error);
             else if (typeof Ge == "number")
               ge = Number.isFinite(Ge) ? Ge : f("#NUM!");
@@ -10582,8 +10610,8 @@ function Hu(e, t = {}, n, i) {
                 }),
                   (ge = f("#SPILL!")));
               else {
-                let je = !1,
-                  Ie = !1,
+                let je = false,
+                  Ie = false,
                   Te = {
                     firstRow: H,
                     lastRow: H + Le.length - 1,
@@ -10602,7 +10630,7 @@ function Hu(e, t = {}, n, i) {
                   Ve = te.merges?.find(kt),
                   et = te.tables?.find((mr) => kt(mr.range));
                 if (Ve || et) {
-                  je = !0;
+                  je = true;
                   let mr = Ve ?? et.range;
                   b.set(Q, {
                     sheetId: V,
@@ -10619,14 +10647,14 @@ function Hu(e, t = {}, n, i) {
                     let Je = `${Ue(K + $e)}${H + mr + 1}`,
                       gr = te.cells[Je];
                     if (S.get(Q)?.has(`${V}:${Je}`)) {
-                      Ie = !0;
+                      Ie = true;
                       break;
                     }
                     if (
                       Je !== G &&
                       ((gr && gr.raw !== null) || m.has(`${V}:${Je}`))
                     ) {
-                      ((je = !0),
+                      ((je = true),
                         b.set(Q, {
                           sheetId: V,
                           anchor: G,
@@ -10675,7 +10703,7 @@ function Hu(e, t = {}, n, i) {
             let Ge =
               _e && typeof _e == "object" && "details" in _e
                 ? _e.details
-                : void 0;
+                : undefined;
             ge = dt(Ge) ? f(Ge.error) : dt(_e) ? f(_e.error) : f("#ERROR!");
           } finally {
             (w.delete(Q), S.delete(Q));
@@ -10714,7 +10742,7 @@ function Hu(e, t = {}, n, i) {
     },
     M = (V, G) => M.getTypedValue(V, G).value;
   M.getTypedValue = (V, G) => {
-    if (i?.running?.() === !1)
+    if (i?.running?.() === false)
       try {
         let H = tt(G),
           K = v.get(V);
@@ -10722,7 +10750,7 @@ function Hu(e, t = {}, n, i) {
           return { type: "error", value: "#REF!" };
         let te = `${Ue(H.col)}${H.row + 1}`,
           Q = `${V}:${te}`,
-          Z = i.value(Q, !1);
+          Z = i.value(Q, false);
         if (Z) return { ...Z };
         let J = h.get(Q) ?? m.get(Q)?.value ?? K.cells[te]?.raw ?? null;
         return dt(J)
@@ -10794,7 +10822,7 @@ function Hu(e, t = {}, n, i) {
             : (B ??= q()).parse(
                 J,
                 { sheet: te.name, row: Q.row + 1, col: Q.col + 1 },
-                !0,
+                true,
               ),
           oe = a.value(re) ?? i?.check();
         return oe
@@ -10818,7 +10846,9 @@ function Hu(e, t = {}, n, i) {
                       : "#VALUE!";
       } catch (te) {
         let Q =
-          te && typeof te == "object" && "details" in te ? te.details : void 0;
+          te && typeof te == "object" && "details" in te
+            ? te.details
+            : undefined;
         return dt(Q)
           ? f(Q.error).error
           : dt(te)
@@ -10834,7 +10864,7 @@ function Hu(e, t = {}, n, i) {
     (M.getSpillDiagnostic = (V, G) => {
       M(V, G);
       let H = b.get(`${V}:${G}`);
-      return H ? { ...H } : void 0;
+      return H ? { ...H } : undefined;
     }),
     (M.getSpillAnchor = (V, G) => (M(V, G), m.get(`${V}:${G}`)?.anchor)),
     (M.getSpillEntries = (V) => {
@@ -10847,7 +10877,7 @@ function Hu(e, t = {}, n, i) {
             new Error("Spill discovery exceeds 1,000 possible array formulas.")
           );
         x = 0;
-        for (let K of i?.running?.() === !1 ? [] : G)
+        for (let K of i?.running?.() === false ? [] : G)
           if ((W(V, K), x > Ne.maxCells))
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
@@ -10887,7 +10917,7 @@ function yi(e, t = {}, n) {
 }
 var js = Object.freeze({
     mode: "automatic",
-    iterative: !1,
+    iterative: false,
     maxIterations: 100,
     maxChange: 0.001,
     timeBudgetMs: 2500,
@@ -10920,11 +10950,11 @@ function $d(e) {
     !Number.isInteger(e.timeBudgetMs) ||
     Number(e.timeBudgetMs) < 1 ||
     Number(e.timeBudgetMs) > 1e4 ||
-    (e.memoryBudgetMiB !== void 0 &&
+    (e.memoryBudgetMiB !== undefined &&
       (!Number.isInteger(e.memoryBudgetMiB) ||
         Number(e.memoryBudgetMiB) < 1 ||
         Number(e.memoryBudgetMiB) > 128)) ||
-    (e.workBudget !== void 0 &&
+    (e.workBudget !== undefined &&
       (!Number.isInteger(e.workBudget) ||
         Number(e.workBudget) < 1e3 ||
         Number(e.workBudget) > 1e7))
@@ -10935,18 +10965,18 @@ function $d(e) {
         maxIterations: Number(e.maxIterations),
         maxChange: e.maxChange,
         timeBudgetMs: Number(e.timeBudgetMs),
-        ...(e.memoryBudgetMiB !== void 0
+        ...(e.memoryBudgetMiB !== undefined
           ? { memoryBudgetMiB: Number(e.memoryBudgetMiB) }
           : {}),
-        ...(e.workBudget !== void 0
+        ...(e.workBudget !== undefined
           ? { workBudget: Number(e.workBudget) }
           : {}),
       };
 }
 function rR(e, t) {
-  e.calculation !== void 0 && (t.calculation = $d(e.calculation));
+  e.calculation !== undefined && (t.calculation = $d(e.calculation));
   let n = e.importedCalculationCaches;
-  if (n === void 0) return;
+  if (n === undefined) return;
   let i = () => {
     throw Error(
       "Invalid imported formula-cache evidence. Caches must remain separately labeled source evidence.",
@@ -10975,7 +11005,7 @@ function rR(e, t) {
     (r.maxIterations !== null &&
       (!Number.isSafeInteger(r.maxIterations) ||
         Number(r.maxIterations) < 1)) ||
-    (r.fullPrecision !== void 0 && typeof r.fullPrecision != "boolean") ||
+    (r.fullPrecision !== undefined && typeof r.fullPrecision != "boolean") ||
     (r.maxChange !== null &&
       (typeof r.maxChange != "number" ||
         !Number.isFinite(r.maxChange) ||
@@ -11009,7 +11039,7 @@ function rR(e, t) {
       if (a.has(c)) return i();
       a.add(c);
       let u;
-      if (l.cache !== void 0) {
+      if (l.cache !== undefined) {
         let d = l.cache;
         if (
           !Md(d) ||
@@ -11044,7 +11074,9 @@ function rR(e, t) {
       iterative: r.iterative,
       maxIterations: r.maxIterations,
       maxChange: r.maxChange,
-      ...(r.fullPrecision !== void 0 ? { fullPrecision: r.fullPrecision } : {}),
+      ...(r.fullPrecision !== undefined
+        ? { fullPrecision: r.fullPrecision }
+        : {}),
     },
     entries: s,
   };
@@ -11078,7 +11110,7 @@ function cR(e) {
 }
 var Q2 = new WeakMap();
 function cW(e) {
-  let t = Hn(e.cells) ? Q2.get(e.cells)?.get(e.id) : void 0;
+  let t = Hn(e.cells) ? Q2.get(e.cells)?.get(e.id) : undefined;
   if (t) return t;
   let n = [],
     i,
@@ -11178,20 +11210,20 @@ function lR(e, t) {
       JSON.stringify(e.importedCalculationCaches) !==
         JSON.stringify(t.importedCalculationCaches))
   )
-    return !1;
+    return false;
   for (let n = 0; n < e.sheets.length; n++) {
     let i = e.sheets[n].cells,
       r = t.sheets[n].cells;
     if (i === r) continue;
     let o = Object.keys(i);
-    if (o.length !== Object.keys(r).length) return !1;
+    if (o.length !== Object.keys(r).length) return false;
     for (let a of o) {
       let s = i[a],
         l = r[a];
-      if (!l || s.raw !== l.raw || !!s.literal != !!l.literal) return !1;
+      if (!l || s.raw !== l.raw || !!s.literal != !!l.literal) return false;
     }
   }
-  return !0;
+  return true;
 }
 function eR(e) {
   return Pd.has(e) || vc.has(e);
@@ -11207,7 +11239,7 @@ function tR(e) {
   let t = cR(e),
     n = Pd.get(e);
   if (uR(n, e, t)) return { calculator: n.calculator, report: n.report };
-  let i = uW(e, t, n ? void 0 : vc.get(e), !1);
+  let i = uW(e, t, n ? undefined : vc.get(e), false);
   return (
     fR(i.report),
     Pd.set(e, i),
@@ -11279,17 +11311,17 @@ function uW(e, t, n, i) {
   let m = new Map(d),
     g = [],
     b = new Set(),
-    w = !0,
+    w = true,
     _,
     S = [...u.values()].reduce((j, q) => j + q.size, 0),
     O = () => (
       w && !_ && (_ = l.check()),
       w && !_ && xa() - r > a.timeBudgetMs && (_ = "#TIMEOUT!"),
-      w ? _ : void 0
+      w ? _ : undefined
     ),
     E = (j, q) => {
       let D = [];
-      return Hu(e, {}, void 0, {
+      return Hu(e, {}, undefined, {
         budget: l,
         running: () => w,
         dateContext: s,
@@ -11373,12 +11405,12 @@ function uW(e, t, n, i) {
         I = E(m, W);
         let M = new Map(),
           B = 0,
-          V = !0;
+          V = true;
         for (let G of b) {
           let H = o.get(G),
             K = I.getTypedValue(H.sheetId, H.address);
           if ((M.set(G, K), K.type !== "number" || !Number.isFinite(K.value))) {
-            V = !1;
+            V = false;
             break;
           }
           B = Math.max(B, Math.abs(Number(K.value) - Number(W.get(G).value)));
@@ -11410,7 +11442,7 @@ function uW(e, t, n, i) {
       b.size &&
         a.iterative &&
         (P.message = `Calculation stopped with ${_}; no intermediate result is current.`)),
-    (w = !1),
+    (w = false),
     l.end());
   let T = (j, q) => T.getTypedValue(j, q).value;
   Object.assign(T, I);
@@ -11569,7 +11601,7 @@ function uW(e, t, n, i) {
       limits: {
         dependencyEdges: nR,
         cooperativeTimeBudgetMs: a.timeBudgetMs,
-        hardInterrupt: !1,
+        hardInterrupt: false,
       },
     },
   };
@@ -11610,7 +11642,7 @@ function pR(e, t, n) {
     !Array.isArray(n.columns) ||
     n.columns.length > ss.columns ||
     [n.caseSensitive, n.unique].some(
-      (d) => d !== void 0 && typeof d != "boolean",
+      (d) => d !== undefined && typeof d != "boolean",
     )
   )
     throw Error("Choose a header range and up to 64 column filters.");
@@ -11687,19 +11719,19 @@ function pR(e, t, n) {
       !d ||
       !s(d.column) ||
       u.has(d.column) ||
-      (d.join !== void 0 && !["and", "or"].includes(d.join))
+      (d.join !== undefined && !["and", "or"].includes(d.join))
     )
       throw Error("Filter columns must be valid and distinct.");
     if (
       (u.add(d.column),
-      d.values !== void 0 &&
+      d.values !== undefined &&
         (!Array.isArray(d.values) ||
           d.values.length > ss.values ||
           !d.values.every(hR)))
     )
       throw Error("Value filters allow up to 1,000 finite typed values.");
     if (
-      d.conditions !== void 0 &&
+      d.conditions !== undefined &&
       (!Array.isArray(d.conditions) || d.conditions.length > 2)
     )
       throw Error("Each column supports up to two custom conditions.");
@@ -11710,7 +11742,7 @@ function pR(e, t, n) {
     }
   }
   if (
-    n.advanced !== void 0 &&
+    n.advanced !== undefined &&
     (!Array.isArray(n.advanced) || n.advanced.length > ss.conditions)
   )
     throw Error("Invalid advanced filter groups.");
@@ -11732,8 +11764,9 @@ function fW(e, t, n) {
   if (t === "number") return typeof e == "number" ? e : null;
   if (t === "date") {
     let i = go(n.datePolicy),
-      r = typeof e == "number" ? e : typeof e == "string" ? Hi(e, i) : void 0;
-    return r !== void 0 && r >= 0 && r < Xi(i.dateSystem) + 1 ? r : null;
+      r =
+        typeof e == "number" ? e : typeof e == "string" ? Hi(e, i) : undefined;
+    return r !== undefined && r >= 0 && r < Xi(i.dateSystem) + 1 ? r : null;
   }
   return typeof e == "string" ? e : null;
 }
@@ -11765,7 +11798,7 @@ function pW(e) {
   return e.normalize("NFC").trim();
 }
 function gR(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !Array.isArray(e) ||
     e.length > tk.views ||
@@ -11827,13 +11860,13 @@ function gR(e, t) {
     for (let d of r.definition.columns)
       if (
         (wc(d, ["column", "values", "conditions", "join"]),
-        d.conditions !== void 0)
+        d.conditions !== undefined)
       ) {
         if (!Array.isArray(d.conditions))
           throw Error("Invalid saved filter conditions.");
         d.conditions.forEach(s);
       }
-    if (r.definition.advanced !== void 0) {
+    if (r.definition.advanced !== undefined) {
       if (!Array.isArray(r.definition.advanced))
         throw Error("Invalid saved advanced criteria.");
       for (let d of r.definition.advanced) {
@@ -12063,7 +12096,7 @@ function wR(e, t) {
   let n = 0;
   for (let i of t.sheets) {
     let r = e.sheets?.find((c) => c.id === i.id)?.consolidation;
-    if (r === void 0) continue;
+    if (r === undefined) continue;
     if (((n += JSON.stringify(r).length), n > yR.metadataCharacters))
       throw Error(
         "Consolidation evidence exceeds 8,000,000 characters. Retain native backups before removing obsolete reports.",
@@ -12130,7 +12163,7 @@ var kR = "ledgerglass-sources-v1",
     .min(1)
     .max(128)
     .refine((e) => e === e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
-  Ld = X.string().datetime({ offset: !0 }),
+  Ld = X.string().datetime({ offset: true }),
   xR = X.string().regex(/^[a-f0-9]{64}$/),
   CW = X.strictObject({
     name: eg,
@@ -12169,7 +12202,7 @@ var kR = "ledgerglass-sources-v1",
     sourceTimestamp: Ld,
     version: Qm,
     rows: X.array(X.array(TW).max(Wa.columns)).max(Wa.rows),
-    complete: X.literal(!0),
+    complete: X.literal(true),
   }),
   AW = [
     "unavailable",
@@ -12238,7 +12271,7 @@ function _R(e, t) {
     i = 0;
   for (let r of t.sheets) {
     let o = e.sheets.find((l) => l.id === r.id)?.externalConnection;
-    if (o === void 0) continue;
+    if (o === undefined) continue;
     if (
       ++i > Wa.sources ||
       (n += JSON.stringify(o).length) > Wa.metadataCharacters
@@ -12395,7 +12428,7 @@ function UW(e) {
     );
   let n = t.data;
   if (n.kind === "solver") {
-    if (n.direction === "target" && n.target === void 0)
+    if (n.direction === "target" && n.target === undefined)
       throw Error("Enter a finite target value.");
     if (
       new Set(n.variables.map((i) => JSON.stringify(i.cell))).size !==
@@ -12427,7 +12460,7 @@ function CR(e, t) {
     i = 0;
   for (let r of t.sheets) {
     let o = n.sheets.find((u) => u.id === r.id)?.analysisReport;
-    if (o === void 0) continue;
+    if (o === undefined) continue;
     if (((i += JSON.stringify(o).length), i > ok.metadataCharacters))
       throw Error("Analysis metadata exceeds 2,000,000 characters.");
     let a = LW.safeParse(o);
@@ -12461,7 +12494,7 @@ function CR(e, t) {
         (s.result.status !== "optimal" ||
           s.result.solution?.length !== s.request.variables.length ||
           s.result.baseline?.length !== s.request.variables.length ||
-          s.result.objective === void 0)) ||
+          s.result.objective === undefined)) ||
       (s.request.kind === "statistics" &&
         (s.result.status !== "complete" || s.applied))
     )
@@ -12688,7 +12721,7 @@ function XW(e) {
   return t;
 }
 function OR(e, t) {
-  if (e.reportOutputs !== void 0) {
+  if (e.reportOutputs !== undefined) {
     let n = X.array(
       X.object({
         id: Ws,
@@ -12704,7 +12737,7 @@ function OR(e, t) {
       throw Error("Saved reports exceed 16 MB.");
     t.reportOutputs = n.map((i) => ({ ...i, snapshot: XW(i.snapshot) }));
   }
-  if (e.embeddedObjectInventories !== void 0) {
+  if (e.embeddedObjectInventories !== undefined) {
     let n = X.array(VW).max(20).parse(e.embeddedObjectInventories);
     if (
       new Set(n.map((i) => i.id)).size !== n.length ||
@@ -12880,7 +12913,7 @@ function MR(e) {
       "Measure names",
     ),
     n.tables.reduce(
-      (r, o) => r + o.columns.filter((a) => a.expression !== void 0).length,
+      (r, o) => r + o.columns.filter((a) => a.expression !== undefined).length,
       0,
     ) > ng.calculatedColumns)
   )
@@ -12891,7 +12924,7 @@ function MR(e) {
         r.columns.map((o) => o.name),
         `Columns in ${r.name}`,
       ),
-      !r.columns.some((o) => o.expression === void 0))
+      !r.columns.some((o) => o.expression === undefined))
     )
       throw Error(
         "A model table requires at least one physical source column.",
@@ -12903,7 +12936,7 @@ function MR(e) {
           o.name === r.dateColumn &&
           o.type === "date" &&
           !o.nullable &&
-          o.expression === void 0,
+          o.expression === undefined,
       )
     )
       throw Error(
@@ -12923,7 +12956,7 @@ function MR(e) {
       );
     if (i(r.one).type !== i(r.many).type)
       throw Error(`Relationship ${r.id} requires matching key types.`);
-    if (i(r.one).expression !== void 0 || i(r.many).expression !== void 0)
+    if (i(r.one).expression !== undefined || i(r.many).expression !== undefined)
       throw Error(
         "Relationship keys must be physical source columns, not DAX calculated columns.",
       );
@@ -12932,17 +12965,17 @@ function MR(e) {
     if (!n.tables.some((o) => o.id === r.tableId))
       throw Error(`Unknown measure table ${r.tableId}.`);
     if (r.operation === "dax") {
-      if (!r.expression || r.column !== void 0)
+      if (!r.expression || r.column !== undefined)
         throw Error(
           "A DAX measure requires an expression and no aggregate column.",
         );
     } else {
-      if (r.expression !== void 0)
+      if (r.expression !== undefined)
         throw Error(
           "Unrecognized expression for an aggregate measure; only DAX measures may contain it.",
         );
       if (r.operation === "countRows") {
-        if (r.column !== void 0)
+        if (r.column !== undefined)
           throw Error("Count rows does not take a column.");
       } else {
         let o = i({ tableId: r.tableId, column: r.column ?? "" });
@@ -12993,14 +13026,14 @@ var ak = X.string().regex(/^[a-f0-9]{64}$/),
 function DR(e, t) {
   let n = e,
     i = 0;
-  if (n.dataModel !== void 0) {
+  if (n.dataModel !== undefined) {
     if (((i += JSON.stringify(n.dataModel).length), i > Ro.metadataCharacters))
       throw Error("Data model metadata exceeds 2,000,000 characters.");
     t.dataModel = MR(n.dataModel);
   }
   for (let r of t.sheets) {
     let o = n.sheets.find((l) => l.id === r.id)?.dataModelReport;
-    if (o === void 0) continue;
+    if (o === undefined) continue;
     if (((i += JSON.stringify(o).length), i > Ro.metadataCharacters))
       throw Error("Data model metadata exceeds 2,000,000 characters.");
     let a = tV.safeParse(o);
@@ -13048,14 +13081,14 @@ var an = Object.freeze({
       "Source region must fit its page.",
     );
 function nV(e, t) {
-  if (typeof e != "string") return !1;
+  if (typeof e != "string") return false;
   try {
     let n = JSON.parse(e);
     return t === "array"
       ? Array.isArray(n)
       : !!n && typeof n == "object" && !Array.isArray(n);
   } catch {
-    return !1;
+    return false;
   }
 }
 var iV = X.object({
@@ -13130,7 +13163,7 @@ var iV = X.object({
   })
     .strict()
     .refine(
-      (e) => e.decision !== "correct" || e.value !== void 0,
+      (e) => e.decision !== "correct" || e.value !== undefined,
       "A corrected value is required.",
     ),
   oV = X.object({
@@ -13204,7 +13237,7 @@ function sV(e, t) {
 }
 var lk = new WeakSet();
 function WR(e, t) {
-  if (e.sourceImports === void 0) return;
+  if (e.sourceImports === undefined) return;
   if (!Array.isArray(e.sourceImports) || e.sourceImports.length > an.imports)
     throw Error("Source import count exceeded.");
   if (
@@ -13319,7 +13352,7 @@ function ag(e, t) {
   return (Bd(i), Object.freeze(i), uk.add(i), i);
 }
 function qR(e, t) {
-  if (e.xlsxSource === void 0) return;
+  if (e.xlsxSource === undefined) return;
   let n = e.xlsxSource;
   if (n && typeof n == "object" && uk.has(n)) {
     t.xlsxSource = n;
@@ -13387,7 +13420,7 @@ function dk(e, t, n, i) {
   return (lg(r), Object.freeze(r.conversion), Object.freeze(r), GR.add(r), r);
 }
 function ZR(e, t) {
-  if (e.alternateSource === void 0) return;
+  if (e.alternateSource === undefined) return;
   let n = e.alternateSource;
   if (GR.has(n)) {
     t.alternateSource = n;
@@ -13470,7 +13503,7 @@ function cg(e) {
   return t;
 }
 function JR(e, t) {
-  if (e.automationArtifacts !== void 0) {
+  if (e.automationArtifacts !== undefined) {
     if (
       !Array.isArray(e.automationArtifacts) ||
       e.automationArtifacts.length > jn.maxArtifacts
@@ -13514,7 +13547,7 @@ function JR(e, t) {
       };
     });
   }
-  if (e.automationRuns !== void 0) {
+  if (e.automationRuns !== undefined) {
     if (
       !Array.isArray(e.automationRuns) ||
       e.automationRuns.length > jn.maxRuns
@@ -13568,7 +13601,7 @@ function JR(e, t) {
   }
 }
 function YR(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!e || typeof e != "object" || Array.isArray(e))
     throw Error("Invalid delimited source footprint.");
   let n = e;
@@ -13618,7 +13651,7 @@ function fV(e) {
   return `${Ue(t.col)}${t.row + 1}`;
 }
 function tN(e, t) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (!Array.isArray(e) || e.length > uV)
     throw Error("A workbook may contain at most 100 formula watches.");
   let n = new Set(),
@@ -13635,12 +13668,12 @@ function tN(e, t) {
     )
       throw Error("Invalid formula watch metadata.");
     if (n.has(r.id)) throw Error("Formula watch IDs must be unique.");
-    if ((n.add(r.id), r.orphaned !== void 0 && !dV.includes(r.orphaned)))
+    if ((n.add(r.id), r.orphaned !== undefined && !dV.includes(r.orphaned)))
       throw Error("Invalid formula watch orphan reason.");
     let o = r.anchor,
       a = fV(o.address),
       s = t.sheets.find((u) => u.id === o.sheetId),
-      l = r.orphaned ?? (s ? void 0 : "missing-sheet"),
+      l = r.orphaned ?? (s ? undefined : "missing-sheet"),
       c = JSON.stringify([r.anchor.sheetId, a]);
     if (!l && i.has(c))
       throw Error("Active formula watches must not repeat the same cell.");
@@ -13857,14 +13890,14 @@ function oN(e) {
             nN(h.raw) ||
             (typeof h.raw == "string" && h.raw.length <= 32767)
           ) ||
-            (h.literal !== void 0 && typeof h.literal != "boolean"))
+            (h.literal !== undefined && typeof h.literal != "boolean"))
         )
           throw Error("Invalid saved what-if assumption.");
         return {
           ...m,
           sheetName: Xs(h.sheetName, 31),
           raw: h.raw,
-          ...(h.literal === void 0 ? {} : { literal: h.literal }),
+          ...(h.literal === undefined ? {} : { literal: h.literal }),
         };
       });
     if (
@@ -13910,7 +13943,7 @@ var pk = {
   renderedCells: 1e5,
 };
 function sN(e, t, n) {
-  if (e === void 0 || e === "") return;
+  if (e === undefined || e === "") return;
   if (typeof e != "string")
     throw Error("Print titles must be a single row or column interval.");
   let i = (
@@ -13947,7 +13980,7 @@ function aN(e, t) {
     : `${Ue(e.start)}:${Ue(e.end)}`;
 }
 function ug(e, t) {
-  if (e !== void 0) {
+  if (e !== undefined) {
     if (
       !Array.isArray(e) ||
       e.length > pk.breaksPerAxis ||
@@ -13962,7 +13995,7 @@ function ug(e, t) {
       throw Error(
         "Manual page breaks require at most 100 distinct ascending boundaries within each worksheet axis (before row/column 2 or later).",
       );
-    return e.length ? [...e] : void 0;
+    return e.length ? [...e] : undefined;
   }
 }
 function bV(e) {
@@ -13978,19 +14011,19 @@ function bV(e) {
       footer: 0.3,
     },
     printArea: e ? Gm(e) : "A1",
-    fitToPage: !0,
+    fitToPage: true,
     fitToWidth: 1,
     fitToHeight: 0,
     scale: 100,
-    gridlines: !0,
-    headings: !1,
+    gridlines: true,
+    headings: false,
     pageOrder: "overThenDown",
     header: "",
     footer: "",
   };
 }
 function Wd(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!e || typeof e != "object" || Array.isArray(e))
     throw new Error("Invalid page layout.");
   let n = e,
@@ -14008,7 +14041,7 @@ function Wd(e, t) {
   )
     throw new Error("Invalid paper, orientation, or margins.");
   if (
-    n.pageOrder !== void 0 &&
+    n.pageOrder !== undefined &&
     n.pageOrder !== "overThenDown" &&
     n.pageOrder !== "downThenOver"
   )
@@ -14066,7 +14099,7 @@ function Wd(e, t) {
     headings: n.headings,
     header: n.header,
     footer: n.footer,
-    ...(n.pageOrder !== void 0 ? { pageOrder: n.pageOrder } : {}),
+    ...(n.pageOrder !== undefined ? { pageOrder: n.pageOrder } : {}),
     ...(p ? { repeatRows: aN(p, "row") } : {}),
     ...(h ? { repeatColumns: aN(h, "column") } : {}),
     ...(m ? { rowBreaks: m } : {}),
@@ -14077,7 +14110,7 @@ function lN(e, t) {
   let n = e.pageSetup,
     i = bV(t);
   if (
-    n.pageOrder !== void 0 &&
+    n.pageOrder !== undefined &&
     n.pageOrder !== "overThenDown" &&
     n.pageOrder !== "downThenOver"
   )
@@ -14152,12 +14185,12 @@ function qa(e, t) {
   return typeof e == "string" && e.length > 0 && e.length <= t;
 }
 function cN(e) {
-  if (typeof e != "string") return !1;
+  if (typeof e != "string") return false;
   try {
     let t = tt(e);
     return `${Ue(t.col)}${t.row + 1}` === e;
   } catch {
-    return !1;
+    return false;
   }
 }
 function wV(e) {
@@ -14177,7 +14210,7 @@ function wV(e) {
   );
 }
 function dN(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   (!Array.isArray(e) || e.length > 100 || JSON.stringify(e).length > 5e6) &&
     Hs();
   let n = new Set(),
@@ -14233,14 +14266,14 @@ function dN(e, t) {
             Hs(),
           a.add(c.sourceAddress),
           s.add(c.outputAddress));
-        let u = c.original === void 0 ? void 0 : Oi(c.original);
+        let u = c.original === undefined ? undefined : Oi(c.original);
         u &&
           typeof u.raw == "string" &&
           u.raw.startsWith("=") &&
           !u.literal &&
           Hs();
         let d;
-        if (c.origin !== void 0) {
+        if (c.origin !== undefined) {
           dg(c.origin, [
             "id",
             "sourceId",
@@ -14434,7 +14467,7 @@ var pg = X.string().refine((e) => {
       let t = tt(e);
       return `${Ue(t.col)}${t.row + 1}` === e;
     } catch {
-      return !1;
+      return false;
     }
   }, "Invalid evidence address."),
   TV = X.strictObject({
@@ -14483,7 +14516,7 @@ var pg = X.string().refine((e) => {
     exceptions: X.array(RV).max(5e3),
   });
 function gN(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !Array.isArray(e) ||
     e.length > 100 ||
@@ -14532,7 +14565,7 @@ function gN(e, t) {
           );
         if (c.has(f.address)) throw Error("Duplicate original field source.");
         c.add(f.address);
-        let h = f.original === void 0 ? void 0 : Oi(f.original);
+        let h = f.original === undefined ? undefined : Oi(f.original);
         if (
           h &&
           typeof h.raw == "string" &&
@@ -14613,7 +14646,7 @@ function Qe(e) {
     lastCol: Math.max(n.col, i.col),
   };
 }
-function yN(e, t = !0) {
+function yN(e, t = true) {
   let n = null;
   for (let [i, r] of Object.entries(e.cells)) {
     let o = r.raw !== null && r.raw !== "",
@@ -14637,7 +14670,7 @@ function yN(e, t = !0) {
   }
   return n;
 }
-function Gm(e, t = !0) {
+function Gm(e, t = true) {
   let n = yN(e, t);
   if (!n) return "A1";
   let i = `${Ue(n.firstCol)}${n.firstRow + 1}`,
@@ -14648,7 +14681,7 @@ function mi(e, t) {
   return e.sheets.find((n) => n.id === t) ?? jt(`Sheet not found: ${t}`);
 }
 function Oi(e) {
-  return gg(e, !1);
+  return gg(e, false);
 }
 function gg(e, t) {
   if (t && Hn(e) && MV.has(e) && !e.hyperlink && !e.style?.binding) return e;
@@ -14665,36 +14698,36 @@ function gg(e, t) {
     Fi(
       n,
       "Cell value",
-      n.startsWith("=") && e.literal !== !0
+      n.startsWith("=") && e.literal !== true
         ? dr.maxFormulaLength
         : dr.maxCellTextLength,
     );
   let i = { raw: n };
-  if (e.literal !== void 0) {
+  if (e.literal !== undefined) {
     if (typeof e.literal != "boolean")
       return jt("Cell literal flag must be boolean.");
     i.literal = e.literal;
   }
   if (
-    (e.numberFormat !== void 0 && (i.numberFormat = Vw(e.numberFormat)),
-    e.numFmt !== void 0 &&
+    (e.numberFormat !== undefined && (i.numberFormat = Vw(e.numberFormat)),
+    e.numFmt !== undefined &&
       (i.numFmt = Fi(e.numFmt, "Excel number format", 200)),
-    e.format !== void 0)
+    e.format !== undefined)
   ) {
     if (typeof e.format != "string" || !PV.has(e.format))
       return jt("Unsupported cell format.");
     i.format = e.format;
   }
   return (
-    e.hyperlink !== void 0 && (i.hyperlink = Pw(e.hyperlink)),
-    e.note !== void 0 && (i.note = Fi(e.note, "Cell note", 1e4)),
-    e.tickmark !== void 0 && (i.tickmark = Fi(e.tickmark, "Tickmark", 40)),
-    e.style !== void 0 && (i.style = As(e.style)),
+    e.hyperlink !== undefined && (i.hyperlink = Pw(e.hyperlink)),
+    e.note !== undefined && (i.note = Fi(e.note, "Cell note", 1e4)),
+    e.tickmark !== undefined && (i.tickmark = Fi(e.tickmark, "Tickmark", 40)),
+    e.style !== undefined && (i.style = As(e.style)),
     i
   );
 }
 function gi(e) {
-  return LV(e, !1);
+  return LV(e, false);
 }
 function LV(e, t) {
   if (t && Hn(e) && $V.has(e)) return e;
@@ -14727,8 +14760,8 @@ function LV(e, t) {
       let g = mg(p.rowCount, 1, Ne.maxRows, "Row count"),
         b = mg(p.colCount, 1, Ne.maxCols, "Column count");
       if (!Gs(p.cells)) return jt("Sheet cells must be an address map.");
-      let w = t && Hn(p) ? bN.get(p) : void 0;
-      if (w !== void 0) {
+      let w = t && Hn(p) ? bN.get(p) : undefined;
+      if (w !== undefined) {
         if (((o += w), o > Ne.maxCells))
           return jt("Workbook exceeds the 100,000 populated cell limit.");
         let O = { ...p };
@@ -14750,7 +14783,7 @@ function LV(e, t) {
         colCount: Ne.maxCols,
         cells: _,
       };
-      if (p.columnWidths !== void 0) {
+      if (p.columnWidths !== undefined) {
         if (!Gs(p.columnWidths))
           return jt("Column widths must be an index map.");
         S.columnWidths = {};
@@ -14769,7 +14802,7 @@ function LV(e, t) {
           S.columnWidths[O] = E;
         }
       }
-      if (p.rowHeights !== void 0) {
+      if (p.rowHeights !== undefined) {
         if (
           !Gs(p.rowHeights) ||
           (Object.getPrototypeOf(p.rowHeights) !== Object.prototype &&
@@ -14792,7 +14825,7 @@ function LV(e, t) {
           S.rowHeights[O] = E;
         }
       }
-      if (p.hidden !== void 0) {
+      if (p.hidden !== undefined) {
         if (typeof p.hidden != "boolean")
           return jt("Sheet hidden flag must be boolean.");
         S.hidden = p.hidden;
@@ -14804,8 +14837,8 @@ function LV(e, t) {
         E5(p, S),
         YR(p.delimitedSource, S),
         j2(p, S),
-        p.objects !== void 0 && Fd(p.objects, S),
-        p.pageLayout !== void 0 && Wd(p.pageLayout, S),
+        p.objects !== undefined && Fd(p.objects, S),
+        p.pageLayout !== undefined && Wd(p.pageLayout, S),
         S
       );
     });
@@ -14843,15 +14876,15 @@ function LV(e, t) {
                   let b = tt(g.address);
                   return g.address !== `${Ue(b.col)}${b.row + 1}`
                     ? jt("History cell address is not canonical.")
-                    : g.before === void 0 && g.after === void 0
+                    : g.before === undefined && g.after === undefined
                       ? jt("History change must have a before or after value.")
                       : {
                           sheetId: g.sheetId,
                           address: g.address,
-                          ...(g.before !== void 0
+                          ...(g.before !== undefined
                             ? { before: gg(g.before, t) }
                             : {}),
-                          ...(g.after !== void 0
+                          ...(g.after !== undefined
                             ? { after: gg(g.after, t) }
                             : {}),
                         };
@@ -14861,7 +14894,7 @@ function LV(e, t) {
     f = { schemaVersion: 1, id: n, name: i, revision: r, sheets: l, events: d };
   return (
     rR(e, f),
-    e.datePolicy !== void 0 && (f.datePolicy = go(e.datePolicy)),
+    e.datePolicy !== undefined && (f.datePolicy = go(e.datePolicy)),
     gR(e.savedFilterViews, f),
     y6(e, f),
     wR(e, f),
@@ -14878,15 +14911,16 @@ function LV(e, t) {
     dN(e.textCleanups, f),
     gN(e.fieldTransforms, f),
     zm(e.tableEvidence, f),
-    e.whatIfAnalyses !== void 0 && (f.whatIfAnalyses = oN(e.whatIfAnalyses)),
-    e.definedNames !== void 0 && (f.definedNames = _d(e.definedNames, f)),
+    e.whatIfAnalyses !== undefined && (f.whatIfAnalyses = oN(e.whatIfAnalyses)),
+    e.definedNames !== undefined && (f.definedNames = _d(e.definedNames, f)),
     _6(e, f),
     S5(e.structureProtection, f),
     Lw(e.metadata, f),
     B5(f),
     V6(e, f),
     z6(e.styleCatalog, f),
-    e.formulaWatches !== void 0 && (f.formulaWatches = tN(e.formulaWatches, f)),
+    e.formulaWatches !== undefined &&
+      (f.formulaWatches = tN(e.formulaWatches, f)),
     dR(e, f),
     S6(e, f),
     f
@@ -14910,7 +14944,7 @@ function so(e) {
 }
 var vN = (e) => !!e && typeof e == "object" && !Array.isArray(e);
 function xN(e) {
-  if (e === void 0) return {};
+  if (e === undefined) return {};
   (!vN(e) ||
     Object.keys(e).some(
       (n) =>
@@ -14931,31 +14965,31 @@ function xN(e) {
     so("Invalid or unknown chart settings.");
   let t = {};
   for (let n of ["altText", "xTitle", "yTitle", "units"])
-    e[n] !== void 0 &&
+    e[n] !== undefined &&
       ((typeof e[n] != "string" ||
         e[n].length > (n === "altText" ? 2e3 : 200)) &&
         so(`Invalid chart ${n}.`),
       (t[n] = e[n]));
   for (let n of ["xScale", "yScale"])
-    e[n] !== void 0 &&
+    e[n] !== undefined &&
       (["linear", "log"].includes(String(e[n])) ||
         so("Chart scales must be linear or log."),
       (t[n] = e[n]));
   if (
-    (e.showLegend !== void 0 &&
+    (e.showLegend !== undefined &&
       (typeof e.showLegend != "boolean" && so("Invalid chart legend setting."),
       (t.showLegend = e.showLegend)),
-    e.histogramBins !== void 0 &&
+    e.histogramBins !== undefined &&
       ((!Number.isInteger(e.histogramBins) ||
         Number(e.histogramBins) < 1 ||
         Number(e.histogramBins) > 50) &&
         so("Choose 1 to 50 histogram bins."),
       (t.histogramBins = Number(e.histogramBins))),
-    e.sparklineKind !== void 0 &&
+    e.sparklineKind !== undefined &&
       (["line", "column", "winLoss"].includes(String(e.sparklineKind)) ||
         so("Invalid sparkline style."),
       (t.sparklineKind = e.sparklineKind)),
-    e.series !== void 0)
+    e.series !== undefined)
   ) {
     (!Array.isArray(e.series) || e.series.length > 20) &&
       so("Select at most 20 chart series.");
@@ -14971,13 +15005,13 @@ function xN(e) {
         n.add(Number(i.column)));
       let r = { column: Number(i.column) };
       return (
-        i.name !== void 0 &&
+        i.name !== undefined &&
           ((typeof i.name != "string" ||
             !i.name.trim() ||
             i.name.length > 200) &&
             so("Chart series names require 1 to 200 characters."),
           (r.name = i.name)),
-        i.kind !== void 0 &&
+        i.kind !== undefined &&
           (["column", "line"].includes(String(i.kind)) ||
             so("Combo series must be column or line."),
           (r.kind = i.kind)),
@@ -14986,7 +15020,7 @@ function xN(e) {
     });
   }
   return (
-    e.includedRows !== void 0 &&
+    e.includedRows !== undefined &&
       ((!Array.isArray(e.includedRows) ||
         e.includedRows.length > 500 ||
         e.includedRows.some(
@@ -15077,8 +15111,8 @@ function Ha(e) {
       throw Error("Unsupported PNG pixel encoding.");
     let l = 8,
       c = 0,
-      u = !1,
-      d = !1;
+      u = false,
+      d = false;
     for (; l < n.length;) {
       if (++c > 4096 || l + 12 > n.length)
         throw Error("PNG chunk structure is invalid or excessive.");
@@ -15087,10 +15121,10 @@ function Ha(e) {
       if (f > n.length - l - 12 || !/^[A-Za-z]{4}$/.test(p))
         throw Error("PNG chunk length or type is invalid.");
       if (p === "IHDR" && l !== 8) throw Error("PNG has duplicate dimensions.");
-      if ((p === "IDAT" && f > 0 && (u = !0), p === "IEND")) {
+      if ((p === "IDAT" && f > 0 && (u = true), p === "IEND")) {
         if (f !== 0 || l + 12 !== n.length)
           throw Error("PNG has invalid trailing data.");
-        d = !0;
+        d = true;
       }
       l += f + 12;
     }
@@ -15100,8 +15134,8 @@ function Ha(e) {
       throw Error("The file contents do not match a JPEG picture.");
     let a = 2,
       s = 0,
-      l = !1,
-      c = !1;
+      l = false,
+      c = false;
     for (; a < n.length;) {
       if (++s > 65536) throw Error("JPEG has too many segments.");
       if (l) for (; a < n.length && n[a] !== 255;) a++;
@@ -15112,7 +15146,7 @@ function Ha(e) {
       if (l && (u === 0 || (u >= 208 && u <= 215))) continue;
       if (u === 217) {
         if (a !== n.length) throw Error("JPEG has trailing data.");
-        c = !0;
+        c = true;
         break;
       }
       if (u === 1) continue;
@@ -15134,7 +15168,7 @@ function Ha(e) {
       if (u === 218) {
         if (!i || d < 6 || d !== 6 + n[a + 2] * 2)
           throw Error("JPEG scan is invalid.");
-        l = !0;
+        l = true;
       }
       a += d;
     }
@@ -15216,7 +15250,8 @@ function EN(e, t) {
     "containerFilename",
     "mediaReference",
   ])
-    e[r] !== void 0 && (i[r] = FV(e[r], r === "sourceLocator" ? 2e3 : 512, r));
+    e[r] !== undefined &&
+      (i[r] = FV(e[r], r === "sourceLocator" ? 2e3 : 512, r));
   if (i.origin === "local-file" && !i.filename)
     throw Error("A local evidence picture requires its original filename.");
   if (i.origin !== "xlsx-media" && (i.containerFilename || i.mediaReference))
@@ -15240,7 +15275,7 @@ function BV(e, t) {
   return n;
 }
 function Fd(e, t) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!Array.isArray(e) || e.length > _N)
     throw new Error("A worksheet supports at most 100 drawing objects.");
   let n = new Set(),
@@ -15287,8 +15322,8 @@ function Fd(e, t) {
       u.dataURL = Cc(a.dataURL, Math.ceil(Xa / 3) * 4 + 100, "picture");
       let d = Ha(u.dataURL);
       ((i += d.bytes.length),
-        a.evidence !== void 0 && (u.evidence = EN(a.evidence, d.bytes)));
-    } else if (a.evidence !== void 0)
+        a.evidence !== undefined && (u.evidence = EN(a.evidence, d.bytes)));
+    } else if (a.evidence !== undefined)
       throw Error("Evidence metadata belongs only to pictures.");
     if (u.kind === "shape") {
       if (!["rectangle", "ellipse", "arrow", "text"].includes(String(a.shape)))
@@ -15305,7 +15340,7 @@ function Fd(e, t) {
       )
         throw new Error("Invalid chart header setting.");
       ((u.headers = a.headers),
-        a.chartOptions !== void 0 && (u.chartOptions = xN(a.chartOptions)));
+        a.chartOptions !== undefined && (u.chartOptions = xN(a.chartOptions)));
     }
     return u;
   });
@@ -15361,7 +15396,7 @@ function SN(e, t, n, i = {}) {
           ? c.base64.slice(c.base64.indexOf(",") + 1)
           : c.base64,
         f =
-          d !== void 0
+          d !== undefined
             ? Math.floor((d.length * 3) / 4) -
               (d.endsWith("==") ? 2 : d.endsWith("=") ? 1 : 0)
             : (c.buffer?.byteLength ?? 0);
@@ -15392,7 +15427,7 @@ function SN(e, t, n, i = {}) {
         (b.dataURL = p),
         (b.evidence = zV(p, {
           origin: "xlsx-media",
-          ...(i.containerFilename !== void 0
+          ...(i.containerFilename !== undefined
             ? { containerFilename: i.containerFilename }
             : {}),
           mediaReference: `imageId:${l.imageId}`,
@@ -15466,8 +15501,8 @@ function qV(e) {
       }
     }
     for (let [d, f] of [
-      ["true", !0],
-      ["false", !1],
+      ["true", true],
+      ["false", false],
       ["null", null],
     ])
       if (e.startsWith(d, t)) return ((t += d.length), f);
@@ -15543,7 +15578,7 @@ function HV(e) {
               type: "null",
               path: i.path + (o ? "" : "/" + u) + d,
               confidence: 1,
-              missing: !0,
+              missing: true,
             },
         ),
       ),
@@ -15558,7 +15593,7 @@ function GV(e) {
   let t = [],
     n = [],
     i = 0,
-    r = new AN.SaxesParser({ xmlns: !0 }),
+    r = new AN.SaxesParser({ xmlns: true }),
     o = (u, d) => (u ? `{${u}}${d}` : d);
   r.on("opentag", (u) => {
     if (++i > an.nodes || t.length >= an.depth)
@@ -15641,7 +15676,7 @@ function GV(e) {
       p = u.text,
       h = u.type?.replace("{http://www.w3.org/2001/XMLSchema}", ""),
       m = u.text.trim();
-    if (u.nil !== void 0) {
+    if (u.nil !== undefined) {
       if (!["true", "1", "false", "0"].includes(u.nil))
         throw Error("Invalid XML nil value.");
       if (["true", "1"].includes(u.nil)) {
@@ -15760,7 +15795,7 @@ function GV(e) {
               type: "null",
               path: u.nodes[g].path + b,
               confidence: 1,
-              missing: !0,
+              missing: true,
             },
         ),
       ),
@@ -15777,7 +15812,7 @@ function gk(e, t) {
     a = "Host extraction required",
     s = [];
   if (i === "json" || i === "xml") {
-    let c = new TextDecoder("utf-8", { fatal: !0 })
+    let c = new TextDecoder("utf-8", { fatal: true })
       .decode(e)
       .replace(/^\uFEFF/, "");
     ((r = i === "json" ? HV(qV(c)) : GV(c)),
@@ -15805,7 +15840,7 @@ function gk(e, t) {
         "Image extraction requires a host OCR adapter or matching extraction JSON.",
       ));
   } else if (i === "html") {
-    let c = new TextDecoder("utf-8", { fatal: !0 }).decode(e);
+    let c = new TextDecoder("utf-8", { fatal: true }).decode(e);
     if (!/^\s*(?:<!doctype\s+html[^>]*>\s*)?<(?:html|table)\b/i.test(c))
       throw Error("Source extension does not match an HTML document.");
     s.push(
@@ -15922,29 +15957,29 @@ function vg(e, t = {}) {
 function yk(e) {
   let t = new DataView(e.buffer, e.byteOffset, e.byteLength);
   (e.length >= 8 &&
-    t.getUint32(0, !0) === 3759263696 &&
-    t.getUint32(4, !0) === 3776623009 &&
+    t.getUint32(0, true) === 3759263696 &&
+    t.getUint32(4, true) === 3776623009 &&
     St(
       "Encrypted Office or legacy binary workbooks are unsupported. Remove the open password in the source application.",
     ),
-    (e.length < 22 || t.getUint32(0, !0) !== 67324752) &&
+    (e.length < 22 || t.getUint32(0, true) !== 67324752) &&
       St("This file is not a supported XLSX archive."));
   let n = -1;
   for (let f = e.length - 22; f >= Math.max(0, e.length - 65557); f--)
     if (
-      t.getUint32(f, !0) === 101010256 &&
-      f + 22 + t.getUint16(f + 20, !0) === e.length
+      t.getUint32(f, true) === 101010256 &&
+      f + 22 + t.getUint16(f + 20, true) === e.length
     ) {
       n = f;
       break;
     }
   n < 0 && St("The XLSX archive is incomplete or has trailing data.");
-  let i = t.getUint16(n + 10, !0),
-    r = t.getUint32(n + 12, !0),
-    o = t.getUint32(n + 16, !0);
-  (t.getUint16(n + 4, !0) ||
-    t.getUint16(n + 6, !0) ||
-    i !== t.getUint16(n + 8, !0) ||
+  let i = t.getUint16(n + 10, true),
+    r = t.getUint32(n + 12, true),
+    o = t.getUint32(n + 16, true);
+  (t.getUint16(n + 4, true) ||
+    t.getUint16(n + 6, true) ||
+    i !== t.getUint16(n + 8, true) ||
     i === 65535 ||
     i > dr.maxXlsxEntries ||
     o + r !== n) &&
@@ -15954,7 +15989,7 @@ function yk(e) {
     l = [],
     c = (f) => {
       try {
-        return new TextDecoder("utf-8", { fatal: !0 }).decode(f);
+        return new TextDecoder("utf-8", { fatal: true }).decode(f);
       } catch {
         return St("Unsupported XLSX path encoding.");
       }
@@ -15962,26 +15997,26 @@ function yk(e) {
     u = o,
     d = 0;
   for (let f = 0; f < i; f++) {
-    (u + 46 > n || t.getUint32(u, !0) !== 33639248) &&
+    (u + 46 > n || t.getUint32(u, true) !== 33639248) &&
       St("Invalid XLSX archive directory.");
-    let p = t.getUint16(u + 8, !0),
-      h = t.getUint16(u + 10, !0),
-      m = t.getUint32(u + 16, !0),
-      g = t.getUint32(u + 20, !0),
-      b = t.getUint32(u + 24, !0),
-      w = t.getUint16(u + 28, !0),
-      _ = t.getUint16(u + 30, !0),
-      S = t.getUint16(u + 32, !0),
-      O = t.getUint32(u + 42, !0);
+    let p = t.getUint16(u + 8, true),
+      h = t.getUint16(u + 10, true),
+      m = t.getUint32(u + 16, true),
+      g = t.getUint32(u + 20, true),
+      b = t.getUint32(u + 24, true),
+      w = t.getUint16(u + 28, true),
+      _ = t.getUint16(u + 30, true),
+      S = t.getUint16(u + 32, true),
+      O = t.getUint32(u + 42, true);
     (p & 8257 && St("Encrypted XLSX archive entries are unsupported."),
       (p & -2063 ||
         ![0, 8].includes(h) ||
         [g, b, O].includes(4294967295) ||
-        t.getUint16(u + 34, !0)) &&
+        t.getUint16(u + 34, true)) &&
         St("Unsupported XLSX compression or ZIP64 metadata."),
       (u + 46 + w + _ + S > n ||
         O + 30 > o ||
-        t.getUint32(O, !0) !== 67324752) &&
+        t.getUint32(O, true) !== 67324752) &&
         St("Invalid XLSX archive offsets."));
     let E = c(e.subarray(u + 46, u + 46 + w));
     ((!E ||
@@ -15993,28 +16028,28 @@ function yk(e) {
       )) &&
       St("Unsafe or duplicate XLSX archive path."),
       s.add(E.toLowerCase()));
-    let R = t.getUint16(O + 26, !0),
-      I = t.getUint16(O + 28, !0),
+    let R = t.getUint16(O + 26, true),
+      I = t.getUint16(O + 28, true),
       U = O + 30 + R + I,
       P = U + g;
     (P > o ||
-      t.getUint16(O + 6, !0) !== p ||
-      t.getUint16(O + 8, !0) !== h ||
+      t.getUint16(O + 6, true) !== p ||
+      t.getUint16(O + 8, true) !== h ||
       c(e.subarray(O + 30, O + 30 + R)) !== E) &&
       St("XLSX local headers do not match the archive directory.");
     let T = P;
     if (p & 8) {
-      let A = P + (P + 4 <= o && t.getUint32(P, !0) === 134695760 ? 4 : 0);
+      let A = P + (P + 4 <= o && t.getUint32(P, true) === 134695760 ? 4 : 0);
       ((A + 12 > o ||
-        t.getUint32(A, !0) !== m ||
-        t.getUint32(A + 4, !0) !== g ||
-        t.getUint32(A + 8, !0) !== b) &&
+        t.getUint32(A, true) !== m ||
+        t.getUint32(A + 4, true) !== g ||
+        t.getUint32(A + 8, true) !== b) &&
         St("Invalid XLSX streaming data descriptor."),
         (T = A + 12));
     } else
-      (t.getUint32(O + 14, !0) !== m ||
-        t.getUint32(O + 18, !0) !== g ||
-        t.getUint32(O + 22, !0) !== b) &&
+      (t.getUint32(O + 14, true) !== m ||
+        t.getUint32(O + 18, true) !== g ||
+        t.getUint32(O + 22, true) !== b) &&
         St("XLSX local sizes or checksum do not match the archive directory.");
     (h === 0 && g !== b && St("Invalid stored XLSX entry size."),
       l.push({ start: O, end: T }),
@@ -16039,8 +16074,8 @@ var JV =
   QV = "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
   ON = () => ({
     warnings: new Set(),
-    hasMainType: !1,
-    hasOfficeDocument: !1,
+    hasMainType: false,
+    hasOfficeDocument: false,
     strings: 0,
     maxString: -1,
     styles: 0,
@@ -16071,7 +16106,7 @@ function Zs(e, t) {
   return r.join("/");
 }
 function MN(e, t, n, i) {
-  let r = new NN.SaxesParser({ xmlns: !0 }),
+  let r = new NN.SaxesParser({ xmlns: true }),
     o = 0,
     a = 0,
     s = new Set(),
@@ -16108,11 +16143,11 @@ function MN(e, t, n, i) {
             address: f("r") ?? "unknown cell",
             type: h,
             value: "",
-            inValue: !1,
-            formula: !1,
+            inValue: false,
+            formula: false,
           }));
         let m = f("s");
-        m !== void 0 &&
+        m !== undefined &&
           ((!/^\d+$/.test(m) || !Number.isSafeInteger(Number(m))) &&
             St(`Invalid cell style index in ${t}.`),
           (i.maxStyle = Math.max(i.maxStyle, Number(m))));
@@ -16121,11 +16156,11 @@ function MN(e, t, n, i) {
         (c &&
           p === "c" &&
           d.local === "v" &&
-          ((c.value = ""), (c.inValue = !0)),
+          ((c.value = ""), (c.inValue = true)),
         c &&
           p === "c" &&
           d.local === "f" &&
-          ((c.formula = !0),
+          ((c.formula = true),
           f("t") &&
             !["normal", "shared", "array"].includes(f("t")) &&
             St(
@@ -16170,7 +16205,7 @@ function MN(e, t, n, i) {
               St(
                 "Unsupported workbook content type. Templates and alternate formats must be saved as XLSX.",
               ),
-            (i.hasMainType = !0)),
+            (i.hasMainType = true)),
           n.has(Zs("_rels/.rels", h)) || St(`Missing XLSX part ${h}.`));
       }
       if (t.endsWith(".rels") && d.local === "Relationship") {
@@ -16203,7 +16238,7 @@ function MN(e, t, n, i) {
               g === `${bk}officeDocument` &&
               ((i.hasOfficeDocument || w !== "xl/workbook.xml") &&
                 St("Unsupported or duplicate workbook relationship."),
-              (i.hasOfficeDocument = !0)));
+              (i.hasOfficeDocument = true)));
         }
       }
     }),
@@ -16243,9 +16278,9 @@ function MN(e, t, n, i) {
           let p = i.emptyStringCaches.get(t) ?? new Set();
           (p.add(c.address), i.emptyStringCaches.set(t, p));
         }
-        c.inValue = !1;
+        c.inValue = false;
       }
-      (d.local === "c" && (c = void 0), l.pop(), o--);
+      (d.local === "c" && (c = undefined), l.pop(), o--);
     }),
     r.write(e).close());
 }
@@ -16293,18 +16328,18 @@ function PN(e) {
     r = 4294967295;
   if (
     e.length < 512 ||
-    n.getUint32(0, !0) !== 3759263696 ||
-    n.getUint32(4, !0) !== 3776623009 ||
-    n.getUint16(28, !0) !== 65534
+    n.getUint32(0, true) !== 3759263696 ||
+    n.getUint32(4, true) !== 3776623009 ||
+    n.getUint16(28, true) !== 65534
   )
     return t();
-  let o = n.getUint16(26, !0),
-    a = n.getUint16(30, !0),
+  let o = n.getUint16(26, true),
+    a = n.getUint16(30, true),
     s = 2 ** a;
   if (
     !((o === 3 && a === 9) || (o === 4 && a === 12)) ||
-    n.getUint16(32, !0) !== 6 ||
-    n.getUint32(56, !0) !== 4096 ||
+    n.getUint16(32, true) !== 6 ||
+    n.getUint32(56, true) !== 4096 ||
     e.length % s
   )
     return t();
@@ -16316,11 +16351,11 @@ function PN(e) {
     u = [],
     d = new Set();
   for (let A = 0; A < 109; A++) {
-    let L = n.getUint32(76 + A * 4, !0);
+    let L = n.getUint32(76 + A * 4, true);
     L !== r && u.push(L);
   }
-  let f = n.getUint32(68, !0),
-    p = n.getUint32(72, !0);
+  let f = n.getUint32(68, true),
+    p = n.getUint32(72, true);
   if (p > l) return t();
   for (let A = 0; A < p; A++) {
     if (d.has(f)) return t();
@@ -16328,14 +16363,14 @@ function PN(e) {
     let L = c(f),
       y = new DataView(L.buffer, L.byteOffset, L.byteLength);
     for (let v = 0; v < s - 4; v += 4) {
-      let k = y.getUint32(v, !0);
+      let k = y.getUint32(v, true);
       k !== r && u.push(k);
     }
-    f = y.getUint32(s - 4, !0);
+    f = y.getUint32(s - 4, true);
   }
   if (
     (p && f !== i) ||
-    u.length !== n.getUint32(44, !0) ||
+    u.length !== n.getUint32(44, true) ||
     !u.length ||
     u.length > l ||
     new Set(u).size !== u.length
@@ -16345,7 +16380,7 @@ function PN(e) {
   for (let A of u) {
     let L = c(A),
       y = new DataView(L.buffer, L.byteOffset, L.byteLength);
-    for (let v = 0; v < s; v += 4) h.push(y.getUint32(v, !0));
+    for (let v = 0; v < s; v += 4) h.push(y.getUint32(v, true));
   }
   for (let A of u) if (h[A] !== 4294967293) return t();
   for (let A of d) if (h[A] !== 4294967292) return t();
@@ -16367,7 +16402,8 @@ function PN(e) {
         let q = y(N);
         if ((C.push(q), (F += q.length), (N = L[N]), F > e.length)) return t();
       }
-      if (k !== void 0 && (k > F || F - k >= (C[0]?.length ?? 1))) return t();
+      if (k !== undefined && (k > F || F - k >= (C[0]?.length ?? 1)))
+        return t();
       let z = new Uint8Array(k ?? F),
         j = 0;
       for (let q of C)
@@ -16375,21 +16411,21 @@ function PN(e) {
           (j = Math.min(j + q.length, z.length)));
       return z;
     },
-    g = m(n.getUint32(48, !0), h, c, l),
+    g = m(n.getUint32(48, true), h, c, l),
     b = new DataView(g.buffer);
   if (!g.length || g.length % 128) return t();
   let w = [];
   for (let A = 0; A < g.length; A += 128) {
     let L = b.getUint8(A + 66),
-      y = b.getUint16(A + 64, !0),
-      v = b.getUint32(A + 124, !0);
+      y = b.getUint16(A + 64, true),
+      v = b.getUint32(A + 124, true);
     if (
       ![0, 1, 2, 5].includes(L) ||
-      (L && (y < 2 || y > 64 || y % 2 || b.getUint16(A + y - 2, !0)))
+      (L && (y < 2 || y > 64 || y % 2 || b.getUint16(A + y - 2, true)))
     )
       return t();
     let k = L
-      ? new TextDecoder("utf-16le", { fatal: !0 }).decode(
+      ? new TextDecoder("utf-16le", { fatal: true }).decode(
           g.subarray(A, A + y - 2),
         )
       : "";
@@ -16401,11 +16437,11 @@ function PN(e) {
     w.push({
       name: k,
       type: L,
-      left: b.getUint32(A + 68, !0),
-      right: b.getUint32(A + 72, !0),
-      child: b.getUint32(A + 76, !0),
-      start: b.getUint32(A + 116, !0),
-      size: b.getUint32(A + 120, !0),
+      left: b.getUint32(A + 68, true),
+      right: b.getUint32(A + 72, true),
+      child: b.getUint32(A + 76, true),
+      start: b.getUint32(A + 116, true),
+      size: b.getUint32(A + 120, true),
     });
   }
   if (
@@ -16432,12 +16468,12 @@ function PN(e) {
   let I;
   if (R.size >= 4096) I = m(R.start, h, c, l, R.size);
   else {
-    let A = n.getUint32(64, !0);
+    let A = n.getUint32(64, true);
     if (!A || A > l) return t();
-    let L = m(n.getUint32(60, !0), h, c, A, A * s),
+    let L = m(n.getUint32(60, true), h, c, A, A * s),
       y = new DataView(L.buffer),
       v = [];
-    for (let x = 0; x < L.length; x += 4) v.push(y.getUint32(x, !0));
+    for (let x = 0; x < L.length; x += 4) v.push(y.getUint32(x, true));
     let k = m(w[0].start, h, c, l, w[0].size);
     I = m(
       R.start,
@@ -16448,21 +16484,21 @@ function PN(e) {
     );
   }
   let U = new DataView(I.buffer),
-    P = U.getUint16(4, !0);
+    P = U.getUint16(4, true);
   if (
-    U.getUint16(0, !0) !== 2057 ||
-    U.getUint16(2, !0) < 4 ||
+    U.getUint16(0, true) !== 2057 ||
+    U.getUint16(2, true) < 4 ||
     ![1280, 1536].includes(P) ||
-    U.getUint16(6, !0) !== 5
+    U.getUint16(6, true) !== 5
   )
     return t();
-  let T = !1;
+  let T = false;
   for (let A = 0; A + 4 <= I.length;) {
-    let L = U.getUint16(A, !0),
-      y = U.getUint16(A + 2, !0);
+    let L = U.getUint16(A, true),
+      y = U.getUint16(A + 2, true);
     if (A + 4 + y > I.length || L === 47) return t();
     if (((A += 4 + y), L === 10)) {
-      T = !0;
+      T = true;
       break;
     }
   }
@@ -16587,7 +16623,7 @@ function vk(e) {
     });
   a.register(mc);
   try {
-    a.push(e, !0);
+    a.push(e, true);
   } catch {
     throw Error("Unable to inspect corrupt alternate workbook archive.");
   }
@@ -16597,13 +16633,13 @@ function vk(e) {
   return n;
 }
 function Ac(e, t) {
-  let n = new TextDecoder("utf-8", { fatal: !0 }).decode(e);
+  let n = new TextDecoder("utf-8", { fatal: true }).decode(e);
   if (
     n.includes("\0") ||
     /<\?xml[^>]*encoding\s*=\s*["'](?!utf-8|utf8)[^"']+/i.test(n)
   )
     throw Error("Alternate workbook XML must use UTF-8.");
-  let i = new LN.SaxesParser({ xmlns: !0 }),
+  let i = new LN.SaxesParser({ xmlns: true }),
     r = 0,
     o = 0;
   (i.on("doctype", () => {
@@ -16633,8 +16669,8 @@ function xg(e) {
       e["[Content_Types].xml"]
     )
       throw Error("Unsupported or mismatched OpenDocument workbook identity.");
-    let s = !1,
-      l = !1;
+    let s = false,
+      l = false;
     if (
       (Ac(e["META-INF/manifest.xml"], (c) => {
         let u = t(c);
@@ -16647,13 +16683,13 @@ function xg(e) {
             u["full-path"] === "/" &&
             u["media-type"] ===
               "application/vnd.oasis.opendocument.spreadsheet" &&
-            (s = !0);
+            (s = true);
         }
       }),
       Ac(e["content.xml"], (c) => {
         c.local === "spreadsheet" &&
           c.uri === "urn:oasis:names:tc:opendocument:xmlns:office:1.0" &&
-          (l = !0);
+          (l = true);
       }),
       !s || !l)
     )
@@ -16714,11 +16750,11 @@ function xg(e) {
         "Invalid binary workbook beginning record. Convert the original in its source application.",
       );
   } else {
-    let s = !0;
+    let s = true;
     Ac(e[i], (l) => {
       if (
         s &&
-        ((s = !1),
+        ((s = false),
         l.local !== "workbook" ||
           ![
             "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
@@ -16805,7 +16841,7 @@ var UN = Bi(Mo(), 1);
 function FN(e, t) {
   let n = (a, s) => {
       if (!e[a]) return;
-      let l = new UN.SaxesParser({ xmlns: !0 });
+      let l = new UN.SaxesParser({ xmlns: true });
       (l.on("opentag", s),
         l.on("doctype", () => {
           throw Error("External link metadata cannot contain DTDs.");
@@ -16851,7 +16887,7 @@ function FN(e, t) {
           f.attributes.Type?.value.endsWith("/externalLinkPath") &&
           f.attributes.TargetMode?.value === "External"
         ) {
-          if (d !== void 0)
+          if (d !== undefined)
             throw Error("Ambiguous external workbook target relationship.");
           d = f.attributes.Target?.value;
         }
@@ -16923,7 +16959,7 @@ var nq = "application/vnd.openxmlformats-officedocument.custom-properties+xml",
   wk = "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
   iq = { scope: "workbook" };
 function Ic(e, t, n, i) {
-  let r = new jN.SaxesParser({ xmlns: !0 });
+  let r = new jN.SaxesParser({ xmlns: true });
   (r.on("opentag", t),
     n && r.on("closetag", n),
     i && r.on("text", i),
@@ -17125,7 +17161,7 @@ function xk(e, t) {
         p[0].type === _g + "custom-properties" &&
         !i.get(c)?.length;
     (Ic(e[c], (m) => {
-      (m.local === "property" && m.attributes.linkTarget && (h = !1),
+      (m.local === "property" && m.attributes.linkTarget && (h = false),
         (m.uri ===
           "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" &&
           ["Properties", "property"].includes(m.local)) ||
@@ -17154,7 +17190,7 @@ function xk(e, t) {
               "empty",
               "null",
             ].includes(m.local)) ||
-          (h = !1));
+          (h = false));
     }),
       h
         ? a.add(c)
@@ -17262,8 +17298,8 @@ function xk(e, t) {
             E = "",
             R,
             I = "",
-            U = !1,
-            P = !1,
+            U = false,
+            P = false,
             T = "";
           Ic(
             h,
@@ -17273,10 +17309,11 @@ function xk(e, t) {
                 ((O = L("r") ?? ""),
                 (E = L("t") ?? ""),
                 E === "e" && S("error cell", "flattened", O)),
-                A.local === "v" && ((P = !0), (T = "")),
-                A.local === "f" && ((U = !0), (I = "")),
+                A.local === "v" && ((P = true), (T = "")),
+                A.local === "f" && ((U = true), (I = "")),
                 A.local === "definedName" &&
-                  ((R = L("name")), S("defined name", "editable", void 0, R)),
+                  ((R = L("name")),
+                  S("defined name", "editable", undefined, R)),
                 A.local === "dataValidation" &&
                   S("data validation", "editable", L("sqref"), L("type")),
                 A.local === "conditionalFormatting" &&
@@ -17314,19 +17351,19 @@ function xk(e, t) {
             },
             (A) => {
               (A.local === "v" &&
-                ((P = !1),
+                ((P = false),
                 O &&
                   E === "s" &&
                   u.has(Number(T)) &&
                   S("rich text", "flattened", O)),
                 A.local === "c" && (O = ""),
                 A.local === "f" &&
-                  ((U = !1),
+                  ((U = false),
                   m === "charts"
                     ? S(
                         "chart source reference",
                         "dropped",
-                        void 0,
+                        undefined,
                         I.slice(0, 1024),
                       )
                     : /(?:\[|https?:|file:|WEBSERVICE|HYPERLINK|RTD|DDE|CALL\s*\(|EXEC\s*\()/i.test(
@@ -17336,7 +17373,7 @@ function xk(e, t) {
                         "external/action formula",
                         "flattened",
                         O,
-                        void 0,
+                        undefined,
                         "External/action references may be neutralized to literal text; the formula cache report provides the actual conversion outcome.",
                       )));
             },
@@ -17350,7 +17387,7 @@ function xk(e, t) {
             S(
               "external relationship",
               "dropped",
-              void 0,
+              undefined,
               O.type.split("/").at(-1),
               "External target is never fetched or carried into the derived copy; its URI remains only in the original.",
             );
@@ -17364,13 +17401,13 @@ function xk(e, t) {
           reason: w,
           locations: g,
           features: _,
-          retainedInOriginal: !0,
+          retainedInOriginal: true,
         };
       });
   return aq({
     schemaVersion: 1,
     policy: "passive-metadata-v1",
-    complete: !0,
+    complete: true,
     phase: "eligible-for-export",
     sourceSha256: t,
     parts: f,
@@ -17415,16 +17452,16 @@ function VN(e) {
 var qN = Bi(Mo(), 1);
 function XN(e) {
   let t = new Map(),
-    n = new qN.SaxesParser({ xmlns: !0 }),
+    n = new qN.SaxesParser({ xmlns: true }),
     i = "",
     r = "",
     o = "",
-    a = !1;
+    a = false;
   n.on("opentag", (l) => {
     l.local === "c"
       ? ((i = String(l.attributes.r?.value ?? "")),
         (r = String(l.attributes.t?.value ?? "n")))
-      : l.local === "v" && i && ((a = !0), (o = ""));
+      : l.local === "v" && i && ((a = true), (o = ""));
   });
   let s = (l) => {
     if (a && ((o += l), o.length > 1024))
@@ -17444,7 +17481,7 @@ function XN(e) {
             throw Error(`Invalid finite numeric value at ${i}.`);
           t.set(i, c);
         }
-        a = !1;
+        a = false;
       } else l.local === "c" && (i = "");
     }),
     n.write(e).close(),
@@ -17628,9 +17665,9 @@ function HN(e, t) {
   );
 }
 function fq(e) {
-  if (e === null || e === "") return !0;
+  if (e === null || e === "") return true;
   if (typeof e == "number") return Number.isFinite(e);
-  if (typeof e != "string") return !1;
+  if (typeof e != "string") return false;
   let t = e.trim() !== "" && Number.isFinite(Number(e));
   return !(
     /[^\x20-\x7e]/.test(e) ||
@@ -17648,11 +17685,11 @@ function JN(e) {
   for (let i of e.matchAll(/<(?:\w+:)?cfRule\b([^>]*)>/g)) {
     let r = /\bpriority=["']([^"']*)["']/.exec(i[1])?.[1],
       o = /\bstopIfTrue=["']([^"']+)["']/.exec(i[1])?.[1];
-    if (r === void 0 && /\bid=["']/.test(i[1])) continue;
+    if (r === undefined && /\bid=["']/.test(i[1])) continue;
     let a = Number(r);
     if (!r || !/^\d+$/.test(r) || !Number.isSafeInteger(a) || a < 1 || n.has(a))
       throw Error("Invalid or duplicate conditional-format priority.");
-    if ((n.add(a), r && o !== void 0)) {
+    if ((n.add(a), r && o !== undefined)) {
       if (!["1", "0", "true", "false"].includes(o))
         throw Error("Invalid conditional-format stop flag.");
       t[String(a)] = o === "1" || o === "true";
@@ -17660,7 +17697,7 @@ function JN(e) {
   }
   for (let i of e.matchAll(/<(?:\w+:)?cfvo\b([^>]*)>/g)) {
     let r = /\bgte=["']([^"']*)["']/.exec(i[1])?.[1];
-    if (r !== void 0 && r !== "1" && r !== "true")
+    if (r !== undefined && r !== "1" && r !== "true")
       throw Error(
         "Strict or malformed conditional icon thresholds are not supported. Use inclusive thresholds or native JSON.",
       );
@@ -17723,7 +17760,7 @@ function hq(e, t) {
     e.cfvo?.length === 2 &&
     ["min", "autoMin"].includes(e.cfvo[0].type) &&
     ["max", "autoMax"].includes(e.cfvo[1].type) &&
-    e.showValue !== !1 &&
+    e.showValue !== false &&
     e.direction !== "rightToLeft"
   )
     return { ...r, kind: "dataBar", fill: qd(e.color, "#4472c4") };
@@ -17732,7 +17769,7 @@ function hq(e, t) {
     e.iconSet === "3Arrows" &&
     !e.reverse &&
     !e.custom &&
-    e.showValue !== !1 &&
+    e.showValue !== false &&
     e.cfvo?.length === 3 &&
     e.cfvo[1].type === e.cfvo[2].type &&
     ["num", "percent"].includes(e.cfvo[1].type)
@@ -17897,10 +17934,10 @@ function YN(e, t, n = {}, i = []) {
           });
         let O = hq(S, w);
         if (O && (O.kind === "duplicate" || O.kind === "unique")) {
-          let E = !0;
+          let E = true;
           for (let [R, I] of Object.entries(t.cells)) {
             if (++f > 1e6) {
-              E = !1;
+              E = false;
               break;
             }
             let U = tt(R);
@@ -17917,10 +17954,10 @@ function YN(e, t, n = {}, i = []) {
                 I.raw.startsWith("=") &&
                 !I.literal &&
                 ((P = e.getCell(R).result),
-                P === void 0 && /^=\s*""\s*$/.test(I.raw) && (P = "")),
+                P === undefined && /^=\s*""\s*$/.test(I.raw) && (P = "")),
               !fq(P))
             ) {
-              E = !1;
+              E = false;
               break;
             }
           }
@@ -17937,7 +17974,7 @@ function YN(e, t, n = {}, i = []) {
         O && u.length < 100
           ? u.push({
               ...O,
-              ...(n[String(b.priority)] !== void 0
+              ...(n[String(b.priority)] !== undefined
                 ? { stopIfTrue: n[String(b.priority)] }
                 : {}),
             })
@@ -17963,9 +18000,14 @@ function YN(e, t, n = {}, i = []) {
 }
 var QN = Bi(Mo(), 1);
 function e8(e) {
-  let t = { mode: "auto", iterative: !1, maxIterations: null, maxChange: null },
-    n = new QN.SaxesParser({ xmlns: !0 }),
-    i = !1;
+  let t = {
+      mode: "auto",
+      iterative: false,
+      maxIterations: null,
+      maxChange: null,
+    },
+    n = new QN.SaxesParser({ xmlns: true }),
+    i = false;
   return (
     n.on("opentag", (r) => {
       if (r.local !== "calcPr" || !/spreadsheetml/.test(r.uri)) return;
@@ -17973,7 +18015,7 @@ function e8(e) {
         throw Error(
           "Duplicate XLSX calculation properties. Repair the source workbook.",
         );
-      i = !0;
+      i = true;
       let o = (d) => {
           let f = r.attributes[d];
           return f && typeof f != "string" ? f.value : f;
@@ -17985,13 +18027,13 @@ function e8(e) {
         u = o("fullPrecision");
       if (
         !["auto", "autoNoTable", "manual"].includes(a) ||
-        (u !== void 0 && !["true", "false", "1", "0"].includes(u)) ||
-        (s !== void 0 && !["true", "false", "1", "0"].includes(s)) ||
-        (l !== void 0 &&
+        (u !== undefined && !["true", "false", "1", "0"].includes(u)) ||
+        (s !== undefined && !["true", "false", "1", "0"].includes(s)) ||
+        (l !== undefined &&
           (!/^\d+$/.test(l) ||
             !Number.isSafeInteger(Number(l)) ||
             Number(l) < 1)) ||
-        (c !== void 0 &&
+        (c !== undefined &&
           (!c.trim() || !Number.isFinite(Number(c)) || Number(c) < 0))
       )
         throw Error(
@@ -18000,9 +18042,11 @@ function e8(e) {
       t = {
         mode: a,
         iterative: s === "true" || s === "1",
-        maxIterations: l === void 0 ? null : Number(l),
-        maxChange: c === void 0 ? null : Number(c),
-        ...(u === void 0 ? {} : { fullPrecision: u === "true" || u === "1" }),
+        maxIterations: l === undefined ? null : Number(l),
+        maxChange: c === undefined ? null : Number(c),
+        ...(u === undefined
+          ? {}
+          : { fullPrecision: u === "true" || u === "1" }),
       };
     }),
     n.on("doctype", () => {
@@ -18016,7 +18060,7 @@ function t8(e, t, n) {
   ((e.calculation = {
     ...js,
     mode: t.mode === "manual" ? "manual" : "automatic",
-    iterative: !1,
+    iterative: false,
     maxIterations:
       t.maxIterations !== null && t.maxIterations <= 1e3
         ? t.maxIterations
@@ -18024,7 +18068,7 @@ function t8(e, t, n) {
     maxChange:
       t.maxChange !== null && t.maxChange <= 1 ? t.maxChange : js.maxChange,
   }),
-    t.fullPrecision === !1 &&
+    t.fullPrecision === false &&
       n.push(
         "The source used precision as displayed. This application calculates with full stored precision and never rounds cells automatically. Source rounding may already have changed stored values irreversibly; review formula results and use explicit ROUND where required. The original setting is retained in imported calculation evidence.",
       ),
@@ -18049,7 +18093,7 @@ var i8 = Bi(Mo(), 1);
 var r8 = new WeakMap();
 function n8(e) {
   try {
-    let t = new TextDecoder("utf-8", { fatal: !0 }).decode(e);
+    let t = new TextDecoder("utf-8", { fatal: true }).decode(e);
     if (t.includes("\0")) throw Error();
     return t;
   } catch {
@@ -18059,7 +18103,7 @@ function n8(e) {
   }
 }
 function pq(e) {
-  let t = vg(e, { allowBinaryWorkbookInventory: !0 }),
+  let t = vg(e, { allowBinaryWorkbookInventory: true }),
     n = new Map(),
     i = 0,
     r,
@@ -18107,7 +18151,7 @@ function pq(e) {
     });
   a.register(mc);
   try {
-    a.push(e, !0);
+    a.push(e, true);
   } catch {
     throw Error("Unable to inspect corrupt automation archive.");
   }
@@ -18118,7 +18162,7 @@ function pq(e) {
 function mq(e, t, n) {
   if (/<\?xml[^>]*encoding\s*=\s*["'](?!utf-8|utf8)[^"']+/i.test(e))
     throw Error(`Unsupported XML encoding in ${t}.`);
-  let i = new i8.SaxesParser({ xmlns: !1 }),
+  let i = new i8.SaxesParser({ xmlns: false }),
     r = 0,
     o = 0;
   (i.on("doctype", () => {
@@ -18344,7 +18388,7 @@ function _k(e, t, n, i, r) {
     workbookName: i.name,
     revision: i.revision,
     compatibility: "derived-subset",
-    lossless: !1,
+    lossless: false,
     originalFileRetained: !!i.xlsxSource,
     ...(i.alternateSource
       ? {
@@ -18488,14 +18532,14 @@ function l8(e, t) {
   )) {
     if (!r[2]) continue;
     if (r[2].toLowerCase() === "c") {
-      i = r[1] || /\/\s*$/.test(r[3]) ? void 0 : r[3];
+      i = r[1] || /\/\s*$/.test(r[3]) ? undefined : r[3];
       continue;
     }
-    if (i === void 0 || r[1] || n(r[3], "t") !== "array") continue;
+    if (i === undefined || r[1] || n(r[3], "t") !== "array") continue;
     let o = n(i, "r") ?? "unknown address",
       a = n(r[3], "ref") ?? o,
       s =
-        n(i, "cm") !== void 0
+        n(i, "cm") !== undefined
           ? "Metadata-qualified Excel array formula (dynamic/legacy classification requires Excel metadata)"
           : "Legacy CSE array formula";
     throw new Error(
@@ -18555,12 +18599,12 @@ var f8 = {
   quote: '"',
   escape: "double",
   newline: "auto",
-  hasHeader: !0,
+  hasHeader: true,
   decimal: ".",
   grouping: "none",
   dateOrder: "ymd",
   empty: "blank",
-  trim: !1,
+  trim: false,
   columns: {},
 };
 var Eq = ["auto", "text", "number", "integer", "boolean", "date"],
@@ -18577,7 +18621,7 @@ var ao = (e, t, n, i, r) => {
           record: t,
           column: n,
           message: i,
-          ...(r !== void 0 ? { value: r.slice(0, 200) } : {}),
+          ...(r !== undefined ? { value: r.slice(0, 200) } : {}),
         }));
   },
   Sq = (e, t, n, i, r, o, a) => {
@@ -18640,8 +18684,8 @@ function Tq(e, t, n, i) {
     changeCount: 0,
     changes: [],
     safeTextChanges: 0,
-    complete: !0,
-    valid: !1,
+    complete: true,
+    valid: false,
     warnings: [],
     safeExportPolicy: "apostrophe-prefix-formula-like-text",
   };
@@ -18656,7 +18700,7 @@ function Aq(e, t) {
         ? "utf-16le"
         : e[0] === 254 && e[1] === 255
           ? "utf-16be"
-          : void 0;
+          : undefined;
   if (n && t !== "auto" && t !== n)
     throw Error(`File BOM indicates ${n}; select that encoding or Automatic.`);
   let i = t === "auto" ? (n ?? "utf-8") : t,
@@ -18665,7 +18709,7 @@ function Aq(e, t) {
     r = (
       i === "windows-1252"
         ? Array.from(e, (o) => m8[o]).join("")
-        : new TextDecoder(i, { fatal: !0, ignoreBOM: !0 }).decode(e)
+        : new TextDecoder(i, { fatal: true, ignoreBOM: true }).decode(e)
     ).replace(/^\uFEFF/, "");
   } catch {
     throw Error(
@@ -18684,20 +18728,20 @@ function Iq(e, t, n, i) {
     a = "start",
     s = 1,
     l = 0,
-    c = !1,
+    c = false,
     u = () => {
       (r.push(o),
         (o = ""),
         (a = "start"),
         r.length > Ne.maxCols &&
-          (ao(n, s, void 0, `Delimited data exceeds ${Ne.maxCols} columns.`),
-          (c = !0)));
+          (ao(n, s, undefined, `Delimited data exceeds ${Ne.maxCols} columns.`),
+          (c = true)));
     },
     d = (f) => {
       if ((u(), !c)) {
         if (s > Ne.maxRows) {
-          (ao(n, s, void 0, `Delimited data exceeds ${Ne.maxRows} rows.`),
-            (c = !0));
+          (ao(n, s, undefined, `Delimited data exceeds ${Ne.maxRows} rows.`),
+            (c = true));
           return;
         }
         ((c = !i(r, s, f === l)), (r = []), s++);
@@ -18732,7 +18776,12 @@ function Iq(e, t, n, i) {
           : p;
       (t.newline !== "auto" &&
         t.newline !== h &&
-        ao(n, s, void 0, "Record newline does not match the selected dialect."),
+        ao(
+          n,
+          s,
+          undefined,
+          "Record newline does not match the selected dialect.",
+        ),
         d(f),
         h.length === 2 && f++,
         (l = f + 1));
@@ -18759,7 +18808,7 @@ function Iq(e, t, n, i) {
         r.length + 1,
         "A field exceeds the 32,767-character cell limit.",
       ),
-      (c = !0));
+      (c = true));
   }
   (!c &&
     a === "quoted" &&
@@ -18829,10 +18878,10 @@ function Nq(e, t, n, i = "1900") {
       try {
         return { raw: h8(r, n) };
       } catch {}
-    return { raw: r, ...(r.startsWith("=") ? { literal: !0 } : {}) };
+    return { raw: r, ...(r.startsWith("=") ? { literal: true } : {}) };
   }
   if (t === "text")
-    return { raw: r, ...(r.startsWith("=") ? { literal: !0 } : {}) };
+    return { raw: r, ...(r.startsWith("=") ? { literal: true } : {}) };
   if (t === "date")
     return {
       raw: Rq(r, n.dateOrder, i),
@@ -18866,11 +18915,11 @@ function g8(e, t, n, i) {
   (a.warnings.push(
     "Delimited data contains values only. All imported formula-like content stays literal text and is never treated as a formula. Auto keeps leading-zero/long identifiers and dates as text; select explicit types for localized numbers, dates and booleans.",
   ),
-    (n.encoding === void 0 || n.encoding === "auto") &&
+    (n.encoding === undefined || n.encoding === "auto") &&
       a.warnings.push(
         `Encoding: ${r.encoding}; automatic mode uses a BOM when present and UTF-8 otherwise. Legacy encodings require an explicit selection.`,
       ),
-    (n.delimiter === void 0 || n.delimiter === "auto") &&
+    (n.delimiter === undefined || n.delimiter === "auto") &&
       a.warnings.push(
         `Detected delimiter: ${r.delimiter === "	" ? "tab" : r.delimiter}. Review the schema and column count before importing.`,
       ));
@@ -18887,7 +18936,7 @@ function g8(e, t, n, i) {
           ao(
             a,
             u,
-            void 0,
+            undefined,
             `Malformed row: expected ${l} fields, found ${c.length}.`,
           ));
       for (let f = 0; f < c.length; f++) {
@@ -18912,7 +18961,7 @@ function g8(e, t, n, i) {
             b instanceof Error ? b.message : "Type conversion failed.",
             p,
           ),
-            (g = { raw: p, ...(p.startsWith("=") ? { literal: !0 } : {}) }));
+            (g = { raw: p, ...(p.startsWith("=") ? { literal: true } : {}) }));
         }
         if (!(r.hasHeader && u === 1)) {
           let b =
@@ -18932,7 +18981,7 @@ function g8(e, t, n, i) {
                 f + 1,
                 "Delimited data exceeds 100,000 populated cells.",
               ),
-              !1
+              false
             );
           i && (s[m] = g);
         }
@@ -18954,13 +19003,13 @@ function g8(e, t, n, i) {
             a.preview.push({ record: u, raw: c.slice(0, 200), values: [] }),
           u <= 25 && f < 200 && a.preview.at(-1)?.values.push(g.raw));
       }
-      return !0;
+      return true;
     }),
     a.records ||
       ao(
         a,
         0,
-        void 0,
+        undefined,
         "The file has no records. Select a populated delimited file.",
       ),
     r.hasHeader && a.records)
@@ -18970,7 +19019,7 @@ function g8(e, t, n, i) {
     c.some(
       (d) =>
         !d.trim() ||
-        (u.has(d.toLowerCase()) ? !0 : (u.add(d.toLowerCase()), !1)),
+        (u.has(d.toLowerCase()) ? true : (u.add(d.toLowerCase()), false)),
     ) &&
       a.warnings.push(
         "Blank or duplicate header labels are retained exactly. Column letters identify them; no fields are overwritten or renamed.",
@@ -18979,10 +19028,10 @@ function g8(e, t, n, i) {
   return ((a.valid = a.complete && a.issueCount === 0), { r: a, cells: s });
 }
 function b8(e, t, n = {}) {
-  return g8(e, t, n, !1).r;
+  return g8(e, t, n, false).r;
 }
 function Eg(e, t, n = {}) {
-  let { r: i, cells: r } = g8(e, t, n, !0);
+  let { r: i, cells: r } = g8(e, t, n, true);
   if (!i.valid)
     throw Error(
       `Unable to read delimited data: ${i.issues[0]?.message ?? "Incomplete preview."} Review the import schema; no rows were imported.`,
@@ -19085,7 +19134,7 @@ function v8(e, t) {
     f = 0,
     p = 0,
     h = 0,
-    m = !1,
+    m = false,
     g = new Set(),
     b = new gc((_) => {
       if ((l++, !i.has(_.name) || g.has(_.name))) {
@@ -19095,7 +19144,7 @@ function v8(e, t) {
       g.add(_.name);
       let S = 0,
         O = /\.(?:xml|rels|vml)$/i.test(_.name),
-        E = O ? new TextDecoder("utf-8", { fatal: !0 }) : void 0,
+        E = O ? new TextDecoder("utf-8", { fatal: true }) : undefined,
         R = -1,
         I = "";
       ((_.ondata = (U, P, T) => {
@@ -19143,7 +19192,7 @@ function v8(e, t) {
             if ((O && MN(I, _.name, n, o), /^xl\/styles\.xml$/i.test(_.name)))
               for (let A of I.matchAll(/<(?:\w+:)?sz\b([^>]*)>/g)) {
                 let L = Number(Wn(A[1], "val"));
-                (!Number.isInteger(L) || L < 8 || L > 72) && (m = !0);
+                (!Number.isInteger(L) || L < 8 || L > 72) && (m = true);
               }
             if (/^xl\/worksheets\//i.test(_.name)) {
               (l8(I, _.name),
@@ -19153,7 +19202,7 @@ function v8(e, t) {
               for (let v of I.matchAll(/<(?:\w+:)?pageSetup\b([^>]*)>/gi)) {
                 let k = Wn(v[1], "pageOrder");
                 if (
-                  k !== void 0 &&
+                  k !== undefined &&
                   !["overThenDown", "downThenOver"].includes(Rc(k))
                 )
                   throw new Error(
@@ -19235,9 +19284,9 @@ function v8(e, t) {
                   throw Error(
                     "XLSX column metadata must stay within 16,384 nonoverlapping columns.",
                   );
-                let z = C === void 0 ? void 0 : Number(C);
+                let z = C === undefined ? undefined : Number(C);
                 if (
-                  z !== void 0 &&
+                  z !== undefined &&
                   (!C?.trim() || !Number.isFinite(z) || z < 0)
                 )
                   throw Error(
@@ -19246,7 +19295,7 @@ function v8(e, t) {
                 y.push({
                   start: N,
                   end: F,
-                  ...(z === void 0 ? {} : { width: z }),
+                  ...(z === undefined ? {} : { width: z }),
                 });
               }
               y.sort((v, k) => v.start - k.start);
@@ -19384,9 +19433,9 @@ function Lq(e) {
 function Ga(e) {
   return e && /^(?:[0-9a-f]{8}|[0-9a-f]{6})$/i.test(e)
     ? `#${e.slice(-6).toLowerCase()}`
-    : void 0;
+    : undefined;
 }
-function Uq(e, t = [], n, i = !1) {
+function Uq(e, t = [], n, i = false) {
   let r = (m) => {
       t.includes(m) || t.push(m);
     },
@@ -19395,32 +19444,32 @@ function Uq(e, t = [], n, i = !1) {
   let a = null,
     s;
   typeof o == "string"
-    ? ((a = o), a.startsWith("=") && (s = !0))
+    ? ((a = o), a.startsWith("=") && (s = true))
     : typeof o == "number" || typeof o == "boolean"
       ? (a = o)
       : o instanceof Date
-        ? (a = n !== void 0 ? Number(n) : _p(o, i ? "1904" : "1900"))
+        ? (a = n !== undefined ? Number(n) : _p(o, i ? "1904" : "1900"))
         : o &&
           typeof o == "object" &&
           ("formula" in o || "sharedFormula" in o
-            ? ((a = `=${e.formula}`), Pq(a) && (s = !0))
+            ? ((a = `=${e.formula}`), Pq(a) && (s = true))
             : "richText" in o
               ? (r(
                   "Rich-text runs are flattened to cell text; per-run formatting is not preserved.",
                 ),
                 (a = o.richText.map((m) => m.text).join("")),
-                a.startsWith("=") && (s = !0))
+                a.startsWith("=") && (s = true))
               : "hyperlink" in o
-                ? ((a = o.text), a.startsWith("=") && (s = !0))
+                ? ((a = o.text), a.startsWith("=") && (s = true))
                 : "error" in o && (a = o.error));
   let l = {};
-  (e.font?.bold && (l.bold = !0),
-    e.font?.italic && (l.italic = !0),
-    e.font?.strike && (l.strikethrough = !0),
+  (e.font?.bold && (l.bold = true),
+    e.font?.italic && (l.italic = true),
+    e.font?.strike && (l.strikethrough = true),
     e.alignment?.vertical &&
       ["top", "middle", "bottom"].includes(e.alignment.vertical) &&
       (l.verticalAlign = e.alignment.vertical),
-    e.alignment?.indent !== void 0 &&
+    e.alignment?.indent !== undefined &&
       (Number.isInteger(e.alignment.indent) &&
       e.alignment.indent >= 0 &&
       e.alignment.indent <= 15
@@ -19428,14 +19477,14 @@ function Uq(e, t = [], n, i = !1) {
         : r(
             "Unsupported indentation was omitted; the editor supports integer levels 0\u201315.",
           )),
-    e.font?.underline && (l.underline = !0),
+    e.font?.underline && (l.underline = true),
     Ca.includes(e.font?.name) && (l.fontFamily = e.font.name),
-    e.font?.size !== void 0 &&
+    e.font?.size !== undefined &&
       Number.isInteger(e.font.size) &&
       e.font.size >= 8 &&
       e.font.size <= 72 &&
       (l.fontSize = e.font.size),
-    e.alignment?.wrapText && (l.wrap = !0));
+    e.alignment?.wrapText && (l.wrap = true));
   let c = {};
   for (let m of Ts) {
     let g = e.border?.[m];
@@ -19470,13 +19519,13 @@ function Uq(e, t = [], n, i = !1) {
       r(
         "An unsupported font family uses the editor default; exact font fidelity is not preserved.",
       ),
-    e.font?.size !== void 0 &&
+    e.font?.size !== undefined &&
       (!Number.isInteger(e.font.size) || e.font.size < 8 || e.font.size > 72) &&
       r(
         "An unsupported font size was omitted; supported sizes are integers from 8 to 72 points.",
       ),
     e.font?.underline &&
-      e.font.underline !== !0 &&
+      e.font.underline !== true &&
       e.font.underline !== "single" &&
       r("An unsupported underline variant was simplified to single underline."),
     (e.font?.vertAlign ||
@@ -19522,7 +19571,7 @@ function Uq(e, t = [], n, i = !1) {
       typeof e.note == "string"
         ? e.note
         : e.note?.texts?.map((m) => m.text).join(""),
-    h = e.numFmt && e.numFmt !== "General" ? e.numFmt : void 0;
+    h = e.numFmt && e.numFmt !== "General" ? e.numFmt : undefined;
   return {
     raw: a,
     ...(s ? { literal: s } : {}),
@@ -19546,7 +19595,9 @@ async function kg(e) {
       "Legacy or macro-enabled Excel formats are not supported. Save as XLSX, CSV or native JSON.",
     );
   if (/\.(csv|tsv)$/i.test(e.name))
-    return Eg(new Uint8Array(await e.arrayBuffer()), e.name, { hasHeader: !1 });
+    return Eg(new Uint8Array(await e.arrayBuffer()), e.name, {
+      hasHeader: false,
+    });
   if (!/\.xlsx$/i.test(e.name))
     throw new Error("Choose an XLSX, CSV, TSV or JSON file.");
   let t = new Uint8Array(await e.arrayBuffer()),
@@ -19646,7 +19697,7 @@ async function kg(e) {
       });
       let y = {};
       for (let N of n.columns.get(U ?? "") ?? []) {
-        if (N.width === void 0) continue;
+        if (N.width === undefined) continue;
         let F = N.width * 7;
         (F < 40 || F > 600) &&
           i.push(
@@ -19658,7 +19709,7 @@ async function kg(e) {
         for (let j = N.start; j <= N.end; j++) y[j] = z;
       }
       let v = (N, F, z, j, q) => {
-          if (N === void 0 || N === 0) return;
+          if (N === undefined || N === 0) return;
           if (typeof N != "number" || !Number.isFinite(N) || N <= 0)
             throw Error("Invalid worksheet default " + q + ".");
           let D = N * F;
@@ -19679,8 +19730,8 @@ async function kg(e) {
         C = {
           id: Nk(),
           name: S.name,
-          ...(k !== void 0 ? { defaultRowHeight: k } : {}),
-          ...(x !== void 0 ? { defaultColumnWidth: x } : {}),
+          ...(k !== undefined ? { defaultRowHeight: k } : {}),
+          ...(x !== undefined ? { defaultColumnWidth: x } : {}),
           cells: E,
           rowCount: Ne.maxRows,
           colCount: Ne.maxCols,
@@ -19690,8 +19741,8 @@ async function kg(e) {
           ...(L.length ? { hiddenCols: L } : {}),
           ...(Object.keys(y).length ? { columnWidths: y } : {}),
           ...(Object.keys(I).length ? { rowHeights: I } : {}),
-          ...(S.state !== "visible" ? { hidden: !0 } : {}),
-          ...(S.state === "veryHidden" ? { veryHidden: !0 } : {}),
+          ...(S.state !== "visible" ? { hidden: true } : {}),
+          ...(S.state === "veryHidden" ? { veryHidden: true } : {}),
           ...(Ga(S.properties.tabColor?.argb)
             ? { tabColor: Ga(S.properties.tabColor?.argb) }
             : {}),
@@ -19757,7 +19808,7 @@ async function kg(e) {
   m.length && (d.definedNames = m);
   let g = n.calculation ?? {
     mode: "auto",
-    iterative: !1,
+    iterative: false,
     maxIterations: null,
     maxChange: null,
   };
@@ -22653,7 +22704,7 @@ function E8(e, t, n) {
         ? "Native workbook exceeds the 50 MB import limit."
         : $k(e, t) === Ne.maxFileBytes
           ? "Files must be 10 MB or smaller."
-          : void 0,
+          : undefined,
     );
 }
 for (let e of [
@@ -22669,12 +22720,12 @@ for (let e of [
   "caches",
 ])
   Object.defineProperty(globalThis, e, {
-    value: void 0,
-    writable: !1,
-    configurable: !1,
+    value: undefined,
+    writable: false,
+    configurable: false,
   });
 function S8(e) {
-  let t = JSON.parse(new TextDecoder("utf-8", { fatal: !0 }).decode(e)),
+  let t = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(e)),
     n = [{ value: t, depth: 0 }],
     i = 0;
   for (; n.length;) {
@@ -22691,10 +22742,10 @@ function S8(e) {
   return t;
 }
 var Pk = self,
-  C8 = !1;
+  C8 = false;
 Pk.onmessage = async ({ data: e }) => {
   if (C8) return;
-  C8 = !0;
+  C8 = true;
   let t = e?.id;
   try {
     if (
@@ -22719,7 +22770,8 @@ Pk.onmessage = async ({ data: e }) => {
             name: e.fileName,
             size: i.length,
             arrayBuffer: async () => i.buffer,
-            text: async () => new TextDecoder("utf-8", { fatal: !0 }).decode(i),
+            text: async () =>
+              new TextDecoder("utf-8", { fatal: true }).decode(i),
           });
         if (
           (/\.json$/i.test(e.fileName) &&
@@ -22774,8 +22826,8 @@ Pk.onmessage = async ({ data: e }) => {
     }
     if (new TextEncoder().encode(JSON.stringify(n)).length > Nc.maxResultBytes)
       throw new An("FILE_LIMIT");
-    Pk.postMessage({ id: t, ok: !0, value: n });
+    Pk.postMessage({ id: t, ok: true, value: n });
   } catch (n) {
-    Pk.postMessage({ id: t, ok: !1, error: _8(n) });
+    Pk.postMessage({ id: t, ok: false, error: _8(n) });
   }
 };

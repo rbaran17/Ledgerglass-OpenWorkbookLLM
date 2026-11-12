@@ -63,15 +63,12 @@ function Hk({
             role: "dialog",
             "aria-label": l,
             onKeyDown: (c) => {
-              var h, f;
+              var f;
               c.key === "Escape" &&
                 (c.preventDefault(),
                 c.stopPropagation(),
                 d(false),
-                (f =
-                  (h = u.current) == null
-                    ? void 0
-                    : h.querySelector("button")) == null || f.focus());
+                (f = u.current?.querySelector("button")) == null || f.focus());
             },
             children: [
               i.jsx("strong", {

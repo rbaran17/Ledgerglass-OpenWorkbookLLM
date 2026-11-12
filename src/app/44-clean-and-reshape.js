@@ -9,32 +9,18 @@ import { Dce, Mce, Oce, a3 } from "./16-text-split-tools.js";
 import { DW, cj, gS, vS } from "./43-text-cleanup.js";
 
 function l4e(e) {
-  var kr, Ke, Tt, zt;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
     s = ne.useRef([e.sheetId, e.range]),
-    [d, u] = ne.useState(
-      ((kr = e.initialRequest) == null ? void 0 : kr.sourceSheetId) ??
-        e.sheetId,
-    ),
-    [l, c] = ne.useState(
-      ((Ke = e.initialRequest) == null ? void 0 : Ke.sourceRange) ?? e.range,
-    ),
-    [h, f] = ne.useState(
-      ((Tt = e.initialRequest) == null ? void 0 : Tt.header) ?? true,
-    ),
-    [p, m] = ne.useState(
-      ((zt = e.initialRequest) == null ? void 0 : zt.outputName) ??
-        "Reshaped fields",
-    ),
+    [d, u] = ne.useState(e.initialRequest?.sourceSheetId ?? e.sheetId),
+    [l, c] = ne.useState(e.initialRequest?.sourceRange ?? e.range),
+    [h, f] = ne.useState(e.initialRequest?.header ?? true),
+    [p, m] = ne.useState(e.initialRequest?.outputName ?? "Reshaped fields"),
     [v, g] = ne.useState(false),
     [b, y] = ne.useState(() => {
-      var Qe;
-      return structuredClone(
-        ((Qe = e.initialRequest) == null ? void 0 : Qe.steps) ?? [],
-      );
+      return structuredClone(e.initialRequest?.steps ?? []);
     }),
     [w, E] = ne.useState(null),
     [A, k] = ne.useState("trim"),
@@ -120,13 +106,11 @@ function l4e(e) {
       candidate: $e,
     }),
     qt =
-      (_e == null ? void 0 : _e.key) === Rr &&
-      _e.plan.snapshot === JSON.stringify(e.workbook)
+      _e?.key === Rr && _e.plan.snapshot === JSON.stringify(e.workbook)
         ? _e.plan
         : null,
     Ye =
-      (lt == null ? void 0 : lt.key) === Rr &&
-      lt.snapshot === JSON.stringify(e.workbook)
+      lt?.key === Rr && lt.snapshot === JSON.stringify(e.workbook)
         ? lt.message
         : null,
     bt = JSON.stringify({
@@ -146,14 +130,12 @@ function l4e(e) {
     [St, cr] = ne.useState(""),
     dr = St === bt ? ke : [];
   (ne.useEffect(() => {
-    var Dt, It;
+    var It;
     const Qe = document.activeElement;
     return (
-      (It =
-        (Dt = o.current) == null
-          ? void 0
-          : Dt.querySelector('[data-ui-label="Transform source range"]')) ==
-        null || It.focus(),
+      (It = o.current?.querySelector(
+        '[data-ui-label="Transform source range"]',
+      )) == null || It.focus(),
       () => {
         Qe != null && Qe.isConnected && Qe.focus();
       }
@@ -358,10 +340,10 @@ function l4e(e) {
         try {
           const Qe = Dce(e.workbook, qt, {
             ...xt,
-            approved: !0,
+            approved: true,
             acceptExceptions: mt,
           });
-          ((a.current = !0),
+          ((a.current = true),
             e.onWorkbookChange(
               Qe,
               `Clean & Reshape: ${qt.sourceSheetName}!${qt.request.sourceRange} → ${qt.request.outputName} (${qt.exceptions.length} retained parse exceptions)`,
@@ -387,8 +369,8 @@ function l4e(e) {
               includeHidden: xt.includeHidden,
               allowNewSheet: xt.allowNewSheet,
             }),
-            !0)
-          : !1;
+            true)
+          : false;
       } catch {
         return false;
       }
@@ -402,17 +384,16 @@ function l4e(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (Qe) => {
-        var Dt, It, ar;
+        var It, ar;
         if (
           (Qe.stopPropagation(),
           Qe.key === "Escape" && (Qe.preventDefault(), e.onClose()),
           Qe.key === "Tab")
         ) {
           const Lr = [
-            ...(((Dt = o.current) == null
-              ? void 0
-              : Dt.querySelectorAll("button,input,select,textarea,summary")) ??
-              []),
+            ...(o.current?.querySelectorAll(
+              "button,input,select,textarea,summary",
+            ) ?? []),
           ].filter(
             (Pr) =>
               !Pr.matches(":disabled") &&
@@ -1331,7 +1312,6 @@ function l4e(e) {
                                               .join(", "),
                                           }),
                                           Qe.sources.map((Dt) => {
-                                            var It, ar;
                                             return i.jsxs(
                                               "pre",
                                               {
@@ -1340,15 +1320,9 @@ function l4e(e) {
                                                   ":",
                                                   " ",
                                                   vS(
-                                                    ((ar =
-                                                      (It = qt.sources.find(
-                                                        (Lr) =>
-                                                          Lr.address === Dt,
-                                                      )) == null
-                                                        ? void 0
-                                                        : It.original) == null
-                                                      ? void 0
-                                                      : ar.raw) ?? null,
+                                                    qt.sources.find(
+                                                      (Lr) => Lr.address === Dt,
+                                                    )?.original?.raw ?? null,
                                                   ),
                                                 ],
                                               },
@@ -1691,7 +1665,6 @@ function BW(e, r, t) {
   return (jn(n), n);
 }
 function b_(e, r, t, n = false) {
-  var p;
   const o = Nr(e, r),
     a = ct(t);
   if (a.lastRow >= o.rowCount || a.lastCol >= o.colCount)
@@ -1704,18 +1677,15 @@ function b_(e, r, t, n = false) {
     .filter(([, m]) => jW(m))
     .map(([m]) => _t(m));
   if (s === d && u === l) {
-    const m =
-      (p = o.tables) == null
-        ? void 0
-        : p
-            .map((v) => ({ bounds: ct(v.range), totals: v.showTotals }))
-            .find(
-              (v) =>
-                s >= v.bounds.firstRow &&
-                s <= v.bounds.lastRow &&
-                u >= v.bounds.firstCol &&
-                u <= v.bounds.lastCol,
-            );
+    const m = o.tables
+      ?.map((v) => ({ bounds: ct(v.range), totals: v.showTotals }))
+      .find(
+        (v) =>
+          s >= v.bounds.firstRow &&
+          s <= v.bounds.lastRow &&
+          u >= v.bounds.firstCol &&
+          u <= v.bounds.lastCol,
+      );
     if (m)
       ((s = m.bounds.firstRow),
         (d = m.bounds.lastRow - (m.totals ? 1 : 0)),
@@ -1751,7 +1721,7 @@ function u4e(e, r) {
     !r.keys.length ||
     r.keys.length > yd.keys ||
     [r.caseSensitive, r.expandSelection, r.includeHidden].some(
-      (o) => o !== void 0 && typeof o != "boolean",
+      (o) => o !== undefined && typeof o != "boolean",
     )
   )
     throw Error("Choose headers and 1–64 sort levels with valid options.");
@@ -1770,7 +1740,7 @@ function u4e(e, r) {
       throw Error(
         "Choose distinct valid sort columns, directions and data types.",
       );
-    if ((n.add(o.column), o.customOrder !== void 0)) {
+    if ((n.add(o.column), o.customOrder !== undefined)) {
       const a = (s) =>
         t.caseSensitive
           ? s.normalize("NFC")

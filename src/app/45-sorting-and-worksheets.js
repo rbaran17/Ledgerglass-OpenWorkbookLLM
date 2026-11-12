@@ -36,10 +36,23 @@ import {
 } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { LC } from "./27-data-validation-dialog.js";
-import { BW, FW, LW, MW, N3, OW, _1, b_, c4e, jW, u4e, yd } from "./44-clean-and-reshape.js";
+import {
+  BW,
+  FW,
+  LW,
+  MW,
+  N3,
+  OW,
+  _1,
+  b_,
+  c4e,
+  jW,
+  u4e,
+  yd,
+} from "./44-clean-and-reshape.js";
 
 function d4e(e, r, t = {}) {
-  var z, V, D;
+  var V;
   const n = BW(e, r.sheetId, t),
     o = u4e(e, r),
     a = b_(e, o.sheetId, o.range, o.headers);
@@ -76,10 +89,7 @@ function d4e(e, r, t = {}) {
         ? B.normalize("NFC")
         : B.normalize("NFC").toLocaleLowerCase("en-US"),
     m = o.keys.map((B) => {
-      var _;
-      return new Map(
-        (_ = B.customOrder) == null ? void 0 : _.map((C, T) => [p(C), T]),
-      );
+      return new Map(B.customOrder?.map((C, T) => [p(C), T]));
     }),
     v = (B) =>
       B.compare === null || B.compare === ""
@@ -105,9 +115,9 @@ function d4e(e, r, t = {}) {
         if (m[C].size) {
           const G = m[C].get(p(String(T.compare))),
             H = m[C].get(p(String(N.compare)));
-          if (G !== void 0 || H !== void 0) {
-            if (G === void 0) return 1;
-            if (H === void 0) return -1;
+          if (G !== undefined || H !== undefined) {
+            if (G === undefined) return 1;
+            if (H === undefined) return -1;
             if (G !== H) return (G - H) * $;
           }
         }
@@ -146,7 +156,7 @@ function d4e(e, r, t = {}) {
       if (N3(T)) {
         const N = _t(C),
           R = B.id === n.id ? _1(I(N.row), N.col) : C,
-          L = (z = _.cells[R]) == null ? void 0 : z.raw;
+          L = _.cells[R]?.raw;
         L !== T.raw &&
           k.push({
             sheet: B.name,
@@ -207,28 +217,22 @@ function d4e(e, r, t = {}) {
       }
     E = rn(E);
   }
-  const O = new Map(
-      (D = E.rowOrigins) == null ? void 0 : D.map((B) => [B.id, B]),
-    ),
+  const O = new Map(E.rowOrigins?.map((B) => [B.id, B])),
     j = {
       request: o,
       selection: a,
       snapshot: JSON.stringify(e),
       rows: g.map((B, _) => {
-        var N;
-        const C =
-            (N = Nr(E, n.id).rowOriginIds) == null
-              ? void 0
-              : N[a.firstDataRow + _],
-          T = C ? O.get(C) : void 0;
+        const C = Nr(E, n.id).rowOriginIds?.[a.firstDataRow + _],
+          T = C ? O.get(C) : undefined;
         return {
           sourceRow: B.row + 1,
           destinationRow: a.firstDataRow + _ + 1,
           ...(C
             ? {
                 sourceId: C,
-                sourceName: T == null ? void 0 : T.sourceName,
-                originalRow: T == null ? void 0 : T.originalRow,
+                sourceName: T?.sourceName,
+                originalRow: T?.originalRow,
               }
             : {}),
           keys: B.keys.map((R) => R.value),
@@ -278,16 +282,14 @@ const dj = (e) => ({
     useCustom: false,
   }),
   h4e = (e) => {
-    var r, t;
+    var t;
     try {
       const n = ct(b_(e.workbook, e.sheetId, e.range).expandedRange).firstRow;
       return (
         n === 0 ||
         !!(
-          (t =
-            (r = e.workbook.sheets.find((o) => o.id === e.sheetId)) == null
-              ? void 0
-              : r.tables) != null && t.some((o) => ct(o.range).firstRow === n)
+          (t = e.workbook.sheets.find((o) => o.id === e.sheetId)?.tables) !=
+            null && t.some((o) => ct(o.range).firstRow === n)
         )
       );
     } catch {
@@ -328,7 +330,7 @@ function p4e(e) {
   } catch (X) {
     C = X.message;
   }
-  const T = _ ? ct(_.expandedRange) : void 0,
+  const T = _ ? ct(_.expandedRange) : undefined,
     N = T
       ? Array.from(
           { length: T.lastCol - T.firstCol + 1 },
@@ -377,24 +379,18 @@ function p4e(e) {
           readOnly: e.readOnly,
           allowedSheetIds: e.allowedSheetIds,
         });
-        (e.onWorkbookChange(
-          X,
-          `Sort ${j == null ? void 0 : j.name}: ${y.movedRows} records moved`,
-        ),
+        (e.onWorkbookChange(X, `Sort ${j?.name}: ${y.movedRows} records moved`),
           e.onClose());
       } catch (X) {
         (w(null), F(X.message));
       }
     };
   (ne.useEffect(() => {
-    var J, q;
+    var q;
     const X = document.activeElement;
     return (
-      (q =
-        (J = o.current) == null
-          ? void 0
-          : J.querySelector('input[data-ui-label="Source range"]')) == null ||
-        q.focus(),
+      (q = o.current?.querySelector('input[data-ui-label="Source range"]')) ==
+        null || q.focus(),
       () => {
         X != null && X.isConnected && X.focus();
       }
@@ -403,14 +399,11 @@ function p4e(e) {
     ne.useEffect(() => {
       var X, J, q;
       y &&
-        ((J = (X = a.current) == null ? void 0 : X.scrollIntoView) == null ||
+        ((J = (X = a.current) == null ? undefined : X.scrollIntoView) == null ||
           J.call(X, { block: "start" }),
         (q = a.current) == null || q.focus({ preventScroll: true }));
     }, [y]));
-  const H = Math.max(
-      1,
-      Math.ceil(((y == null ? void 0 : y.rows.length) ?? 0) / yd.pageSize),
-    ),
+  const H = Math.max(1, Math.ceil((y?.rows.length ?? 0) / yd.pageSize)),
     Q = Math.min(I, H - 1);
   return i.jsx("div", {
     className: "dup-backdrop",
@@ -424,18 +417,16 @@ function p4e(e) {
       "aria-labelledby": `${n}-title`,
       ref: o,
       onKeyDown: (X) => {
-        var J, q, W;
+        var q, W;
         if (
           (X.stopPropagation(),
           X.key === "Escape" && (X.preventDefault(), e.onClose()),
           X.key === "Tab")
         ) {
           const K = [
-            ...(((J = o.current) == null
-              ? void 0
-              : J.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
-                )) ?? []),
+            ...(o.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
+            ) ?? []),
           ].filter(
             (te) =>
               !te.closest("details:not([open])") || te.tagName === "SUMMARY",
@@ -479,11 +470,7 @@ function p4e(e) {
               children: [
                 i.jsx(M, { children: "Worksheet" }),
                 i.jsx("strong", {
-                  children: V
-                    ? j == null
-                      ? void 0
-                      : j.name
-                    : "Outside current context",
+                  children: V ? j?.name : "Outside current context",
                 }),
               ],
             }),
@@ -524,7 +511,7 @@ function p4e(e) {
                 i.jsxs("strong", {
                   children: [
                     i.jsx(M, { children: "Complete records: " }),
-                    _ == null ? void 0 : _.expandedRange,
+                    _?.expandedRange,
                   ],
                 }),
                 i.jsx("p", {
@@ -533,7 +520,7 @@ function p4e(e) {
                       "Every populated column in these worksheet rows moves together, including fields beside the selection. Headers stay in place. Applying also clears temporary view sorting and search.",
                   }),
                 }),
-                (_ == null ? void 0 : _.expansionRequired) &&
+                _?.expansionRequired &&
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
@@ -619,7 +606,6 @@ function p4e(e) {
                             onChange: (q) =>
                               L(J, { column: Number(q.target.value) }),
                             children: N.map((q) => {
-                              var W;
                               return i.jsxs(
                                 "option",
                                 {
@@ -627,7 +613,7 @@ function p4e(e) {
                                   children: [
                                     ut(q),
                                     u && T
-                                      ? ` · ${String(((W = j == null ? void 0 : j.cells[`${ut(q)}${T.firstRow + 1}`]) == null ? void 0 : W.raw) ?? "(blank header)")}`
+                                      ? ` · ${String(j?.cells[`${ut(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
                                       : "",
                                   ],
                                 },
@@ -1044,7 +1030,7 @@ const x2 = (e) =>
       ? e.message
       : "The worksheet operation could not be completed.";
 function m4e(e) {
-  var K, te;
+  var K;
   const { text: r, language: t } = Dr(),
     [n, o] = ne.useState(e.sheetId),
     a = e.workbook.sheets.find((ae) => ae.id === n) ?? e.workbook.sheets[0],
@@ -1097,12 +1083,12 @@ function m4e(e) {
       if (he.readOnly) throw new Error("This workbook is read-only.");
       const Se = oe(he.workbook);
       if (Se === he.workbook) return;
-      (he.onWorkbookChange(Se, ae), A(null), F(!1), O(0), b(ae));
+      (he.onWorkbookChange(Se, ae), A(null), F(false), O(0), b(ae));
       const le = de
         ? Se.sheets.find(
             (ce) => !he.workbook.sheets.some((ge) => ge.id === ce.id),
           )
-        : void 0;
+        : undefined;
       (le
         ? (o(le.id), le.hidden || he.onSelectSheet(le.id))
         : Se.sheets.some((ce) => ce.id === a.id) ||
@@ -1129,7 +1115,7 @@ function m4e(e) {
         name: a.name,
         dependencies: AP(e.workbook, a.id),
       }),
-        F(!1));
+        F(false));
     } catch (ae) {
       v(bS(ae));
     }
@@ -1140,7 +1126,7 @@ function m4e(e) {
         v("The workbook changed. Review current dependencies before deleting.");
         return;
       }
-      G(`Delete worksheet: ${E.name}`, (ae) => Vne(ae, E.sheetId, !0));
+      G(`Delete worksheet: ${E.name}`, (ae) => Vne(ae, E.sheetId, true));
     }
   }
   async function J() {
@@ -1179,10 +1165,7 @@ function m4e(e) {
     }
   }
   const q = !!(E && E.workbook !== e.workbook),
-    W =
-      E == null
-        ? void 0
-        : E.dependencies.some((ae) => /unsupported/i.test(ae.kind));
+    W = E?.dependencies.some((ae) => /unsupported/i.test(ae.kind));
   return i.jsx("div", {
     className: "sm-backdrop",
     onPointerDown: (ae) => {
@@ -1196,7 +1179,7 @@ function m4e(e) {
       "aria-labelledby": B,
       tabIndex: -1,
       onKeyDown: (ae) => {
-        var oe, de;
+        var de;
         if (
           (ae.stopPropagation(),
           ae.key === "Escape" &&
@@ -1204,11 +1187,9 @@ function m4e(e) {
           ae.key === "Tab")
         ) {
           const he = Array.from(
-              ((oe = j.current) == null
-                ? void 0
-                : oe.querySelectorAll(
-                    'button,input,select,textarea,[tabindex="0"]',
-                  )) ?? [],
+              j.current?.querySelectorAll(
+                'button,input,select,textarea,[tabindex="0"]',
+              ) ?? [],
             ).filter(
               (ge) =>
                 !ge.matches(":disabled") &&
@@ -1290,7 +1271,7 @@ function m4e(e) {
                       {
                         children: i.jsxs("button", {
                           type: "button",
-                          ref: ae.id === a.id ? z : void 0,
+                          ref: ae.id === a.id ? z : undefined,
                           "aria-label": `Manage ${ae.name}`,
                           "aria-pressed": ae.id === a.id,
                           onClick: () => U(ae.id),
@@ -1586,10 +1567,7 @@ function m4e(e) {
                         i.jsx("button", {
                           type: "button",
                           disabled:
-                            c.toLowerCase() ===
-                            ((te = a.tabColor) == null
-                              ? void 0
-                              : te.toLowerCase()),
+                            c.toLowerCase() === a.tabColor?.toLowerCase(),
                           onClick: () =>
                             G(`Change tab color: ${a.name}`, (ae) =>
                               EO(ae, a.id, c),
@@ -1616,7 +1594,9 @@ function m4e(e) {
                       type: "button",
                       className: "sm-danger",
                       disabled: !$,
-                      title: L ? "Keep at least one visible worksheet" : void 0,
+                      title: L
+                        ? "Keep at least one visible worksheet"
+                        : undefined,
                       onClick: Q,
                       children: [
                         i.jsx(Trash2, { size: 14 }),
@@ -1912,7 +1892,7 @@ const QT = {
     version: "Version",
   },
   ox = (e) =>
-    e === void 0
+    e === undefined
       ? "Not set"
       : e === null || e === ""
         ? "Blank"

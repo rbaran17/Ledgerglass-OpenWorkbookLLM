@@ -61,14 +61,11 @@ function $z(e) {
         ));
     };
   ne.useEffect(() => {
-    var ce, ge;
+    var ge;
     const le = document.activeElement;
     return (
-      (ge =
-        (ce = o.current) == null
-          ? void 0
-          : ce.querySelector('[data-ui-label="Source range"]')) == null ||
-        ge.focus(),
+      (ge = o.current?.querySelector('[data-ui-label="Source range"]')) ==
+        null || ge.focus(),
       () => {
         le != null && le.isConnected && le.focus();
       }
@@ -115,13 +112,10 @@ function $z(e) {
         }
     },
     ae =
-      (I == null
-        ? void 0
-        : I.rows.filter(
-            (le) =>
-              C === "all" ||
-              (C === "groups" ? !!le.groupId : le.disposition === C),
-          )) ?? [],
+      I?.rows.filter(
+        (le) =>
+          C === "all" || (C === "groups" ? !!le.groupId : le.disposition === C),
+      ) ?? [],
     oe = Math.max(1, Math.ceil(ae.length / lw.pageSize)),
     de = Math.min(N, oe - 1),
     he = ae.slice(de * 20, de * 20 + 20),
@@ -172,18 +166,16 @@ function $z(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (le) => {
-        var ce, ge, se;
+        var ge, se;
         if (
           (le.stopPropagation(),
           le.key === "Escape" && (le.preventDefault(), a.current()),
           le.key === "Tab")
         ) {
           const we = [
-            ...(((ce = o.current) == null
-              ? void 0
-              : ce.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
-                )) ?? []),
+            ...(o.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
+            ) ?? []),
           ].filter(
             (Ee) =>
               !Ee.closest("details:not([open])") || Ee.tagName === "SUMMARY",
@@ -753,14 +745,10 @@ function $z(e) {
   });
 }
 const zz = new WeakMap(),
-  K7 = (e) =>
-    typeof (e == null ? void 0 : e.raw) == "string" &&
-    e.raw.startsWith("=") &&
-    !e.literal,
+  K7 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
   n2 = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
   nfe = (e, r) => (e.axis === "row" ? String(r + 1) : ut(r));
 function ife(e, r, t, n = {}) {
-  var f, p, m;
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = Vn(e),
     a = LC(e, r, t),
@@ -774,7 +762,7 @@ function ife(e, r, t, n = {}) {
     );
   const u = e.sheets.find((v) => v.id === r),
     l =
-      t.moveBefore !== void 0
+      t.moveBefore !== undefined
         ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : nfe(t, t.moveBefore)}`
         : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
     c = {
@@ -800,14 +788,14 @@ function ife(e, r, t, n = {}) {
       w !== b && c.movedCells++;
       const E = g.cells[w];
       K7(y) &&
-        ((E == null ? void 0 : E.raw) !== y.raw &&
+        (E?.raw !== y.raw &&
           c.formulaChanges.push({
             sheetId: v.id,
             sheetName: v.name,
             beforeAddress: b,
             address: w,
             before: String(y.raw),
-            after: String((E == null ? void 0 : E.raw) ?? ""),
+            after: String(E?.raw ?? ""),
           }),
         s(v.id, w) === "#REF!" &&
           o(v.id, b) !== "#REF!" &&
@@ -816,22 +804,19 @@ function ife(e, r, t, n = {}) {
             sheetName: v.name,
             address: w,
             before: String(y.raw),
-            after: String((E == null ? void 0 : E.raw) ?? ""),
+            after: String(E?.raw ?? ""),
           }));
     }
     for (const b of g.conditionalFormats ?? []) {
-      const y =
-        (f = v.conditionalFormats) == null
-          ? void 0
-          : f.find((w) => w.id === b.id);
+      const y = v.conditionalFormats?.find((w) => w.id === b.id);
       b.formula &&
         n2(b.formula) &&
-        !n2((y == null ? void 0 : y.formula) ?? "") &&
+        !n2(y?.formula ?? "") &&
         c.referenceIssues.push({
           kind: "conditional rule",
           sheetName: g.name,
           address: b.range,
-          before: (y == null ? void 0 : y.formula) ?? "",
+          before: y?.formula ?? "",
           after: b.formula,
         });
     }
@@ -856,20 +841,17 @@ function ife(e, r, t, n = {}) {
         c.metadataChanges.push({ sheetName: v.name, field: b });
   }
   for (const v of a.definedNames ?? []) {
-    const g =
-      (p = e.definedNames) == null
-        ? void 0
-        : p.find((b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId);
+    const g = e.definedNames?.find(
+      (b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId,
+    );
     n2(v.refersTo) &&
-      !n2((g == null ? void 0 : g.refersTo) ?? "") &&
+      !n2(g?.refersTo ?? "") &&
       c.referenceIssues.push({
         kind: "name",
         sheetName:
-          ((m = e.sheets.find((b) => b.id === v.scopeSheetId)) == null
-            ? void 0
-            : m.name) ?? "Workbook",
+          e.sheets.find((b) => b.id === v.scopeSheetId)?.name ?? "Workbook",
         address: v.name,
-        before: (g == null ? void 0 : g.refersTo) ?? "",
+        before: g?.refersTo ?? "",
         after: v.refersTo,
       });
   }
@@ -929,12 +911,11 @@ function afe({
     B = ne.useRef(null),
     _ = e.sheets.find((G) => G.id === r);
   ne.useEffect(() => {
-    var H, Q;
+    var Q;
     const G = document.activeElement;
     return (
-      (Q = (H = B.current) == null ? void 0 : H.querySelector("select")) ==
-        null || Q.focus(),
-      () => (G == null ? void 0 : G.focus())
+      (Q = B.current?.querySelector("select")) == null || Q.focus(),
+      () => G?.focus()
     );
   }, []);
   const C = () => {
@@ -967,11 +948,11 @@ function afe({
           index: T(f),
           count: m,
           remove: g === "delete",
-          ...(g === "move" ? { moveBefore: T(y, !0) } : {}),
+          ...(g === "move" ? { moveBefore: T(y, true) } : {}),
         },
         { readOnly: o },
       );
-      (A(G), D(!1), O(0));
+      (A(G), D(false), O(0));
     } catch (G) {
       (F(G.message), A(null));
     }
@@ -1033,16 +1014,13 @@ function afe({
       "aria-modal": "true",
       "aria-label": `Insert / Delete / Move ${l === "row" ? "Rows" : "Columns"}`,
       onKeyDown: (G) => {
-        var H;
         if (
           (G.key === "Escape" && (G.stopPropagation(), a()), G.key === "Tab")
         ) {
           const Q = Array.from(
-              ((H = B.current) == null
-                ? void 0
-                : H.querySelectorAll(
-                    "button:not([disabled]),input:not([disabled]),select:not([disabled])",
-                  )) ?? [],
+              B.current?.querySelectorAll(
+                "button:not([disabled]),input:not([disabled]),select:not([disabled])",
+              ) ?? [],
             ),
             X = Q[0],
             J = Q.at(-1);

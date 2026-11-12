@@ -141,7 +141,15 @@ import {
   w2e,
   y2e,
 } from "./53-find-replace-go-to.js";
-import { $2e, A2, P2e, V2e, xH, yH, z2e } from "./54-workbook-save-conflicts.js";
+import {
+  $2e,
+  A2,
+  P2e,
+  V2e,
+  xH,
+  yH,
+  z2e,
+} from "./54-workbook-save-conflicts.js";
 import {
   Gv,
   Jd,
@@ -158,19 +166,16 @@ import {
 } from "./55-external-source-refresh.js";
 
 function IH(e) {
-  var s, d, u, l;
   const r = ne.useMemo(() => xH(), []),
     t = e.reliability ?? r,
     n = ne.useRef({
-      propId: (s = e.initialWorkbook) == null ? void 0 : s.id,
-      emittedId: void 0,
+      propId: e.initialWorkbook?.id,
+      emittedId: undefined,
       generation: 0,
     });
-  n.current.propId !== ((d = e.initialWorkbook) == null ? void 0 : d.id) &&
-    (n.current.emittedId !==
-      ((u = e.initialWorkbook) == null ? void 0 : u.id) &&
-      n.current.generation++,
-    (n.current.propId = (l = e.initialWorkbook) == null ? void 0 : l.id));
+  n.current.propId !== e.initialWorkbook?.id &&
+    (n.current.emittedId !== e.initialWorkbook?.id && n.current.generation++,
+    (n.current.propId = e.initialWorkbook?.id));
   const o = ne.useCallback(
       (c) => {
         var h;
@@ -233,7 +238,7 @@ function rEe({
   externalProposal: j,
   onExternalProposalStaged: z,
 }) {
-  var dc, _u, kl, Y, re, me, xe, Ne, Ve, Ge, Et, dt, At, Ft, Ht, yr, wr, Xr;
+  var dc, Y, re, Et, Xr;
   const V = ne.useMemo(() => xH(), []),
     D = s ?? V,
     [B, _] = ne.useState(false),
@@ -250,7 +255,7 @@ function rEe({
     [Q, X$1] = ne.useState([]),
     [J, q] = ne.useState([]),
     W = r ?? J,
-    K = r !== void 0 ? t : q,
+    K = r !== undefined ? t : q,
     te = u ?? Q,
     ae = u ? c : X$1,
     [oe, de] = ne.useState(H.sheets.find((fe) => !fe.hidden).id),
@@ -338,7 +343,6 @@ function rEe({
     let fe = 0,
       Oe;
     const Be = () => {
-        var Nt, wt;
         if (!Ke.current.dragging || !Oe) return;
         const gt = to.current;
         if (gt) {
@@ -349,17 +353,13 @@ function rEe({
             Oe.x < jt.left + 28
               ? (gt.scrollLeft -= 36)
               : Oe.x > jt.right - 28 && (gt.scrollLeft += 36));
-          const rr =
-            (wt =
-              (Nt = document.elementFromPoint) == null
-                ? void 0
-                : Nt.call(
-                    document,
-                    Math.max(jt.left + 48, Math.min(jt.right - 8, Oe.x)),
-                    Math.max(jt.top + 28, Math.min(jt.bottom - 8, Oe.y)),
-                  )) == null
-              ? void 0
-              : wt.closest("[data-address]");
+          const rr = document.elementFromPoint
+            ?.call(
+              document,
+              Math.max(jt.left + 48, Math.min(jt.right - 8, Oe.x)),
+              Math.max(jt.top + 28, Math.min(jt.bottom - 8, Oe.y)),
+            )
+            ?.closest("[data-address]");
           rr && gt.contains(rr) && ar.current(rr.dataset.address);
         }
         fe = requestAnimationFrame(Be);
@@ -374,7 +374,7 @@ function rEe({
         ((Ke.current.dragging = false),
           cancelAnimationFrame(fe),
           (fe = 0),
-          (Oe = void 0),
+          (Oe = undefined),
           gt && ls());
       };
     return (
@@ -405,10 +405,10 @@ function rEe({
     za = [
       H.id,
       he.id,
-      (Or == null ? void 0 : Or.horizontal) !== void 0,
-      (Or == null ? void 0 : Or.vertical) !== void 0,
-      Or == null ? void 0 : Or.row,
-      Or == null ? void 0 : Or.col,
+      Or?.horizontal !== undefined,
+      Or?.vertical !== undefined,
+      Or?.row,
+      Or?.col,
     ].join(":"),
     an = E2e(za),
     Ra = an.views[an.activeId],
@@ -491,10 +491,7 @@ function rEe({
     Hr = Kc.result,
     Bd = !!Ui && Ui.snapshot !== H,
     Yc = !!he.frozenRows,
-    tc = ne.useMemo(
-      () => (Hr == null ? void 0 : Hr.hiddenRows) ?? cn(he, "row"),
-      [he, Hr],
-    ),
+    tc = ne.useMemo(() => Hr?.hiddenRows ?? cn(he, "row"), [he, Hr]),
     rc = ne.useMemo(() => cn(he, "column"), [he]),
     ni = ne.useMemo(() => ul(he.rowCount, tc), [he.rowCount, tc]),
     Sn = ne.useMemo(() => ul(he.colCount, rc), [he.colCount, rc]),
@@ -511,7 +508,8 @@ function rEe({
     if (!ni.isHidden(fe.row) && !Sn.isHidden(fe.col)) return;
     const Oe = ni.next(fe.row, 1, true) ?? ni.next(fe.row, -1, true),
       Be = Sn.next(fe.col, 1, true) ?? Sn.next(fe.col, -1, true);
-    if (Oe === null || Be === null || Oe === void 0 || Be === void 0) return;
+    if (Oe === null || Be === null || Oe === undefined || Be === undefined)
+      return;
     const Ue = `${ut(Be)}${Oe + 1}`;
     (or(Ue), Rr(Ue), (qt.current = Ue), dr(Ue), Go(Ue));
   }, [xt, ni, Sn]);
@@ -539,7 +537,7 @@ function rEe({
     range: Ye,
     selectionKey: br,
   };
-  const nc = ne.useRef(void 0);
+  const nc = ne.useRef(undefined);
   function _f() {
     (If((fe) => fe + 1), Bl(null), Ll(null), eo(null));
   }
@@ -681,9 +679,7 @@ function rEe({
       () => ({
         ...bn,
         ...he.rowHeights,
-        ...((ri == null ? void 0 : ri.axis) === "row"
-          ? { [ri.index]: ri.size }
-          : {}),
+        ...(ri?.axis === "row" ? { [ri.index]: ri.size } : {}),
       }),
       [bn, he.rowHeights, ri],
     ),
@@ -698,9 +694,7 @@ function rEe({
           Ks,
           {
             ...he.columnWidths,
-            ...((ri == null ? void 0 : ri.axis) === "column"
-              ? { [ri.index]: ri.size }
-              : {}),
+            ...(ri?.axis === "column" ? { [ri.index]: ri.size } : {}),
           },
           rc,
         ),
@@ -714,8 +708,8 @@ function rEe({
       if (!_r) return Uj(ln, Ni);
       const fe = {};
       for (const [Oe, Be] of Object.entries(en)) {
-        const Ue = sn == null ? void 0 : sn.get(Number(Oe));
-        Ue !== void 0 && Ue >= 0 && (fe[Ue] = Be);
+        const Ue = sn?.get(Number(Oe));
+        Ue !== undefined && Ue >= 0 && (fe[Ue] = Be);
       }
       return CS(_r.length, co, fe);
     }, [_r, sn, ln, Ni, en, co]),
@@ -818,14 +812,13 @@ function rEe({
     ne.useEffect(() => {
       if (!to.current || typeof ResizeObserver > "u") return;
       const Oe = new ResizeObserver((Be) => {
-        var Xe;
         const Ue = {};
         for (const gt of Be) {
           const Nt = Number(gt.target.dataset.row),
             wt = gt.target.offsetHeight;
           Number.isInteger(Nt) &&
-            ((Xe = he.rowHeights) == null ? void 0 : Xe[Nt]) === void 0 &&
-            (ri == null ? void 0 : ri.axis) !== "row" &&
+            he.rowHeights?.[Nt] === undefined &&
+            ri?.axis !== "row" &&
             wt > co &&
             (Ue[Nt] = wt);
         }
@@ -852,13 +845,13 @@ function rEe({
         return;
       }
       const Be = ro(fe.row);
-      if (Be === void 0 && fe.row >= Su) {
+      if (Be === undefined && fe.row >= Su) {
         (jr(""), po(null));
         return;
       }
       let Ue = na,
         Xe = va;
-      if (Be !== void 0 && Be >= 0) {
+      if (Be !== undefined && Be >= 0) {
         const Nt = Gn.offset(Be),
           wt = Gn.offset(Be + 1);
         let jt = Ea.logicalOffset;
@@ -911,13 +904,11 @@ function rEe({
     ne.useEffect(() => {
       (et(br),
         du("selection", () =>
-          y == null
-            ? void 0
-            : y({
-                sheetId: he.id,
-                range: Ye,
-                ...(Jt.length > 1 ? { ranges: Jt } : {}),
-              }),
+          y?.({
+            sheetId: he.id,
+            range: Ye,
+            ...(Jt.length > 1 ? { ranges: Jt } : {}),
+          }),
         ));
     }, [br, Ye, he.id, y]),
     ne.useEffect(() => {
@@ -933,12 +924,12 @@ function rEe({
             vn(Oe.warning ?? "Restored your locally saved workbook."),
             la("saved", Oe.workbook));
           try {
-            du("loaded", () => (b == null ? void 0 : b(Oe.workbook)));
+            du("loaded", () => b?.(Oe.workbook));
           } catch {
             hn("The host could not acknowledge the loaded workbook.");
           }
         }
-        se.current = !0;
+        se.current = true;
       } catch (Oe) {
         (As(Oe),
           (qe.current =
@@ -965,22 +956,20 @@ function rEe({
     ne.useEffect(() => {
       if (!k && !("coordination" in Se)) return;
       const fe = (Oe) => {
-        var Xe;
-        const Be = (Xe = le.current) == null ? void 0 : Xe.guard,
-          Ue = k ?? (Be == null ? void 0 : Be.namespace);
+        const Be = le.current?.guard,
+          Ue = k ?? Be?.namespace;
         if (!(!Ue || (Oe.key !== null && Oe.key !== Ue)))
           try {
             const gt = Se.load();
             if (
-              JSON.stringify((gt == null ? void 0 : gt.guard) ?? null) ===
-              JSON.stringify(Be ?? null)
+              JSON.stringify(gt?.guard ?? null) === JSON.stringify(Be ?? null)
             )
               return;
             As(
               new Oo(
                 "conflict",
                 "Another workbook window changed the saved version. Your local work has been retained.",
-                gt == null ? void 0 : gt.guard,
+                gt?.guard,
               ),
             );
           } catch (gt) {
@@ -995,10 +984,9 @@ function rEe({
     ne.useEffect(() => {
       if (!k && !I) return;
       const fe = (Oe) => {
-        var Be;
         (kr.current ||
           Ee.current.controllers.size ||
-          JSON.stringify((Be = le.current) == null ? void 0 : Be.workbook) !==
+          JSON.stringify(le.current?.workbook) !==
             JSON.stringify(sr.current.book)) &&
           (Oe.preventDefault(), (Oe.returnValue = ""));
       };
@@ -1044,8 +1032,7 @@ function rEe({
         Bl(null),
         Ll(null),
         () => {
-          var Oe;
-          return (Oe = ss.current) == null ? void 0 : Oe.abort();
+          return ss.current?.abort();
         }
       );
     }, [H, he.id, br, w]),
@@ -1066,14 +1053,14 @@ function rEe({
           Bl(Oe),
           Pr("assistant"),
           hn(""),
-          (fe = { accepted: !0 }));
+          (fe = { accepted: true }));
       } catch (Oe) {
         const Be =
           Oe instanceof Error ? Oe.message : "Invalid external proposal.";
         (hn(Be), (fe = { accepted: false, error: Be }));
       }
       try {
-        du("proposal", () => (z == null ? void 0 : z(j.requestId, fe)));
+        du("proposal", () => z?.(j.requestId, fe));
       } catch {
         hn("The host could not acknowledge the staged proposal.");
       }
@@ -1103,15 +1090,12 @@ function rEe({
   function la(fe, Oe, Be) {
     try {
       du("save-state", () => {
-        var Ue;
-        return (Ue = ye.current) == null
-          ? void 0
-          : Ue.call(ye, {
-              status: fe,
-              workbookId: Oe.id,
-              revision: Oe.revision,
-              ...(Be ? { message: Be } : {}),
-            });
+        return ye.current?.call(ye, {
+          status: fe,
+          workbookId: Oe.id,
+          revision: Oe.revision,
+          ...(Be ? { message: Be } : {}),
+        });
       });
     } catch {
       hn(
@@ -1198,7 +1182,7 @@ function rEe({
       ke(Oe.controllers.size);
       const Nt = setTimeout(() => {
           if (!Oe.active || Oe !== Ee.current) return;
-          ((Oe.stalled = !0),
+          ((Oe.stalled = true),
             D.start("persistence", "save").finish("failed", "timeout"),
             As(
               new Oo(
@@ -1214,7 +1198,7 @@ function rEe({
             Oe.active &&
               Oe === Ee.current &&
               (ke(Oe.controllers.size),
-              Oe.controllers.size || (Oe.stalled = !1)),
+              Oe.controllers.size || (Oe.stalled = false)),
             rr
           ),
           (rr) => (clearTimeout(Nt), Xe(rr)),
@@ -1226,7 +1210,7 @@ function rEe({
       return (
         (Oe.tail = jt),
         jt.then(() => {
-          Oe.tail === jt && (Oe.tail = void 0);
+          Oe.tail === jt && (Oe.tail = undefined);
         }),
         wt
       );
@@ -1268,7 +1252,7 @@ function rEe({
           Oe = yi(fe),
           Be = z2e(Se, fe);
         if (Be) {
-          ((se.current = !0),
+          ((se.current = true),
             Qc(Be, Ee.current),
             D.start("persistence", "save").finish("recovered"));
           return;
@@ -1281,7 +1265,7 @@ function rEe({
               "Saved data is available again. Compare it before replacing your local changes.",
               Xe.guard,
             );
-          se.current = !0;
+          se.current = true;
         }
         const Ue = _i(fe, Oe);
         Gv(Ue) && Ue.catch(() => {});
@@ -1303,19 +1287,13 @@ function rEe({
     return (
       la("saving", Be),
       Jc((gt) => {
-        var Nt;
         return TS(
-          Se.save(
-            Be,
-            Ue,
-            ((Nt = le.current) == null ? void 0 : Nt.guard) ?? null,
-            {
-              allowIdentityChange: !!(
-                le.current && le.current.workbook.id !== Be.id
-              ),
-              signal: gt,
-            },
-          ),
+          Se.save(Be, Ue, le.current?.guard ?? null, {
+            allowIdentityChange: !!(
+              le.current && le.current.workbook.id !== Be.id
+            ),
+            signal: gt,
+          }),
           (wt) => Qc(wt, Xe),
         );
       })
@@ -1359,7 +1337,7 @@ function rEe({
         "Loaded the saved workbook. The discarded local undo history has been cleared.",
       ));
     try {
-      du("change", () => (m == null ? void 0 : m(Oe.workbook)));
+      du("change", () => m?.(Oe.workbook));
     } catch {
       hn("The host could not acknowledge the reloaded workbook.");
     }
@@ -1417,7 +1395,7 @@ function rEe({
           As(wt);
         }
       try {
-        du("change", () => (m == null ? void 0 : m(fe)));
+        du("change", () => m?.(fe));
       } catch {
         hn(
           "The host could not acknowledge the change. Export JSON to retain this revision.",
@@ -1432,14 +1410,14 @@ function rEe({
           snapshot: H,
           report: Sue(H),
           fileName: H.xlsxSource.fileName,
-          inspectOnly: !0,
+          inspectOnly: true,
         }),
       );
       return;
     }
     if (ui()) {
       if (
-        (fe === "populationFilter" && Bn(void 0),
+        (fe === "populationFilter" && Bn(undefined),
         Jt.length > 1 &&
           ![
             "search",
@@ -1480,11 +1458,13 @@ function rEe({
         Zs(Bo.snapshot);
         return;
       }
-      (fe === "sheets" && ft(he.id), fe === "automation" && at(void 0), Je(fe));
+      (fe === "sheets" && ft(he.id),
+        fe === "automation" && at(undefined),
+        Je(fe));
     }
   }
   function So(fe, Oe) {
-    var gt, Nt;
+    var Nt;
     const Be = sr.current.book,
       Ue = sw(Be, fe, E, Oe),
       Xe = fe.sheets.find((wt) => !Be.sheets.some((jt) => jt.id === wt.id));
@@ -1493,10 +1473,8 @@ function rEe({
       true,
       Oe === "Unprotect sheet" &&
         !(
-          (Nt =
-            (gt = fe.sheets.find((wt) => wt.id === he.id)) == null
-              ? void 0
-              : gt.protection) != null && Nt.enabled
+          (Nt = fe.sheets.find((wt) => wt.id === he.id)?.protection) != null &&
+          Nt.enabled
         ),
     ),
       vn(Oe),
@@ -1535,7 +1513,7 @@ function rEe({
     try {
       if (Ue && fe.some((Xe) => Xe.sheetId !== Ue))
         throw Error("The formula destination changed.");
-      di(p0(sr.current.book, fe, E, Oe), !0, !1, void 0, !0, Ue);
+      di(p0(sr.current.book, fe, E, Oe), true, false, undefined, true, Ue);
     } catch (Xe) {
       throw (
         Xe instanceof jN &&
@@ -1571,9 +1549,9 @@ function rEe({
         (Be.start = Ue),
         (Be.end = Xe),
         (Oe || (Be.span && (Ue !== Be.span.end || Xe !== Ue))) &&
-          ((Be.span = void 0),
-          (Be.anchor = void 0),
-          (Be.head = void 0),
+          ((Be.span = undefined),
+          (Be.anchor = undefined),
+          (Be.head = undefined),
           zt(null))));
   }
   function ls() {
@@ -1594,10 +1572,7 @@ function rEe({
   function Ss() {
     var Oe;
     const fe = sr.current.book.sheets.find((Be) => {
-      var Ue;
-      return (
-        Be.id === (((Ue = kr.current) == null ? void 0 : Ue.sheetId) ?? he.id)
-      );
+      return Be.id === (kr.current?.sheetId ?? he.id);
     });
     return A || !fe || !!((Oe = fe.protection) != null && Oe.enabled);
   }
@@ -1609,8 +1584,8 @@ function rEe({
     const gt = Xe.span ?? J5(Ue.value, Xe.start, Xe.end);
     if (!gt) return false;
     const Nt = Oe && Xe.sheetId === he.id && Xe.anchor ? Xe.anchor : fe,
-      wt = (Be == null ? void 0 : Be.range) ?? (Nt === fe ? fe : wy(Nt, fe)),
-      jt = Uae(Ue.value, gt, wt, Ue.sheetId === he.id ? void 0 : he.name);
+      wt = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
+      jt = Uae(Ue.value, gt, wt, Ue.sheetId === he.id ? undefined : he.name);
     return (
       us(
         jt.value,
@@ -1625,7 +1600,7 @@ function rEe({
       zt({
         sheetId: he.id,
         range: wt,
-        bounds: (Be == null ? void 0 : Be.bounds) ?? ct(wt),
+        bounds: Be?.bounds ?? ct(wt),
       }),
       ls(),
       true
@@ -1744,8 +1719,8 @@ function rEe({
       Go(fe.address));
   }
   function us(fe, Oe = false) {
-    var Ue, Xe, gt, Nt;
-    const Be = kr.current ? void 0 : Qr.getSpillAnchor(he.id, xt);
+    var Ue;
+    const Be = kr.current ? undefined : Qr.getSpillAnchor(he.id, xt);
     if (Be && Be !== xt) {
       hn(
         `This cell belongs to the array formula in ${Be}. Edit that cell instead.`,
@@ -1754,23 +1729,18 @@ function rEe({
     }
     ((Ue = Ae.current) == null || Ue.abort(),
       (kr.current = {
-        sheetId: ((Xe = kr.current) == null ? void 0 : Xe.sheetId) ?? he.id,
-        address: ((gt = kr.current) == null ? void 0 : gt.address) ?? xt,
+        sheetId: kr.current?.sheetId ?? he.id,
+        address: kr.current?.address ?? xt,
         value: fe,
         locale: kr.current ? kr.current.locale : R.entryLocale,
-        originalText:
-          ((Nt = kr.current) == null ? void 0 : Nt.originalText) ??
-          L(he.cells[xt]),
+        originalText: kr.current?.originalText ?? L(he.cells[xt]),
       }),
       kt(fe),
       Oe && Ir(fe));
   }
   function pi() {
     requestAnimationFrame(() => {
-      var fe;
-      return (fe = to.current) == null
-        ? void 0
-        : fe.focus({ preventScroll: true });
+      return to.current?.focus({ preventScroll: true });
     });
   }
   function Da() {
@@ -1779,20 +1749,17 @@ function rEe({
       $l(),
       (kr.current = null),
       Ir(null),
-      kt((fe == null ? void 0 : fe.originalText) ?? L(he.cells[xt])),
+      kt(fe?.originalText ?? L(he.cells[xt])),
       pi());
   }
   function ui(fe) {
-    var Be, Ue;
     const Oe = kr.current;
     if (!Oe) return true;
     try {
       const Xe = zae(Oe.value),
-        gt =
-          (Be = sr.current.book.sheets.find((Nt) => Nt.id === Oe.sheetId)) ==
-          null
-            ? void 0
-            : Be.cells[Oe.address];
+        gt = sr.current.book.sheets.find((Nt) => Nt.id === Oe.sheetId)?.cells[
+          Oe.address
+        ];
       return (
         Xe !== Oe.originalText &&
           To(
@@ -1803,15 +1770,13 @@ function rEe({
                 cell: Mae(
                   Xe,
                   gt,
-                  (Ue = sr.current.book.datePolicy) == null
-                    ? void 0
-                    : Ue.dateSystem,
+                  sr.current.book.datePolicy?.dateSystem,
                   Oe.locale,
                 ),
               },
             ],
             "Edit cells",
-            void 0,
+            undefined,
             Oe.sheetId,
           ),
         (It.current =
@@ -1823,7 +1788,7 @@ function rEe({
         (kr.current = null),
         Ir(null),
         kt(Xe),
-        !0
+        true
       );
     } catch (Xe) {
       return (
@@ -1882,8 +1847,8 @@ function rEe({
         Co(0),
         rs(0),
         Ir(null),
-        (Ke.current.anchor = void 0),
-        (Ke.current.head = void 0),
+        (Ke.current.anchor = undefined),
+        (Ke.current.head = undefined),
         zt(null),
         ls());
       return;
@@ -1947,18 +1912,17 @@ function rEe({
         throw Error("Unmerge selected cells before changing border edges.");
       To(
         Oe.map((Be) => {
-          var Ue, Xe;
           return {
             sheetId: he.id,
             address: Be,
             cell: {
               ...he.cells[Be],
-              raw: ((Ue = he.cells[Be]) == null ? void 0 : Ue.raw) ?? null,
+              raw: he.cells[Be]?.raw ?? null,
               ...fe,
               ...(fe.style
                 ? {
                     style: {
-                      ...((Xe = he.cells[Be]) == null ? void 0 : Xe.style),
+                      ...he.cells[Be]?.style,
                       ...fe.style,
                     },
                   }
@@ -2022,9 +1986,9 @@ function rEe({
               },
               E,
               fe ? "Redo workbook change" : "Undo workbook change",
-              { restoringHistory: !0 },
+              { restoringHistory: true },
             );
-      (di(Be, !1),
+      (di(Be, false),
         fe
           ? (ia(Qi.slice(0, -1)), mo([...ns, H]))
           : (mo(ns.slice(0, -1)), ia([...Qi, H])),
@@ -2172,9 +2136,7 @@ function rEe({
         ...(ei === "visible"
           ? {
               population: {
-                definition:
-                  (Hr == null ? void 0 : Hr.context.definition) ??
-                  (Ui == null ? void 0 : Ui.definition),
+                definition: Hr?.context.definition ?? Ui?.definition,
                 scope: "visible",
               },
             }
@@ -2259,8 +2221,8 @@ function rEe({
         mo([]),
         ia([]),
         wi(fe.sheets.find((Oe) => !Oe.hidden).id),
-        Hc(!1),
-        Pl(!1),
+        Hc(false),
+        Pl(false),
         Pr(null));
     });
   }
@@ -2331,21 +2293,17 @@ function rEe({
   }
   function zl(fe) {
     On(() => {
-      var Nt;
       if ((rt(), fe.length > Mt.maxFileBytes))
         throw new Error("Clipboard text is too large.");
-      const Oe =
-        ((Nt = ku.current) == null ? void 0 : Nt.text) === fe
-          ? ku.current
-          : null;
-      if (Oe && (Bo == null ? void 0 : Bo.text) === fe) {
+      const Oe = ku.current?.text === fe ? ku.current : null;
+      if (Oe && Bo?.text === fe) {
         Zs(Bo.snapshot);
         return;
       }
       if (Oe) {
         const wt = i$(H, he.id, Ye, Oe.snapshot, {
           mode: "all",
-          deferValidationWarnings: !0,
+          deferValidationWarnings: true,
           readOnly: sr.current.readOnly,
         });
         (To(wt.patches, "Paste cells"), dr(wt.targetRange));
@@ -2353,7 +2311,7 @@ function rEe({
       }
       const Be = x7.parse(fe.replace(/\r?\n$/, ""), {
         delimiter: "	",
-        skipEmptyLines: !1,
+        skipEmptyLines: false,
       });
       if (Be.errors.length)
         throw new Error("Clipboard text contains malformed quoted cells.");
@@ -2366,19 +2324,12 @@ function rEe({
         throw new Error(`Paste at most ${Mt.maxPatches} cells at a time.`);
       (Ue.forEach((wt, jt) =>
         wt.forEach((rr, Mr) => {
-          var Sr;
           if (Xe.row + jt >= he.rowCount || Xe.col + Mr >= he.colCount)
             throw new Error(
               "Paste exceeds the Excel worksheet boundary (XFD1048576).",
             );
           const Br = `${ut(Xe.col + Mr)}${Xe.row + jt + 1}`,
-            xr = Gm(
-              rr,
-              he.cells[Br],
-              (Sr = sr.current.book.datePolicy) == null
-                ? void 0
-                : Sr.dateSystem,
-            );
+            xr = Gm(rr, he.cells[Br], sr.current.book.datePolicy?.dateSystem);
           gt.push({ sheetId: he.id, address: Br, cell: xr });
         }),
       ),
@@ -2410,12 +2361,11 @@ function rEe({
       if (!as) return;
       const fe = Object.keys(he.cells)
         .filter((Ue) => {
-          var gt;
           const Xe = _t(Ue);
           return (
             !ni.isHidden(Xe.row) &&
             !Sn.isHidden(Xe.col) &&
-            String(((gt = he.cells[Ue]) == null ? void 0 : gt.raw) ?? "")
+            String(he.cells[Ue]?.raw ?? "")
               .toLowerCase()
               .includes(as.toLowerCase())
           );
@@ -2444,10 +2394,8 @@ function rEe({
       const fe = new RegExp(as.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"),
         Oe = Ii()
           .filter((Be) => {
-            var Ue;
             return (
-              typeof ((Ue = he.cells[Be]) == null ? void 0 : Ue.raw) ==
-                "string" &&
+              typeof he.cells[Be]?.raw == "string" &&
               String(he.cells[Be].raw).toLowerCase().includes(as.toLowerCase())
             );
           })
@@ -2493,7 +2441,7 @@ function rEe({
         const Sr = wt(Be ? xr.row : xr.col);
         return Sr === null ? [] : [Sr];
       }),
-      Mr = w2e(jt, (Xe == null ? void 0 : Xe.length) ?? gt.count, rr, Ue),
+      Mr = w2e(jt, Xe?.length ?? gt.count, rr, Ue),
       Br = Xe ? Xe[Mr] : gt.logicalIndex(Mr);
     return Be ? { row: Br, col: Oe } : { row: fe, col: Br };
   }
@@ -2551,7 +2499,7 @@ function rEe({
           : Xe === 0 && gt === he.colCount - 1,
       wt = fe === "column" ? Xe : Be,
       jt = fe === "column" ? gt : Ue;
-    if (Oe !== void 0 && (!Nt || Oe < wt || Oe > jt)) return [Oe];
+    if (Oe !== undefined && (!Nt || Oe < wt || Oe > jt)) return [Oe];
     const rr = new Set();
     for (const Br of Pt()) {
       const xr = fe === "column" ? Br.col : Br.row;
@@ -2571,11 +2519,7 @@ function rEe({
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(([rr, Mr]) => {
-        var Br;
-        return (
-          (((Br = Xe[gt]) == null ? void 0 : Br[rr]) ??
-            (fe === "column" ? Og(Xe) : Dg(Xe))) !== Mr
-        );
+        return (Xe[gt]?.[rr] ?? (fe === "column" ? Og(Xe) : Dg(Xe))) !== Mr;
       })
     )
       return;
@@ -2604,33 +2548,14 @@ function rEe({
   }
   function Ko(fe, Oe) {
     On(() => {
-      var Nt, wt;
       if (je || sr.current.readOnly || !ui()) return;
       const Be = Cl(fe, Oe),
         Ue = sr.current.book.sheets.find((jt) => jt.id === he.id),
         Xe = Vn(sr.current.book),
         gt =
           fe === "column"
-            ? R2e(
-                Ue,
-                Be,
-                Xe,
-                Nu,
-                Gi,
-                (Nt = sr.current.book.datePolicy) == null
-                  ? void 0
-                  : Nt.dateSystem,
-              )
-            : _2e(
-                Ue,
-                Be,
-                Xe,
-                Nu,
-                Gi,
-                (wt = sr.current.book.datePolicy) == null
-                  ? void 0
-                  : wt.dateSystem,
-              );
+            ? R2e(Ue, Be, Xe, Nu, Gi, sr.current.book.datePolicy?.dateSystem)
+            : _2e(Ue, Be, Xe, Nu, Gi, sr.current.book.datePolicy?.dateSystem);
       (Oa(
         fe,
         gt,
@@ -2782,7 +2707,7 @@ function rEe({
     );
   }, [!!Fo]);
   function Qs(fe) {
-    var Nt, wt;
+    var wt;
     if (
       fe.target !== fe.currentTarget ||
       fe.defaultPrevented ||
@@ -2858,11 +2783,9 @@ function rEe({
     }
     if (fe.key === "Escape" && !fe.ctrlKey && !fe.metaKey && !fe.shiftKey) {
       (fe.preventDefault(),
-        (wt =
-          (Nt = lt.current) == null
-            ? void 0
-            : Nt.querySelector('[role="tab"][aria-selected="true"]')) == null ||
-          wt.focus());
+        (wt = lt.current?.querySelector(
+          '[role="tab"][aria-selected="true"]',
+        )) == null || wt.focus());
       return;
     }
     if (
@@ -2942,7 +2865,7 @@ function rEe({
       if (["b", "i", "u"].includes(jt)) {
         if ((fe.preventDefault(), !je)) {
           const rr = jt === "b" ? "bold" : jt === "i" ? "italic" : "underline";
-          Vi({ style: { [rr]: !ys(ur == null ? void 0 : ur.style)[rr] } });
+          Vi({ style: { [rr]: !ys(ur?.style)[rr] } });
         }
         return;
       }
@@ -2970,8 +2893,7 @@ function rEe({
         (fe.preventDefault(),
           Pl(true),
           requestAnimationFrame(() => {
-            var rr;
-            return (rr = Ld.current) == null ? void 0 : rr.focus();
+            return Ld.current?.focus();
           }));
         return;
       }
@@ -2987,7 +2909,7 @@ function rEe({
         fe.preventDefault();
         const rr = RC(he);
         da(
-          `${ut(Sn.next((rr == null ? void 0 : rr.lastCol) ?? 0, -1, true) ?? Sn.logicalIndex(0))}${(ni.next((rr == null ? void 0 : rr.lastRow) ?? 0, -1, true) ?? ni.logicalIndex(0)) + 1}`,
+          `${ut(Sn.next(rr?.lastCol ?? 0, -1, true) ?? Sn.logicalIndex(0))}${(ni.next(rr?.lastRow ?? 0, -1, true) ?? ni.logicalIndex(0)) + 1}`,
           fe.shiftKey,
         );
         return;
@@ -3085,7 +3007,9 @@ function rEe({
           "data-column": fe,
           "aria-colindex": fe + 2,
           className: `${_t(xt).col === fe ? "lg-selected-header" : ""} ${Oe ? "lg-frozen-column" : ""}`,
-          style: Oe ? { position: "sticky", left: _s[fe], zIndex: 7 } : void 0,
+          style: Oe
+            ? { position: "sticky", left: _s[fe], zIndex: 7 }
+            : undefined,
           onClick: (Be) => {
             ai(`${ut(fe)}1`, false, {
               range: `${ut(fe)}:${ut(fe)}`,
@@ -3118,7 +3042,7 @@ function rEe({
         fe,
       ),
     Ma = (fe, Oe, Be, Ue) => {
-      var Xe, gt;
+      var gt;
       return i.jsx(
         nEe,
         {
@@ -3134,8 +3058,8 @@ function rEe({
           rightGap: Be.rightGap,
           minimumHeight: en[fe] ?? co,
           fixedHeight:
-            ((Xe = he.rowHeights) == null ? void 0 : Xe[fe]) !== void 0 ||
-            ((ri == null ? void 0 : ri.axis) === "row" && ri.index === fe),
+            he.rowHeights?.[fe] !== undefined ||
+            (ri?.axis === "row" && ri.index === fe),
           onRowSelect: (Nt) => {
             ai(`A${fe + 1}`, false, {
               range: `${fe + 1}:${fe + 1}`,
@@ -3154,8 +3078,7 @@ function rEe({
           onFormulaKey: qa,
           formulaHelpId: `${$}-formula-help`,
           onFormulaPick: ai,
-          formulaReference:
-            (Tt == null ? void 0 : Tt.sheetId) === he.id ? Tt.bounds : null,
+          formulaReference: Tt?.sheetId === he.id ? Tt.bounds : null,
           formulaDraftActive: !!(
             (gt = kr.current) != null && gt.value.startsWith("=")
           ),
@@ -3204,11 +3127,9 @@ function rEe({
           mergeBounds: ic,
           displayedRows: Oe ? Dn : Be.shownRows,
           filterHeader:
-            Hr && fe === ct(Hr.context.range).firstRow ? Hr.fields : void 0,
+            Hr && fe === ct(Hr.context.range).firstRow ? Hr.fields : undefined,
           filteredColumns:
-            (Hr == null
-              ? void 0
-              : Hr.context.definition.columns.map((Nt) => Nt.column)) ?? [],
+            Hr?.context.definition.columns.map((Nt) => Nt.column) ?? [],
           onColumnFilter: (Nt) => {
             (Pn("populationFilter"), Bn(Nt));
           },
@@ -3261,7 +3182,7 @@ function rEe({
   }
   function Al(fe) {
     const Oe = _t(xt),
-      Be = zr || kn ? void 0 : ic.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
+      Be = zr || kn ? undefined : ic.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
       Ue = Be ? `${ut(Be.firstCol)}${Be.firstRow + 1}` : xt,
       Xe = an.views[fe],
       gt = Lo(Xe),
@@ -3299,7 +3220,7 @@ function rEe({
             [...Dn, ...jt].includes(_t(xt).row) &&
             [...Ln, ...rr].includes(_t(xt).col)
               ? `${$}-${fe}-${Ue}`
-              : void 0,
+              : undefined,
           "aria-label": Or
             ? `Worksheet pane ${fe.replace("-", " ")}`
             : T("Editable worksheet grid"),
@@ -3377,7 +3298,7 @@ function rEe({
               Sr.defaultPrevented ||
               (Sr.preventDefault(),
               On(() => {
-                (Sr.clipboardData.setData("text/plain", ed(!0)),
+                (Sr.clipboardData.setData("text/plain", ed(true)),
                   vn(
                     "Cut is ready. Select a destination and paste to preview the move.",
                   ));
@@ -3480,7 +3401,7 @@ function rEe({
             const Di = ro(Wi.row),
               $o = Wi.row < Su,
               Ds = Wi.col < Tu;
-            if (!$o && Di === void 0) return null;
+            if (!$o && Di === undefined) return null;
             const qo =
                 (Es +
                   (Ds
@@ -3514,9 +3435,11 @@ function rEe({
         ? A
           ? "The host has opened this workbook read-only."
           : "Unprotect the worksheet before editing."
-        : void 0,
+        : undefined,
     fo =
-      Jt.length > 1 ? "Select one rectangular range for this command." : void 0;
+      Jt.length > 1
+        ? "Select one rectangular range for this command."
+        : undefined;
   let Xa;
   try {
     _e && Ii();
@@ -3564,8 +3487,7 @@ function rEe({
     },
     {
       name: "Add / Edit Note",
-      run: () =>
-        Ia({ kind: "note", value: (ur == null ? void 0 : ur.note) ?? "" }),
+      run: () => Ia({ kind: "note", value: ur?.note ?? "" }),
       reason: no,
     },
     { name: "Comments", run: () => Pn("comments") },
@@ -3578,7 +3500,7 @@ function rEe({
     role: "region",
     "aria-label": H.name,
     onKeyDown: (fe) => {
-      var gt, Nt, wt;
+      var wt;
       if (
         fe.key !== "F6" ||
         fe.defaultPrevented ||
@@ -3593,14 +3515,10 @@ function rEe({
         return;
       fe.preventDefault();
       const Oe = [
-          (gt = lt.current) == null
-            ? void 0
-            : gt.querySelector('[role="tab"][aria-selected="true"]'),
+          lt.current?.querySelector('[role="tab"][aria-selected="true"]'),
           pt.current,
           to.current,
-          (Nt = lt.current) == null
-            ? void 0
-            : Nt.querySelector('[data-sheet-id][aria-current="true"]'),
+          lt.current?.querySelector('[data-sheet-id][aria-current="true"]'),
         ].filter((jt) => !!jt),
         Be = document.activeElement,
         Ue =
@@ -3625,15 +3543,13 @@ function rEe({
         children: [
           i.jsx("button", {
             onClick: () => {
-              var fe;
-              return (fe = to.current) == null ? void 0 : fe.focus();
+              return to.current?.focus();
             },
             children: i.jsx(M, { children: "Skip to worksheet" }),
           }),
           i.jsx("button", {
             onClick: () => {
-              var fe;
-              return (fe = pt.current) == null ? void 0 : fe.focus();
+              return pt.current?.focus();
             },
             children: i.jsx(M, { children: "Skip to formula bar" }),
           }),
@@ -3665,13 +3581,12 @@ function rEe({
               : lI(
                   Qr(he.id, xt),
                   he.cells[xt],
-                  (_u = H.datePolicy) == null ? void 0 : _u.dateSystem,
+                  H.datePolicy?.dateSystem,
                   R.entryLocale,
                 )
             ).slice(0, 250),
             formula:
-              typeof ((kl = he.cells[xt]) == null ? void 0 : kl.raw) ==
-                "string" &&
+              typeof he.cells[xt]?.raw == "string" &&
               String(he.cells[xt].raw).startsWith("=") &&
               !he.cells[xt].literal
                 ? R.message(" Formula: {formula}.", {
@@ -3724,7 +3639,6 @@ function rEe({
         }),
       $e &&
         (() => {
-          var Oe, Be;
           const fe = {
             mode: $e,
             workbook: H,
@@ -3782,7 +3696,7 @@ function rEe({
                     Xe,
                   ),
               },
-              (ze == null ? void 0 : ze.sha256) ?? "automation",
+              ze?.sha256 ?? "automation",
             );
           if ($e === "search" || $e === "goToSpecial")
             return i.jsx(
@@ -3822,7 +3736,7 @@ function rEe({
               {
                 ...fe,
                 mode: $e,
-                clipboard: (Oe = ku.current) == null ? void 0 : Oe.snapshot,
+                clipboard: ku.current?.snapshot,
                 onSelectionChange: dr,
               },
               $e,
@@ -3844,9 +3758,9 @@ function rEe({
               workbook: H,
               readOnly: A,
               persistent: !!(k || (F && I)),
-              checkpoints: (
-                (ce == null ? void 0 : ce.checkpoints) ?? []
-              ).filter((Ue) => Ue.workbookId === H.id),
+              checkpoints: (ce?.checkpoints ?? []).filter(
+                (Ue) => Ue.workbookId === H.id,
+              ),
               onClose: fe.onClose,
               onWorkbookChange: ua,
               onCreateWorkbook: (Ue) => {
@@ -3981,7 +3895,7 @@ function rEe({
               sheetId: he.id,
               range: Ye,
               column: An,
-              definition: Ui == null ? void 0 : Ui.definition,
+              definition: Ui?.definition,
               readOnly: A,
               onWorkbookChange: (Ue, Xe) => {
                 if (sr.current.book !== H)
@@ -4098,7 +4012,7 @@ function rEe({
               readOnly: je,
               initialFile: pl,
               onClose: () => {
-                (su(void 0), fe.onClose());
+                (su(undefined), fe.onClose());
               },
               onWorkbookChange: (Ue) => {
                 if (sr.current.book !== H || sr.current.readOnly)
@@ -4109,7 +4023,7 @@ function rEe({
               },
               onAutomation: async (Ue) => {
                 const Xe = await ow(Ue, Yu);
-                (at(Xe), su(void 0), Je("automation"));
+                (at(Xe), su(undefined), Je("automation"));
               },
             });
           if ($e === "reportOutputs")
@@ -4117,7 +4031,7 @@ function rEe({
               workbook: H,
               sheetId: he.id,
               range: Ye,
-              filter: Hr == null ? void 0 : Hr.context.definition,
+              filter: Hr?.context.definition,
               readOnly: A,
               allowHidden: true,
               onClose: fe.onClose,
@@ -4177,10 +4091,7 @@ function rEe({
             return $e === "consolidation"
               ? i.jsx(ice, {
                   ...Ue,
-                  initialDefinition:
-                    ((Be = he.consolidation) == null
-                      ? void 0
-                      : Be.definition) ?? l,
+                  initialDefinition: he.consolidation?.definition ?? l,
                   approvedWorkbooks: te,
                   onApprovedWorkbooksChange: ae,
                   allowFileSources: h && !!ae,
@@ -4311,7 +4222,7 @@ function rEe({
               ? "The workbook changed. Cancel and review again for the current revision."
               : "bytes" in oi && je
                 ? "This workbook is read-only. Import is unavailable."
-                : void 0,
+                : undefined,
           onClose: () => xs(null),
           onReport: (fe) =>
             Jd(
@@ -4378,7 +4289,7 @@ function rEe({
               ? "The workbook changed. Cancel and review the file again for the current revision."
               : vo.imported && je
                 ? "This workbook is read-only. Import is unavailable."
-                : void 0,
+                : undefined,
           onClose: () => Ml(null),
           onReport: () =>
             Jd(
@@ -4419,8 +4330,7 @@ function rEe({
               ".xlsx,.xltx,.xls,.xlsb,.xlsm,.xltm,.ods,.csv,.tsv,.json,.bas,.vba,.cls,.ts,.osts,.xlam",
             hidden: true,
             onChange: (fe) => {
-              var Oe;
-              return void Ns((Oe = fe.target.files) == null ? void 0 : Oe[0]);
+              return void Ns(fe.target.files?.[0]);
             },
             lang: N("Import workbook file"),
             "data-ui-label": "Import workbook file",
@@ -4446,8 +4356,7 @@ function rEe({
             onUndo: () => fu(),
             onRedo: () => fu(true),
             onImport: () => {
-              var fe;
-              return (fe = yl.current) == null ? void 0 : fe.click();
+              return yl.current?.click();
             },
             onExport: (fe) => void hu(fe),
             onNew: () => oc(t5()),
@@ -4490,7 +4399,7 @@ function rEe({
             onNote: () =>
               Ia({
                 kind: "note",
-                value: (ur == null ? void 0 : ur.note) ?? "",
+                value: ur?.note ?? "",
               }),
             onReviewed: () =>
               Vi({ tickmark: ur != null && ur.tickmark ? "" : "✓" }),
@@ -4520,11 +4429,8 @@ function rEe({
             workbook: H,
             sheetId: he.id,
             onReview: () => {
-              var fe;
               return Pn(
-                ((fe = he.analysisReport) == null
-                  ? void 0
-                  : fe.request.kind) === "solver"
+                he.analysisReport?.request.kind === "solver"
                   ? "solver"
                   : "statistics",
               );
@@ -4537,10 +4443,8 @@ function rEe({
           }),
           (_a.report.settings.mode === "manual" ||
             _a.report.pending > 0 ||
-            ((me = _a.report.execution) == null ? void 0 : me.state) ===
-              "timeout" ||
-            ((xe = _a.report.execution) == null ? void 0 : xe.state) ===
-              "failed") &&
+            _a.report.execution?.state === "timeout" ||
+            _a.report.execution?.state === "failed") &&
             i.jsxs("div", {
               className: "lg-notice",
               role: "status",
@@ -4558,10 +4462,8 @@ function rEe({
                     _a.report.pending,
                     " ",
                     i.jsx(M, { children: "pending formulas" }),
-                    ((Ne = _a.report.execution) == null ? void 0 : Ne.state) ===
-                      "timeout" ||
-                    ((Ve = _a.report.execution) == null ? void 0 : Ve.state) ===
-                      "failed"
+                    _a.report.execution?.state === "timeout" ||
+                    _a.report.execution?.state === "failed"
                       ? ` · ${_a.report.execution.message}`
                       : "",
                   ],
@@ -4570,8 +4472,7 @@ function rEe({
                   onClick: () => Pn("calculateNow"),
                   children: i.jsx(M, { children: "Calculate Now" }),
                 }),
-                ((Ge = _a.report.execution) == null ? void 0 : Ge.mode) ===
-                  "worker" &&
+                _a.report.execution?.mode === "worker" &&
                   _a.report.execution.state === "pending" &&
                   i.jsx("button", {
                     onClick: bl.cancel,
@@ -4714,7 +4615,7 @@ function rEe({
                         "aria-describedby":
                           (Et = kr.current) != null && Et.value.startsWith("=")
                             ? `${$}-formula-help`
-                            : void 0,
+                            : undefined,
                         onFocus: (fe) => {
                           (!kr.current && st.startsWith("=") && !je && us(st),
                             Zt(true),
@@ -4785,9 +4686,7 @@ function rEe({
                       }),
                     ],
                   }),
-                  ((dt = kr.current) == null
-                    ? void 0
-                    : dt.value.startsWith("=")) &&
+                  kr.current?.value.startsWith("=") &&
                     i.jsxs("div", {
                       className: "lg-formula-entry-help",
                       id: `${$}-formula-help`,
@@ -4797,19 +4696,11 @@ function rEe({
                           children: [
                             "Editing",
                             " ",
-                            (At = H.sheets.find((fe) => {
-                              var Oe;
-                              return (
-                                fe.id ===
-                                ((Oe = kr.current) == null
-                                  ? void 0
-                                  : Oe.sheetId)
-                              );
-                            })) == null
-                              ? void 0
-                              : At.name,
+                            H.sheets.find((fe) => {
+                              return fe.id === kr.current?.sheetId;
+                            })?.name,
                             "!",
-                            (Ft = kr.current) == null ? void 0 : Ft.address,
+                            kr.current?.address,
                             " ·",
                             " ",
                             Qe ? "Point mode" : "Edit mode",
@@ -4822,7 +4713,7 @@ function rEe({
                           "aria-atomic": "true",
                           "aria-label": "Formula reference",
                           children: Tt
-                            ? `Reference: ${(Ht = H.sheets.find((fe) => fe.id === Tt.sheetId)) == null ? void 0 : Ht.name}!${Tt.range}`
+                            ? `Reference: ${H.sheets.find((fe) => fe.id === Tt.sheetId)?.name}!${Tt.range}`
                             : "Formula not yet applied",
                         }),
                       ],
@@ -4859,7 +4750,7 @@ function rEe({
                                   value: "",
                                   onChange: (Oe) => {
                                     const Be = fe.list[Number(Oe.target.value)];
-                                    Be !== void 0 &&
+                                    Be !== undefined &&
                                       On(() => {
                                         (Da(),
                                           To(
@@ -4870,7 +4761,7 @@ function rEe({
                                                 cell: {
                                                   ...he.cells[xt],
                                                   raw: Be,
-                                                  literal: !0,
+                                                  literal: true,
                                                 },
                                               },
                                             ],
@@ -4981,15 +4872,12 @@ function rEe({
                         }),
                       ],
                     }),
-                  (KS(ur == null ? void 0 : ur.style) ||
-                    ((yr = H.styleCatalog) == null
-                      ? void 0
-                      : yr.missingTheme)) &&
+                  (KS(ur?.style) || H.styleCatalog?.missingTheme) &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
                       children: [
-                        KS(ur == null ? void 0 : ur.style) || bB(H).join(" "),
+                        KS(ur?.style) || bB(H).join(" "),
                         i.jsx("button", {
                           onClick: () => Pn("themes"),
                           children: i.jsx(M, {
@@ -5018,7 +4906,7 @@ function rEe({
                             ? "Filter paused — workbook changed"
                             : Kc.error
                               ? "Filter unavailable — source rows shown"
-                              : `${Hr == null ? void 0 : Hr.context.visibleRows} visible / ${Hr == null ? void 0 : Hr.context.totalRows} total data rows`,
+                              : `${Hr?.context.visibleRows} visible / ${Hr?.context.totalRows} total data rows`,
                         }),
                         Hr &&
                           i.jsxs("span", {
@@ -5086,7 +4974,7 @@ function rEe({
                           i.jsx("span", { role: "alert", children: Kc.error }),
                       ],
                     }),
-                  (Hr == null ? void 0 : Hr.context.visibleRows) === 0 &&
+                  Hr?.context.visibleRows === 0 &&
                     i.jsxs("div", {
                       className: "lg-population-empty",
                       role: "status",
@@ -5232,11 +5120,8 @@ function rEe({
                       children: [
                         i.jsx(M, { children: "Cut ready:" }),
                         " ",
-                        ((wr = H.sheets.find(
-                          (fe) => fe.id === Bo.snapshot.sheetId,
-                        )) == null
-                          ? void 0
-                          : wr.name) ?? "Deleted worksheet",
+                        H.sheets.find((fe) => fe.id === Bo.snapshot.sheetId)
+                          ?.name ?? "Deleted worksheet",
                         "!",
                         Bo.snapshot.range,
                         " ",
@@ -5279,7 +5164,7 @@ function rEe({
                                 "button",
                                 {
                                   "aria-current":
-                                    fe.id === he.id ? "true" : void 0,
+                                    fe.id === he.id ? "true" : undefined,
                                   className: fe.id === he.id ? "active" : "",
                                   "data-sheet-id": fe.id,
                                   tabIndex: fe.id === he.id ? 0 : -1,
@@ -5329,18 +5214,16 @@ function rEe({
                                               ];
                                     (wi(Xe.id),
                                       requestAnimationFrame(() => {
-                                        var gt, Nt;
-                                        return (Nt = Array.from(
-                                          ((gt = lt.current) == null
-                                            ? void 0
-                                            : gt.querySelectorAll(
-                                                "[data-sheet-id]",
-                                              )) ?? [],
-                                        ).find(
-                                          (wt) => wt.dataset.sheetId === Xe.id,
-                                        )) == null
-                                          ? void 0
-                                          : Nt.focus();
+                                        return Array.from(
+                                          lt.current?.querySelectorAll(
+                                            "[data-sheet-id]",
+                                          ) ?? [],
+                                        )
+                                          .find(
+                                            (wt) =>
+                                              wt.dataset.sheetId === Xe.id,
+                                          )
+                                          ?.focus();
                                       }));
                                   },
                                   onClick: () => wi(fe.id),
@@ -5348,7 +5231,7 @@ function rEe({
                                     ? {
                                         boxShadow: `inset 0 -3px ${fe.tabColor}`,
                                       }
-                                    : void 0,
+                                    : undefined,
                                   onDoubleClick: () => {
                                     ui() && (ft(fe.id), Je("sheets"));
                                   },
@@ -5417,10 +5300,7 @@ function rEe({
                             ba.current &&
                             i.jsx("button", {
                               onClick: () => {
-                                var fe;
-                                return (fe = ba.current) == null
-                                  ? void 0
-                                  : fe.abort();
+                                return ba.current?.abort();
                               },
                               children: i.jsx(M, {
                                 children: "Cancel file processing",
@@ -5953,7 +5833,7 @@ function rEe({
                               selectionLabel: Wa,
                               selectedCount: ie,
                               busy: Qu,
-                              proposalId: Xs == null ? void 0 : Xs.id,
+                              proposalId: Xs?.id,
                               onSend: No,
                               onCancel: () => {
                                 var fe;
@@ -6045,7 +5925,7 @@ function rEe({
                                                 Xs.id,
                                               ),
                                               Xs.patches.map((fe) => {
-                                                var Oe, Be, Ue, Xe;
+                                                var Be;
                                                 return i.jsxs(
                                                   "div",
                                                   {
@@ -6056,13 +5936,8 @@ function rEe({
                                                       }),
                                                       i.jsx("del", {
                                                         children: String(
-                                                          ((Oe =
-                                                            he.cells[
-                                                              fe.address
-                                                            ]) == null
-                                                            ? void 0
-                                                            : Oe.raw) ??
-                                                            "(blank)",
+                                                          he.cells[fe.address]
+                                                            ?.raw ?? "(blank)",
                                                         ),
                                                       }),
                                                       i.jsxs("span", {
@@ -6087,19 +5962,12 @@ function rEe({
                                                         children: [
                                                           [
                                                             "Value type",
-                                                            ((Ue =
-                                                              he.cells[
-                                                                fe.address
-                                                              ]) == null
-                                                              ? void 0
-                                                              : Ue.raw) == null
+                                                            he.cells[fe.address]
+                                                              ?.raw == null
                                                               ? "blank"
-                                                              : typeof ((Xe =
-                                                                  he.cells[
-                                                                    fe.address
-                                                                  ]) == null
-                                                                  ? void 0
-                                                                  : Xe.raw),
+                                                              : typeof he.cells[
+                                                                  fe.address
+                                                                ]?.raw,
                                                             fe.cell.raw === null
                                                               ? "blank"
                                                               : typeof fe.cell
@@ -6122,15 +5990,11 @@ function rEe({
                                                                 gt !== "raw",
                                                             )
                                                             .map((gt) => {
-                                                              var Nt;
                                                               return [
                                                                 gt,
-                                                                (Nt =
-                                                                  he.cells[
-                                                                    fe.address
-                                                                  ]) == null
-                                                                  ? void 0
-                                                                  : Nt[gt],
+                                                                he.cells[
+                                                                  fe.address
+                                                                ]?.[gt],
                                                                 fe.cell[gt],
                                                               ];
                                                             }),
@@ -6162,7 +6026,7 @@ function rEe({
                                                                         {
                                                                           children:
                                                                             Nt ===
-                                                                            void 0
+                                                                            undefined
                                                                               ? "(not set)"
                                                                               : JSON.stringify(
                                                                                   Nt,
@@ -6174,7 +6038,7 @@ function rEe({
                                                                         {
                                                                           children:
                                                                             wt ===
-                                                                            void 0
+                                                                            undefined
                                                                               ? "(not set)"
                                                                               : JSON.stringify(
                                                                                   wt,
@@ -6328,35 +6192,26 @@ function rEe({
                                               fe.changes
                                                 .slice(0, 5)
                                                 .map((Oe, Be) => {
-                                                  var Ue, Xe, gt;
                                                   return i.jsxs(
                                                     "small",
                                                     {
                                                       children: [
-                                                        ((Ue = H.sheets.find(
+                                                        H.sheets.find(
                                                           (Nt) =>
                                                             Nt.id ===
                                                             Oe.sheetId,
-                                                        )) == null
-                                                          ? void 0
-                                                          : Ue.name) ?? "Sheet",
+                                                        )?.name ?? "Sheet",
                                                         "!",
                                                         Oe.address,
                                                         ":",
                                                         " ",
                                                         String(
-                                                          ((Xe = Oe.before) ==
-                                                          null
-                                                            ? void 0
-                                                            : Xe.raw) ?? "∅",
+                                                          Oe.before?.raw ?? "∅",
                                                         ),
                                                         " →",
                                                         " ",
                                                         String(
-                                                          ((gt = Oe.after) ==
-                                                          null
-                                                            ? void 0
-                                                            : gt.raw) ?? "∅",
+                                                          Oe.after?.raw ?? "∅",
                                                         ),
                                                       ],
                                                     },
@@ -6489,8 +6344,7 @@ function rEe({
           onRetry: () => {
             (Rf(null),
               requestAnimationFrame(() => {
-                var fe;
-                return (fe = pt.current) == null ? void 0 : fe.focus();
+                return pt.current?.focus();
               }));
           },
           onCancel: () => {
@@ -6692,7 +6546,6 @@ function nEe({
             ],
           }),
         [...n, ...y].map((Te, Pe) => {
-          var _e, Ze;
           const qe = T.find((lt) => Tp(lt, b, Te));
           let ht = 1,
             Re = 1,
@@ -6710,12 +6563,12 @@ function nEe({
           const ke = X[Me],
             je = {
               ...ke,
-              raw: (ke == null ? void 0 : ke.raw) ?? null,
-              style: { ...(ke == null ? void 0 : ke.style), ...H(Me) },
+              raw: ke?.raw ?? null,
+              style: { ...ke?.style, ...H(Me) },
             },
             $e = K(Q, Me),
             Je =
-              typeof (je == null ? void 0 : je.raw) == "string" &&
+              typeof je?.raw == "string" &&
               je.raw.startsWith("=") &&
               !je.literal,
             ze = J === Me,
@@ -6741,15 +6594,15 @@ function nEe({
                     id: `${e}-${Me}`,
                     colSpan: ht,
                     rowSpan: Re,
-                    "aria-colspan": ht > 1 ? ht : void 0,
-                    "aria-rowspan": Re > 1 ? Re : void 0,
+                    "aria-colspan": ht > 1 ? ht : undefined,
+                    "aria-rowspan": Re > 1 ? Re : undefined,
                     role: "gridcell",
-                    "aria-label": `${Me} ${ge.entryLocale ? lI($e, je, (_e = C.datePolicy) == null ? void 0 : _e.dateSystem, ge.entryLocale) : String($e ?? "")}`,
+                    "aria-label": `${Me} ${ge.entryLocale ? lI($e, je, C.datePolicy?.dateSystem, ge.entryLocale) : String($e ?? "")}`,
                     "aria-colindex": Te + 2,
                     "aria-selected": W.some((lt) => Tp(lt, b, Te)),
                     "data-address": Me,
                     "data-formula-reference":
-                      B && Tp(B, b, Te) ? "true" : void 0,
+                      B && Tp(B, b, Te) ? "true" : undefined,
                     className: `${ze ? "lg-cell-active" : ""} ${W.some((lt) => Tp(lt, b, Te)) ? "lg-cell-selected" : ""} ${Je ? "lg-formula-cell" : ""} ${typeof $e == "string" && $e.startsWith("#") ? "lg-cell-error" : ""} ${n.includes(Te) ? "lg-frozen-column" : ""}`,
                     style: at,
                     title: `${Me}${je != null && je.note ? ` · ${je.note}` : ""}${Je ? ` · ${je.raw}` : ""}`,
@@ -6780,7 +6633,7 @@ function nEe({
                                 autoFocus: true,
                                 readOnly: Se,
                                 "aria-label": `Edit ${Me}`,
-                                "aria-describedby": _ ? V : void 0,
+                                "aria-describedby": _ ? V : undefined,
                                 value: ae,
                                 onSelect: (lt) => {
                                   (j(lt.currentTarget),
@@ -6872,16 +6725,11 @@ function nEe({
                                         children: i.jsx(jI, {
                                           value: $e,
                                           cell: je,
-                                          dateSystem:
-                                            (Ze = C.datePolicy) == null
-                                              ? void 0
-                                              : Ze.dateSystem,
+                                          dateSystem: C.datePolicy?.dateSystem,
                                         }),
                                       }),
                               }),
-                              ($ == null
-                                ? void 0
-                                : $.some((lt) => lt.column === Te)) &&
+                              $?.some((lt) => lt.column === Te) &&
                                 i.jsx("button", {
                                   className: "lg-header-filter",
                                   "aria-label": `Filter ${$.find((lt) => lt.column === Te).label} column`,
@@ -6894,7 +6742,7 @@ function nEe({
                                   lang: ce("Filter this column"),
                                   children: "▾",
                                 }),
-                              (je == null ? void 0 : je.hyperlink) &&
+                              je?.hyperlink &&
                                 (je.hyperlink.kind === "external"
                                   ? i.jsx("a", {
                                       className: "lg-cell-link",
@@ -6920,8 +6768,7 @@ function nEe({
                                       onClick: (lt) => {
                                         lt.stopPropagation();
                                         const be = je.hyperlink;
-                                        (be == null ? void 0 : be.kind) ===
-                                          "internal" &&
+                                        be?.kind === "internal" &&
                                           g(be.sheetId, be.address);
                                       },
                                       children: "↗",
@@ -6941,9 +6788,9 @@ function nEe({
                                   lang: ce("Open review discussion"),
                                   children: "●",
                                 }),
-                              (je == null ? void 0 : je.note) &&
+                              je?.note &&
                                 i.jsx("i", { className: "lg-note-marker" }),
-                              (je == null ? void 0 : je.tickmark) &&
+                              je?.tickmark &&
                                 i.jsx("span", {
                                   className: "lg-tick",
                                   children: je.tickmark,

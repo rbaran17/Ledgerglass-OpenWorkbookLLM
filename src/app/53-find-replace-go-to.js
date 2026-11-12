@@ -45,9 +45,8 @@ import {
 } from "./52-workbook-comparison.js";
 
 function m2e(e, r, t, n = {}) {
-  var p, m, v;
   (n.readOnly && Eo("This workbook is read-only."),
-    n.readOnly !== void 0 &&
+    n.readOnly !== undefined &&
       typeof n.readOnly != "boolean" &&
       Eo("Read-only must be boolean."),
     (typeof t != "string" || t.length > 32767) &&
@@ -105,15 +104,13 @@ function m2e(e, r, t, n = {}) {
   }
   const f = {
     targetSheetId:
-      ((p = l[0]) == null ? void 0 : p.sheetId) ??
-      ((m = e.sheets.find((g) => {
+      l[0]?.sheetId ??
+      e.sheets.find((g) => {
         var b;
         return !((b = g.protection) != null && b.enabled);
-      })) == null
-        ? void 0
-        : m.id) ??
+      })?.id ??
       a.sheetId,
-    targetRange: ((v = l[0]) == null ? void 0 : v.address) ?? a.range,
+    targetRange: l[0]?.address ?? a.range,
     targetCount: l.length,
     matchedCells: u.length,
     replacedCells: l.length,
@@ -137,7 +134,7 @@ function m2e(e, r, t, n = {}) {
 function g2e(e, r, t = {}) {
   return r.count
     ? tI(e, r, t)
-    : (t.readOnly !== void 0 &&
+    : (t.readOnly !== undefined &&
         typeof t.readOnly != "boolean" &&
         Eo("Read-only must be boolean."),
       t.readOnly && Eo("This workbook is read-only."),
@@ -252,7 +249,7 @@ function b2e(e, r, t) {
         );
       const w = a(o.id, m);
       t === "blanks"
-        ? (y = ((g == null ? void 0 : g.raw) === null || !g) && w === null)
+        ? (y = (g?.raw === null || !g) && w === null)
         : (y =
             (b || !!a.getSpillAnchor(o.id, m)) &&
             typeof w == "string" &&
@@ -281,7 +278,6 @@ const qm = (e) =>
         : String(e),
   Bv = 20;
 function y2e(e) {
-  var ht;
   const { text: r, language: t } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -293,9 +289,8 @@ function y2e(e) {
       range: e.range,
       ranges: e.ranges ? [...e.ranges] : [e.range],
       sheetName:
-        ((ht = e.workbook.sheets.find((Re) => Re.id === e.sheetId)) == null
-          ? void 0
-          : ht.name) ?? "Worksheet",
+        e.workbook.sheets.find((Re) => Re.id === e.sheetId)?.name ??
+        "Worksheet",
     }),
     [u, l] = ne.useState(e.initialTab ?? "find"),
     [c, h] = ne.useState("sheet"),
@@ -340,16 +335,13 @@ function y2e(e) {
       oe());
   }
   ne.useEffect(() => {
-    var Me, ke, je;
+    var je;
     const Re = document.activeElement;
     return (
       (je =
         a.current ??
-        ((Me = o.current) == null
-          ? void 0
-          : Me.querySelector("select,input")) ??
-        ((ke = o.current) == null ? void 0 : ke.querySelector("button"))) ==
-        null || je.focus(),
+        o.current?.querySelector("select,input") ??
+        o.current?.querySelector("button")) == null || je.focus(),
       () => {
         Re != null && Re.isConnected && Re.focus();
       }
@@ -443,15 +435,12 @@ function y2e(e) {
         te(
           Object.fromEntries(
             Me.previewPatches.map((ke) => {
-              var $e;
               const je = Nr(s.current.workbook, ke.sheetId);
               return [
                 `${ke.sheetId}:${ke.address}`,
                 {
                   sheetName: je.name,
-                  raw:
-                    (($e = je.cells[ke.address]) == null ? void 0 : $e.raw) ??
-                    null,
+                  raw: je.cells[ke.address]?.raw ?? null,
                 },
               ];
             }),
@@ -512,12 +501,9 @@ function y2e(e) {
         J(qm(Re));
       }
   }
-  const Ae = Math.max(1, Math.ceil(((B == null ? void 0 : B.total) ?? 0) / Bv)),
+  const Ae = Math.max(1, Math.ceil((B?.total ?? 0) / Bv)),
     ye = Math.min(U, Ae - 1),
-    Te = Math.max(
-      1,
-      Math.ceil(((N == null ? void 0 : N.previewPatches.length) ?? 0) / Bv),
-    ),
+    Te = Math.max(1, Math.ceil((N?.previewPatches.length ?? 0) / Bv)),
     Pe = Math.min(H, Te - 1),
     qe = !!(
       (B &&
@@ -541,16 +527,14 @@ function y2e(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       onKeyDown: (Re) => {
-        var Me, ke;
+        var ke;
         if (Re.key === "Escape")
           (Re.preventDefault(), Re.stopPropagation(), s.current.onClose());
         else if (Re.key === "Tab") {
           const je = Array.from(
-              ((Me = o.current) == null
-                ? void 0
-                : Me.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ).filter((ze) => !ze.hidden),
             $e = je[0],
             Je = je.at(-1);
@@ -605,7 +589,7 @@ function y2e(e) {
                 tabIndex: u === Re ? 0 : -1,
                 onClick: () => de(Re),
                 onKeyDown: (je) => {
-                  var $e, Je;
+                  var Je;
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(je.key)
                   ) {
@@ -618,10 +602,8 @@ function y2e(e) {
                             ? 2
                             : (ke + (je.key === "ArrowRight" ? 1 : 2)) % 3;
                     (de(ze[at]),
-                      (Je =
-                        ($e = je.currentTarget.parentElement) == null
-                          ? void 0
-                          : $e.children[at]) == null || Je.focus());
+                      (Je = je.currentTarget.parentElement?.children[at]) ==
+                        null || Je.focus());
                   }
                 },
                 children: Me,
@@ -978,8 +960,8 @@ function y2e(e) {
                               "tr",
                               {
                                 className:
-                                  (C == null ? void 0 : C.sheetId) ===
-                                    Re.sheetId && C.address === Re.address
+                                  C?.sheetId === Re.sheetId &&
+                                  C.address === Re.address
                                     ? "st-selected"
                                     : "",
                                 children: [
@@ -1110,18 +1092,14 @@ function y2e(e) {
                           children: N.previewPatches
                             .slice(Pe * Bv, (Pe + 1) * Bv)
                             .map((Re) => {
-                              var Me, ke;
                               return i.jsxs(
                                 "tr",
                                 {
                                   children: [
                                     i.jsxs("td", {
                                       children: [
-                                        ((Me =
-                                          K[`${Re.sheetId}:${Re.address}`]) ==
-                                        null
-                                          ? void 0
-                                          : Me.sheetName) ?? Re.sheetId,
+                                        K[`${Re.sheetId}:${Re.address}`]
+                                          ?.sheetName ?? Re.sheetId,
                                         "!",
                                         Re.address,
                                       ],
@@ -1129,11 +1107,7 @@ function y2e(e) {
                                     i.jsx("td", {
                                       className: "st-value",
                                       children: Pj(
-                                        (ke =
-                                          K[`${Re.sheetId}:${Re.address}`]) ==
-                                          null
-                                          ? void 0
-                                          : ke.raw,
+                                        K[`${Re.sheetId}:${Re.address}`]?.raw,
                                       ),
                                     }),
                                     i.jsx("td", {
@@ -1356,11 +1330,11 @@ function C2e(e) {
     className: `lg-pane-layout ${c ? "is-split" : ""}`,
     style: {
       gridTemplateColumns:
-        (c == null ? void 0 : c.vertical) !== void 0
+        c?.vertical !== undefined
           ? `minmax(0,${c.vertical}fr) 7px minmax(0,${100 - c.vertical}fr)`
           : "minmax(0,1fr)",
       gridTemplateRows:
-        (c == null ? void 0 : c.horizontal) !== void 0
+        c?.horizontal !== undefined
           ? `minmax(0,${c.horizontal}fr) 7px minmax(0,${100 - c.horizontal}fr)`
           : "minmax(0,1fr)",
     },
@@ -1381,7 +1355,7 @@ function C2e(e) {
         ),
       ),
       ["horizontal", "vertical"].map((f) =>
-        (c == null ? void 0 : c[f]) === void 0
+        c?.[f] === undefined
           ? null
           : i.jsx(
               "div",
@@ -1436,12 +1410,8 @@ function C2e(e) {
                       g.call(v, p.pointerId));
                 },
                 onPointerMove: (p) => {
-                  var w;
                   const m = d.current,
-                    v =
-                      (w = n.current) == null
-                        ? void 0
-                        : w.getBoundingClientRect();
+                    v = n.current?.getBoundingClientRect();
                   if (!m || !v) return;
                   const g = f === "horizontal" ? v.height : v.width;
                   if (g <= 0) return;
@@ -1503,10 +1473,7 @@ function dH(e, r) {
   var n;
   if (!(r instanceof Node)) return false;
   const t = document.getElementById(e.getAttribute("aria-controls") ?? "");
-  return !!(
-    (n = t == null ? void 0 : t.closest(".formula-suggestions")) != null &&
-    n.contains(r)
-  );
+  return !!((n = t?.closest(".formula-suggestions")) != null && n.contains(r));
 }
 const fH = ne.forwardRef(function (
     {
@@ -1664,7 +1631,7 @@ const fH = ne.forwardRef(function (
                     "aria-label": "Formula suggestions",
                     tabIndex: 0,
                     "aria-activedescendant":
-                      p >= 0 && f.items[p] ? `${c}-${p}` : void 0,
+                      p >= 0 && f.items[p] ? `${c}-${p}` : undefined,
                     onFocus: () => {
                       (y(true), p < 0 && m(0));
                     },
@@ -1758,7 +1725,7 @@ const fH = ne.forwardRef(function (
   S2e = 1.35,
   hH = (e, r, t) => Math.max(r, Math.min(t, e));
 function pH(e) {
-  const r = ys(e == null ? void 0 : e.style),
+  const r = ys(e?.style),
     t = r != null && r.fontSize ? `${r.fontSize}pt` : "14px",
     n =
       r != null && r.fontFamily
@@ -1836,13 +1803,10 @@ function N2e(e, r) {
   );
 }
 function vH(e, r) {
-  var t;
   return (
     k2e +
     hB(e.style).horizontal +
-    (((t = e.style) == null ? void 0 : t.align) === "center"
-      ? 0
-      : fB(e.style)) +
+    (e.style?.align === "center" ? 0 : fB(e.style)) +
     N2e(e, r)
   );
 }

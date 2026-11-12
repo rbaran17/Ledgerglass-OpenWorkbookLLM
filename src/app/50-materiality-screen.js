@@ -16,7 +16,14 @@ import { U1, ct, ut } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { MC, OC } from "./07-xlsx-archive-reader.js";
 import { yh } from "./09-workbook-links.js";
-import { II, Iz, Rz, l3, mde, pde } from "./21-aging-and-materiality-screens.js";
+import {
+  II,
+  Iz,
+  Rz,
+  l3,
+  mde,
+  pde,
+} from "./21-aging-and-materiality-screens.js";
 import { Aj, L4e, kj } from "./49-outlines-and-comments.js";
 
 function P4e(e) {
@@ -89,10 +96,7 @@ function P4e(e) {
       : null,
     we = Aj(c),
     Ee = se != null && se.disclose ? N : null,
-    Ae =
-      (Ee == null
-        ? void 0
-        : Ee.rows.filter((Me) => K === "all" || Me.disposition === K)) ?? [],
+    Ae = Ee?.rows.filter((Me) => K === "all" || Me.disposition === K) ?? [],
     ye = Math.max(1, Math.ceil(Ae.length / II.pageSize)),
     Te = Math.min(q, ye - 1),
     Pe = (Me) => {
@@ -105,15 +109,12 @@ function P4e(e) {
         J(""));
     };
   ne.useEffect(() => {
-    var ke, je;
+    var je;
     u.current = true;
     const Me = document.activeElement;
     return (
-      (je =
-        (ke = a.current) == null
-          ? void 0
-          : ke.querySelector('[data-ui-label="Source range"]')) == null ||
-        je.focus(),
+      (je = a.current?.querySelector('[data-ui-label="Source range"]')) ==
+        null || je.focus(),
       () => {
         ((u.current = false),
           d.current++,
@@ -200,18 +201,16 @@ function P4e(e) {
       "aria-labelledby": `${o}-title`,
       ref: a,
       onKeyDown: (Me) => {
-        var ke, je, $e;
+        var je, $e;
         if (
           (Me.stopPropagation(),
           Me.key === "Escape" && (Me.preventDefault(), e.onClose()),
           Me.key === "Tab")
         ) {
           const Je = Array.from(
-            ((ke = a.current) == null
-              ? void 0
-              : ke.querySelectorAll(
-                  'button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
-                )) ?? [],
+            a.current?.querySelectorAll(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
+            ) ?? [],
           ).filter(
             (ze) =>
               !ze.closest("details:not([open])") || ze.tagName === "SUMMARY",
@@ -463,8 +462,7 @@ function P4e(e) {
                   type: "file",
                   accept: "application/json,.json",
                   onChange: (Me) => {
-                    var je;
-                    const ke = (je = Me.target.files) == null ? void 0 : je[0];
+                    const ke = Me.target.files?.[0];
                     ((Me.target.value = ""), Re(ke));
                   },
                   lang: t("Load saved configuration"),
@@ -959,12 +957,11 @@ function V4e(e, r) {
         .slice(0, 10);
 }
 function yw(e, r) {
-  var u;
   if (!Number.isFinite(e) || Math.abs(e) > 1e15) return null;
   const [t, n = "0"] = Math.abs(e).toString().split("e"),
     o = t.split("."),
     a = BigInt(o.join("")),
-    s = r - (((u = o[1]) == null ? void 0 : u.length) ?? 0) + Number(n);
+    s = r - (o[1]?.length ?? 0) + Number(n);
   if (s >= 0) return a * 10n ** BigInt(s);
   const d = 10n ** BigInt(-s);
   return a % d === 0n ? a / d : null;
@@ -1075,8 +1072,7 @@ function Rj(e, r) {
     (t.groups = new Set(r.map((o) => o.group.id)).size),
     (t.findings = r.length));
   const n = r.reduce((o, a) => {
-    var s;
-    return o + BigInt(((s = a.missing) == null ? void 0 : s.count) ?? 0);
+    return o + BigInt(a.missing?.count ?? 0);
   }, 0n);
   return (
     n > BigInt(Number.MAX_SAFE_INTEGER) &&
@@ -1273,7 +1269,7 @@ function W4e(e, r, t = {}) {
           ) {
             const U = R.slice(
               y.prefix.length,
-              y.suffix ? R.length - y.suffix.length : void 0,
+              y.suffix ? R.length - y.suffix.length : undefined,
             );
             /^\d{1,15}$/.test(U) && ($ = Number(U));
           }
@@ -1590,14 +1586,14 @@ function YW(e, r, t, n = {}) {
         )
       : o.request !== JSON.stringify(s)
         ? {
-            current: !1,
-            disclose: !0,
+            current: false,
+            disclose: true,
             reason:
               "Settings changed. This is a previous result; run checks again before export.",
           }
         : {
-            current: !0,
-            disclose: !0,
+            current: true,
+            disclose: true,
             reason: "Current source and rule configuration.",
           };
   } catch {

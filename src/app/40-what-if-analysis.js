@@ -56,14 +56,11 @@ function $xe(e) {
       JSON.stringify(T.context.allowedSheetIds) === JSON.stringify(U),
     J = (e.workbook.whatIfAnalyses ?? []).filter((ge) => v_(e.workbook, ge, $));
   (ne.useEffect(() => {
-    var se, we;
+    var we;
     const ge = document.activeElement;
     return (
-      (we =
-        (se = u.current) == null
-          ? void 0
-          : se.querySelector('[data-ui-label="Analysis name"]')) == null ||
-        we.focus(),
+      (we = u.current?.querySelector('[data-ui-label="Analysis name"]')) ==
+        null || we.focus(),
       () => {
         ge != null && ge.isConnected && ge.focus();
       }
@@ -184,7 +181,7 @@ function $xe(e) {
       W(() => {
         T &&
           (e.onWorkbookChange(
-            Pxe(e.workbook, T, $, D || void 0),
+            Pxe(e.workbook, T, $, D || undefined),
             `Save what-if report: ${T.request.name}`,
           ),
           N(null));
@@ -227,18 +224,16 @@ function $xe(e) {
       "aria-modal": "true",
       "aria-labelledby": `${d}-title`,
       onKeyDown: (ge) => {
-        var se, we, Ee;
+        var we, Ee;
         if (
           (ge.stopPropagation(),
           ge.key === "Escape" && (ge.preventDefault(), e.onClose()),
           ge.key === "Tab")
         ) {
           const Ae = [
-            ...(((se = u.current) == null
-              ? void 0
-              : se.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
-                )) ?? []),
+            ...(u.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
+            ) ?? []),
           ].filter(
             (ye) =>
               !ye.hidden &&
@@ -882,7 +877,6 @@ function zxe({
   onExport: o,
   onReport: a,
 }) {
-  var T, N;
   const { text: s, language: d } = Dr(),
     u = "bytes" in e,
     l = ne.useId(),
@@ -891,7 +885,6 @@ function zxe({
     f = ne.useRef(0),
     p = ne.useRef(null),
     [m, v] = ne.useState(() => {
-      var R, L, $;
       return {
         ...U$,
         columns: {},
@@ -906,30 +899,26 @@ function zxe({
               encoding: "utf-8",
               newline: `\r
 `,
-              range:
-                ((R = e.population) == null ? void 0 : R.range) ??
-                z$(e.snapshot, e.sheetId),
+              range: e.population?.range ?? z$(e.snapshot, e.sheetId),
               ...(e.population
                 ? { population: { definition: e.population, scope: "full" } }
                 : {}),
               hasHeader: e.population
                 ? true
-                : ((($ =
-                    (L = e.snapshot.sheets.find((U) => U.id === e.sheetId)) ==
-                    null
-                      ? void 0
-                      : L.delimitedSource) == null
-                    ? void 0
-                    : $.hasHeader) ?? true),
+                : (e.snapshot.sheets.find((U) => U.id === e.sheetId)
+                    ?.delimitedSource?.hasHeader ?? true),
             }),
       };
     }),
     g = (R) => {
       try {
-        return { result: u ? void 0 : V$(e.snapshot, e.sheetId, R), error: "" };
+        return {
+          result: u ? undefined : V$(e.snapshot, e.sheetId, R),
+          error: "",
+        };
       } catch (L) {
         return {
-          result: void 0,
+          result: undefined,
           error: L instanceof Error ? L.message : "Preview failed.",
         };
       }
@@ -941,8 +930,8 @@ function zxe({
     [A, k] = ne.useState(false),
     [F, I] = ne.useState(0),
     [O, j] = ne.useState(""),
-    z = (T = b.result) == null ? void 0 : T.report,
-    V = Math.max(1, Math.ceil(((z == null ? void 0 : z.columns) ?? 1) / 20));
+    z = b.result?.report,
+    V = Math.max(1, Math.ceil((z?.columns ?? 1) / 20));
   function D(R, L) {
     var $;
     (v((U) => ({ ...U, [R]: L })),
@@ -1030,18 +1019,15 @@ function zxe({
       ref: c,
       className: "lg-delimited-review",
       onKeyDown: (R) => {
-        var L;
         if (
           (R.stopPropagation(),
           R.key === "Escape" && (R.preventDefault(), t()),
           R.key === "Tab")
         ) {
           const $ = [
-              ...(((L = c.current) == null
-                ? void 0
-                : L.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
-                  )) ?? []),
+              ...(c.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
+              ) ?? []),
             ],
             U = $[0],
             G = $.at(-1);
@@ -1088,8 +1074,7 @@ function zxe({
                   i.jsx(M, { children: "Export population" }),
                   i.jsxs("select", {
                     "aria-label": s("Export population"),
-                    value:
-                      ((N = m.population) == null ? void 0 : N.scope) ?? "full",
+                    value: m.population?.scope ?? "full",
                     onChange: (R) =>
                       D("population", {
                         definition: e.population,
@@ -1428,7 +1413,7 @@ function zxe({
                                   R.column ? `, column ${R.column}` : "",
                                   ": ",
                                   R.message,
-                                  R.value !== void 0
+                                  R.value !== undefined
                                     ? ` Value: ${R.value}`
                                     : "",
                                 ],
@@ -1667,18 +1652,11 @@ class Wxe {
     this.ts = r;
   }
   peek(r) {
-    var t;
-    return r === void 0
-      ? this.ts[this.pos]
-      : ((t = this.ts[this.pos]) == null ? void 0 : t.value) === r;
+    return r === undefined ? this.ts[this.pos] : this.ts[this.pos]?.value === r;
   }
   error(r) {
-    var t, n;
     throw {
-      line:
-        ((t = this.ts[this.pos]) == null ? void 0 : t.line) ??
-        ((n = this.ts.at(-1)) == null ? void 0 : n.line) ??
-        1,
+      line: this.ts[this.pos]?.line ?? this.ts.at(-1)?.line ?? 1,
       message: r,
     };
   }
@@ -1686,7 +1664,7 @@ class Wxe {
     const t = this.ts[this.pos++];
     return (
       (!t ||
-        (r !== void 0 &&
+        (r !== undefined &&
           (t.value !== r ||
             t.type !== ("().,;:=[]{}+-".includes(r) ? "symbol" : "id")))) &&
         (this.pos--,

@@ -47,7 +47,19 @@ import {
   y0,
 } from "./02-number-formats.js";
 import { Ba, ane, eg, g5, m5, pO } from "./03-defined-names.js";
-import { Gl, M5, Mie, Rie, dp, jie, kR, nU, oU, pf, wn } from "./04-pivot-tables-and-pictures.js";
+import {
+  Gl,
+  M5,
+  Mie,
+  Rie,
+  dp,
+  jie,
+  kR,
+  nU,
+  oU,
+  pf,
+  wn,
+} from "./04-pivot-tables-and-pictures.js";
 
 function Ty(e, r, t = {}) {
   var b;
@@ -59,7 +71,7 @@ function Ty(e, r, t = {}) {
   const n = eg(e.definedNames, e),
     o =
       r.kind === "create"
-        ? void 0
+        ? undefined
         : n.find(
             (y) =>
               y.name.toLowerCase() === r.name.toLowerCase() &&
@@ -81,30 +93,24 @@ function Ty(e, r, t = {}) {
   if (
     a &&
     e.sheets.some((y) => {
-      var w;
-      return (w = y.tables) == null
-        ? void 0
-        : w.some((E) => E.name.toLowerCase() === a.name.toLowerCase());
+      return y.tables?.some(
+        (E) => E.name.toLowerCase() === a.name.toLowerCase(),
+      );
     })
   )
     throw Error("A table already uses this name.");
   const s = structuredClone(e),
-    d = o ? Ba(o) : void 0;
+    d = o ? Ba(o) : undefined;
   ((s.definedNames = eg(
     [...n.filter((y) => Ba(y) !== d), ...(a ? [a] : [])],
     e,
   )),
     o && a && (s.definedNames = n.map((y) => (Ba(y) === d ? a : y))));
-  const u =
-      (a == null ? void 0 : a.scopeSheetId) ??
-      (o == null ? void 0 : o.scopeSheetId),
+  const u = a?.scopeSheetId ?? o?.scopeSheetId,
     l = (y) => {
-      var w, E;
+      var E;
       if (
-        (E =
-          (w = e.sheets.find((A) => A.id === y)) == null
-            ? void 0
-            : w.protection) != null &&
+        (E = e.sheets.find((A) => A.id === y)?.protection) != null &&
         E.enabled
       )
         throw Error(
@@ -141,7 +147,7 @@ function Ty(e, r, t = {}) {
         throw Error("The name dependency chain exceeds 32 levels.");
       for (const A of m(y)) {
         const k = dp(A, e, w),
-          F = r.kind === "create" ? dp(A, s, w) : void 0;
+          F = r.kind === "create" ? dp(A, s, w) : undefined;
         if (F && Ba(F) === Ba(a) && (!k || Ba(k) !== Ba(F))) return true;
         if (!k) {
           if (r.kind === "create" && dp(A, s, w) && Ba(dp(A, s, w)) === Ba(a))
@@ -221,7 +227,7 @@ function Ty(e, r, t = {}) {
         if (
           w.some((V, D) => {
             const B = dp(I, s, V);
-            return (O[D] ? Ba(O[D]) : void 0) !== (B ? Ba(B) : void 0);
+            return (O[D] ? Ba(O[D]) : undefined) !== (B ? Ba(B) : undefined);
           })
         )
           throw Error(
@@ -370,7 +376,6 @@ function Xb(e, r) {
 function Fie(e, r, t = kR, n = lx(), o, a) {
   const s = e.utils._applyInfix.bind(e.utils);
   ((e.utils._applyInfix = (u, l, c) => {
-    var b, y;
     const h = (w, E) => (
       ["=", "<>", "<", ">", "<=", ">="].includes(l) &&
         typeof w == "string" &&
@@ -384,10 +389,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
       p = f(u.val),
       m = f(c.val),
       v = Math.max(p.length, m.length),
-      g = Math.max(
-        ((b = p[0]) == null ? void 0 : b.length) ?? 0,
-        ((y = m[0]) == null ? void 0 : y.length) ?? 0,
-      );
+      g = Math.max(p[0]?.length ?? 0, m[0]?.length ?? 0);
     return !v ||
       !g ||
       (p.length !== v && p.length !== 1) ||
@@ -432,7 +434,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
         .replace(/^_xlfn\./i, "")
         .replace(/^_xlws\./i, "")
         .toUpperCase();
-      const c = (f) => (f == null ? void 0 : e.retrieveRef(f));
+      const c = (f) => (f == null ? undefined : e.retrieveRef(f));
       try {
         if (!Mie.has(u)) return t("#NAME?");
         if (u === "RAND") return l.length ? t("#VALUE!") : Math.random();
@@ -445,7 +447,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             D.some(
               (T) =>
                 Array.isArray(T) ||
-                T === void 0 ||
+                T === undefined ||
                 (typeof T == "string" && T.trim() === "") ||
                 !Number.isFinite(Number(T)),
             )
@@ -577,7 +579,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           if (B && typeof B == "object" && "ref" in B) {
             const _ = l[0],
               C = B;
-            (h = _ == null ? void 0 : _.ref) != null &&
+            (h = _?.ref) != null &&
               h.sheet &&
               !C.ref.sheet &&
               (C.ref.sheet = _.ref.sheet);
@@ -590,7 +592,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           if (wn(D)) return D;
           if (Array.isArray(D))
             return u6(
-              [D, c(l[1]), l.length === 3 ? c(l[2]) : !1],
+              [D, c(l[1]), l.length === 3 ? c(l[2]) : false],
               ([_, C, T]) =>
                 wn(_)
                   ? _
@@ -606,7 +608,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           if (typeof D == "string" && !/^(TRUE|FALSE)$/i.test(D))
             return t("#VALUE!");
           const B = typeof D == "string" ? D.toUpperCase() === "TRUE" : !!D;
-          return c(B ? l[1] : l.length === 3 ? l[2] : !1) ?? 0;
+          return c(B ? l[1] : l.length === 3 ? l[2] : false) ?? 0;
         }
         if (u === "IFERROR" || u === "IFNA") {
           if (l.length !== 2) return t("#VALUE!");
@@ -689,7 +691,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
         if (u === "N")
           return wn(O[0]) || typeof O[0] == "number"
             ? O[0]
-            : O[0] === !0
+            : O[0] === true
               ? 1
               : 0;
         if (u === "T") return wn(O[0]) || typeof O[0] == "string" ? O[0] : "";
@@ -753,10 +755,9 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           const N = [],
             R = [],
             L = (H) => {
-              var J;
               if (!Array.isArray(H)) return "1:1";
               const Q = H.every(Array.isArray) ? H : [H],
-                X = ((J = Q[0]) == null ? void 0 : J.length) ?? 0;
+                X = Q[0]?.length ?? 0;
               return Q.length && X && Q.every((q) => q.length === X)
                 ? `${Q.length}:${X}`
                 : "invalid";
@@ -810,10 +811,10 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
         if (u === "VALUE") {
           if (O.length !== 1 || Array.isArray(O[0])) return t("#VALUE!");
           let D = String(O[0] ?? "").trim(),
-            B = !1;
+            B = false;
           D.startsWith("(") &&
             D.endsWith(")") &&
-            ((B = !0), (D = D.slice(1, -1).trim()));
+            ((B = true), (D = D.slice(1, -1).trim()));
           const _ = D.endsWith("%");
           if (
             (_ && (D = D.slice(0, -1).trim()),
@@ -839,7 +840,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             return t("#N/A");
           const B = Gl(D),
             _ = O[0],
-            C = O[2] === void 0 ? 1 : Number(O[2]);
+            C = O[2] === undefined ? 1 : Number(O[2]);
           if (![0, -1, 1].includes(C)) return t("#N/A");
           if (C === 0) {
             const $ = B.findIndex((U) =>
@@ -935,18 +936,19 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             _ = String(O[2] ?? ""),
             C = B.length ? D.split(B).length - 1 : 0;
           if (
-            O[3] !== void 0 &&
+            O[3] !== undefined &&
             (!Number.isInteger(Number(O[3])) || Number(O[3]) < 1)
           )
             return t("#VALUE!");
           if (
             D.length +
-              (O[3] === void 0 ? C : Math.min(C, 1)) * (_.length - B.length) >
+              (O[3] === undefined ? C : Math.min(C, 1)) *
+                (_.length - B.length) >
             32767
           )
             return t("#LIMIT!");
           if (!B.length) return D;
-          if (O[3] === void 0) return D.split(B).join(_);
+          if (O[3] === undefined) return D.split(B).join(_);
           let T = 0;
           return D.split(B).reduce(
             (N, R, L) => (L === 0 ? R : N + (++T === Number(O[3]) ? _ : B) + R),
@@ -958,7 +960,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             return t("#VALUE!");
           const D = String(O[0] ?? "").toLowerCase(),
             B = String(O[1] ?? "").toLowerCase(),
-            _ = O[2] === void 0 ? 1 : Number(O[2]);
+            _ = O[2] === undefined ? 1 : Number(O[2]);
           if (!Number.isInteger(_) || _ < 1 || _ > B.length)
             return t("#VALUE!");
           if (!/[?*~]/.test(D)) {
@@ -1001,7 +1003,7 @@ function Af(e, r, t = "1900") {
   if (typeof e == "boolean") return e ? "TRUE" : "FALSE";
   if (typeof e != "number") return e;
   if (!Number.isFinite(e)) return "#NUM!";
-  if ((r == null ? void 0 : r.format) === "date") {
+  if (r?.format === "date") {
     if (r.numFmt)
       try {
         if (Bw(r.numFmt).kind === "temporal")
@@ -1021,22 +1023,22 @@ function Af(e, r, t = "1900") {
     if (r.numFmt.toLowerCase() === "general")
       return String(Number(e.toPrecision(15)));
     const n = zB(e, r.numFmt);
-    if (n !== void 0) return n;
+    if (n !== undefined) return n;
   }
-  return (r == null ? void 0 : r.format) === "percent"
+  return r?.format === "percent"
     ? new Intl.NumberFormat("en-US", {
         style: "percent",
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
       }).format(e)
-    : (r == null ? void 0 : r.format) === "currency"
+    : r?.format === "currency"
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
         }).format(e)
-      : (r == null ? void 0 : r.format) === "number"
+      : r?.format === "number"
         ? new Intl.NumberFormat("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
@@ -1078,11 +1080,11 @@ function Nx(e) {
     !Number.isInteger(e.timeBudgetMs) ||
     Number(e.timeBudgetMs) < 1 ||
     Number(e.timeBudgetMs) > 1e4 ||
-    (e.memoryBudgetMiB !== void 0 &&
+    (e.memoryBudgetMiB !== undefined &&
       (!Number.isInteger(e.memoryBudgetMiB) ||
         Number(e.memoryBudgetMiB) < 1 ||
         Number(e.memoryBudgetMiB) > 128)) ||
-    (e.workBudget !== void 0 &&
+    (e.workBudget !== undefined &&
       (!Number.isInteger(e.workBudget) ||
         Number(e.workBudget) < 1e3 ||
         Number(e.workBudget) > 1e7))
@@ -1093,18 +1095,18 @@ function Nx(e) {
         maxIterations: Number(e.maxIterations),
         maxChange: e.maxChange,
         timeBudgetMs: Number(e.timeBudgetMs),
-        ...(e.memoryBudgetMiB !== void 0
+        ...(e.memoryBudgetMiB !== undefined
           ? { memoryBudgetMiB: Number(e.memoryBudgetMiB) }
           : {}),
-        ...(e.workBudget !== void 0
+        ...(e.workBudget !== undefined
           ? { workBudget: Number(e.workBudget) }
           : {}),
       };
 }
 function Lie(e, r) {
-  e.calculation !== void 0 && (r.calculation = Nx(e.calculation));
+  e.calculation !== undefined && (r.calculation = Nx(e.calculation));
   const t = e.importedCalculationCaches;
-  if (t === void 0) return;
+  if (t === undefined) return;
   const n = () => {
     throw Error(
       "Invalid imported formula-cache evidence. Caches must remain separately labeled source evidence.",
@@ -1133,7 +1135,7 @@ function Lie(e, r) {
     (o.maxIterations !== null &&
       (!Number.isSafeInteger(o.maxIterations) ||
         Number(o.maxIterations) < 1)) ||
-    (o.fullPrecision !== void 0 && typeof o.fullPrecision != "boolean") ||
+    (o.fullPrecision !== undefined && typeof o.fullPrecision != "boolean") ||
     (o.maxChange !== null &&
       (typeof o.maxChange != "number" ||
         !Number.isFinite(o.maxChange) ||
@@ -1167,7 +1169,7 @@ function Lie(e, r) {
       if (s.has(l)) return n();
       s.add(l);
       let c;
-      if (u.cache !== void 0) {
+      if (u.cache !== undefined) {
         const h = u.cache;
         if (
           !Ny(h) ||
@@ -1202,7 +1204,9 @@ function Lie(e, r) {
       iterative: o.iterative,
       maxIterations: o.maxIterations,
       maxChange: o.maxChange,
-      ...(o.fullPrecision !== void 0 ? { fullPrecision: o.fullPrecision } : {}),
+      ...(o.fullPrecision !== undefined
+        ? { fullPrecision: o.fullPrecision }
+        : {}),
     },
     entries: d,
   };
@@ -1235,12 +1239,7 @@ const tu = new WeakMap(),
   DO = new WeakMap();
 const ok = new WeakMap();
 function Uie(e) {
-  var u;
-  const r = es(e.cells)
-    ? (u = ok.get(e.cells)) == null
-      ? void 0
-      : u.get(e.id)
-    : void 0;
+  const r = es(e.cells) ? ok.get(e.cells)?.get(e.id) : undefined;
   if (r) return r;
   const t = [];
   let n, o;
@@ -1387,7 +1386,7 @@ function A1(e) {
 }
 function Hie(e) {
   const r = tu.get(e);
-  return nm(r, e) ? { calculator: r.calculator, report: r.report } : void 0;
+  return nm(r, e) ? { calculator: r.calculator, report: r.report } : undefined;
 }
 const PE = new WeakMap();
 function qie(e) {
@@ -1447,8 +1446,9 @@ function U5(e, r, t) {
   if (r === "number") return typeof e == "number" ? e : null;
   if (r === "date") {
     const n = ts(t.datePolicy),
-      o = typeof e == "number" ? e : typeof e == "string" ? zp(e, n) : void 0;
-    return o !== void 0 && o >= 0 && o < wd(n.dateSystem) + 1 ? o : null;
+      o =
+        typeof e == "number" ? e : typeof e == "string" ? zp(e, n) : undefined;
+    return o !== undefined && o >= 0 && o < wd(n.dateSystem) + 1 ? o : null;
   }
   return typeof e == "string" ? e : null;
 }
@@ -1516,12 +1516,8 @@ function Jie(e, r, t, n) {
   return false;
 }
 function $5(e, r, t, n) {
-  var s;
   const o = e(r, t),
-    a =
-      (s = n == null ? void 0 : n.sheets.find((d) => d.id === r)) == null
-        ? void 0
-        : s.cells[t];
+    a = n?.sheets.find((d) => d.id === r)?.cells[t];
   if (
     a &&
     a.raw === o &&
@@ -1565,22 +1561,17 @@ function NR(e) {
   return e.normalize("NFC").trim();
 }
 function RR(e, r) {
-  var t, n, o;
+  var t, o;
   if (
     ((t = e.structureProtection) != null && t.enabled) ||
-    ((o =
-      (n = e.sheets.find((a) => a.id === r)) == null ? void 0 : n.protection) !=
-      null &&
-      o.enabled)
+    ((o = e.sheets.find((a) => a.id === r)?.protection) != null && o.enabled)
   )
     throw Error(
       "Unprotect the workbook and source worksheet before changing saved filter views.",
     );
 }
 function _R(e, r) {
-  var n;
-  const t =
-    (n = e.savedFilterViews) == null ? void 0 : n.find((o) => o.id === r);
+  const t = e.savedFilterViews?.find((o) => o.id === r);
   if (!t) throw Error("This saved filter view no longer exists.");
   return t;
 }
@@ -1719,12 +1710,9 @@ const CC = "ledgerglass-consolidation-v1",
     outputHash: V5,
   });
 function mU(e) {
-  var t;
   const r = pU.safeParse(e);
   if (!r.success)
-    throw Error(
-      `Invalid consolidation: ${(t = r.error.issues[0]) == null ? void 0 : t.message}`,
-    );
+    throw Error(`Invalid consolidation: ${r.error.issues[0]?.message}`);
   return r.data;
 }
 const DR = (e) => JSON.stringify(e.map((r) => [typeof r, r]));
@@ -1762,15 +1750,10 @@ function gU(e) {
   });
 }
 function uoe(e, r) {
-  var n, o, a;
   let t = 0;
   for (const s of r.sheets) {
-    const d =
-      (o = (n = e.sheets) == null ? void 0 : n.find((f) => f.id === s.id)) ==
-      null
-        ? void 0
-        : o.consolidation;
-    if (d === void 0) continue;
+    const d = e.sheets?.find((f) => f.id === s.id)?.consolidation;
+    if (d === undefined) continue;
     if (((t += JSON.stringify(d).length), t > k1.metadataCharacters))
       throw Error(
         "Consolidation evidence exceeds 8,000,000 characters. Retain native backups before removing obsolete reports.",
@@ -1778,7 +1761,7 @@ function uoe(e, r) {
     const u = loe.safeParse(d);
     if (!u.success)
       throw Error(
-        `Invalid consolidation evidence: ${(a = u.error.issues[0]) == null ? void 0 : a.message}`,
+        `Invalid consolidation evidence: ${u.error.issues[0]?.message}`,
       );
     const l = u.data,
       c = l.review,
@@ -2016,15 +1999,11 @@ const goe = strictObject({
     outputHash: LO,
   });
 function boe(e, r) {
-  var o;
   let t = 0,
     n = 0;
   for (const a of r.sheets) {
-    const s =
-      (o = e.sheets.find((l) => l.id === a.id)) == null
-        ? void 0
-        : o.externalConnection;
-    if (s === void 0) continue;
+    const s = e.sheets.find((l) => l.id === a.id)?.externalConnection;
+    if (s === undefined) continue;
     if (
       ++n > fl.sources ||
       (t += JSON.stringify(s).length) > fl.metadataCharacters

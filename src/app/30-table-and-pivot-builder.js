@@ -16,7 +16,15 @@ import {
   yie,
 } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { BI, Xk, Y7, cfe, ffe, hfe, ufe } from "./29-conditional-formatting-dialog.js";
+import {
+  BI,
+  Xk,
+  Y7,
+  cfe,
+  ffe,
+  hfe,
+  ufe,
+} from "./29-conditional-formatting-dialog.js";
 
 function pfe({
   mode: e,
@@ -27,18 +35,15 @@ function pfe({
   onClose: a,
   onWorkbookChange: s,
 }) {
-  var Ut, Jt, fr, br;
+  var br;
   const { text: d, language: u } = Dr(),
     l = ne.useRef(null);
   ne.useEffect(() => {
     const rt = document.activeElement,
       Le = l.current,
-      et =
-        Le == null
-          ? void 0
-          : Le.querySelector(
-              "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
-            );
+      et = Le?.querySelector(
+        "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
+      );
     return (
       et == null || et.focus(),
       () => {
@@ -124,17 +129,14 @@ function pfe({
     [lt, be] = ne.useState(""),
     [ft, pt] = ne.useState(""),
     [Fe, nt] = ne.useState(null),
-    mt =
-      ((Ut = r.sheets.find((rt) => rt.id === t)) == null
-        ? void 0
-        : Ut.tables) ?? [],
+    mt = r.sheets.find((rt) => rt.id === t)?.tables ?? [],
     Wt = r.sheets.flatMap((rt) =>
       (e === "pivot" ? (rt.pivots ?? []) : (rt.queries ?? [])).map((Le) => ({
         sheetName: rt.name,
         definition: Le,
       })),
     ),
-    Zt = () => (ge ? { sheetId: we, address: Ae } : void 0);
+    Zt = () => (ge ? { sheetId: we, address: Ae } : undefined);
   function xt(rt, Le) {
     if (!o) {
       (be(""), pt(""));
@@ -170,7 +172,6 @@ function pfe({
     }
   }
   function Wr(rt) {
-    var et, st;
     (nt(null), A(rt), Je(null));
     const Le = mt.find((kt) => kt.id === rt);
     if (!Le) {
@@ -178,8 +179,8 @@ function pfe({
       return;
     }
     (w(Le.name),
-      ht(((et = Le.columns[0]) == null ? void 0 : et.id) ?? ""),
-      Me(((st = Le.columns[0]) == null ? void 0 : st.calculatedFormula) ?? ""),
+      ht(Le.columns[0]?.id ?? ""),
+      Me(Le.columns[0]?.calculatedFormula ?? ""),
       v(Le.range),
       b(Le.columns.map((kt) => kt.name)),
       F(Le.style),
@@ -289,7 +290,7 @@ function pfe({
   const St = (rt) =>
       i.jsxs(i.Fragment, {
         children: [
-          rt !== void 0 && i.jsx("option", { value: "", children: rt }),
+          rt !== undefined && i.jsx("option", { value: "", children: rt }),
           g.map((Le) => i.jsx("option", { value: Le, children: Le }, Le)),
         ],
       }),
@@ -335,18 +336,15 @@ function pfe({
     "aria-modal": "true",
     "aria-label": dr,
     onKeyDown: (rt) => {
-      var Le;
       if (
         (rt.key === "Escape" &&
           (rt.preventDefault(), rt.stopPropagation(), a()),
         rt.key === "Tab")
       ) {
         const et = Array.from(
-            ((Le = l.current) == null
-              ? void 0
-              : Le.querySelectorAll(
-                  "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex='0']",
-                )) ?? [],
+            l.current?.querySelectorAll(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex='0']",
+            ) ?? [],
           ).filter(
             (gr) =>
               (!gr.closest("fieldset:disabled") &&
@@ -655,41 +653,35 @@ function pfe({
                               "aria-label": d("Calculated column"),
                               value: qe,
                               onChange: (rt) => {
-                                var Le, et;
                                 (ht(rt.target.value),
                                   Me(
-                                    ((et =
-                                      (Le = mt.find((st) => st.id === E)) ==
-                                      null
-                                        ? void 0
-                                        : Le.columns.find(
-                                            (st) => st.id === rt.target.value,
-                                          )) == null
-                                      ? void 0
-                                      : et.calculatedFormula) ?? "",
+                                    mt
+                                      .find((st) => st.id === E)
+                                      ?.columns.find(
+                                        (st) => st.id === rt.target.value,
+                                      )?.calculatedFormula ?? "",
                                   ),
                                   Je(null));
                               },
                               lang: u("Calculated column"),
                               "data-ui-label": "Calculated column",
-                              children:
-                                (Jt = mt.find((rt) => rt.id === E)) == null
-                                  ? void 0
-                                  : Jt.columns.map((rt) =>
-                                      i.jsxs(
-                                        "option",
-                                        {
-                                          value: rt.id,
-                                          children: [
-                                            rt.name,
-                                            rt.calculatedFormula
-                                              ? " · calculated"
-                                              : "",
-                                          ],
-                                        },
-                                        rt.id,
-                                      ),
-                                    ),
+                              children: mt
+                                .find((rt) => rt.id === E)
+                                ?.columns.map((rt) =>
+                                  i.jsxs(
+                                    "option",
+                                    {
+                                      value: rt.id,
+                                      children: [
+                                        rt.name,
+                                        rt.calculatedFormula
+                                          ? " · calculated"
+                                          : "",
+                                      ],
+                                    },
+                                    rt.id,
+                                  ),
+                                ),
                             }),
                           ],
                         }),
@@ -731,10 +723,9 @@ function pfe({
                             i.jsx("button", {
                               type: "button",
                               disabled: !(
-                                (br =
-                                  (fr = mt.find((rt) => rt.id === E)) == null
-                                    ? void 0
-                                    : fr.columns.find((rt) => rt.id === qe)) !=
+                                (br = mt
+                                  .find((rt) => rt.id === E)
+                                  ?.columns.find((rt) => rt.id === qe)) !=
                                   null && br.calculatedFormula
                               ),
                               onClick: () =>
@@ -823,7 +814,6 @@ function pfe({
                                       }),
                                     }),
                                     $e.plan.afterColumns.map((rt, Le) => {
-                                      var et;
                                       return i.jsxs(
                                         "p",
                                         {
@@ -834,11 +824,8 @@ function pfe({
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "Before:" }),
                                             " ",
-                                            ((et = $e.plan.beforeColumns[Le]) ==
-                                            null
-                                              ? void 0
-                                              : et.calculatedFormula) ??
-                                              "No rule",
+                                            $e.plan.beforeColumns[Le]
+                                              ?.calculatedFormula ?? "No rule",
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "After: " }),
                                             rt.calculatedFormula ?? "No rule",
@@ -854,18 +841,15 @@ function pfe({
                                   children: $e.plan.changes
                                     .slice(ze * 20, ze * 20 + 20)
                                     .map((rt) => {
-                                      var Le, et, st;
                                       return i.jsxs(
                                         "li",
                                         {
                                           children: [
                                             i.jsxs("strong", {
                                               children: [
-                                                (Le = r.sheets.find(
+                                                r.sheets.find(
                                                   (kt) => kt.id === rt.sheetId,
-                                                )) == null
-                                                  ? void 0
-                                                  : Le.name,
+                                                )?.name,
                                                 "!",
                                                 rt.address,
                                               ],
@@ -873,16 +857,12 @@ function pfe({
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "Before: " }),
                                             JSON.stringify(
-                                              ((et = rt.before) == null
-                                                ? void 0
-                                                : et.raw) ?? null,
+                                              rt.before?.raw ?? null,
                                             ),
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "After: " }),
                                             JSON.stringify(
-                                              ((st = rt.after) == null
-                                                ? void 0
-                                                : st.raw) ?? null,
+                                              rt.after?.raw ?? null,
                                             ),
                                             i.jsxs("details", {
                                               children: [
@@ -1351,7 +1331,7 @@ function pfe({
                                                               otherField:
                                                                 et.target
                                                                   .value ||
-                                                                void 0,
+                                                                undefined,
                                                             }
                                                           : kt,
                                                       ),

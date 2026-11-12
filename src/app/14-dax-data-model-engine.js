@@ -21,7 +21,17 @@ import {
 } from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { X1, q1 } from "./12-formula-dependency-inspector.js";
-import { Av, Bm, Cv, Lh, My, ny, oce, qf, ry } from "./13-consolidation-dialog.js";
+import {
+  Av,
+  Bm,
+  Cv,
+  Lh,
+  My,
+  ny,
+  oce,
+  qf,
+  ry,
+} from "./13-consolidation-dialog.js";
 
 function ace(e) {
   const r = e.definition,
@@ -54,7 +64,7 @@ function ace(e) {
       );
   for (const N of r.tables)
     for (const R of N.columns)
-      R.expression !== void 0 &&
+      R.expression !== undefined &&
         n.set(Cv({ tableId: N.id, column: R.name }), UO(R.expression));
   for (const N of r.measures)
     N.operation === "dax" && n.set(`measure:${N.id}`, UO(N.expression));
@@ -160,7 +170,7 @@ function ace(e) {
       e.tick();
       const L = t.get(N.tableId),
         $ = L.columns.find((Q) => Q.name === N.column);
-      if ($.expression === void 0) return e.value(N.tableId, N.column, R);
+      if ($.expression === undefined) return e.value(N.tableId, N.column, R);
       const U = Cv(N),
         G = `${U}:${R}`;
       let H = o.get(U);
@@ -213,7 +223,7 @@ function ace(e) {
           for (let Q = 0; Q < H.length; Q++) {
             e.tick();
             const X = e.parentRow(U.many.tableId, $, Q);
-            (X === void 0 || !G[X]) && (H[Q] = 0);
+            (X === undefined || !G[X]) && (H[Q] = 0);
           }
         }
       return (d.set(N.filters, L), L);
@@ -261,10 +271,12 @@ function ace(e) {
       (N.columns ? [t.get(N.tableId)] : F(N.tableId)).map((L) => {
         const $ =
             N.columns ??
-            L.columns.filter((G) => G.expression === void 0).map((G) => G.name),
+            L.columns
+              .filter((G) => G.expression === undefined)
+              .map((G) => G.name),
           U = N.rows
             .map((G) => e.parentRow(N.tableId, L.id, G))
-            .filter((G) => G !== void 0);
+            .filter((G) => G !== undefined);
         return I(L.id, $, U);
       }),
     j = (N) => {
@@ -376,12 +388,12 @@ function ace(e) {
           : N.op === "<>"
             ? X !== 0
             : N.op === "<"
-              ? X !== void 0 && X < 0
+              ? X !== undefined && X < 0
               : N.op === ">"
-                ? X !== void 0 && X > 0
+                ? X !== undefined && X > 0
                 : N.op === "<="
-                  ? X !== void 0 && X <= 0
-                  : X !== void 0 && X >= 0;
+                  ? X !== undefined && X <= 0
+                  : X !== undefined && X >= 0;
       }
       if (
         (N.op === "*" && (U === null || G === null)) ||
@@ -512,7 +524,7 @@ function ace(e) {
             "RELATED requires a full row context on the related many side.",
           );
         const H = e.parentRow(G.tableId, U.tableId, G.index);
-        return H === void 0
+        return H === undefined
           ? on(
               "DAX_RELATIONSHIP",
               "RELATED requires a unique many-to-one relationship path.",
@@ -661,7 +673,7 @@ function ace(e) {
     calculatedColumns: () =>
       r.tables.flatMap((N) =>
         N.columns
-          .filter((R) => R.expression !== void 0)
+          .filter((R) => R.expression !== undefined)
           .map((R) => ({
             tableId: N.id,
             name: R.name,
@@ -676,7 +688,8 @@ function ace(e) {
           const J = t.get(X.tableId).columns.find((q) => q.name === X.column);
           return (
             !["blank", "notBlank"].includes(X.operator) &&
-              (X.value === void 0 || !R7(X.value, { ...J, nullable: true })) &&
+              (X.value === undefined ||
+                !R7(X.value, { ...J, nullable: true })) &&
               on(
                 "DAX_FILTER",
                 "Filter value does not match its declared column type.",
@@ -738,7 +751,7 @@ function ace(e) {
           e.tick();
           const q = N.groupBy.map((W) => {
             const K = e.parentRow(X, W.tableId, J);
-            return K === void 0
+            return K === undefined
               ? on("DAX_RELATIONSHIP", "A group has no relationship path.")
               : y(W, K);
           });
@@ -779,9 +792,8 @@ function R7(e, r) {
             new Date(e + "T00:00:00Z").toISOString().slice(0, 10) === e;
 }
 function sce(e) {
-  var n;
   const r = e.map((o) => String(o)).sort(),
-    t = (n = r[0]) == null ? void 0 : n.slice(0, 4);
+    t = r[0]?.slice(0, 4);
   (!r.length ||
     new Set(r).size !== r.length ||
     r[0] !== `${t}-01-01` ||
@@ -878,14 +890,13 @@ function az(e, r) {
   );
 }
 function sz(e, r) {
-  var a;
   const t = e.sheets.find((s) => s.id === r.sheetId);
   if (!t)
     return ha("SOURCE", `Model table ${r.name} has a missing worksheet.`, {
       tableId: r.id,
     });
   if (!r.tableId) return r.range;
-  const n = (a = t.tables) == null ? void 0 : a.find((s) => s.id === r.tableId);
+  const n = t.tables?.find((s) => s.id === r.tableId);
   if (!n)
     return ha("SOURCE", `The structured table for ${r.name} is missing.`, {
       tableId: r.id,
@@ -929,7 +940,7 @@ function uce(e, r, t, n, o = {}) {
   );
 }
 function bI(e, r) {
-  if (r.readOnly !== void 0 && typeof r.readOnly != "boolean")
+  if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Host read-only must be boolean.");
   return {
     readOnly: !!r.readOnly,
@@ -940,7 +951,7 @@ function bI(e, r) {
   };
 }
 function cce(e, r, t, n) {
-  var u, l;
+  var u;
   bI(e, t);
   for (const c of r.tables)
     (u = e.sheets.find((h) => h.id === c.sheetId)) != null &&
@@ -968,11 +979,10 @@ function cce(e, r, t, n) {
   const s = X1(e, o, t),
     d = new Map();
   return (
-    ((l = e.calculation) == null ? void 0 : l.mode) === "manual" &&
+    e.calculation?.mode === "manual" &&
       s.dependencyCells.some((c) => {
-        var h;
         return (
-          typeof ((h = c.cell) == null ? void 0 : h.raw) == "string" &&
+          typeof c.cell?.raw == "string" &&
           c.cell.raw.startsWith("=") &&
           !c.cell.literal
         );
@@ -983,7 +993,7 @@ function cce(e, r, t, n) {
       ),
     s.snapshots.forEach((c, h) => {
       const f = r.tables[h],
-        p = f.columns.filter((g) => g.expression === void 0);
+        p = f.columns.filter((g) => g.expression === undefined);
       (c.headers.length !== p.length ||
         c.headers.some((g, b) => g !== p[b].name)) &&
         ha(
@@ -994,7 +1004,6 @@ function cce(e, r, t, n) {
       const m = new Map();
       let v = 0;
       (p.forEach((g, b) => {
-        var E;
         const y = c.records.map((A) => {
             const k = A.values[b];
             return (
@@ -1012,9 +1021,7 @@ function cce(e, r, t, n) {
           (v +=
             w.data.byteLength +
             w.nulls.byteLength +
-            (((E = w.dictionary) == null
-              ? void 0
-              : E.reduce((A, k) => A + k.length * 2, 0)) ?? 0)));
+            (w.dictionary?.reduce((A, k) => A + k.length * 2, 0) ?? 0)));
       }),
         d.set(f.id, {
           definition: f,
@@ -1034,7 +1041,6 @@ function cce(e, r, t, n) {
   );
 }
 function yI(e, r, t, n = {}) {
-  var a;
   const o = {
     complete: false,
     diagnostics: [],
@@ -1137,7 +1143,7 @@ function yI(e, r, t, n = {}) {
             { relationshipId: A.id },
           ),
           O.add(B),
-          _ === void 0
+          _ === undefined
             ? (z++,
               o.diagnostics.length < 100 &&
                 o.diagnostics.push({
@@ -1177,7 +1183,7 @@ function yI(e, r, t, n = {}) {
       return o;
     if (
       s.measures.some((A) => A.operation === "dax") ||
-      s.tables.some((A) => A.columns.some((k) => k.expression !== void 0))
+      s.tables.some((A) => A.columns.some((k) => k.expression !== undefined))
     ) {
       const A = ace({
         definition: s,
@@ -1186,12 +1192,10 @@ function yI(e, r, t, n = {}) {
         order: p,
         tick: c,
         canFilter: (k, F) => {
-          var I;
-          return ((I = m.get(k)) == null ? void 0 : I.has(F)) ?? !1;
+          return m.get(k)?.has(F) ?? false;
         },
         parentRow: (k, F, I) => {
-          var z;
-          const O = (z = m.get(F)) == null ? void 0 : z.get(k);
+          const O = m.get(F)?.get(k);
           if (!O) return;
           let j = I;
           for (let V = O.length - 1; V >= 0; V--) (c(), (j = v.get(O[V])[j]));
@@ -1209,15 +1213,13 @@ function yI(e, r, t, n = {}) {
           (o.tables.find((O) => O.id === k.tableId).columnarBytes +=
             I.data.byteLength +
             I.nulls.byteLength +
-            (((a = I.dictionary) == null
-              ? void 0
-              : a.reduce((O, j) => O + j.length * 2, 0)) ?? 0)));
+            (I.dictionary?.reduce((O, j) => O + j.length * 2, 0) ?? 0)));
       }
       return (
         A.query(d, o),
         (o.rows.length + 2) * o.headers.length > ta.outputCells &&
           ha("LIMIT", "The model result exceeds 20,000 output cells."),
-        (o.complete = !0),
+        (o.complete = true),
         o
       );
     }
@@ -1227,8 +1229,8 @@ function yI(e, r, t, n = {}) {
         F = k.columns.get(A.column),
         I = g.get(A.tableId);
       (!["blank", "notBlank"].includes(A.operator) &&
-        (A.value === void 0 ||
-          !oz(A.value, { ...F.definition, nullable: !0 })) &&
+        (A.value === undefined ||
+          !oz(A.value, { ...F.definition, nullable: true })) &&
         ha("FILTER", "Filter values must match the declared column type."),
         ["gt", "gte", "lt", "lte"].includes(A.operator) &&
           (!["number", "date"].includes(F.definition.type) ||
@@ -1287,7 +1289,7 @@ function yI(e, r, t, n = {}) {
     for (const [A, k] of b.entries()) {
       const F = u.get(k.tableId),
         I = g.get(k.tableId),
-        O = k.column ? F.columns.get(k.column) : void 0;
+        O = k.column ? F.columns.get(k.column) : undefined;
       for (let j = 0; j < F.count; j++) {
         if ((c(), !I[j])) continue;
         const z = k.operation === "countRows" ? 1 : kv(O, j);
@@ -1311,7 +1313,7 @@ function yI(e, r, t, n = {}) {
         : [{ keys: [], values: [...o.totals] }]),
       (o.rows.length + 2) * o.headers.length > ta.outputCells &&
         ha("LIMIT", "The model result exceeds 20,000 output cells."),
-      (o.complete = !0),
+      (o.complete = true),
       o
     );
   } catch (s) {
@@ -1434,9 +1436,9 @@ function lz(e, r) {
     for (let s = t.firstCol; s <= t.lastCol; s++) {
       const d = e.cells[`${ut(s)}${o + 1}`];
       a.push({
-        raw: (d == null ? void 0 : d.raw) ?? null,
+        raw: d?.raw ?? null,
         literal: !!(d != null && d.literal),
-        note: (d == null ? void 0 : d.note) ?? "",
+        note: d?.note ?? "",
       });
     }
     n.push(a);
@@ -1530,7 +1532,7 @@ function pce(e, r = {}) {
 }
 function mce(e, r, t = {}) {
   const n = e.sheets.find((a) => a.id === r),
-    o = n == null ? void 0 : n.dataModelReport;
+    o = n?.dataModelReport;
   if (!n || !o) return { status: "none", message: "No model report." };
   try {
     if (!e.dataModel || hr(e.dataModel) !== o.definitionHash)
@@ -1601,12 +1603,9 @@ function uz({ label: e, value: r, onChange: t }) {
               "aria-label": n(`${e} insert function`),
               value: "",
               onChange: (d) => {
-                var h, f;
                 if (!d.target.value) return;
-                const u =
-                    ((h = a.current) == null ? void 0 : h.selectionStart) ??
-                    r.length,
-                  l = ((f = a.current) == null ? void 0 : f.selectionEnd) ?? u,
+                const u = a.current?.selectionStart ?? r.length,
+                  l = a.current?.selectionEnd ?? u,
                   c = d.target.value + "(";
                 (t(r.slice(0, u) + c + r.slice(l)),
                   requestAnimationFrame(() => {
@@ -1647,7 +1646,7 @@ function uz({ label: e, value: r, onChange: t }) {
 function gce({ definition: e, onChange: r }) {
   const { text: t } = Dr(),
     n = e.tables.reduce(
-      (a, s) => a + s.columns.filter((d) => d.expression !== void 0).length,
+      (a, s) => a + s.columns.filter((d) => d.expression !== undefined).length,
       0,
     ),
     o = (a, s) =>
@@ -1677,7 +1676,7 @@ function gce({ definition: e, onChange: r }) {
                     "aria-label": t(`${a.name} calendar date column`),
                     value: a.dateColumn ?? "",
                     onChange: (s) =>
-                      o(a.id, { dateColumn: s.target.value || void 0 }),
+                      o(a.id, { dateColumn: s.target.value || undefined }),
                     children: [
                       i.jsx("option", {
                         value: "",
@@ -1686,7 +1685,7 @@ function gce({ definition: e, onChange: r }) {
                       a.columns
                         .filter(
                           (s) =>
-                            s.expression === void 0 &&
+                            s.expression === undefined &&
                             s.type === "date" &&
                             !s.nullable,
                         )
@@ -1711,8 +1710,8 @@ function gce({ definition: e, onChange: r }) {
               a.columns.map((s, d) => {
                 const u = a.columns
                   .slice(0, d + 1)
-                  .filter((l) => l.expression !== void 0).length;
-                return s.expression === void 0
+                  .filter((l) => l.expression !== undefined).length;
+                return s.expression === undefined
                   ? null
                   : i.jsxs(
                       "fieldset",

@@ -31,19 +31,16 @@ import { lm } from "./36-watch-window-and-goal-seek.js";
 import { Axe, Cxe, Exe, Oi, aj } from "./37-linear-solver-engine.js";
 
 function kxe(e) {
-  var K;
   const { text: r } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = e.workbook.sheets.find((te) => te.id === e.sheetId),
     a = o.analysisReport,
-    [s, d] = ne.useState(
-      (a == null ? void 0 : a.request.kind) ?? e.initialKind ?? "statistics",
-    ),
+    [s, d] = ne.useState(a?.request.kind ?? e.initialKind ?? "statistics"),
     [u, l] = ne.useState("Setup"),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
-    [m, v] = ne.useState((a == null ? void 0 : a.includeHidden) ?? false),
+    [m, v] = ne.useState(a?.includeHidden ?? false),
     [g, b] = ne.useState(0),
     y = () => {
       let te = 1;
@@ -58,8 +55,7 @@ function kxe(e) {
     },
     [w, E] = ne.useState(y),
     [A, k] = ne.useState(() => {
-      var te;
-      return (a == null ? void 0 : a.request.kind) === "solver"
+      return a?.request.kind === "solver"
         ? a.request
         : {
             kind: "solver",
@@ -67,14 +63,12 @@ function kxe(e) {
             objective: {
               sheetId: e.sheetId,
               address:
-                ((te = Object.entries(o.cells).find(
+                Object.entries(o.cells).find(
                   ([, ae]) =>
                     !ae.literal &&
                     typeof ae.raw == "string" &&
                     ae.raw.startsWith("="),
-                )) == null
-                  ? void 0
-                  : te[0]) ?? "C2",
+                )?.[0] ?? "C2",
             },
             direction: "maximize",
             variables: Object.entries(o.cells)
@@ -92,7 +86,7 @@ function kxe(e) {
           };
     }),
     [F, I] = ne.useState(() =>
-      (a == null ? void 0 : a.request.kind) === "statistics"
+      a?.request.kind === "statistics"
         ? a.request
         : {
             kind: "statistics",
@@ -103,9 +97,7 @@ function kxe(e) {
             missing: "reject",
           },
     ),
-    [O, j] = ne.useState(
-      ((K = F.bins) == null ? void 0 : K.join(", ")) ?? "10, 20, 30",
-    ),
+    [O, j] = ne.useState(F.bins?.join(", ") ?? "10, 20, 30"),
     [z, V] = ne.useState(0),
     [D, B] = ne.useState(-1),
     [_, C] = ne.useState(null),
@@ -145,24 +137,21 @@ function kxe(e) {
     J = (te, ae, oe) =>
       i.jsx(ci, {
         "aria-label": r(te),
-        value: ae === void 0 || !Number.isFinite(ae) ? "" : ae,
+        value: ae === undefined || !Number.isFinite(ae) ? "" : ae,
         onValueChange: (de) => oe(aj(de)),
       });
   (ne.useEffect(() => {
-    var ae, oe;
+    var oe;
     const te = document.activeElement;
     return (
-      (oe = (ae = n.current) == null ? void 0 : ae.querySelector("button")) ==
-        null || oe.focus(),
+      (oe = n.current?.querySelector("button")) == null || oe.focus(),
       () => {
         te != null && te.isConnected && te.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
-      var ae;
-      const te =
-        (ae = n.current) == null ? void 0 : ae.querySelector(".lg-model-body");
+      const te = n.current?.querySelector(".lg-model-body");
       te && (te.scrollTop = 0);
     }, [u, f]));
   const q = () => {
@@ -566,16 +555,12 @@ function kxe(e) {
                                 i.jsx("button", {
                                   disabled: A.variables.length >= 6,
                                   onClick: () => {
-                                    var te;
                                     return G({
                                       variables: [
                                         ...A.variables,
                                         {
                                           cell: {
-                                            sheetId:
-                                              ((te = Q[0]) == null
-                                                ? void 0
-                                                : te.id) ?? e.sheetId,
+                                            sheetId: Q[0]?.id ?? e.sheetId,
                                             address: "A2",
                                           },
                                           lower: 0,
@@ -1171,14 +1156,17 @@ function kxe(e) {
                                   f.result.iterations,
                                 ],
                               }),
-                              f.result.objective !== void 0 &&
+                              f.result.objective !== undefined &&
                                 i.jsxs("b", {
                                   children: [
                                     "Objective:",
                                     " ",
-                                    f.result.objective.toLocaleString(void 0, {
-                                      maximumFractionDigits: 10,
-                                    }),
+                                    f.result.objective.toLocaleString(
+                                      undefined,
+                                      {
+                                        maximumFractionDigits: 10,
+                                      },
+                                    ),
                                   ],
                                 }),
                             ],
@@ -1223,7 +1211,7 @@ function kxe(e) {
                                                                 6,
                                                               )
                                                             : oe.toLocaleString(
-                                                                void 0,
+                                                                undefined,
                                                                 {
                                                                   maximumSignificantDigits: 12,
                                                                 },
@@ -1351,9 +1339,7 @@ function kxe(e) {
   });
 }
 function Sxe({ workbook: e, sheetId: r, onReview: t }) {
-  var a;
-  const n =
-    (a = e.sheets.find((s) => s.id === r)) == null ? void 0 : a.analysisReport;
+  const n = e.sheets.find((s) => s.id === r)?.analysisReport;
   if (!n) return null;
   const o = Axe(e, r, { includeHidden: n.includeHidden });
   return i.jsxs("div", {
@@ -1404,7 +1390,7 @@ function Txe(e) {
   };
 }
 function Nxe(e, r, t = {}) {
-  var E, A, k, F, I, O;
+  var A, I, O;
   const n = BR(r),
     o = lm(e, t),
     a = rn(e),
@@ -1414,7 +1400,7 @@ function Nxe(e, r, t = {}) {
   if (!o.includeHidden && (s.hidden || s.veryHidden))
     throw Error("The report source worksheet is hidden.");
   if (
-    ((E = a.calculation) == null ? void 0 : E.mode) === "manual" ||
+    a.calculation?.mode === "manual" ||
     ((A = a.calculation) != null && A.iterative)
   )
     throw Error(
@@ -1422,10 +1408,8 @@ function Nxe(e, r, t = {}) {
     );
   const d =
     n.kind === "object"
-      ? structuredClone(
-          (k = s.objects) == null ? void 0 : k.find((j) => j.id === n.objectId),
-        )
-      : void 0;
+      ? structuredClone(s.objects?.find((j) => j.id === n.objectId))
+      : undefined;
   if (n.kind === "object" && !d)
     throw Error("The source drawing no longer exists.");
   if (d && FR(d.kind === "chart" ? d.range : d.anchor) !== n.range)
@@ -1458,7 +1442,7 @@ function Nxe(e, r, t = {}) {
         throw Error("Report calculation is outside the captured range.");
       return f.get(z);
     },
-    m = n.filter ? f0(a, s.id, n.filter, p) : void 0;
+    m = n.filter ? f0(a, s.id, n.filter, p) : undefined;
   m && (n.filter = m.context.definition);
   const v = c.map((j, z) => u.firstRow + z + 1),
     g =
@@ -1472,8 +1456,8 @@ function Nxe(e, r, t = {}) {
           )
         : v;
   let b = g;
-  if ((d == null ? void 0 : d.kind) === "chart") {
-    const j = (F = d.chartOptions) == null ? void 0 : F.includedRows,
+  if (d?.kind === "chart") {
+    const j = d.chartOptions?.includedRows,
       z = g.filter(
         (D) =>
           (d.headers !== false && D === u.firstRow + 1) || !j || j.includes(D),
@@ -1505,7 +1489,7 @@ function Nxe(e, r, t = {}) {
           ? "Filter criteria are recorded, but full population was selected: filtered rows are included."
           : "Only matching visible rows are retained; excluded rows have locators but no values in this snapshot.",
       ),
-    (d == null ? void 0 : d.kind) === "chart" &&
+    d?.kind === "chart" &&
       y.push(
         "Chart row selections are preserved. Explicitly excluded chart rows are omitted from retained cells.",
       ));
@@ -1525,22 +1509,20 @@ function Nxe(e, r, t = {}) {
     rows: b.map((j) => ({
       row: j,
       cells: l.map((z, V) => {
-        var C;
         const D = `${ut(z)}${j}`,
           B = c[j - u.firstRow - 1][V],
           _ = s.cells[D];
         return {
           address: D,
           value: B,
-          text: Af(B, _, (C = a.datePolicy) == null ? void 0 : C.dateSystem),
+          text: Af(B, _, a.datePolicy?.dateSystem),
           ...(_ != null && _.style ? { style: ys(_.style) } : {}),
         };
       }),
     })),
     columns: l,
     widths: l.map((j) => {
-      var z;
-      return ((z = s.columnWidths) == null ? void 0 : z[String(j)]) ?? 84;
+      return s.columnWidths?.[String(j)] ?? 84;
     }),
     excludedRows: v.filter((j) => !b.includes(j)),
     ...(d ? { object: d } : {}),
@@ -1551,10 +1533,8 @@ function Nxe(e, r, t = {}) {
 }
 const qT = new WeakMap();
 function Rxe(e, r, t = {}, n) {
-  var s;
   if (n) {
-    const d =
-      (s = e.reportOutputs) == null ? void 0 : s.find((u) => u.id === n);
+    const d = e.reportOutputs?.find((u) => u.id === n);
     if (!d || d.snapshot.request.mode !== "linked")
       throw Error("Only an existing linked output can be refreshed.");
     if (hr(BR(r)) !== hr(d.snapshot.request))
@@ -1616,10 +1596,9 @@ function Ixe(e, r, t = {}) {
   return (qT.delete(r), a);
 }
 function _xe(e, r, t = {}) {
-  var o;
   if (t.readOnly) throw Error("This workbook is read-only.");
   $a(e);
-  const n = (o = e.reportOutputs) == null ? void 0 : o.find((a) => a.id === r);
+  const n = e.reportOutputs?.find((a) => a.id === r);
   if (!n) throw Error("Report output not found.");
   return (
     m_(e, n.snapshot, t),
@@ -1653,10 +1632,8 @@ function m_(e, r, t = {}) {
   }
 }
 function Dxe(e, r, t = {}) {
-  var n;
   try {
-    const o =
-      (n = e.reportOutputs) == null ? void 0 : n.find((s) => s.id === r);
+    const o = e.reportOutputs?.find((s) => s.id === r);
     if (!o) throw Error("Report output not found.");
     m_(e, o.snapshot, t);
     const a = Wg(o.snapshot);
@@ -1725,7 +1702,7 @@ function g_(e) {
       r.request.name,
       r.workbookName,
       r.sheetName,
-      (t == null ? void 0 : t.label) ?? "",
+      t?.label ?? "",
       ...r.rows.flatMap((h) => h.cells.map((f) => f.text)),
     ].some((h) =>
       new RegExp(
@@ -1740,23 +1717,22 @@ function g_(e) {
   let n = 640,
     o = 0,
     a = "";
-  if ((t == null ? void 0 : t.kind) === "chart") {
+  if (t?.kind === "chart") {
     const h = Txe(r),
       f = Ww(h, t, (m, v) => {
-        var g;
-        return ((g = h.cells[v]) == null ? void 0 : g.raw) ?? null;
+        return h.cells[v]?.raw ?? null;
       });
     aR(f);
     const p = c_.renderToStaticMarkup(i.jsx(LI, { report: f }));
     ((n = 640),
       (o = t.chart === "sparkline" ? 128 : 380),
       (a = `<svg x="18" y="112" width="${n}" height="${o}" viewBox="${t.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${p}</svg>`));
-  } else if ((t == null ? void 0 : t.kind) === "picture")
+  } else if (t?.kind === "picture")
     (P1(t.dataURL),
       (n = Math.max(640, t.width)),
       (o = t.height),
       (a = `<image x="18" y="112" width="${t.width}" height="${o}" href="${cd(t.dataURL)}"/>`));
-  else if ((t == null ? void 0 : t.kind) === "shape") {
+  else if (t?.kind === "shape") {
     ((n = Math.max(640, t.width)), (o = Math.max(80, t.height)));
     const h = `fill="${t.fill}" stroke="${t.stroke}" stroke-width="2"`,
       f =

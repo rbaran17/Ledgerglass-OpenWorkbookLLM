@@ -70,13 +70,10 @@ function RS({ label: e, trigger: r, children: t, className: n = "" }) {
           role: "region",
           "aria-label": e,
           onClick: (a) => {
-            var s, d;
+            var d;
             a.target.closest("button") &&
               (o.current && (o.current.open = false),
-              (d =
-                (s = o.current) == null
-                  ? void 0
-                  : s.querySelector("summary")) == null || d.focus());
+              (d = o.current?.querySelector("summary")) == null || d.focus());
           },
           children: t,
         }),
@@ -98,7 +95,7 @@ function _H() {
       t.version !== 1 ||
       !t.documents ||
       !xp.includes(t.activeDocument) ||
-      (t.versionStores !== void 0 &&
+      (t.versionStores !== undefined &&
         (!t.versionStores ||
           typeof t.versionStores != "object" ||
           Array.isArray(t.versionStores) ||
@@ -107,7 +104,7 @@ function _H() {
       throw new Error("Invalid workspace");
     return {
       version: 1,
-      legacy: !0,
+      legacy: true,
       activeDocument: t.activeDocument,
       documents: {
         ledger: rn(t.documents.ledger),
@@ -124,9 +121,8 @@ function _H() {
   }
 }
 function DH(e, r) {
-  var s;
   const t = e.documents[r];
-  let n = ((s = e.versionStores) == null ? void 0 : s[r]) ?? JSON.stringify(t);
+  let n = e.versionStores?.[r] ?? JSON.stringify(t);
   const o = BC(
       {
         getItem: () => n,
@@ -209,7 +205,7 @@ async function aEe(e) {
         return {
           id: t,
           store: o,
-          workbook: (a == null ? void 0 : a.workbook) ?? e.documents[t],
+          workbook: a?.workbook ?? e.documents[t],
           problem: "",
         };
       } catch (a) {
@@ -230,7 +226,6 @@ async function aEe(e) {
   };
 }
 function sEe() {
-  var N;
   const [e] = ne.useState(_H),
     [r, t] = ne.useState(e.documents),
     [n, o] = ne.useState(null),
@@ -266,20 +261,19 @@ function sEe() {
     [k, F] = ne.useState({}),
     I = l[a],
     O =
-      (n == null ? void 0 : n.problems[a]) ||
-      ((I == null ? void 0 : I.status) === "error" ||
-      (I == null ? void 0 : I.status) === "conflict"
+      n?.problems[a] ||
+      (I?.status === "error" || I?.status === "conflict"
         ? (I.message ??
           "The workbook could not be saved. Changes remain in this tab.")
         : ""),
-    j = !O && (I == null ? void 0 : I.status) === "saved",
+    j = !O && I?.status === "saved",
     z = ne.useMemo(() => kz(), []),
     V = r[a],
     D = k[a]
       ? V.sheets.find((R) => R.id === k[a].sheetId)
       : V.sheets.find((R) => !R.hidden),
-    B = ((N = k[a]) == null ? void 0 : N.range) ?? "A1",
-    _ = `${(D == null ? void 0 : D.name) ?? "Sheet1"}!${B}`,
+    B = k[a]?.range ?? "A1",
+    _ = `${D?.name ?? "Sheet1"}!${B}`,
     C = xp.filter((R) =>
       `${Wf[R]} ${r[R].name}`.toLowerCase().includes(y.toLowerCase()),
     );
@@ -574,7 +568,7 @@ function sEe() {
                     type: "button",
                     className: `emb-document ${a === R && f ? "emb-document-active" : ""}`,
                     "aria-label": `Open ${Wf[R]}`,
-                    "aria-current": a === R && f ? "page" : void 0,
+                    "aria-current": a === R && f ? "page" : undefined,
                     onClick: () => T(R),
                     children: [
                       i.jsx("div", {
@@ -706,7 +700,7 @@ function sEe() {
             className: `emb-workbook-window ${m ? "emb-window-expanded" : ""}`,
             "aria-label": "Embedded workbook window",
             hidden: !f,
-            style: f ? void 0 : { display: "none" },
+            style: f ? undefined : { display: "none" },
             children: [
               i.jsxs("div", {
                 className: "emb-window-titlebar",
@@ -789,7 +783,7 @@ function sEe() {
                     {
                       className: "emb-editor",
                       hidden: R !== a,
-                      style: R !== a ? { display: "none" } : void 0,
+                      style: R !== a ? { display: "none" } : undefined,
                       children: i.jsx(IH, {
                         initialWorkbook: n.documents[R],
                         ...h[R],
@@ -986,8 +980,10 @@ Hq.createRoot(document.getElementById("root")).render(
     ? i.jsx(sEe, {})
     : i.jsx(IH, {
         actor: "Preparer",
-        initialWorkbook: k2.has("demo") ? FI() : void 0,
+        initialWorkbook: k2.has("demo") ? FI() : undefined,
         persistenceKey:
-          k2.has("temporary") || k2.has("demo") ? void 0 : "excel-workbook-v2",
+          k2.has("temporary") || k2.has("demo")
+            ? undefined
+            : "excel-workbook-v2",
       }),
 );

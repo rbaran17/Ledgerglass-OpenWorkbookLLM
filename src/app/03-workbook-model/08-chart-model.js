@@ -49,13 +49,13 @@ function dne(e, r) {
     (pC(a.refersTo), cne(a.refersTo, r));
     const s = a.scopeSheetId
       ? r.sheets.findIndex((d) => d.id === a.scopeSheetId)
-      : void 0;
-    o += `<definedName name="${Yy(a.name, true)}"${s !== void 0 ? ` localSheetId="${s}"` : ""}${a.comment !== void 0 ? ` comment="${Yy(a.comment, true)}"` : ""}>${Yy(a.refersTo.slice(1))}</definedName>`;
+      : undefined;
+    o += `<definedName name="${Yy(a.name, true)}"${s !== undefined ? ` localSheetId="${s}"` : ""}${a.comment !== undefined ? ` comment="${Yy(a.comment, true)}"` : ""}>${Yy(a.refersTo.slice(1))}</definedName>`;
   }
   return fne(e, o);
 }
 function Ww(e, r, t) {
-  var I, O, j;
+  var I, O;
   (r.kind !== "chart" || !oR.includes(r.chart)) &&
     Rl("Choose a supported chart type.");
   const n = r.chart,
@@ -84,17 +84,14 @@ function Ww(e, r, t) {
       };
     },
     c = Array.from({ length: a.lastCol - u + 1 }, (z, V) => {
-      var C;
       const D = u + V,
-        B = (C = s.series) == null ? void 0 : C.find((T) => T.column === D + 1),
+        B = s.series?.find((T) => T.column === D + 1),
         _ = r.headers ? l(a.firstRow, D).value : ut(D);
       return {
         column: D + 1,
-        name: (B == null ? void 0 : B.name) ?? String(_ ?? ut(D)),
-        kind:
-          (B == null ? void 0 : B.kind) ??
-          (n === "combo" && V > 0 ? "line" : "column"),
-        included: s.series === void 0 || !!B,
+        name: B?.name ?? String(_ ?? ut(D)),
+        kind: B?.kind ?? (n === "combo" && V > 0 ? "line" : "column"),
+        included: s.series === undefined || !!B,
       };
     });
   ((I = s.series) != null &&
@@ -116,7 +113,8 @@ function Ww(e, r, t) {
         row: D + 1,
         label: a.firstCol < u ? String(B.value ?? "") : B.address,
         category: B,
-        included: s.includedRows === void 0 || s.includedRows.includes(D + 1),
+        included:
+          s.includedRows === undefined || s.includedRows.includes(D + 1),
         hidden: f(D),
         values: c.map((_) => l(D, _.column - 1)),
       };
@@ -215,9 +213,7 @@ function Ww(e, r, t) {
       objectId: r.id,
       kind: n,
       title: r.label,
-      altText:
-        ((j = s.altText) == null ? void 0 : j.trim()) ||
-        `${r.label || n}. ${E}. ${w.policy}`,
+      altText: s.altText?.trim() || `${r.label || n}. ${E}. ${w.policy}`,
       source: { sheetId: e.id, sheetName: e.name, range: o },
       axes: {
         x: { title: s.xTitle ?? "", scale: s.xScale ?? "linear" },
@@ -319,7 +315,7 @@ function sR(e, r) {
   return t;
 }
 function yC(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!Array.isArray(e) || e.length > Kne)
     throw new Error("A worksheet supports at most 100 drawing objects.");
   const t = new Set();
@@ -366,8 +362,8 @@ function yC(e, r) {
       c.dataURL = zv(s.dataURL, Math.ceil(Hw / 3) * 4 + 100, "picture");
       const h = P1(c.dataURL);
       ((n += h.bytes.length),
-        s.evidence !== void 0 && (c.evidence = _P(s.evidence, h.bytes)));
-    } else if (s.evidence !== void 0)
+        s.evidence !== undefined && (c.evidence = _P(s.evidence, h.bytes)));
+    } else if (s.evidence !== undefined)
       throw Error("Evidence metadata belongs only to pictures.");
     if (c.kind === "shape") {
       if (!["rectangle", "ellipse", "arrow", "text"].includes(String(s.shape)))
@@ -384,7 +380,7 @@ function yC(e, r) {
       )
         throw new Error("Invalid chart header setting.");
       ((c.headers = s.headers),
-        s.chartOptions !== void 0 && (c.chartOptions = IP(s.chartOptions)));
+        s.chartOptions !== undefined && (c.chartOptions = IP(s.chartOptions)));
     }
     return c;
   });
@@ -488,12 +484,12 @@ function fR(e) {
   const r = {
     sheetId: s1(e.sheetId),
     range: Xp(xf(e.range, "Source range", 50)),
-    ...(e.tableId !== void 0 ? { tableId: s1(e.tableId) } : {}),
+    ...(e.tableId !== undefined ? { tableId: s1(e.tableId) } : {}),
   };
   return (Ef(r.range), r);
 }
 function BP(e) {
-  return e === void 0
+  return e === undefined
     ? []
     : ((!Array.isArray(e) || e.length > 100) &&
         Xt("Use at most 100 source filters."),
@@ -523,20 +519,21 @@ function BP(e) {
           {
             field: sl(r.field),
             operator: r.operator,
-            ...(t !== void 0 ? { value: t } : {}),
+            ...(t !== undefined ? { value: t } : {}),
           }
         );
       }));
 }
 function LP(e) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   dl(e) || Xt("Invalid output destination.");
-  const r = e.address === void 0 ? "A1" : xf(e.address, "Output address", 20),
+  const r =
+      e.address === undefined ? "A1" : xf(e.address, "Output address", 20),
     t = _t(r);
   return {
     address: Cn(t.row, t.col),
-    ...(e.sheetId !== void 0 ? { sheetId: s1(e.sheetId) } : {}),
-    ...(e.sheetName !== void 0
+    ...(e.sheetId !== undefined ? { sheetId: s1(e.sheetId) } : {}),
+    ...(e.sheetName !== undefined
       ? { sheetName: xf(e.sheetName, "Output sheet name", 31) }
       : {}),
   };
@@ -551,24 +548,24 @@ function wC(e) {
         Xt(
           "Invalid pivot aggregation. Choose sum, count, average, min, max or distinctCount.",
         ),
-      o.showAs !== void 0 &&
+      o.showAs !== undefined &&
         !nie.includes(o.showAs) &&
         Xt("Choose a supported Show values as setting."),
       {
         field: sl(o.field),
         operation: o.operation,
-        ...(o.name !== void 0 ? { name: sl(o.name) } : {}),
-        ...(o.showAs !== void 0 ? { showAs: o.showAs } : {}),
+        ...(o.name !== undefined ? { name: sl(o.name) } : {}),
+        ...(o.showAs !== undefined ? { showAs: o.showAs } : {}),
       }
     ),
   );
-  (e.grandTotals !== void 0 &&
+  (e.grandTotals !== undefined &&
     typeof e.grandTotals != "boolean" &&
     Xt("Grand totals must be boolean."),
-    e.subtotals !== void 0 &&
+    e.subtotals !== undefined &&
       typeof e.subtotals != "boolean" &&
       Xt("Subtotals must be boolean."),
-    e.dateGroups !== void 0 &&
+    e.dateGroups !== undefined &&
       (!Array.isArray(e.dateGroups) || e.dateGroups.length > 100) &&
       Xt("Use at most 100 date groups."));
   const t = (e.dateGroups ?? []).map(
@@ -584,7 +581,7 @@ function wC(e) {
   );
   (new Set(t.map((o) => o.field)).size !== t.length &&
     Xt("Choose one date grouping per source field."),
-    e.calculatedFields !== void 0 &&
+    e.calculatedFields !== undefined &&
       (!Array.isArray(e.calculatedFields) || e.calculatedFields.length > 100) &&
       Xt("Use at most 100 calculated fields."));
   const n = (e.calculatedFields ?? []).map(
@@ -593,8 +590,8 @@ function wC(e) {
         !["add", "subtract", "multiply", "divide"].includes(
           String(o.operation),
         ) ||
-        (o.otherField === void 0) == (o.constant === void 0) ||
-        (o.constant !== void 0 &&
+        (o.otherField === undefined) == (o.constant === undefined) ||
+        (o.constant !== undefined &&
           (typeof o.constant != "number" || !Number.isFinite(o.constant)))) &&
         Xt(
           "A calculated field needs add/subtract/multiply/divide and exactly one numeric constant or other source field.",
@@ -603,7 +600,7 @@ function wC(e) {
         name: sl(o.name),
         field: sl(o.field),
         operation: o.operation,
-        ...(o.otherField !== void 0
+        ...(o.otherField !== undefined
           ? { otherField: sl(o.otherField) }
           : { constant: o.constant }),
       }
@@ -620,9 +617,9 @@ function wC(e) {
       values: r,
       filters: BP(e.filters),
       grandTotals: e.grandTotals !== false,
-      ...(e.subtotals !== void 0 ? { subtotals: e.subtotals } : {}),
-      ...(e.dateGroups !== void 0 ? { dateGroups: t } : {}),
-      ...(e.calculatedFields !== void 0 ? { calculatedFields: n } : {}),
+      ...(e.subtotals !== undefined ? { subtotals: e.subtotals } : {}),
+      ...(e.dateGroups !== undefined ? { dateGroups: t } : {}),
+      ...(e.calculatedFields !== undefined ? { calculatedFields: n } : {}),
       ...iie(e),
       destination: LP(e.destination),
     }
@@ -633,7 +630,7 @@ function PP(e) {
   const r = D5(e.fields, "Selected fields");
   r.length || Xt("Choose at least one output field.");
   const t = {};
-  if (e.rename !== void 0) {
+  if (e.rename !== undefined) {
     dl(e.rename) || Xt("Rename fields must be a name map.");
     for (const [s, d] of Object.entries(e.rename))
       (r.includes(s) || Xt("Only selected fields can be renamed."),
@@ -645,12 +642,12 @@ function PP(e) {
         }));
   }
   let n;
-  (e.sort !== void 0 &&
+  (e.sort !== undefined &&
     ((!dl(e.sort) ||
       !["ascending", "descending"].includes(String(e.sort.direction))) &&
       Xt("Invalid query sort."),
     (n = { field: sl(e.sort.field), direction: e.sort.direction })),
-    e.derived !== void 0 &&
+    e.derived !== undefined &&
       (!Array.isArray(e.derived) || e.derived.length > 100) &&
       Xt("Use at most 100 derived fields."));
   const o = (e.derived ?? []).map(
@@ -667,7 +664,7 @@ function PP(e) {
             "trim",
           ].includes(String(s.operation))) &&
           Xt("Invalid derived operation."),
-        s.constant !== void 0 &&
+        s.constant !== undefined &&
           !(typeof s.constant == "string" && s.constant.length <= 32767) &&
           !(typeof s.constant == "number" && Number.isFinite(s.constant)) &&
           Xt("A derived constant must be bounded text or a finite number."),
@@ -675,8 +672,10 @@ function PP(e) {
           name: sl(s.name),
           field: sl(s.field),
           operation: s.operation,
-          ...(s.otherField !== void 0 ? { otherField: sl(s.otherField) } : {}),
-          ...(s.constant !== void 0 ? { constant: s.constant } : {}),
+          ...(s.otherField !== undefined
+            ? { otherField: sl(s.otherField) }
+            : {}),
+          ...(s.constant !== undefined ? { constant: s.constant } : {}),
         }
       ),
     ),
@@ -701,7 +700,7 @@ function PP(e) {
 }
 function Ax(e, r) {
   if (dl(e)) {
-    if (e.tables !== void 0) {
+    if (e.tables !== undefined) {
       (!Array.isArray(e.tables) || e.tables.length > Mt.maxCells) &&
         Xt("Tables must be a bounded list.");
       const t = new Set(),
@@ -734,8 +733,8 @@ function Ax(e, r) {
             {
               id: s1(m.id),
               name: sl(m.name),
-              ...(m.dataType !== void 0 ? { dataType: iR(m.dataType) } : {}),
-              ...(m.calculatedFormula !== void 0
+              ...(m.dataType !== undefined ? { dataType: iR(m.dataType) } : {}),
+              ...(m.calculatedFormula !== undefined
                 ? { calculatedFormula: wR(m.calculatedFormula, true) }
                 : {}),
             }
@@ -778,7 +777,7 @@ function Ax(e, r) {
       }
     }
     for (const t of ["pivots", "queries"]) {
-      if (e[t] === void 0) continue;
+      if (e[t] === undefined) continue;
       (!Array.isArray(e[t]) || e[t].length > Mt.maxCells) &&
         Xt("Analysis definitions must be a bounded list.");
       const n = new Set(),
@@ -799,7 +798,7 @@ function Ax(e, r) {
             id: d,
             outputRange: u,
             sourceRevision: Number(a.sourceRevision),
-            ...(t === "pivots" && a.refresh !== void 0
+            ...(t === "pivots" && a.refresh !== undefined
               ? { refresh: tie(a.refresh) }
               : {}),
           };
@@ -818,10 +817,7 @@ function cie(e, r, t, n, o, a) {
     n + o > s) &&
     Xt("Invalid structural edit bounds."),
     e.sheets.some((l) => {
-      var c;
-      return (c = l.tables) == null
-        ? void 0
-        : c.some((h) => h.columns.some((f) => f.calculatedFormula));
+      return l.tables?.some((h) => h.columns.some((f) => f.calculatedFormula));
     }) &&
       Xt(
         "Calculated table formulas require explicit table append/resize. Clear their saved rules (keeping cell formulas) before inserting or deleting worksheet rows/columns, then reapply the rules.",
@@ -899,16 +895,14 @@ function Gp(e) {
   };
 }
 function z1(e, r, t, n) {
-  var m, v, g;
   const o = /^([A-Za-z_][A-Za-z0-9_.]*)?(\[.+\])$/.exec(t);
   if (!o) return null;
   let a;
   if (o[1])
     for (const b of e.sheets) {
-      const y =
-        (m = b.tables) == null
-          ? void 0
-          : m.find((w) => w.name.toLowerCase() === o[1].toLowerCase());
+      const y = b.tables?.find(
+        (w) => w.name.toLowerCase() === o[1].toLowerCase(),
+      );
       if (y) {
         a = { sheet: b, table: y };
         break;
@@ -917,10 +911,7 @@ function z1(e, r, t, n) {
   else if (n) {
     const b = e.sheets.find((E) => E.id === r),
       y = _t(n),
-      w =
-        (v = b == null ? void 0 : b.tables) == null
-          ? void 0
-          : v.find((E) => Dp(ct(E.range), y.row, y.col));
+      w = b?.tables?.find((E) => Dp(ct(E.range), y.row, y.col));
     b && w && (a = { sheet: b, table: w });
   }
   if (!a) return null;
@@ -932,8 +923,7 @@ function z1(e, r, t, n) {
       .replace(/[\[\]]/g, "")
       .split(/[:,]/)
       .map((b) => b.trim()),
-    h =
-      (g = c.find((b) => b.startsWith("#"))) == null ? void 0 : g.toLowerCase(),
+    h = c.find((b) => b.startsWith("#"))?.toLowerCase(),
     f = c.some((b) => b.startsWith("@")) || h === "#this row";
   if (
     c.some(
@@ -979,7 +969,7 @@ function z1(e, r, t, n) {
 function kx(e, r) {
   const t = Gp(e),
     n = e.columns[r].name,
-    o = Object.hasOwn(e.totals, n) ? e.totals[n] : void 0;
+    o = Object.hasOwn(e.totals, n) ? e.totals[n] : undefined;
   return o
     ? t.lastRow < t.firstRow
       ? { raw: o === "count" || o === "sum" ? 0 : null }
@@ -1003,10 +993,10 @@ function VP(e, r) {
               raw: r.columns[s - t.firstCol].name,
               literal: r.columns[s - t.firstCol].name.startsWith("=")
                 ? true
-                : void 0,
+                : undefined,
             }
           : c
-            ? { ...u, ...kx(r, s - t.firstCol), literal: void 0 }
+            ? { ...u, ...kx(r, s - t.firstCol), literal: undefined }
             : u;
       e.cells[d] = {
         ...h,

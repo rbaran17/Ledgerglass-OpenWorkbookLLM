@@ -54,14 +54,13 @@ function Efe({
     [d, u] = ne.useState(0),
     [l, c] = ne.useState(""),
     h = ne.useRef(null),
-    f = (e == null ? void 0 : e.points) ?? [],
+    f = e?.points ?? [],
     p = Math.min(d, Math.max(0, Math.ceil(f.length / 20) - 1)),
     m = (v = false) => {
-      var g;
       try {
         if ((c(""), !e)) throw Error(r);
         if (v) {
-          const b = (g = h.current) == null ? void 0 : g.querySelector("svg");
+          const b = h.current?.querySelector("svg");
           if (!b)
             throw Error("Resolve chart errors before exporting the visual.");
           o({
@@ -74,7 +73,7 @@ function Efe({
             filename: "Chart-inspection.json",
             mime: "application/json",
             content: JSON.stringify(
-              { workbookId: n, revision: t, draft: !0, ...e },
+              { workbookId: n, revision: t, draft: true, ...e },
               null,
               2,
             ),
@@ -307,18 +306,14 @@ function Efe({
   });
 }
 function Wz(e) {
-  var _, C, T, N, R;
+  var N;
   const { text: r, language: t } = Dr(),
     n = yh(),
-    o =
-      (C =
-        (_ = e.workbook.sheets.find((L) => L.id === e.sheetId)) == null
-          ? void 0
-          : _.objects) == null
-        ? void 0
-        : C.find((L) => L.id === e.objectId),
+    o = e.workbook.sheets
+      .find((L) => L.id === e.sheetId)
+      ?.objects?.find((L) => L.id === e.objectId),
     a =
-      (o == null ? void 0 : o.kind) ??
+      o?.kind ??
       (/picture|image/i.test(e.mode)
         ? "picture"
         : /chart/i.test(e.mode)
@@ -343,11 +338,7 @@ function Wz(e) {
               : {}),
           },
     ),
-    [g, b] = ne.useState(
-      ((T = o == null ? void 0 : o.evidence) == null
-        ? void 0
-        : T.sourceLocator) ?? "",
-    ),
+    [g, b] = ne.useState(o?.evidence?.sourceLocator ?? ""),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(false),
     k =
@@ -356,11 +347,7 @@ function Wz(e) {
       d.current.selection !== e.range ||
       u.current !== e.mode ||
       l.current !== e.objectId,
-    F =
-      e.readOnly ||
-      k ||
-      !s ||
-      !!((N = s == null ? void 0 : s.protection) != null && N.enabled),
+    F = e.readOnly || k || !s || !!((N = s?.protection) != null && N.enabled),
     I = () => {
       const L = c.current;
       if (u.current !== L.mode || l.current !== L.objectId)
@@ -375,12 +362,11 @@ function Wz(e) {
       !F && !E && v(($) => ({ ...$, ...L }));
     };
   (ne.useEffect(() => {
-    var $, U;
+    var U;
     f.current = true;
     const L = document.activeElement;
     return (
-      (U = ($ = h.current) == null ? void 0 : $.querySelector("button")) ==
-        null || U.focus(),
+      (U = h.current?.querySelector("button")) == null || U.focus(),
       () => {
         ((f.current = false),
           p.current++,
@@ -398,7 +384,7 @@ function Wz(e) {
     try {
       if (
         (I(),
-        A(!0),
+        A(true),
         w(""),
         L.size > 2 * 1024 * 1024 ||
           L.size === 0 ||
@@ -461,7 +447,7 @@ function Wz(e) {
         (a === "picture" &&
           (G.evidence = {
             ...(m.evidence ?? ek(m.dataURL, { origin: "legacy-native" })),
-            sourceLocator: g || void 0,
+            sourceLocator: g || undefined,
           }),
         e.objectId &&
           !((L = U.objects) != null && L.some((X) => X.id === e.objectId)))
@@ -487,7 +473,7 @@ function Wz(e) {
   }
   const V =
       m.evidence ??
-      (m.dataURL ? ek(m.dataURL, { origin: "legacy-native" }) : void 0),
+      (m.dataURL ? ek(m.dataURL, { origin: "legacy-native" }) : undefined),
     D = ne.useMemo(() => {
       if (a !== "chart" || !s) return { report: null, error: "" };
       try {
@@ -503,18 +489,15 @@ function Wz(e) {
   return i.jsx("div", {
     className: "dg-backdrop",
     onKeyDown: (L) => {
-      var $;
       if (
         (L.stopPropagation(),
         L.key === "Escape" && (L.preventDefault(), e.onClose()),
         L.key === "Tab")
       ) {
         const U = [
-            ...((($ = h.current) == null
-              ? void 0
-              : $.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
-                )) ?? []),
+            ...(h.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
+            ) ?? []),
           ].filter((Q) => !Q.closest("fieldset:disabled")),
           G = U[0],
           H = U.at(-1);
@@ -576,9 +559,7 @@ function Wz(e) {
                     "This workbook is read-only. Object properties remain available to view.",
                 }),
               }),
-            ((R = s == null ? void 0 : s.protection) == null
-              ? void 0
-              : R.enabled) &&
+            s?.protection?.enabled &&
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
@@ -604,10 +585,7 @@ function Wz(e) {
                             "aria-label": r("Picture file"),
                             disabled: F || E,
                             onChange: (L) => {
-                              var $;
-                              return void j(
-                                ($ = L.target.files) == null ? void 0 : $[0],
-                              );
+                              return void j(L.target.files?.[0]);
                             },
                             lang: t("Picture file"),
                             "data-ui-label": "Picture file",
@@ -959,15 +937,12 @@ function Hz({ object: e, sheet: r, calc: t, textScale: n = 1 }) {
       : i.jsx(yfe, { object: e, sheet: r, calc: t });
 }
 function Cfe(e) {
-  var y, w;
+  var y;
   const { text: r, language: t } = Dr(),
     n = e.workbook.sheets.find((E) => E.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
-  const a =
-      e.readOnly ||
-      !n ||
-      !!((y = n == null ? void 0 : n.protection) != null && y.enabled),
+  const a = e.readOnly || !n || !!((y = n?.protection) != null && y.enabled),
     [s, d] = ne.useState(null),
     [u, l] = ne.useState(""),
     [c, h] = ne.useState(null),
@@ -979,10 +954,7 @@ function Cfe(e) {
     try {
       const I = o.current,
         O = I.workbook.sheets.find((z) => z.id === I.sheetId);
-      if (!(
-        (F = O == null ? void 0 : O.objects) != null &&
-        F.some((z) => z.id === E.id)
-      ))
+      if (!((F = O?.objects) != null && F.some((z) => z.id === E.id)))
         throw Error("The selected drawing no longer exists.");
       const j = I5(
         I.workbook,
@@ -1006,7 +978,7 @@ function Cfe(e) {
         F = I5(
           A.workbook,
           A.sheetId,
-          ((k == null ? void 0 : k.objects) ?? []).filter((I) => I.id !== E),
+          (k?.objects ?? []).filter((I) => I.id !== E),
           {
             readOnly: A.readOnly,
             snapshot: F2(A.workbook, A.sheetId, A.selection),
@@ -1130,8 +1102,8 @@ function Cfe(e) {
           lang: t("Worksheet drawings"),
           "data-ui-label": "Worksheet drawings",
           children: [
-            ((n == null ? void 0 : n.objects) ?? []).map((E) => {
-              const A = (f == null ? void 0 : f.id) === E.id ? f.next : E,
+            (n?.objects ?? []).map((E) => {
+              const A = f?.id === E.id ? f.next : E,
                 k = e.positionForCell(A.anchor),
                 F = A.kind === "chart" && A.chart === "sparkline",
                 I = XR(n, A);
@@ -1254,9 +1226,7 @@ function Cfe(e) {
           ],
         }),
         c &&
-          ((w = n == null ? void 0 : n.objects) == null
-            ? void 0
-            : w.some((E) => E.id === c)) &&
+          n?.objects?.some((E) => E.id === c) &&
           i.jsx(Wz, {
             mode: "drawing-properties",
             objectId: c,
@@ -1389,25 +1359,22 @@ function Xz({
                         children: [
                           t.headings && i.jsx("th", { children: E + 1 }),
                           m.map((A) => {
-                            var V;
                             const k = y.get(E * 16384 + A);
                             if (k && (E !== k.firstRow || A !== k.firstCol))
                               return null;
-                            const F =
-                                (k == null ? void 0 : k.anchor) ??
-                                `${ut(A)}${E + 1}`,
+                            const F = k?.anchor ?? `${ut(A)}${E + 1}`,
                               I =
                                 k != null && k.suppressContent
-                                  ? void 0
+                                  ? undefined
                                   : r.cells[F],
                               O = {
                                 ...I,
-                                raw: (I == null ? void 0 : I.raw) ?? null,
+                                raw: I?.raw ?? null,
                                 style:
                                   k != null && k.suppressContent
                                     ? {}
                                     : {
-                                        ...(I == null ? void 0 : I.style),
+                                        ...I?.style,
                                         ...u(F).style,
                                       },
                               },
@@ -1415,11 +1382,7 @@ function Xz({
                                 k != null && k.suppressContent
                                   ? null
                                   : d(r.id, F),
-                              z =
-                                b[
-                                  g.get((k == null ? void 0 : k.lastRow) ?? E) +
-                                    1
-                                ] - b[g.get(E)];
+                              z = b[g.get(k?.lastRow ?? E) + 1] - b[g.get(E)];
                             return i.jsx(
                               "td",
                               {
@@ -1432,9 +1395,9 @@ function Xz({
                                     ? "true"
                                     : "false",
                                 "data-print-number":
-                                  typeof j == "number" ? "true" : void 0,
-                                colSpan: (k == null ? void 0 : k.colSpan) ?? 1,
-                                rowSpan: (k == null ? void 0 : k.rowSpan) ?? 1,
+                                  typeof j == "number" ? "true" : undefined,
+                                colSpan: k?.colSpan ?? 1,
+                                rowSpan: k?.rowSpan ?? 1,
                                 style: Dw(O.style, j, {
                                   defaultBorder: t.gridlines
                                     ? "1px solid #d4d4d4"
@@ -1449,15 +1412,12 @@ function Xz({
                                   children: i.jsx(Fz, {
                                     decoration:
                                       k != null && k.suppressContent
-                                        ? void 0
+                                        ? undefined
                                         : u(F),
                                     children: i.jsx(jI, {
                                       value: j,
                                       cell: O,
-                                      dateSystem:
-                                        (V = e.datePolicy) == null
-                                          ? void 0
-                                          : V.dateSystem,
+                                      dateSystem: e.datePolicy?.dateSystem,
                                     }),
                                   }),
                                 }),
@@ -1558,7 +1518,6 @@ function uW(e, r, t) {
   return { ...o, sheet: n, layout: n.pageLayout, calc: a, ruleStyles: s };
 }
 function cW(e, r, t) {
-  var u;
   const n = Nr(e, r),
     o = uW(e, r, t ?? n.pageLayout ?? { ...ZR(n), ...XE }),
     a = o.pages.map((l, c) =>
@@ -1594,7 +1553,7 @@ function cW(e, r, t) {
                 }),
                 i.jsx("meta", {
                   name: "description",
-                  content: `Workbook ${e.name}; revision ${e.revision}; period ${((u = e.metadata) == null ? void 0 : u.period) || "not set"}; ${o.pages.length} page(s).`,
+                  content: `Workbook ${e.name}; revision ${e.revision}; period ${e.metadata?.period || "not set"}; ${o.pages.length} page(s).`,
                 }),
                 i.jsx("style", {
                   children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${qz}@page{size:${s} ${o.layout.orientation};margin:0}`,
@@ -1674,8 +1633,7 @@ function mw(e) {
         });
       for (const m of ["header", "footer"]) {
         const v = o.querySelector(`.dg-print-${m}`);
-        if (!((f = v == null ? void 0 : v.textContent) != null && f.trim()))
-          continue;
+        if (!((f = v?.textContent) != null && f.trim())) continue;
         const g = v.getBoundingClientRect();
         (zy(g, d) ||
           cS(v) ||
@@ -1690,8 +1648,7 @@ function mw(e) {
       const h = [];
       for (const m of o.querySelectorAll("[data-print-cell]")) {
         const v = m.firstElementChild;
-        if (!((p = v == null ? void 0 : v.textContent) != null && p.trim()))
-          continue;
+        if (!((p = v?.textContent) != null && p.trim())) continue;
         m.dataset.printInArea !== "false" && (n = true);
         const g = m.dataset.printCell,
           b = m.dataset.printNumber === "true";
@@ -1771,14 +1728,13 @@ function k3(e) {
     );
 }
 async function gw(e, r = {}) {
-  var s;
   const t = e.ownerDocument ?? e,
     { signal: n, timeoutMs: o = 1e4 } = r;
   if (n != null && n.aborted) throw Error("Print preparation was cancelled.");
   const a = [];
   try {
     const d = Promise.all([
-      ((s = t.fonts) == null ? void 0 : s.ready) ?? Promise.resolve(),
+      t.fonts?.ready ?? Promise.resolve(),
       ...Array.from(e.querySelectorAll("img")).map(
         (u) =>
           new Promise((l, c) => {
@@ -1800,8 +1756,8 @@ async function gw(e, r = {}) {
                   `Picture “${u.alt || "Untitled"}” could not be loaded. Replace it before printing.`,
                 ),
               );
-            (u.addEventListener("load", h, { once: !0 }),
-              u.addEventListener("error", f, { once: !0 }),
+            (u.addEventListener("load", h, { once: true }),
+              u.addEventListener("error", f, { once: true }),
               a.push(() => {
                 (u.removeEventListener("load", h),
                   u.removeEventListener("error", f));
@@ -1822,7 +1778,7 @@ async function gw(e, r = {}) {
             o,
           ),
           h = () => l(Error("Print preparation was cancelled."));
-        (n == null || n.addEventListener("abort", h, { once: !0 }),
+        (n == null || n.addEventListener("abort", h, { once: true }),
           a.push(() => {
             (clearTimeout(c), n == null || n.removeEventListener("abort", h));
           }));
@@ -1855,7 +1811,7 @@ function jme(e, r) {
   }.pdf`;
 }
 async function Fme(e, r, t) {
-  var h, f, p, m, v, g;
+  var p, m, v, g;
   const n = () => {
       var b;
       if ((b = t.signal) != null && b.aborted)
@@ -1881,7 +1837,7 @@ async function Fme(e, r, t) {
             )),
               (w = () => k(Error("PDF creation was cancelled."))),
               (F = t.signal) == null ||
-                F.addEventListener("abort", w, { once: !0 }),
+                F.addEventListener("abort", w, { once: true }),
               (I = t.signal) != null && I.aborted && w());
           }),
         ]);
@@ -1918,7 +1874,8 @@ async function Fme(e, r, t) {
         );
       ((l.onload = () => F()),
         (l.onerror = () => I(Error("The PDF rendering frame could not load."))),
-        (z = t.signal) == null || z.addEventListener("abort", O, { once: !0 }),
+        (z = t.signal) == null ||
+          z.addEventListener("abort", O, { once: true }),
         c.push(() => {
           var V;
           (clearTimeout(j),
@@ -1948,7 +1905,7 @@ async function Fme(e, r, t) {
     const E = await PDFDocument.create();
     (E.setTitle(`${e.name} — ${a.name}`),
       E.setSubject(
-        `Period: ${((h = e.metadata) == null ? void 0 : h.period) || "not set"}; engagement: ${((f = e.metadata) == null ? void 0 : f.engagement) || "not set"}; revision ${e.revision}. Image-based schedule snapshot.`,
+        `Period: ${e.metadata?.period || "not set"}; engagement: ${e.metadata?.engagement || "not set"}; revision ${e.revision}. Image-based schedule snapshot.`,
       ),
       E.setCreator("Ledgerglass schedule PDF"),
       E.setProducer("Ledgerglass / pdf-lib"));
@@ -1963,9 +1920,9 @@ async function Fme(e, r, t) {
           height: u.height,
           pixelRatio: m2.pixelRatio,
           backgroundColor: "#ffffff",
-          skipFonts: !0,
+          skipFonts: true,
           fontEmbedCSS: "",
-          skipAutoScale: !0,
+          skipAutoScale: true,
         }),
       );
       try {

@@ -63,8 +63,32 @@ import {
   xv,
   z5,
 } from "./05-consolidation-and-sources.js";
-import { $U, Ap, GE, GR, Hn, KR, Vv, W5, XO, ut, wg, xd } from "./06-data-model-and-analysis.js";
-import { AE, Fg, G5, Np, ON, X3, XR, _t, ct, q3 } from "./07-conditional-formatting.js";
+import {
+  $U,
+  Ap,
+  GE,
+  GR,
+  Hn,
+  KR,
+  Vv,
+  W5,
+  XO,
+  ut,
+  wg,
+  xd,
+} from "./06-data-model-and-analysis.js";
+import {
+  AE,
+  Fg,
+  G5,
+  Np,
+  ON,
+  X3,
+  XR,
+  _t,
+  ct,
+  q3,
+} from "./07-conditional-formatting.js";
 import {
   $1,
   Ax,
@@ -132,7 +156,7 @@ function Wg(e) {
   return r;
 }
 function Roe(e, r) {
-  if (e.reportOutputs !== void 0) {
+  if (e.reportOutputs !== undefined) {
     const t = array(
       object({
         id: Ap,
@@ -148,7 +172,7 @@ function Roe(e, r) {
       throw Error("Saved reports exceed 16 MB.");
     r.reportOutputs = t.map((n) => ({ ...n, snapshot: Wg(n.snapshot) }));
   }
-  if (e.embeddedObjectInventories !== void 0) {
+  if (e.embeddedObjectInventories !== undefined) {
     const t = array(Noe).max(20).parse(e.embeddedObjectInventories);
     if (
       new Set(t.map((n) => n.id)).size !== t.length ||
@@ -159,7 +183,7 @@ function Roe(e, r) {
   }
 }
 function Rx(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!e || typeof e != "object" || Array.isArray(e))
     throw new Error("Invalid page layout.");
   const t = e,
@@ -177,7 +201,7 @@ function Rx(e, r) {
   )
     throw new Error("Invalid paper, orientation, or margins.");
   if (
-    t.pageOrder !== void 0 &&
+    t.pageOrder !== undefined &&
     t.pageOrder !== "overThenDown" &&
     t.pageOrder !== "downThenOver"
   )
@@ -235,7 +259,7 @@ function Rx(e, r) {
     headings: t.headings,
     header: t.header,
     footer: t.footer,
-    ...(t.pageOrder !== void 0 ? { pageOrder: t.pageOrder } : {}),
+    ...(t.pageOrder !== undefined ? { pageOrder: t.pageOrder } : {}),
     ...(p ? { repeatRows: G5(p, "row") } : {}),
     ...(m ? { repeatColumns: G5(m, "column") } : {}),
     ...(v ? { rowBreaks: v } : {}),
@@ -243,7 +267,6 @@ function Rx(e, r) {
   };
 }
 function zU(e, r) {
-  var I, O;
   const t = { ...e };
   (Rx(r, t), (r = t.pageLayout));
   const n = ct(r.printArea);
@@ -340,7 +363,7 @@ function zU(e, r) {
         $;
       for (const U of C) {
         const G = D(U),
-          H = $ !== void 0 && B.some((Q) => Q > $ && Q <= U);
+          H = $ !== undefined && B.some((Q) => Q > $ && Q <= U);
         if (
           (R.length &&
             (L + G > V + 1e-7 || H) &&
@@ -423,9 +446,7 @@ function zU(e, r) {
         ? y.columns.flatMap((j) => y.rows.map((z) => A(z, j)))
         : y.rows.flatMap((j) => y.columns.map((z) => A(j, z))),
     F =
-      r.fitToPage &&
-      (((I = r.rowBreaks) == null ? void 0 : I.length) ?? 0) +
-        (((O = r.columnBreaks) == null ? void 0 : O.length) ?? 0)
+      r.fitToPage && (r.rowBreaks?.length ?? 0) + (r.columnBreaks?.length ?? 0)
         ? [
             "Fit to pages ignores saved manual page breaks. Turn it off to use the breaks.",
           ]
@@ -548,7 +569,6 @@ function OQ(e, r) {
   return t;
 }
 function WQ(e, r, t, n, o = true) {
-  var p;
   const a = e.sheets.find((m) => m.id === r);
   jn(a);
   const s = Ix(t);
@@ -603,9 +623,10 @@ function WQ(e, r, t, n, o = true) {
   const f = { ...a.cells };
   for (const m of s) {
     const v = _t(m);
-    f[m] = ((p = c[v.row - d.firstRow]) == null
-      ? void 0
-      : p[v.col - d.firstCol]) ?? { ...f[m], raw: null };
+    f[m] = c[v.row - d.firstRow]?.[v.col - d.firstCol] ?? {
+      ...f[m],
+      raw: null,
+    };
   }
   return {
     workbook: {
@@ -636,7 +657,7 @@ function yB(e, r, t = {}) {
     const y = Nr(e, v),
       w = y.cells[g];
     if (Ql(w) !== Ql(b)) {
-      if ((jn(y), QJ(w == null ? void 0 : w.style, b.style))) {
+      if ((jn(y), QJ(w?.style, b.style))) {
         const A = _t(g);
         (E = y.merges) != null &&
           E.some((k) => {
@@ -687,7 +708,7 @@ function yB(e, r, t = {}) {
     case "createStyle": {
       const g = Rp(a.name, "Style name"),
         b =
-          a.styleId === void 0
+          a.styleId === undefined
             ? `style-${crypto.randomUUID()}`
             : Rp(a.styleId, "Style ID", 100),
         y = ZS(a.definition);
@@ -743,7 +764,7 @@ function yB(e, r, t = {}) {
       ho("Choose a supported theme or named style action.");
   }
   const h = IN(o),
-    f = a.kind === "detachStyle" && !n ? void 0 : h,
+    f = a.kind === "detachStyle" && !n ? undefined : h,
     p = {
       setTheme: "Change workbook theme",
       createStyle: "Create named style",
@@ -791,9 +812,8 @@ function nQ(e, r, t, n, o = "Reviewer", a = {}) {
   return ON(e, [...(e.reviewThreads ?? []), l]);
 }
 function CB(e, r, t) {
-  var o;
   t.readOnly && ji("This workbook is read-only.");
-  const n = (o = e.reviewThreads) == null ? void 0 : o.find((a) => a.id === r);
+  const n = e.reviewThreads?.find((a) => a.id === r);
   return n
     ? (n.orphaned &&
         ji(
@@ -863,10 +883,10 @@ function oD(e, r, t, n, o = {}) {
     ji(
       "Choose the merged area's first cell or unmerge it before changing its link.",
     );
-  const l = n === null ? void 0 : X3(n);
+  const l = n === null ? undefined : X3(n);
   if (
-    ((l == null ? void 0 : l.kind) === "internal" && Nr(e, l.sheetId),
-    JSON.stringify(d == null ? void 0 : d.hyperlink) === JSON.stringify(l))
+    (l?.kind === "internal" && Nr(e, l.sheetId),
+    JSON.stringify(d?.hyperlink) === JSON.stringify(l))
   )
     return e;
   !d &&
@@ -886,9 +906,7 @@ function lQ(e, r, t) {
   let o = false;
   const a = Object.fromEntries(
     Object.entries(n.cells).map(([s, d]) => {
-      var u;
-      return ((u = d.hyperlink) == null ? void 0 : u.kind) !== "internal" ||
-        d.hyperlink.sheetId !== r
+      return d.hyperlink?.kind !== "internal" || d.hyperlink.sheetId !== r
         ? [s, d]
         : ((o = true),
           [s, { ...d, hyperlink: { ...d.hyperlink, sheetId: t } }]);
@@ -908,16 +926,14 @@ function jQ(e, r, t) {
   t = o[0];
   const a = _t(t),
     s = n.cells[t];
-  if ((s == null ? void 0 : s.raw) !== void 0 && s.raw !== null && s.raw !== "")
+  if (s?.raw !== undefined && s.raw !== null && s.raw !== "")
     throw new Error("Select an empty cell for AutoSum.");
   const d = (h, f) => {
     if (h < 0 || f < 0) return false;
     const p = n.cells[`${ut(f)}${h + 1}`];
     return (
-      typeof (p == null ? void 0 : p.raw) == "number" ||
-      (typeof (p == null ? void 0 : p.raw) == "string" &&
-        p.raw.startsWith("=") &&
-        !p.literal)
+      typeof p?.raw == "number" ||
+      (typeof p?.raw == "string" && p.raw.startsWith("=") && !p.literal)
     );
   };
   let u, l;
@@ -941,9 +957,8 @@ function jQ(e, r, t) {
   );
 }
 function Gne(e, r, t, n) {
-  var h;
   const o = Nr(e, r),
-    a = (h = o.tables) == null ? void 0 : h.find((f) => f.id === t);
+    a = o.tables?.find((f) => f.id === t);
   if (!a) throw Error("Table not found.");
   const s = a.columns.findIndex((f) => f.id === n);
   if (s < 0) throw Error("Select an existing table column.");
@@ -965,14 +980,10 @@ function Gne(e, r, t, n) {
   };
 }
 function die(e, r, t) {
-  var s;
   const n = Nr(e, r),
     o = ct(t);
   if ($1(o) !== 1) return Xp(t);
-  const a =
-    (s = n.tables) == null
-      ? void 0
-      : s.find((d) => Dp(ct(d.range), o.firstRow, o.firstCol));
+  const a = n.tables?.find((d) => Dp(ct(d.range), o.firstRow, o.firstCol));
   return a ? a.range : Ta(n, false);
 }
 function $P(e, r, t) {
@@ -983,7 +994,7 @@ function $P(e, r, t) {
   for (let d = o.firstCol; d <= o.lastCol; d++) {
     const u = Cn(o.firstRow, d),
       l = n.cells[u],
-      c = (l == null ? void 0 : l.raw) ?? null;
+      c = l?.raw ?? null;
     let h = `Column${d - o.firstCol + 1}`;
     try {
       Mg(c) || (h = sl(String(c)));
@@ -1004,7 +1015,7 @@ function $P(e, r, t) {
 }
 function zP(e, r, t, n) {
   const o = $P(e, r, t);
-  if (n === void 0)
+  if (n === undefined)
     return (
       o.some((s) => s.requiresResolution) &&
         Xt(
@@ -1022,14 +1033,13 @@ function zP(e, r, t, n) {
   );
 }
 function hR(e, r) {
-  var o, a;
+  var a;
   const t = [];
   for (const s of e.sheets) {
     const d = r.sheets.find((u) => u.id === s.id);
     if (d)
       for (const u of s.tables ?? []) {
-        const l =
-          (o = d.tables) == null ? void 0 : o.find((m) => m.id === u.id);
+        const l = d.tables?.find((m) => m.id === u.id);
         if (!l) continue;
         const c = ct(u.range),
           h = ct(l.range),
@@ -1041,9 +1051,7 @@ function hR(e, r) {
               y = s.cells[Cn(c.firstRow, c.firstCol + g)],
               w = d.cells[Cn(h.firstRow, h.firstCol + v)],
               A =
-                (y == null ? void 0 : y.raw) !== (w == null ? void 0 : w.raw) ||
-                (y == null ? void 0 : y.literal) !==
-                  (w == null ? void 0 : w.literal)
+                y?.raw !== w?.raw || y?.literal !== w?.literal
                   ? w && !Mg(w.raw)
                     ? sl(String(w.raw))
                     : Xt(
@@ -1083,7 +1091,9 @@ function hR(e, r) {
       d.cells[m] = {
         ...(d.cells[m] ?? { raw: f.name }),
         raw: f.name,
-        ...(f.name.startsWith("=") ? { literal: true } : { literal: void 0 }),
+        ...(f.name.startsWith("=")
+          ? { literal: true }
+          : { literal: undefined }),
       };
     });
     const h = (f) =>
@@ -1177,18 +1187,13 @@ function hR(e, r) {
   return n;
 }
 function V1(e, r) {
-  var l, c;
   const t = fR(r),
     n = Nr(e, t.sheetId),
     o = t.tableId
-      ? (((l = n.tables) == null
-          ? void 0
-          : l.find((h) => h.id === t.tableId)) ??
+      ? (n.tables?.find((h) => h.id === t.tableId) ??
         Xt("The source table no longer exists."))
-      : (c = n.tables) == null
-        ? void 0
-        : c.find((h) => h.range === Xp(t.range)),
-    a = Ef((o == null ? void 0 : o.range) ?? t.range, n),
+      : n.tables?.find((h) => h.range === Xp(t.range)),
+    a = Ef(o?.range ?? t.range, n),
     s = Vn(e);
   o != null && o.showTotals && a.lastRow--;
   const d = [];
@@ -1212,11 +1217,7 @@ function V1(e, r) {
     }),
       (f.some((p) => !Mg(p)) ||
         d.some((p, m) => {
-          var v;
-          return !Mg(
-            ((v = n.cells[Cn(h, a.firstCol + m)]) == null ? void 0 : v.raw) ??
-              null,
-          );
+          return !Mg(n.cells[Cn(h, a.firstCol + m)]?.raw ?? null);
         })) &&
         u.push({ index: h, values: f }));
   }
@@ -1230,7 +1231,7 @@ function V1(e, r) {
       rows: u,
       source: {
         ...t,
-        range: (o == null ? void 0 : o.range) ?? Xp(t.range),
+        range: o?.range ?? Xp(t.range),
         ...(o ? { tableId: o.id } : {}),
       },
     }
@@ -1259,15 +1260,10 @@ function vR(e, r, t) {
   });
 }
 function HP(e, r) {
-  var a;
   const t = e.sheets.find((s) => {
-      var d;
-      return (d = s.pivots) == null ? void 0 : d.some((u) => u.id === r);
+      return s.pivots?.some((u) => u.id === r);
     }),
-    n =
-      (a = t == null ? void 0 : t.pivots) == null
-        ? void 0
-        : a.find((s) => s.id === r);
+    n = t?.pivots?.find((s) => s.id === r);
   if (((!t || !n) && Xt("Pivot definition not found."), !n.refresh))
     return {
       state: "unverified",
@@ -1363,9 +1359,8 @@ function GP(e, r) {
   );
 }
 function vie(e, r) {
-  var s, d;
   const { definition: t, built: n } = GP(e, r),
-    o = ((s = t.chart) == null ? void 0 : s.valueIndex) ?? 0;
+    o = t.chart?.valueIndex ?? 0;
   n.chartRows.length > 200 &&
     Xt(
       "PivotCharts are limited to 200 leaf groups. Filter or regroup before charting.",
@@ -1377,7 +1372,7 @@ function vie(e, r) {
         "The PivotChart contains a calculation error. Resolve zero denominators or invalid source calculations.",
       ),
     {
-      kind: ((d = t.chart) == null ? void 0 : d.kind) ?? "column",
+      kind: t.chart?.kind ?? "column",
       measure: n.measures[o].name,
       showAs: t.values[o].showAs ?? "value",
       points: a,
@@ -1405,12 +1400,8 @@ function O5(e, r, t) {
     v = (E, A, k) =>
       !A ||
       A.parts.every((F, I) => {
-        var z;
         const O = E.values[Yv(a.fields, k[I])],
-          j =
-            (z = o.dateGroups) == null
-              ? void 0
-              : z.find((V) => V.field === k[I]);
+          j = o.dateGroups?.find((V) => V.field === k[I]);
         return (
           JSON.stringify(j ? DP(O, j, E.index) : Mg(O) ? null : O) ===
           JSON.stringify(F)
@@ -1446,18 +1437,16 @@ function O5(e, r, t) {
     measure: o.values[m],
     underlyingValue: d.baseMatrix[c + 1][u.col - l.firstCol],
     displayedValue: d.matrix[c + 1][u.col - l.firstCol],
-    rowGroup: (f == null ? void 0 : f.parts) ?? null,
-    columnGroup: (p == null ? void 0 : p.parts) ?? null,
+    rowGroup: f?.parts ?? null,
+    columnGroup: p?.parts ?? null,
     fields: [...a.fields],
     records: w,
   };
 }
 function xie(e, r, t) {
-  var s;
   const n = Nr(e, r),
     o = ct(t.range),
     a = (d, u) => {
-      var c, h;
       const l = Vg(d.replace(/"(?:[^"]|"")*"/g, '""'));
       /\b(?:INDIRECT|OFFSET|EVALUATE|LET|LAMBDA)\s*\(/i.test(l) &&
         Xt(
@@ -1469,9 +1458,11 @@ function xie(e, r, t) {
           "g",
         ),
       )) {
-        const p = ((c = f[1]) == null ? void 0 : c.replace(/''/g, "'")) ?? f[2];
+        const p = f[1]?.replace(/''/g, "'") ?? f[2];
         if (
-          p ? p.toLowerCase() !== n.name.toLowerCase() : u !== void 0 && u !== r
+          p
+            ? p.toLowerCase() !== n.name.toLowerCase()
+            : u !== undefined && u !== r
         )
           continue;
         const m = Number(f[3].replace("$", "")) - 1,
@@ -1488,9 +1479,11 @@ function xie(e, r, t) {
           "g",
         ),
       )) {
-        const p = ((h = f[1]) == null ? void 0 : h.replace(/''/g, "'")) ?? f[2];
+        const p = f[1]?.replace(/''/g, "'") ?? f[2];
         if (
-          p ? p.toLowerCase() !== n.name.toLowerCase() : u !== void 0 && u !== r
+          p
+            ? p.toLowerCase() !== n.name.toLowerCase()
+            : u !== undefined && u !== r
         )
           continue;
         const m = ct(`${f[3]}:${f[4] ?? f[3]}`);
@@ -1514,8 +1507,7 @@ function xie(e, r, t) {
           l.raw.startsWith("=") &&
           !l.literal &&
           a(l.raw, d.id),
-        ((s = l.hyperlink) == null ? void 0 : s.kind) === "internal" &&
-          l.hyperlink.sheetId === r)
+        l.hyperlink?.kind === "internal" && l.hyperlink.sheetId === r)
       ) {
         const h = _t(l.hyperlink.address);
         h.row === o.lastRow &&
@@ -1603,22 +1595,18 @@ function JP(e, r, t, n, o) {
   for (const c of r.reviewThreads ?? []) c.orphaned || l(c.anchor);
 }
 function Kie(e, r, t = "A1") {
-  var d;
   const n = Nr(e, r),
     o = ct(t);
   if (o.firstRow !== o.lastRow || o.firstCol !== o.lastCol) return t;
-  const a =
-    (d = n.tables) == null
-      ? void 0
-      : d.find((u) => {
-          const l = ct(u.range);
-          return (
-            o.firstRow >= l.firstRow &&
-            o.firstRow <= l.lastRow &&
-            o.firstCol >= l.firstCol &&
-            o.firstCol <= l.lastCol
-          );
-        });
+  const a = n.tables?.find((u) => {
+    const l = ct(u.range);
+    return (
+      o.firstRow >= l.firstRow &&
+      o.firstRow <= l.lastRow &&
+      o.firstCol >= l.firstCol &&
+      o.firstCol <= l.lastCol
+    );
+  });
   if (!a) return Ta(n, false);
   const s = ct(a.range);
   return `${ut(s.firstCol)}${s.firstRow + 1}:${ut(s.lastCol)}${s.lastRow + 1 - (a.showTotals ? 1 : 0)}`;
@@ -1631,7 +1619,7 @@ function TR(e, r, t) {
     !Array.isArray(t.columns) ||
     t.columns.length > Cc.columns ||
     [t.caseSensitive, t.unique].some(
-      (f) => f !== void 0 && typeof f != "boolean",
+      (f) => f !== undefined && typeof f != "boolean",
     )
   )
     throw Error("Choose a header range and up to 64 column filters.");
@@ -1709,19 +1697,19 @@ function TR(e, r, t) {
       !f ||
       !d(f.column) ||
       c.has(f.column) ||
-      (f.join !== void 0 && !["and", "or"].includes(f.join))
+      (f.join !== undefined && !["and", "or"].includes(f.join))
     )
       throw Error("Filter columns must be valid and distinct.");
     if (
       (c.add(f.column),
-      f.values !== void 0 &&
+      f.values !== undefined &&
         (!Array.isArray(f.values) ||
           f.values.length > Cc.values ||
           !f.values.every(jO)))
     )
       throw Error("Value filters allow up to 1,000 finite typed values.");
     if (
-      f.conditions !== void 0 &&
+      f.conditions !== undefined &&
       (!Array.isArray(f.conditions) || f.conditions.length > 2)
     )
       throw Error("Each column supports up to two custom conditions.");
@@ -1732,7 +1720,7 @@ function TR(e, r, t) {
     }
   }
   if (
-    t.advanced !== void 0 &&
+    t.advanced !== undefined &&
     (!Array.isArray(t.advanced) || t.advanced.length > Cc.conditions)
   )
     throw Error("Invalid advanced filter groups.");
@@ -1764,7 +1752,7 @@ function f0(e, r, t, n = Vn(e)) {
     p = new Set(),
     m = {},
     v = o.columns.map((O) =>
-      O.values === void 0 ? null : new Set(O.values.map((j) => eh(j, d))),
+      O.values === undefined ? null : new Set(O.values.map((j) => eh(j, d))),
     );
   let g = 0,
     b = 0,
@@ -1826,9 +1814,7 @@ function f0(e, r, t, n = Vn(e)) {
     if (D) (c.push(O + 1), V ? b++ : h.push(O + 1));
     else {
       const B = f.at(-1);
-      (B == null ? void 0 : B.end) === O - 1
-        ? (B.end = O)
-        : f.push({ start: O, end: O });
+      B?.end === O - 1 ? (B.end = O) : f.push({ start: O, end: O });
     }
   }
   const A = [];
@@ -1890,7 +1876,7 @@ function FO(e, r, t, n, o = "") {
   };
 }
 function fU(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !Array.isArray(e) ||
     e.length > z5.views ||
@@ -1952,13 +1938,13 @@ function fU(e, r) {
     for (const h of o.definition.columns)
       if (
         (xv(h, ["column", "values", "conditions", "join"]),
-        h.conditions !== void 0)
+        h.conditions !== undefined)
       ) {
         if (!Array.isArray(h.conditions))
           throw Error("Invalid saved filter conditions.");
         h.conditions.forEach(d);
       }
-    if (o.definition.advanced !== void 0) {
+    if (o.definition.advanced !== undefined) {
       if (!Array.isArray(o.definition.advanced))
         throw Error("Invalid saved advanced criteria.");
       for (const h of o.definition.advanced) {
