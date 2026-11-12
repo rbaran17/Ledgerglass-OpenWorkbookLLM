@@ -49,16 +49,22 @@ for (const folder of ["node-scripts", "mcp-client"]) {
   }
 }
 
-const host = await run("examples/react-host/verify.mjs");
-assert.equal(
-  host.code,
-  0,
-  `examples/react-host/verify.mjs\n${host.stdout}\n${host.stderr}`,
-);
-const hostChecks = host.stdout.match(/^PASS /gm)?.length ?? 0;
-assert.ok(
-  hostChecks >= 8,
-  "the React host check ran fewer checks than expected",
-);
-console.log(`PASS examples/react-host (${hostChecks} browser checks)`);
-console.log(`${count + 1} examples verified.`);
+for (const [folder, minimumChecks] of [
+  ["react-host", 8],
+  ["source-gateway", 6],
+]) {
+  const host = await run(`examples/${folder}/verify.mjs`);
+  assert.equal(
+    host.code,
+    0,
+    `examples/${folder}/verify.mjs\n${host.stdout}\n${host.stderr}`,
+  );
+  const checks = host.stdout.match(/^PASS /gm)?.length ?? 0;
+  assert.ok(
+    checks >= minimumChecks,
+    `examples/${folder} ran fewer checks than expected`,
+  );
+  console.log(`PASS examples/${folder} (${checks} browser checks)`);
+  count++;
+}
+console.log(`${count} examples verified.`);

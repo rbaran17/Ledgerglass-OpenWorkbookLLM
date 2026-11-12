@@ -13,6 +13,7 @@ import {
   externalSourceKinds,
   externalSourceLimits,
   isSourceId,
+  parseActiveSourceApproval,
   parseSourceRequest,
   toExternalSourceError,
   validateExternalSourcePayload,
@@ -101,7 +102,19 @@ function describeSource(connector) {
     `s-${sha256Hex(JSON.stringify([table.columns, table.controlFields])).slice(0, 16)}`;
   if (!isSourceId(schemaVersion))
     fail("schemaVersion is not a valid identifier.");
-  return { ...table, schemaVersion };
+  const source = { ...table, schemaVersion };
+  // Last, the editor's own schema: a source it would reject must not be registered.
+  try {
+    parseActiveSourceApproval(
+      { source, expiresAt: "9999-12-31T00:00:00.000Z" },
+      0,
+    );
+  } catch {
+    fail(
+      "is not a source description the editor accepts (check the label, column names and control fields).",
+    );
+  }
+  return source;
 }
 
 /**

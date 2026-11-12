@@ -127,7 +127,14 @@ function isRealDate(text) {
 
 function shapeValue(raw, column, parseText) {
   if (raw === null || raw === undefined) return null;
-  if (parseText && typeof raw === "string" && raw.trim() === "") return null;
+  // In a text source an empty field is "no value". Blank space is kept as text in a text column
+  // and is "no value" in a number, boolean or date column.
+  if (
+    parseText &&
+    typeof raw === "string" &&
+    (raw === "" || (column.type !== "text" && raw.trim() === ""))
+  )
+    return null;
   switch (column.type) {
     case "text":
       if (typeof raw === "string") {
@@ -142,7 +149,8 @@ function shapeValue(raw, column, parseText) {
       if (
         parseText &&
         typeof raw === "string" &&
-        /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw.trim())
+        /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw.trim()) &&
+        Number.isFinite(Number(raw.trim()))
       )
         return Number(raw.trim());
       break;

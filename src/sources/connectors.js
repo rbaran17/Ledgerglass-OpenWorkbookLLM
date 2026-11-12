@@ -292,7 +292,8 @@ export function createQueryConnector(options = {}) {
  *
  * @param options.database  Path to the database file.
  * @param options.query     One SELECT statement whose result columns are the declared columns,
- *   in order. Fixed here; a request cannot change it.
+ *   in order. Fixed here; a request cannot change it. Anything else is refused when the
+ *   connector is created, and the read-only connection refuses writes in any case.
  * @param options.parameters  Values for `?` placeholders in the query. Also fixed here.
  */
 export function createSqliteConnector(options = {}) {
@@ -301,7 +302,20 @@ export function createSqliteConnector(options = {}) {
     requireText(options.database, "a database path", name),
   );
   const query = requireText(options.query, "a query", name).trim();
-  if (!/^(select|with)\b/i.test(query) || /;\s*\S/.test(query))
+  // A first check on the text, with string literals, quoted names and comments removed. The
+  // read-only connection below is what enforces it: SQLite itself refuses any write.
+  const bare = query
+    .replace(/'(?:[^']|'')*'/g, "''")
+    .replace(/"(?:[^"]|"")*"/g, '""')
+    .replace(/--[^\n]*/g, " ")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+  if (
+    !/^(select|with)\b/i.test(bare) ||
+    /;\s*\S/.test(bare) ||
+    /\b(insert|update|delete|replace|drop|alter|create|attach|detach|pragma|vacuum|reindex)\b/i.test(
+      bare,
+    )
+  )
     throw new TypeError(`${name}: query must be a single SELECT statement.`);
   return {
     id: options.id,

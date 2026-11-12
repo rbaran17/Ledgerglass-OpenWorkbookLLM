@@ -6,6 +6,12 @@
  * which is why several object types allow extra properties.
  */
 import type { ComponentType } from "react";
+import type {
+  ExternalSourceErrorCode,
+  ExternalSourceErrorInstance,
+  SourceApproval,
+  SourcePayload,
+} from "./source-gateway";
 
 /** What a cell stores: a number, text, a boolean, a formula beginning with "=", or nothing. */
 export type RawCellContent = string | number | boolean | null;
@@ -225,6 +231,8 @@ export interface AuditWorkbookProps {
   /** Browser storage key for saving locally. Without it nothing is stored. */
   persistenceKey?: string;
   workbookStore?: unknown;
+  /** Adapter for external data sources, read through your gateway. See docs/SOURCES.md. */
+  externalSourceAdapter?: ExternalSourceAdapter;
   [extra: string]: unknown;
 }
 
@@ -473,6 +481,49 @@ export function createWorkbookCatalog<TCatalog>(
   },
   options?: WorkbookCatalogOptions,
 ): TCatalog;
+
+/** The client side of the external source protocol, as the editor's `externalSourceAdapter` prop uses it. */
+export interface ExternalSourceAdapter {
+  /** The sources this user may see, each with an approval. Rejects with `ExternalSourceError`. */
+  catalog(options?: { signal?: AbortSignal }): Promise<SourceApproval[]>;
+  /** A fresh approval for one source. Rejects with `ExternalSourceError`. */
+  authorize(
+    sourceId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SourceApproval>;
+  /** The source's rows as a payload. The editor checks it again before using it. Rejects with `ExternalSourceError`. */
+  refresh(
+    sourceId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SourcePayload>;
+}
+
+export interface ExternalSourceAdapterOptions {
+  /** The URL of your source gateway, for example "/api/sources". */
+  endpoint: string;
+  /** Sent with every request, for example an Authorization header. */
+  headers?: Record<string, string>;
+  /** The fetch to use. Default: the global fetch. */
+  fetch?: typeof fetch;
+  /** Credential handling for the request. Default "same-origin". */
+  credentials?: RequestCredentials;
+}
+
+/**
+ * Returns an adapter that sends the editor's source requests to your gateway. Throws `TypeError`
+ * without an endpoint; its methods reject with `ExternalSourceError` carrying the server's code.
+ */
+export function createHttpSourceAdapter(
+  options: ExternalSourceAdapterOptions,
+): ExternalSourceAdapter;
+
+/**
+ * The error external source operations reject with. Its message is the text the editor shows for
+ * its code.
+ */
+export const ExternalSourceError: new (
+  code: ExternalSourceErrorCode,
+) => ExternalSourceErrorInstance;
 
 /** The wider model API, by area. Reference pages are in docs/api/. */
 export * from "./sdk/calculation";

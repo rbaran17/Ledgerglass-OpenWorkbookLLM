@@ -12,15 +12,20 @@
     "paths": {
       "@ledgerglass/workbook": ["types/index.d.ts"],
       "@ledgerglass/workbook/mcp": ["types/mcp.d.ts"],
-      "@ledgerglass/workbook/node": ["types/node.d.ts"]
+      "@ledgerglass/workbook/node": ["types/node.d.ts"],
+      "@ledgerglass/workbook/source-gateway": ["types/source-gateway.d.ts"],
+      "@ledgerglass/workbook/source-connectors": ["types/source-connectors.d.ts"]
     }
   },
   "include": [
     "index.d.ts",
     "mcp.d.ts",
     "node.d.ts",
+    "source-gateway.d.ts",
+    "source-connectors.d.ts",
     "sdk/*.d.ts",
     "tests/consumer.tsx",
-    "tests/node-consumer.ts"
+    "tests/node-consumer.ts",
+    "tests/sources-consumer.ts"
   ]
 }

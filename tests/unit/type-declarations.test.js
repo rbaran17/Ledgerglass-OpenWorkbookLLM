@@ -4,7 +4,8 @@ import { dirname, join } from "node:path";
 
 /**
  * Names a module exports, read from its source so the module does not have to load here.
- * `export * from "./x.js"` is followed into that file.
+ * `export { a, b }` blocks and inline `export function a` / `export const a` declarations are read,
+ * and `export * from "./x.js"` is followed into that file.
  */
 function exportedNames(path) {
   const source = readFileSync(path, "utf8");
@@ -17,6 +18,10 @@ function exportedNames(path) {
         .pop();
       if (name) names.add(name);
     }
+  for (const declaration of source.matchAll(
+    /^export (?:async )?(?:const|function|class|let) (\w+)/gm,
+  ))
+    names.add(declaration[1]);
   for (const star of source.matchAll(/export \* from "(\.[^"]+)"/g))
     for (const name of exportedNames(join(dirname(path), star[1])))
       names.add(name);
@@ -74,5 +79,17 @@ test("each SDK area declares exactly what it exports", () => {
 test("the MCP server's declarations cover exactly what it exports", () => {
   expect(declaredNames("types/mcp.d.ts")).toEqual(
     exportedNames("src/mcp/server.js"),
+  );
+});
+
+test("the source gateway's declarations cover exactly what it exports", () => {
+  expect(declaredNames("types/source-gateway.d.ts")).toEqual(
+    exportedNames("src/sources/gateway.js"),
+  );
+});
+
+test("the source connectors' declarations cover exactly what they export", () => {
+  expect(declaredNames("types/source-connectors.d.ts")).toEqual(
+    exportedNames("src/sources/connectors.js"),
   );
 });
