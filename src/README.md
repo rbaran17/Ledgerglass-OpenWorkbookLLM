@@ -14,12 +14,12 @@ compiled application in `dist/` and is now the source the build uses.
 
 - The code is formatted but not original: identifiers are the minifier's, and
   there are no types or comments.
-- `main.js` is a single module of about 138,000 lines. Module boundaries from
+- `main.js` is a single module of about 120,000 lines. Module boundaries from
   the original project are not marked.
 - In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, the formula parser
-  the lucide-react icons and fflate are imported from `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse and
+  the lucide-react icons, fflate and pdf-lib are imported from `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse and
   the formula parser are. Updates to these take effect on the next build.
-- In `main.js` and `assistant/`, pdf-lib, html-to-image, the
+- In `main.js` and `assistant/`, html-to-image, the
   assistant UI libraries and others are still inlined at the versions the original build
   used. Updating `package.json` does not change them yet.
 - The workers (`workers/*.worker.js`) are bundled by

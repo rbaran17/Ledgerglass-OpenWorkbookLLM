@@ -217,3 +217,23 @@ test("alternate workbook format round-trips through its ZIP archive", async ({ p
   await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
   expect(errors).toEqual([]);
 });
+
+test("schedule PDF export produces a PDF file", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "Trial balance" }).click();
+  await page.getByRole("tab", { name: "Page Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Margins", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Page setup and print preview" });
+  await dialog.getByRole("button", { name: "Create PDF", exact: true }).click();
+  const link = dialog.getByRole("link", { name: /Download PDF/ });
+  await expect(link).toBeVisible({ timeout: 60_000 });
+  const downloading = page.waitForEvent("download");
+  await link.click();
+  const download = await downloading;
+  const bytes = await readFile(await download.path());
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(bytes.length).toBeGreaterThan(1000);
+  expect(bytes.subarray(-1024).toString("latin1")).toContain("%%EOF");
+  expect(errors).toEqual([]);
+});
