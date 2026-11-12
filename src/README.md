@@ -17,7 +17,7 @@ compiled application in `dist/` and is now the source the build uses.
 
 ## What to expect
 
-- The code is not the original. There are no types or comments. Module-level
+- The code is not the original. Only the public surface is typed (`types/`, for the library and the MCP server); the rest is untyped JavaScript with few comments. Module-level
   names (about 2,200 functions, components and constants) were assigned after
   recovery from strings, property names and usage, so they describe what the
   code appears to do and some will be imprecise. Local variables are mostly

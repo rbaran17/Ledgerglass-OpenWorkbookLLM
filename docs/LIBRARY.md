@@ -2,7 +2,7 @@
 
 `npm run build:lib` builds an ES module library into `lib/` that a React application can import: the editor component, the workbook model and the assistant protocol.
 
-> The library was rebuilt after the original SDK source was lost. The export names below were chosen for the rebuild, and the original package's exact API was not recovered. There are no TypeScript declarations, and the package is not published to a registry (`"private": true`).
+> The library was rebuilt after the original SDK source was lost. The export names below were chosen for the rebuild, and the original package's exact API was not recovered. TypeScript declarations for everything listed here are in `types/` (hand-written, and checked by `npm run test:types`); the application's internals are untyped JavaScript. The package is not published to a registry (`"private": true`).
 
 ## Build
 

@@ -3,7 +3,7 @@
  * Import the stylesheet as well: `import "@ledgerglass/workbook/style.css"`.
  *
  * The names exported here were chosen for the rebuilt library; the original package's exact API
- * was not recovered. There are no TypeScript declarations.
+ * was not recovered. Their TypeScript declarations are in types/index.d.ts.
  */
 import "./styles/workbook.css";
 
