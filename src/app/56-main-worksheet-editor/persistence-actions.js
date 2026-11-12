@@ -59,17 +59,14 @@ function createPersistenceActions({
   }
   function reportSaveStatus(fe, Oe, Be) {
     try {
-      notifyHostCallback("save-state", () => {
-        return setSaveAbortControllerRef.current?.call(
-          setSaveAbortControllerRef,
-          {
-            status: fe,
-            workbookId: Oe.id,
-            revision: Oe.revision,
-            ...(Be ? { message: Be } : {}),
-          },
-        );
-      });
+      notifyHostCallback("save-state", () =>
+        setSaveAbortControllerRef.current?.({
+          status: fe,
+          workbookId: Oe.id,
+          revision: Oe.revision,
+          ...(Be ? { message: Be } : {}),
+        }),
+      );
     } catch {
       setErrorNotice(
         "The host could not acknowledge the save status. Export JSON to retain your work.",
@@ -268,8 +265,8 @@ function createPersistenceActions({
       Xe = persistenceSessionRef.current;
     return (
       reportSaveStatus("saving", Be),
-      enqueueSaveOperation((gt) => {
-        return chainMaybePromise(
+      enqueueSaveOperation((gt) =>
+        chainMaybePromise(
           workbookPersistence.save(
             Be,
             Ue,
@@ -283,8 +280,8 @@ function createPersistenceActions({
             },
           ),
           (wt) => acknowledgeSavedWorkbook(wt, Xe),
-        );
-      })
+        ),
+      )
     );
   }
   function exportLocalChangesJson() {
@@ -297,7 +294,6 @@ function createPersistenceActions({
     );
   }
   function reloadSavedWorkbook(fe) {
-    var Ue;
     const Oe = workbookPersistence.load();
     if (!Oe || JSON.stringify(Oe.guard) !== JSON.stringify(fe.guard))
       throw new Error(
@@ -307,7 +303,7 @@ function createPersistenceActions({
     Be.active = false;
     for (const Xe of Be.controllers) Xe.abort();
     ((persistenceSessionRef.current = { active: true, controllers: new Set() }),
-      (Ue = saveAbortControllerRef.current) == null || Ue.abort(),
+      saveAbortControllerRef.current?.abort(),
       (persistedWorkbookRecordRef.current = Oe),
       setPersistedWorkbookRecord(Oe),
       (latestEditStateRef.current.book = Oe.workbook),
@@ -334,7 +330,6 @@ function createPersistenceActions({
     reportSaveStatus("saved", Oe.workbook);
   }
   function commitWorkbookChange(fe, Oe = true, Be = false, Ue, Xe = false, gt) {
-    var Nt;
     if (
       readOnly ||
       ((isEditingLocked || latestEditStateRef.current.readOnly) &&
@@ -342,12 +337,9 @@ function createPersistenceActions({
         !(
           Xe &&
           gt &&
-          latestEditStateRef.current.book.sheets.some((wt) => {
-            var jt;
-            return (
-              wt.id === gt && !((jt = wt.protection) != null && jt.enabled)
-            );
-          })
+          latestEditStateRef.current.book.sheets.some(
+            (wt) => wt.id === gt && !wt.protection?.enabled,
+          )
         ))
     )
       throw new Error("This workbook is read-only.");
@@ -359,12 +351,11 @@ function createPersistenceActions({
             JSON.stringify(latestEditStateRef.current.book)))
     )) {
       if (
-        (Ue || (Nt = saveAbortControllerRef.current) == null || Nt.abort(),
+        (Ue || saveAbortControllerRef.current?.abort(),
         (fe = buildCanonicalWorkbookSnapshot(
           Ue || Xe ? fe : touchWorkbookModifiedAt(fe),
         )),
-        onBeforeChange == null ||
-          onBeforeChange(fe, latestEditStateRef.current.book),
+        onBeforeChange?.(fe, latestEditStateRef.current.book),
         Oe)
       ) {
         const wt = latestEditStateRef.current.book;

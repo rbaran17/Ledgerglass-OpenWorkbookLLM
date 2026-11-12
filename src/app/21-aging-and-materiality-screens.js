@@ -36,7 +36,6 @@ import {
 } from "./20-calculation-options-and-sources.js";
 
 async function requestAssistantAnswer(e, r, t, n = {}) {
-  var d, u;
   if (n.reliability) {
     const { reliability, ...c } = n;
     return reliability.run("provider", "request", () =>
@@ -55,17 +54,13 @@ async function requestAssistantAnswer(e, r, t, n = {}) {
   const o = structuredClone(t),
     a = n.conversation ? parseAssistantChatRequest(n.conversation) : undefined;
   if (
-    ((a != null && a.attachments.length) ||
-      (a != null &&
-        a.messages.some((l) => {
-          return l.attachments?.length;
-        }))) &&
-    !((d = e.chat) != null && d.attachments)
+    (a?.attachments.length || a?.messages.some((l) => l.attachments?.length)) &&
+    !e.chat?.attachments
   )
     throw new Error(
       "This provider does not support file attachments. Remove the files or use a chat-enabled host adapter.",
     );
-  if (a != null && a.messages.length && !((u = e.chat) != null && u.history))
+  if (a?.messages.length && !e.chat?.history)
     throw new Error(
       "This provider does not support conversation history. Start a new chat or use a chat-enabled host adapter.",
     );
@@ -249,11 +244,7 @@ function resolveMaterialitySourceRange(e, r, t) {
 }
 function inspectScreenFormulaCells(e, r, t, n) {
   const o = t.filter((g) => isFormulaInputValue(r.cells[g])),
-    a = new Map(
-      t.map((g) => {
-        return [g, r.cells[g]?.raw ?? null];
-      }),
-    );
+    a = new Map(t.map((g) => [g, r.cells[g]?.raw ?? null]));
   if (!o.length) return a;
   const s = JSON.stringify(e);
   let d = "";
@@ -480,14 +471,14 @@ function buildMaterialitySourceEvidence(e, r, t = {}) {
     sheetId: d.id,
     sheetName: d.name,
     rows: h,
-    headers: Array.from({ length: u.lastCol - u.firstCol + 1 }, (m, v) => {
-      return a.headers
+    headers: Array.from({ length: u.lastCol - u.firstCol + 1 }, (m, v) =>
+      a.headers
         ? String(
             d.cells[formatCellAddress(u.firstRow, u.firstCol + v)]?.raw ??
               `Column ${columnIndexToLetters(u.firstCol + v)}`,
           )
-        : `Column ${columnIndexToLetters(u.firstCol + v)}`;
-    }),
+        : `Column ${columnIndexToLetters(u.firstCol + v)}`,
+    ),
   };
   return (
     new TextEncoder().encode(JSON.stringify(f, null, 2)).length > 2e6 &&
@@ -1181,7 +1172,7 @@ function AgingScheduleScreen(e) {
           }
         : checkAgingReportFreshness(e.workbook, C, K, te)
       : null,
-    ge = ce != null && ce.disclose ? C : null,
+    ge = ce?.disclose ? C : null,
     se =
       ge?.rows.filter(
         (Me) =>
@@ -1200,16 +1191,12 @@ function AgingScheduleScreen(e) {
         Q(""));
     };
   ne.useEffect(() => {
-    var je;
     s.current = true;
     const Me = document.activeElement;
     return (
-      (je = a.current?.querySelector('[data-ui-label="Aging source range"]')) ==
-        null || je.focus(),
+      a.current?.querySelector('[data-ui-label="Aging source range"]')?.focus(),
       () => {
-        ((s.current = false),
-          d.current++,
-          Me != null && Me.isConnected && Me.focus());
+        ((s.current = false), d.current++, Me?.isConnected && Me.focus());
       }
     );
   }, []);
@@ -1228,7 +1215,7 @@ function AgingScheduleScreen(e) {
     },
     Pe = () => {
       try {
-        if (!C || !(ce != null && ce.current))
+        if (!C || !ce?.current)
           throw Error("Run a current aging schedule before downloading.");
         const Me = exportAgingReportJson(e.workbook, C, K, te),
           ke = URL.createObjectURL(
@@ -1666,7 +1653,7 @@ function AgingScheduleScreen(e) {
               ],
             }),
             i.jsx("button", {
-              disabled: !(ce != null && ce.current),
+              disabled: !ce?.current,
               onClick: Pe,
               children: i.jsx(LocalizedText, {
                 children: "Download current aging report",

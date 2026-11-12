@@ -908,9 +908,7 @@ function inspectFormulaCalculation(e, r) {
       {},
       {
         allowName(C) {
-          var T;
-          return !o.has(C) ||
-            (!r.includeHidden && (T = u.get(C)) != null && T.sheet.hidden)
+          return !o.has(C) || (!r.includeHidden && u.get(C)?.sheet.hidden)
             ? ((m = true),
               g(
                 "excluded",
@@ -961,7 +959,7 @@ function inspectFormulaCalculation(e, r) {
     ),
     w = e.sheets.find((C) => C.id === r.sheetId).cells[s],
     E = w?.raw ?? null,
-    A = typeof E == "string" && E.startsWith("=") && !(w != null && w.literal),
+    A = typeof E == "string" && E.startsWith("=") && !w?.literal,
     k = y(r.sheetId, s),
     { range, diagnostic } = y.peekSpill(r.sheetId, s);
   for (const C of y.getReferenceDiagnostics()) g("reference", C.message);
@@ -1062,21 +1060,19 @@ function EvaluateFormulaDialog(e) {
     (u(0), c(""));
   }, [h]),
     ne.useEffect(() => {
-      var w;
       const b = document.activeElement;
       return (
-        (w = o.current?.querySelector("button")) == null || w.focus(),
+        o.current?.querySelector("button")?.focus(),
         () => {
-          b != null && b.isConnected && b.focus();
+          b?.isConnected && b.focus();
         }
       );
     }, []));
   const f = h.report,
     p = f ? Math.min(d, f.steps.length - 1) : -1,
     m = f?.steps[p],
-    v = (b, y) => {
-      return `${e.workbook.sheets.find((E) => E.id === b)?.name ?? "Unavailable sheet"}!${y}`;
-    },
+    v = (b, y) =>
+      `${e.workbook.sheets.find((E) => E.id === b)?.name ?? "Unavailable sheet"}!${y}`,
     g = () => {
       if (f)
         try {
@@ -1488,13 +1484,11 @@ function CalculationInspectorDialog(e) {
     (p(0), v(""));
   }, [g]),
     ne.useEffect(() => {
-      var I;
       const k = document.activeElement;
       return (
-        (I = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
-          null || I.focus(),
+        o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
         () => {
-          k != null && k.isConnected && k.focus();
+          k?.isConnected && k.focus();
         }
       );
     }, []));
@@ -1605,7 +1599,6 @@ function CalculationInspectorDialog(e) {
                     tabIndex: s === k ? 0 : -1,
                     onClick: () => d(k),
                     onKeyDown: (F) => {
-                      var I;
                       if (
                         ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
                           F.key,
@@ -1618,9 +1611,7 @@ function CalculationInspectorDialog(e) {
                             : F.key === "End" || k === "precedents"
                               ? "dependents"
                               : "precedents";
-                        (d(O),
-                          (I = document.getElementById(`${n}-${O}`)) == null ||
-                            I.focus());
+                        (d(O), document.getElementById(`${n}-${O}`)?.focus());
                       }
                     },
                     children: k === "precedents" ? "Precedents" : "Dependents",
@@ -1927,8 +1918,8 @@ function CalculationInspectorDialog(e) {
                     ],
                   }),
                   i.jsx("ul", {
-                    children: b.references.map((k, F) => {
-                      return i.jsxs(
+                    children: b.references.map((k, F) =>
+                      i.jsxs(
                         "li",
                         {
                           children: [
@@ -1951,8 +1942,8 @@ function CalculationInspectorDialog(e) {
                           ],
                         },
                         F,
-                      );
-                    }),
+                      ),
+                    ),
                   }),
                 ],
               }),

@@ -148,9 +148,9 @@ function renderWorkbookGrid({
               children: [
                 "Editing",
                 " ",
-                activeWorkbook.sheets.find((fe) => {
-                  return fe.id === activeCellEditRef.current?.sheetId;
-                })?.name,
+                activeWorkbook.sheets.find(
+                  (fe) => fe.id === activeCellEditRef.current?.sheetId,
+                )?.name,
                 "!",
                 activeCellEditRef.current?.address,
                 " ·",

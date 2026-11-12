@@ -1,5 +1,5 @@
 import { LabeledField } from "./14-dax-data-model-engine.js";
-import { downloadBlobAsFile } from "./09-workbook-links.js";
+
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -68,8 +68,8 @@ function DataAnalysisDialog(e) {
       return `Analysis ${te}`;
     },
     [w, E] = ne.useState(y),
-    [A, k] = ne.useState(() => {
-      return a?.request.kind === "solver"
+    [A, k] = ne.useState(() =>
+      a?.request.kind === "solver"
         ? a.request
         : {
             kind: "solver",
@@ -97,8 +97,8 @@ function DataAnalysisDialog(e) {
             constraints: [],
             tolerance: 1e-8,
             maxCandidates: 5e4,
-          };
-    }),
+          },
+    ),
     [F, I] = ne.useState(() =>
       a?.request.kind === "statistics"
         ? a.request
@@ -157,12 +157,11 @@ function DataAnalysisDialog(e) {
         onValueChange: (de) => oe(parseNumericText(de)),
       });
   (ne.useEffect(() => {
-    var oe;
     const te = document.activeElement;
     return (
-      (oe = n.current?.querySelector("button")) == null || oe.focus(),
+      n.current?.querySelector("button")?.focus(),
       () => {
-        te != null && te.isConnected && te.focus();
+        te?.isConnected && te.focus();
       }
     );
   }, []),
@@ -574,8 +573,8 @@ function DataAnalysisDialog(e) {
                                 ),
                                 i.jsx("button", {
                                   disabled: A.variables.length >= 6,
-                                  onClick: () => {
-                                    return G({
+                                  onClick: () =>
+                                    G({
                                       variables: [
                                         ...A.variables,
                                         {
@@ -588,8 +587,7 @@ function DataAnalysisDialog(e) {
                                           domain: "continuous",
                                         },
                                       ],
-                                    });
-                                  },
+                                    }),
                                   children: i.jsx(LocalizedText, {
                                     children: "Add changing cell",
                                   }),
@@ -1341,14 +1339,14 @@ function DataAnalysisDialog(e) {
               children: i.jsx(LocalizedText, { children: "Preview analysis" }),
             }),
             i.jsx("button", {
-              disabled: e.readOnly || !L || !(f != null && f.result.success),
+              disabled: e.readOnly || !L || !f?.result.success,
               onClick: () => W("report"),
               children: i.jsx(LocalizedText, { children: "Save report" }),
             }),
             s === "solver" &&
               i.jsx("button", {
                 className: "primary",
-                disabled: e.readOnly || !L || !(f != null && f.result.success),
+                disabled: e.readOnly || !L || !f?.result.success,
                 onClick: () => W("apply-solution"),
                 children: i.jsx(LocalizedText, {
                   children: "Apply solution and report",
@@ -1414,7 +1412,6 @@ function buildReportSourceSheet(e) {
   };
 }
 function buildReportSnapshot(e, r, t = {}) {
-  var A, I, O;
   const n = validateObjectReportRequest(r),
     o = normalizeAnalysisPermissions(e, t),
     a = normalizeWorkbookInput(e),
@@ -1423,10 +1420,7 @@ function buildReportSnapshot(e, r, t = {}) {
     throw Error("The report source is outside the authorized host context.");
   if (!o.includeHidden && (s.hidden || s.veryHidden))
     throw Error("The report source worksheet is hidden.");
-  if (
-    a.calculation?.mode === "manual" ||
-    ((A = a.calculation) != null && A.iterative)
-  )
+  if (a.calculation?.mode === "manual" || a.calculation?.iterative)
     throw Error(
       "Report capture requires automatic, non-iterative calculation. Recalculate and retry.",
     );
@@ -1507,8 +1501,8 @@ function buildReportSnapshot(e, r, t = {}) {
   ];
   ((s.analysisReport ||
     s.dataModelReport ||
-    ((I = s.pivots) != null && I.length) ||
-    ((O = s.queries) != null && O.length)) &&
+    s.pivots?.length ||
+    s.queries?.length) &&
     y.push(
       "This worksheet contains generated report output. Captured cells are historical source values; verify the underlying analysis, model, pivot or query freshness separately.",
     ),
@@ -1545,16 +1539,12 @@ function buildReportSnapshot(e, r, t = {}) {
           address: D,
           value: B,
           text: formatNumberWithPattern(B, _, a.datePolicy?.dateSystem),
-          ...(_ != null && _.style
-            ? { style: resolveEffectiveCellStyle(_.style) }
-            : {}),
+          ...(_?.style ? { style: resolveEffectiveCellStyle(_.style) } : {}),
         };
       }),
     })),
     columns: l,
-    widths: l.map((j) => {
-      return s.columnWidths?.[String(j)] ?? 84;
-    }),
+    widths: l.map((j) => s.columnWidths?.[String(j)] ?? 84),
     excludedRows: v.filter((j) => !b.includes(j)),
     ...(d ? { object: d } : {}),
     warnings: y,
@@ -1762,9 +1752,7 @@ function renderReportSvg(e) {
     a = "";
   if (t?.kind === "chart") {
     const h = buildReportSourceSheet(r),
-      f = inspectChartSource(h, t, (m, v) => {
-        return h.cells[v]?.raw ?? null;
-      });
+      f = inspectChartSource(h, t, (m, v) => h.cells[v]?.raw ?? null);
     formatDiagnosticsMessage(f);
     const p = c_.renderToStaticMarkup(i.jsx(ChartReportSvg, { report: f }));
     ((n = 640),

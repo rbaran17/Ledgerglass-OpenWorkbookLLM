@@ -1,6 +1,5 @@
 import { buildCompositeKey } from "./11-workbook-formats-dialog.js";
-import { LabeledField } from "./14-dax-data-model-engine.js";
-import i from "react/jsx-runtime";
+
 import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
 import {
   assertWorkbookStructureEditable,
@@ -19,7 +18,7 @@ import {
   normalizeWorkbookInput,
   columnIndexToLetters,
 } from "./03-workbook-model.js";
-import { LocalizedText } from "./04-cell-input-paste-and-fill.js";
+
 import {
   readSourceHeaders,
   inspectOutputNameSafety,
@@ -126,9 +125,7 @@ function linearizeSolverFormula(e, r, t) {
       }
       let I = 0,
         O = 0;
-      const j = () => {
-          return k[I]?.text;
-        },
+      const j = () => k[I]?.text,
         z = () => {
           if (++O > 32)
             throw Error("Solver expression nesting limit exceeded.");
@@ -246,7 +243,6 @@ function linearizeSolverFormula(e, r, t) {
       return B;
     },
     p = r.variables.map((y) => {
-      var k, F;
       const w = validateAnalysisSource(e, y.cell, t),
         E = w.cells[y.cell.address],
         A = _t(y.cell.address);
@@ -254,7 +250,7 @@ function linearizeSolverFormula(e, r, t) {
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas or text.",
         );
-      if ((k = w.protection) != null && k.enabled)
+      if (w.protection?.enabled)
         throw Error("A changing worksheet is protected.");
       if (
         [...(w.pivots ?? []), ...(w.queries ?? [])].some((I) =>
@@ -268,8 +264,7 @@ function linearizeSolverFormula(e, r, t) {
         if (
           A.row === O.firstRow ||
           (I.showTotals && A.row === O.lastRow) ||
-          ((F = I.columns[A.col - O.firstCol]) != null &&
-            F.calculatedFormula) ||
+          I.columns[A.col - O.firstCol]?.calculatedFormula ||
           Object.entries(w.cells).some(([j, z]) => {
             const V = _t(j);
             return (
@@ -470,15 +465,15 @@ function solveBoundedLinearModel(e, r, t = {}) {
   const v = l.map((g) => (Object.is(g, -0) ? 0 : g));
   return (
     v.forEach((g, b) => {
-      var E;
       const y = r.variables[b].cell;
       if (
-        (E = e.sheets.find((A) => A.id === y.sheetId).validations) != null &&
-        E.some(
-          (A) =>
-            parseRangeBounds(A.range, y.address) &&
-            !validateDataValidationRule(A, g),
-        )
+        e.sheets
+          .find((A) => A.id === y.sheetId)
+          .validations?.some(
+            (A) =>
+              parseRangeBounds(A.range, y.address) &&
+              !validateDataValidationRule(A, g),
+          )
       )
         throw Error("The solution violates a changing-cell validation rule.");
     }),
@@ -796,7 +791,7 @@ function computeDescriptiveStatistics(e, r, t = {}) {
   } else if (r.method === "histogram") {
     const b = p(),
       y = r.bins;
-    if (!(y != null && y.length) || y.some((A, k) => k > 0 && A <= y[k - 1]))
+    if (!y?.length || y.some((A, k) => k > 0 && A <= y[k - 1]))
       throw Error(
         "Histogram bin upper bounds must be finite and strictly increasing.",
       );
@@ -1051,7 +1046,7 @@ function buildAnalysisReportCells(e, r) {
       const s = e.cells[`${columnIndexToLetters(a)}${o + 1}`];
       n.push({
         raw: s?.raw ?? null,
-        literal: !!(s != null && s.literal),
+        literal: !!s?.literal,
       });
     }
   return fingerprintCanonicalValue(n);

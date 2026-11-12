@@ -17,7 +17,6 @@ import {
 } from "./45-sorting-and-worksheets.js";
 
 function WorkbookManagerDialog(e) {
-  var N, R, L;
   const { text, language } = useWorkbookMessages(),
     n = ne.useRef(null),
     o = ne.useRef(e.onClose);
@@ -48,32 +47,26 @@ function WorkbookManagerDialog(e) {
   const [I, O] = ne.useState(false),
     [j, z] = ne.useState(0),
     V = !!(
-      ((N = e.workbook.structureProtection) != null && N.enabled) ||
-      e.workbook.sheets.some((U) => {
-        return U.protection?.enabled;
-      })
+      e.workbook.structureProtection?.enabled ||
+      e.workbook.sheets.some((U) => U.protection?.enabled)
     );
   (ne.useEffect(() => {
-    var H;
     const U = document.activeElement;
     return (
-      (H = n.current?.querySelector("input, button")) == null || H.focus(),
+      n.current?.querySelector("input, button")?.focus(),
       () => {
-        U != null && U.isConnected && U.focus();
+        U?.isConnected && U.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
       (g(null), O(false), z(0));
     }, [e.workbook.revision, e.workbook.id]));
-  const D = (U) => {
-      return (
-        e.workbook.sheets.find((X) => X.id === U)?.name ??
-        v?.structuralChanges.find((X) => X.path === `sheets.${U}`)?.before
-          ?.name ??
-        "Removed worksheet"
-      );
-    },
+  const D = (U) =>
+      e.workbook.sheets.find((X) => X.id === U)?.name ??
+      v?.structuralChanges.find((X) => X.path === `sheets.${U}`)?.before
+        ?.name ??
+      "Removed worksheet",
     B = v
       ? [
           ...v.cellChanges.map((U) => ({
@@ -278,12 +271,11 @@ function WorkbookManagerDialog(e) {
                             }),
                           }),
                           i.jsx("dd", {
-                            children:
-                              (R = e.workbook.metadata) != null && R.createdAt
-                                ? new Date(
-                                    e.workbook.metadata.createdAt,
-                                  ).toLocaleString()
-                                : "Not recorded in this file",
+                            children: e.workbook.metadata?.createdAt
+                              ? new Date(
+                                  e.workbook.metadata.createdAt,
+                                ).toLocaleString()
+                              : "Not recorded in this file",
                           }),
                           i.jsx("dt", {
                             children: i.jsx(LocalizedText, {
@@ -291,12 +283,11 @@ function WorkbookManagerDialog(e) {
                             }),
                           }),
                           i.jsx("dd", {
-                            children:
-                              (L = e.workbook.metadata) != null && L.modifiedAt
-                                ? new Date(
-                                    e.workbook.metadata.modifiedAt,
-                                  ).toLocaleString()
-                                : "Not recorded in this file",
+                            children: e.workbook.metadata?.modifiedAt
+                              ? new Date(
+                                  e.workbook.metadata.modifiedAt,
+                                ).toLocaleString()
+                              : "Not recorded in this file",
                           }),
                           i.jsx("dt", {
                             children: i.jsx(LocalizedText, {

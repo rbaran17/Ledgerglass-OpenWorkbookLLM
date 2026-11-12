@@ -84,7 +84,6 @@ import {
 } from "./08-chart-model.js";
 
 function evaluateWorkbookFormulas(e, r = {}, t, n) {
-  var K;
   const o = listInstalledExtensionFunctions(e),
     a = new Set([...builtinFunctionNames, ...o.map((te) => te.name)]),
     s = n?.budget ?? createCalculationBudgetTracker(e),
@@ -120,16 +119,14 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
   const j = e.definedNames?.some((te) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te.refersTo),
     ),
-    z =
-      (K = e.definedNames) != null && K.length
-        ? new RegExp(
-            `(?:^|[^A-Za-z0-9_.\\\\])(?:${e.definedNames.map((te) => te.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
-            "i",
-          )
-        : undefined,
+    z = e.definedNames?.length
+      ? new RegExp(
+          `(?:^|[^A-Za-z0-9_.\\\\])(?:${e.definedNames.map((te) => te.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
+          "i",
+        )
+      : undefined,
     V = (te) =>
-      /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te) ||
-      !!(j && z != null && z.test(te)),
+      /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te) || !!(j && z?.test(te)),
     D = buildExternalLinkAliases(e),
     B = [...e.sheets, ...D.sheets],
     _ = new Map(B.map((te) => [te.id, te])),
@@ -145,8 +142,8 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
     R.set(
       te.id,
       Object.entries(te.cells)
-        .filter(([, ae]) => {
-          return (
+        .filter(
+          ([, ae]) =>
             typeof ae.raw == "string" &&
             ae.raw.startsWith("=") &&
             !ae.literal &&
@@ -157,9 +154,8 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
               /[{}#]/.test(ae.raw.replace(/"(?:[^"]|"")*"/g, '""')) ||
               /^=\s*[^()+*/]*:/.test(ae.raw) ||
               (e.definedNames?.length &&
-                /^=\s*[A-Za-z_][A-Za-z0-9_.]*\s*$/.test(ae.raw)))
-          );
-        })
+                /^=\s*[A-Za-z_][A-Za-z0-9_.]*\s*$/.test(ae.raw))),
+        )
         .map(([ae]) => ae)
         .sort((ae, oe) => {
           const de = _t(ae),
@@ -299,8 +295,8 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
             return ye;
           },
         }),
-        (le, ce, ge) => {
-          return p(le, ce, {
+        (le, ce, ge) =>
+          p(le, ce, {
             currentSheetName: ge.position?.sheet,
             retrieve: (we) => ge.retrieveRef(we),
             issue: f,
@@ -309,19 +305,15 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
             readMetadata:
               t || n
                 ? (we, Ee) => {
-                    if (
-                      (n == null || n.read(`${we}:${Ee}`),
-                      t && !t.allowRead(we, Ee))
-                    )
+                    if ((n?.read(`${we}:${Ee}`), t && !t.allowRead(we, Ee)))
                       throw f("#BLOCKED!");
-                    t == null ||
-                      t.step({
-                        kind: "metadata",
-                        sheetId: we,
-                        address: Ee,
-                        operation: "Inspect cell metadata",
-                        result: null,
-                      });
+                    t?.step({
+                      kind: "metadata",
+                      sheetId: we,
+                      address: Ee,
+                      operation: "Inspect cell metadata",
+                      result: null,
+                    });
                   }
                 : undefined,
             isActive: (we, Ee) => y.has(`${we}:${Ee}`),
@@ -332,8 +324,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
                 return String(we.raw);
               }
             },
-          });
-        },
+          }),
         f,
         d,
         (le) => {
@@ -348,14 +339,14 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
         (le, ce, ge) => {
           const se =
             le && typeof le == "object" && "ref" in le ? le.ref : undefined;
-          if (!(se != null && se.from) || !se.to) return;
+          if (!se?.from || !se.to) return;
           const we = U(se.sheet ?? te.position?.sheet),
             Ee = `${columnIndexToLetters(se.from.col + ge - 1)}${se.from.row + ce}`;
           if (t && !t.allowRead(we.id, Ee)) throw f("#BLOCKED!");
-          n == null || n.read(`${we.id}:${Ee}`);
+          n?.read(`${we.id}:${Ee}`);
           const Ae = we.cells[Ee];
           if (
-            (Ae != null && Ae.literal) ||
+            Ae?.literal ||
             typeof Ae?.raw != "string" ||
             !Ae.raw.startsWith("=")
           )
@@ -366,8 +357,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
             const qe = O++;
             try {
               if (
-                t != null &&
-                t.allowDatabaseCriterion &&
+                t?.allowDatabaseCriterion &&
                 !t.allowDatabaseCriterion(
                   we.id,
                   shiftFormulaReferences(ye, Pe, 0),
@@ -386,7 +376,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
                 throw f("#LIMIT!");
               return V(Re)
                 ? H(Re.slice(1), we.id, Ee)
-                : (I[qe] ?? (I[qe] = G())).parse(
+                : (I[qe] ??= G()).parse(
                     $(Re.slice(1), we.id, Ee),
                     {
                       sheet: we.name,
@@ -522,7 +512,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
           )
             throw f("#NAME?");
           const ge = F++,
-            se = k[ge] ?? (k[ge] = G()),
+            se = (k[ge] ??= G()),
             we = se._callFunction;
           se._callFunction = (Ee, Ae) =>
             Ee === y5
@@ -563,7 +553,6 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
       );
     },
     X = (te, ae) => {
-      var ye;
       if (++T > workbookLimits.maxCells) return f("#LIMIT!");
       let oe, de;
       try {
@@ -577,12 +566,12 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
       const Se = `${te}:${ae}`,
         le = D.values.get(Se);
       if (le) return le.type === "error" ? f(String(le.value)) : le.value;
-      n == null || n.read(Se);
+      n?.read(Se);
       const ce = n?.value(Se, y.size > 0 || w.size > 0);
       if (ce) return ce.type === "error" ? f(String(ce.value)) : ce.value;
-      for (const Te of y) (ye = E.get(Te)) == null || ye.add(Se);
+      for (const Te of y) E.get(Te)?.add(Se);
       if (y.has(Se) || w.has(Se))
-        return (n == null || n.cycle([...y, ...w, Se]), f("#CYCLE!"));
+        return (n?.cycle([...y, ...w, Se]), f("#CYCLE!"));
       if (m.has(Se)) return m.get(Se);
       if (v.has(Se)) return v.get(Se).value;
       const ge = he.cells[ae];
@@ -609,9 +598,8 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
       if (typeof ge.raw != "string" || !ge.raw.startsWith("=") || ge.literal)
         return ge.raw;
       const se = ge.raw;
-      n == null || n.enter(Se);
+      n?.enter(Se);
       let Ee = (() => {
-        var $e;
         if (
           y.size + w.size >= fileImportLimits.maxFormulaDepth ||
           se.length > fileImportLimits.maxFormulaLength ||
@@ -663,7 +651,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
         (y.add(Se), E.set(Se, new Set()));
         let Re;
         try {
-          const Je = A[ht] ?? (A[ht] = G()),
+          const Je = (A[ht] ??= G()),
             ze = Pe
               ? H(Te, te, ae)
               : Je.parse(
@@ -734,7 +722,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
                 for (let mt = 0; mt < _e; mt++) {
                   const Wt = `${columnIndexToLetters(de + mt)}${oe + nt + 1}`,
                     Zt = he.cells[Wt];
-                  if (($e = E.get(Se)) != null && $e.has(`${te}:${Wt}`)) {
+                  if (E.get(Se)?.has(`${te}:${Wt}`)) {
                     lt = true;
                     break;
                   }
@@ -809,37 +797,35 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
       return (
         Ae && (Ee = f(Ae)),
         m.set(Se, Ee),
-        n == null ||
-          n.leave(
-            Se,
-            isFormulaError(Ee)
-              ? { type: "error", value: Ee.error }
-              : {
-                  type:
-                    Ee === null
-                      ? "blank"
-                      : typeof Ee == "string"
-                        ? "text"
-                        : typeof Ee == "boolean"
-                          ? "boolean"
-                          : "number",
-                  value: Ee,
-                },
-          ),
-        t == null ||
-          t.step({
-            kind: "formula",
-            sheetId: te,
-            address: ae,
-            operation: ge.raw,
-            result: Ee,
-          }),
+        n?.leave(
+          Se,
+          isFormulaError(Ee)
+            ? { type: "error", value: Ee.error }
+            : {
+                type:
+                  Ee === null
+                    ? "blank"
+                    : typeof Ee == "string"
+                      ? "text"
+                      : typeof Ee == "boolean"
+                        ? "boolean"
+                        : "number",
+                value: Ee,
+              },
+        ),
+        t?.step({
+          kind: "formula",
+          sheetId: te,
+          address: ae,
+          operation: ge.raw,
+          result: Ee,
+        }),
         Ee
       );
     },
     J = (te, ae) => J.getTypedValue(te, ae).value;
   J.getTypedValue = (te, ae) => {
-    if (n?.running?.call(n) === false)
+    if (n?.running?.() === false)
       try {
         const Se = _t(ae),
           le = _.get(te);
@@ -921,7 +907,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
         (y.add(de), E.set(de, new Set()));
         const se = le
             ? H(ce, te, ae)
-            : (q ?? (q = G())).parse(
+            : (q ??= G()).parse(
                 ce,
                 { sheet: he.name, row: Se.row + 1, col: Se.col + 1 },
                 true,
@@ -968,9 +954,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
       const oe = b.get(`${te}:${ae}`);
       return oe ? { ...oe } : undefined;
     }),
-    (J.getSpillAnchor = (te, ae) => {
-      return (J(te, ae), v.get(`${te}:${ae}`)?.anchor);
-    }),
+    (J.getSpillAnchor = (te, ae) => (J(te, ae), v.get(`${te}:${ae}`)?.anchor)),
     (J.getSpillEntries = (te) => {
       s.begin();
       try {
@@ -981,7 +965,7 @@ function evaluateWorkbookFormulas(e, r = {}, t, n) {
             new Error("Spill discovery exceeds 1,000 possible array formulas.")
           );
         T = 0;
-        for (const he of n?.running?.call(n) === false ? [] : oe)
+        for (const he of n?.running?.() === false ? [] : oe)
           if ((Q(te, he), T > workbookLimits.maxCells))
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
@@ -1185,15 +1169,9 @@ function cU(e, r, t, n) {
         n.spills
           .filter((h) => h.sheetId === c)
           .map(({ address, anchor }) => ({ address, anchor })),
-      getSpillAnchor: (c, h) => {
-        return o.get(s(c, h))?.anchor;
-      },
-      getSpillRange: (c, h) => {
-        return a.get(s(c, h))?.range;
-      },
-      getSpillDiagnostic: (c, h) => {
-        return structuredClone(a.get(s(c, h))?.diagnostic);
-      },
+      getSpillAnchor: (c, h) => o.get(s(c, h))?.anchor,
+      getSpillRange: (c, h) => a.get(s(c, h))?.range,
+      getSpillDiagnostic: (c, h) => structuredClone(a.get(s(c, h))?.diagnostic),
       peekSpill: (c, h) => {
         const f = a.get(s(c, h));
         return f
@@ -1477,8 +1455,7 @@ function recalculateWorkbookFormulas(e, r, t, n) {
   }
   formulas.forEach((U, G) => {
     !l.has(G) &&
-      t != null &&
-      t.values.has(G) &&
+      t?.values.has(G) &&
       (h.set(G, t.values.get(G)), c.set(G, new Set(t.dependencies.get(G))));
   });
   const v = new Map(h),
@@ -1509,7 +1486,7 @@ function recalculateWorkbookFormulas(e, r, t, n) {
           q.has(X) || (E >= j5 ? (w = "#LIMIT!") : (q.add(X), E++));
         },
         value(X, J) {
-          return J && G != null && G.has(X) ? G.get(X) : U.get(X);
+          return J && G?.has(X) ? G.get(X) : U.get(X);
         },
         enter(X) {
           (H.push(X),
@@ -1710,7 +1687,6 @@ function recalculateWorkbookFormulas(e, r, t, n) {
     L.set(Q, [...(L.get(Q) ?? []), H]);
   }
   const $ = [...formulas].map(([U, G]) => {
-    var X;
     const H = h.get(U) ?? pendingFormulaValue,
       Q = t?.values.get(U);
     return {
@@ -1728,8 +1704,7 @@ function recalculateWorkbookFormulas(e, r, t, n) {
         : {}),
       ...(H.value === "#PENDING!" &&
       Q?.value === "#PENDING!" &&
-      (X = R.get(U)) != null &&
-      X.lastKnown
+      R.get(U)?.lastKnown
         ? { lastKnown: R.get(U).lastKnown }
         : {}),
       dependencies: [...(c.get(U) ?? [])].sort(),
@@ -1824,11 +1799,10 @@ function calculateWorkbookWithSettings(e, r = {}, t) {
     : evaluateWorkbookFormulas(e, r, t);
 }
 function updateConditionalFormatRules(e, r, t, n = {}) {
-  var p;
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = e.sheets.find((m) => m.id === r);
   if (!o) throw Error("Worksheet no longer exists.");
-  if ((p = o.protection) != null && p.enabled)
+  if (o.protection?.enabled)
     throw Error("Unprotect the worksheet before changing conditional formats.");
   const a = normalizeConditionalRules(t),
     s = o.conditionalFormats ?? [],
@@ -1921,7 +1895,7 @@ function buildCalculationEvidence(e, r) {
               1e-10 * Math.max(1, Math.abs(a.cache.value), Math.abs(u.value))
             : a.cache.value === u.value),
         c = s
-          ? d != null && d.literal
+          ? d?.literal
             ? "neutralized-or-literal"
             : d?.raw !== a.formula
               ? "formula-changed"
@@ -2137,3 +2111,15 @@ export {
   acceptWorkerCalculationResult,
   checkDataValidationBatch,
 };
+
+/* Also used by the workers. */
+export {
+  PO,
+  cellSnapshotSchema,
+  filterRequestSchema,
+  kU,
+  recalculateWorkbookFormulas,
+};
+
+/* Also used by the workers. */
+export { evaluateValidationRule };

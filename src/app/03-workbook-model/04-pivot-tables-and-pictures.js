@@ -1,9 +1,8 @@
 import {
   isNonArrayObject,
-  isPlainObjectValue,
   throwWorkbookError,
 } from "./01-cell-styles-and-themes.js";
-import { createUuid, isNullOrEmptyValue } from "./03-defined-names.js";
+import { isNullOrEmptyValue } from "./03-defined-names.js";
 import { boundedTextSchema } from "../01-core-schemas-and-hashing.js";
 import { flattenNestedValues } from "../02-financial-functions.js";
 import {
@@ -54,7 +53,6 @@ import {
 } from "./03-defined-names.js";
 
 function inspectPictureDataUrl(e) {
-  var s;
   if (
     typeof e != "string" ||
     e.length > Math.ceil(maxPictureHashBytes / 3) * 4 + 30
@@ -97,15 +95,13 @@ function inspectPictureDataUrl(e) {
       ((n = d.getUint32(16)),
       (o = d.getUint32(20)),
       a(),
-      !(
-        (s = {
-          0: [1, 2, 4, 8, 16],
-          2: [8, 16],
-          3: [1, 2, 4, 8],
-          4: [8, 16],
-          6: [8, 16],
-        }[t[25]]) != null && s.includes(t[24])
-      ) ||
+      !{
+        0: [1, 2, 4, 8, 16],
+        2: [8, 16],
+        3: [1, 2, 4, 8],
+        4: [8, 16],
+        6: [8, 16],
+      }[t[25]]?.includes(t[24]) ||
         t[26] !== 0 ||
         t[27] !== 0 ||
         t[28] > 1)
@@ -424,16 +420,14 @@ const createAggregateAccumulator = (e = false) => ({
   ...(e ? { distinct: new Set() } : {}),
 });
 function SO(e, r) {
-  var t;
   (isNullOrEmptyValue(r) ||
     (e.count++,
-    (t = e.distinct) == null ||
-      t.add(
-        JSON.stringify([
-          typeof r,
-          typeof r == "string" ? r.toLocaleLowerCase("en-US") : r,
-        ]),
-      )),
+    e.distinct?.add(
+      JSON.stringify([
+        typeof r,
+        typeof r == "string" ? r.toLocaleLowerCase("en-US") : r,
+      ]),
+    )),
     isFiniteNumber(r) &&
       (e.numeric++,
       (e.sum += r),
@@ -492,7 +486,7 @@ function computePivotTable(e, r, t) {
           ...C,
           index: n(T?.field ?? C.field),
           calculated: T,
-          other: T != null && T.otherField ? n(T.otherField) : undefined,
+          other: T?.otherField ? n(T.otherField) : undefined,
         }
       );
     }),
@@ -608,9 +602,7 @@ function computePivotTable(e, r, t) {
       !o.length &&
       p.set("[]", { key: "[]", parts: [], subtotal: false }));
   function E(C, T) {
-    var $;
-    if (!e.subtotals && !(($ = e.sorts) != null && $.length))
-      return [...C.values()];
+    if (!e.subtotals && !e.sorts?.length) return [...C.values()];
     if (!T.length) return [...C.values()];
     const N = new Map();
     for (const U of C.values())
@@ -1021,8 +1013,7 @@ function findRowOrigin(e, r, t) {
   return o ? { ...o } : null;
 }
 function validateRowOrigins(e, r) {
-  var n;
-  if (!((n = e.rowOrigins) != null && n.length)) return;
+  if (!e.rowOrigins?.length) return;
   const t = new Map((r.rowOrigins ?? []).map((o) => [o.id, o]));
   for (const o of e.rowOrigins)
     if (
@@ -1099,9 +1090,7 @@ const computePivotRefreshFingerprint = (e) => {
   );
 };
 function findPivotDefinition(e, r) {
-  const t = e.sheets.find((a) => {
-      return a.pivots?.some((d) => d.id === r);
-    }),
+  const t = e.sheets.find((a) => a.pivots?.some((d) => d.id === r)),
     n = t?.pivots?.find((a) => a.id === r);
   return (
     (!t || !n) && throwWorkbookError("Pivot definition not found."),
@@ -1636,11 +1625,13 @@ function evaluateDatabaseFunction(e, r, t) {
           });
     };
   let g = 0;
-  const b = s.slice(1).map((T, N) =>
-    T.map((R, L) => {
-      return l[L] < 0 ? t.criterionFormula?.call(t, r[2], N + 1, L) : undefined;
-    }),
-  );
+  const b = s
+    .slice(1)
+    .map((T, N) =>
+      T.map((R, L) =>
+        l[L] < 0 ? t.criterionFormula?.(r[2], N + 1, L) : undefined,
+      ),
+    );
   l.forEach((T, N) => {
     T < 0 && !b.some((R) => R[N]) && n();
   });
@@ -1945,3 +1936,25 @@ export {
   isFormulaCellValue,
 };
 export { throwErrorMessage, isPlainDataObject, isFiniteNumber };
+
+/* Also used by the workers. */
+export {
+  FormulaErrorClass,
+  a1CellPattern,
+  a1ReferenceAnchorPattern,
+  aggregateFunctionNames,
+  databaseFunctionLimits,
+  linkedCellValueSchema,
+  tU,
+  workbookLinkPackageSchema,
+  workbookLinkSourceSchema,
+};
+
+/* Also used by the workers. */
+export {
+  assertPlainTextLabel,
+  isBoundedString,
+  isIsoDateString,
+  requireBoundedList,
+  requirePivotFieldName,
+};

@@ -60,9 +60,10 @@ function buildExtensionCallReview(e, r, t = {}) {
         );
       const p = evaluateExtensionFunctionCall(s, h, f, o);
       if (
-        ((l += p.reduce((v, g) => {
-          return v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1);
-        }, 0)),
+        ((l += p.reduce(
+          (v, g) => v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1),
+          0,
+        )),
         l > extensionRuntimeLimits.inputCells ||
           d.length >= extensionRuntimeLimits.calls)
       )
@@ -118,7 +119,6 @@ async function runReviewedExtensionCalls(
   t = {},
   n = { approved: false },
 ) {
-  var c, h, f;
   const o = k$.get(r),
     a = validateExtensionHostPolicy(e, t);
   if (!o || o.used)
@@ -139,12 +139,11 @@ async function runReviewedExtensionCalls(
   const s = n.timeoutMs ?? extensionRuntimeLimits.timeoutMs;
   if (!Number.isInteger(s) || s < 1 || s > extensionRuntimeLimits.maxTimeoutMs)
     throw Error("Extension timeout must be between 1 and 60,000 milliseconds.");
-  if ((c = n.signal) != null && c.aborted)
-    throw Error("Extension processing cancelled.");
+  if (n.signal?.aborted) throw Error("Extension processing cancelled.");
   o.used = true;
   const d = new AbortController(),
     u = () => d.abort();
-  (h = n.signal) == null || h.addEventListener("abort", u, { once: true });
+  n.signal?.addEventListener("abort", u, { once: true });
   let l;
   try {
     const p = new Promise((O, j) => {
@@ -270,9 +269,7 @@ async function runReviewedExtensionCalls(
       I
     );
   } finally {
-    (clearTimeout(l),
-      (f = n.signal) == null || f.removeEventListener("abort", u),
-      d.abort());
+    (clearTimeout(l), n.signal?.removeEventListener("abort", u), d.abort());
   }
 }
 function applyReviewedExtensionResults(e, r, t = {}) {
@@ -357,9 +354,8 @@ function AddInsAndCustomFunctionsDialog(e) {
       allowedSheetIds: t.current.allowedSheetIds,
     }),
     B = () => {
-      var W;
       (o.current++,
-        (W = n.current) == null || W.abort(),
+        n.current?.abort(),
         (n.current = null),
         b(false),
         h(null),
@@ -368,15 +364,11 @@ function AddInsAndCustomFunctionsDialog(e) {
         v(false));
     };
   (ne.useEffect(() => {
-    var K;
     const W = document.activeElement;
     return (
-      (K = r.current) == null || K.focus(),
+      r.current?.focus(),
       () => {
-        var te;
-        (o.current++,
-          (te = n.current) == null || te.abort(),
-          W != null && W.isConnected && W.focus());
+        (o.current++, n.current?.abort(), W?.isConnected && W.focus());
       }
     );
   }, []),
@@ -678,8 +670,7 @@ function AddInsAndCustomFunctionsDialog(e) {
                     "Review every argument before allowing this host adapter to process it. Source workbooks and credentials are not included in the request.",
                 }),
                 i.jsx("button", {
-                  disabled:
-                    !(V != null && V.enabled) || e.readOnly || g || !!I.error,
+                  disabled: !V?.enabled || e.readOnly || g || !!I.error,
                   onClick: T,
                   children: "Review function inputs",
                 }),
@@ -708,8 +699,8 @@ function AddInsAndCustomFunctionsDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: c.requests.map((W) => {
-                            return i.jsxs(
+                          children: c.requests.map((W) =>
+                            i.jsxs(
                               "tr",
                               {
                                 children: [
@@ -737,8 +728,8 @@ function AddInsAndCustomFunctionsDialog(e) {
                                 ],
                               },
                               W.cacheKey,
-                            );
-                          }),
+                            ),
+                          ),
                         }),
                       ],
                     }),

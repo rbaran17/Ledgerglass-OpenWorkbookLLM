@@ -199,10 +199,7 @@ function evaluateFinancialFunction(e, r, t) {
     s = (k, F, I) => dateToSerial(k, F, I, a),
     d = (k) => serialToDateParts(k, a),
     u = (k) => {
-      var F;
-      ((o = true),
-        (F = t.report) == null ||
-          F.call(t, { functionName: e, convention: n, ...k }));
+      ((o = true), t.report?.({ functionName: e, convention: n, ...k }));
     },
     l = (k, F) => {
       throw (u({ status: "error", error: k, message: F }), t.issue(k));
@@ -733,11 +730,7 @@ function broadcastOverArrays(e, r, t) {
       Array.isArray(s) ? (s.every(Array.isArray) ? s : [s]) : [[s]],
     ),
     o = Math.max(...n.map((s) => s.length)),
-    a = Math.max(
-      ...n.map((s) => {
-        return s[0]?.length ?? 0;
-      }),
-    );
+    a = Math.max(...n.map((s) => s[0]?.length ?? 0));
   return !o ||
     !a ||
     n.some(
@@ -827,7 +820,6 @@ function parseDateTimeText(e) {
     );
 }
 function evaluateTextFunction(e, r, t) {
-  var g;
   if (!supportedTextFunctionNames.includes(e)) return notTextFunctionSentinel;
   const n = (b = "#VALUE!") => {
       throw t.issue(b);
@@ -998,7 +990,7 @@ function evaluateTextFunction(e, r, t) {
     const E = /%+$/.exec(w)?.[0].length ?? 0;
     w = w.slice(0, w.length - E);
     const A = w.split(b);
-    ((A.length > 2 || ((g = A[1]) != null && g.includes(y))) && n(),
+    ((A.length > 2 || A[1]?.includes(y)) && n(),
       (w = A[0].split(y).join("") + (A.length === 2 ? "." + A[1] : "")),
       /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(w) || n());
     let k = Number(w);
@@ -1085,3 +1077,13 @@ export {
   minColumnWidth,
 };
 export { coerceValueToText, flattenNestedValues };
+
+/* Also used by the workers. */
+export {
+  compensatedSum,
+  countSignChanges,
+  financialArgumentRanges,
+  parseDateTimeText,
+  solveRateCandidates,
+  supportedTextFunctionNames,
+};

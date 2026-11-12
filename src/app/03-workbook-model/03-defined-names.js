@@ -787,13 +787,8 @@ function m5(e, r = false) {
     return t;
   }
   return t
-    .filter((o) => {
-      var a;
-      return !((a = n.get(o.start)) != null && a.excluded);
-    })
-    .map((o) => {
-      return { ...o, bound: n.get(o.start)?.bound };
-    });
+    .filter((o) => !n.get(o.start)?.excluded)
+    .map((o) => ({ ...o, bound: n.get(o.start)?.bound }));
 }
 function replaceTextSpans(e, r, t) {
   let n = "",
@@ -1257,7 +1252,6 @@ function evaluateReusableFormula(e, r, t, n) {
       );
     },
     b = (E, A, k, F, I) => {
-      var _, C, T, N;
       if ((c(1, I), E.kind === "symbol")) return v(E, A, k, F, I);
       if (E.kind === "group") return w(E.body, A, k, F, I + 1);
       if (E.kind === "text") return m(E.text, F, []);
@@ -1267,8 +1261,7 @@ function evaluateReusableFormula(e, r, t, n) {
         for (let L = 0; L < E.args.length - 1; L += 2) {
           const $ = w(E.args[L + 1], A, R, F, I + 1),
             U = normalizeBindingName(validateBindingName(E.args[L]).name);
-          (R.set(U, h($)),
-            (_ = n.step) == null || _.call(n, "binding", `LET ${U}`, $));
+          (R.set(U, h($)), n.step?.("binding", `LET ${U}`, $));
         }
         return w(E.args.at(-1), A, R, F, I + 1);
       }
@@ -1301,13 +1294,11 @@ function evaluateReusableFormula(e, r, t, n) {
             return n.issue("#VALUE!");
           const L = typeof R == "string" ? R.toUpperCase() === "TRUE" : !!R;
           return (
-            (C = n.step) == null ||
-              C.call(
-                n,
-                "branch",
-                `IF: ${L ? "true" : "false"} branch selected`,
-                R,
-              ),
+            n.step?.(
+              "branch",
+              `IF: ${L ? "true" : "false"} branch selected`,
+              R,
+            ),
             E.args[L ? 1 : 2] ? w(E.args[L ? 1 : 2], A, k, F, I + 1) : false
           );
         }
@@ -1322,13 +1313,7 @@ function evaluateReusableFormula(e, r, t, n) {
             return R;
           const L = n.isIssue(R) && (j === "IFERROR" || R.error === "#N/A");
           return (
-            (T = n.step) == null ||
-              T.call(
-                n,
-                "branch",
-                `${j}: ${L ? "fallback" : "value"} selected`,
-                R,
-              ),
+            n.step?.("branch", `${j}: ${L ? "fallback" : "value"} selected`, R),
             L ? w(E.args[1], A, k, F, I + 1) : R
           );
         }
@@ -1344,8 +1329,7 @@ function evaluateReusableFormula(e, r, t, n) {
         ),
         B = g(V, D, I);
       return (
-        (N = n.step) == null ||
-          N.call(n, "function", A.slice(E.callee.start, E.callee.end), B),
+        n.step?.("function", A.slice(E.callee.start, E.callee.end), B),
         B
       );
     },
@@ -1401,26 +1385,18 @@ function evaluateReusableFormula(e, r, t, n) {
 function summarizeWorksheets(e, r = {}) {
   return e.sheets
     .filter((t) => !r.allowedSheetIds || r.allowedSheetIds.includes(t.id))
-    .map((t) => {
-      var n;
-      return {
-        sheetId: t.id,
-        name: t.name,
-        visibility: t.veryHidden
-          ? "veryHidden"
-          : t.hidden
-            ? "hidden"
-            : "visible",
-        tabColor: t.tabColor ?? null,
-        storedCellCount: Object.keys(t.cells).length,
-        formulaCellCount: Object.values(t.cells).filter(
-          (o) =>
-            !o.literal && typeof o.raw == "string" && o.raw.startsWith("="),
-        ).length,
-        calculationParticipation: "included-when-referenced",
-        structureLocked: !!((n = e.structureProtection) != null && n.enabled),
-      };
-    });
+    .map((t) => ({
+      sheetId: t.id,
+      name: t.name,
+      visibility: t.veryHidden ? "veryHidden" : t.hidden ? "hidden" : "visible",
+      tabColor: t.tabColor ?? null,
+      storedCellCount: Object.keys(t.cells).length,
+      formulaCellCount: Object.values(t.cells).filter(
+        (o) => !o.literal && typeof o.raw == "string" && o.raw.startsWith("="),
+      ).length,
+      calculationParticipation: "included-when-referenced",
+      structureLocked: !!e.structureProtection?.enabled,
+    }));
 }
 const createUuid = () => crypto.randomUUID();
 
@@ -1509,9 +1485,7 @@ function validateWorkbookStructureProtection(e, r) {
     throwWorkbookError("At least one worksheet must remain visible.");
 }
 function assertWorkbookStructureEditable(e) {
-  var r;
-  (r = e.structureProtection) != null &&
-    r.enabled &&
+  e.structureProtection?.enabled &&
     throwWorkbookError(
       "Workbook structure is protected. Unprotect the structure before changing worksheets.",
     );
@@ -1537,9 +1511,7 @@ function Q6(e, r) {
       /^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}/,
       /^\$?[1-9]\d*:\$?[1-9]\d*/,
       /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
-    ].map((o) => {
-      return o.exec(e.slice(r))?.[0].length ?? 0;
-    }),
+    ].map((o) => o.exec(e.slice(r))?.[0].length ?? 0),
   );
   if (!t) return r;
   let n = r + t;
@@ -1814,8 +1786,7 @@ function validateTableColumnType(e) {
   return e;
 }
 function applyTableSourceEvidence(e, r) {
-  var n;
-  if (!((n = e.tableEvidence) != null && n.length)) return r;
+  if (!e.tableEvidence?.length) return r;
   const t = new Map(e.tableEvidence.map((o) => [o.id, o]));
   for (const o of r.tableEvidence ?? []) {
     const a = t.get(o.id);
@@ -2090,3 +2061,16 @@ export {
   isVisibleWorksheet,
 };
 export { unquoteSheetName, quoteSheetName };
+
+/* Also used by the workers. */
+export {
+  Bne,
+  S5,
+  inspectFormulaForMigration,
+  isFormulaClosure,
+  reusableFormulaLimits,
+  sheetPrefixPattern,
+};
+
+/* Also used by the workers. */
+export { invalidXmlCharPattern, isPlainObject, validateWorksheetName };

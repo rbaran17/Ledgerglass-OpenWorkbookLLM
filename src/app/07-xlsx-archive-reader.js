@@ -14,9 +14,9 @@ import {
 import {
   unsupportedXlsxMarkers,
   excelMessagePatterns,
-  fileParserWorkerSource,
   fileProcessingErrorMessages,
 } from "./06-analysis-tools.js";
+import { fileParserWorkerSource } from "./06b-file-parser-worker-source.js";
 
 class FileProcessingError extends Error {
   constructor(r, t = fileProcessingErrorMessages[r]) {
@@ -128,7 +128,6 @@ function fileByteLimitFor(e, r) {
           : workbookLimits.maxFileBytes;
 }
 function assertImportFileAllowed(e, r, t) {
-  var o;
   if (
     typeof r != "string" ||
     !r.length ||
@@ -141,8 +140,8 @@ function assertImportFileAllowed(e, r, t) {
       "FILE_TYPE",
       "Legacy or macro-enabled Excel formats are not supported. Save as XLSX, CSV or native JSON.",
     );
-  if (!(
-    (o = {
+  if (
+    !{
       workbook: /\.(xlsx|xltx|csv|tsv|json)$/i,
       source: /\.(json|xml|pdf|png|jpe?g|html?)$/i,
       formats: /\.(xls|xlsb|xlsm|xltx|xltm|ods)$/i,
@@ -150,8 +149,8 @@ function assertImportFileAllowed(e, r, t) {
       automation: /\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm|xlsx|xltx|xls|xlsb)$/i,
       json: /\.json$/i,
       picture: /\.(png|jpe?g)$/i,
-    }[e]) != null && o.test(e === "picture" ? r.trim() : r)
-  ))
+    }[e]?.test(e === "picture" ? r.trim() : r)
+  )
     throw new FileProcessingError("FILE_TYPE");
   if (!Number.isSafeInteger(t) || t < 0 || t > fileByteLimitFor(e, r))
     throw new FileProcessingError(
@@ -181,15 +180,9 @@ function createBrowserFileWorker(e = {}) {
         onerror: null,
       };
     return (
-      (n.onmessage = (a) => {
-        return o.onmessage?.call(o, { data: a.data });
-      }),
-      (n.onerror = () => {
-        return o.onerror?.call(o, {});
-      }),
-      (n.onmessageerror = () => {
-        return o.onerror?.call(o, {});
-      }),
+      (n.onmessage = (a) => o.onmessage?.({ data: a.data })),
+      (n.onerror = () => o.onerror?.({})),
+      (n.onmessageerror = () => o.onerror?.({})),
       o
     );
   } catch (n) {
@@ -220,25 +213,16 @@ async function createNodeFileWorker() {
       onerror: null,
     };
   return (
-    t.on("message", (o) => {
-      return n.onmessage?.call(n, { data: o });
-    }),
-    t.on("error", () => {
-      return n.onerror?.call(n, {});
-    }),
-    t.on("messageerror", () => {
-      return n.onerror?.call(n, {});
-    }),
-    t.on("exit", () => {
-      return n.onerror?.call(n, {});
-    }),
+    t.on("message", (o) => n.onmessage?.({ data: o })),
+    t.on("error", () => n.onerror?.({})),
+    t.on("messageerror", () => n.onerror?.({})),
+    t.on("exit", () => n.onerror?.({})),
     n
   );
 }
 function createFileWorker() {
-  var e;
   if (typeof Worker < "u") return createBrowserFileWorker();
-  if (typeof process < "u" && (e = process.versions) != null && e.node)
+  if (typeof process < "u" && process.versions?.node)
     return createNodeFileWorker();
   throw Error("File worker unavailable.");
 }
@@ -273,7 +257,6 @@ function readFileAsArrayBuffer(e, r) {
       });
 }
 async function runFileImport(e, r, t = {}, n) {
-  var a;
   if (t.reliability) {
     const { reliability, ...d } = t;
     return reliability.run("file", e, () => runFileImport(e, r, d, n));
@@ -282,27 +265,24 @@ async function runFileImport(e, r, t = {}, n) {
   const o = t.timeoutMs ?? u1.defaultTimeoutMs;
   if (!Number.isInteger(o) || o < 1 || o > u1.maxTimeoutMs)
     throw new FileProcessingError("FILE_LIMIT");
-  if ((a = t.signal) != null && a.aborted)
-    throw new FileProcessingError("FILE_CANCELLED");
+  if (t.signal?.aborted) throw new FileProcessingError("FILE_CANCELLED");
   if (activeFileImportCount >= u1.maxConcurrent)
     throw new FileProcessingError("FILE_BUSY");
   return (
     activeFileImportCount++,
     new Promise((s, d) => {
-      var g, b;
       let u = false,
         l;
       const c = new AbortController(),
         h = crypto.randomUUID(),
         f = performance.now(),
         p = (y, w) => {
-          var E;
           if (!u) {
             if (
               ((u = true),
               activeFileImportCount--,
               clearTimeout(v),
-              (E = t.signal) == null || E.removeEventListener("abort", m),
+              t.signal?.removeEventListener("abort", m),
               c.abort(),
               l)
             ) {
@@ -317,9 +297,8 @@ async function runFileImport(e, r, t = {}, n) {
         m = () => p(new FileProcessingError("FILE_CANCELLED")),
         v = setTimeout(() => p(new FileProcessingError("FILE_TIMEOUT")), o);
       if (
-        ((g = t.signal) == null ||
-          g.addEventListener("abort", m, { once: true }),
-        (b = t.signal) != null && b.aborted)
+        (t.signal?.addEventListener("abort", m, { once: true }),
+        t.signal?.aborted)
       ) {
         m();
         return;
@@ -431,9 +410,8 @@ function assertXlsxExpansionLimit(e, r, t) {
     );
 }
 function parseWorksheetCells(e, r, t = 0) {
-  const n = (c, h) => {
-      return new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)?.[2];
-    },
+  const n = (c, h) =>
+      new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)?.[2],
     o = e.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, "");
   let a = 0,
     s = 0,
@@ -703,9 +681,7 @@ function parseWorksheetXml(e, r, t, n) {
         throwInvalidXlsx(
           `XML complexity exceeds the supported budget in ${r}.`,
         );
-      const f = (m) => {
-          return h.attributes[m]?.value;
-        },
+      const f = (m) => h.attributes[m]?.value,
         p = u.at(-1);
       if (
         (u.push(h.local),
@@ -833,7 +809,7 @@ function parseWorksheetXml(e, r, t, n) {
       }
     }),
     o.on("text", (h) => {
-      l != null && l.inValue && (l.value += h);
+      l?.inValue && (l.value += h);
     }),
     o.on("closetag", (h) => {
       if (l && h.local === "v") {

@@ -73,14 +73,13 @@ function createRowColumnAndFillActions({
       Xe = Ue.sheets.find((rr) => rr.id === activeSheet.id),
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
-      !Object.entries(Oe).some(([rr, Mr]) => {
-        return (
+      !Object.entries(Oe).some(
+        ([rr, Mr]) =>
           (Xe[gt]?.[rr] ??
             (fe === "column"
               ? defaultColumnWidthOf(Xe)
-              : defaultRowHeightOf(Xe))) !== Mr
-        );
-      })
+              : defaultRowHeightOf(Xe))) !== Mr,
+      )
     )
       return;
     const wt = _t(activeCellAddress),

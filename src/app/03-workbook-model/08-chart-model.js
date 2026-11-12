@@ -63,7 +63,6 @@ function serializeDefinedNames(e, r) {
   return insertDefinedNamesIntoWorkbookXml(e, o);
 }
 function inspectChartSource(e, r, t) {
-  var I, O;
   (r.kind !== "chart" || !supportedChartKinds.includes(r.chart)) &&
     failWithMessage("Choose a supported chart type.");
   const n = r.chart,
@@ -104,13 +103,11 @@ function inspectChartSource(e, r, t) {
         included: s.series === undefined || !!B,
       };
     });
-  ((I = s.series) != null &&
-    I.some((z) => z.column < u + 1 || z.column > a.lastCol + 1) &&
+  (s.series?.some((z) => z.column < u + 1 || z.column > a.lastCol + 1) &&
     failWithMessage(
       "A selected chart series no longer exists in its source range. Re-select series.",
     ),
-    (O = s.includedRows) != null &&
-      O.some((z) => z < d + 1 || z > a.lastRow + 1) &&
+    s.includedRows?.some((z) => z < d + 1 || z > a.lastRow + 1) &&
       failWithMessage(
         "A chart filter row is outside its source range. Reset the row filter.",
       ));
@@ -742,7 +739,6 @@ function normalizeTableDefinitions(e, r) {
       const t = new Set(),
         n = new Set();
       r.tables = e.tables.map((s) => {
-        var p;
         (!isPlainDataObject(s) ||
           !Array.isArray(s.columns) ||
           typeof s.showTotals != "boolean" ||
@@ -753,8 +749,7 @@ function normalizeTableDefinitions(e, r) {
           u = validateTableName(s.name),
           l = toA1RangeAddress(xf(s.range, "Table range", 50)),
           c = resolveSourceRange(l, r);
-        ((p = r.merges) != null &&
-          p.some((m) => rangesIntersect(c, parseRangeAddress(m))) &&
+        (r.merges?.some((m) => rangesIntersect(c, parseRangeAddress(m))) &&
           throwWorkbookError(
             "A table cannot overlap merged cells. Unmerge the source first.",
           ),
@@ -873,9 +868,9 @@ function checkStructuralEditImpact(e, r, t, n, o, a) {
     o < 1 ||
     n + o > s) &&
     throwWorkbookError("Invalid structural edit bounds."),
-    e.sheets.some((l) => {
-      return l.tables?.some((h) => h.columns.some((f) => f.calculatedFormula));
-    }) &&
+    e.sheets.some((l) =>
+      l.tables?.some((h) => h.columns.some((f) => f.calculatedFormula)),
+    ) &&
       throwWorkbookError(
         "Calculated table formulas require explicit table append/resize. Clear their saved rules (keeping cell formulas) before inserting or deleting worksheet rows/columns, then reapply the rules.",
       ));
@@ -1280,4 +1275,14 @@ export {
   buildTableCellEntries,
   validateDrawingObjects,
   rewriteStructuredReferences,
+};
+
+/* Also used by the workers. */
+export {
+  normalizeOutputDestination,
+  normalizeSourceFilters,
+  requireMetadataId,
+  tablePaletteStyleNames,
+  validateFieldList,
+  xf,
 };

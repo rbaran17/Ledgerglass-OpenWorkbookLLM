@@ -103,7 +103,6 @@ function ai({ file, remove }) {
   });
 }
 function mb(t) {
-  var T$1, A$1;
   const { text, language, message } = u(),
     r$1 = r.useRef(t);
   r$1.current = t;
@@ -116,25 +115,12 @@ function mb(t) {
     [f$1, p$1] = r.useState(false),
     [m, _] = r.useState(null),
     [x, y] = r.useState("");
-  (r.useEffect(
-    () => () => {
-      return c.current?.abort();
-    },
-    [],
-  ),
+  (r.useEffect(() => () => c.current?.abort(), []),
     r.useEffect(() => {
-      var v;
-      ((v = c.current) == null || v.abort(), u$1(false), d$1(""));
+      (c.current?.abort(), u$1(false), d$1(""));
     }, [t.session.id, t.adapter]));
   async function w(v) {
-    var K;
-    if (
-      !v.length ||
-      !((K = t.adapter.chat) != null && K.attachments) ||
-      c.current ||
-      l$1 ||
-      t.busy
-    )
+    if (!v.length || !t.adapter.chat?.attachments || c.current || l$1 || t.busy)
       return;
     const D = t.session.attachments;
     if ((d$1(""), D.length + v.length > l.filesPerMessage)) {
@@ -179,7 +165,6 @@ function mb(t) {
     }
   }
   async function S$1(v$1, D) {
-    var j, B;
     const $ = r$1.current;
     if (i$1.current || $.busy || l$1 || !v$1.trim()) return;
     const U = D ?? $.session.attachments,
@@ -198,9 +183,7 @@ function mb(t) {
           {
             role: "user",
             text: L.text,
-            ...((j = L.attachments) != null && j.length
-              ? { attachments: L.attachments }
-              : {}),
+            ...(L.attachments?.length ? { attachments: L.attachments } : {}),
           },
           { role: "assistant", text: V.text },
         );
@@ -213,7 +196,7 @@ function mb(t) {
         );
       if (v$1.length > l.promptCharacters)
         throw Error("Keep your message under 10,000 characters.");
-      if (U.length && !((B = $.adapter.chat) != null && B.attachments))
+      if (U.length && !$.adapter.chat?.attachments)
         throw Error(
           "This provider does not support file attachments. Remove the files or connect a chat-enabled provider.",
         );
@@ -329,13 +312,12 @@ function mb(t) {
       v && S$1(v.text, v.attachments);
     },
     P$1 = () => {
-      var v, D;
       (t.onCancel(),
         t.onReset(),
-        (v = c.current) == null || v.abort(),
+        c.current?.abort(),
         t.setSession(k()),
         y("New chat started."),
-        (D = a.current) == null || D.focus());
+        a.current?.focus());
     },
     E = async (v) => {
       try {
@@ -593,10 +575,9 @@ function mb(t) {
                 v.currentTarget.contains(v.relatedTarget) || p$1(false);
               },
               onDrop: (v) => {
-                var D;
                 (v.preventDefault(),
                   p$1(false),
-                  (D = t.adapter.chat) != null && D.attachments
+                  t.adapter.chat?.attachments
                     ? w(Array.from(v.dataTransfer.files))
                     : d$1("This provider does not support attachments."));
               },
@@ -649,10 +630,9 @@ function mb(t) {
                   addAttachmentOnPaste: false,
                   onKeyDown: (v) => v.stopPropagation(),
                   onPaste: (v) => {
-                    var D;
                     v.clipboardData.files.length &&
                       (v.preventDefault(),
-                      (D = t.adapter.chat) != null && D.attachments
+                      t.adapter.chat?.attachments
                         ? w(Array.from(v.clipboardData.files))
                         : d$1("This provider does not support attachments."));
                   },
@@ -677,21 +657,14 @@ function mb(t) {
                         j.jsx("button", {
                           type: "button",
                           "aria-label": text("Attach files"),
-                          title:
-                            (T$1 = t.adapter.chat) != null && T$1.attachments
-                              ? text("Attach files · up to 4 files, 5 MB each")
-                              : text(
-                                  "File support is not enabled by this host adapter",
-                                ),
+                          title: t.adapter.chat?.attachments
+                            ? text("Attach files · up to 4 files, 5 MB each")
+                            : text(
+                                "File support is not enabled by this host adapter",
+                              ),
                           disabled:
-                            !(
-                              (A$1 = t.adapter.chat) != null && A$1.attachments
-                            ) ||
-                            t.busy ||
-                            l$1,
-                          onClick: () => {
-                            return o.current?.click();
-                          },
+                            !t.adapter.chat?.attachments || t.busy || l$1,
+                          onClick: () => o.current?.click(),
                           children: j.jsx(Paperclip, { size: 18 }),
                         }),
                         j.jsx("span", {

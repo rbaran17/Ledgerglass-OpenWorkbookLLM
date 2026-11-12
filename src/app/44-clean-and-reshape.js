@@ -14,7 +14,6 @@ import {
   _t,
   parseRangeAddress,
   assertSheetUnprotected,
-  columnIndexToLetters,
   matrixResultFunctionNames,
 } from "./03-workbook-model.js";
 import {
@@ -45,9 +44,7 @@ function CleanAndReshapeDialog(e) {
     [h, f] = ne.useState(e.initialRequest?.header ?? true),
     [p, m] = ne.useState(e.initialRequest?.outputName ?? "Reshaped fields"),
     [v, g] = ne.useState(false),
-    [b, y] = ne.useState(() => {
-      return structuredClone(e.initialRequest?.steps ?? []);
-    }),
+    [b, y] = ne.useState(() => structuredClone(e.initialRequest?.steps ?? [])),
     [w, E] = ne.useState(null),
     [A, k] = ne.useState("trim"),
     [F, I] = ne.useState("1"),
@@ -156,14 +153,13 @@ function CleanAndReshapeDialog(e) {
     [St, cr] = ne.useState(""),
     dr = St === bt ? ke : [];
   (ne.useEffect(() => {
-    var It;
     const Qe = document.activeElement;
     return (
-      (It = o.current?.querySelector(
-        '[data-ui-label="Transform source range"]',
-      )) == null || It.focus(),
+      o.current
+        ?.querySelector('[data-ui-label="Transform source range"]')
+        ?.focus(),
       () => {
-        Qe != null && Qe.isConnected && Qe.focus();
+        Qe?.isConnected && Qe.focus();
       }
     );
   }, []),
@@ -1389,8 +1385,8 @@ function CleanAndReshapeDialog(e) {
                                               )
                                               .join(", "),
                                           }),
-                                          Qe.sources.map((Dt) => {
-                                            return i.jsxs(
+                                          Qe.sources.map((Dt) =>
+                                            i.jsxs(
                                               "pre",
                                               {
                                                 children: [
@@ -1405,8 +1401,8 @@ function CleanAndReshapeDialog(e) {
                                                 ],
                                               },
                                               Dt,
-                                            );
-                                          }),
+                                            ),
+                                          ),
                                         ],
                                       }),
                                     }),

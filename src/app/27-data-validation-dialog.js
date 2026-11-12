@@ -53,7 +53,6 @@ function DataValidationDialog({
   onWorkbookChange,
   onNavigate,
 }) {
-  var he;
   const { text, language } = useWorkbookMessages(),
     l = workbook.sheets.find((ce) => ce.id === sheetId),
     [c, h] = ne.useState(),
@@ -76,14 +75,13 @@ function DataValidationDialog({
     [q, W] = ne.useState(),
     K = ne.useRef(null);
   ne.useEffect(() => {
-    var se;
     const ce = document.activeElement;
     return (
-      (se = K.current?.querySelector("button,input")) == null || se.focus(),
+      K.current?.querySelector("button,input")?.focus(),
       () => ce?.focus()
     );
   }, []);
-  const te = readOnly || !!((he = l.protection) != null && he.enabled),
+  const te = readOnly || !!l.protection?.enabled,
     ae = (ce) => {
       J("");
       try {
@@ -277,8 +275,7 @@ function DataValidationDialog({
                             children: [
                               i.jsxs("button", {
                                 onClick: () => {
-                                  (onNavigate == null ||
-                                    onNavigate(ce.sheetId, ce.address),
+                                  (onNavigate?.(ce.sheetId, ce.address),
                                     onNavigate && onClose());
                                 },
                                 disabled: !onNavigate,
@@ -338,16 +335,16 @@ function DataValidationDialog({
                                 onWorkbookChange(
                                   {
                                     ...workbook,
-                                    sheets: workbook.sheets.map((ge) => {
-                                      return ge.id === sheetId
+                                    sheets: workbook.sheets.map((ge) =>
+                                      ge.id === sheetId
                                         ? {
                                             ...ge,
                                             validations: ge.validations?.filter(
                                               (we) => we.id !== ce.id,
                                             ),
                                           }
-                                        : ge;
-                                    }),
+                                        : ge,
+                                    ),
                                   },
                                   "Remove data validation",
                                 ),
@@ -749,10 +746,9 @@ function shiftPrintLayoutForAxis(e, r) {
         : `${columnIndexToLetters(u.start)}:${columnIndexToLetters(u.end)}`;
   }
   return (
-    t[s] &&
-      (t[s] = [...new Set(t[s].map((u) => mapIndexAfterMove(u, o)))].sort(
-        (u, l) => u - l,
-      )),
+    (t[s] &&= [...new Set(t[s].map((u) => mapIndexAfterMove(u, o)))].sort(
+      (u, l) => u - l,
+    )),
     t
   );
 }
@@ -1451,7 +1447,6 @@ function Pz(e, r) {
   return `${r}-${o}`;
 }
 function runDuplicateInspection(e, r, t, n) {
-  var m;
   const o = parseRangeAddress(t),
     a = [];
   for (let v = o.firstRow; v <= o.lastRow; v++)
@@ -1484,10 +1479,7 @@ function runDuplicateInspection(e, r, t, n) {
             (y) => typeof y.raw == "string" && y.raw.toLowerCase().includes(g),
           ),
       ) &&
-      !(
-        (m = e.definedNames) != null &&
-        m.some((b) => b.refersTo.toLowerCase().includes(g))
-      )
+      !e.definedNames?.some((b) => b.refersTo.toLowerCase().includes(g))
     ) {
       d = true;
       break;

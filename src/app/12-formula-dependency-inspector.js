@@ -1181,7 +1181,6 @@ function readSourceRectangles(e, r, t = {}) {
       ].sort(),
     },
     a = n.map((y) => {
-      var A;
       const w = e.sheets.find((k) => k.id === y.sheetId);
       (!w || !o.allowedSheetIds.includes(w.id)) &&
         failWithMessage("A source is outside the authorized host context.");
@@ -1194,16 +1193,15 @@ function readSourceRectangles(e, r, t = {}) {
                 "A source includes hidden cells. Explicitly include hidden records before previewing.",
               );
       return (
-        (A = w.merges) != null &&
-          A.some((k) => {
-            const F = parseRangeAddress(k);
-            return (
-              F.firstRow <= E.lastRow &&
-              F.lastRow >= E.firstRow &&
-              F.firstCol <= E.lastCol &&
-              F.lastCol >= E.firstCol
-            );
-          }) &&
+        w.merges?.some((k) => {
+          const F = parseRangeAddress(k);
+          return (
+            F.firstRow <= E.lastRow &&
+            F.lastRow >= E.firstRow &&
+            F.firstCol <= E.lastCol &&
+            F.lastCol >= E.firstCol
+          );
+        }) &&
           failWithMessage(
             "Merged source cells are ambiguous; use an unmerged headed population.",
           ),
@@ -2055,7 +2053,7 @@ function buildConsolidationOutputCells(e, r) {
       const d = e.cells[`${columnIndexToLetters(s)}${o + 1}`];
       a.push({
         raw: d?.raw ?? null,
-        literal: !!(d != null && d.literal),
+        literal: !!d?.literal,
         note: d?.note ?? "",
       });
     }

@@ -78,9 +78,8 @@ function renderAssistantPanel({
         proposalId: assistantProposal?.id,
         onSend: askAssistantQuestion,
         onCancel: () => {
-          var fe;
           (assistantRequestIdRef.current++,
-            (fe = assistantAbortControllerRef.current) == null || fe.abort(),
+            assistantAbortControllerRef.current?.abort(),
             setIsAssistantBusy(false),
             isAssistantBusy &&
               setStatusNotice(
@@ -175,9 +174,8 @@ function renderAssistantPanel({
                           },
                           assistantProposal.id,
                         ),
-                        assistantProposal.patches.map((fe) => {
-                          var Be;
-                          return i.jsxs(
+                        assistantProposal.patches.map((fe) =>
+                          i.jsxs(
                             "div",
                             {
                               className: "lg-diff",
@@ -194,9 +192,7 @@ function renderAssistantPanel({
                                 i.jsxs("span", {
                                   children: [
                                     String(fe.cell.raw ?? "(blank)"),
-                                    (Be = fe.cell.style) != null && Be.fill
-                                      ? " · highlight"
-                                      : "",
+                                    fe.cell.style?.fill ? " · highlight" : "",
                                   ],
                                 }),
                                 i.jsx("dl", {
@@ -223,13 +219,11 @@ function renderAssistantPanel({
                                       ]),
                                     )
                                       .filter((gt) => gt !== "raw")
-                                      .map((gt) => {
-                                        return [
-                                          gt,
-                                          activeSheet.cells[fe.address]?.[gt],
-                                          fe.cell[gt],
-                                        ];
-                                      }),
+                                      .map((gt) => [
+                                        gt,
+                                        activeSheet.cells[fe.address]?.[gt],
+                                        fe.cell[gt],
+                                      ]),
                                   ]
                                     .filter(
                                       ([, gt, Nt]) =>
@@ -269,8 +263,8 @@ function renderAssistantPanel({
                               ],
                             },
                             fe.address,
-                          );
-                        }),
+                          ),
+                        ),
                         assistantProposal.patches.length > 0 &&
                           i.jsxs(i.Fragment, {
                             children: [

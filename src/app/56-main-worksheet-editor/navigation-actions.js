@@ -87,7 +87,6 @@ function createNavigationActions({
   stepVisibleColumnIndex,
 }) {
   function commitWorkbookEdit(fe, Oe) {
-    var Nt;
     const Be = latestEditStateRef.current.book,
       Ue = applyWorkbookChange(Be, fe, actor, Oe),
       Xe = fe.sheets.find((wt) => !Be.sheets.some((jt) => jt.id === wt.id));
@@ -95,10 +94,7 @@ function createNavigationActions({
       Ue,
       true,
       Oe === "Unprotect sheet" &&
-        !(
-          (Nt = fe.sheets.find((wt) => wt.id === activeSheet.id)?.protection) !=
-            null && Nt.enabled
-        ),
+        !fe.sheets.find((wt) => wt.id === activeSheet.id)?.protection?.enabled,
     ),
       setStatusNotice(Oe),
       Xe && (setActiveDialogMode(null), switchActiveWorksheet(Xe.id)));
@@ -178,10 +174,8 @@ function createNavigationActions({
       setCellEditState(null));
   }
   function switchActiveWorksheet(fe) {
-    var Oe;
     if (
-      (Oe = activeCellEditRef.current) != null &&
-      Oe.value.startsWith("=") &&
+      activeCellEditRef.current?.value.startsWith("=") &&
       fe !== activeSheet.id
     ) {
       (setActiveSheetId(fe),

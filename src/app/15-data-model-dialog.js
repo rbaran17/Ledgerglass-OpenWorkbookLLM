@@ -15,7 +15,6 @@ import {
   cn,
   parseRangeAddress,
   dataModelLimits,
-  columnIndexToLetters,
 } from "./03-workbook-model.js";
 import {
   useWorkbookMessages,
@@ -33,7 +32,6 @@ import {
 } from "./14-dax-data-model-engine.js";
 
 function DataModelDialog(e) {
-  var oe, Se;
   const { text } = useWorkbookMessages(),
     t = ne.useRef(e);
   t.current = e;
@@ -88,12 +86,11 @@ function DataModelDialog(e) {
     z = ne.useRef(null),
     V = ne.useRef(false);
   ne.useEffect(() => {
-    var ge;
     const le = document.activeElement;
     return (
-      (ge = z.current?.querySelector("button")) == null || ge.focus(),
+      z.current?.querySelector("button")?.focus(),
       () => {
-        le != null && le.isConnected && le.focus();
+        le?.isConnected && le.focus();
       }
     );
   }, []);
@@ -112,9 +109,7 @@ function DataModelDialog(e) {
       (u(le), B());
     },
     T = (le) => a.tables.find((ce) => ce.id === le),
-    N = (le) => {
-      return T(le)?.columns[0]?.name ?? "";
-    },
+    N = (le) => T(le)?.columns[0]?.name ?? "",
     R = (le, ce, ge) =>
       i.jsx("input", {
         "aria-label": text(le),
@@ -142,9 +137,8 @@ function DataModelDialog(e) {
         a.tables.map((se) => ({ value: se.id, label: se.name })),
         ge,
       ),
-    G = (le, ce, ge, se) => {
-      return L(le, ge, $(T(ce)?.columns.map((Ee) => Ee.name) ?? []), se);
-    },
+    G = (le, ce, ge, se) =>
+      L(le, ge, $(T(ce)?.columns.map((Ee) => Ee.name) ?? []), se),
     H = (le, ce) =>
       _({
         ...a,
@@ -221,9 +215,7 @@ function DataModelDialog(e) {
   }
   const W = A?.result,
     K =
-      !!(W != null && W.complete) &&
-      !e.readOnly &&
-      !((oe = e.workbook.structureProtection) != null && oe.enabled),
+      !!W?.complete && !e.readOnly && !e.workbook.structureProtection?.enabled,
     te = e.workbook.sheets.filter(
       (le) =>
         (!e.allowedSheetIds || e.allowedSheetIds.includes(le.id)) &&
@@ -430,8 +422,8 @@ function DataModelDialog(e) {
                         children: "Remove saved model",
                       }),
                     }),
-                  a.tables.map((le) => {
-                    return i.jsxs(
+                  a.tables.map((le) =>
+                    i.jsxs(
                       "fieldset",
                       {
                         children: [
@@ -571,8 +563,8 @@ function DataModelDialog(e) {
                         ],
                       },
                       le.id,
-                    );
-                  }),
+                    ),
+                  ),
                 ],
               }),
             l === "Relationships" &&
@@ -1165,8 +1157,8 @@ function DataModelDialog(e) {
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: W.diagnostics.map((le, ce) => {
-                                return i.jsxs(
+                              children: W.diagnostics.map((le, ce) =>
+                                i.jsxs(
                                   "tr",
                                   {
                                     children: [
@@ -1184,8 +1176,8 @@ function DataModelDialog(e) {
                                     ],
                                   },
                                   ce,
-                                );
-                              }),
+                                ),
+                              ),
                             }),
                           ],
                         }),
@@ -1215,8 +1207,8 @@ function DataModelDialog(e) {
                             }),
                           }),
                           i.jsx("tbody", {
-                            children: W.tables.map((le) => {
-                              return i.jsxs(
+                            children: W.tables.map((le) =>
+                              i.jsxs(
                                 "tr",
                                 {
                                   children: [
@@ -1240,13 +1232,13 @@ function DataModelDialog(e) {
                                   ],
                                 },
                                 le.id,
-                              );
-                            }),
+                              ),
+                            ),
                           }),
                         ],
                       }),
                       W.complete &&
-                        !!((Se = W.calculatedColumns) != null && Se.length) &&
+                        !!W.calculatedColumns?.length &&
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
@@ -1281,8 +1273,8 @@ function DataModelDialog(e) {
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: W.calculatedColumns.map((le) => {
-                                    return i.jsxs(
+                                  children: W.calculatedColumns.map((le) =>
+                                    i.jsxs(
                                       "tr",
                                       {
                                         children: [
@@ -1307,8 +1299,8 @@ function DataModelDialog(e) {
                                         ],
                                       },
                                       `${le.tableId}:${le.name}`,
-                                    );
-                                  }),
+                                    ),
+                                  ),
                                 }),
                               ],
                             }),
@@ -1517,7 +1509,7 @@ function isElementVisibleForFocus(e) {
       return false;
     if (r.tagName === "DETAILS" && !r.hasAttribute("open")) {
       const n = Array.from(r.children).find((o) => o.tagName === "SUMMARY");
-      if (!(n != null && n.contains(e))) return false;
+      if (!n?.contains(e)) return false;
     }
   }
   return true;
@@ -1557,7 +1549,6 @@ function useDialogFocusTrap(e) {
         d.clear();
       },
       l = () => {
-        var v;
         const p = Array.from(
           t.querySelectorAll('[role="dialog"][aria-modal="true"]'),
         )
@@ -1566,8 +1557,7 @@ function useDialogFocusTrap(e) {
         if (p === n) {
           p &&
             (!isElementVisibleForFocus(document.activeElement) ||
-              ((v = document.activeElement) != null &&
-                v.matches(":disabled"))) &&
+              document.activeElement?.matches(":disabled")) &&
             (getFocusableElements(p)[0] ?? p).focus({ preventScroll: true });
           return;
         }
@@ -1607,13 +1597,12 @@ function useDialogFocusTrap(e) {
             m.contains(document.activeElement))
         ) {
           const g =
-            o != null &&
-            o.isConnected &&
+            o?.isConnected &&
             isElementVisibleForFocus(o) &&
             !o.matches(":disabled")
               ? o
               : t.querySelector(".lg-grid-scroll");
-          g == null || g.focus({ preventScroll: true });
+          g?.focus({ preventScroll: true });
         }
         (m && (!m.isConnected || !isElementVisibleForFocus(m)) && a.delete(m),
           p || a.clear());
@@ -1626,12 +1615,11 @@ function useDialogFocusTrap(e) {
             return;
           }
           ((!n && !m.closest('[role="dialog"][aria-modal="true"]')) ||
-            (n != null && n.contains(m))) &&
+            n?.contains(m)) &&
             (s = m);
         }
       },
       h = (p) => {
-        var b;
         if ((l(), !n || p.key !== "Tab")) return;
         const m = getFocusableElements(n),
           v = m[0],
@@ -1645,7 +1633,7 @@ function useDialogFocusTrap(e) {
           (!p.shiftKey && document.activeElement === g)) &&
           (p.preventDefault(),
           p.stopPropagation(),
-          (b = p.shiftKey ? g : v) == null || b.focus());
+          (p.shiftKey ? g : v)?.focus());
       };
     (t.addEventListener("keydown", h, true),
       document.addEventListener("focusin", c, true));
@@ -1668,9 +1656,7 @@ function useDialogFocusTrap(e) {
       }
     );
   }, [e]),
-    ne.useLayoutEffect(() => {
-      return r.current?.call(r);
-    }));
+    ne.useLayoutEffect(() => r.current?.()));
 }
 const dataModelBudgets = {
   sourceCells: 500,

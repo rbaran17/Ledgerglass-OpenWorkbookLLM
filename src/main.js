@@ -1,10 +1,12 @@
 import "./styles/workbook.css";
 import "./app/01-core-schemas-and-hashing.js";
+import "./app/01b-react-module-handles.js";
 import "./app/02-financial-functions.js";
 import "./app/03-workbook-model.js";
 import "./app/04-cell-input-paste-and-fill.js";
 import "./app/05-add-ins-and-custom-functions.js";
 import "./app/06-analysis-tools.js";
+import "./app/06b-file-parser-worker-source.js";
 import "./app/07-xlsx-archive-reader.js";
 import "./app/08-xlsx-export-and-preservation.js";
 import "./app/09-workbook-links.js";
@@ -73,11 +75,8 @@ export {
 export { default as j } from "react/jsx-runtime";
 export { default as r } from "react";
 export { default as b } from "react-dom";
-export {
-  Gq as R,
-  uEe as a,
-  unwrapDefaultExport as g,
-} from "./app/01-core-schemas-and-hashing.js";
+export { Gq as R, uEe as a } from "./app/01b-react-module-handles.js";
+export { unwrapDefaultExport as g } from "./app/01-core-schemas-and-hashing.js";
 export {
   LocalizedText as W,
   createEmptyAssistantConversation as k,

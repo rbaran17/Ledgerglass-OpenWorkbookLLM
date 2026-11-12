@@ -1,7 +1,6 @@
 import { parseNumericText } from "./37-linear-solver-engine.js";
 import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
-import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
-import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
+
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -98,7 +97,7 @@ function PatternCheckDialog(e) {
           }
         : checkReportCurrency(e.workbook, y, C, T)
       : null,
-    U = $ != null && $.disclose ? y : null,
+    U = $?.disclose ? y : null,
     G = U?.results.find((ce) => ce.rule.id === V) ?? U?.results[0],
     H = V === "combined" ? U?.combination : G,
     Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
@@ -121,16 +120,12 @@ function PatternCheckDialog(e) {
         z(""));
     };
   ne.useEffect(() => {
-    var se;
     d.current = true;
     const ce = document.activeElement;
     return (
-      (se = a.current?.querySelector('[data-ui-label="Source range"]')) ==
-        null || se.focus(),
+      a.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
       () => {
-        ((d.current = false),
-          s.current++,
-          ce != null && ce.isConnected && ce.focus());
+        ((d.current = false), s.current++, ce?.isConnected && ce.focus());
       }
     );
   }, []);
@@ -859,7 +854,7 @@ function PatternCheckDialog(e) {
               }),
             }),
             i.jsx("button", {
-              disabled: !($ != null && $.current),
+              disabled: !$?.current,
               onClick: () => {
                 try {
                   if (!y) throw Error("Run a current report first.");
@@ -941,7 +936,7 @@ function PatternCheckDialog(e) {
             children: [
               i.jsxs("h3", {
                 children: [
-                  $ != null && $.current ? "Current" : "Previous",
+                  $?.current ? "Current" : "Previous",
                   " ",
                   i.jsx(LocalizedText, { children: "report —" }),
                   " ",
@@ -1082,8 +1077,8 @@ function PatternCheckDialog(e) {
                     i.jsx("tbody", {
                       children: H?.rows
                         .slice(X$1 * 20, (X$1 + 1) * 20)
-                        .map((ce) => {
-                          return i.jsxs(
+                        .map((ce) =>
+                          i.jsxs(
                             "tr",
                             {
                               children: [
@@ -1105,8 +1100,8 @@ function PatternCheckDialog(e) {
                               ],
                             },
                             ce.sourceRow,
-                          );
-                        }),
+                          ),
+                        ),
                     }),
                   ],
                 }),
@@ -1319,7 +1314,7 @@ function buildAnswerCitations(e, r, t, n, o = {}) {
           cells: b.map((E) => {
             const A = l.get(E),
               k = d.cells[E],
-              F = !!(k != null && k.literal);
+              F = !!k?.literal;
             return {
               ...A,
               literal: F,

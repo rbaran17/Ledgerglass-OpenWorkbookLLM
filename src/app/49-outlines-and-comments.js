@@ -1,4 +1,3 @@
-import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
 import {
   X,
   ListTree,
@@ -38,21 +37,19 @@ import {
 } from "./48-format-cells-and-move.js";
 
 function OutlineToolsPanel(e) {
-  var z;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
   a.current = e;
   const s = ne.useRef(null);
-  s.current ||
-    (s.current = {
-      workbookId: e.workbook.id,
-      revision: e.workbook.revision,
-      snapshot: JSON.stringify(e.workbook),
-      sheetId: e.sheetId,
-      range: e.range,
-    });
+  s.current ||= {
+    workbookId: e.workbook.id,
+    revision: e.workbook.revision,
+    snapshot: JSON.stringify(e.workbook),
+    sheetId: e.sheetId,
+    range: e.range,
+  };
   const [d, u] = ne.useState(/column/i.test(e.mode) ? "column" : "row"),
     [l, c] = ne.useState(0),
     [h, f] = ne.useState(""),
@@ -61,7 +58,7 @@ function OutlineToolsPanel(e) {
     v = parseRangeAddress(e.range),
     g = d === "row" ? v.firstRow : v.firstCol,
     b = d === "row" ? v.lastRow : v.lastCol,
-    y = e.readOnly || !!((z = p?.protection) != null && z.enabled),
+    y = e.readOnly || !!p?.protection?.enabled,
     w = s.current,
     E = ne.useMemo(
       () => JSON.stringify(e.workbook) !== w.snapshot,
@@ -79,25 +76,20 @@ function OutlineToolsPanel(e) {
     I = Math.max(1, Math.ceil(m.length / wS)),
     O = Math.min(l, I - 1);
   ne.useEffect(() => {
-    var B;
     const V = document.activeElement;
     return (
-      (B = o.current?.querySelector("button:not(:disabled)")) == null ||
-        B.focus(),
+      o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        V != null && V.isConnected && V.focus();
+        V?.isConnected && V.focus();
       }
     );
   }, []);
   function j(V, D) {
-    var _;
     try {
       const C = a.current;
       if (
         C.readOnly ||
-        ((_ = C.workbook.sheets.find((N) => N.id === C.sheetId)?.protection) !=
-          null &&
-          _.enabled)
+        C.workbook.sheets.find((N) => N.id === C.sheetId)?.protection?.enabled
       )
         throw Error(
           "This worksheet is read-only. Unlock it before changing outlines.",
@@ -473,7 +465,6 @@ function resolveSelectionAnchorAddress(e) {
 }
 const formatLocalDateTime = (e) => new Date(e).toLocaleString();
 function ReviewToolsPanel(e) {
-  var he, Se;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -517,7 +508,7 @@ function ReviewToolsPanel(e) {
       s.current.range !== e.range ||
       s.current.active !== e.active ||
       s.current.content !== JSON.stringify(e.workbook),
-    $ = e.readOnly || !!((he = d?.protection) != null && he.enabled) || L || !d,
+    $ = e.readOnly || !!d?.protection?.enabled || L || !d,
     G = [...(e.workbook.reviewThreads ?? [])]
       .sort((se, we) => we.updatedAt.localeCompare(se.updatedAt))
       .filter(
@@ -533,21 +524,14 @@ function ReviewToolsPanel(e) {
       ),
     H = G.find((se) => se.id === g),
     Q = e.workbook.sheets.find((se) => se.id === H?.anchor.sheetId),
-    X$1 =
-      e.readOnly ||
-      L ||
-      !!(H != null && H.orphaned) ||
-      !Q ||
-      !!((Se = Q.protection) != null && Se.enabled),
+    X$1 = e.readOnly || L || !!H?.orphaned || !Q || !!Q.protection?.enabled,
     J = e.actor?.trim() || "Reviewer";
   ne.useEffect(() => {
-    var Ee;
     const se = document.activeElement;
     return (
-      (Ee = o.current?.querySelector("button:not(:disabled)")) == null ||
-        Ee.focus(),
+      o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        se != null && se.isConnected && se.focus();
+        se?.isConnected && se.focus();
       }
     );
   }, []);
@@ -583,9 +567,8 @@ function ReviewToolsPanel(e) {
       }
     })(),
     te = (se, we) => {
-      var Ee;
       try {
-        (O(""), (Ee = e.onNavigate) == null || Ee.call(e, se, we), e.onClose());
+        (O(""), e.onNavigate?.(se, we), e.onClose());
       } catch (Ae) {
         O(
           Ae instanceof Error
@@ -667,7 +650,6 @@ function ReviewToolsPanel(e) {
                   (h(se), O(""));
                 },
                 onKeyDown: (Ee) => {
-                  var Ae;
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(Ee.key)
                   ) {
@@ -680,9 +662,7 @@ function ReviewToolsPanel(e) {
                           : we
                             ? "comments"
                             : "hyperlink";
-                    (h(ye),
-                      (Ae = document.getElementById(`${n}-${ye}-tab`)) ==
-                        null || Ae.focus());
+                    (h(ye), document.getElementById(`${n}-${ye}-tab`)?.focus());
                   }
                 },
                 children: [

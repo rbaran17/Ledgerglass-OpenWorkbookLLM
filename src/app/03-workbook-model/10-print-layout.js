@@ -153,7 +153,7 @@ function parseReportSnapshot(e) {
     s.cells.forEach((d, u) => {
       if (d.address !== `${columnIndexToLetters(n[u])}${s.row}`)
         throw Error("Invalid report cell address.");
-      d.style && (d.style = validateCellStyle(d.style));
+      d.style &&= validateCellStyle(d.style);
     });
   }
   if (r.object) {
@@ -693,7 +693,6 @@ function findSheetOrThrow(e, r) {
   );
 }
 function applyNamedStyleChange(e, r, t = {}) {
-  var m;
   t.readOnly && failWithMessage("This workbook is read-only.");
   for (const v of e.sheets)
     for (const g of Object.values(v.cells))
@@ -707,7 +706,6 @@ function applyNamedStyleChange(e, r, t = {}) {
       o.styles.find((g) => g.id === v) ??
       failWithMessage("This named style no longer exists.");
   function l(v, g, b) {
-    var E;
     const y = findSheetOrThrow(e, v),
       w = y.cells[g];
     if (canonicalStyleKey(w) !== canonicalStyleKey(b)) {
@@ -715,16 +713,15 @@ function applyNamedStyleChange(e, r, t = {}) {
         (assertSheetUnprotected(y), hasBorderEdgeChanges(w?.style, b.style))
       ) {
         const A = _t(g);
-        (E = y.merges) != null &&
-          E.some((k) => {
-            const F = parseRangeAddress(k);
-            return (
-              A.row >= F.firstRow &&
-              A.row <= F.lastRow &&
-              A.col >= F.firstCol &&
-              A.col <= F.lastCol
-            );
-          }) &&
+        y.merges?.some((k) => {
+          const F = parseRangeAddress(k);
+          return (
+            A.row >= F.firstRow &&
+            A.row <= F.lastRow &&
+            A.col >= F.firstCol &&
+            A.col <= F.lastCol
+          );
+        }) &&
           failWithMessage(
             "Unmerge the intersecting cells before changing named-style border edges.",
           );
@@ -742,11 +739,9 @@ function applyNamedStyleChange(e, r, t = {}) {
     }
   }
   function c(v) {
-    var g;
     for (const b of e.sheets)
       for (const [y, w] of Object.entries(b.cells))
-        (g = w.style) != null &&
-          g.binding &&
+        w.style?.binding &&
           (!v || w.style.binding.styleId === v) &&
           (assertSheetUnprotected(b),
           l(b.id, y, {
@@ -807,7 +802,7 @@ function applyNamedStyleChange(e, r, t = {}) {
       for (const b of enumerateSelectionCells(a.ranges)) {
         const y = g.cells[b] ?? { raw: null };
         if (a.kind === "detachStyle") {
-          if (!((m = y.style) != null && m.binding)) continue;
+          if (!y.style?.binding) continue;
           const w = resolveEffectiveCellStyle(y.style),
             E = { ...y, style: w };
           (Object.keys(w).length || delete E.style, l(g.id, b, E));
@@ -945,23 +940,21 @@ function setReviewThreadResolved(e, r, t, n = "Reviewer", o = {}) {
   );
 }
 function setCellHyperlink(e, r, t, n, o = {}) {
-  var f;
   assertSheetWritable(e, r, o);
   const a = findSheetOrThrow(e, r),
     s = normalizeCellAddress(t),
     d = a.cells[s],
     u = _t(s);
-  (f = a.merges) != null &&
-    f.some((p) => {
-      const m = parseRangeAddress(p);
-      return (
-        u.row >= m.firstRow &&
-        u.row <= m.lastRow &&
-        u.col >= m.firstCol &&
-        u.col <= m.lastCol &&
-        (u.row !== m.firstRow || u.col !== m.firstCol)
-      );
-    }) &&
+  a.merges?.some((p) => {
+    const m = parseRangeAddress(p);
+    return (
+      u.row >= m.firstRow &&
+      u.row <= m.lastRow &&
+      u.col >= m.firstCol &&
+      u.col <= m.lastCol &&
+      (u.row !== m.firstRow || u.col !== m.firstCol)
+    );
+  }) &&
     throwWithMessage(
       "Choose the merged area's first cell or unmerge it before changing its link.",
     );
@@ -989,12 +982,12 @@ function collectHyperlinkEntries(e, r, t) {
   const n = findSheetOrThrow(e, t);
   let o = false;
   const a = Object.fromEntries(
-    Object.entries(n.cells).map(([s, d]) => {
-      return d.hyperlink?.kind !== "internal" || d.hyperlink.sheetId !== r
+    Object.entries(n.cells).map(([s, d]) =>
+      d.hyperlink?.kind !== "internal" || d.hyperlink.sheetId !== r
         ? [s, d]
         : ((o = true),
-          [s, { ...d, hyperlink: { ...d.hyperlink, sheetId: t } }]);
-    }),
+          [s, { ...d, hyperlink: { ...d.hyperlink, sheetId: t } }]),
+    ),
   );
   return o
     ? {
@@ -1096,8 +1089,7 @@ function suggestTableHeaderName(e, r, t) {
         address: u,
         original: c,
         suggested: f,
-        requiresResolution:
-          c !== f || (f.startsWith("=") && !(l != null && l.literal)),
+        requiresResolution: c !== f || (f.startsWith("=") && !l?.literal),
       }));
   }
   return s;
@@ -1124,7 +1116,6 @@ function validateReviewedTableHeaders(e, r, t, n) {
   );
 }
 function renameTableHeaderField(e, r) {
-  var a;
   const t = [];
   for (const s of e.sheets) {
     const d = r.sheets.find((u) => u.id === s.id);
@@ -1195,14 +1186,13 @@ function renameTableHeaderField(e, r) {
     for (const f of n.sheets) {
       for (const p of f.tables ?? [])
         for (const m of p.columns)
-          m.calculatedFormula &&
-            (m.calculatedFormula = $v(
-              m.calculatedFormula,
-              s.old.name,
-              u.name,
-              s.names,
-              p.id === u.id && f.id === d.id,
-            ));
+          m.calculatedFormula &&= $v(
+            m.calculatedFormula,
+            s.old.name,
+            u.name,
+            s.names,
+            p.id === u.id && f.id === d.id,
+          );
       for (const [p, m] of Object.entries(f.cells)) {
         if (typeof m.raw != "string" || !m.raw.startsWith("=") || m.literal)
           continue;
@@ -1230,39 +1220,34 @@ function renameTableHeaderField(e, r) {
         if (h(p.source))
           if (
             ((p.source = { ...p.source, tableId: u.id, range: u.range }),
-            p.filters &&
-              (p.filters = p.filters.map((m) => ({ ...m, field: l(m.field) }))),
+            (p.filters &&= p.filters.map((m) => ({ ...m, field: l(m.field) }))),
             "rowFields" in p)
           ) {
             ((p.rowFields = p.rowFields.map(l)),
               (p.columnFields = p.columnFields.map(l)),
               (p.values = p.values.map((m) => ({ ...m, field: l(m.field) }))),
-              p.dateGroups &&
-                (p.dateGroups = p.dateGroups.map((m) => ({
-                  ...m,
-                  field: l(m.field),
-                }))));
+              (p.dateGroups &&= p.dateGroups.map((m) => ({
+                ...m,
+                field: l(m.field),
+              }))));
             for (const m of ["slicers", "timelines", "sorts"])
-              p[m] && (p[m] = p[m].map((v) => ({ ...v, field: l(v.field) })));
-            p.calculatedFields &&
-              (p.calculatedFields = p.calculatedFields.map((m) => ({
+              p[m] &&= p[m].map((v) => ({ ...v, field: l(v.field) }));
+            p.calculatedFields &&= p.calculatedFields.map((m) => ({
+              ...m,
+              field: l(m.field),
+              ...(m.otherField ? { otherField: l(m.otherField) } : {}),
+            }));
+          } else
+            ((p.fields = p.fields.map(l)),
+              (p.rename &&= Object.fromEntries(
+                Object.entries(p.rename).map(([m, v]) => [l(m), v]),
+              )),
+              (p.sort &&= { ...p.sort, field: l(p.sort.field) }),
+              (p.derived &&= p.derived.map((m) => ({
                 ...m,
                 field: l(m.field),
                 ...(m.otherField ? { otherField: l(m.otherField) } : {}),
-              })));
-          } else
-            ((p.fields = p.fields.map(l)),
-              p.rename &&
-                (p.rename = Object.fromEntries(
-                  Object.entries(p.rename).map(([m, v]) => [l(m), v]),
-                )),
-              p.sort && (p.sort = { ...p.sort, field: l(p.sort.field) }),
-              p.derived &&
-                (p.derived = p.derived.map((m) => ({
-                  ...m,
-                  field: l(m.field),
-                  ...(m.otherField ? { otherField: l(m.otherField) } : {}),
-                }))));
+              }))));
     }
     for (const f of n.definedNames ?? [])
       f.refersTo = $v(f.refersTo, s.old.name, u.name, s.names);
@@ -1270,7 +1255,7 @@ function renameTableHeaderField(e, r) {
   }
   assertUniqueTableNames(n);
   for (const s of e.sheets) {
-    if (!((a = s.protection) != null && a.enabled)) continue;
+    if (!s.protection?.enabled) continue;
     const d = n.sheets.find((u) => u.id === s.id);
     JSON.stringify(s) !== JSON.stringify(d) &&
       throwWorkbookError(
@@ -1288,7 +1273,7 @@ function buildPivotSource(e, r) {
       : n.tables?.find((h) => h.range === toA1RangeAddress(t.range)),
     a = resolveSourceRange(o?.range ?? t.range, n),
     s = calculateWorkbookWithSettings(e);
-  o != null && o.showTotals && a.lastRow--;
+  o?.showTotals && a.lastRow--;
   const d = [];
   for (let h = a.firstCol; h <= a.lastCol; h++)
     d.push(validateColumnName(s(n.id, Cn(a.firstRow, h))));
@@ -1309,11 +1294,10 @@ function buildPivotSource(e, r) {
         );
     }),
       (f.some((p) => !isNullOrEmptyValue(p)) ||
-        d.some((p, m) => {
-          return !isNullOrEmptyValue(
-            n.cells[Cn(h, a.firstCol + m)]?.raw ?? null,
-          );
-        })) &&
+        d.some(
+          (p, m) =>
+            !isNullOrEmptyValue(n.cells[Cn(h, a.firstCol + m)]?.raw ?? null),
+        )) &&
         u.push({ index: h, values: f }));
   }
   return (
@@ -1355,9 +1339,7 @@ function aggregatePivotRows(e, r, t) {
   });
 }
 function getPivotRefreshState(e, r) {
-  const t = e.sheets.find((s) => {
-      return s.pivots?.some((u) => u.id === r);
-    }),
+  const t = e.sheets.find((s) => s.pivots?.some((u) => u.id === r)),
     n = t?.pivots?.find((s) => s.id === r);
   if (
     ((!t || !n) && throwWorkbookError("Pivot definition not found."),
@@ -1734,7 +1716,6 @@ function resolveTableDataRange(e, r, t = "A1") {
   return `${columnIndexToLetters(s.firstCol)}${s.firstRow + 1}:${columnIndexToLetters(s.lastCol)}${s.lastRow + 1 - (a.showTotals ? 1 : 0)}`;
 }
 function validateFilterRequest(e, r, t) {
-  var h;
   if (
     !t ||
     typeof t.range != "string" ||
@@ -1762,8 +1743,7 @@ function validateFilterRequest(e, r, t) {
       "Filtering is limited to 10,000 data rows, 100,000 cells including headers, and 64 columns. Choose a smaller range.",
     );
   if (
-    (h = n.merges) != null &&
-    h.some((f) => {
+    n.merges?.some((f) => {
       const p = parseRangeAddress(f);
       return (
         p.firstRow <= o.lastRow &&
@@ -1874,7 +1854,6 @@ function validateFilterRequest(e, r, t) {
   });
 }
 function applyFilterConditions(e, r, t, n = calculateWorkbookWithSettings(e)) {
-  var F, I;
   const o = validateFilterRequest(e, r, t),
     a = findSheetOrThrow(e, r),
     s = parseRangeAddress(o.range),
@@ -1940,22 +1919,19 @@ function applyFilterConditions(e, r, t, n = calculateWorkbookWithSettings(e)) {
       throw Error(
         "Filter comparison work exceeds its 5,000,000-unit budget. Narrow the range or simplify criteria.",
       );
-    (l.push(O + 1),
-      (F = a.rowOriginIds) != null && F[O] && (m[O + 1] = a.rowOriginIds[O]));
+    (l.push(O + 1), a.rowOriginIds?.[O] && (m[O + 1] = a.rowOriginIds[O]));
     const V = u.isHidden(O);
     V && g++;
     let D =
-      o.columns.every((B, _) => {
-        var C;
-        return (
+      o.columns.every(
+        (B, _) =>
           (v[_] === null || v[_].has(comparableCellValueKey(z(B.column), d))) &&
-          (!((C = B.conditions) != null && C.length) ||
+          (!B.conditions?.length ||
             (B.join === "or"
               ? B.conditions.some((T) => w(z(B.column), T))
-              : B.conditions.every((T) => w(z(B.column), T))))
-        );
-      }) &&
-      (!((I = o.advanced) != null && I.length) ||
+              : B.conditions.every((T) => w(z(B.column), T)))),
+      ) &&
+      (!o.advanced?.length ||
         o.advanced.some((B) => B.every((_) => w(z(_.column), _))));
     if (D && o.unique) {
       const B = JSON.stringify(j.map((_) => comparableCellValueKey(_, d)));
@@ -2284,3 +2260,6 @@ export {
   validateReviewedTableHeaders,
   zU,
 };
+
+/* Also used by the workers. */
+export { validateFilterRequest };

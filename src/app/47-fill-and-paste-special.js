@@ -1,17 +1,7 @@
-import {
-  unquoteSheetName,
-  rangesIntersect,
-  isCellInsideRange,
-  quoteSheetName,
-  throwWorkbookError,
-} from "./03-workbook-model.js";
-import {
-  assertWorkbookWritable,
-  eI,
-  formatCellAddress,
-} from "./04-cell-input-paste-and-fill.js";
+import { unquoteSheetName, throwWorkbookError } from "./03-workbook-model.js";
+
 import { formatSortRangeAddress } from "./44-clean-and-reshape.js";
-import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+
 import { X, Clipboard, Rows3, Grid2x2 } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -56,7 +46,6 @@ import {
 } from "./46-workbook-manager.js";
 
 function PasteSpecialDialog(e) {
-  var at;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -97,7 +86,7 @@ function PasteSpecialDialog(e) {
     [le, ce] = ne.useState(false),
     ge = Object.keys(d.rowHeights ?? {}).length,
     se = Object.keys(d.columnWidths ?? {}).length,
-    we = e.readOnly || !!((at = d.protection) != null && at.enabled),
+    we = e.readOnly || !!d.protection?.enabled,
     Ee =
       (e.mode === "viewSettings" &&
         JSON.stringify(e.workbook) !== K.snapshotGuard) ||
@@ -187,25 +176,22 @@ function PasteSpecialDialog(e) {
     W(0);
   }, [Te.plan]),
     ne.useEffect(() => {
-      var be;
       const Ze = document.activeElement;
       return (
-        (be = o.current?.querySelector(
-          "button:not(:disabled),input:not(:disabled)",
-        )) == null || be.focus(),
+        o.current
+          ?.querySelector("button:not(:disabled),input:not(:disabled)")
+          ?.focus(),
         () => {
-          Ze != null && Ze.isConnected && Ze.focus();
+          Ze?.isConnected && Ze.focus();
         }
       );
     }, []));
   function Me() {
-    var be;
     const Ze = a.current,
       lt = s.current;
     if (
       Ze.readOnly ||
-      ((be = findSheetOrThrow(Ze.workbook, Ze.sheetId).protection) != null &&
-        be.enabled)
+      findSheetOrThrow(Ze.workbook, Ze.sheetId).protection?.enabled
     )
       throw new Error("This worksheet is read-only.");
     if (
@@ -220,15 +206,13 @@ function PasteSpecialDialog(e) {
       throw new Error(Ae);
   }
   function ke(Ze, lt, be) {
-    var ft, pt;
+    var ft;
     try {
       (h(""), Me());
       const Fe = Ze();
       (JSON.stringify(Fe) !== JSON.stringify(a.current.workbook) &&
         a.current.onWorkbookChange(Fe, lt),
-        be &&
-          ((pt = (ft = a.current).onSelectionChange) == null ||
-            pt.call(ft, be)),
+        be && (ft = a.current).onSelectionChange?.call(ft, be),
         a.current.onClose());
     } catch (Fe) {
       h(describeWorkbookError(Fe));
@@ -487,7 +471,6 @@ function PasteSpecialDialog(e) {
                     role: "tablist",
                     "aria-label": text("Fill options"),
                     onKeyDown: (Ze) => {
-                      var be;
                       if (
                         !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
                           Ze.key,
@@ -502,9 +485,9 @@ function PasteSpecialDialog(e) {
                             ? "copy"
                             : "series";
                       (A(lt),
-                        (be = Ze.currentTarget.querySelector(
-                          `[data-fill-tab="${lt}"]`,
-                        )) == null || be.focus());
+                        Ze.currentTarget
+                          .querySelector(`[data-fill-tab="${lt}"]`)
+                          ?.focus());
                     },
                     lang: language("Fill options"),
                     "data-ui-label": "Fill options",
@@ -1546,7 +1529,6 @@ function PasteSpecialDialog(e) {
   });
 }
 function FillPreviewDialog(e) {
-  var b;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -1580,21 +1562,17 @@ function FillPreviewDialog(e) {
     }, [e.workbook, e.sheetId, e.sourceRange, e.targetRange, d]),
     v = m.plan;
   ne.useEffect(() => {
-    var w;
     const y = document.activeElement;
     return (
-      (w = o.current) == null || w.focus(),
+      o.current?.focus(),
       () => {
-        y != null && y.isConnected && y.focus();
+        y?.isConnected && y.focus();
       }
     );
   }, []);
   const g =
     e.readOnly ||
-    !!(
-      (b = findSheetOrThrow(e.workbook, e.sheetId).protection) != null &&
-      b.enabled
-    ) ||
+    !!findSheetOrThrow(e.workbook, e.sheetId).protection?.enabled ||
     p;
   return i.jsx("div", {
     className: "et-backdrop",
@@ -1730,8 +1708,8 @@ function FillPreviewDialog(e) {
                         i.jsx("tbody", {
                           children: v.previewPatches
                             .slice(h * 25, (h + 1) * 25)
-                            .map((y) => {
-                              return i.jsxs(
+                            .map((y) =>
+                              i.jsxs(
                                 "tr",
                                 {
                                   children: [
@@ -1752,8 +1730,8 @@ function FillPreviewDialog(e) {
                                   ],
                                 },
                                 `${y.sheetId}:${y.address}`,
-                              );
-                            }),
+                              ),
+                            ),
                         }),
                       ],
                     }),

@@ -159,11 +159,7 @@ function saveTransformationRecipe(e, r, t, n, o = {}) {
   return (validateSavedRecipeMetadata(l, l), l);
 }
 function deleteTransformationRecipe(e, r, t = {}) {
-  var n;
-  if (
-    (kI(e, !!t.readOnly),
-    !((n = e.transformationRecipes) != null && n.some((o) => o.id === r)))
-  )
+  if ((kI(e, !!t.readOnly), !e.transformationRecipes?.some((o) => o.id === r)))
     throw Error("Saved recipe no longer exists.");
   return {
     ...e,
@@ -1129,16 +1125,15 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
             ["trim", "Trim keys"],
             ["collapseWhitespace", "Collapse key whitespace"],
             ["ignoreCase", "Ignore key case"],
-          ].map(([f, p]) => {
-            var m;
-            return i.jsxs(
+          ].map(([f, p]) =>
+            i.jsxs(
               "label",
               {
                 className: "recipe-check",
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: !!((m = step.normalization) != null && m[f]),
+                    checked: !!step.normalization?.[f],
                     onChange: (v) =>
                       d({
                         normalization: {
@@ -1151,8 +1146,8 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                 ],
               },
               f,
-            );
-          }),
+            ),
+          ),
           i.jsxs("label", {
             children: [
               i.jsx(LocalizedText, { children: "Unicode normalization" }),

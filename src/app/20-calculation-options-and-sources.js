@@ -55,14 +55,13 @@ function CalculationOptionsDialog(e) {
       m(0));
   }, [e.workbook]),
     ne.useEffect(() => {
-      var V;
       const j = document.activeElement;
       return (
-        (V = o.current?.querySelector(
-          '[data-ui-label="Close Calculation Options"]',
-        )) == null || V.focus(),
+        o.current
+          ?.querySelector('[data-ui-label="Close Calculation Options"]')
+          ?.focus(),
         () => {
-          j != null && j.isConnected && j.focus();
+          j?.isConnected && j.focus();
         }
       );
     }, []));
@@ -75,14 +74,13 @@ function CalculationOptionsDialog(e) {
     },
     y = () =>
       b(() => {
-        var j;
         if (e.onCalculate) {
           e.onCalculate();
           return;
         }
         (refreshCalculationReport(e.workbook),
           a((z) => z + 1),
-          (j = e.onCalculated) == null || j.call(e));
+          e.onCalculated?.());
       }),
     w = () =>
       b(() => {
@@ -114,11 +112,11 @@ function CalculationOptionsDialog(e) {
           V.click(),
           setTimeout(() => URL.revokeObjectURL(z), 1e3));
       }),
-    A = report.cells.filter((j) => {
-      return `${e.workbook.sheets.find((V) => V.id === j.sheetId)?.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
+    A = report.cells.filter((j) =>
+      `${e.workbook.sheets.find((V) => V.id === j.sheetId)?.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
         .toLowerCase()
-        .includes(h.toLowerCase());
-    }),
+        .includes(h.toLowerCase()),
+    ),
     k = A.slice(p * 100, (p + 1) * 100),
     F = (j) => {
       var V, D;
@@ -643,17 +641,15 @@ function CalculationOptionsDialog(e) {
                 }),
               }),
               i.jsx("tbody", {
-                children: k.map((j) => {
-                  return i.jsxs(
+                children: k.map((j) =>
+                  i.jsxs(
                     "tr",
                     {
                       children: [
                         i.jsx("td", {
                           children: i.jsxs("button", {
                             onClick: () => {
-                              var D;
-                              ((D = e.onNavigate) == null ||
-                                D.call(e, j.sheetId, j.address),
+                              (e.onNavigate?.(j.sheetId, j.address),
                                 e.onClose());
                             },
                             children: [
@@ -776,8 +772,8 @@ function CalculationOptionsDialog(e) {
                       ],
                     },
                     `${j.sheetId}:${j.address}`,
-                  );
-                }),
+                  ),
+                ),
               }),
             ],
           }),
@@ -883,12 +879,11 @@ function GridContextMenu({
     }, [x, y]),
     ne.useEffect(() => {
       let p = false;
-      const m = requestAnimationFrame(() => {
-          return d.current?.querySelector("button")?.focus();
-        }),
+      const m = requestAnimationFrame(() =>
+          d.current?.querySelector("button")?.focus(),
+        ),
         v = (g) => {
-          var b;
-          (b = d.current) != null && b.contains(g.target)
+          d.current?.contains(g.target)
             ? (p = true)
             : (g.type !== "focusin" || p) && onClose(false);
         };
@@ -910,7 +905,6 @@ function GridContextMenu({
       style: l,
       onContextMenu: (p) => p.preventDefault(),
       onKeyDown: (p) => {
-        var g;
         if (p.defaultPrevented || p.ctrlKey || p.metaKey || p.altKey) return;
         const m = Array.from(
             p.currentTarget.querySelectorAll('[role="menuitem"]'),
@@ -924,7 +918,7 @@ function GridContextMenu({
               : p.key === "End"
                 ? m.length - 1
                 : (v + (p.key === "ArrowDown" ? 1 : m.length - 1)) % m.length;
-          (g = m[b]) == null || g.focus();
+          m[b]?.focus();
         } else
           (p.key === "Escape" || p.key === "Tab") &&
             (p.preventDefault(), p.stopPropagation(), onClose(true));
@@ -1035,9 +1029,7 @@ const assistantRequestLimits = Object.freeze({
     .map((e) => `.${e}`)
     .join(","),
   textAttachmentExtensions = new Set(["txt", "md", "csv", "tsv", "json"]),
-  getFileExtension = (e) => {
-    return e.split(".").pop()?.toLowerCase() ?? "";
-  };
+  getFileExtension = (e) => e.split(".").pop()?.toLowerCase() ?? "";
 function assertCondition(e, r) {
   if (!e) throw new Error(r);
 }
@@ -1072,7 +1064,7 @@ function readAttachmentBytes(e, r) {
         a ||
           ((a = true),
           clearTimeout(u),
-          r == null || r.removeEventListener("abort", d),
+          r?.removeEventListener("abort", d),
           c ? n(c) : t(new Uint8Array(l)));
       },
       d = () => {
@@ -1100,8 +1092,8 @@ function readAttachmentBytes(e, r) {
           undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         )),
-      r == null || r.addEventListener("abort", d, { once: true }),
-      r != null && r.aborted ? d() : o.readAsArrayBuffer(e));
+      r?.addEventListener("abort", d, { once: true }),
+      r?.aborted ? d() : o.readAsArrayBuffer(e));
   });
 }
 async function prepareChatAttachment(e, r) {
@@ -1310,7 +1302,7 @@ function isAbortOrTimeoutError(e) {
 async function raceWithAbortSignal(e, r, t = 3e4) {
   if (!Number.isFinite(t) || t < 1 || t > 12e4)
     throw new LLMRequestError("invalid_request");
-  if (r != null && r.aborted) throw new LLMRequestError("cancelled");
+  if (r?.aborted) throw new LLMRequestError("cancelled");
   const n = new AbortController();
   let o;
   const a = new Promise((l, c) => {
@@ -1321,14 +1313,14 @@ async function raceWithAbortSignal(e, r, t = 3e4) {
       (o(c), n.abort(c));
     },
     d = () => s("cancelled");
-  r == null || r.addEventListener("abort", d, { once: true });
+  r?.addEventListener("abort", d, { once: true });
   const u = setTimeout(() => s("timeout"), t);
   try {
     return await Promise.race([a, e(n.signal)]);
   } catch (l) {
     throw isAbortOrTimeoutError(l);
   } finally {
-    (clearTimeout(u), r == null || r.removeEventListener("abort", d));
+    (clearTimeout(u), r?.removeEventListener("abort", d));
   }
 }
 const answerGroundingLimits = Object.freeze({
@@ -1568,13 +1560,11 @@ function buildAssistantSelectionContext(e, r) {
     sheetId: n.id,
     sheetName: n.name,
     range: r.range.toUpperCase(),
-    cells: t.map((a) => {
-      return {
-        address: a,
-        raw: n.cells[a]?.raw ?? null,
-        value: o(n.id, a),
-      };
-    }),
+    cells: t.map((a) => ({
+      address: a,
+      raw: n.cells[a]?.raw ?? null,
+      value: o(n.id, a),
+    })),
   };
 }
 function validateAssistantFormula(e, r) {
@@ -1826,7 +1816,7 @@ function validateProposedCalculation(e, r, t) {
           f = {
             ...h,
             ...c.cell,
-            ...((h != null && h.style) || c.cell.style
+            ...(h?.style || c.cell.style
               ? {
                   style: { ...h?.style, ...c.cell.style },
                 }
@@ -1848,8 +1838,7 @@ function validateProposedCalculation(e, r, t) {
           });
         return (
           assertCondition(
-            !m ||
-              (h?.raw === f.raw && !!(h != null && h.literal) == !!f.literal),
+            !m || (h?.raw === f.raw && !!h?.literal == !!f.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
           ),
           { ...c, cell: f }
@@ -1942,7 +1931,7 @@ function buildLocalDemoProposal() {
     localOnly: true,
     chat: { history: true, attachments: true },
     async propose(e, r, t, n) {
-      if (t != null && t.aborted)
+      if (t?.aborted)
         throw new DOMException("Request cancelled.", "AbortError");
       const o = {
           id: `local-${r.revision}-${Date.now()}`,
@@ -2017,7 +2006,7 @@ function buildLocalDemoProposal() {
           ],
           externalSources: [],
         }),
-        n != null && n.attachments.length)
+        n?.attachments.length)
       ) {
         const d = parseAssistantChatRequest(n).attachments,
           u = `Received ${d.length} attachment${d.length === 1 ? "" : "s"}: ${d.map((l) => `${l.name} (${l.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;

@@ -35,7 +35,6 @@ function renderFormulaBar({
   commitNameBoxReference,
   moveSelectionAfterCommit,
 }) {
-  let formulaInputNode;
   return i.jsxs("div", {
     className: "lg-formula-bar",
     children: [
@@ -46,10 +45,8 @@ function renderFormulaBar({
         onChange: (fe) => setGoToReferenceText(fe.target.value),
         onBlur: commitNameBoxReference,
         onKeyDown: (fe) => {
-          var Oe;
           fe.key === "Enter" &&
-            (commitNameBoxReference(),
-            (Oe = gridContainerRef.current) == null || Oe.focus());
+            (commitNameBoxReference(), gridContainerRef.current?.focus());
         },
         lang: language("Selected range"),
         "data-ui-label": "Selected range",
@@ -85,11 +82,9 @@ function renderFormulaBar({
         "aria-label": text("Formula bar"),
         readOnly: isFormulaEditingLocked(),
         value: cellEditText,
-        "aria-describedby":
-          (formulaInputNode = activeCellEditRef.current) != null &&
-          formulaInputNode.value.startsWith("=")
-            ? `${editorIdPrefix}-formula-help`
-            : undefined,
+        "aria-describedby": activeCellEditRef.current?.value.startsWith("=")
+          ? `${editorIdPrefix}-formula-help`
+          : undefined,
         onFocus: (fe) => {
           (!activeCellEditRef.current &&
             cellEditText.startsWith("=") &&
@@ -116,22 +111,19 @@ function renderFormulaBar({
             (setIsFormulaBarFocused(false), commitCellEdit());
         },
         onKeyDown: (fe) => {
-          var Oe, Be;
           if (!fe.nativeEvent.isComposing) {
             if (fe.key === "Escape") {
               if (
                 !formulaPointerStateRef.current.span &&
                 cellEditText.length > 1 &&
-                (Oe = formulaSuggestionListRef.current) != null &&
-                Oe.handleKeyDown(fe)
+                formulaSuggestionListRef.current?.handleKeyDown(fe)
               )
                 return;
               (fe.preventDefault(), cancelCellEdit());
               return;
             }
             handleFormulaKeyDown(fe) ||
-              ((Be = formulaSuggestionListRef.current) != null &&
-                Be.handleKeyDown(fe)) ||
+              formulaSuggestionListRef.current?.handleKeyDown(fe) ||
               ((fe.key === "Enter" || fe.key === "Tab") &&
                 (fe.preventDefault(),
                 commitCellEdit() &&
@@ -156,10 +148,8 @@ function renderFormulaBar({
           (beginCellEdit(fe),
             setFormulaCaretPosition(Oe),
             requestAnimationFrame(() => {
-              var Be, Ue;
-              ((Be = formulaInputRef.current) == null || Be.focus(),
-                (Ue = formulaInputRef.current) == null ||
-                  Ue.setSelectionRange(Oe, Oe));
+              (formulaInputRef.current?.focus(),
+                formulaInputRef.current?.setSelectionRange(Oe, Oe));
             }));
         },
       }),

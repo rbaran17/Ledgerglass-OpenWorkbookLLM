@@ -227,9 +227,9 @@ function createViewAndSelectionActions({
     }
   }
   function focusGridSurface() {
-    requestAnimationFrame(() => {
-      return gridContainerRef.current?.focus({ preventScroll: true });
-    });
+    requestAnimationFrame(() =>
+      gridContainerRef.current?.focus({ preventScroll: true }),
+    );
   }
   function requestCellScroll(fe) {
     setPendingScrollAddress(fe);

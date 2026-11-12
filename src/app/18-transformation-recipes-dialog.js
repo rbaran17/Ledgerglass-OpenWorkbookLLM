@@ -119,22 +119,20 @@ function TransformationRecipesDialog(e) {
       }
     }, [e.workbook, he, JSON.stringify($)]);
   (ne.useEffect(() => {
-    var Pe;
     const ye = document.activeElement;
     return (
-      (Pe = n.current?.querySelector("input,select,button")) == null ||
-        Pe.focus(),
+      n.current?.querySelector("input,select,button")?.focus(),
       () => {
-        ye != null && ye.isConnected && ye.focus();
+        ye?.isConnected && ye.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
-      var ye, Te;
+      var ye;
       W &&
-        ((Te = (ye = o.current) == null ? undefined : ye.scrollIntoView) ==
-          null ||
-          Te.call(ye, { block: "start" }));
+        ((ye = o.current) == null ? undefined : ye.scrollIntoView)?.call(ye, {
+          block: "start",
+        });
     }, [j, W]));
   const le = (ye) => {
     try {
@@ -219,9 +217,9 @@ function TransformationRecipesDialog(e) {
       qe.click(),
       setTimeout(() => URL.revokeObjectURL(Pe), 5e3));
   }
-  const Ae = e.workbook.sheets.filter((ye) => {
-    return ye.transformationRun?.recipeId === c;
-  });
+  const Ae = e.workbook.sheets.filter(
+    (ye) => ye.transformationRun?.recipeId === c,
+  );
   return i.jsx("div", {
     className: "recipe-backdrop",
     children: i.jsxs("section", {
@@ -898,8 +896,8 @@ function TransformationRecipesDialog(e) {
                       "aria-label": text("Recipe step trace"),
                       lang: language("Recipe step trace"),
                       "data-ui-label": "Recipe step trace",
-                      children: K.steps.map((ye) => {
-                        return i.jsxs(
+                      children: K.steps.map((ye) =>
+                        i.jsxs(
                           "details",
                           {
                             open: ye.status === "failed",
@@ -1031,8 +1029,8 @@ function TransformationRecipesDialog(e) {
                             ],
                           },
                           ye.id,
-                        );
-                      }),
+                        ),
+                      ),
                     }),
                   C === "sources" &&
                     i.jsxs("div", {

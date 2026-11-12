@@ -30,7 +30,6 @@ import {
 } from "./09-workbook-links.js";
 
 function SourceImportDialog(e) {
-  var Ee;
   const r = ne.useId(),
     t = ne.useRef(null),
     n = ne.useRef(e),
@@ -55,15 +54,12 @@ function SourceImportDialog(e) {
     [R, L] = ne.useState(""),
     [$, U] = ne.useState("0:0");
   ne.useEffect(() => {
-    var ye;
     a.current = true;
     const Ae = document.activeElement;
     return (
-      (ye = t.current) == null || ye.focus(),
+      t.current?.focus(),
       () => {
-        ((a.current = false),
-          o.current++,
-          Ae != null && Ae.isConnected && Ae.focus());
+        ((a.current = false), o.current++, Ae?.isConnected && Ae.focus());
       }
     );
   }, []);
@@ -597,8 +593,8 @@ function SourceImportDialog(e) {
                         }),
                         ae
                           .slice(_ * 10, _ * 10 + 10)
-                          .map(({ cell, row, column, key }) => {
-                            return i.jsxs(
+                          .map(({ cell, row, column, key }) =>
+                            i.jsxs(
                               "div",
                               {
                                 className: "lg-source-flag",
@@ -723,8 +719,8 @@ function SourceImportDialog(e) {
                                 ],
                               },
                               key,
-                            );
-                          }),
+                            ),
+                          ),
                         i.jsxs("div", {
                           className: "lg-formats-actions",
                           children: [
@@ -808,7 +804,7 @@ function SourceImportDialog(e) {
                     }),
                 ],
               }),
-            !!((Ee = e.workbook.sourceImports) != null && Ee.length) &&
+            !!e.workbook.sourceImports?.length &&
               i.jsxs("section", {
                 className: "lg-formats-source",
                 children: [
@@ -1332,17 +1328,15 @@ function XlsxConversionReview({
   originalLabel = "Download original XLSX",
   inspectOnly = false,
 }) {
-  var m;
   const { text, language } = useWorkbookMessages(),
     c = ne.useId(),
     h = ne.useRef(null);
   ne.useEffect(() => {
-    var g;
     const v = document.activeElement;
     return (
-      (g = h.current) == null || g.focus(),
+      h.current?.focus(),
       () => {
-        v != null && v.isConnected && v.focus();
+        v?.isConnected && v.focus();
       }
     );
   }, []);
@@ -1662,7 +1656,7 @@ function XlsxConversionReview({
               lang: language("Compatibility notices"),
               "data-ui-label": "Compatibility notices",
               children: [
-                (m = report.embeddedObjectLosses) != null && m.length
+                report.embeddedObjectLosses?.length
                   ? i.jsxs("li", {
                       children: [
                         i.jsxs("strong", {

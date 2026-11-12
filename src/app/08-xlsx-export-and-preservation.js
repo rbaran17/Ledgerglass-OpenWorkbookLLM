@@ -165,15 +165,14 @@ function readPackageRelationships(e) {
   return (
     parseXmlPartStrict(e["xl/workbook.xml"], (a) => {
       if (a.local === "sheet") {
-        const d = n.find((u) => {
-          return (
+        const d = n.find(
+          (u) =>
             u.owner === "xl/workbook.xml" &&
             u.id ===
               Object.values(a.attributes).find(
                 (c) => c.local === "id" && c.uri === z2.slice(0, -1),
-              )?.value
-          );
-        });
+              )?.value,
+        );
         d && o.set(d.target, a.attributes.name?.value ?? "Unknown worksheet");
       }
     }),
@@ -234,7 +233,6 @@ function classifyPreservedPart(e, r) {
                                             : "unknown part";
 }
 function F$(e, r) {
-  var p;
   const t = readPackageRelationships(e),
     n = new Map(),
     o = new Map();
@@ -265,35 +263,32 @@ function F$(e, r) {
         (E) => m.has(E.owner) || (!E.external && m.has(E.target)),
       );
     let g = !Object.keys(e).some((E) => /xmlMaps|singleXmlCells/i.test(E));
-    (g &&
-      (g = u.every(
+    ((g &&= u.every(
+      (E) =>
+        E.endsWith(".rels") ||
+        (/\.xml$/.test(E) &&
+          [
+            "application/xml",
+            "text/xml",
+            customXmlPropertiesContentType,
+          ].includes(t.contentType(E))),
+    )),
+      (g &&= v.every(
         (E) =>
-          E.endsWith(".rels") ||
-          (/\.xml$/.test(E) &&
-            [
-              "application/xml",
-              "text/xml",
-              customXmlPropertiesContentType,
-            ].includes(t.contentType(E))),
+          !E.external &&
+          ((E.owner === "xl/workbook.xml" &&
+            E.type === z2 + "customXml" &&
+            m.has(E.target)) ||
+            (m.has(E.owner) &&
+              m.has(E.target) &&
+              E.type === z2 + "customXmlProps")),
       )),
-      g &&
-        (g = v.every(
-          (E) =>
-            !E.external &&
-            ((E.owner === "xl/workbook.xml" &&
-              E.type === z2 + "customXml" &&
-              m.has(E.target)) ||
-              (m.has(E.owner) &&
-                m.has(E.target) &&
-                E.type === z2 + "customXmlProps")),
-        )),
-      g &&
-        (g = v.every((E) =>
-          E.owner === "xl/workbook.xml"
-            ? ["application/xml", "text/xml"].includes(t.contentType(E.target))
-            : t.contentType(E.owner) !== customXmlPropertiesContentType &&
-              t.contentType(E.target) === customXmlPropertiesContentType,
-        )));
+      (g &&= v.every((E) =>
+        E.owner === "xl/workbook.xml"
+          ? ["application/xml", "text/xml"].includes(t.contentType(E.target))
+          : t.contentType(E.owner) !== customXmlPropertiesContentType &&
+            t.contentType(E.target) === customXmlPropertiesContentType,
+      )));
     const b = v.filter((E) => E.owner === "xl/workbook.xml"),
       y = new Set(),
       w = b.map((E) => E.target);
@@ -305,7 +300,7 @@ function F$(e, r) {
         for (const A of n.get(E) ?? []) A.external || w.push(A.target);
       }
     }
-    g && (g = b.length > 0 && u.every((E) => y.has(E)));
+    g &&= b.length > 0 && u.every((E) => y.has(E));
     for (const E of u)
       g
         ? s.add(E)
@@ -322,7 +317,7 @@ function F$(e, r) {
       m.length === 1 &&
       m[0].owner === "" &&
       m[0].type === z2 + "custom-properties" &&
-      !((p = n.get(l)) != null && p.length);
+      !n.get(l)?.length;
     (parseXmlPartStrict(e[l], (g) => {
       (g.local === "property" && g.attributes.linkTarget && (v = false),
         (g.uri ===
@@ -469,9 +464,7 @@ function F$(e, r) {
         parseXmlPartStrict(
           v,
           (D) => {
-            const B = (_) => {
-              return D.attributes[_]?.value;
-            };
+            const B = (_) => D.attributes[_]?.value;
             (D.local === "c" &&
               ((k = B("r") ?? ""),
               (F = B("t") ?? ""),
@@ -747,11 +740,8 @@ function parseXlsxDataValidations(e) {
   for (const t of e.matchAll(
     /<(?:\w+:)?dataValidation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?dataValidation>)/g,
   )) {
-    const n = (d) => {
-        return new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(
-          t[1],
-        )?.[1];
-      },
+    const n = (d) =>
+        new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(t[1])?.[1],
       o = (n("sqref") ?? "").trim().split(/\s+/).filter(Boolean);
     if (!o.length) continue;
     const a = formatRangeCornerCells(o[0]).split(":")[0];
@@ -931,7 +921,7 @@ function appendStopIfTrueAttribute(e, r) {
   return e.replace(/<cfRule\b[^>]*>/g, (n) => {
     const o = Number(/\bpriority="(\d+)"/.exec(n)?.[1]),
       a = t[o - 1];
-    return a != null && a.stopIfTrue
+    return a?.stopIfTrue
       ? n.replace(/\s+stopIfTrue="[^"]*"/, "").replace(/>$/, ' stopIfTrue="1">')
       : n;
   });
@@ -1243,13 +1233,11 @@ function inspectEmbeddedObjects(e) {
   };
 }
 function retainEmbeddedObjectInventory(e, r, t = {}) {
-  var o;
   if (t.readOnly) throw Error("This workbook is read-only.");
   assertWorkbookStructureEditable(e);
   const n = inspectEmbeddedObjects(r);
   if (
-    (o = e.embeddedObjectInventories) != null &&
-    o.some((a) => a.sourceSha256 === n.sourceSha256)
+    e.embeddedObjectInventories?.some((a) => a.sourceSha256 === n.sourceSha256)
   )
     throw Error("This source inventory has already been retained.");
   return normalizeWorkbookInput({
@@ -1274,7 +1262,6 @@ function flattenEmbeddedObjectItems(e) {
   );
 }
 function buildExchangeSchemaReport(e, r, t, n, o) {
-  var a;
   return {
     schemaVersion: 1,
     direction: e,
@@ -1310,7 +1297,7 @@ function buildExchangeSchemaReport(e, r, t, n, o) {
       hidden: !!(s.hidden || s.veryHidden),
     })),
     warnings: [...new Set(o)],
-    ...(e === "export" && (a = n.embeddedObjectInventories) != null && a.length
+    ...(e === "export" && n.embeddedObjectInventories?.length
       ? { embeddedObjectLosses: flattenEmbeddedObjectItems(n) }
       : {}),
     caches: {
@@ -1917,8 +1904,8 @@ function resolvePackagePartPath(e) {
   return r.join("/");
 }
 const decodeXmlEntities = (e) =>
-  e.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (r) => {
-    return r === "&amp;"
+  e.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (r) =>
+    r === "&amp;"
       ? "&"
       : r === "&lt;"
         ? "<"
@@ -1933,8 +1920,8 @@ const decodeXmlEntities = (e) =>
                     r.slice(r[2]?.toLowerCase() === "x" ? 3 : 2, -1),
                     r[2]?.toLowerCase() === "x" ? 16 : 10,
                   ),
-                );
-  });
+                ),
+  );
 function importXlsxWorkbook(e, r) {
   const t = inspectXlsxPackage(e),
     n = new Set(t.keys()),
@@ -2130,7 +2117,7 @@ function importXlsxWorkbook(e, r) {
                 const U = R === undefined ? undefined : Number(R);
                 if (
                   U !== undefined &&
-                  (!(R != null && R.trim()) || !Number.isFinite(U) || U < 0)
+                  (!R?.trim() || !Number.isFinite(U) || U < 0)
                 )
                   throw Error(
                     "XLSX column widths must be finite nonnegative values.",
@@ -2292,18 +2279,12 @@ const expandHexColorToArgb = (e) => {
     date: "yyyy-mm-dd",
   };
 function serializeWorksheetXml(e, r) {
-  if (
-    !r.some((n) => {
-      return n.hiddenRows?.length || n.hiddenCols?.length;
-    })
-  )
-    return e;
+  if (!r.some((n) => n.hiddenRows?.length || n.hiddenCols?.length)) return e;
   const t = unzipSync(e);
   return (
     r.forEach((n, o) => {
-      var h;
       const a = readHiddenAxisIntervals(n, "row");
-      if (!a.length && !((h = n.hiddenCols) != null && h.length)) return;
+      if (!a.length && !n.hiddenCols?.length) return;
       const s = "xl/worksheets/sheet" + (o + 1) + ".xml";
       let d = strFromU8(t[s]);
       if (
@@ -2399,23 +2380,17 @@ function serializeWorksheetXml(e, r) {
 }
 function applyPageBreakXml(e, r) {
   if (
-    !r.some((n) => {
-      return (
-        n.pageLayout?.rowBreaks?.length || n.pageLayout?.columnBreaks?.length
-      );
-    })
+    !r.some(
+      (n) =>
+        n.pageLayout?.rowBreaks?.length || n.pageLayout?.columnBreaks?.length,
+    )
   )
     return e;
   const t = unzipSync(e);
   return (
     r.forEach((n, o) => {
-      var c, h;
       const a = n.pageLayout;
-      if (
-        !((c = a?.rowBreaks) != null && c.length) &&
-        !((h = a?.columnBreaks) != null && h.length)
-      )
-        return;
+      if (!a?.rowBreaks?.length && !a?.columnBreaks?.length) return;
       const s = `xl/worksheets/sheet${o + 1}.xml`;
       let d = strFromU8(t[s]);
       d = d.replace(
@@ -2427,7 +2402,7 @@ function applyPageBreakXml(e, r) {
         ["colBreaks", a.columnBreaks, 1048575],
       ]
         .map(([f, p, m]) =>
-          p != null && p.length
+          p?.length
             ? `<${f} count="${p.length}" manualBreakCount="${p.length}">${p.map((v) => `<brk id="${v}" min="0" max="${m}" man="1"/>`).join("")}</${f}>`
             : "",
         )
@@ -2443,12 +2418,11 @@ function applyPageBreakXml(e, r) {
 }
 function applySheetRuleFlags(e, r) {
   if (
-    !r.some((n) => {
-      return (
+    !r.some(
+      (n) =>
         n.conditionalFormats?.some((s) => s.stopIfTrue) ||
-        n.validations?.some((s) => s.showDropdown === false)
-      );
-    })
+        n.validations?.some((s) => s.showDropdown === false),
+    )
   )
     return e;
   const t = unzipSync(e);
@@ -2466,7 +2440,6 @@ function applySheetRuleFlags(e, r) {
   );
 }
 async function exportWorkbookToXlsx(e) {
-  var p, m, v, g, y, w, E, A, k, F, I, O, j, z, V;
   const r = [
     "Dynamic-array formulas are exported as ordinary anchor formulas without Excel dynamic-array metadata. Native JSON retains local spill behavior. Legacy CSE and metadata-qualified Excel arrays are identified and refused on import; convert a reviewed copy in Excel before importing. Independent Excel round-trip acceptance is required.",
     `Date calculations use the Gregorian ${normalizeDatePolicy(e.datePolicy).dateSystem} serial system, preserved in XLSX. Native JSON retains the explicit text-date order and calculation time zone; XLSX does not retain that policy or the calculation clock evidence. DATEVALUE/VALUE text interpretation and TODAY/NOW results may change in Excel. Export calculation evidence separately and review calendar-sensitive formulas.`,
@@ -2474,9 +2447,7 @@ async function exportWorkbookToXlsx(e) {
   ];
   (e.styleCatalog ||
     e.sheets.some((D) =>
-      Object.values(D.cells).some((B) => {
-        return B.style?.binding;
-      }),
+      Object.values(D.cells).some((B) => B.style?.binding),
     )) &&
     r.push(
       "Named styles and theme bindings are flattened to their current effective formatting in XLSX. Keep native JSON to preserve reusable styles, inherited values and explicit overrides.",
@@ -2491,8 +2462,7 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "Custom-function manifests, reviewed result caches and linked entity fields are retained in native JSON only. XLSX does not install or authorize extensions. Custom function formulas require a compatible, separately approved implementation in the receiving application; cached results are historical and not proof of live calculation.",
       ),
-    (p = t.sourceImports) != null &&
-      p.length &&
+    t.sourceImports?.length &&
       r.push(
         "Structured/document source originals, field paths, native-type evidence, page regions and review decisions are native JSON only and omitted from derived XLSX. Keep a native backup and use File > Import sources to retrieve the originals.",
       ),
@@ -2500,13 +2470,11 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "The retained alternate-format original and conversion provenance are native JSON only and are omitted from derived XLSX. Keep the original from File > Workbook formats. Conversion equivalence has not been verified.",
       ),
-    (m = t.reportOutputs) != null &&
-      m.length &&
+    t.reportOutputs?.length &&
       r.push(
         "Reusable report outputs, fixed snapshots and host-reviewed links are native JSON only and are omitted from XLSX. Export each report as SVG/PNG/HTML/JSON for downstream reuse; XLSX does not create Office OLE links or refresh authority.",
       ),
-    (v = t.embeddedObjectInventories) != null &&
-      v.length &&
+    t.embeddedObjectInventories?.length &&
       r.push(
         "Unsupported OLE/ActiveX/embedded-object metadata and payloads are omitted from derived XLSX. Every retained inventory item is listed as dropped in embeddedObjectLosses. No object was executed or fetched; preserve the original files separately and native JSON for the inventory.",
       ),
@@ -2518,8 +2486,7 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "Relational model tables, relationships, typed contracts, measures, queries and source-freshness evidence require native JSON. XLSX exports supported worksheet values only; no Excel Data Model or DAX is generated. Published model results are snapshots and are not recalculated by Excel from these definitions.",
       ),
-    (g = t.importedCalculationCaches) != null &&
-      g.entries.length &&
+    t.importedCalculationCaches?.entries.length &&
       r.push(
         "Original imported formula caches, source file hash and cache comparisons are native JSON evidence only. XLSX writes current local results; it never writes imported historical caches as current values.",
       ),
@@ -2527,40 +2494,34 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "Manual calculation mode is exported. Pending formula caches are omitted; choose Calculate Now before relying on formula results in another application.",
       ),
-    (((y = t.automationArtifacts) != null && y.length) ||
-      ((w = t.automationRuns) != null && w.length)) &&
+    (t.automationArtifacts?.length || t.automationRuns?.length) &&
       r.push(
         "Preserved VBA/Office Scripts source bytes and migration run provenance are native JSON only. XLSX contains the resulting cells; it does not embed executable macros or Office Scripts. Download original artifacts separately from Automation & Scripts.",
       ),
-    (E = t.whatIfAnalyses) != null &&
-      E.length &&
+    t.whatIfAnalyses?.length &&
       r.push(
         "What-if scenario and sensitivity definitions, retained assumptions and baseline evidence are native JSON metadata. XLSX preserves report cells only; native Excel Scenario Manager and data-table formulas are not created. Keep native JSON to reopen and refresh the analysis.",
       ),
-    t.sheets.some((D) => {
-      return D.pivots?.length;
-    }) &&
+    t.sheets.some((D) => D.pivots?.length) &&
       r.push(
         "Native PivotTable definitions, slicers, timelines, Show values as settings, field sorting, PivotCharts, calculated fields, grouping, refresh fingerprints and freshness labels are not preserved in XLSX. Only the current output cells are exported; keep native JSON and export pivot context to verify and refresh the result.",
       ),
-    (((A = t.tableEvidence) != null && A.length) ||
-      t.sheets.some((D) => {
-        return D.tables?.some((_) => _.columns.some((C) => C.dataType));
-      })) &&
+    (t.tableEvidence?.length ||
+      t.sheets.some((D) =>
+        D.tables?.some((_) => _.columns.some((C) => C.dataType)),
+      )) &&
       r.push(
         "Table column types and original header/conversion evidence are native JSON only. XLSX retains supported tables and current cell values; save native JSON to retain the original source values and type contracts.",
       ),
-    (k = t.textCleanups) != null &&
-      k.length &&
+    t.textCleanups?.length &&
       r.push(
         "Text cleanup history, original evidence snapshots and cleanup recipes are retained in native JSON only. XLSX keeps the output values and cell notes but cannot restore the cleanup history.",
       ),
-    (F = t.savedFilterViews) != null &&
-      F.length &&
+    t.savedFilterViews?.length &&
       r.push(
         "Named filter views and their historical preview counts are retained in native JSON only. XLSX exports the full source population and does not write Excel AutoFilter criteria. Keep native JSON to reopen saved views and review fresh results.",
       ),
-    (((I = t.transformationRecipes) != null && I.length) ||
+    (t.transformationRecipes?.length ||
       t.sheets.some((D) => D.transformationRun)) &&
       r.push(
         "Versioned transformation recipes, source/output hashes and complete step execution evidence are native JSON only. XLSX retains current output values and source-row notes; keep the native workbook for repeatable recipe refresh and lineage.",
@@ -2573,19 +2534,17 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "External source connections, refresh attempts, source versions, stale state and control-total evidence are native JSON only. XLSX contains a values snapshot and source notes, with no refresh or credential authority. Keep the native workbook and reauthorize the host source before refreshing.",
       ),
-    (O = t.fieldTransforms) != null &&
-      O.length &&
+    t.fieldTransforms?.length &&
       r.push(
         "Clean & Reshape recipes, reviewed inference examples and original source snapshots are native JSON only. XLSX keeps current output values, derivation notes and the exceptions appendix; save native JSON to retain reversible transformation evidence.",
       ),
-    t.sheets.some((D) => {
-      return D.tables?.some((_) => _.columns.some((C) => C.calculatedFormula));
-    }) &&
+    t.sheets.some((D) =>
+      D.tables?.some((_) => _.columns.some((C) => C.calculatedFormula)),
+    ) &&
       r.push(
         "Calculated table column rules are retained in native JSON only. XLSX retains the individual cell formulas and values, but does not preserve the reusable calculated-column rule for future appends.",
       ),
-    (j = t.formulaWatches) != null &&
-      j.length &&
+    t.formulaWatches?.length &&
       r.push(
         "The formula Watch Window list is retained in native JSON only; XLSX cellWatches are not exported.",
       ),
@@ -2593,13 +2552,11 @@ async function exportWorkbookToXlsx(e) {
       r.push(
         "Split panes are retained in native JSON only and are not preserved in XLSX. Save workbook data to keep divider layouts and initial scroll anchors.",
       ),
-    (z = t.rowOrigins) != null &&
-      z.length &&
+    t.rowOrigins?.length &&
       r.push(
         "Original source row identities and their current associations are retained in native JSON only. XLSX export does not preserve the source registry; reopening that XLSX creates a new file-source identity.",
       ),
-    (V = t.definedNames) != null &&
-      V.length &&
+    t.definedNames?.length &&
       r.push(
         "Defined-name formula text, workbook/worksheet scope and supported comments are preserved. Recalculation uses the supported local engine; relative, volatile and dynamic name formulas require independent Excel review.",
       ),

@@ -1,6 +1,4 @@
 import {
-  isNonArrayObject,
-  buildSnapshotGuard,
   isPlainObjectValue,
   throwWithMessage,
 } from "./01-cell-styles-and-themes.js";
@@ -715,7 +713,6 @@ function validateDataModel(e) {
   return t;
 }
 function validateModelQuery(e, r) {
-  var a;
   const t = modelQuerySchema.safeParse(e);
   if (!t.success)
     throw Error(`Invalid model query: ${t.error.issues[0]?.message}`);
@@ -726,10 +723,11 @@ function validateModelQuery(e, r) {
       "Group fields",
     ));
   for (const s of [...n.groupBy, ...n.filters])
-    if (!(
-      (a = r.tables.find((d) => d.id === s.tableId)) != null &&
-      a.columns.some((d) => d.name === s.column)
-    ))
+    if (
+      !r.tables
+        .find((d) => d.id === s.tableId)
+        ?.columns.some((d) => d.name === s.column)
+    )
       throw Error(`Unknown query field ${s.tableId}.${s.column}.`);
   if (n.measureIds.some((s) => !r.measures.some((d) => d.id === s)))
     throw Error("A selected model measure is missing.");
@@ -1661,8 +1659,7 @@ function validateTextCleanupSteps(e) {
   );
 }
 function assertTextCleanupEvidenceUnchanged(e, r) {
-  var n;
-  if (!((n = e.textCleanups) != null && n.length)) return r;
+  if (!e.textCleanups?.length) return r;
   const t = new Map(e.textCleanups.map((o) => [o.id, o]));
   for (const o of r.textCleanups ?? []) {
     const a = t.get(o.id);
@@ -1837,8 +1834,7 @@ function validateFieldTransformRecipe(e) {
   return t;
 }
 function assertFieldTransformsUnchanged(e, r) {
-  var n;
-  if (!((n = e.fieldTransforms) != null && n.length)) return r;
+  if (!e.fieldTransforms?.length) return r;
   const t = new Map(e.fieldTransforms.map((o) => [o.id, o]));
   for (const o of r.fieldTransforms ?? [])
     if (t.has(o.id) && JSON.stringify(t.get(o.id)) !== JSON.stringify(o))
@@ -2029,4 +2025,64 @@ export {
   reportHashSchema,
   resolveExtractedCellValue,
   buildRetainedSourceRecord,
+};
+
+/* Also used by the workers. */
+export {
+  IU,
+  Poe,
+  analysisCellValueSchema,
+  analysisOutcomeSchema,
+  analysisReportRecordSchema,
+  analysisSpecSchema,
+  boundedNumberSchema,
+  cellReferenceSchema,
+  cellTextValueSchema,
+  columnIndexSchema,
+  dataModelDefinitionSchema,
+  dataModelReportSchema,
+  distinctColumnPositions,
+  distinctExampleRowsSchema,
+  documentSourceFormats,
+  extractedDocumentSchema,
+  extractedTableSchema,
+  fieldTransformRecipeSchema,
+  fieldTransformStepSchema,
+  finiteNumberSchema,
+  modelColumnSchema,
+  modelFilterSchema,
+  modelGroupFieldSchema,
+  modelMeasureSchema,
+  modelQuerySchema,
+  modelTableSourceSchema,
+  nativeCellValueSchema,
+  outputWorksheetNameSchema,
+  relationshipOptionsSchema,
+  retainedSourceFileSchema,
+  reviewCorrectionSchema,
+  shiftColumnReference,
+  solverAnalysisSpecSchema,
+  sourceImportRecordSchema,
+  sourceRegionSchema,
+  statisticsAnalysisSpecSchema,
+  tableIdentifierSchema,
+  textCaseModeSchema,
+  textExtractStepSchema,
+};
+
+/* Also used by the workers. */
+export {
+  MU,
+  assertUniqueCaseInsensitive,
+  automationArtifactKinds,
+  isSafeFileName,
+  requireAutomationEvidenceCount,
+  requireAutomationFileName,
+  requireAutomationSourceHash,
+  requireAutomationText,
+  requireAutomationTimestamp,
+  retainOriginalXlsx,
+  validateAlternateSource,
+  validateAutomationApprovedRange,
+  validateRetainedXlsxSource,
 };

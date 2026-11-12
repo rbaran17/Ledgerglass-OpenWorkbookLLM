@@ -39,7 +39,6 @@ function TableToolsDialog({
   onClose,
   onWorkbookChange,
 }) {
-  var br;
   const { text, language } = useWorkbookMessages(),
     l = ne.useRef(null);
   ne.useEffect(() => {
@@ -49,9 +48,9 @@ function TableToolsDialog({
         "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
       );
     return (
-      et == null || et.focus(),
+      et?.focus(),
       () => {
-        rt != null && rt.isConnected && rt.focus();
+        rt?.isConnected && rt.focus();
       }
     );
   }, []);
@@ -752,12 +751,10 @@ function TableToolsDialog({
                             }),
                             i.jsx("button", {
                               type: "button",
-                              disabled: !(
-                                (br = mt
-                                  .find((rt) => rt.id === E)
-                                  ?.columns.find((rt) => rt.id === qe)) !=
-                                  null && br.calculatedFormula
-                              ),
+                              disabled: !mt
+                                .find((rt) => rt.id === E)
+                                ?.columns.find((rt) => rt.id === qe)
+                                ?.calculatedFormula,
                               onClick: () =>
                                 qt({
                                   kind: "clearColumnFormula",
@@ -847,8 +844,8 @@ function TableToolsDialog({
                                           "Saved column rules before and after",
                                       }),
                                     }),
-                                    $e.plan.afterColumns.map((rt, Le) => {
-                                      return i.jsxs(
+                                    $e.plan.afterColumns.map((rt, Le) =>
+                                      i.jsxs(
                                         "p",
                                         {
                                           children: [
@@ -870,16 +867,16 @@ function TableToolsDialog({
                                           ],
                                         },
                                         rt.id,
-                                      );
-                                    }),
+                                      ),
+                                    ),
                                   ],
                                 }),
                                 i.jsx("ol", {
                                   start: ze * 20 + 1,
                                   children: $e.plan.changes
                                     .slice(ze * 20, ze * 20 + 20)
-                                    .map((rt) => {
-                                      return i.jsxs(
+                                    .map((rt) =>
+                                      i.jsxs(
                                         "li",
                                         {
                                           children: [
@@ -932,8 +929,8 @@ function TableToolsDialog({
                                           ],
                                         },
                                         `${rt.sheetId}:${rt.address}`,
-                                      );
-                                    }),
+                                      ),
+                                    ),
                                 }),
                                 $e.plan.changes.length > 20 &&
                                   i.jsxs("div", {

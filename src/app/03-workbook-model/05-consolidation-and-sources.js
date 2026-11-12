@@ -81,9 +81,8 @@ import {
 } from "./04-pivot-tables-and-pictures.js";
 
 function applyDefinedNameOperation(e, r, t = {}) {
-  var b;
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if ((b = e.structureProtection) != null && b.enabled)
+  if (e.structureProtection?.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before changing names.",
     );
@@ -113,11 +112,9 @@ function applyDefinedNameOperation(e, r, t = {}) {
     );
   if (
     a &&
-    e.sheets.some((y) => {
-      return y.tables?.some(
-        (E) => E.name.toLowerCase() === a.name.toLowerCase(),
-      );
-    })
+    e.sheets.some((y) =>
+      y.tables?.some((E) => E.name.toLowerCase() === a.name.toLowerCase()),
+    )
   )
     throw Error("A table already uses this name.");
   const s = structuredClone(e),
@@ -131,11 +128,7 @@ function applyDefinedNameOperation(e, r, t = {}) {
       (s.definedNames = n.map((y) => (definedNameScopeKey(y) === d ? a : y))));
   const u = a?.scopeSheetId ?? o?.scopeSheetId,
     l = (y) => {
-      var E;
-      if (
-        (E = e.sheets.find((A) => A.id === y)?.protection) != null &&
-        E.enabled
-      )
+      if (e.sheets.find((A) => A.id === y)?.protection?.enabled)
         throw Error(
           "An affected worksheet is protected. Unprotect it before changing names.",
         );
@@ -226,7 +219,6 @@ function applyDefinedNameOperation(e, r, t = {}) {
           );
       }
       const F = replaceTextSpans(y, A, (I) => {
-        var z;
         if (r.kind !== "rename") return I.text;
         const O = w.map((V) => findScopedDefinedName(I, e, V)),
           j = O.map((V) => !!V && definedNameScopeKey(V) === d);
@@ -235,11 +227,7 @@ function applyDefinedNameOperation(e, r, t = {}) {
             `The workbook-scoped definition ${E.label} resolves differently across worksheets. Qualify its references before renaming.`,
           );
         if (j.every(Boolean)) {
-          if (
-            !I.qualifier &&
-            (z = I.bound) != null &&
-            z.has(a.name.toLowerCase())
-          )
+          if (!I.qualifier && I.bound?.has(a.name.toLowerCase()))
             throw Error(
               `Renaming would be shadowed by a local LET variable or LAMBDA parameter in ${E.label}. Choose a distinct name.`,
             );
@@ -285,12 +273,11 @@ function applyDefinedNameOperation(e, r, t = {}) {
   for (const y of s.sheets) {
     for (const w of y.tables ?? [])
       for (const E of w.columns)
-        E.calculatedFormula &&
-          (E.calculatedFormula = g(E.calculatedFormula, [y.id], {
-            kind: "table-column",
-            label: `${y.name}: ${w.name}[${E.name}] calculated rule`,
-            sheetId: y.id,
-          }));
+        E.calculatedFormula &&= g(E.calculatedFormula, [y.id], {
+          kind: "table-column",
+          label: `${y.name}: ${w.name}[${E.name}] calculated rule`,
+          sheetId: y.id,
+        });
     for (const [w, E] of Object.entries(y.cells))
       typeof E.raw == "string" &&
         E.raw.startsWith("=") &&
@@ -480,7 +467,6 @@ function createWorkbookFormulaEngine(
   const d = e._callFunction.bind(e);
   return (
     (e._callFunction = (u, l) => {
-      var h;
       u = u
         .replace(/^_xlfn\./i, "")
         .replace(/^_xlws\./i, "")
@@ -655,10 +641,7 @@ function createWorkbookFormulaEngine(
           if (B && typeof B == "object" && "ref" in B) {
             const _ = l[0],
               C = B;
-            (h = _?.ref) != null &&
-              h.sheet &&
-              !C.ref.sheet &&
-              (C.ref.sheet = _.ref.sheet);
+            _?.ref?.sheet && !C.ref.sheet && (C.ref.sheet = _.ref.sheet);
           }
           return B;
         }
@@ -1091,7 +1074,7 @@ function createWorkbookFormulaEngine(
   );
 }
 function formatNumberWithPattern(e, r, t = "1900") {
-  if (r != null && r.numberFormat)
+  if (r?.numberFormat)
     try {
       return formatCellValueWithNumberFormat(e, r.numberFormat, t).text;
     } catch {
@@ -1117,7 +1100,7 @@ function formatNumberWithPattern(e, r, t = "1900") {
       t,
     ).text;
   }
-  if (r != null && r.numFmt) {
+  if (r?.numFmt) {
     if (r.numFmt.toLowerCase() === "general")
       return String(Number(e.toPrecision(15)));
     const n = numberFormatToIntlOptions(e, r.numFmt);
@@ -1320,21 +1303,17 @@ const calculatorRecords = new WeakMap(),
     "i",
   ),
   _O = { test: (e) => findVolatileFunctionNames(e).length > 0 },
-  ik = (e, r) => {
-    var t;
-    return (
-      !!((t = e.definedNames) != null && t.length) ||
-      [...r.values()].some((n) => {
-        const o = n.formula.replace(/"(?:[^"]|"")*"/g, '""');
-        return (
-          dynamicFunctionPattern.test(o) ||
-          /[{}#]/.test(o) ||
-          /^=\s*[^()+*/]*:/.test(o) ||
-          (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(o) && o.includes(":"))
-        );
-      })
-    );
-  },
+  ik = (e, r) =>
+    !!e.definedNames?.length ||
+    [...r.values()].some((n) => {
+      const o = n.formula.replace(/"(?:[^"]|"")*"/g, '""');
+      return (
+        dynamicFunctionPattern.test(o) ||
+        /[{}#]/.test(o) ||
+        /^=\s*[^()+*/]*:/.test(o) ||
+        (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(o) && o.includes(":"))
+      );
+    }),
   calculationSnapshotCache = new WeakMap();
 const sheetInputCache = new WeakMap();
 function buildSheetCalculationSnapshot(e) {
@@ -1345,12 +1324,11 @@ function buildSheetCalculationSnapshot(e) {
   const t = [];
   let n, o;
   const a = () =>
-      n ??
-      (n = Object.entries(e.cells).map(([l, c]) => [
+      (n ??= Object.entries(e.cells).map(([l, c]) => [
         `${e.id}:${l}`,
         JSON.stringify([c.raw, !!c.literal]),
       ])),
-    s = () => o ?? (o = JSON.stringify(a()));
+    s = () => (o ??= JSON.stringify(a()));
   isDeepFrozenValue(e.cells) || s();
   for (const l in e.cells) {
     const c = e.cells[l],
@@ -1404,7 +1382,7 @@ function buildWorkbookCalculationDescriptor(e) {
 function buildWorkbookCalculationSignature(e) {
   const r = e.sheets.map(buildSheetCalculationSnapshot);
   let t;
-  const n = () => t ?? (t = new Map(r.flatMap((h) => h.inputs()))),
+  const n = () => (t ??= new Map(r.flatMap((h) => h.inputs()))),
     o = new Map(r.flatMap((h) => h.formulas)),
     a = normalizeCalculationSettings(
       e.calculation ?? defaultCalculationSettings,
@@ -1412,11 +1390,9 @@ function buildWorkbookCalculationSignature(e) {
     s = buildWorkbookCalculationDescriptor(e);
   let d, u;
   const l = () =>
-      d ??
-      (d = `[${JSON.stringify(e.revision)},${JSON.stringify(s)},[${r.map((h) => h.signature()).join(",")}]]`),
+      (d ??= `[${JSON.stringify(e.revision)},${JSON.stringify(s)},[${r.map((h) => h.signature()).join(",")}]]`),
     c = () =>
-      u ??
-      (u = `[${l()},${JSON.stringify(e.importedCalculationCaches ?? null)}]`);
+      (u ??= `[${l()},${JSON.stringify(e.importedCalculationCaches ?? null)}]`);
   return (
     isDeepFrozenValue(e) || c(),
     {
@@ -1697,10 +1673,9 @@ function normalizeSavedFilterViewName(e) {
   return e.normalize("NFC").trim();
 }
 function assertSavedFilterViewsEditable(e, r) {
-  var t, o;
   if (
-    ((t = e.structureProtection) != null && t.enabled) ||
-    ((o = e.sheets.find((a) => a.id === r)?.protection) != null && o.enabled)
+    e.structureProtection?.enabled ||
+    e.sheets.find((a) => a.id === r)?.protection?.enabled
   )
     throw Error(
       "Unprotect the workbook and source worksheet before changing saved filter views.",
@@ -2267,3 +2242,39 @@ export {
   savedFilterViewLimits,
   zie,
 };
+
+/* Also used by the workers. */
+export {
+  MO,
+  boundedLabelSchema,
+  buildSheetCalculationSnapshot,
+  buildWorkbookCalculationDescriptor,
+  buildWorkbookCalculationSignature,
+  categoryValueSchema,
+  columnNameSchema,
+  consolidationDefinitionSchema,
+  consolidationEvidenceSchema,
+  consolidationIssueSchema,
+  consolidationSourceResultSchema,
+  consolidationSourceSchema,
+  consolidationSourceSnapshotSchema,
+  consolidationSubtotalSchema,
+  consolidationTotalsSchema,
+  dynamicFunctionPattern,
+  externalSourceErrorCodes,
+  externalSourceKinds,
+  isoDateTimeSchema,
+  matchCriteriaValue,
+  scalarValueSchema,
+  sourceApprovalSchema,
+  sourceColumnSchema,
+  sourceControlFieldSchema,
+  sourceIdSchema,
+  sourceRefreshStateSchema,
+  sourceResultPayloadSchema,
+  sourceTableSchema,
+  throwInvalidCalculationSettings,
+};
+
+/* Also used by the workers. */
+export { externalSourceErrorMessages };

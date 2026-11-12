@@ -63,9 +63,8 @@ function createFileAndAnalysisActions({
   switchActiveWorksheet,
 }) {
   async function importWorkbookFromFile(fe) {
-    var gt;
     if (!fe) return;
-    (gt = activeOperationControllerRef.current) == null || gt.abort();
+    activeOperationControllerRef.current?.abort();
     const Oe = new AbortController(),
       Be = ++latestOperationIdRef.current;
     activeOperationControllerRef.current = Oe;
@@ -278,7 +277,6 @@ function createFileAndAnalysisActions({
     });
   }
   async function askAssistantQuestion(fe, Oe) {
-    var Xe;
     if (!fe.trim()) return null;
     if (selectionAreas.length > 1)
       throw (
@@ -287,7 +285,7 @@ function createFileAndAnalysisActions({
         ),
         new Error("Select one rectangular range before asking the assistant.")
       );
-    (Xe = assistantAbortControllerRef.current) == null || Xe.abort();
+    assistantAbortControllerRef.current?.abort();
     const Be = ++assistantRequestIdRef.current;
     (setIsAssistantBusy(true),
       setAssistantProposal(null),

@@ -32,11 +32,10 @@ function createFormulaEntryActions({
   jumpToDataEdge,
 }) {
   function insertFormulaReference(fe, Oe = false, Be) {
-    var rr;
     const Ue = activeCellEditRef.current,
       Xe = formulaPointerStateRef.current;
     if (
-      !(Ue != null && Ue.value.startsWith("=")) ||
+      !Ue?.value.startsWith("=") ||
       isFormulaEditingLocked() ||
       isOperationBusy
     )
@@ -53,10 +52,7 @@ function createFormulaEntryActions({
         Ue.sheetId === activeSheet.id ? undefined : activeSheet.name,
       );
     return (
-      beginCellEdit(
-        jt.value,
-        !!((rr = Xe.input) != null && rr.classList.contains("lg-cell-editor")),
-      ),
+      beginCellEdit(jt.value, !!Xe.input?.classList.contains("lg-cell-editor")),
       (Xe.span = jt.span),
       (Xe.start = Xe.end = jt.span.end),
       (Xe.anchor = Nt),
@@ -73,11 +69,7 @@ function createFormulaEntryActions({
     );
   }
   function handleFormulaPointerDown(fe) {
-    var Nt;
-    if (
-      fe.button !== 0 ||
-      !((Nt = activeCellEditRef.current) != null && Nt.value.startsWith("="))
-    )
+    if (fe.button !== 0 || !activeCellEditRef.current?.value.startsWith("="))
       return false;
     const Oe = fe.target;
     if (Oe.closest('input,button,a,[role="separator"]')) return false;

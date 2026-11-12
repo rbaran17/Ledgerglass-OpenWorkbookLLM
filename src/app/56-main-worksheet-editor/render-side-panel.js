@@ -246,8 +246,8 @@ function renderSidePanel({
                                       new Date(fe.timestamp).toLocaleString(),
                                     ],
                                   }),
-                                  fe.changes.slice(0, 5).map((Oe, Be) => {
-                                    return i.jsxs(
+                                  fe.changes.slice(0, 5).map((Oe, Be) =>
+                                    i.jsxs(
                                       "small",
                                       {
                                         children: [
@@ -265,8 +265,8 @@ function renderSidePanel({
                                         ],
                                       },
                                       Be,
-                                    );
-                                  }),
+                                    ),
+                                  ),
                                   fe.changes.length > 5 &&
                                     i.jsxs("small", {
                                       children: [

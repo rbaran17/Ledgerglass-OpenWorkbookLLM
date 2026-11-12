@@ -1,4 +1,3 @@
-import ne from "react";
 import {
   iso,
   string,
@@ -53,9 +52,7 @@ function unwrapDefaultExport(e) {
     : e;
 }
 
-const Gq = unwrapDefaultExport(ne),
-  uEe = copyModuleProperties({ __proto__: null, default: Gq }, [ne]),
-  deepFrozenValueSet = new WeakSet();
+const deepFrozenValueSet = new WeakSet();
 function isDeepFrozenValue(e) {
   return !!e && typeof e == "object" && deepFrozenValueSet.has(e);
 }
@@ -66,13 +63,12 @@ function deepFreezeValue(e) {
 }
 const linkedOrBoundCellCache = new WeakMap();
 function hasLinkedOrBoundCells(e) {
-  var t;
   if (!isDeepFrozenValue(e)) return true;
   let r = linkedOrBoundCellCache.get(e);
   if (r === undefined) {
     r = false;
     for (const n in e)
-      if (e[n].hyperlink || ((t = e[n].style) != null && t.binding)) {
+      if (e[n].hyperlink || e[n].style?.binding) {
         r = true;
         break;
       }
@@ -612,7 +608,7 @@ function tokenizeFormulaText(e) {
           }
         }
         if (
-          (h ?? (h = { kind: "text", text: e.slice(c, r), start: c, end: r }),
+          ((h ??= { kind: "text", text: e.slice(c, r), start: c, end: r }),
           h.kind !== "text")
         )
           for (;;) {
@@ -1169,11 +1165,11 @@ function validateExtensionState(e, r) {
     n = e.extensions;
   if (
     Array.isArray(n?.installed) &&
-    n.installed.some((u) => {
-      return u?.manifest?.functions?.some((h) =>
+    n.installed.some((u) =>
+      u?.manifest?.functions?.some((h) =>
         t.has(`${u.manifest.namespace}.${h.id}`),
-      );
-    })
+      ),
+    )
   )
     throw Error("Extension functions cannot shadow defined names.");
   if (tD.has(e.extensions)) {
@@ -1423,22 +1419,19 @@ function createCalculationBudgetTracker(e) {
     s = 0,
     d = 0,
     u = 0;
-  const l = () => {
-    return (
-      !o &&
-        t > r.memoryBudgetBytes &&
-        ((o = "#LIMIT!"), (a = "Working-data memory budget exceeded")),
-      !o &&
-        n > r.workBudget &&
-        ((o = "#LIMIT!"), (a = "Calculation work budget exceeded")),
-      !o &&
-        d + (u ? readMonotonicClockMs() - s : 0) >
-          (e.calculation?.timeBudgetMs ?? 2500) &&
-        ((o = "#TIMEOUT!"),
-        (a = "Cooperative calculation time budget exceeded")),
-      o
-    );
-  };
+  const l = () => (
+    !o &&
+      t > r.memoryBudgetBytes &&
+      ((o = "#LIMIT!"), (a = "Working-data memory budget exceeded")),
+    !o &&
+      n > r.workBudget &&
+      ((o = "#LIMIT!"), (a = "Calculation work budget exceeded")),
+    !o &&
+      d + (u ? readMonotonicClockMs() - s : 0) >
+        (e.calculation?.timeBudgetMs ?? 2500) &&
+      ((o = "#TIMEOUT!"), (a = "Cooperative calculation time budget exceeded")),
+    o
+  );
   return {
     begin() {
       u++ === 0 && (s = readMonotonicClockMs());
@@ -1534,7 +1527,6 @@ function buildCalculationClock(e) {
   };
 }
 function workbookUsesNowOrToday(e) {
-  var t;
   const r = (n) =>
     /\b(?:NOW|TODAY)\s*\(/i.test(n.replace(/"(?:[^"]|"")*"/g, '""'));
   return (
@@ -1546,7 +1538,7 @@ function workbookUsesNowOrToday(e) {
           o.raw.startsWith("=") &&
           r(o.raw),
       ),
-    ) || !!((t = e.definedNames) != null && t.some((n) => r(n.refersTo)))
+    ) || !!e.definedNames?.some((n) => r(n.refersTo))
   );
 }
 const millisecondsPerDay = 864e5,
@@ -1672,9 +1664,7 @@ function resolveLocalDateTime(e, r = new Date()) {
       second: "2-digit",
       hourCycle: "h23",
     }).formatToParts(r),
-    a = (v) => {
-      return Number(o.find((b) => b.type === v)?.value);
-    },
+    a = (v) => Number(o.find((b) => b.type === v)?.value),
     s = a("year"),
     d = a("month"),
     u = a("day"),
@@ -1720,11 +1710,9 @@ function findVolatileFunctionNames(e) {
   ];
 }
 function workbookHasVolatileFunctions(e) {
-  var r;
   return (
-    !!(
-      (r = e.definedNames) != null &&
-      r.some((t) => findVolatileFunctionNames(t.refersTo).length)
+    !!e.definedNames?.some(
+      (t) => findVolatileFunctionNames(t.refersTo).length,
     ) ||
     e.sheets.some((t) =>
       Object.values(t.cells).some(
@@ -2084,7 +2072,6 @@ export {
   copyExtensionCacheEntries,
   validateSavedRecipeMetadata,
   walkFormulaNodes,
-  Gq,
   calculationBudgetDefaults,
   resolveCalculationBudget,
   isoDateTimeSchemaFactory,
@@ -2131,7 +2118,6 @@ export {
   hasLinkedOrBoundCells,
   serialToDateParts,
   normalizeDatePolicy,
-  uEe,
   dateSystemSerialOffset,
   dateSystemMaxSerial,
   calculationFeatureSupport,
@@ -2139,4 +2125,47 @@ export {
   listInstalledExtensionFunctions,
   parseDateText,
 };
+export { copyModuleProperties };
 export { boundedTextSchema };
+
+/* Also used by the workers. */
+export {
+  SJ,
+  UJ,
+  aggregateMeasureSchema,
+  cellScalarSchema,
+  columnTypeProfileSchema,
+  deepFrozenValueSet,
+  distinctFieldListSchema,
+  extensionEntityTypeSchema,
+  extensionManifestSchema,
+  extensionMatrixTypeSchema,
+  extensionPermissionSchema,
+  extensionScalarKindSchema,
+  extensionScalarTypeSchema,
+  extensionValueTypeSchema,
+  filterConditionSchema,
+  hasExtensionCacheForSheet,
+  isExcelLeapYear,
+  isValidFormulaName,
+  isoTimestampSchema,
+  linkedOrBoundCellCache,
+  millisecondsPerDay,
+  nD,
+  nonnegativeSafeIntegerSchema,
+  numericColumnSummarySchema,
+  objectDefineProperty,
+  od,
+  opaqueIdSchema,
+  safeIdentifierSchema,
+  serialZeroUtcMs,
+  sha256HexSchema,
+  sheetRangeSourceSchema,
+  singleLineTextSchema,
+  transformationRecipeSchema,
+  transformationRecipeVersionSchema,
+  transformationRunEvidenceSchema,
+  transformationStepRunSchema,
+  transformationStepSchema,
+  utf8Encoder,
+};

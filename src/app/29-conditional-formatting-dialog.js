@@ -50,7 +50,6 @@ function WorksheetToolDialog({
   onClose,
   onWorkbookChange,
 }) {
-  var Ae, Pe, qe, ht;
   const { text, language } = useWorkbookMessages(),
     l = workbook.sheets.find((Re) => Re.id === sheetId),
     c = range.split(":")[0],
@@ -98,11 +97,9 @@ function WorksheetToolDialog({
     [oe, de] = ne.useState(0),
     [he, Se] = ne.useState(ae[0]?.[1].raw ?? "");
   ne.useEffect(() => {
-    var ke;
     const Re = document.activeElement;
     return (
-      (ke = te.current?.querySelector("input,textarea,select,button")) ==
-        null || ke.focus(),
+      te.current?.querySelector("input,textarea,select,button")?.focus(),
       () => Re?.focus()
     );
   }, []);
@@ -110,10 +107,7 @@ function WorksheetToolDialog({
       conditional: "Conditional Formatting",
       validation: "Data Validation",
       duplicates: "Remove Duplicates",
-      protection:
-        (Ae = l.protection) != null && Ae.enabled
-          ? "Unprotect Sheet"
-          : "Protect Sheet",
+      protection: l.protection?.enabled ? "Unprotect Sheet" : "Protect Sheet",
       merge: "Merge & Center",
       paint: "Format Painter",
       spelling: "Spelling",
@@ -124,7 +118,6 @@ function WorksheetToolDialog({
       (onWorkbookChange(Re, Me), onClose());
     };
   async function ge() {
-    var Re, Me;
     (H(""), q(true));
     try {
       if (readOnly && mode !== "spelling")
@@ -141,14 +134,9 @@ function WorksheetToolDialog({
           workbook,
           sheetId,
           T,
-          !((Re = l.protection) != null && Re.enabled),
+          !l.protection?.enabled,
         );
-        ce(
-          ke,
-          (Me = l.protection) != null && Me.enabled
-            ? "Unprotect sheet"
-            : "Protect sheet",
-        );
+        ce(ke, l.protection?.enabled ? "Unprotect sheet" : "Protect sheet");
       } else if (mode === "conditional") {
         if (
           ["greater", "less", "between"].includes(p) &&
@@ -526,8 +514,8 @@ function WorksheetToolDialog({
                               ce(
                                 {
                                   ...workbook,
-                                  sheets: workbook.sheets.map((Me) => {
-                                    return Me.id === sheetId
+                                  sheets: workbook.sheets.map((Me) =>
+                                    Me.id === sheetId
                                       ? {
                                           ...Me,
                                           conditionalFormats:
@@ -535,8 +523,8 @@ function WorksheetToolDialog({
                                               (je) => je.id !== Re.id,
                                             ),
                                         }
-                                      : Me;
-                                  }),
+                                      : Me,
+                                  ),
                                 },
                                 "Remove conditional formatting",
                               ),
@@ -684,16 +672,16 @@ function WorksheetToolDialog({
                               ce(
                                 {
                                   ...workbook,
-                                  sheets: workbook.sheets.map((Me) => {
-                                    return Me.id === sheetId
+                                  sheets: workbook.sheets.map((Me) =>
+                                    Me.id === sheetId
                                       ? {
                                           ...Me,
                                           validations: Me.validations?.filter(
                                             (je) => je.id !== Re.id,
                                           ),
                                         }
-                                      : Me;
-                                  }),
+                                      : Me,
+                                  ),
                                 },
                                 "Remove data validation",
                               ),
@@ -729,8 +717,8 @@ function WorksheetToolDialog({
                           children: "Compare these columns",
                         }),
                       }),
-                      we.map((Re) => {
-                        return i.jsxs(
+                      we.map((Re) =>
+                        i.jsxs(
                           "label",
                           {
                             className: "wt-check",
@@ -756,8 +744,8 @@ function WorksheetToolDialog({
                             ],
                           },
                           Re,
-                        );
-                      }),
+                        ),
+                      ),
                     ],
                   }),
                   i.jsx("p", {
@@ -776,16 +764,14 @@ function WorksheetToolDialog({
                     children: [
                       i.jsx(ShieldCheck, { size: 17 }),
                       " ",
-                      (Pe = l.protection) != null && Pe.enabled
+                      l.protection?.enabled
                         ? "Unlock editing on this worksheet."
                         : "Prevent changes to this worksheet until it is unprotected.",
                     ],
                   }),
                   i.jsxs("label", {
                     children: [
-                      (qe = l.protection) != null && qe.hash
-                        ? "Password"
-                        : "Password (optional)",
+                      l.protection?.hash ? "Password" : "Password (optional)",
                       i.jsx("input", {
                         type: "password",
                         "aria-label": text("Sheet password"),
@@ -939,7 +925,7 @@ function WorksheetToolDialog({
                 : mode === "spelling"
                   ? "Save correction"
                   : mode === "protection"
-                    ? (ht = l.protection) != null && ht.enabled
+                    ? l.protection?.enabled
                       ? "Unprotect"
                       : "Protect"
                     : "Apply",
@@ -1032,13 +1018,11 @@ function TableColumnTypesPanel({
               B?.exceptions.length ?? 0,
               " ",
               i.jsx(LocalizedText, { children: "exceptions" }),
-              B != null && B.truncated
-                ? " — partial inspection (first 500 rows)"
-                : "",
+              B?.truncated ? " — partial inspection (first 500 rows)" : "",
               ".",
             ],
           }),
-          !!(B != null && B.exceptions.length) &&
+          !!B?.exceptions.length &&
             i.jsxs("details", {
               children: [
                 i.jsx("summary", {
@@ -1225,12 +1209,10 @@ function TableColumnTypesPanel({
                 i.jsx("ol", {
                   start: O * 20 + 1,
                   children: [
-                    ...A.plan.changes.map((T) => {
-                      return {
-                        address: T.address,
-                        text: `${JSON.stringify(T.before?.raw ?? null)} → ${JSON.stringify(T.after.raw)}`,
-                      };
-                    }),
+                    ...A.plan.changes.map((T) => ({
+                      address: T.address,
+                      text: `${JSON.stringify(T.before?.raw ?? null)} → ${JSON.stringify(T.after.raw)}`,
+                    })),
                     ...A.plan.exceptions.map((T) => ({
                       address: T.address,
                       text: `Retained ${JSON.stringify(T.value)}: ${T.reason}`,
@@ -1798,9 +1780,9 @@ function nextDefaultTableName(e) {
   let r = 1;
   for (
     ;
-    e.sheets.some((t) => {
-      return t.tables?.some((o) => o.name.toLowerCase() === `table${r}`);
-    });
+    e.sheets.some((t) =>
+      t.tables?.some((o) => o.name.toLowerCase() === `table${r}`),
+    );
   )
     r++;
   return `Table${r}`;

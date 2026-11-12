@@ -370,8 +370,8 @@ function ThemeRoleBindings({ definition }) {
                   }),
                 ],
               }),
-              ["top", "right", "bottom", "left"].map((r) => {
-                return i.jsxs(
+              ["top", "right", "bottom", "left"].map((r) =>
+                i.jsxs(
                   "div",
                   {
                     children: [
@@ -391,8 +391,8 @@ function ThemeRoleBindings({ definition }) {
                     ],
                   },
                   r,
-                );
-              }),
+                ),
+              ),
             ],
           }),
         ],
@@ -426,8 +426,8 @@ function ThemeChangePreview({ plan }) {
       })),
       {
         name: "Missing theme fallback",
-        before: r != null && r.missingTheme ? "Office fallback" : "None",
-        after: t != null && t.missingTheme ? "Office fallback" : "None",
+        before: r?.missingTheme ? "Office fallback" : "None",
+        after: t?.missingTheme ? "Office fallback" : "None",
       },
     ].filter((a) => a.before !== a.after),
     o = [
@@ -535,7 +535,6 @@ function ThemeChangePreview({ plan }) {
   });
 }
 function ThemesAndCellStylesDialog(e) {
-  var ae;
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
@@ -578,10 +577,7 @@ function ThemesAndCellStylesDialog(e) {
       s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.active !== e.active,
     T = e.readOnly || C || !c,
-    N =
-      T ||
-      !!((ae = c?.protection) != null && ae.enabled) ||
-      countSelectionCells(u) > 500;
+    N = T || !!c?.protection?.enabled || countSelectionCells(u) > 500;
   function R() {
     (z(undefined), D(""), _(0));
   }
@@ -633,13 +629,11 @@ function ThemesAndCellStylesDialog(e) {
       R());
   }
   ne.useEffect(() => {
-    var Se;
     const de = document.activeElement;
     return (
-      (Se = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
-        null || Se.focus(),
+      o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
       () => {
-        de != null && de.isConnected && de.focus();
+        de?.isConnected && de.focus();
       }
     );
   }, []);
@@ -725,7 +719,6 @@ function ThemesAndCellStylesDialog(e) {
                 tabIndex: g === de ? 0 : -1,
                 onClick: () => b(de),
                 onKeyDown: (Se) => {
-                  var ce;
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(Se.key)
                   ) {
@@ -733,8 +726,7 @@ function ThemesAndCellStylesDialog(e) {
                     const ge =
                       Se.key === "Home" ? 0 : Se.key === "End" ? 1 : 1 - he;
                     (b(ge === 0 ? "Theme" : "Cell Styles"),
-                      (ce = Se.currentTarget.parentElement?.children[ge]) ==
-                        null || ce.focus());
+                      Se.currentTarget.parentElement?.children[ge]?.focus());
                   }
                 },
                 children: de,
@@ -1163,15 +1155,14 @@ function ThemesAndCellStylesDialog(e) {
                               className: "ts-actions",
                               children: [
                                 i.jsx("button", {
-                                  onClick: () => {
-                                    return $({
+                                  onClick: () =>
+                                    $({
                                       base: cloneStructuredValue(
                                         resolveEffectiveCellStyle(
                                           c?.cells[h]?.style,
                                         ),
                                       ),
-                                    });
-                                  },
+                                    }),
                                   children: i.jsx(LocalizedText, {
                                     children: "Use active cell formatting",
                                   }),
@@ -1329,8 +1320,8 @@ function ThemesAndCellStylesDialog(e) {
                               i.jsx("tbody", {
                                 children: j.changes
                                   .slice(B * 20, B * 20 + 20)
-                                  .map((de) => {
-                                    return i.jsxs(
+                                  .map((de) =>
+                                    i.jsxs(
                                       "tr",
                                       {
                                         children: [
@@ -1368,8 +1359,8 @@ function ThemesAndCellStylesDialog(e) {
                                         ],
                                       },
                                       `${de.sheetId}:${de.address}`,
-                                    );
-                                  }),
+                                    ),
+                                  ),
                               }),
                             ],
                           }),
@@ -1434,12 +1425,11 @@ function ThemesAndCellStylesDialog(e) {
 }
 function CellValuePreview({ value, cell, dateSystem }) {
   const n = useWorkbookMessages(),
-    o =
-      cell != null && cell.numberFormat
-        ? formatCellValueWithNumberFormat(value, cell.numberFormat, dateSystem)
-        : undefined,
+    o = cell?.numberFormat
+      ? formatCellValueWithNumberFormat(value, cell.numberFormat, dateSystem)
+      : undefined,
     a = cell ? getImportedNumberFormatWarning(cell) : undefined;
-  if (o != null && o.accounting) {
+  if (o?.accounting) {
     const { symbol, amount, symbolPosition } = o.accounting;
     return i.jsxs("span", {
       title: a || undefined,
