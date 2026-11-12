@@ -41,7 +41,7 @@ export function Workbook() {
 }
 ```
 
-Give the container a height: the editor fills it.
+Give the container a definite height: the editor fills it. With a height of `auto` all the way up (for example an unsized `#root`), the editor sizes itself from its full row count, which can exhaust the browser tab's memory.
 
 | Prop                           | Meaning                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------- |

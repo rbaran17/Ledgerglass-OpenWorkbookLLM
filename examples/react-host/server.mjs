@@ -59,19 +59,24 @@ function proposeSum(context) {
     byColumn.set(column, [...(byColumn.get(column) ?? []), cell]);
   }
   const [column, columnNumbers] = [...byColumn.entries()].sort(
-    ([left, a], [right, b]) =>
-      b.length - a.length || left.localeCompare(right),
+    ([left, a], [right, b]) => b.length - a.length || left.localeCompare(right),
   )[0];
 
   // The target must be inside the approved selection (the editor refuses edits outside it),
   // so it is an empty cell in the same column, below the last number.
-  const lastRow = Math.max(...columnNumbers.map((c) => parseAddress(c.address).row));
+  const lastRow = Math.max(
+    ...columnNumbers.map((c) => parseAddress(c.address).row),
+  );
   const target = context.cells
     .filter((cell) => {
       const where = parseAddress(cell.address);
-      return where.column === column && where.row > lastRow && cell.raw === null;
+      return (
+        where.column === column && where.row > lastRow && cell.raw === null
+      );
     })
-    .sort((a, b) => parseAddress(a.address).row - parseAddress(b.address).row)[0];
+    .sort(
+      (a, b) => parseAddress(a.address).row - parseAddress(b.address).row,
+    )[0];
   if (!target)
     return noProposal(
       context,
@@ -124,7 +129,9 @@ function readJson(request) {
 }
 
 function sendJson(response, status, body) {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+  });
   response.end(JSON.stringify(body));
 }
 
@@ -138,19 +145,26 @@ async function handlePropose(request, response) {
   // The adapter sends { prompt, context, request }. The context is what the editor built from
   // the approved selection; the proposal must answer that exact context.
   if (!body || typeof body.context !== "object" || !body.context)
-    return sendJson(response, 400, { error: "Send a context from the editor." });
+    return sendJson(response, 400, {
+      error: "Send a context from the editor.",
+    });
   try {
     const proposal = proposeSum(body.context);
     // Check the proposal against the context it was made for: same workbook and revision,
     // patches and citations inside the selection, and formulas that use only allowed functions.
-    return sendJson(response, 200, validateAssistantProposal(proposal, body.context));
+    return sendJson(
+      response,
+      200,
+      validateAssistantProposal(proposal, body.context),
+    );
   } catch (error) {
     return sendJson(response, 422, { error: error.message });
   }
 }
 
 async function serveFile(response, urlPath) {
-  const relative = urlPath === "/" ? "index.html" : decodeURIComponent(urlPath.slice(1));
+  const relative =
+    urlPath === "/" ? "index.html" : decodeURIComponent(urlPath.slice(1));
   const filePath = path.resolve(publicDir, relative);
   // Refuse anything outside public/.
   if (!filePath.startsWith(publicDir + path.sep)) {
@@ -162,7 +176,8 @@ async function serveFile(response, urlPath) {
     if (!info.isFile()) throw new Error("not a file");
     const body = await readFile(filePath);
     response.writeHead(200, {
-      "Content-Type": contentTypes[path.extname(filePath)] ?? "application/octet-stream",
+      "Content-Type":
+        contentTypes[path.extname(filePath)] ?? "application/octet-stream",
     });
     response.end(body);
   } catch {
@@ -171,7 +186,10 @@ async function serveFile(response, urlPath) {
   }
 }
 
-export function startServer({ port = Number(process.env.PORT ?? 4310), host = "127.0.0.1" } = {}) {
+export function startServer({
+  port = Number(process.env.PORT ?? 4310),
+  host = "127.0.0.1",
+} = {}) {
   const server = createServer((request, response) => {
     const { pathname } = new URL(request.url, "http://localhost");
     if (request.method === "POST" && pathname === "/api/propose")

@@ -8,6 +8,12 @@ body {
   color: #1d2630;
 }
 
+/* The editor needs a definite height: #root and .page must have one, or the grid sizes itself
+   from its row count and the page stops responding. */
+#root {
+  height: 100%;
+}
+
 .page {
   display: flex;
   flex-direction: column;

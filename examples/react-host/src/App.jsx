@@ -124,17 +124,13 @@ export default function App() {
           </button>
           <label className="file-button">
             Open file
-            <input
-              type="file"
-              accept=".xlsx,.csv"
-              onChange={openFile}
-            />
+            <input type="file" accept=".xlsx,.csv" onChange={openFile} />
           </label>
           <button type="button" onClick={reset}>
             Reset
           </button>
         </div>
-        <p role="status" className="status">
+        <p role="status" className="status" data-testid="status">
           {status}
         </p>
       </header>

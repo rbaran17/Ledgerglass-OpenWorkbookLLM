@@ -75,6 +75,8 @@ jobs:
         run: |
           npm run build:lib
           npm run test:lib
+      - name: Run the SDK examples
+        run: npm run test:examples
       - name: Show a workbook through the AG-UI client and the A2UI renderer
         run: npm run test:agent-ui
 

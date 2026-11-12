@@ -43,6 +43,7 @@ export async function buildHost() {
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta http-equiv="Content-Security-Policy" content="${contentSecurityPolicy}" />
+<link rel="icon" href="data:," />
 <title>Ledgerglass host example</title>
 <link rel="stylesheet" href="assets/main.css" />
 </head>

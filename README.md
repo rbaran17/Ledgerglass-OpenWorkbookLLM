@@ -305,6 +305,7 @@ Embedded-Workbook.html  Launcher for the embedded mode
 ## Documentation
 
 - **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
+- **Examples:** [examples/](examples/README.md) (Node scripts, an MCP client and a React host application; all run in CI).
 - **API reference:** [docs/api/README.md](docs/api/README.md) (about 125 model functions by area, and the Node entry).
 - **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, adapters and model functions).
 - **Agent-rendered workbook:** [docs/AGENT-UI.md](docs/AGENT-UI.md) (AG-UI frontend tool and A2UI catalog component).
