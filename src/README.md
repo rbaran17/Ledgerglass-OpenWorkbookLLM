@@ -14,9 +14,9 @@ compiled application in `dist/` and is now the source the build uses.
 
 - The code is formatted but not original: identifiers are the minifier's, and
   there are no types or comments.
-- `main.js` is a single module of about 119,000 lines. Module boundaries from
+- `main.js` is a single module of about 117,500 lines. Module boundaries from
   the original project are not marked.
-- In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, the formula parser
+- In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, saxes, the formula parser,
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
   `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse,
   fflate and the formula parser are. Updates to these take effect on the next build.
