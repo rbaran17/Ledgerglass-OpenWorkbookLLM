@@ -266,3 +266,76 @@ test("assistant reply is rendered as Markdown", async ({ page }) => {
   await expect(conversation.locator("p").first()).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test("assistant keeps a multi-turn conversation", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const prompt = page.getByLabel("Assistant prompt");
+  const conversation = page.getByLabel("Conversation");
+  await prompt.fill("First question about totals");
+  await prompt.press("Enter");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(1, { timeout: 30_000 });
+  await prompt.fill("Second question about accruals");
+  await prompt.press("Enter");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(2, { timeout: 30_000 });
+  await expect(conversation).toContainText("First question about totals");
+  await expect(conversation).toContainText("Second question about accruals");
+  await expect(conversation.getByLabel("Your message", { exact: true })).toHaveCount(2);
+  await expect(conversation.getByLabel("Assistant message", { exact: true })).toHaveCount(2);
+  expect(errors).toEqual([]);
+});
+
+test("assistant starts a new chat", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const conversation = page.getByLabel("Conversation");
+  await page.getByLabel("Assistant prompt").fill("Question before the reset");
+  await page.getByLabel("Assistant prompt").press("Enter");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(1, { timeout: 30_000 });
+  await page.getByRole("button", { name: "New chat" }).click();
+  await expect(conversation).not.toContainText("Question before the reset");
+  await expect(conversation.getByLabel("Assistant message", { exact: true })).toHaveCount(0);
+  await expect(conversation).toContainText("How can I help?");
+  expect(errors).toEqual([]);
+});
+
+test("assistant accepts a file attachment", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const conversation = page.getByLabel("Conversation");
+  await page.getByLabel("Upload chat attachments").setInputFiles({
+    name: "notes.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("Quarter-end accrual notes"),
+  });
+  await expect(page.getByRole("button", { name: "Remove attachment notes.txt" })).toBeVisible();
+  await expect(page.getByText("notes.txt", { exact: true })).toBeVisible();
+  await page.getByLabel("Assistant prompt").fill("Summarize the attachment");
+  await page.getByLabel("Assistant prompt").press("Enter");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(1, { timeout: 30_000 });
+  await expect(conversation).toContainText("Summarize the attachment");
+  await expect(conversation).toContainText("notes.txt");
+  expect(errors).toEqual([]);
+});
+
+test("assistant panel can be closed and reopened", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const prompt = page.getByLabel("Assistant prompt");
+  const conversation = page.getByLabel("Conversation");
+  await prompt.fill("Question before closing");
+  await prompt.press("Enter");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(1, { timeout: 30_000 });
+  await page.getByRole("button", { name: "Close side panel" }).click();
+  await expect(prompt).toBeHidden();
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  await expect(prompt).toBeVisible();
+  // Observed: the conversation survives closing the panel within the same page session.
+  await expect(conversation).toContainText("Question before closing");
+  await expect(conversation.getByText(/Local deterministic demo/)).toHaveCount(1);
+  expect(errors).toEqual([]);
+});
