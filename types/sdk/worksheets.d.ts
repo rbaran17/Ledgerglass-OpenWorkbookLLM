@@ -113,7 +113,10 @@ export interface WorksheetSummaryOptions {
 }
 
 /** Returns a new workbook with a worksheet added at the end. Throws if the name is invalid or already used, or if the structure is protected. */
-export function addWorksheet(workbook: Workbook, worksheetName: string): Workbook;
+export function addWorksheet(
+  workbook: Workbook,
+  worksheetName: string,
+): Workbook;
 
 /** Returns a new workbook with the worksheet renamed, and formulas that use its name rewritten to match. Returns the same object when the name is unchanged. Throws if the name is invalid or already used. */
 export function renameWorksheet(
@@ -130,7 +133,10 @@ export function moveWorksheet(
 ): Workbook;
 
 /** Returns a new workbook with a copy of the worksheet placed after it, named with the next free " (n)" suffix. Formulas on the copy that point at the original sheet are rewritten to point at the copy. Throws if a formula uses a three-dimensional reference. */
-export function duplicateWorksheet(workbook: Workbook, sheetId: string): Workbook;
+export function duplicateWorksheet(
+  workbook: Workbook,
+  sheetId: string,
+): Workbook;
 
 /** Returns a new workbook without the worksheet; formulas that referred to it become #REF!. If anything depends on the worksheet, pass `true` as `isDeletionConfirmed`, otherwise this throws. Throws for the only worksheet and when no visible worksheet would remain. */
 export function deleteWorksheet(
