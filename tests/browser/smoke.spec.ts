@@ -193,3 +193,27 @@ test("XML import parses elements and entities", async ({ page }) => {
   await expect(cell(page, "B3")).toHaveAttribute("aria-label", "B3 -300");
   expect(errors).toEqual([]);
 });
+
+test("alternate workbook format round-trips through its ZIP archive", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByText(/^Workbook formats/).click();
+  await page.getByRole("button", { name: "Review XLTX export" }).click();
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download derived XLTX" }).click();
+  const download = await downloading;
+  const bytes = await readFile(await download.path());
+  expect(bytes.subarray(0, 2).toString()).toBe("PK");
+
+  await open(page, "temporary");
+  await page.getByLabel("Import workbook file").setInputFiles({
+    name: "roundtrip.xltx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+    buffer: bytes,
+  });
+  await page.getByRole("button", { name: "Preview template workbook" }).click();
+  await page.getByRole("button", { name: "Open derived workbook" }).click();
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  expect(errors).toEqual([]);
+});
