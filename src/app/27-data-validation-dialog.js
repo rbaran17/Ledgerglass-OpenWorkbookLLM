@@ -1,40 +1,44 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { Mt } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  $a,
-  Ad,
-  BQ,
-  Fg,
-  H3,
-  Jf,
-  LQ,
-  Vn,
-  _B,
+  assertWorkbookStructureEditable,
+  normalizeHiddenIntervals,
+  resolveValidationInspection,
+  parsePrintTitles,
+  resolveMovedRange,
+  mapIndexAfterMove,
+  summarizeValidationInspection,
+  calculateWorkbookWithSettings,
+  normalizeDataValidationRules,
   _t,
-  cie,
+  checkStructuralEditImpact,
   cn,
-  ct,
-  dQ,
-  iae,
-  jn,
-  pf,
-  rQ,
-  rn,
-  sQ,
-  sR,
-  ut,
-  xB,
-  xQ,
-  xd,
-  y0,
-  z1,
+  parseRangeAddress,
+  shiftFormulaWatchesOnAxisEdit,
+  shiftPrintSettingsOnAxisEdit,
+  assertSheetUnprotected,
+  resolveDefinedNameValue,
+  validateRowColumnMove,
+  normalizeWorkbookInput,
+  shiftReviewTargetsOnAxisEdit,
+  measureChartSelection,
+  columnIndexToLetters,
+  mapRangeAfterMove,
+  applyAxisStructureEdit,
+  shiftFormulaReferences,
+  matrixResultFunctionNames,
+  rewriteStructuredReferences,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { m0 } from "./12-formula-dependency-inspector.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
 
-function qde({
+function DataValidationDialog({
   workbook,
   sheetId,
   range,
@@ -44,7 +48,7 @@ function qde({
   onNavigate,
 }) {
   var he;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     l = workbook.sheets.find((ce) => ce.id === sheetId),
     [c, h] = ne.useState(),
     [f, p] = ne.useState(range),
@@ -90,7 +94,8 @@ function qde({
       ae(() => {
         if (te) throw Error("This worksheet is read-only or protected.");
         if (
-          (jn(l), !["list", "custom"].includes(m) && (!E.trim() || !k.trim()))
+          (assertSheetUnprotected(l),
+          !["list", "custom"].includes(m) && (!E.trim() || !k.trim()))
         )
           throw Error("Enter finite validation bounds.");
         const ce = {
@@ -116,7 +121,7 @@ function qde({
             inputMessage: N,
             ...(m === "custom" ? { formula: I } : {}),
           },
-          ge = _B(
+          ge = normalizeDataValidationRules(
             c
               ? (l.validations ?? []).map((se) => (se.id === c ? ce : se))
               : [...(l.validations ?? []), ce],
@@ -184,7 +189,7 @@ function qde({
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              children: i.jsx(M, { children: "Data Validation" }),
+              children: i.jsx(LocalizedText, { children: "Data Validation" }),
             }),
             i.jsx("button", {
               "aria-label": text("Close data validation"),
@@ -199,7 +204,7 @@ function qde({
           className: "wt-body",
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Rules apply to typed values, paste, SDK edits and approved assistant changes. Stop rejects the entire batch; Warning and Information require explicit review. Existing values are retained.",
               }),
@@ -208,11 +213,13 @@ function qde({
               onClick: () =>
                 ae(() =>
                   W({
-                    value: LQ(workbook, sheetId),
+                    value: summarizeValidationInspection(workbook, sheetId),
                     snapshot: JSON.stringify(workbook),
                   }),
                 ),
-              children: i.jsx(M, { children: "Inspect existing values" }),
+              children: i.jsx(LocalizedText, {
+                children: "Inspect existing values",
+              }),
             }),
             q &&
               i.jsxs("section", {
@@ -224,7 +231,10 @@ function qde({
                     disabled: q.snapshot !== JSON.stringify(workbook),
                     onClick: () =>
                       ae(() => {
-                        const ce = BQ(workbook, q.value),
+                        const ce = resolveValidationInspection(
+                            workbook,
+                            q.value,
+                          ),
                           ge = URL.createObjectURL(
                             new Blob([ce], { type: "application/json" }),
                           ),
@@ -234,7 +244,7 @@ function qde({
                           se.click(),
                           setTimeout(() => URL.revokeObjectURL(ge), 1e3));
                       }),
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Download validation findings",
                     }),
                   }),
@@ -246,7 +256,7 @@ function qde({
                         : "Workbook changed. Inspect existing values again.",
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Inspection recalculates locally, including in Manual mode; it does not publish current calculation results or change source data.",
                     }),
@@ -288,7 +298,7 @@ function qde({
                   children: [
                     l.validations?.length ?? 0,
                     " ",
-                    i.jsx(M, { children: "existing rules" }),
+                    i.jsx(LocalizedText, { children: "existing rules" }),
                   ],
                 }),
                 l.validations?.map((ce) =>
@@ -309,13 +319,16 @@ function qde({
                         i.jsxs("button", {
                           disabled: te,
                           onClick: () => de(ce),
-                          children: [i.jsx(M, { children: "Edit " }), ce.range],
+                          children: [
+                            i.jsx(LocalizedText, { children: "Edit " }),
+                            ce.range,
+                          ],
                         }),
                         i.jsxs("button", {
                           disabled: te,
                           onClick: () =>
                             ae(() => {
-                              (jn(l),
+                              (assertSheetUnprotected(l),
                                 onWorkbookChange(
                                   {
                                     ...workbook,
@@ -335,7 +348,7 @@ function qde({
                                 onClose());
                             }),
                           children: [
-                            i.jsx(M, { children: "Remove " }),
+                            i.jsx(LocalizedText, { children: "Remove " }),
                             ce.range,
                           ],
                         }),
@@ -353,7 +366,7 @@ function qde({
                 i.jsx("legend", { children: c ? "Edit rule" : "New rule" }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Apply to" }),
+                    i.jsx(LocalizedText, { children: "Apply to" }),
                     i.jsx("input", {
                       "aria-label": text("Validation range"),
                       value: f,
@@ -368,7 +381,7 @@ function qde({
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Allow" }),
+                        i.jsx(LocalizedText, { children: "Allow" }),
                         i.jsx("select", {
                           "aria-label": text("Validation type"),
                           value: m,
@@ -392,7 +405,7 @@ function qde({
                     !["list", "custom"].includes(m) &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Condition" }),
+                          i.jsx(LocalizedText, { children: "Condition" }),
                           i.jsx("select", {
                             "aria-label": text("Validation operator"),
                             value: g,
@@ -419,7 +432,7 @@ function qde({
                 m === "list"
                   ? i.jsxs("label", {
                       children: [
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "Values, separated by commas (or a JSON array for exact text)",
                         }),
@@ -435,7 +448,7 @@ function qde({
                   : m === "custom"
                     ? i.jsxs("label", {
                         children: [
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children: "Formula relative to the top-left cell",
                           }),
                           i.jsx("input", {
@@ -446,7 +459,7 @@ function qde({
                             "data-ui-label": "Validation formula",
                           }),
                           i.jsx("small", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children:
                                 "Use TRUE/FALSE or a finite number. Relative references move with each cell; $ references stay fixed. Formula errors stop entry.",
                             }),
@@ -458,10 +471,10 @@ function qde({
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children: "Minimum / comparison value",
                               }),
-                              i.jsx(ci, {
+                              i.jsx(LocalizedNumberField, {
                                 "aria-label": text("Validation values"),
                                 value: E,
                                 onValueChange: A,
@@ -473,8 +486,8 @@ function qde({
                           ["between", "notBetween"].includes(g) &&
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Maximum" }),
-                                i.jsx(ci, {
+                                i.jsx(LocalizedText, { children: "Maximum" }),
+                                i.jsx(LocalizedNumberField, {
                                   "aria-label": text("Validation maximum"),
                                   value: k,
                                   onValueChange: F,
@@ -500,7 +513,7 @@ function qde({
                       checked: j,
                       onChange: (ce) => z(ce.target.checked),
                     }),
-                    i.jsx(M, { children: "Allow blank cells" }),
+                    i.jsx(LocalizedText, { children: "Allow blank cells" }),
                   ],
                 }),
                 m === "list" &&
@@ -512,7 +525,7 @@ function qde({
                         checked: V,
                         onChange: (ce) => D(ce.target.checked),
                       }),
-                      i.jsx(M, { children: "Show dropdown" }),
+                      i.jsx(LocalizedText, { children: "Show dropdown" }),
                     ],
                   }),
                 i.jsxs("label", {
@@ -523,12 +536,14 @@ function qde({
                       checked: B,
                       onChange: (ce) => _(ce.target.checked),
                     }),
-                    i.jsx(M, { children: "Show input message when selected" }),
+                    i.jsx(LocalizedText, {
+                      children: "Show input message when selected",
+                    }),
                   ],
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Input title" }),
+                    i.jsx(LocalizedText, { children: "Input title" }),
                     i.jsx("input", {
                       "aria-label": text("Validation input title"),
                       maxLength: 100,
@@ -541,7 +556,7 @@ function qde({
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Input message" }),
+                    i.jsx(LocalizedText, { children: "Input message" }),
                     i.jsx("input", {
                       "aria-label": text("Validation input message"),
                       maxLength: 500,
@@ -554,7 +569,7 @@ function qde({
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Error style" }),
+                    i.jsx(LocalizedText, { children: "Error style" }),
                     i.jsxs("select", {
                       "aria-label": text("Validation error style"),
                       value: L,
@@ -577,7 +592,7 @@ function qde({
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Error title" }),
+                    i.jsx(LocalizedText, { children: "Error title" }),
                     i.jsx("input", {
                       "aria-label": text("Validation error title"),
                       value: U,
@@ -589,7 +604,7 @@ function qde({
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Error message" }),
+                    i.jsx(LocalizedText, { children: "Error message" }),
                     i.jsx("input", {
                       "aria-label": text("Validation message"),
                       maxLength: 500,
@@ -609,7 +624,7 @@ function qde({
           children: [
             i.jsx("button", {
               onClick: onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               disabled: te,
@@ -622,21 +637,21 @@ function qde({
     }),
   });
 }
-function G2(e, r, t, n = false) {
-  const o = ct(e),
+function shiftRangeForAxisEdit(e, r, t, n = false) {
+  const o = parseRangeAddress(e),
     a = r.axis;
   return (
-    H3(
+    resolveMovedRange(
       a === "row" ? o.firstRow : o.firstCol,
       a === "row" ? o.lastRow : o.lastCol,
       r,
       t,
       n,
     ),
-    Zh(e, r)
+    assertRangeWithinSheetBounds(e, r)
   );
 }
-function Xde(e, r, t) {
+function assertMoveKeepsTablesIntact(e, r, t) {
   const n = t,
     o = t.axis,
     a = structuredClone(e);
@@ -647,20 +662,23 @@ function Xde(e, r, t) {
           "Clear saved calculated-column rules before moving worksheet structures, keeping their cell formulas; then reapply the rules.",
         );
       if (s.id !== r) continue;
-      const u = ct(d.range),
-        l = G2(d.range, t, `table ${d.name}`),
-        c = ct(l);
+      const u = parseRangeAddress(d.range),
+        l = shiftRangeForAxisEdit(d.range, t, `table ${d.name}`),
+        c = parseRangeAddress(l);
       if (o === "row") {
         if (
-          Jf(u.firstRow, n) !== c.firstRow ||
-          (d.showTotals && Jf(u.lastRow, n) !== c.lastRow)
+          mapIndexAfterMove(u.firstRow, n) !== c.firstRow ||
+          (d.showTotals && mapIndexAfterMove(u.lastRow, n) !== c.lastRow)
         )
           throw Error(
             "This move would displace a table header or totals row. Move the complete table or only its data rows.",
           );
       } else
         d.columns = d.columns
-          .map((h, f) => ({ column: h, index: Jf(u.firstCol + f, n) }))
+          .map((h, f) => ({
+            column: h,
+            index: mapIndexAfterMove(u.firstCol + f, n),
+          }))
           .sort((h, f) => h.index - f.index)
           .map((h) => h.column);
       d.range = l;
@@ -668,7 +686,7 @@ function Xde(e, r, t) {
     for (const d of [...(s.pivots ?? []), ...(s.queries ?? [])])
       if (
         (s.id === r &&
-          (d.outputRange = G2(
+          (d.outputRange = shiftRangeForAxisEdit(
             d.outputRange,
             t,
             "generated analysis output",
@@ -676,9 +694,12 @@ function Xde(e, r, t) {
           )),
         d.source.sheetId === r)
       ) {
-        const u = ct(d.source.range),
-          l = G2(d.source.range, t, "analysis source");
-        if (o === "row" && Jf(u.firstRow, n) !== ct(l).firstRow)
+        const u = parseRangeAddress(d.source.range),
+          l = shiftRangeForAxisEdit(d.source.range, t, "analysis source");
+        if (
+          o === "row" &&
+          mapIndexAfterMove(u.firstRow, n) !== parseRangeAddress(l).firstRow
+        )
           throw Error(
             "This move would displace an analysis source header. Move the whole source or only its data rows.",
           );
@@ -687,88 +708,99 @@ function Xde(e, r, t) {
   }
   return a;
 }
-function Gde(e, r) {
+function collectAxisStructureConflicts(e, r) {
   const t = r.axis,
     n = r,
     o = t === "row" ? "hiddenRows" : "hiddenCols",
     a = t === "row" ? e.rowCount : e.colCount,
-    s = (e[o] ?? []).flatMap((l) => xB(l.start, l.end, n)),
+    s = (e[o] ?? []).flatMap((l) => mapRangeAfterMove(l.start, l.end, n)),
     d = e.outlineGroups?.map((l) =>
       l.axis !== t
         ? l
-        : { ...l, ...H3(l.start, l.end, n, "outline group", true) },
+        : {
+            ...l,
+            ...resolveMovedRange(l.start, l.end, n, "outline group", true),
+          },
     );
-  return { [o]: Ad(s, a), ...(d ? { outlineGroups: d } : {}) };
+  return {
+    [o]: normalizeHiddenIntervals(s, a),
+    ...(d ? { outlineGroups: d } : {}),
+  };
 }
-function Zde(e, r) {
+function shiftPrintLayoutForAxis(e, r) {
   if (!e.pageLayout) return;
   const t = { ...e.pageLayout },
     n = r.axis,
     o = r,
     a = n === "row" ? "repeatRows" : "repeatColumns",
     s = n === "row" ? "rowBreaks" : "columnBreaks",
-    d = Fg(t[a], n, e);
+    d = parsePrintTitles(t[a], n, e);
   if (d) {
-    const u = H3(d.start, d.end, o, "print titles", true);
+    const u = resolveMovedRange(d.start, d.end, o, "print titles", true);
     t[a] =
       n === "row"
         ? `${u.start + 1}:${u.end + 1}`
-        : `${ut(u.start)}:${ut(u.end)}`;
+        : `${columnIndexToLetters(u.start)}:${columnIndexToLetters(u.end)}`;
   }
   return (
     t[s] &&
-      (t[s] = [...new Set(t[s].map((u) => Jf(u, o)))].sort((u, l) => u - l)),
+      (t[s] = [...new Set(t[s].map((u) => mapIndexAfterMove(u, o)))].sort(
+        (u, l) => u - l,
+      )),
     t
   );
 }
-function Kf(e, r) {
+function remapAxisIndex(e, r) {
   return r.moveBefore !== undefined
-    ? Jf(e, r)
+    ? mapIndexAfterMove(e, r)
     : r.remove && e >= r.index && e < r.index + r.count
       ? null
       : e >= r.index + (r.remove ? r.count : 0)
         ? e + (r.remove ? -r.count : r.count)
         : e;
 }
-function cg(e, r) {
+function assertInsertionWithinSheet(e, r) {
   const t = _t(e),
-    n = Kf(r.axis === "row" ? t.row : t.col, r);
+    n = remapAxisIndex(r.axis === "row" ? t.row : t.col, r);
   if (n === null) return null;
-  if (n < 0 || n >= (r.axis === "row" ? Mt.maxRows : Mt.maxCols))
+  if (
+    n < 0 ||
+    n >= (r.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols)
+  )
     throw Error(
       "Insertion would move existing content beyond the Excel worksheet boundary.",
     );
   const o = /^(\$?)([A-Z]+)(\$?)(\d+)$/i.exec(e);
   return r.axis === "row"
     ? `${o[1]}${o[2]}${o[3]}${n + 1}`
-    : `${o[1]}${ut(n)}${o[3]}${o[4]}`;
+    : `${o[1]}${columnIndexToLetters(n)}${o[3]}${o[4]}`;
 }
-function Zh(e, r) {
-  const t = ct(e);
+function assertRangeWithinSheetBounds(e, r) {
+  const t = parseRangeAddress(e);
   let n = r.axis === "row" ? t.firstRow : t.firstCol,
     o = r.axis === "row" ? t.lastRow : t.lastCol;
   if (r.moveBefore !== undefined) {
-    const d = H3(n, o, r, `reference ${e}`);
+    const d = resolveMovedRange(n, o, r, `reference ${e}`);
     ((n = d.start), (o = d.end));
   } else if (r.remove) {
     const d = r.index + r.count - 1;
     if (n >= r.index && o <= d) return null;
-    ((n = n >= r.index && n <= d ? r.index : Kf(n, r)),
-      (o = o >= r.index && o <= d ? r.index - 1 : Kf(o, r)));
-  } else ((n = Kf(n, r)), (o = Kf(o, r)));
-  if (o >= (r.axis === "row" ? Mt.maxRows : Mt.maxCols))
+    ((n = n >= r.index && n <= d ? r.index : remapAxisIndex(n, r)),
+      (o = o >= r.index && o <= d ? r.index - 1 : remapAxisIndex(o, r)));
+  } else ((n = remapAxisIndex(n, r)), (o = remapAxisIndex(o, r)));
+  if (o >= (r.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols))
     throw Error("The range would exceed the Excel worksheet boundary.");
   const a =
       r.axis === "row"
-        ? `${ut(t.firstCol)}${n + 1}`
-        : `${ut(n)}${t.firstRow + 1}`,
+        ? `${columnIndexToLetters(t.firstCol)}${n + 1}`
+        : `${columnIndexToLetters(n)}${t.firstRow + 1}`,
     s =
       r.axis === "row"
-        ? `${ut(t.lastCol)}${o + 1}`
-        : `${ut(o)}${t.lastRow + 1}`;
+        ? `${columnIndexToLetters(t.lastCol)}${o + 1}`
+        : `${columnIndexToLetters(o)}${t.lastRow + 1}`;
   return a === s ? a : `${a}:${s}`;
 }
-function ay(e, r, t, n) {
+function rewriteFormulaForStructuralEdit(e, r, t, n) {
   if (!e.startsWith("=")) return e;
   const o = String.raw`(?:'(?:[^']|'')+'|[A-Za-z_\\][A-Za-z0-9_.\\]*)`,
     a = new RegExp(
@@ -833,15 +865,22 @@ function ay(e, r, t, n) {
               const [w, E] = g.split(":"),
                 A = w.replace(/\$/g, ""),
                 k = E.replace(/\$/g, ""),
-                F = Zh(b ? `${A}1:${k}1` : `A${A}:A${k}`, n);
+                F = assertRangeWithinSheetBounds(
+                  b ? `${A}1:${k}1` : `A${A}:A${k}`,
+                  n,
+                );
               if (!F) v = p + "#REF!";
               else {
-                const I = ct(F),
+                const I = parseRangeAddress(F),
                   O = b
                     ? _t(A + "1").col > _t(k + "1").col
                     : Number(A) > Number(k),
-                  j = b ? ut(I.firstCol) : String(I.firstRow + 1),
-                  z = b ? ut(I.lastCol) : String(I.lastRow + 1);
+                  j = b
+                    ? columnIndexToLetters(I.firstCol)
+                    : String(I.firstRow + 1),
+                  z = b
+                    ? columnIndexToLetters(I.lastCol)
+                    : String(I.lastRow + 1);
                 v =
                   p +
                   (w.startsWith("$") ? "$" : "") +
@@ -853,10 +892,10 @@ function ay(e, r, t, n) {
             }
           } else if (g.includes(":")) {
             const [w, E] = g.split(":"),
-              A = Zh(g, n);
+              A = assertRangeWithinSheetBounds(g, n);
             if (!A) v = p + "#REF!";
             else {
-              const k = ct(A),
+              const k = parseRangeAddress(A),
                 F = _t(w),
                 I = _t(E),
                 O = /^(\$?)[A-Z]+(\$?)\d+$/i.exec(w),
@@ -864,11 +903,11 @@ function ay(e, r, t, n) {
                 z = (V, D) => {
                   const B = F.col <= I.col === V ? k.firstCol : k.lastCol,
                     _ = F.row <= I.row === V ? k.firstRow : k.lastRow;
-                  return `${D[1]}${ut(B)}${D[2]}${_ + 1}`;
+                  return `${D[1]}${columnIndexToLetters(B)}${D[2]}${_ + 1}`;
                 };
               v = p + z(true, O) + ":" + z(false, j);
             }
-          } else v = p + (cg(g, n) ?? "#REF!");
+          } else v = p + (assertInsertionWithinSheet(g, n) ?? "#REF!");
         } catch (w) {
           if (n.moveBefore !== undefined) throw w;
           v = p + "#REF!";
@@ -881,7 +920,7 @@ function ay(e, r, t, n) {
   }
   return d;
 }
-function LC(e, r, t) {
+function applyStructuralEdit(e, r, t) {
   if (t.permutation !== undefined && t.moveBefore === undefined)
     throw Error(
       "A structural permutation requires an explicit move operation.",
@@ -893,7 +932,8 @@ function LC(e, r, t) {
     !Number.isInteger(t.count) ||
     t.count < 1 ||
     t.count > 1e4 ||
-    t.index + t.count > (t.axis === "row" ? Mt.maxRows : Mt.maxCols)
+    t.index + t.count >
+      (t.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols)
   )
     throw Error("Choose a valid position and 1–10,000 rows or columns.");
   if (t.moveBefore !== undefined) {
@@ -901,26 +941,29 @@ function LC(e, r, t) {
       throw Error(
         "A structural operation cannot delete and move at the same time.",
       );
-    rQ(t, t.axis === "row" ? Mt.maxRows : Mt.maxCols);
+    validateRowColumnMove(
+      t,
+      t.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
+    );
   }
   const n = e.sheets.find((c) => c.id === r);
   if (!n) throw Error("The worksheet was not found.");
-  jn(n);
+  assertSheetUnprotected(n);
   const o =
     t.moveBefore !== undefined
-      ? Xde(e, r, t)
-      : cie(e, r, t.axis, t.index, t.count, t.remove);
+      ? assertMoveKeepsTablesIntact(e, r, t)
+      : checkStructuralEditImpact(e, r, t.axis, t.index, t.count, t.remove);
   let a = 0;
   const s = o.sheets.map((c) => {
       const h = {};
       for (const [O, j] of Object.entries(c.cells)) {
-        const z = c.id === r ? cg(O, t) : O;
+        const z = c.id === r ? assertInsertionWithinSheet(O, t) : O;
         if (!z) continue;
         const V =
           typeof j.raw == "string" && j.raw.startsWith("=") && !j.literal
-            ? ay(j.raw, c.name, n.name, t)
+            ? rewriteFormulaForStructuralEdit(j.raw, c.name, n.name, t)
             : j.raw;
-        (V !== j.raw && jn(c), (h[z] = { ...j, raw: V }));
+        (V !== j.raw && assertSheetUnprotected(c), (h[z] = { ...j, raw: V }));
       }
       const f = (O) => {
           if (!["formula", "custom"].includes(O.kind) || !O.formula) return O;
@@ -938,17 +981,22 @@ function LC(e, r, t) {
             );
           if (c.id === r && t.remove) {
             const T = O.range.split(":")[0];
-            if (cg(T, t) === null)
+            if (assertInsertionWithinSheet(T, t) === null)
               throw Error(
                 `This edit removes a ${j} formula's anchor. Relocate or remove the rule first.`,
               );
           }
-          const V = ay(O.formula, c.name, n.name, t),
+          const V = rewriteFormulaForStructuralEdit(
+              O.formula,
+              c.name,
+              n.name,
+              t,
+            ),
             D = t.axis === "row" ? 1 : 0,
             B = t.axis === "column" ? 1 : 0,
-            _ = ct(O.range);
+            _ = parseRangeAddress(O.range);
           if (
-            xd(O.formula, D, B) !== O.formula &&
+            shiftFormulaReferences(O.formula, D, B) !== O.formula &&
             (t.axis === "row" ? _.lastRow > _.firstRow : _.lastCol > _.firstCol)
           ) {
             const T =
@@ -958,32 +1006,44 @@ function LC(e, r, t) {
                 `Structural edits can verify at most 5,000 applied cells for relative ${j} formulas. Narrow or remove the rules first.`,
               );
             a += T;
-            const N = c.id === r ? Zh(O.range, t) : O.range;
+            const N =
+              c.id === r ? assertRangeWithinSheetBounds(O.range, t) : O.range;
             if (!N)
               throw Error(
                 `This edit removes a ${j} formula range. Remove the rule first.`,
               );
-            const R = ct(N);
+            const R = parseRangeAddress(N);
             for (let L = _.firstRow; L <= _.lastRow; L++)
               for (let $ = _.firstCol; $ <= _.lastCol; $++) {
-                const U = `${ut($)}${L + 1}`,
-                  G = c.id === r ? cg(U, t) : U;
+                const U = `${columnIndexToLetters($)}${L + 1}`,
+                  G = c.id === r ? assertInsertionWithinSheet(U, t) : U;
                 if (!G) continue;
                 const H = _t(G),
-                  Q = ay(
-                    xd(O.formula, L - _.firstRow, $ - _.firstCol),
+                  Q = rewriteFormulaForStructuralEdit(
+                    shiftFormulaReferences(
+                      O.formula,
+                      L - _.firstRow,
+                      $ - _.firstCol,
+                    ),
                     c.name,
                     n.name,
                     t,
                   ),
-                  X = xd(V, H.row - R.firstRow, H.col - R.firstCol);
+                  X = shiftFormulaReferences(
+                    V,
+                    H.row - R.firstRow,
+                    H.col - R.firstCol,
+                  );
                 if (Q !== X)
                   throw Error(
                     `This structural edit requires different relative ${j} formulas within one rule. Split, relocate, or remove the rule first.`,
                   );
               }
           }
-          return (V !== O.formula && jn(c), { ...O, formula: V });
+          return (
+            V !== O.formula && assertSheetUnprotected(c),
+            { ...O, formula: V }
+          );
         },
         p = c.conditionalFormats?.map(f),
         m = c.validations?.map(f);
@@ -997,9 +1057,12 @@ function LC(e, r, t) {
       const v = t.axis === "row" ? "rowHeights" : "columnWidths",
         g = {};
       for (const [O, j] of Object.entries(c[v] ?? {})) {
-        const z = Kf(Number(O), t);
+        const z = remapAxisIndex(Number(O), t);
         if (z !== null) {
-          if (z >= (t.axis === "row" ? Mt.maxRows : Mt.maxCols))
+          if (
+            z >=
+            (t.axis === "row" ? workbookLimits.maxRows : workbookLimits.maxCols)
+          )
             throw Error(
               "Insertion would discard explicit sizing at the worksheet boundary.",
             );
@@ -1009,26 +1072,26 @@ function LC(e, r, t) {
       const b = (c.merges ?? [])
           .map((O) =>
             t.moveBefore !== undefined
-              ? G2(O, t, "merged range", true)
-              : Zh(O, t),
+              ? shiftRangeForAxisEdit(O, t, "merged range", true)
+              : assertRangeWithinSheetBounds(O, t),
           )
           .filter((O) => !!O),
         y = (m ?? []).flatMap((O) => {
-          const j = Zh(O.range, t);
+          const j = assertRangeWithinSheetBounds(O.range, t);
           return j ? [{ ...O, range: j }] : [];
         }),
         w = (p ?? []).flatMap((O) => {
-          const j = Zh(O.range, t);
+          const j = assertRangeWithinSheetBounds(O.range, t);
           return j ? [{ ...O, range: j }] : [];
         }),
         E = c.objects?.map((O) => {
-          const j = cg(O.anchor, t);
+          const j = assertInsertionWithinSheet(O.anchor, t);
           if (!j)
             throw Error(
               `This edit would remove the anchor of ${O.label || O.kind}. Move or delete that drawing first.`,
             );
           if (O.kind !== "chart" || !O.range) return { ...O, anchor: j };
-          const z = ct(O.range),
+          const z = parseRangeAddress(O.range),
             V = t.index + t.count - 1;
           if (
             t.remove &&
@@ -1050,20 +1113,20 @@ function LC(e, r, t) {
             throw Error(
               "This edit would remove chart category labels. Adjust or delete the chart first.",
             );
-          const D = Zh(O.range, t);
+          const D = assertRangeWithinSheetBounds(O.range, t);
           if (!D)
             throw Error(
               "This edit would remove the entire chart source. Adjust or delete the chart first.",
             );
-          const B = sR(D, c);
+          const B = measureChartSelection(D, c);
           if (
             t.moveBefore !== undefined &&
             ((t.axis === "row" &&
               O.headers &&
-              Kf(z.firstRow, t) !== B.firstRow) ||
+              remapAxisIndex(z.firstRow, t) !== B.firstRow) ||
               (t.axis === "column" &&
                 z.lastCol > z.firstCol &&
-                Kf(z.firstCol, t) !== B.firstCol))
+                remapAxisIndex(z.firstCol, t) !== B.firstCol))
           )
             throw Error(
               "This move would displace chart headers or category labels. Move the complete chart source or only its data rows or value columns.",
@@ -1080,7 +1143,7 @@ function LC(e, r, t) {
             : undefined;
           if (_) {
             const C = (T, N) => {
-              const R = Kf(T - 1, t);
+              const R = remapAxisIndex(T - 1, t);
               if (R === null)
                 throw Error(
                   `This edit would remove a selected chart ${N}. Reset the chart selection before deleting it.`,
@@ -1106,12 +1169,19 @@ function LC(e, r, t) {
         }),
         A =
           t.moveBefore !== undefined
-            ? Zde(c, t)
+            ? shiftPrintLayoutForAxis(c, t)
             : c.pageLayout
-              ? iae(c.pageLayout, c, t.axis, t.index, t.count, t.remove)
+              ? shiftPrintSettingsOnAxisEdit(
+                  c.pageLayout,
+                  c,
+                  t.axis,
+                  t.index,
+                  t.count,
+                  t.remove,
+                )
               : undefined;
       if (A) {
-        const O = Zh(A.printArea, t);
+        const O = assertRangeWithinSheetBounds(A.printArea, t);
         if (!O)
           throw Error(
             "This edit would remove the entire print area. Change the print area first.",
@@ -1122,15 +1192,21 @@ function LC(e, r, t) {
         ...c,
         cells: h,
         ...(t.moveBefore !== undefined
-          ? Gde(c, t)
-          : xQ({ ...c, merges: b }, t.axis, t.index, t.count, t.remove)),
+          ? collectAxisStructureConflicts(c, t)
+          : applyAxisStructureEdit(
+              { ...c, merges: b },
+              t.axis,
+              t.index,
+              t.count,
+              t.remove,
+            )),
         ...(t.axis === "row" && c.rowOriginIds
           ? {
               rowOriginIds: Object.fromEntries(
                 Object.entries(c.rowOriginIds).flatMap(([O, j]) => {
-                  const z = Kf(Number(O), t);
+                  const z = remapAxisIndex(Number(O), t);
                   if (z === null) return [];
-                  if (z >= Mt.maxRows)
+                  if (z >= workbookLimits.maxRows)
                     throw Error(
                       "Insertion would discard source-row provenance at the worksheet boundary.",
                     );
@@ -1151,49 +1227,58 @@ function LC(e, r, t) {
       const h = c.scopeSheetId
           ? (o.sheets.find((m) => m.id === c.scopeSheetId)?.name ?? "")
           : "",
-        f = ay(c.refersTo, h, n.name, t);
-      if (!c.scopeSheetId && ay(c.refersTo, n.name, n.name, t) !== f)
+        f = rewriteFormulaForStructuralEdit(c.refersTo, h, n.name, t);
+      if (
+        !c.scopeSheetId &&
+        rewriteFormulaForStructuralEdit(c.refersTo, n.name, n.name, t) !== f
+      )
         throw Error(
           `Workbook-scoped name ${c.name} has ambiguous unqualified worksheet references. Qualify those references before inserting or deleting rows or columns.`,
         );
       return { ...c, refersTo: f };
     }),
-    u = sQ(
-      dQ({ ...o, sheets: s, ...(d ? { definedNames: d } : {}) }, r, t),
+    u = shiftReviewTargetsOnAxisEdit(
+      shiftFormulaWatchesOnAxisEdit(
+        { ...o, sheets: s, ...(d ? { definedNames: d } : {}) },
+        r,
+        t,
+      ),
       r,
       t,
     );
   for (const c of u.sheets) {
     const h = e.sheets.find((f) => f.id === c.id);
-    c.id !== r && JSON.stringify(c.cells) !== JSON.stringify(h.cells) && jn(h);
+    c.id !== r &&
+      JSON.stringify(c.cells) !== JSON.stringify(h.cells) &&
+      assertSheetUnprotected(h);
   }
-  return rn(u);
+  return normalizeWorkbookInput(u);
 }
-const lw = {
+const structuralEditLimits = {
   sourceCells: 500,
   dependencyCells: 1e3,
   formulaCells: 5e3,
   depth: 8,
   pageSize: 20,
 };
-function qi(e) {
+function throwReviewError(e) {
   throw Error(e);
 }
-const Kde = (e, r) => JSON.stringify([e, r]),
-  Yf = (e, r) => `${ut(r)}${e + 1}`,
-  uw = (e) =>
+const stringifyKeyPair = (e, r) => JSON.stringify([e, r]),
+  Yf = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
+  isFormulaSource = (e) =>
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("=");
-function Yde(e, r) {
+function resolveDuplicateReviewScope(e, r) {
   return (
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      qi("Include hidden must be boolean."),
+      throwReviewError("Include hidden must be boolean."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      qi("The duplicate review host context is invalid."),
+      throwReviewError("The duplicate review host context is invalid."),
     {
       includeHidden: !!r.includeHidden,
       allowedSheetIds: [
@@ -1223,7 +1308,10 @@ function Jde(e, r, t, n) {
       for (; a < r.length && u;)
         (r[a] === "[" && u++, r[a] === "]" && u--, a++);
       const l = r.slice(s, a),
-        c = !u && !/^[A-Za-z0-9_!]/.test(r.slice(a)) && z1(e, t, l, n);
+        c =
+          !u &&
+          !/^[A-Za-z0-9_!]/.test(r.slice(a)) &&
+          rewriteStructuredReferences(e, t, l, n);
       o += c ? "0" : l;
       continue;
     }
@@ -1238,7 +1326,7 @@ function Qde(e, r) {
     if (!a) return;
     ((t += a.length),
       t > 1e6 &&
-        qi(
+        throwReviewError(
           "Output-name safety inspection exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ));
     const u = Jde(e, a.replace(/"(?:[^"]|"")*"/g, ""), s, d);
@@ -1254,14 +1342,14 @@ function Qde(e, r) {
   };
   for (const a of e.sheets) {
     for (const [s, d] of Object.entries(a.cells))
-      uw(d) && o(String(d.raw), a.id, s);
+      isFormulaSource(d) && o(String(d.raw), a.id, s);
     for (const s of a.conditionalFormats ?? [])
       if (s.kind === "formula") {
-        const d = ct(s.range);
+        const d = parseRangeAddress(s.range);
         o(s.formula, a.id, Yf(d.firstRow, d.firstCol));
       }
     for (const s of a.tables ?? []) {
-      const d = ct(s.range);
+      const d = parseRangeAddress(s.range);
       s.columns.forEach((u, l) =>
         o(
           u.calculatedFormula,
@@ -1275,7 +1363,7 @@ function Qde(e, r) {
     o(a.refersTo, a.scopeSheetId ?? e.sheets[0].id);
   return n;
 }
-function efe(e, r) {
+function normalizeDuplicateReviewRequest(e, r) {
   ((!r ||
     typeof r != "object" ||
     Object.keys(r).some(
@@ -1292,43 +1380,49 @@ function efe(e, r) {
           "outputSheetName",
         ].includes(s),
     )) &&
-    qi("Invalid duplicate review request."),
+    throwReviewError("Invalid duplicate review request."),
     (typeof r.sheetId != "string" || typeof r.range != "string") &&
-      qi("Choose a source worksheet and one rectangular range."));
-  const t = ct(r.range),
+      throwReviewError("Choose a source worksheet and one rectangular range."));
+  const t = parseRangeAddress(r.range),
     n = t.lastCol - t.firstCol + 1,
     o = t.lastRow - t.firstRow + 1;
-  (n * o > lw.sourceCells &&
-    qi("Select at most 500 source cells for duplicate review."),
+  (n * o > structuralEditLimits.sourceCells &&
+    throwReviewError("Select at most 500 source cells for duplicate review."),
     (!Array.isArray(r.keyColumns) ||
       !r.keyColumns.length ||
       r.keyColumns.some(
         (s) => !Number.isInteger(s) || s < t.firstCol || s > t.lastCol,
       )) &&
-      qi("Choose one or more key columns inside the source range."),
+      throwReviewError(
+        "Choose one or more key columns inside the source range.",
+      ),
     ([r.headers, r.caseSensitive, r.trimText].some(
       (s) => typeof s != "boolean",
     ) ||
       !["raw", "calculated"].includes(r.comparison) ||
       !["match", "keep"].includes(r.blankPolicy)) &&
-      qi("Choose valid comparison, header, case, trim and blank rules."),
+      throwReviewError(
+        "Choose valid comparison, header, case, trim and blank rules.",
+      ),
     o <= (r.headers ? 1 : 0) &&
-      qi("The source must contain at least one data row after its header."),
+      throwReviewError(
+        "The source must contain at least one data row after its header.",
+      ),
     typeof r.outputSheetName != "string" &&
-      qi("Choose a new output worksheet name."));
+      throwReviewError("Choose a new output worksheet name."));
   const a = r.outputSheetName.trim();
   return (
     (!a ||
       a.length > 31 ||
       /[\\/\[\]*?:\u0000-\u001f]/.test(a) ||
       /^'|'$/.test(a)) &&
-      qi(
+      throwReviewError(
         "The output sheet needs a valid Excel worksheet name of 1–31 characters.",
       ),
     e.sheets.some((s) => s.name.toLowerCase() === a.toLowerCase()) &&
-      qi("A worksheet with that output name already exists."),
+      throwReviewError("A worksheet with that output name already exists."),
     Qde(e, a) &&
-      qi(
+      throwReviewError(
         "That output name is already referenced by workbook formulas or formula metadata. Choose a different name to avoid reconnecting an unresolved source reference.",
       ),
     {
@@ -1353,25 +1447,25 @@ function Pz(e, r) {
   for (; t.has(`${r}-${o}`);) o++;
   return `${r}-${o}`;
 }
-function tfe(e, r, t, n) {
+function runDuplicateInspection(e, r, t, n) {
   var m;
-  const o = ct(t),
+  const o = parseRangeAddress(t),
     a = [];
   for (let v = o.firstRow; v <= o.lastRow; v++)
     for (let g = o.firstCol; g <= o.lastCol; g++) a.push(Yf(v, g));
   if (
     (a.some((v) => !r.cells[v] || r.cells[v].raw === null) &&
-      qi(
+      throwReviewError(
         "Calculated comparison requires populated source cells; blank or possible spill-child cells are outside this subset. Use raw comparison or a populated selection.",
       ),
-    !a.some((v) => uw(r.cells[v])))
+    !a.some((v) => isFormulaSource(r.cells[v])))
   )
     return new Map(a.map((v) => [v, r.cells[v].raw]));
   const s = {
     id: Pz(e, "duplicate-inspection"),
     name: "Duplicate inspection",
-    rowCount: Mt.maxRows,
-    colCount: Mt.maxCols,
+    rowCount: workbookLimits.maxRows,
+    colCount: workbookLimits.maxCols,
     cells: { A1: { raw: `=SUM('${r.name.replace(/'/g, "''")}'!${t})` } },
   };
   let d = false;
@@ -1395,8 +1489,11 @@ function tfe(e, r, t, n) {
       break;
     }
   }
-  d || qi("A temporary duplicate inspection context could not be isolated.");
-  const u = m0(
+  d ||
+    throwReviewError(
+      "A temporary duplicate inspection context could not be isolated.",
+    );
+  const u = inspectFormulaDependencies(
       {
         ...e,
         sheets: [
@@ -1408,12 +1505,12 @@ function tfe(e, r, t, n) {
         sheetId: s.id,
         address: "A1",
         direction: "precedents",
-        depth: lw.depth,
+        depth: structuralEditLimits.depth,
         includeHidden: n.includeHidden,
         allowedSheetIds: [...n.allowedSheetIds, s.id],
         limits: {
-          maxNodes: lw.dependencyCells,
-          maxFormulaCells: lw.formulaCells,
+          maxNodes: structuralEditLimits.dependencyCells,
+          maxFormulaCells: structuralEditLimits.formulaCells,
           maxReferences: 1e4,
         },
       },
@@ -1423,11 +1520,11 @@ function tfe(e, r, t, n) {
     u.coverage.depthLimited ||
     u.cycles.length ||
     u.issues.some((v) => v.from === u.target.key || l.has(v.from))) &&
-    qi(
+    throwReviewError(
       "Calculated comparison requires a complete supported static dependency closure within 1,000 cells, 5,000 scanned formulas and depth 8; hidden, dynamic, unsupported or cyclic dependencies are excluded.",
     );
   const c = new Set([
-    ...y0,
+    ...matrixResultFunctionNames,
     "ISFORMULA",
     "INDEX",
     "CHOOSE",
@@ -1452,12 +1549,12 @@ function tfe(e, r, t, n) {
       b = g.cells[v.address];
     if (
       ((!b || b.raw === null) &&
-        qi(
+        throwReviewError(
           "Calculated comparison requires populated static dependencies; blank or possible spill-child dependencies are unsupported.",
         ),
-      uw(b))
+      isFormulaSource(b))
     ) {
-      const y = pf(String(b.raw), e, g.id).replace(
+      const y = resolveDefinedNameValue(String(b.raw), e, g.id).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
         "",
       );
@@ -1470,7 +1567,7 @@ function tfe(e, r, t, n) {
               .replace(/^_XLWS\./, ""),
           ),
         )) &&
-        qi(
+        throwReviewError(
           "Calculated comparison excludes volatile, dynamic-reference and array/spill formulas. Raw comparison can preserve their formula text without execution.",
         );
     }
@@ -1482,50 +1579,58 @@ function tfe(e, r, t, n) {
         .map((v) => ({
           ...v,
           cells: Object.fromEntries(
-            Object.entries(v.cells).filter(([g]) => l.has(Kde(v.id, g))),
+            Object.entries(v.cells).filter(([g]) =>
+              l.has(stringifyKeyPair(v.id, g)),
+            ),
           ),
         })),
     },
-    f = Vn(h),
+    f = calculateWorkbookWithSettings(h),
     p = new Map();
   for (const v of u.nodes) {
     const g = f(v.sheetId, v.address);
     (f.getOperationalErrors().length &&
-      qi(
+      throwReviewError(
         `An operational calculation error (${f.getOperationalErrors().join(", ")}) prevents duplicate review, even when a formula handler conceals it.`,
       ),
       f.getSpillRange(v.sheetId, v.address) &&
-        qi(
+        throwReviewError(
           "Calculated comparison requires scalar cells; a dependency produced an array/spill result.",
         ),
-      uw(e.sheets.find((b) => b.id === v.sheetId).cells[v.address]) &&
+      isFormulaSource(
+        e.sheets.find((b) => b.id === v.sheetId).cells[v.address],
+      ) &&
         typeof g == "string" &&
         /^#(?:[A-Z0-9_/.]+[!?]?)/.test(g) &&
-        qi(
+        throwReviewError(
           "Calculated comparison cannot group formula errors or error-like formula strings; correct them or use raw comparison.",
         ),
       typeof g == "number" &&
         !Number.isFinite(g) &&
-        qi("Nonfinite values cannot be used in duplicate review."),
+        throwReviewError(
+          "Nonfinite values cannot be used in duplicate review.",
+        ),
       v.sheetId === r.id && a.includes(v.address) && p.set(v.address, g));
   }
   return (
     (f.getOperationalErrors().length || p.size !== a.length) &&
-      qi(
+      throwReviewError(
         "Calculated source coverage is incomplete or encountered an operational error.",
       ),
     p
   );
 }
-function Uz(e, r, t = {}) {
+function createDuplicateReviewSheet(e, r, t = {}) {
   (t.readOnly &&
-    qi("This workbook is read-only. A derived worksheet cannot be created."),
-    $a(e));
-  const n = efe(e, r),
-    o = Yde(e, t),
+    throwReviewError(
+      "This workbook is read-only. A derived worksheet cannot be created.",
+    ),
+    assertWorkbookStructureEditable(e));
+  const n = normalizeDuplicateReviewRequest(e, r),
+    o = resolveDuplicateReviewScope(e, t),
     a = e.sheets.find((j) => j.id === n.sheetId);
-  a || qi("The source worksheet no longer exists.");
-  const s = ct(n.range),
+  a || throwReviewError("The source worksheet no longer exists.");
+  const s = parseRangeAddress(n.range),
     d = s.lastCol - s.firstCol + 1;
   ((!o.allowedSheetIds.includes(a.id) ||
     (!o.includeHidden &&
@@ -1535,11 +1640,11 @@ function Uz(e, r, t = {}) {
         cn(a, "column").some(
           (j) => j.start <= s.lastCol && j.end >= s.firstCol,
         )))) &&
-    qi(
+    throwReviewError(
       "The source range is outside the visible, authorized host context. Include hidden only within permitted host scope.",
     ),
     (a.merges ?? []).some((j) => {
-      const z = ct(j);
+      const z = parseRangeAddress(j);
       return (
         z.firstRow <= s.lastRow &&
         z.lastRow >= s.firstRow &&
@@ -1547,10 +1652,13 @@ function Uz(e, r, t = {}) {
         z.lastCol >= s.firstCol
       );
     }) &&
-      qi(
+      throwReviewError(
         "Unmerge the selected source before duplicate review so row boundaries are unambiguous.",
       ));
-  const u = n.comparison === "calculated" ? tfe(e, a, n.range, o) : null,
+  const u =
+      n.comparison === "calculated"
+        ? runDuplicateInspection(e, a, n.range, o)
+        : null,
     l = (j, z) => {
       const V = Yf(j, z),
         D = structuredClone(a.cells[V] ?? { raw: null }),
@@ -1558,14 +1666,16 @@ function Uz(e, r, t = {}) {
       return (
         typeof B == "number" &&
           !Number.isFinite(B) &&
-          qi("Nonfinite values cannot be used in duplicate review."),
+          throwReviewError(
+            "Nonfinite values cannot be used in duplicate review.",
+          ),
         { cell: D, value: B }
       );
     },
     c = Array.from({ length: d }, (j, z) =>
       n.headers
         ? l(s.firstRow, s.firstCol + z).cell
-        : { raw: `Column ${ut(s.firstCol + z)}` },
+        : { raw: `Column ${columnIndexToLetters(s.firstCol + z)}` },
     ),
     h = [],
     f = new Map();
@@ -1577,7 +1687,7 @@ function Uz(e, r, t = {}) {
         const $ = L - s.firstCol,
           U = V[$];
         let G = D[$];
-        return n.comparison === "raw" && uw(U)
+        return n.comparison === "raw" && isFormulaSource(U)
           ? ["formula", G]
           : (typeof G == "string" &&
               (n.trimText && (G = G.trim()),
@@ -1634,8 +1744,8 @@ function Uz(e, r, t = {}) {
     b = {
       id: Pz(e, "duplicate-review"),
       name: n.outputSheetName,
-      rowCount: Mt.maxRows,
-      colCount: Mt.maxCols,
+      rowCount: workbookLimits.maxRows,
+      colCount: workbookLimits.maxCols,
       cells: {},
       frozenRows: 3,
     },
@@ -1651,7 +1761,7 @@ function Uz(e, r, t = {}) {
       2,
       0,
       y(
-        `${g.input} source rows; ${g.retained} retained; ${g.excluded} excluded from population. ${n.comparison} typed keys ${n.keyColumns.map(ut).join(", ")}; ${n.headers ? "source header" : "no source header"}; ${n.caseSensitive ? "case-sensitive" : "ignore case"}; ${n.trimText ? "trim outer text" : "preserve whitespace"}; blanks ${n.blankPolicy}. First source row wins. Source unchanged.`,
+        `${g.input} source rows; ${g.retained} retained; ${g.excluded} excluded from population. ${n.comparison} typed keys ${n.keyColumns.map(columnIndexToLetters).join(", ")}; ${n.headers ? "source header" : "no source header"}; ${n.caseSensitive ? "case-sensitive" : "ignore case"}; ${n.trimText ? "trim outer text" : "preserve whitespace"}; blanks ${n.blankPolicy}. First source row wins. Source unchanged.`,
       ),
     ));
   const E = (j) => {
@@ -1697,7 +1807,7 @@ function Uz(e, r, t = {}) {
         ].forEach((D, B) => w(z, d + B, y(D))));
     };
   (E(3), m.forEach((j, z) => A(j, 4 + z)));
-  const k = `A3:${ut(d + 3)}${3 + m.length}`;
+  const k = `A3:${columnIndexToLetters(d + 3)}${3 + m.length}`;
   let F = null;
   if (v.length) {
     const j = m.length + 6;
@@ -1708,18 +1818,22 @@ function Uz(e, r, t = {}) {
     ),
       E(j + 1),
       v.forEach((z, V) => A(z, j + 2 + V)),
-      (F = `A${j + 1}:${ut(d + 3)}${j + 1 + v.length}`));
+      (F = `A${j + 1}:${columnIndexToLetters(d + 3)}${j + 1 + v.length}`));
   }
   e.sheets.reduce((j, z) => j + Object.keys(z.cells).length, 0) +
     Object.keys(b.cells).length >
-    Mt.maxCells &&
-    qi("The derived worksheet would exceed the workbook's stored-cell budget.");
+    workbookLimits.maxCells &&
+    throwReviewError(
+      "The derived worksheet would exceed the workbook's stored-cell budget.",
+    );
   const O = structuredClone(e);
   return (
     O.sheets.push(b),
     new TextEncoder().encode(JSON.stringify(O)).byteLength >
-      Mt.maxNativeBytes &&
-      qi("The derived workbook would exceed the native file budget."),
+      workbookLimits.maxNativeBytes &&
+      throwReviewError(
+        "The derived workbook would exceed the native file budget.",
+      ),
     {
       snapshot: JSON.stringify(e),
       request: n,
@@ -1735,22 +1849,22 @@ function Uz(e, r, t = {}) {
     }
   );
 }
-function rfe(e, r, t = {}) {
-  (t.readOnly && qi("This workbook is read-only."),
+function applyDuplicateReviewPreview(e, r, t = {}) {
+  (t.readOnly && throwReviewError("This workbook is read-only."),
     JSON.stringify(e) !== r.snapshot &&
-      qi(
+      throwReviewError(
         "The workbook changed after duplicate review. Preview again before Apply.",
       ));
-  const n = Uz(e, r.request, t);
+  const n = createDuplicateReviewSheet(e, r.request, t);
   return (
     JSON.stringify(n) !== JSON.stringify(r) &&
-      qi(
+      throwReviewError(
         "The duplicate preview or host context changed. Preview and review again.",
       ),
     n.next
   );
 }
-const Z7 = (e) =>
+const describeCellValueType = (e) =>
     e === null
       ? "Blank"
       : typeof e == "string"
@@ -1758,7 +1872,7 @@ const Z7 = (e) =>
         : `${typeof e}: ${String(e)}`,
   qk = (e) => {
     try {
-      const r = ct(e);
+      const r = parseRangeAddress(e);
       return r.lastCol - r.firstCol + 1 <= 500
         ? Array.from(
             { length: r.lastCol - r.firstCol + 1 },
@@ -1770,4 +1884,13 @@ const Z7 = (e) =>
     }
   };
 
-export { LC, Uz, Z7, cg, lw, qde, qk, rfe };
+export {
+  applyStructuralEdit,
+  createDuplicateReviewSheet,
+  describeCellValueType,
+  assertInsertionWithinSheet,
+  structuralEditLimits,
+  DataValidationDialog,
+  qk,
+  applyDuplicateReviewPreview,
+};

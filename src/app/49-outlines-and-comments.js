@@ -10,28 +10,35 @@ import {
 import i from "react/jsx-runtime";
 import ne from "react";
 import {
-  AQ,
-  CQ,
+  setOutlineGroupCollapsed,
+  removeOutlineGroup,
   EQ,
-  Jl,
-  NB,
-  SQ,
-  X3,
+  reviewThreadLimits,
+  addOutlineGroup,
+  clearAxisOutlineGroups,
+  validateHyperlinkRecord,
   _t,
-  ct,
-  iQ,
-  kQ,
+  parseRangeAddress,
+  addReviewThreadReply,
+  setOutlineGroupLevel,
   nQ,
-  oD,
-  oQ,
-  ut,
+  setCellHyperlink,
+  setReviewThreadResolved,
+  columnIndexToLetters,
 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { Ej, Wm, wS } from "./48-format-cells-and-move.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  staleOutlineMessage,
+  formatRowColumnSpan,
+  wS,
+} from "./48-format-cells-and-move.js";
 
-function j4e(e) {
+function OutlineToolsPanel(e) {
   var z;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
@@ -49,8 +56,8 @@ function j4e(e) {
     [l, c] = ne.useState(0),
     [h, f] = ne.useState(""),
     p = e.workbook.sheets.find((V) => V.id === e.sheetId),
-    m = ne.useMemo(() => (p ? NB(p, d) : []), [p, d]),
-    v = ct(e.range),
+    m = ne.useMemo(() => (p ? addOutlineGroup(p, d) : []), [p, d]),
+    v = parseRangeAddress(e.range),
     g = d === "row" ? v.firstRow : v.firstCol,
     b = d === "row" ? v.lastRow : v.lastCol,
     y = e.readOnly || !!((z = p?.protection) != null && z.enabled),
@@ -101,7 +108,7 @@ function j4e(e) {
         C.range !== w.range ||
         JSON.stringify(C.workbook) !== w.snapshot
       )
-        throw Error(Ej);
+        throw Error(staleOutlineMessage);
       const T = V(C.workbook);
       (T !== C.workbook && C.onWorkbookChange(T, D), C.onClose());
     } catch (C) {
@@ -145,7 +152,9 @@ function j4e(e) {
             i.jsx(ListTree, { size: 20 }),
             i.jsx("h2", {
               id: n,
-              children: i.jsx(M, { children: "Row and column outlines" }),
+              children: i.jsx(LocalizedText, {
+                children: "Row and column outlines",
+              }),
             }),
             i.jsx("button", {
               type: "button",
@@ -161,7 +170,7 @@ function j4e(e) {
           className: "ot-body",
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Group detail rows or columns, leaving summary cells outside the group. Collapsing changes visibility only; formulas and totals remain unchanged.",
               }),
@@ -170,7 +179,7 @@ function j4e(e) {
               i.jsx("p", {
                 className: "ot-notice",
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This worksheet is read-only. Outline details can be inspected.",
                 }),
@@ -179,14 +188,14 @@ function j4e(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "ot-error",
-                children: h || Ej,
+                children: h || staleOutlineMessage,
               }),
             i.jsxs("div", {
               className: "ot-create",
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Group by" }),
+                    i.jsx(LocalizedText, { children: "Group by" }),
                     i.jsxs("select", {
                       "aria-label": text("Outline axis"),
                       value: d,
@@ -209,9 +218,11 @@ function j4e(e) {
                   children: [
                     i.jsx("span", {
                       className: "ot-small",
-                      children: i.jsx(M, { children: "Selected range" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Selected range",
+                      }),
                     }),
-                    i.jsx("strong", { children: Wm(d, g, b) }),
+                    i.jsx("strong", { children: formatRowColumnSpan(d, g, b) }),
                   ],
                 }),
                 i.jsx("button", {
@@ -221,9 +232,11 @@ function j4e(e) {
                   onClick: () =>
                     j(
                       (V) => EQ(V, e.sheetId, d, g, b),
-                      "Group " + Wm(d, g, b).toLowerCase(),
+                      "Group " + formatRowColumnSpan(d, g, b).toLowerCase(),
                     ),
-                  children: i.jsx(M, { children: "Group selection" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Group selection",
+                  }),
                 }),
               ],
             }),
@@ -231,7 +244,7 @@ function j4e(e) {
               className: "ot-levels",
               children: [
                 i.jsx("strong", {
-                  children: i.jsx(M, { children: "Show level" }),
+                  children: i.jsx(LocalizedText, { children: "Show level" }),
                 }),
                 Array.from({ length: F }, (V, D) =>
                   i.jsx(
@@ -242,7 +255,7 @@ function j4e(e) {
                       "aria-label": "Show outline level " + (D + 1),
                       onClick: () =>
                         j(
-                          (B) => kQ(B, e.sheetId, d, D + 1),
+                          (B) => setOutlineGroupLevel(B, e.sheetId, d, D + 1),
                           "Show " + d + " outline level " + (D + 1),
                         ),
                       children: D + 1,
@@ -255,13 +268,13 @@ function j4e(e) {
             i.jsxs("p", {
               className: "ot-small",
               children: [
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "Level 1 hides all grouped details. Higher levels reveal nested detail; level ",
                 }),
                 F,
                 " ",
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "expands every group on this axis. Manually hidden rows and columns remain hidden.",
                 }),
@@ -284,10 +297,10 @@ function j4e(e) {
                   disabled: k || !m.length,
                   onClick: () =>
                     j(
-                      (V) => SQ(V, e.sheetId, d),
+                      (V) => clearAxisOutlineGroups(V, e.sheetId, d),
                       "Clear " + d + " outline groups",
                     ),
-                  children: i.jsx(M, { children: "Clear groups" }),
+                  children: i.jsx(LocalizedText, { children: "Clear groups" }),
                 }),
               ],
             }),
@@ -303,12 +316,16 @@ function j4e(e) {
                           i.jsxs("div", {
                             children: [
                               i.jsx("strong", {
-                                children: Wm(d, V.start, V.end),
+                                children: formatRowColumnSpan(
+                                  d,
+                                  V.start,
+                                  V.end,
+                                ),
                               }),
                               i.jsxs("span", {
                                 className: "ot-small",
                                 children: [
-                                  i.jsx(M, { children: "Depth " }),
+                                  i.jsx(LocalizedText, { children: "Depth " }),
                                   V.depth,
                                   " ·",
                                   " ",
@@ -325,12 +342,26 @@ function j4e(e) {
                                 disabled: k,
                                 "aria-label":
                                   (V.collapsed ? "Expand " : "Collapse ") +
-                                  Wm(d, V.start, V.end).toLowerCase(),
+                                  formatRowColumnSpan(
+                                    d,
+                                    V.start,
+                                    V.end,
+                                  ).toLowerCase(),
                                 onClick: () =>
                                   j(
-                                    (D) => AQ(D, e.sheetId, V.id, !V.collapsed),
+                                    (D) =>
+                                      setOutlineGroupCollapsed(
+                                        D,
+                                        e.sheetId,
+                                        V.id,
+                                        !V.collapsed,
+                                      ),
                                     (V.collapsed ? "Expand " : "Collapse ") +
-                                      Wm(d, V.start, V.end).toLowerCase(),
+                                      formatRowColumnSpan(
+                                        d,
+                                        V.start,
+                                        V.end,
+                                      ).toLowerCase(),
                                   ),
                                 children: V.collapsed ? "Expand" : "Collapse",
                               }),
@@ -339,14 +370,25 @@ function j4e(e) {
                                 disabled: k,
                                 "aria-label":
                                   "Ungroup " +
-                                  Wm(d, V.start, V.end).toLowerCase(),
+                                  formatRowColumnSpan(
+                                    d,
+                                    V.start,
+                                    V.end,
+                                  ).toLowerCase(),
                                 onClick: () =>
                                   j(
-                                    (D) => CQ(D, e.sheetId, V.id),
+                                    (D) =>
+                                      removeOutlineGroup(D, e.sheetId, V.id),
                                     "Ungroup " +
-                                      Wm(d, V.start, V.end).toLowerCase(),
+                                      formatRowColumnSpan(
+                                        d,
+                                        V.start,
+                                        V.end,
+                                      ).toLowerCase(),
                                   ),
-                                children: i.jsx(M, { children: "Ungroup" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Ungroup",
+                                }),
                               }),
                             ],
                           }),
@@ -358,7 +400,7 @@ function j4e(e) {
                 })
               : i.jsx("p", {
                   className: "ot-empty",
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Select detail cells in the worksheet, then choose Group selection.",
                   }),
@@ -371,14 +413,16 @@ function j4e(e) {
                     type: "button",
                     disabled: O === 0,
                     onClick: () => c(O - 1),
-                    children: i.jsx(M, { children: "Previous groups" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Previous groups",
+                    }),
                   }),
                   i.jsxs("span", {
                     children: [
-                      i.jsx(M, { children: "Page " }),
+                      i.jsx(LocalizedText, { children: "Page " }),
                       O + 1,
                       " ",
-                      i.jsx(M, { children: "of " }),
+                      i.jsx(LocalizedText, { children: "of " }),
                       I,
                     ],
                   }),
@@ -386,7 +430,7 @@ function j4e(e) {
                     type: "button",
                     disabled: O + 1 === I,
                     onClick: () => c(O + 1),
-                    children: i.jsx(M, { children: "Next groups" }),
+                    children: i.jsx(LocalizedText, { children: "Next groups" }),
                   }),
                 ],
               }),
@@ -396,14 +440,14 @@ function j4e(e) {
           className: "ot-footer",
           children: [
             i.jsx("span", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Up to 8 nested groups · 1,000 groups per worksheet",
               }),
             }),
             i.jsx("button", {
               type: "button",
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Done" }),
+              children: i.jsx(LocalizedText, { children: "Done" }),
             }),
           ],
         }),
@@ -411,9 +455,9 @@ function j4e(e) {
     }),
   });
 }
-const by = 20;
-function F4e(e) {
-  const r = ct(e.range);
+const reviewPageSize = 20;
+function resolveSelectionAnchorAddress(e) {
+  const r = parseRangeAddress(e.range);
   if (e.active) {
     const t = _t(e.active);
     if (
@@ -422,14 +466,14 @@ function F4e(e) {
       t.col >= r.firstCol &&
       t.col <= r.lastCol
     )
-      return `${ut(t.col)}${t.row + 1}`;
+      return `${columnIndexToLetters(t.col)}${t.row + 1}`;
   }
-  return `${ut(r.firstCol)}${r.firstRow + 1}`;
+  return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}`;
 }
-const Cj = (e) => new Date(e).toLocaleString();
-function B4e(e) {
+const formatLocalDateTime = (e) => new Date(e).toLocaleString();
+function ReviewToolsPanel(e) {
   var he, Se;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -443,7 +487,7 @@ function B4e(e) {
       content: JSON.stringify(e.workbook),
     }),
     d = e.workbook.sheets.find((se) => se.id === e.sheetId),
-    u = F4e(e),
+    u = resolveSelectionAnchorAddress(e),
     l = d?.cells[u]?.hyperlink,
     [c, h] = ne.useState(e.mode ?? "comments"),
     [f, p] = ne.useState("cell"),
@@ -528,7 +572,7 @@ function B4e(e) {
     },
     K = (() => {
       try {
-        return X3(
+        return validateHyperlinkRecord(
           j === "external"
             ? { kind: "external", url: V, label: N }
             : { kind: "internal", sheetId: B, address: C, label: N },
@@ -585,7 +629,9 @@ function B4e(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Comments & links" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Comments & links",
+                  }),
                 }),
                 i.jsxs("p", {
                   children: [d?.name ?? "Worksheet unavailable", "!", u],
@@ -656,7 +702,7 @@ function B4e(e) {
               i.jsx("p", {
                 className: "rv-error",
                 role: "alert",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "The workbook or selection changed. Close and reopen the review tools.",
                 }),
@@ -664,7 +710,7 @@ function B4e(e) {
             e.readOnly &&
               i.jsx("p", {
                 className: "rv-muted",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This workbook is read-only. Discussions and links remain available for inspection.",
                 }),
@@ -673,7 +719,7 @@ function B4e(e) {
               d?.protection?.enabled &&
               i.jsx("p", {
                 className: "rv-muted",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This worksheet is protected. Unprotect it before adding comments or changing links.",
                 }),
@@ -687,9 +733,9 @@ function B4e(e) {
                     i.jsxs("p", {
                       className: "rv-muted",
                       children: [
-                        i.jsx(M, { children: "Posting as " }),
+                        i.jsx(LocalizedText, { children: "Posting as " }),
                         i.jsx("strong", { children: J }),
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             ". Names and times come from this application; they are not verified identities. Comments stay separate from cell notes.",
                         }),
@@ -698,7 +744,7 @@ function B4e(e) {
                     i.jsxs("label", {
                       className: "rv-filter",
                       children: [
-                        i.jsx(M, { children: "Show discussions" }),
+                        i.jsx(LocalizedText, { children: "Show discussions" }),
                         i.jsxs("select", {
                           "aria-label": text("Show discussions"),
                           value: f,
@@ -740,11 +786,14 @@ function B4e(e) {
                             !G.length &&
                               i.jsx("p", {
                                 className: "rv-empty",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "No discussions in this view.",
                                 }),
                               }),
-                            G.slice(m * by, (m + 1) * by).map((se) =>
+                            G.slice(
+                              m * reviewPageSize,
+                              (m + 1) * reviewPageSize,
+                            ).map((se) =>
                               i.jsxs(
                                 "button",
                                 {
@@ -793,14 +842,14 @@ function B4e(e) {
                                 se.id,
                               ),
                             ),
-                            G.length > by &&
+                            G.length > reviewPageSize &&
                               i.jsxs("div", {
                                 className: "rv-pages",
                                 children: [
                                   i.jsx("button", {
                                     disabled: !m,
                                     onClick: () => v(m - 1),
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Previous discussions",
                                     }),
                                   }),
@@ -808,13 +857,14 @@ function B4e(e) {
                                     children: [
                                       m + 1,
                                       " / ",
-                                      Math.ceil(G.length / by),
+                                      Math.ceil(G.length / reviewPageSize),
                                     ],
                                   }),
                                   i.jsx("button", {
-                                    disabled: (m + 1) * by >= G.length,
+                                    disabled:
+                                      (m + 1) * reviewPageSize >= G.length,
                                     onClick: () => v(m + 1),
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Next discussions",
                                     }),
                                   }),
@@ -848,7 +898,7 @@ function B4e(e) {
                                               H.anchor.sheetId,
                                               H.anchor.address,
                                             ),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Go to cell",
                                           }),
                                         }),
@@ -863,7 +913,7 @@ function B4e(e) {
                                           ? "The original worksheet was deleted."
                                           : "The original row or column was deleted.",
                                         " ",
-                                        i.jsx(M, {
+                                        i.jsx(LocalizedText, {
                                           children:
                                             "This discussion is retained for review and cannot receive new replies.",
                                         }),
@@ -875,7 +925,9 @@ function B4e(e) {
                                       children: [
                                         i.jsx(Check, { size: 14 }),
                                         " ",
-                                        i.jsx(M, { children: "Resolved by" }),
+                                        i.jsx(LocalizedText, {
+                                          children: "Resolved by",
+                                        }),
                                         " ",
                                         H.resolved.author,
                                         " ·",
@@ -883,7 +935,9 @@ function B4e(e) {
                                         i.jsx("time", {
                                           dateTime: H.resolved.createdAt,
                                           title: H.resolved.createdAt,
-                                          children: Cj(H.resolved.createdAt),
+                                          children: formatLocalDateTime(
+                                            H.resolved.createdAt,
+                                          ),
                                         }),
                                       ],
                                     }),
@@ -903,7 +957,9 @@ function B4e(e) {
                                                 i.jsx("time", {
                                                   dateTime: se.createdAt,
                                                   title: se.createdAt,
-                                                  children: Cj(se.createdAt),
+                                                  children: formatLocalDateTime(
+                                                    se.createdAt,
+                                                  ),
                                                 }),
                                               ],
                                             }),
@@ -920,7 +976,7 @@ function B4e(e) {
                                         i.jsx("button", {
                                           disabled: !y,
                                           onClick: () => w(y - 1),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Previous messages",
                                           }),
                                         }),
@@ -936,7 +992,7 @@ function B4e(e) {
                                           disabled:
                                             (y + 1) * 10 >= H.messages.length,
                                           onClick: () => w(y + 1),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Next messages",
                                           }),
                                         }),
@@ -950,7 +1006,7 @@ function B4e(e) {
                                         onClick: () =>
                                           q(
                                             () =>
-                                              oQ(
+                                              setReviewThreadResolved(
                                                 e.workbook,
                                                 H.id,
                                                 !H.resolved,
@@ -979,20 +1035,29 @@ function B4e(e) {
                                         (se.preventDefault(),
                                           q(
                                             () =>
-                                              iQ(e.workbook, H.id, k, J, {
-                                                readOnly: e.readOnly,
-                                              }),
+                                              addReviewThreadReply(
+                                                e.workbook,
+                                                H.id,
+                                                k,
+                                                J,
+                                                {
+                                                  readOnly: e.readOnly,
+                                                },
+                                              ),
                                             "Reply to review discussion",
                                           ));
                                       },
                                       children: [
                                         i.jsxs("label", {
                                           children: [
-                                            i.jsx(M, { children: "Reply" }),
+                                            i.jsx(LocalizedText, {
+                                              children: "Reply",
+                                            }),
                                             i.jsx("textarea", {
                                               "aria-label": text("Reply"),
                                               rows: 3,
-                                              maxLength: Jl.textLength,
+                                              maxLength:
+                                                reviewThreadLimits.textLength,
                                               value: k,
                                               disabled: X$1,
                                               onChange: (se) =>
@@ -1005,7 +1070,7 @@ function B4e(e) {
                                         i.jsx("button", {
                                           className: "rv-primary",
                                           disabled: X$1 || !k.trim(),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Post reply",
                                           }),
                                         }),
@@ -1015,7 +1080,7 @@ function B4e(e) {
                               })
                             : i.jsx("p", {
                                 className: "rv-empty",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Select a discussion to read its messages.",
                                 }),
@@ -1038,14 +1103,16 @@ function B4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "New comment on " }),
+                            i.jsx(LocalizedText, {
+                              children: "New comment on ",
+                            }),
                             d?.name,
                             "!",
                             u,
                             i.jsx("textarea", {
                               "aria-label": text("New comment"),
                               rows: 3,
-                              maxLength: Jl.textLength,
+                              maxLength: reviewThreadLimits.textLength,
                               value: E,
                               disabled: $,
                               onChange: (se) => A(se.target.value),
@@ -1058,12 +1125,18 @@ function B4e(e) {
                           className: "rv-compose-footer",
                           children: [
                             i.jsxs("small", {
-                              children: [E.length, " / ", Jl.textLength],
+                              children: [
+                                E.length,
+                                " / ",
+                                reviewThreadLimits.textLength,
+                              ],
                             }),
                             i.jsx("button", {
                               className: "rv-primary",
                               disabled: $ || !E.trim(),
-                              children: i.jsx(M, { children: "Post comment" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Post comment",
+                              }),
                             }),
                           ],
                         }),
@@ -1071,7 +1144,7 @@ function B4e(e) {
                     }),
                     i.jsx("p", {
                       className: "rv-muted",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Comments are stored in this workbook. Typing an @name does not notify or send a message to anyone.",
                       }),
@@ -1084,7 +1157,7 @@ function B4e(e) {
                   "aria-labelledby": `${n}-hyperlink-tab`,
                   children: [
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Add a link to this cell without replacing its value, formula, formatting or note.",
                       }),
@@ -1095,7 +1168,7 @@ function B4e(e) {
                         (se.preventDefault(),
                           q(
                             () =>
-                              oD(
+                              setCellHyperlink(
                                 e.workbook,
                                 e.sheetId,
                                 u,
@@ -1115,7 +1188,7 @@ function B4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Link type" }),
+                            i.jsx(LocalizedText, { children: "Link type" }),
                             i.jsxs("select", {
                               "aria-label": text("Link type"),
                               value: j,
@@ -1139,7 +1212,7 @@ function B4e(e) {
                         j === "external"
                           ? i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Address" }),
+                                i.jsx(LocalizedText, { children: "Address" }),
                                 i.jsx("input", {
                                   "aria-label": text("Link address"),
                                   type: "text",
@@ -1148,7 +1221,7 @@ function B4e(e) {
                                   placeholder: text(
                                     "https://example.com/evidence",
                                   ),
-                                  maxLength: Jl.urlLength,
+                                  maxLength: reviewThreadLimits.urlLength,
                                   onChange: (se) => D(se.target.value),
                                   lang: language("Link address"),
                                   "data-ui-label": "Link address",
@@ -1160,7 +1233,9 @@ function B4e(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Worksheet" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Worksheet",
+                                    }),
                                     i.jsx("select", {
                                       "aria-label": text("Link worksheet"),
                                       value: B,
@@ -1186,7 +1261,9 @@ function B4e(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Cell address" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Cell address",
+                                    }),
                                     i.jsx("input", {
                                       "aria-label": text("Link cell address"),
                                       value: C,
@@ -1202,12 +1279,14 @@ function B4e(e) {
                             }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Display text (optional)" }),
+                            i.jsx(LocalizedText, {
+                              children: "Display text (optional)",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Link display text"),
                               value: N,
                               disabled: $,
-                              maxLength: Jl.labelLength,
+                              maxLength: reviewThreadLimits.labelLength,
                               onChange: (se) => R(se.target.value),
                               lang: language("Link display text"),
                               "data-ui-label": "Link display text",
@@ -1239,14 +1318,16 @@ function B4e(e) {
                                     "data-ui-label": "Open link preview",
                                     children: [
                                       i.jsx(ExternalLink, { size: 15 }),
-                                      i.jsx(M, { children: "Open link" }),
+                                      i.jsx(LocalizedText, {
+                                        children: "Open link",
+                                      }),
                                     ],
                                   })
                                 : e.onNavigate &&
                                   i.jsx("button", {
                                     type: "button",
                                     onClick: () => te(K.sheetId, K.address),
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Go to target",
                                     }),
                                   }),
@@ -1254,7 +1335,7 @@ function B4e(e) {
                           }),
                         i.jsx("p", {
                           className: "rv-muted",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Web links use https or http. Email links use one mailto recipient. Local files, embedded credentials and executable links are not accepted. Opening a link is a separate action.",
                           }),
@@ -1268,18 +1349,28 @@ function B4e(e) {
                               onClick: () =>
                                 q(
                                   () =>
-                                    oD(e.workbook, e.sheetId, u, null, {
-                                      readOnly: e.readOnly,
-                                    }),
+                                    setCellHyperlink(
+                                      e.workbook,
+                                      e.sheetId,
+                                      u,
+                                      null,
+                                      {
+                                        readOnly: e.readOnly,
+                                      },
+                                    ),
                                   "Remove cell hyperlink",
                                 ),
-                              children: i.jsx(M, { children: "Remove link" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Remove link",
+                              }),
                             }),
                             i.jsx("button", {
                               className: "rv-primary",
                               disabled:
                                 $ || !(j === "external" ? V.trim() : C.trim()),
-                              children: i.jsx(M, { children: "Save link" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Save link",
+                              }),
                             }),
                           ],
                         }),
@@ -1297,7 +1388,7 @@ function B4e(e) {
 }
 const Aj = (e) => {
     try {
-      const r = ct(e);
+      const r = parseRangeAddress(e);
       return r.lastCol - r.firstCol < 500
         ? Array.from(
             { length: r.lastCol - r.firstCol + 1 },
@@ -1308,8 +1399,14 @@ const Aj = (e) => {
       return [];
     }
   },
-  kj = (e) =>
+  formatCellValueLabel = (e) =>
     e === null ? "Blank" : typeof e == "string" ? JSON.stringify(e) : String(e),
-  L4e = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
+  comparatorSymbols = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
 
-export { Aj, B4e, L4e, j4e, kj };
+export {
+  Aj,
+  ReviewToolsPanel,
+  comparatorSymbols,
+  OutlineToolsPanel,
+  formatCellValueLabel,
+};

@@ -14,57 +14,64 @@ import {
 import i from "react/jsx-runtime";
 import ne from "react";
 import {
-  AP,
-  CP,
-  EO,
-  Hne,
-  Nr,
-  Pne,
-  Une,
-  Vne,
-  Wne,
+  describeSheetDeletionImpacts,
+  addWorksheet,
+  setWorksheetTabColor,
+  unprotectWorkbookStructure,
+  findSheetOrThrow,
+  renameWorksheet,
+  setWorksheetVisibility,
+  deleteWorksheet,
+  protectWorkbookStructure,
   _t,
   cn,
-  ct,
-  jn,
-  jne,
-  rn,
-  ut,
-  v0,
-  xO,
-  zne,
+  parseRangeAddress,
+  assertSheetUnprotected,
+  summarizeWorksheets,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  checkDataValidationBatch,
+  moveWorksheet,
+  duplicateWorksheet,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { LC } from "./27-data-validation-dialog.js";
 import {
-  BW,
-  FW,
-  LW,
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { applyStructuralEdit } from "./27-data-validation-dialog.js";
+import {
+  assertSortWorkbookAuthorized,
+  buildAllowedSheetKey,
+  buildSortPlan,
   MW,
   N3,
-  OW,
-  _1,
-  b_,
-  c4e,
-  jW,
-  u4e,
-  yd,
+  stableSortPolicy,
+  formatSortCellAddress,
+  resolveSortSourceRange,
+  assertSortSafeFormulas,
+  isNonBlankCellEntry,
+  normalizeSortSpecification,
+  sortEngineLimits,
 } from "./44-clean-and-reshape.js";
 
-function d4e(e, r, t = {}) {
+function buildSortPreview(e, r, t = {}) {
   var V;
-  const n = BW(e, r.sheetId, t),
-    o = u4e(e, r),
-    a = b_(e, o.sheetId, o.range, o.headers);
+  const n = assertSortWorkbookAuthorized(e, r.sheetId, t),
+    o = normalizeSortSpecification(e, r),
+    a = resolveSortSourceRange(e, o.sheetId, o.range, o.headers);
   if (a.expansionRequired && !o.expandSelection)
     throw Error(
       `This selection is part of populated records. Expand the selection to ${a.expandedRange}, or cancel; partial-record sorting is blocked.`,
     );
-  const s = ct(a.expandedRange),
+  const s = parseRangeAddress(a.expandedRange),
     d = a.lastRow - a.firstDataRow + 1;
   if (d < 2)
     throw Error("Choose at least two data rows. Check the header setting.");
-  if (d > yd.rows || d * (s.lastCol - s.firstCol + 1) > yd.cells)
+  if (
+    d > sortEngineLimits.rows ||
+    d * (s.lastCol - s.firstCol + 1) > sortEngineLimits.cells
+  )
     throw Error(
       "Sort supports at most 10,000 rows and 100,000 record cells per reviewed operation.",
     );
@@ -76,8 +83,8 @@ function d4e(e, r, t = {}) {
     throw Error(
       `The source contains ${l} hidden rows. Include hidden rows explicitly or cancel so records stay together.`,
     );
-  c4e(e, d, t);
-  const c = LW(e, o, a),
+  assertSortSafeFormulas(e, d, t);
+  const c = buildSortPlan(e, o, a),
     h = JSON.stringify(c),
     f = new Intl.Collator("en-US", {
       usage: "sort",
@@ -144,18 +151,18 @@ function d4e(e, r, t = {}) {
       moveBefore: a.firstDataRow,
       permutation: b,
     };
-  let E = y ? LC(e, n.id, w) : structuredClone(e);
+  let E = y ? applyStructuralEdit(e, n.id, w) : structuredClone(e);
   const A = [],
     k = [],
     F = [],
     I = (B) =>
       B >= a.firstDataRow && B <= a.lastRow ? b[B - a.firstDataRow] : B;
   for (const B of e.sheets) {
-    const _ = Nr(E, B.id);
+    const _ = findSheetOrThrow(E, B.id);
     for (const [C, T] of Object.entries(B.cells))
       if (N3(T)) {
         const N = _t(C),
-          R = B.id === n.id ? _1(I(N.row), N.col) : C,
+          R = B.id === n.id ? formatSortCellAddress(I(N.row), N.col) : C,
           L = _.cells[R]?.raw;
         L !== T.raw &&
           k.push({
@@ -182,7 +189,7 @@ function d4e(e, r, t = {}) {
       F.push({ sheet: "Workbook", field: "definedNames" }),
     JSON.stringify(e.formulaWatches) !== JSON.stringify(E.formulaWatches) &&
       F.push({ sheet: "Workbook", field: "formulaWatches" }),
-    A.length > yd.cells)
+    A.length > sortEngineLimits.cells)
   )
     throw Error(
       "The sort would change more than 100,000 cells including dependent references.",
@@ -190,14 +197,16 @@ function d4e(e, r, t = {}) {
   JSON.stringify(e.reviewThreads) !== JSON.stringify(E.reviewThreads) &&
     F.push({ sheet: "Workbook", field: "reviewThreads" });
   for (const B of e.sheets)
-    B.id !== n.id && JSON.stringify(B) !== JSON.stringify(Nr(E, B.id)) && jn(B);
-  if ((v0(E, A), y)) {
-    const B = Nr(E, n.id);
+    B.id !== n.id &&
+      JSON.stringify(B) !== JSON.stringify(findSheetOrThrow(E, B.id)) &&
+      assertSheetUnprotected(B);
+  if ((checkDataValidationBatch(E, A), y)) {
+    const B = findSheetOrThrow(E, n.id);
     ((E.rowOrigins = [...(E.rowOrigins ?? [])]),
       (B.rowOriginIds = { ...B.rowOriginIds }));
     const _ = new Set(
       Object.entries(n.cells)
-        .filter(([, C]) => jW(C))
+        .filter(([, C]) => isNonBlankCellEntry(C))
         .map(([C]) => _t(C).row),
     );
     for (const C of g)
@@ -215,7 +224,7 @@ function d4e(e, r, t = {}) {
             kind: "snapshot",
           }));
       }
-    E = rn(E);
+    E = normalizeWorkbookInput(E);
   }
   const O = new Map(E.rowOrigins?.map((B) => [B.id, B])),
     j = {
@@ -223,7 +232,7 @@ function d4e(e, r, t = {}) {
       selection: a,
       snapshot: JSON.stringify(e),
       rows: g.map((B, _) => {
-        const C = Nr(E, n.id).rowOriginIds?.[a.firstDataRow + _],
+        const C = findSheetOrThrow(E, n.id).rowOriginIds?.[a.firstDataRow + _],
           T = C ? O.get(C) : undefined;
         return {
           sourceRow: B.row + 1,
@@ -243,67 +252,72 @@ function d4e(e, r, t = {}) {
       formulaChanges: k,
       metadataChanges: F,
       hiddenRows: l,
-      policy: OW,
+      policy: stableSortPolicy,
     };
   return (
     MW.set(j, {
       signature: JSON.stringify(j),
       candidate: E,
       keys: h,
-      allowed: FW(e, t),
+      allowed: buildAllowedSheetKey(e, t),
     }),
     j
   );
 }
-function f4e(e, r, t = {}) {
+function assertSortPreviewCurrent(e, r, t = {}) {
   const n = MW.get(r);
   if (!n || n.signature !== JSON.stringify(r))
     throw Error(
       "This sort preview changed or was restored from another session. Preview again.",
     );
   if (
-    (BW(e, r.request.sheetId, t),
-    n.allowed !== FW(e, t) || JSON.stringify(e) !== r.snapshot)
+    (assertSortWorkbookAuthorized(e, r.request.sheetId, t),
+    n.allowed !== buildAllowedSheetKey(e, t) ||
+      JSON.stringify(e) !== r.snapshot)
   )
     throw Error(
       "The workbook or host permissions changed after the sort preview. Preview again.",
     );
-  if (n.keys !== JSON.stringify(LW(e, r.request, r.selection)))
+  if (n.keys !== JSON.stringify(buildSortPlan(e, r.request, r.selection)))
     throw Error(
       "Calculated sort keys changed after the preview. Preview and review the new order.",
     );
   return r.movedRows ? structuredClone(n.candidate) : e;
 }
-const dj = (e) => ({
+const buildSortKeySpec = (e) => ({
     column: e,
     direction: "ascending",
     type: "auto",
     customText: "",
     useCustom: false,
   }),
-  h4e = (e) => {
+  expandSortSelectionToRecords = (e) => {
     var t;
     try {
-      const n = ct(b_(e.workbook, e.sheetId, e.range).expandedRange).firstRow;
+      const n = parseRangeAddress(
+        resolveSortSourceRange(e.workbook, e.sheetId, e.range).expandedRange,
+      ).firstRow;
       return (
         n === 0 ||
         !!(
           (t = e.workbook.sheets.find((o) => o.id === e.sheetId)?.tables) !=
-            null && t.some((o) => ct(o.range).firstRow === n)
+            null && t.some((o) => parseRangeAddress(o.range).firstRow === n)
         )
       );
     } catch {
       return false;
     }
   };
-function p4e(e) {
-  const { text, language } = Dr(),
+function CustomSortDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
     [s, d] = ne.useState(e.range),
-    [u, l] = ne.useState(() => h4e(e)),
-    [c, h] = ne.useState([dj(ct(e.range).firstCol)]),
+    [u, l] = ne.useState(() => expandSortSelectionToRecords(e)),
+    [c, h] = ne.useState([
+      buildSortKeySpec(parseRangeAddress(e.range).firstCol),
+    ]),
     [f, p] = ne.useState(false),
     [m, v] = ne.useState(false),
     [g, b] = ne.useState(false),
@@ -326,11 +340,11 @@ function p4e(e) {
     C = "";
   try {
     if (!V) throw Error("The source is outside the host-approved worksheets.");
-    _ = b_(e.workbook, e.sheetId, s, u);
+    _ = resolveSortSourceRange(e.workbook, e.sheetId, s, u);
   } catch (X) {
     C = X.message;
   }
-  const T = _ ? ct(_.expandedRange) : undefined,
+  const T = _ ? parseRangeAddress(_.expandedRange) : undefined,
     N = T
       ? Array.from(
           { length: T.lastCol - T.firstCol + 1 },
@@ -350,7 +364,7 @@ function p4e(e) {
     },
     U = () => {
       try {
-        const X = d4e(
+        const X = buildSortPreview(
           e.workbook,
           {
             sheetId: e.sheetId,
@@ -375,7 +389,7 @@ function p4e(e) {
       try {
         if (!y || !B)
           throw Error("The workbook or selection changed. Preview again.");
-        const X = f4e(e.workbook, y, {
+        const X = assertSortPreviewCurrent(e.workbook, y, {
           readOnly: e.readOnly,
           allowedSheetIds: e.allowedSheetIds,
         });
@@ -403,7 +417,10 @@ function p4e(e) {
           J.call(X, { block: "start" }),
         (q = a.current) == null || q.focus({ preventScroll: true }));
     }, [y]));
-  const H = Math.max(1, Math.ceil((y?.rows.length ?? 0) / yd.pageSize)),
+  const H = Math.max(
+      1,
+      Math.ceil((y?.rows.length ?? 0) / sortEngineLimits.pageSize),
+    ),
     Q = Math.min(I, H - 1);
   return i.jsx("div", {
     className: "dup-backdrop",
@@ -445,10 +462,10 @@ function p4e(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Custom sort" }),
+                  children: i.jsx(LocalizedText, { children: "Custom sort" }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Review the new record order before applying it.",
                   }),
                 }),
@@ -468,7 +485,7 @@ function p4e(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Worksheet" }),
+                i.jsx(LocalizedText, { children: "Worksheet" }),
                 i.jsx("strong", {
                   children: V ? j?.name : "Outside current context",
                 }),
@@ -476,7 +493,7 @@ function p4e(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source range" }),
+                i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
                   value: s,
@@ -498,7 +515,7 @@ function p4e(e) {
                     (R(), l(X.target.checked));
                   },
                 }),
-                i.jsx(M, { children: "My data has headers" }),
+                i.jsx(LocalizedText, { children: "My data has headers" }),
               ],
             }),
           ],
@@ -510,12 +527,12 @@ function p4e(e) {
               children: [
                 i.jsxs("strong", {
                   children: [
-                    i.jsx(M, { children: "Complete records: " }),
+                    i.jsx(LocalizedText, { children: "Complete records: " }),
                     _?.expandedRange,
                   ],
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Every populated column in these worksheet rows moves together, including fields beside the selection. Headers stay in place. Applying also clears temporary view sorting and search.",
                   }),
@@ -524,7 +541,9 @@ function p4e(e) {
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, { children: "Expand selection" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Expand selection",
+                        }),
                       }),
                       i.jsxs("label", {
                         children: [
@@ -536,7 +555,7 @@ function p4e(e) {
                               (R(), p(false));
                             },
                           }),
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "Keep current selection (sorting blocked to protect records)",
                           }),
@@ -552,7 +571,7 @@ function p4e(e) {
                               (R(), p(true));
                             },
                           }),
-                          i.jsx(M, { children: "Expand to " }),
+                          i.jsx(LocalizedText, { children: "Expand to " }),
                           _.expandedRange,
                         ],
                       }),
@@ -563,16 +582,24 @@ function p4e(e) {
         i.jsxs("div", {
           className: "sort-level-heading",
           children: [
-            i.jsx("h3", { children: i.jsx(M, { children: "Sort levels" }) }),
+            i.jsx("h3", {
+              children: i.jsx(LocalizedText, { children: "Sort levels" }),
+            }),
             i.jsxs("button", {
-              disabled: c.length >= yd.keys || c.length >= N.length,
+              disabled:
+                c.length >= sortEngineLimits.keys || c.length >= N.length,
               onClick: () => {
                 (R(),
-                  h([...c, dj(N.find((X) => !c.some((J) => J.column === X)))]));
+                  h([
+                    ...c,
+                    buildSortKeySpec(
+                      N.find((X) => !c.some((J) => J.column === X)),
+                    ),
+                  ]));
               },
               children: [
                 i.jsx(Plus, { size: 15 }),
-                i.jsx(M, { children: "Add level" }),
+                i.jsx(LocalizedText, { children: "Add level" }),
               ],
             }),
           ],
@@ -590,9 +617,9 @@ function p4e(e) {
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Column" }),
+                      i.jsx(LocalizedText, { children: "Column" }),
                       N.length > 500
-                        ? i.jsx(ci, {
+                        ? i.jsx(LocalizedNumberField, {
                             "aria-label": `Column ${J + 1}`,
                             min: T.firstCol + 1,
                             max: T.lastCol + 1,
@@ -611,9 +638,9 @@ function p4e(e) {
                                 {
                                   value: q,
                                   children: [
-                                    ut(q),
+                                    columnIndexToLetters(q),
                                     u && T
-                                      ? ` · ${String(j?.cells[`${ut(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
+                                      ? ` · ${String(j?.cells[`${columnIndexToLetters(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
                                       : "",
                                   ],
                                 },
@@ -625,7 +652,7 @@ function p4e(e) {
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Order" }),
+                      i.jsx(LocalizedText, { children: "Order" }),
                       i.jsxs("select", {
                         "aria-label": `Order ${J + 1}`,
                         value: X$1.direction,
@@ -645,7 +672,7 @@ function p4e(e) {
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Interpret as" }),
+                      i.jsx(LocalizedText, { children: "Interpret as" }),
                       i.jsxs("select", {
                         "aria-label": `Interpretation ${J + 1}`,
                         value: X$1.type,
@@ -706,7 +733,7 @@ function p4e(e) {
                               onChange: (q) =>
                                 L(J, { useCustom: q.target.checked }),
                             }),
-                            i.jsx(M, {
+                            i.jsx(LocalizedText, {
                               children: "Use a custom order for level ",
                             }),
                             J + 1,
@@ -715,7 +742,9 @@ function p4e(e) {
                         X$1.useCustom &&
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "One value per line" }),
+                              i.jsx(LocalizedText, {
+                                children: "One value per line",
+                              }),
                               i.jsx("textarea", {
                                 "aria-label": `Custom order ${J + 1}`,
                                 rows: 3,
@@ -727,7 +756,7 @@ Low`,
                                   L(J, { customText: q.target.value }),
                               }),
                               i.jsx("small", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Unlisted values follow the list; blanks stay last. Descending reverses the list.",
                                 }),
@@ -754,7 +783,7 @@ Low`,
                     (R(), b(X.target.checked));
                   },
                 }),
-                i.jsx(M, { children: "Case-sensitive text" }),
+                i.jsx(LocalizedText, { children: "Case-sensitive text" }),
               ],
             }),
             i.jsxs("label", {
@@ -766,14 +795,14 @@ Low`,
                     (R(), v(X.target.checked));
                   },
                 }),
-                i.jsx(M, { children: "Include hidden rows" }),
+                i.jsx(LocalizedText, { children: "Include hidden rows" }),
               ],
             }),
           ],
         }),
         i.jsx("p", {
           className: "sort-policy",
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Ties keep their original row order. Blanks stay last. Automatic keeps numbers and numeric text distinct. Limit: 10,000 rows and 100,000 cells.",
           }),
@@ -781,17 +810,19 @@ Low`,
         i.jsxs("details", {
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Comparison and reference policy",
               }),
             }),
-            Object.values(OW).map((X) => i.jsx("p", { children: X }, X)),
+            Object.values(stableSortPolicy).map((X) =>
+              i.jsx("p", { children: X }, X),
+            ),
           ],
         }),
         e.readOnly &&
           i.jsx("p", {
             role: "status",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "This host is read-only. Sorting cannot change records.",
             }),
@@ -801,7 +832,7 @@ Low`,
           !B &&
           i.jsx("p", {
             role: "alert",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "The workbook, selection or permissions changed. Preview again.",
             }),
@@ -820,27 +851,27 @@ Low`,
                 children: [
                   y.movedRows,
                   " ",
-                  i.jsx(M, { children: "records move · " }),
+                  i.jsx(LocalizedText, { children: "records move · " }),
                   y.changedCells,
                   " ",
-                  i.jsx(M, { children: "cells change" }),
+                  i.jsx(LocalizedText, { children: "cells change" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
                   y.rows.length,
                   " ",
-                  i.jsx(M, { children: "records reviewed · " }),
+                  i.jsx(LocalizedText, { children: "records reviewed · " }),
                   y.hiddenRows,
                   " ",
-                  i.jsx(M, { children: "hidden rows · " }),
+                  i.jsx(LocalizedText, { children: "hidden rows · " }),
                   y.formulaChanges.length,
                   " ",
-                  i.jsx(M, { children: "formula rewrites ·" }),
+                  i.jsx(LocalizedText, { children: "formula rewrites ·" }),
                   " ",
                   y.metadataChanges.length,
                   " ",
-                  i.jsx(M, { children: "metadata updates" }),
+                  i.jsx(LocalizedText, { children: "metadata updates" }),
                 ],
               }),
               i.jsx("div", {
@@ -851,23 +882,34 @@ Low`,
                       children: i.jsxs("tr", {
                         children: [
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Source row" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Source row",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Destination row" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Destination row",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Sort values" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Sort values",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Source identity" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Source identity",
+                            }),
                           }),
                         ],
                       }),
                     }),
                     i.jsx("tbody", {
                       children: y.rows
-                        .slice(Q * yd.pageSize, (Q + 1) * yd.pageSize)
+                        .slice(
+                          Q * sortEngineLimits.pageSize,
+                          (Q + 1) * sortEngineLimits.pageSize,
+                        )
                         .map((X) =>
                           i.jsxs(
                             "tr",
@@ -918,21 +960,21 @@ Low`,
                   i.jsx("button", {
                     disabled: Q === 0,
                     onClick: () => O(Q - 1),
-                    children: i.jsx(M, { children: "Previous" }),
+                    children: i.jsx(LocalizedText, { children: "Previous" }),
                   }),
                   i.jsxs("span", {
                     children: [
-                      i.jsx(M, { children: "Page " }),
+                      i.jsx(LocalizedText, { children: "Page " }),
                       Q + 1,
                       " ",
-                      i.jsx(M, { children: "of " }),
+                      i.jsx(LocalizedText, { children: "of " }),
                       H,
                     ],
                   }),
                   i.jsx("button", {
                     disabled: Q === H - 1,
                     onClick: () => O(Q + 1),
-                    children: i.jsx(M, { children: "Next" }),
+                    children: i.jsx(LocalizedText, { children: "Next" }),
                   }),
                 ],
               }),
@@ -941,14 +983,14 @@ Low`,
                   children: [
                     i.jsxs("summary", {
                       children: [
-                        i.jsx(M, { children: "Review " }),
+                        i.jsx(LocalizedText, { children: "Review " }),
                         y.formulaChanges.length,
                         " ",
-                        i.jsx(M, { children: "formula changes" }),
+                        i.jsx(LocalizedText, { children: "formula changes" }),
                       ],
                     }),
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "First 50 changes shown; the SDK preview contains the complete list.",
                       }),
@@ -982,7 +1024,7 @@ Low`,
                 i.jsxs("details", {
                   children: [
                     i.jsx("summary", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "Review metadata updates",
                       }),
                     }),
@@ -998,20 +1040,20 @@ Low`,
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsxs("div", {
               children: [
                 i.jsx("button", {
                   disabled: e.readOnly || !!C,
                   onClick: U,
-                  children: i.jsx(M, { children: "Preview sort" }),
+                  children: i.jsx(LocalizedText, { children: "Preview sort" }),
                 }),
                 i.jsx("button", {
                   className: "dup-primary",
                   disabled: !B || !(y != null && y.movedRows),
                   onClick: G,
-                  children: i.jsx(M, { children: "Apply sort" }),
+                  children: i.jsx(LocalizedText, { children: "Apply sort" }),
                 }),
               ],
             }),
@@ -1021,21 +1063,21 @@ Low`,
     }),
   });
 }
-const x2 = (e) =>
+const worksheetVisibilityState = (e) =>
     e.veryHidden ? "veryHidden" : e.hidden ? "hidden" : "visible",
-  fj = (e) =>
+  worksheetVisibilityLabel = (e) =>
     e === "veryHidden" ? "Very hidden" : e === "hidden" ? "Hidden" : "Visible",
-  bS = (e) =>
+  describeWorksheetError = (e) =>
     e instanceof Error
       ? e.message
       : "The worksheet operation could not be completed.";
-function m4e(e) {
+function WorksheetTabBar(e) {
   var K;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState(e.sheetId),
     a = e.workbook.sheets.find((ae) => ae.id === n) ?? e.workbook.sheets[0],
     [s, d] = ne.useState(a.name),
-    [u, l] = ne.useState(x2(a)),
+    [u, l] = ne.useState(worksheetVisibilityState(a)),
     [c, h] = ne.useState(a.tabColor ?? "#107c41"),
     [f, p] = ne.useState(""),
     [m, v] = ne.useState(""),
@@ -1052,7 +1094,7 @@ function m4e(e) {
   const B = ne.useId(),
     _ = !!((K = e.workbook.structureProtection) != null && K.enabled),
     T = ne
-      .useMemo(() => jne(e.workbook), [e.workbook])
+      .useMemo(() => summarizeWorksheets(e.workbook), [e.workbook])
       .find((ae) => ae.sheetId === a.id),
     N = e.readOnly || _ || y,
     R = e.workbook.sheets.findIndex((ae) => ae.id === a.id),
@@ -1071,7 +1113,10 @@ function m4e(e) {
     );
   }, []),
     ne.useEffect(() => {
-      (o(a.id), d(a.name), l(x2(a)), h(a.tabColor ?? "#107c41"));
+      (o(a.id),
+        d(a.name),
+        l(worksheetVisibilityState(a)),
+        h(a.tabColor ?? "#107c41"));
     }, [a.id, a.name, a.hidden, a.veryHidden, a.tabColor]));
   function U(ae) {
     (o(ae), A(null), F(false), v(""), b(""));
@@ -1097,14 +1142,14 @@ function m4e(e) {
           !Se.sheets.some((ce) => ce.id === he.sheetId && !ce.hidden) &&
           he.onSelectSheet(Se.sheets.find((ce) => !ce.hidden).id));
     } catch (he) {
-      v(bS(he));
+      v(describeWorksheetError(he));
     }
   }
   function H() {
     const ae = new Set(e.workbook.sheets.map((de) => de.name.toLowerCase()));
     let oe = 1;
     for (; ae.has(`sheet${oe}`);) oe++;
-    G("Add worksheet", (de) => CP(de, `Sheet${oe}`), true);
+    G("Add worksheet", (de) => addWorksheet(de, `Sheet${oe}`), true);
   }
   function Q() {
     (v(""), b(""), O(0));
@@ -1113,11 +1158,11 @@ function m4e(e) {
         workbook: e.workbook,
         sheetId: a.id,
         name: a.name,
-        dependencies: AP(e.workbook, a.id),
+        dependencies: describeSheetDeletionImpacts(e.workbook, a.id),
       }),
         F(false));
     } catch (ae) {
-      v(bS(ae));
+      v(describeWorksheetError(ae));
     }
   }
   function X$1() {
@@ -1126,7 +1171,9 @@ function m4e(e) {
         v("The workbook changed. Review current dependencies before deleting.");
         return;
       }
-      G(`Delete worksheet: ${E.name}`, (ae) => Vne(ae, E.sheetId, true));
+      G(`Delete worksheet: ${E.name}`, (ae) =>
+        deleteWorksheet(ae, E.sheetId, true),
+      );
     }
   }
   async function J() {
@@ -1136,7 +1183,9 @@ function m4e(e) {
     (v(""), b(""), w(true));
     try {
       if (ae.readOnly) throw new Error("This workbook is read-only.");
-      const he = await (oe ? Hne(ae.workbook, f) : Wne(ae.workbook, f));
+      const he = await (oe
+        ? unprotectWorkbookStructure(ae.workbook, f)
+        : protectWorkbookStructure(ae.workbook, f));
       if (!D.current) return;
       const Se = V.current;
       if (Se.readOnly)
@@ -1159,7 +1208,7 @@ function m4e(e) {
             : "Workbook structure is protected.",
         ));
     } catch (he) {
-      D.current && v(bS(he));
+      D.current && v(describeWorksheetError(he));
     } finally {
       D.current && w(false);
     }
@@ -1217,7 +1266,9 @@ function m4e(e) {
                 i.jsx(FileSpreadsheet, { size: 19 }),
                 i.jsx("h2", {
                   id: B,
-                  children: i.jsx(M, { children: "Manage Worksheets" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Manage Worksheets",
+                  }),
                 }),
               ],
             }),
@@ -1247,7 +1298,7 @@ function m4e(e) {
                       children: [
                         e.workbook.sheets.length,
                         " ",
-                        i.jsx(M, { children: "worksheets" }),
+                        i.jsx(LocalizedText, { children: "worksheets" }),
                       ],
                     }),
                     i.jsx("button", {
@@ -1287,7 +1338,9 @@ function m4e(e) {
                                 ae.name,
                                 i.jsxs("small", {
                                   children: [
-                                    fj(x2(ae)),
+                                    worksheetVisibilityLabel(
+                                      worksheetVisibilityState(ae),
+                                    ),
                                     ae.id === e.sheetId ? " · Current" : "",
                                   ],
                                 }),
@@ -1322,7 +1375,7 @@ function m4e(e) {
                       },
                       children: [
                         i.jsx(Eye$1, { size: 14 }),
-                        i.jsx(M, { children: "Go to sheet" }),
+                        i.jsx(LocalizedText, { children: "Go to sheet" }),
                       ],
                     }),
                   ],
@@ -1330,7 +1383,7 @@ function m4e(e) {
                 e.readOnly &&
                   i.jsx("p", {
                     className: "sm-hint",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "The host opened this workbook read-only. You can inspect its worksheets.",
                     }),
@@ -1340,7 +1393,7 @@ function m4e(e) {
                     className: "sm-lock-note",
                     children: [
                       i.jsx(LockKeyhole, { size: 14 }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "Workbook structure is protected. Unlock it below to make changes.",
                       }),
@@ -1353,22 +1406,30 @@ function m4e(e) {
                   "data-ui-label": "Worksheet inspection metadata",
                   children: [
                     i.jsx("h4", {
-                      children: i.jsx(M, { children: "Worksheet inspection" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Worksheet inspection",
+                      }),
                     }),
                     i.jsxs("dl", {
                       children: [
                         i.jsxs("div", {
                           children: [
                             i.jsx("dt", {
-                              children: i.jsx(M, { children: "Visibility" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Visibility",
+                              }),
                             }),
-                            i.jsx("dd", { children: fj(T.visibility) }),
+                            i.jsx("dd", {
+                              children: worksheetVisibilityLabel(T.visibility),
+                            }),
                           ],
                         }),
                         i.jsxs("div", {
                           children: [
                             i.jsx("dt", {
-                              children: i.jsx(M, { children: "Stored cells" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Stored cells",
+                              }),
                             }),
                             i.jsx("dd", {
                               children: T.storedCellCount.toLocaleString(),
@@ -1378,7 +1439,9 @@ function m4e(e) {
                         i.jsxs("div", {
                           children: [
                             i.jsx("dt", {
-                              children: i.jsx(M, { children: "Formula cells" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Formula cells",
+                              }),
                             }),
                             i.jsx("dd", {
                               children: T.formulaCellCount.toLocaleString(),
@@ -1388,7 +1451,9 @@ function m4e(e) {
                         i.jsxs("div", {
                           children: [
                             i.jsx("dt", {
-                              children: i.jsx(M, { children: "Tab color" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Tab color",
+                              }),
                             }),
                             i.jsx("dd", { children: T.tabColor ?? "None" }),
                           ],
@@ -1396,10 +1461,12 @@ function m4e(e) {
                         i.jsxs("div", {
                           children: [
                             i.jsx("dt", {
-                              children: i.jsx(M, { children: "Calculation" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Calculation",
+                              }),
                             }),
                             i.jsx("dd", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Included when referenced",
                               }),
                             }),
@@ -1408,7 +1475,7 @@ function m4e(e) {
                       ],
                     }),
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Hidden and very hidden worksheets still participate in calculation. This inspection does not evaluate formulas.",
                       }),
@@ -1421,20 +1488,22 @@ function m4e(e) {
                   children: [
                     i.jsx("legend", {
                       className: "sm-sr-only",
-                      children: i.jsx(M, { children: "Worksheet settings" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Worksheet settings",
+                      }),
                     }),
                     i.jsxs("form", {
                       className: "sm-name-form",
                       onSubmit: (ae) => {
                         (ae.preventDefault(),
                           G(`Rename worksheet: ${a.name}`, (oe) =>
-                            Pne(oe, a.id, s),
+                            renameWorksheet(oe, a.id, s),
                           ));
                       },
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Sheet name" }),
+                            i.jsx(LocalizedText, { children: "Sheet name" }),
                             i.jsx("input", {
                               "aria-label": text("Sheet name"),
                               value: s,
@@ -1448,7 +1517,9 @@ function m4e(e) {
                         i.jsx("button", {
                           type: "submit",
                           disabled: !s.trim() || s.trim() === a.name,
-                          children: i.jsx(M, { children: "Rename sheet" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Rename sheet",
+                          }),
                         }),
                       ],
                     }),
@@ -1460,12 +1531,14 @@ function m4e(e) {
                           onClick: () =>
                             G(
                               `Duplicate worksheet: ${a.name}`,
-                              (ae) => zne(ae, a.id),
+                              (ae) => duplicateWorksheet(ae, a.id),
                               true,
                             ),
                           children: [
                             i.jsx(Copy, { size: 14 }),
-                            i.jsx(M, { children: "Duplicate sheet" }),
+                            i.jsx(LocalizedText, {
+                              children: "Duplicate sheet",
+                            }),
                           ],
                         }),
                         i.jsxs("div", {
@@ -1478,7 +1551,7 @@ function m4e(e) {
                               disabled: R === 0,
                               onClick: () =>
                                 G(`Move worksheet: ${a.name}`, (ae) =>
-                                  xO(ae, a.id, R - 1),
+                                  moveWorksheet(ae, a.id, R - 1),
                                 ),
                               lang: language("Move worksheet up"),
                               "data-ui-label": "Move worksheet up",
@@ -1491,7 +1564,7 @@ function m4e(e) {
                               disabled: R === e.workbook.sheets.length - 1,
                               onClick: () =>
                                 G(`Move worksheet: ${a.name}`, (ae) =>
-                                  xO(ae, a.id, R + 1),
+                                  moveWorksheet(ae, a.id, R + 1),
                                 ),
                               lang: language("Move worksheet down"),
                               "data-ui-label": "Move worksheet down",
@@ -1506,7 +1579,7 @@ function m4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Visibility" }),
+                            i.jsx(LocalizedText, { children: "Visibility" }),
                             i.jsxs("select", {
                               "aria-label": text("Worksheet visibility"),
                               value: u,
@@ -1532,18 +1605,20 @@ function m4e(e) {
                         }),
                         i.jsx("button", {
                           type: "button",
-                          disabled: u === x2(a),
+                          disabled: u === worksheetVisibilityState(a),
                           onClick: () =>
                             G(`Change worksheet visibility: ${a.name}`, (ae) =>
-                              Une(ae, a.id, u),
+                              setWorksheetVisibility(ae, a.id, u),
                             ),
-                          children: i.jsx(M, { children: "Apply visibility" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Apply visibility",
+                          }),
                         }),
                       ],
                     }),
                     i.jsx("p", {
                       className: "sm-hint",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Hidden worksheets remain available here. Very hidden records a separate Excel visibility state. At least one worksheet must remain visible.",
                       }),
@@ -1553,7 +1628,7 @@ function m4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Tab color" }),
+                            i.jsx(LocalizedText, { children: "Tab color" }),
                             i.jsx("input", {
                               "aria-label": text("Worksheet tab color"),
                               type: "color",
@@ -1570,18 +1645,22 @@ function m4e(e) {
                             c.toLowerCase() === a.tabColor?.toLowerCase(),
                           onClick: () =>
                             G(`Change tab color: ${a.name}`, (ae) =>
-                              EO(ae, a.id, c),
+                              setWorksheetTabColor(ae, a.id, c),
                             ),
-                          children: i.jsx(M, { children: "Apply tab color" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Apply tab color",
+                          }),
                         }),
                         i.jsx("button", {
                           type: "button",
                           disabled: !a.tabColor,
                           onClick: () =>
                             G(`Remove tab color: ${a.name}`, (ae) =>
-                              EO(ae, a.id),
+                              setWorksheetTabColor(ae, a.id),
                             ),
-                          children: i.jsx(M, { children: "No color" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "No color",
+                          }),
                         }),
                       ],
                     }),
@@ -1600,11 +1679,11 @@ function m4e(e) {
                       onClick: Q,
                       children: [
                         i.jsx(Trash2, { size: 14 }),
-                        i.jsx(M, { children: "Delete worksheet…" }),
+                        i.jsx(LocalizedText, { children: "Delete worksheet…" }),
                       ],
                     }),
                     i.jsx("small", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "Review affected references before deleting.",
                       }),
                     }),
@@ -1619,13 +1698,13 @@ function m4e(e) {
                     children: [
                       i.jsxs("h4", {
                         children: [
-                          i.jsx(M, { children: "Delete “" }),
+                          i.jsx(LocalizedText, { children: "Delete “" }),
                           E.name,
                           "”?",
                         ],
                       }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "The worksheet and its contents will be removed. Dependent formulas can become #REF!; dependent refresh definitions are removed while their result cells remain.",
                         }),
@@ -1634,7 +1713,7 @@ function m4e(e) {
                         children: [
                           i.jsx("strong", { children: E.dependencies.length }),
                           " ",
-                          i.jsx(M, { children: "affected" }),
+                          i.jsx(LocalizedText, { children: "affected" }),
                           " ",
                           E.dependencies.length === 1
                             ? "reference"
@@ -1661,7 +1740,7 @@ function m4e(e) {
                           })
                         : i.jsx("p", {
                             className: "sm-hint",
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "No dependent references were found.",
                             }),
                           }),
@@ -1676,7 +1755,9 @@ function m4e(e) {
                               onClick: () => O((ae) => ae - 1),
                               lang: language("Previous references"),
                               "data-ui-label": "Previous references",
-                              children: i.jsx(M, { children: "Previous" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Previous",
+                              }),
                             }),
                             i.jsxs("span", {
                               "aria-live": "polite",
@@ -1685,10 +1766,12 @@ function m4e(e) {
                                 "–",
                                 Math.min(E.dependencies.length, (I + 1) * 200),
                                 " ",
-                                i.jsx(M, { children: "of " }),
+                                i.jsx(LocalizedText, { children: "of " }),
                                 E.dependencies.length,
                                 " ",
-                                i.jsx(M, { children: "references" }),
+                                i.jsx(LocalizedText, {
+                                  children: "references",
+                                }),
                               ],
                             }),
                             i.jsx("button", {
@@ -1698,14 +1781,16 @@ function m4e(e) {
                               onClick: () => O((ae) => ae + 1),
                               lang: language("Next references"),
                               "data-ui-label": "Next references",
-                              children: i.jsx(M, { children: "Next" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Next",
+                              }),
                             }),
                           ],
                         }),
                       W &&
                         i.jsx("p", {
                           className: "sm-error",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Some references cannot be updated safely. Resolve the listed unsupported references first.",
                           }),
@@ -1713,7 +1798,7 @@ function m4e(e) {
                       q &&
                         i.jsx("p", {
                           className: "sm-error",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "The workbook changed. Review its current dependencies before deleting.",
                           }),
@@ -1727,7 +1812,7 @@ function m4e(e) {
                             disabled: N || q || W,
                             onChange: (ae) => F(ae.target.checked),
                           }),
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "I understand that this removes the worksheet and may leave reference errors.",
                           }),
@@ -1741,14 +1826,16 @@ function m4e(e) {
                             onClick: () => {
                               (A(null), F(false));
                             },
-                            children: i.jsx(M, { children: "Keep worksheet" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Keep worksheet",
+                            }),
                           }),
                           q
                             ? i.jsx("button", {
                                 type: "button",
                                 disabled: N,
                                 onClick: Q,
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Review current dependencies",
                                 }),
                               })
@@ -1757,7 +1844,7 @@ function m4e(e) {
                                 className: "sm-danger sm-delete-final",
                                 disabled: !$ || !k || W,
                                 onClick: X$1,
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Delete worksheet",
                                 }),
                               }),
@@ -1782,19 +1869,21 @@ function m4e(e) {
                   ? i.jsx(LockKeyhole, { size: 16 })
                   : i.jsx(LockKeyholeOpen, { size: 16 }),
                 i.jsx("strong", {
-                  children: i.jsx(M, { children: "Workbook structure" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Workbook structure",
+                  }),
                 }),
                 i.jsx("span", { children: _ ? "Protected" : "Unlocked" }),
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Protect worksheet names, order, visibility, tab colors, and adding or deleting sheets.",
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Visibility and structure locks control editing. Access to this workbook and its hidden content is granted separately by the host application.",
               }),
@@ -1848,14 +1937,14 @@ function m4e(e) {
           className: "sm-footer",
           children: [
             i.jsx("span", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Changes use the workbook’s undo history.",
               }),
             }),
             i.jsx("button", {
               type: "button",
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Done" }),
+              children: i.jsx(LocalizedText, { children: "Done" }),
             }),
           ],
         }),
@@ -1863,7 +1952,7 @@ function m4e(e) {
     }),
   });
 }
-const QT = {
+const worksheetPropertyLabels = {
     raw: "Value",
     literal: "Entered as text",
     style: "Formatting",
@@ -1891,7 +1980,7 @@ const QT = {
     sourceRevision: "Source revision",
     version: "Version",
   },
-  ox = (e) =>
+  formatAuditDetailValue = (e) =>
     e === undefined
       ? "Not set"
       : e === null || e === ""
@@ -1911,7 +2000,7 @@ const QT = {
               ? String(e)
               : Array.isArray(e)
                 ? e.length
-                  ? e.map(ox).join("; ")
+                  ? e.map(formatAuditDetailValue).join("; ")
                   : "None"
                 : Object.entries(e)
                     .filter(
@@ -1925,12 +2014,22 @@ const QT = {
                           "salt",
                         ].includes(r),
                     )
-                    .map(([r, t]) => `${QT[r] ?? r}: ${ox(t)}`)
+                    .map(
+                      ([r, t]) =>
+                        `${worksheetPropertyLabels[r] ?? r}: ${formatAuditDetailValue(t)}`,
+                    )
                     .join(" · ") || "No details",
-  hj = (e) => (e ? ox(e) : "Empty cell"),
-  g4e = (e) =>
+  formatAuditCellValue = (e) => (e ? formatAuditDetailValue(e) : "Empty cell"),
+  formatChangeAttribution = (e) =>
     e != null && e.actor && e.timestamp
       ? `${e.actor} · ${new Date(e.timestamp).toLocaleString()}${e.basis === "operation-history" ? " · from operation history" : ""}`
       : "Author and time not recorded for this change";
 
-export { QT, g4e, hj, m4e, ox, p4e };
+export {
+  worksheetPropertyLabels,
+  formatChangeAttribution,
+  formatAuditCellValue,
+  WorksheetTabBar,
+  formatAuditDetailValue,
+  CustomSortDialog,
+};

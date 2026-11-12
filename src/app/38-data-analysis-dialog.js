@@ -2,36 +2,49 @@ import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import c_ from "react-dom/server";
-import { Lg, hr } from "./01-core-schemas-and-hashing.js";
 import {
-  $a,
-  Af,
-  BR,
-  CU,
-  FR,
-  P1,
-  Ta,
-  Vv,
-  W5,
-  Wg,
-  Ww,
+  deepFreezeValue,
+  fingerprintCanonicalValue,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  assertWorkbookStructureEditable,
+  formatNumberWithPattern,
+  validateObjectReportRequest,
+  reportOutputFormatVersion,
+  parseReportRange,
+  inspectPictureDataUrl,
+  formatOccupiedRangeAddress,
+  reportOutputLimits,
+  hashRecordExcludingHash,
+  parseReportSnapshot,
+  inspectChartSource,
   _t,
-  aR,
+  formatDiagnosticsMessage,
   cn,
-  ct,
-  f0,
-  rn,
-  ut,
-  ys,
+  parseRangeAddress,
+  applyFilterConditions,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { J$ } from "./12-formula-dependency-inspector.js";
-import { LI } from "./31-pivot-explore-and-slicers.js";
-import { lm } from "./36-watch-window-and-goal-seek.js";
-import { Axe, Cxe, Exe, Oi, aj } from "./37-linear-solver-engine.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { readSourceRectangles } from "./12-formula-dependency-inspector.js";
+import { ChartReportSvg } from "./31-pivot-explore-and-slicers.js";
+import { normalizeAnalysisPermissions } from "./36-watch-window-and-goal-seek.js";
+import {
+  readSavedAnalysisReport,
+  commitAnalysisResult,
+  runAnalysisRequest,
+  LabeledField,
+  parseNumericInput,
+} from "./37-linear-solver-engine.js";
 
-function kxe(e) {
-  const { text } = Dr(),
+function DataAnalysisDialog(e) {
+  const { text } = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = e.workbook.sheets.find((te) => te.id === e.sheetId),
@@ -92,7 +105,9 @@ function kxe(e) {
             kind: "statistics",
             outputName: w,
             sheetId: e.sheetId,
-            range: e.range.includes(":") ? e.range : Ta(o),
+            range: e.range.includes(":")
+              ? e.range
+              : formatOccupiedRangeAddress(o),
             method: "descriptive",
             missing: "reject",
           },
@@ -135,10 +150,10 @@ function kxe(e) {
         ),
       }),
     J = (te, ae, oe) =>
-      i.jsx(ci, {
+      i.jsx(LocalizedNumberField, {
         "aria-label": text(te),
         value: ae === undefined || !Number.isFinite(ae) ? "" : ae,
-        onValueChange: (de) => oe(aj(de)),
+        onValueChange: (de) => oe(parseNumericInput(de)),
       });
   (ne.useEffect(() => {
     var oe;
@@ -164,10 +179,10 @@ function kxe(e) {
                   ...F,
                   outputName: w,
                   ...(F.method === "histogram"
-                    ? { bins: O.split(",").map(aj) }
+                    ? { bins: O.split(",").map(parseNumericInput) }
                     : {}),
                 },
-          ae = Exe(e.workbook, te, $);
+          ae = runAnalysisRequest(e.workbook, te, $);
         (p(ae), B(z), C(e.workbook), N(R), l("Results"), b(0));
       } catch (te) {
         h(te instanceof Error ? te.message : "Analysis failed.");
@@ -177,7 +192,7 @@ function kxe(e) {
       try {
         if (!L || !f)
           throw Error("Preview the current inputs and permissions first.");
-        const ae = Cxe(e.workbook, f, te, $);
+        const ae = commitAnalysisResult(e.workbook, f, te, $);
         (e.onWorkbookChange(
           ae,
           te === "report"
@@ -229,16 +244,18 @@ function kxe(e) {
               children: [
                 i.jsx("p", {
                   className: "eyebrow",
-                  children: i.jsx(M, { children: "Data · Analysis" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Data · Analysis",
+                  }),
                 }),
                 i.jsx("h2", {
                   id: t,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: s === "solver" ? "Solver" : "Data Analysis",
                   }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       s === "solver"
                         ? "Define a bounded linear model, review the result, then choose whether to apply it."
@@ -263,14 +280,14 @@ function kxe(e) {
                 {
                   "aria-pressed": u === te,
                   onClick: () => l(te),
-                  children: i.jsx(M, { children: te }),
+                  children: i.jsx(LocalizedText, { children: te }),
                 },
                 te,
               ),
             ),
             i.jsx("span", {
               className: "lg-analysis-mode",
-              children: Oi(
+              children: LabeledField(
                 "Tool",
                 i.jsxs("select", {
                   value: s,
@@ -295,7 +312,7 @@ function kxe(e) {
             a &&
               i.jsx("p", {
                 className: "lg-analysis-hint",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Loaded the saved definition. A new preview and a new report name are required to refresh it.",
                 }),
@@ -312,7 +329,7 @@ function kxe(e) {
                     i.jsxs("div", {
                       className: "lg-model-controls",
                       children: [
-                        Oi(
+                        LabeledField(
                           "Output worksheet",
                           i.jsx("input", {
                             value: w,
@@ -322,7 +339,7 @@ function kxe(e) {
                           }),
                         ),
                         e.allowHidden &&
-                          Oi(
+                          LabeledField(
                             "Include hidden source cells",
                             i.jsx("input", {
                               type: "checkbox",
@@ -340,12 +357,14 @@ function kxe(e) {
                             i.jsxs("fieldset", {
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, { children: "Objective" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Objective",
+                                  }),
                                 }),
                                 i.jsxs("div", {
                                   className: "lg-model-controls",
                                   children: [
-                                    Oi(
+                                    LabeledField(
                                       "Objective worksheet",
                                       X$1(
                                         A.objective.sheetId,
@@ -359,7 +378,7 @@ function kxe(e) {
                                         "Objective worksheet",
                                       ),
                                     ),
-                                    Oi(
+                                    LabeledField(
                                       "Objective formula cell",
                                       i.jsx("input", {
                                         value: A.objective.address,
@@ -374,7 +393,7 @@ function kxe(e) {
                                           }),
                                       }),
                                     ),
-                                    Oi(
+                                    LabeledField(
                                       "Direction",
                                       i.jsxs("select", {
                                         value: A.direction,
@@ -397,7 +416,7 @@ function kxe(e) {
                                       }),
                                     ),
                                     A.direction === "target" &&
-                                      Oi(
+                                      LabeledField(
                                         "Target value",
                                         J("Target value", A.target, (te) =>
                                           G({ target: te }),
@@ -410,13 +429,13 @@ function kxe(e) {
                             i.jsxs("fieldset", {
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Changing cells",
                                   }),
                                 }),
                                 i.jsx("p", {
                                   className: "lg-analysis-hint",
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children:
                                       "Up to six numeric inputs. Give every input finite lower and upper bounds. Use continuous inputs together, or integer and binary inputs together.",
                                   }),
@@ -428,7 +447,7 @@ function kxe(e) {
                                       className:
                                         "lg-model-controls lg-analysis-row",
                                       children: [
-                                        Oi(
+                                        LabeledField(
                                           `Variable ${ae + 1} worksheet`,
                                           X$1(
                                             te.cell.sheetId,
@@ -450,7 +469,7 @@ function kxe(e) {
                                             `Variable ${ae + 1} worksheet`,
                                           ),
                                         ),
-                                        Oi(
+                                        LabeledField(
                                           `Variable ${ae + 1} cell`,
                                           i.jsx("input", {
                                             value: te.cell.address,
@@ -478,7 +497,7 @@ function kxe(e) {
                                           }),
                                         ),
                                         ["lower", "upper"].map((oe) =>
-                                          Oi(
+                                          LabeledField(
                                             `Variable ${ae + 1} ${oe}`,
                                             J(
                                               `Variable ${ae + 1} ${oe}`,
@@ -495,7 +514,7 @@ function kxe(e) {
                                             ),
                                           ),
                                         ),
-                                        Oi(
+                                        LabeledField(
                                           `Variable ${ae + 1} domain`,
                                           i.jsxs("select", {
                                             value: te.domain,
@@ -570,7 +589,7 @@ function kxe(e) {
                                       ],
                                     });
                                   },
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Add changing cell",
                                   }),
                                 }),
@@ -579,7 +598,7 @@ function kxe(e) {
                             i.jsxs("fieldset", {
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Constraints",
                                   }),
                                 }),
@@ -590,7 +609,7 @@ function kxe(e) {
                                       className:
                                         "lg-model-controls lg-analysis-row",
                                       children: [
-                                        Oi(
+                                        LabeledField(
                                           `Constraint ${ae + 1} worksheet`,
                                           X$1(
                                             te.left.sheetId,
@@ -612,7 +631,7 @@ function kxe(e) {
                                             `Constraint ${ae + 1} worksheet`,
                                           ),
                                         ),
-                                        Oi(
+                                        LabeledField(
                                           `Constraint ${ae + 1} cell`,
                                           i.jsx("input", {
                                             value: te.left.address,
@@ -639,7 +658,7 @@ function kxe(e) {
                                               }),
                                           }),
                                         ),
-                                        Oi(
+                                        LabeledField(
                                           `Constraint ${ae + 1} relation`,
                                           i.jsx("select", {
                                             value: te.operator,
@@ -666,7 +685,7 @@ function kxe(e) {
                                             ),
                                           }),
                                         ),
-                                        Oi(
+                                        LabeledField(
                                           `Constraint ${ae + 1} right type`,
                                           i.jsxs("select", {
                                             value:
@@ -707,7 +726,7 @@ function kxe(e) {
                                           }),
                                         ),
                                         typeof te.right == "number"
-                                          ? Oi(
+                                          ? LabeledField(
                                               `Constraint ${ae + 1} value`,
                                               J(
                                                 `Constraint ${ae + 1} value`,
@@ -729,7 +748,7 @@ function kxe(e) {
                                             )
                                           : i.jsxs(i.Fragment, {
                                               children: [
-                                                Oi(
+                                                LabeledField(
                                                   `Constraint ${ae + 1} right worksheet`,
                                                   X$1(
                                                     te.right.sheetId,
@@ -753,7 +772,7 @@ function kxe(e) {
                                                     `Constraint ${ae + 1} right worksheet`,
                                                   ),
                                                 ),
-                                                Oi(
+                                                LabeledField(
                                                   `Constraint ${ae + 1} right cell`,
                                                   i.jsx("input", {
                                                     value: te.right.address,
@@ -816,7 +835,7 @@ function kxe(e) {
                                         },
                                       ],
                                     }),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Add constraint",
                                   }),
                                 }),
@@ -825,7 +844,7 @@ function kxe(e) {
                             i.jsxs("div", {
                               className: "lg-model-controls",
                               children: [
-                                Oi(
+                                LabeledField(
                                   "Feasibility tolerance",
                                   J(
                                     "Feasibility tolerance",
@@ -833,7 +852,7 @@ function kxe(e) {
                                     (te) => G({ tolerance: te }),
                                   ),
                                 ),
-                                Oi(
+                                LabeledField(
                                   "Maximum candidates",
                                   J(
                                     "Maximum candidates",
@@ -845,7 +864,7 @@ function kxe(e) {
                             }),
                             i.jsx("p", {
                               className: "lg-analysis-hint",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Supported formulas: numeric cell references, defined names, +, −, ×, ÷, SUM, AVERAGE and linear SUMPRODUCT. Nonlinear and mixed integer models require another engine.",
                               }),
@@ -857,14 +876,14 @@ function kxe(e) {
                             i.jsxs("fieldset", {
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Source and method",
                                   }),
                                 }),
                                 i.jsxs("div", {
                                   className: "lg-model-controls",
                                   children: [
-                                    Oi(
+                                    LabeledField(
                                       "Source worksheet",
                                       X$1(
                                         F.sheetId,
@@ -872,7 +891,7 @@ function kxe(e) {
                                         "Source worksheet",
                                       ),
                                     ),
-                                    Oi(
+                                    LabeledField(
                                       "Headed source range",
                                       i.jsx("input", {
                                         value: F.range,
@@ -884,7 +903,7 @@ function kxe(e) {
                                           }),
                                       }),
                                     ),
-                                    Oi(
+                                    LabeledField(
                                       "Analysis method",
                                       i.jsx("select", {
                                         value: F.method,
@@ -913,7 +932,7 @@ function kxe(e) {
                                         ),
                                       }),
                                     ),
-                                    Oi(
+                                    LabeledField(
                                       "Incomplete rows",
                                       i.jsxs("select", {
                                         value: F.missing,
@@ -936,7 +955,7 @@ function kxe(e) {
                                 }),
                                 i.jsx("p", {
                                   className: "lg-analysis-hint",
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children:
                                       "Include text column headers and numeric data. Up to 500 data rows, six columns and 2,000 cells. Formula inputs are limited to 50 deterministic scalar formulas with bounded dependencies.",
                                   }),
@@ -945,13 +964,13 @@ function kxe(e) {
                             }),
                             F.method === "regression" &&
                               i.jsx("p", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Put the response Y in the first column and predictors X in the remaining columns. The model includes an intercept, coefficient confidence intervals and residuals.",
                                 }),
                               }),
                             F.method === "histogram" &&
-                              Oi(
+                              LabeledField(
                                 "Bin upper bounds",
                                 i.jsx("input", {
                                   value: O,
@@ -964,14 +983,14 @@ function kxe(e) {
                               i.jsxs("fieldset", {
                                 children: [
                                   i.jsx("legend", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Distribution parameters",
                                     }),
                                   }),
                                   i.jsxs("div", {
                                     className: "lg-model-controls",
                                     children: [
-                                      Oi(
+                                      LabeledField(
                                         "Distribution",
                                         i.jsxs("select", {
                                           value: F.distribution ?? "normal",
@@ -999,13 +1018,13 @@ function kxe(e) {
                                       F.distribution === "normal"
                                         ? i.jsxs(i.Fragment, {
                                             children: [
-                                              Oi(
+                                              LabeledField(
                                                 "Mean",
                                                 J("Mean", F.mean, (te) =>
                                                   H({ mean: te }),
                                                 ),
                                               ),
-                                              Oi(
+                                              LabeledField(
                                                 "Standard deviation",
                                                 J(
                                                   "Standard deviation",
@@ -1021,13 +1040,13 @@ function kxe(e) {
                                         : F.distribution === "binomial"
                                           ? i.jsxs(i.Fragment, {
                                               children: [
-                                                Oi(
+                                                LabeledField(
                                                   "Trials",
                                                   J("Trials", F.trials, (te) =>
                                                     H({ trials: te }),
                                                   ),
                                                 ),
-                                                Oi(
+                                                LabeledField(
                                                   "Success probability",
                                                   J(
                                                     "Success probability",
@@ -1038,7 +1057,7 @@ function kxe(e) {
                                                 ),
                                               ],
                                             })
-                                          : Oi(
+                                          : LabeledField(
                                               "Rate (lambda)",
                                               J(
                                                 "Rate (lambda)",
@@ -1049,7 +1068,7 @@ function kxe(e) {
                                     ],
                                   }),
                                   i.jsx("p", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Select one column of evaluation points. Parameters are supplied explicitly; they are not estimated from that column.",
                                     }),
@@ -1060,14 +1079,14 @@ function kxe(e) {
                               i.jsxs("fieldset", {
                                 children: [
                                   i.jsx("legend", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Forecast settings",
                                     }),
                                   }),
                                   i.jsxs("div", {
                                     className: "lg-model-controls",
                                     children: [
-                                      Oi(
+                                      LabeledField(
                                         "Forecast method",
                                         i.jsxs("select", {
                                           value: F.forecast ?? "linear",
@@ -1089,7 +1108,7 @@ function kxe(e) {
                                           ],
                                         }),
                                       ),
-                                      Oi(
+                                      LabeledField(
                                         "Forecast periods",
                                         J(
                                           "Forecast periods",
@@ -1098,7 +1117,7 @@ function kxe(e) {
                                         ),
                                       ),
                                       F.forecast === "moving-average" &&
-                                        Oi(
+                                        LabeledField(
                                           "Moving average window",
                                           J(
                                             "Moving average window",
@@ -1107,7 +1126,7 @@ function kxe(e) {
                                           ),
                                         ),
                                       F.forecast === "exponential" &&
-                                        Oi(
+                                        LabeledField(
                                           "Smoothing alpha",
                                           J(
                                             "Smoothing alpha",
@@ -1118,7 +1137,7 @@ function kxe(e) {
                                     ],
                                   }),
                                   i.jsx("p", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Select numeric period then value. Periods must be increasing and equally spaced. No seasonal model or prediction interval is claimed.",
                                     }),
@@ -1174,7 +1193,7 @@ function kxe(e) {
                           !L &&
                             i.jsx("p", {
                               role: "alert",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "The workbook or permissions changed. Preview again.",
                               }),
@@ -1234,7 +1253,7 @@ function kxe(e) {
                                     i.jsx("button", {
                                       disabled: g === 0,
                                       onClick: () => b((te) => te - 1),
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Previous results",
                                       }),
                                     }),
@@ -1254,7 +1273,7 @@ function kxe(e) {
                                       disabled:
                                         (g + 1) * 20 >= f.result.rows.length,
                                       onClick: () => b((te) => te + 1),
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Next results",
                                       }),
                                     }),
@@ -1266,7 +1285,7 @@ function kxe(e) {
                             open: true,
                             children: [
                               i.jsx("summary", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Method, assumptions and reference checks",
                                 }),
@@ -1299,7 +1318,7 @@ function kxe(e) {
                         ],
                       })
                     : i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Choose the inputs in Setup, then preview the analysis.",
                         }),
@@ -1311,26 +1330,28 @@ function kxe(e) {
           children: [
             i.jsx("span", {
               className: "lg-analysis-license",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Local computation · MIT engines · Preview leaves source cells unchanged",
               }),
             }),
             i.jsx("button", {
               onClick: q,
-              children: i.jsx(M, { children: "Preview analysis" }),
+              children: i.jsx(LocalizedText, { children: "Preview analysis" }),
             }),
             i.jsx("button", {
               disabled: e.readOnly || !L || !(f != null && f.result.success),
               onClick: () => W("report"),
-              children: i.jsx(M, { children: "Save report" }),
+              children: i.jsx(LocalizedText, { children: "Save report" }),
             }),
             s === "solver" &&
               i.jsx("button", {
                 className: "primary",
                 disabled: e.readOnly || !L || !(f != null && f.result.success),
                 onClick: () => W("apply-solution"),
-                children: i.jsx(M, { children: "Apply solution and report" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Apply solution and report",
+                }),
               }),
           ],
         }),
@@ -1338,10 +1359,12 @@ function kxe(e) {
     }),
   });
 }
-function Sxe({ workbook, sheetId, onReview }) {
+function AnalysisSnapshotNotice({ workbook, sheetId, onReview }) {
   const n = workbook.sheets.find((s) => s.id === sheetId)?.analysisReport;
   if (!n) return null;
-  const o = Axe(workbook, sheetId, { includeHidden: n.includeHidden });
+  const o = readSavedAnalysisReport(workbook, sheetId, {
+    includeHidden: n.includeHidden,
+  });
   return i.jsxs("div", {
     className: "lg-notice",
     role: "status",
@@ -1350,13 +1373,13 @@ function Sxe({ workbook, sheetId, onReview }) {
       i.jsx("span", { children: o.message }),
       i.jsx("button", {
         onClick: onReview,
-        children: i.jsx(M, { children: "Review analysis" }),
+        children: i.jsx(LocalizedText, { children: "Review analysis" }),
       }),
     ],
   });
 }
-function yW(e) {
-  return hr({
+function captureAnalysisWorkbookState(e) {
+  return fingerprintCanonicalValue({
     id: e.id,
     name: e.name,
     sheets: e.sheets,
@@ -1366,14 +1389,14 @@ function yW(e) {
     styleCatalog: e.styleCatalog ?? null,
   });
 }
-const wW = (e, r, t) =>
+const isCellHiddenInSheet = (e, r, t) =>
   !!(
     e.hidden ||
     e.veryHidden ||
     cn(e, "row").some((n) => n.start <= r && n.end >= r) ||
     cn(e, "column").some((n) => n.start <= t && n.end >= t)
   );
-function Txe(e) {
+function buildReportSourceSheet(e) {
   return {
     id: e.request.sheetId,
     name: e.sheetName,
@@ -1389,11 +1412,11 @@ function Txe(e) {
     ),
   };
 }
-function Nxe(e, r, t = {}) {
+function buildReportSnapshot(e, r, t = {}) {
   var A, I, O;
-  const n = BR(r),
-    o = lm(e, t),
-    a = rn(e),
+  const n = validateObjectReportRequest(r),
+    o = normalizeAnalysisPermissions(e, t),
+    a = normalizeWorkbookInput(e),
     s = a.sheets.find((j) => j.id === n.sheetId);
   if (!s || !o.allowedSheetIds.includes(s.id))
     throw Error("The report source is outside the authorized host context.");
@@ -1412,11 +1435,14 @@ function Nxe(e, r, t = {}) {
       : undefined;
   if (n.kind === "object" && !d)
     throw Error("The source drawing no longer exists.");
-  if (d && FR(d.kind === "chart" ? d.range : d.anchor) !== n.range)
+  if (
+    d &&
+    parseReportRange(d.kind === "chart" ? d.range : d.anchor) !== n.range
+  )
     throw Error("The report range must match the drawing source.");
   if (d && d.kind !== "chart" && n.filter)
     throw Error("Pictures and shapes do not use population filters.");
-  const u = ct(n.range),
+  const u = parseRangeAddress(n.range),
     l = Array.from(
       { length: u.lastCol - u.firstCol + 1 },
       (j, z) => u.firstCol + z,
@@ -1424,25 +1450,27 @@ function Nxe(e, r, t = {}) {
   let c,
     h = [];
   if (d && d.kind !== "chart") {
-    if (!o.includeHidden && wW(s, u.firstRow, u.firstCol))
+    if (!o.includeHidden && isCellHiddenInSheet(s, u.firstRow, u.firstCol))
       throw Error(
         "The drawing anchor is hidden. Explicit authorization is required.",
       );
     ((c = [[null]]), (h = [{ sheetId: s.id, address: d.anchor }]));
   } else {
-    const j = J$(a, [{ sheetId: s.id, range: n.range }], t);
+    const j = readSourceRectangles(a, [{ sheetId: s.id, range: n.range }], t);
     ((c = j.grids[0].values), (h = j.dependencyCells));
   }
   const f = new Map();
   c.forEach((j, z) =>
-    j.forEach((V, D) => f.set(`${ut(u.firstCol + D)}${u.firstRow + z + 1}`, V)),
+    j.forEach((V, D) =>
+      f.set(`${columnIndexToLetters(u.firstCol + D)}${u.firstRow + z + 1}`, V),
+    ),
   );
   const p = (j, z) => {
       if (j !== s.id || !f.has(z))
         throw Error("Report calculation is outside the captured range.");
       return f.get(z);
     },
-    m = n.filter ? f0(a, s.id, n.filter, p) : undefined;
+    m = n.filter ? applyFilterConditions(a, s.id, n.filter, p) : undefined;
   m && (n.filter = m.context.definition);
   const v = c.map((j, z) => u.firstRow + z + 1),
     g =
@@ -1468,8 +1496,8 @@ function Nxe(e, r, t = {}) {
         (D) => !(d.headers !== false && D === u.firstRow + 1),
       ),
     };
-    const V = Ww(s, d, p);
-    (aR(V), (b = z));
+    const V = inspectChartSource(s, d, p);
+    (formatDiagnosticsMessage(V), (b = z));
   }
   if (!b.length) throw Error("No rows remain in the report population.");
   const y = [
@@ -1494,7 +1522,7 @@ function Nxe(e, r, t = {}) {
         "Chart row selections are preserved. Explicitly excluded chart rows are omitted from retained cells.",
       ));
   const w = {
-    engine: CU,
+    engine: reportOutputFormatVersion,
     id: crypto.randomUUID(),
     request: n,
     workbookId: a.id,
@@ -1502,21 +1530,23 @@ function Nxe(e, r, t = {}) {
     revision: a.revision,
     sheetName: s.name,
     calculatedAt: new Date().toISOString(),
-    sourceHash: yW(a),
+    sourceHash: captureAnalysisWorkbookState(a),
     includeHidden: o.includeHidden,
     authorizedSheetIds: [...new Set([s.id, ...h.map((j) => j.sheetId)])].sort(),
     sourceCells: h.map((j) => ({ sheetId: j.sheetId, address: j.address })),
     rows: b.map((j) => ({
       row: j,
       cells: l.map((z, V) => {
-        const D = `${ut(z)}${j}`,
+        const D = `${columnIndexToLetters(z)}${j}`,
           B = c[j - u.firstRow - 1][V],
           _ = s.cells[D];
         return {
           address: D,
           value: B,
-          text: Af(B, _, a.datePolicy?.dateSystem),
-          ...(_ != null && _.style ? { style: ys(_.style) } : {}),
+          text: formatNumberWithPattern(B, _, a.datePolicy?.dateSystem),
+          ...(_ != null && _.style
+            ? { style: resolveEffectiveCellStyle(_.style) }
+            : {}),
         };
       }),
     })),
@@ -1529,15 +1559,21 @@ function Nxe(e, r, t = {}) {
     warnings: y,
     hash: "",
   };
-  return ((w.hash = W5(w)), Lg(Wg(w)));
+  return (
+    (w.hash = hashRecordExcludingHash(w)),
+    deepFreezeValue(parseReportSnapshot(w))
+  );
 }
 const qT = new WeakMap();
-function Rxe(e, r, t = {}, n) {
+function refreshReportOutput(e, r, t = {}, n) {
   if (n) {
     const d = e.reportOutputs?.find((u) => u.id === n);
     if (!d || d.snapshot.request.mode !== "linked")
       throw Error("Only an existing linked output can be refreshed.");
-    if (hr(BR(r)) !== hr(d.snapshot.request))
+    if (
+      fingerprintCanonicalValue(validateObjectReportRequest(r)) !==
+      fingerprintCanonicalValue(d.snapshot.request)
+    )
       throw Error(
         "Refresh uses the saved definition. Publish a new output to change it.",
       );
@@ -1546,28 +1582,31 @@ function Rxe(e, r, t = {}, n) {
         "This link belongs to a different workbook. Publish a new output after reviewing the source.",
       );
   }
-  const o = Nxe(e, r, t),
+  const o = buildReportSnapshot(e, r, t),
     a = {
       request: o.request,
       snapshot: o,
-      workbookHash: hr(e),
-      contextHash: hr(lm(e, t)),
+      workbookHash: fingerprintCanonicalValue(e),
+      contextHash: fingerprintCanonicalValue(
+        normalizeAnalysisPermissions(e, t),
+      ),
       ...(n ? { refreshId: n } : {}),
     };
-  return (qT.set(a, hr(a)), a);
+  return (qT.set(a, fingerprintCanonicalValue(a)), a);
 }
-function Ixe(e, r, t = {}) {
+function publishReportOutput(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (
-    ($a(e),
-    qT.get(r) !== hr(r) ||
-      r.workbookHash !== hr(e) ||
-      r.contextHash !== hr(lm(e, t)))
+    (assertWorkbookStructureEditable(e),
+    qT.get(r) !== fingerprintCanonicalValue(r) ||
+      r.workbookHash !== fingerprintCanonicalValue(e) ||
+      r.contextHash !==
+        fingerprintCanonicalValue(normalizeAnalysisPermissions(e, t)))
   )
     throw Error(
       "The preview, workbook or permissions changed. Preview the report again.",
     );
-  const n = rn(e),
+  const n = normalizeWorkbookInput(e),
     o = [...(n.reportOutputs ?? [])];
   if (r.refreshId) {
     const s = o.findIndex((d) => d.id === r.refreshId);
@@ -1592,21 +1631,24 @@ function Ixe(e, r, t = {}) {
       snapshot: structuredClone(r.snapshot),
     });
   }
-  const a = rn({ ...n, reportOutputs: o });
+  const a = normalizeWorkbookInput({ ...n, reportOutputs: o });
   return (qT.delete(r), a);
 }
-function _xe(e, r, t = {}) {
+function removeReportOutput(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  $a(e);
+  assertWorkbookStructureEditable(e);
   const n = e.reportOutputs?.find((a) => a.id === r);
   if (!n) throw Error("Report output not found.");
   return (
-    m_(e, n.snapshot, t),
-    rn({ ...e, reportOutputs: e.reportOutputs.filter((a) => a.id !== r) })
+    validateReportSourceScope(e, n.snapshot, t),
+    normalizeWorkbookInput({
+      ...e,
+      reportOutputs: e.reportOutputs.filter((a) => a.id !== r),
+    })
   );
 }
-function m_(e, r, t = {}) {
-  const n = lm(e, t);
+function validateReportSourceScope(e, r, t = {}) {
+  const n = normalizeAnalysisPermissions(e, t);
   if (
     r.workbookId !== e.id ||
     r.authorizedSheetIds.some((o) => !n.allowedSheetIds.includes(o)) ||
@@ -1619,7 +1661,7 @@ function m_(e, r, t = {}) {
     if (
       !a ||
       !n.allowedSheetIds.includes(o.sheetId) ||
-      (!n.includeHidden && wW(a, s.row, s.col))
+      (!n.includeHidden && isCellHiddenInSheet(a, s.row, s.col))
     )
       throw Error(
         "A report source cell is missing, hidden or outside the authorized context.",
@@ -1631,18 +1673,18 @@ function m_(e, r, t = {}) {
       throw Error("The report source is missing or hidden.");
   }
 }
-function Dxe(e, r, t = {}) {
+function describeReportOutputStatus(e, r, t = {}) {
   try {
     const o = e.reportOutputs?.find((s) => s.id === r);
     if (!o) throw Error("Report output not found.");
-    m_(e, o.snapshot, t);
-    const a = Wg(o.snapshot);
+    validateReportSourceScope(e, o.snapshot, t);
+    const a = parseReportSnapshot(o.snapshot);
     return a.request.mode === "snapshot"
       ? {
           status: "snapshot",
           message: `Fixed snapshot of revision ${a.revision}. Later edits do not change it.`,
         }
-      : yW(e) !== a.sourceHash
+      : captureAnalysisWorkbookState(e) !== a.sourceHash
         ? {
             status: "stale",
             message:
@@ -1660,7 +1702,7 @@ function Dxe(e, r, t = {}) {
     };
   }
 }
-const cd = (e) =>
+const escapeHtmlText = (e) =>
     String(e).replace(
       /[&<>"']/g,
       (r) =>
@@ -1672,11 +1714,11 @@ const cd = (e) =>
           "'": "&apos;",
         })[r],
     ),
-  nA = (e) =>
+  toSafeFileName = (e) =>
     e.replace(/[\x00-\x1f\\/:*?"<>|]/g, "_").slice(0, 100) || "Report",
-  T3 = (e) =>
+  formatReportCaption = (e) =>
     `${e.workbookName} · revision ${e.revision} · ${e.sheetName}!${e.request.range} · calculated ${e.calculatedAt}`;
-function gy(e, r) {
+function wrapTextByCharacters(e, r) {
   return e
     .replace(
       /\r\n?/g,
@@ -1694,8 +1736,8 @@ function gy(e, r) {
       return o.length ? o : [""];
     });
 }
-function g_(e) {
-  const r = Wg(e),
+function renderReportSvg(e) {
+  const r = parseReportSnapshot(e),
     t = r.object;
   if (
     [
@@ -1718,20 +1760,20 @@ function g_(e) {
     o = 0,
     a = "";
   if (t?.kind === "chart") {
-    const h = Txe(r),
-      f = Ww(h, t, (m, v) => {
+    const h = buildReportSourceSheet(r),
+      f = inspectChartSource(h, t, (m, v) => {
         return h.cells[v]?.raw ?? null;
       });
-    aR(f);
-    const p = c_.renderToStaticMarkup(i.jsx(LI, { report: f }));
+    formatDiagnosticsMessage(f);
+    const p = c_.renderToStaticMarkup(i.jsx(ChartReportSvg, { report: f }));
     ((n = 640),
       (o = t.chart === "sparkline" ? 128 : 380),
       (a = `<svg x="18" y="112" width="${n}" height="${o}" viewBox="${t.chart === "sparkline" ? "0 0 200 40" : "0 0 640 380"}">${p}</svg>`));
   } else if (t?.kind === "picture")
-    (P1(t.dataURL),
+    (inspectPictureDataUrl(t.dataURL),
       (n = Math.max(640, t.width)),
       (o = t.height),
-      (a = `<image x="18" y="112" width="${t.width}" height="${o}" href="${cd(t.dataURL)}"/>`));
+      (a = `<image x="18" y="112" width="${t.width}" height="${o}" href="${escapeHtmlText(t.dataURL)}"/>`));
   else if (t?.kind === "shape") {
     ((n = Math.max(640, t.width)), (o = Math.max(80, t.height)));
     const h = `fill="${t.fill}" stroke="${t.stroke}" stroke-width="2"`,
@@ -1743,12 +1785,15 @@ function g_(e) {
             : t.shape === "text"
               ? ""
               : `<rect x="1" y="1" width="${t.width - 2}" height="${o - 2}" ${h}/>`,
-      p = gy(t.label, Math.max(4, Math.floor((t.width - 16) / 8)));
+      p = wrapTextByCharacters(
+        t.label,
+        Math.max(4, Math.floor((t.width - 16) / 8)),
+      );
     if (p.length * 18 + 16 > o)
       throw Error(
         "The shape label does not fit the report image. Enlarge the source shape before publishing.",
       );
-    a = `<g transform="translate(18 112)">${f}${p.map((m, v) => `<text x="8" y="${24 + v * 18}" font-size="13" fill="#202334">${cd(m)}</text>`).join("")}</g>`;
+    a = `<g transform="translate(18 112)">${f}${p.map((m, v) => `<text x="8" y="${24 + v * 18}" font-size="13" fill="#202334">${escapeHtmlText(m)}</text>`).join("")}</g>`;
   } else {
     const h = r.columns.map((p, m) =>
       Math.min(
@@ -1771,14 +1816,17 @@ function g_(e) {
     let f = 112;
     for (const p of r.rows) {
       const m = p.cells.map((b, y) =>
-          gy(b.text, Math.max(1, Math.floor((h[y] - 16) / 8))),
+          wrapTextByCharacters(
+            b.text,
+            Math.max(1, Math.floor((h[y] - 16) / 8)),
+          ),
         ),
         v = Math.max(28, ...m.map((b) => b.length * 18 + 12));
       let g = 18;
       (p.cells.forEach((b, y) => {
         const w = b.style ?? {},
           E = h[y];
-        ((a += `<rect x="${g}" y="${f}" width="${E}" height="${v}" fill="${cd(w.fill ?? "#ffffff")}" stroke="#ccd6fa"/><text font-family="Courier New,monospace" font-size="13" fill="${cd(w.color ?? "#202334")}"${w.bold ? ' font-weight="bold"' : ""}${w.italic ? ' font-style="italic"' : ""}${w.underline ? ' text-decoration="underline"' : ""}>${m[y].map((A, k) => `<tspan x="${g + 8}" y="${f + 20 + k * 18}">${cd(A)}</tspan>`).join("")}</text>`),
+        ((a += `<rect x="${g}" y="${f}" width="${E}" height="${v}" fill="${escapeHtmlText(w.fill ?? "#ffffff")}" stroke="#ccd6fa"/><text font-family="Courier New,monospace" font-size="13" fill="${escapeHtmlText(w.color ?? "#202334")}"${w.bold ? ' font-weight="bold"' : ""}${w.italic ? ' font-style="italic"' : ""}${w.underline ? ' text-decoration="underline"' : ""}>${m[y].map((A, k) => `<tspan x="${g + 8}" y="${f + 20 + k * 18}">${escapeHtmlText(A)}</tspan>`).join("")}</text>`),
           (g += E));
       }),
         (f += v));
@@ -1788,50 +1836,56 @@ function g_(e) {
   if (
     ((n += 36),
     (o += 162),
-    n > Vv.imageWidth || o > Vv.imageHeight || n * o > Vv.imagePixels)
+    n > reportOutputLimits.imageWidth ||
+      o > reportOutputLimits.imageHeight ||
+      n * o > reportOutputLimits.imagePixels)
   )
     throw Error(
       "Report image exceeds 4,096 × 16,384 / 16 megapixels. Narrow the range or export JSON/HTML instead.",
     );
   const s = `${r.request.population} population · ${r.rows.length} retained / ${r.rows.length + r.excludedRows.length} range rows · ${r.request.filter ? "filter criteria recorded" : "no population filter"}`,
-    d = gy(T3(r), Math.floor((n - 36) / 7.4)),
+    d = wrapTextByCharacters(
+      formatReportCaption(r),
+      Math.floor((n - 36) / 7.4),
+    ),
     u = [
-      ...gy(r.request.name, Math.floor((n - 36) / 9)),
+      ...wrapTextByCharacters(r.request.name, Math.floor((n - 36) / 9)),
       ...d,
-      ...gy(s, Math.floor((n - 36) / 7.4)),
+      ...wrapTextByCharacters(s, Math.floor((n - 36) / 7.4)),
     ],
     l = Math.max(0, u.length * 18 + 24 - 112);
   if (
     ((o += l),
     (a = `<g transform="translate(0 ${l})">${a}</g>`),
-    o > Vv.imageHeight || n * o > Vv.imagePixels)
+    o > reportOutputLimits.imageHeight ||
+      n * o > reportOutputLimits.imagePixels)
   )
     throw Error(
       "Report image exceeds its pixel budget. Narrow the range or export JSON/HTML.",
     );
-  const c = `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${o}" viewBox="0 0 ${n} ${o}" role="img"><title>${cd(r.request.name)}</title><desc>${cd(T3(r))}. ${cd(s)}. Fixed snapshot; no automatic refresh.</desc><metadata>${cd(JSON.stringify({ engine: r.engine, hash: r.hash, request: r.request, workbookId: r.workbookId, revision: r.revision, calculatedAt: r.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${u.map((h, f) => `<text x="18" y="${25 + f * 18}" font-size="${f === 0 ? 16 : 12}" fill="#362c63">${cd(h)}</text>`).join("")}${a}<text x="18" y="${o - 17}" font-size="11" fill="#545969">Fixed snapshot · ${cd(r.id)} · full values and context in the JSON export</text></g></svg>`;
+  const c = `<svg xmlns="http://www.w3.org/2000/svg" width="${n}" height="${o}" viewBox="0 0 ${n} ${o}" role="img"><title>${escapeHtmlText(r.request.name)}</title><desc>${escapeHtmlText(formatReportCaption(r))}. ${escapeHtmlText(s)}. Fixed snapshot; no automatic refresh.</desc><metadata>${escapeHtmlText(JSON.stringify({ engine: r.engine, hash: r.hash, request: r.request, workbookId: r.workbookId, revision: r.revision, calculatedAt: r.calculatedAt }))}</metadata><rect width="100%" height="100%" fill="white"/><g font-family="Arial,sans-serif">${u.map((h, f) => `<text x="18" y="${25 + f * 18}" font-size="${f === 0 ? 16 : 12}" fill="#362c63">${escapeHtmlText(h)}</text>`).join("")}${a}<text x="18" y="${o - 17}" font-size="11" fill="#545969">Fixed snapshot · ${escapeHtmlText(r.id)} · full values and context in the JSON export</text></g></svg>`;
   return {
-    filename: nA(r.request.name) + ".svg",
+    filename: toSafeFileName(r.request.name) + ".svg",
     mime: "image/svg+xml",
     content: c,
     width: n,
     height: o,
   };
 }
-function Oxe(e) {
-  const r = Wg(e);
+function buildReportSvgFile(e) {
+  const r = parseReportSnapshot(e);
   return {
-    filename: nA(r.request.name) + ".json",
+    filename: toSafeFileName(r.request.name) + ".json",
     mime: "application/json",
     content: JSON.stringify(r, null, 2),
   };
 }
-function XT({ snapshot, showData = true }) {
-  const t = Wg(snapshot);
+function ReportOutputView({ snapshot, showData = true }) {
+  const t = parseReportSnapshot(snapshot);
   let n,
     o = "";
   try {
-    n = g_(t);
+    n = renderReportSvg(t);
   } catch (a) {
     o = a.message;
   }
@@ -1842,7 +1896,7 @@ function XT({ snapshot, showData = true }) {
       i.jsxs("figcaption", {
         children: [
           i.jsx("strong", { children: t.request.name }),
-          i.jsx("p", { children: T3(t) }),
+          i.jsx("p", { children: formatReportCaption(t) }),
           i.jsxs("p", {
             children: [
               "Fixed snapshot · ",
@@ -1863,7 +1917,7 @@ function XT({ snapshot, showData = true }) {
       }),
       n
         ? i.jsx("img", {
-            alt: t.request.name + " — " + T3(t),
+            alt: t.request.name + " — " + formatReportCaption(t),
             src:
               "data:image/svg+xml;charset=utf-8," +
               encodeURIComponent(n.content),
@@ -1892,7 +1946,13 @@ function XT({ snapshot, showData = true }) {
                       t.columns.map((a) =>
                         i.jsxs(
                           "th",
-                          { children: [ut(a), " · column ", a + 1] },
+                          {
+                            children: [
+                              columnIndexToLetters(a),
+                              " · column ",
+                              a + 1,
+                            ],
+                          },
                           a,
                         ),
                       ),
@@ -1946,17 +2006,17 @@ function XT({ snapshot, showData = true }) {
     ],
   });
 }
-function Mxe(e) {
-  const r = Wg(e),
-    t = c_.renderToStaticMarkup(i.jsx(XT, { snapshot: r }));
+function buildReportHtmlFile(e) {
+  const r = parseReportSnapshot(e),
+    t = c_.renderToStaticMarkup(i.jsx(ReportOutputView, { snapshot: r }));
   return {
-    filename: nA(r.request.name) + ".html",
+    filename: toSafeFileName(r.request.name) + ".html",
     mime: "text/html",
-    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${cd(r.request.name)}</title></head><body style="padding:18px;overflow:auto">${t}</body></html>`,
+    content: `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>${escapeHtmlText(r.request.name)}</title></head><body style="padding:18px;overflow:auto">${t}</body></html>`,
   };
 }
-async function jxe(e) {
-  const r = g_(e),
+async function renderReportPngBlob(e) {
+  const r = renderReportSvg(e),
     t = URL.createObjectURL(new Blob([r.content], { type: "image/svg+xml" }));
   try {
     const n = new Image();
@@ -1990,12 +2050,12 @@ async function jxe(e) {
     });
     if (s.size > 16 * 1024 * 1024)
       throw Error("PNG exceeds 16 MB. Export SVG or narrow the report.");
-    return { filename: nA(e.request.name) + ".png", blob: s };
+    return { filename: toSafeFileName(e.request.name) + ".png", blob: s };
   } finally {
     URL.revokeObjectURL(t);
   }
 }
-const sj = ({ filename, blob }) => {
+const downloadReportFile = ({ filename, blob }) => {
   const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
@@ -2004,4 +2064,18 @@ const sj = ({ filename, blob }) => {
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };
 
-export { Dxe, Ixe, Mxe, Oxe, Rxe, Sxe, XT, _xe, g_, jxe, kxe, m_, sj };
+export {
+  describeReportOutputStatus,
+  publishReportOutput,
+  buildReportHtmlFile,
+  buildReportSvgFile,
+  refreshReportOutput,
+  AnalysisSnapshotNotice,
+  ReportOutputView,
+  removeReportOutput,
+  renderReportSvg,
+  renderReportPngBlob,
+  DataAnalysisDialog,
+  validateReportSourceScope,
+  downloadReportFile,
+};

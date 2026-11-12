@@ -1,31 +1,42 @@
 import { X, Download, CircleCheck, FileInput } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { Cd, FU, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { oT } from "./05-add-ins-and-custom-functions.js";
-import { H1, MC } from "./07-xlsx-archive-reader.js";
 import {
-  Due,
-  H$,
-  Iue,
-  Mue,
-  Oue,
+  sourceImportLimits,
+  retainAlternateFormatSource,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { assertFormatInspectionCurrent } from "./05-add-ins-and-custom-functions.js";
+import {
+  importWorkbookFile,
+  importNativeJsonFile,
+} from "./07-xlsx-archive-reader.js";
+import {
+  commitSourceImport,
+  toSourceFileDescriptor,
+  runDocumentExtraction,
+  resolveImportedSourceCell,
+  findSourceImport,
   Rue,
-  _ue,
-  jue,
-  q$,
-  yh,
+  buildSourceReview,
+  downloadBlobAsFile,
+  parseExtractionResult,
+  useCancellableOperation,
 } from "./09-workbook-links.js";
 
-function Fue(e) {
+function SourceImportDialog(e) {
   var Ee;
   const r = ne.useId(),
     t = ne.useRef(null),
     n = ne.useRef(e),
     o = ne.useRef(0),
     a = ne.useRef(true),
-    s = yh();
+    s = useCancellableOperation();
   n.current = e;
   const [d, u] = ne.useState(null),
     [l, c] = ne.useState(""),
@@ -98,18 +109,21 @@ function Fue(e) {
   const X$1 = (Ae) =>
       G(async (ye) => {
         const Te = d,
-          Pe = await MC(Ae, s.begin());
-        a.current && o.current === ye && H(q$(Te, Pe));
+          Pe = await importNativeJsonFile(Ae, s.begin());
+        a.current && o.current === ye && H(parseExtractionResult(Te, Pe));
       }),
     J = () =>
       G(async (Ae) => {
-        const ye = await Iue(d, e.extractor, v, s.begin());
+        const ye = await runDocumentExtraction(d, e.extractor, v, s.begin());
         a.current && o.current === Ae && H(ye);
       }),
-    q = (Ae, ye) => (n.current.onDownload ?? jue)({ filename: Ae, blob: ye }),
+    q = (Ae, ye) =>
+      (n.current.onDownload ?? downloadBlobAsFile)({ filename: Ae, blob: ye }),
     W = (Ae) =>
       G(async () => {
-        const ye = Ae ? Oue(n.current.workbook, R) : H$(d);
+        const ye = Ae
+          ? findSourceImport(n.current.workbook, R)
+          : toSourceFileDescriptor(d);
         await q(
           ye.fileName,
           new Blob([new Uint8Array(ye.bytes)], {
@@ -129,17 +143,18 @@ function Fue(e) {
             key: `${ye}:${Pe}`,
           })),
         )
-        .filter((Ae) => Ae.cell.confidence < Cd.confidence) ?? [],
+        .filter((Ae) => Ae.cell.confidence < sourceImportLimits.confidence) ??
+      [],
     oe = ae.filter((Ae) => !b[Ae.key]).length,
     de = e.workbook.sourceImports?.find((Ae) => Ae.id === R),
     [he, Se] = $.split(":").map(Number),
-    le = de ? Mue(e.workbook, de.id, he, Se) : null,
+    le = de ? resolveImportedSourceCell(e.workbook, de.id, he, Se) : null,
     ce = () => {
       j("");
       try {
         if (Object.values(T).some(Boolean))
           throw Error("Finish each corrected value before previewing.");
-        const Ae = _ue(e.workbook, d, {
+        const Ae = buildSourceReview(e.workbook, d, {
           tableId: l,
           sheetName: h,
           ambiguityReviewed: p,
@@ -155,7 +170,9 @@ function Fue(e) {
       try {
         if (n.current.workbook !== A)
           throw Error("The workbook changed. Preview the import again.");
-        const Ae = Due(n.current.workbook, w, { readOnly: n.current.readOnly });
+        const Ae = commitSourceImport(n.current.workbook, w, {
+          readOnly: n.current.readOnly,
+        });
         (e.onWorkbookChange(Ae, "Import reviewed source"),
           L(w.record.id),
           U("0:0"),
@@ -590,7 +607,7 @@ function Fue(e) {
                                     children: [
                                       i.jsxs("strong", {
                                         children: [
-                                          ut(column),
+                                          columnIndexToLetters(column),
                                           row + 2,
                                           " · ",
                                           Math.round(cell.confidence * 100),
@@ -867,7 +884,7 @@ function Fue(e) {
                             i.jsxs("label", {
                               children: [
                                 "Source record",
-                                i.jsx(ci, {
+                                i.jsx(LocalizedNumberField, {
                                   "aria-label": "Source record",
                                   min: 1,
                                   max: de.table.rows.length,
@@ -895,7 +912,11 @@ function Fue(e) {
                                       "option",
                                       {
                                         value: ye,
-                                        children: [ut(ye), " · ", Ae.name],
+                                        children: [
+                                          columnIndexToLetters(ye),
+                                          " · ",
+                                          Ae.name,
+                                        ],
                                       },
                                       ye,
                                     ),
@@ -969,8 +990,8 @@ function Fue(e) {
     }),
   });
 }
-async function Bue(e, r, t, n) {
-  const o = oT(e);
+async function validateConvertedSource(e, r, t, n) {
+  const o = assertFormatInspectionCurrent(e);
   if (t !== true)
     throw Error(
       "Acknowledge conversion losses and compare the source before importing the converted workbook.",
@@ -979,18 +1000,23 @@ async function Bue(e, r, t, n) {
     throw Error(
       "Choose the converted XLSX copy; renaming the original does not convert it.",
     );
-  const a = await H1(r, n);
-  if ((oT(e), !a.workbook.xlsxSource || !a.report))
+  const a = await importWorkbookFile(r, n);
+  if ((assertFormatInspectionCurrent(e), !a.workbook.xlsxSource || !a.report))
     throw Error(
       "A screened XLSX conversion and compatibility report are required.",
     );
-  a.workbook.alternateSource = FU(o, e.fileName, e.format, {
-    method: "external-conversion",
-    convertedFileName: r.name,
-    convertedSha256: a.workbook.xlsxSource.sha256,
-    reviewedAt: new Date().toISOString(),
-    equivalence: "not-verified",
-  });
+  a.workbook.alternateSource = retainAlternateFormatSource(
+    o,
+    e.fileName,
+    e.format,
+    {
+      method: "external-conversion",
+      convertedFileName: r.name,
+      convertedSha256: a.workbook.xlsxSource.sha256,
+      reviewedAt: new Date().toISOString(),
+      equivalence: "not-verified",
+    },
+  );
   const s =
     "An externally converted XLSX was selected and conversion losses acknowledged. This application has not verified that its formulas, dates, styles or special parts match the retained original. Compare them in the source application. The original is retained under File > Workbook formats and in native JSON.";
   return (
@@ -1005,17 +1031,21 @@ async function Bue(e, r, t, n) {
     a
   );
 }
-function Lue(e) {
-  return { bytes: oT(e), fileName: e.fileName, sha256: e.sha256 };
+function describeSourceFile(e) {
+  return {
+    bytes: assertFormatInspectionCurrent(e),
+    fileName: e.fileName,
+    sha256: e.sha256,
+  };
 }
-const Tk = {
+const partDispositionLabels = {
   editable: "Editable",
   "preserved-opaque": "Preserved opaque",
   flattened: "Flattened",
   dropped: "Dropped",
 };
-function Pue({ inventory }) {
-  const { text, language } = Dr(),
+function SourcePackageInventory({ inventory }) {
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState(""),
     [a, s] = ne.useState("all"),
     [d, u] = ne.useState(0),
@@ -1044,28 +1074,30 @@ function Pue({ inventory }) {
     "data-ui-label": "Source package inventory",
     children: [
       i.jsx("h3", {
-        children: i.jsx(M, { children: "Source parts and export outcome" }),
+        children: i.jsx(LocalizedText, {
+          children: "Source parts and export outcome",
+        }),
       }),
       i.jsxs("p", {
         children: [
           inventory.parts.length,
           " ",
-          i.jsx(M, { children: "entries inventoried ·" }),
+          i.jsx(LocalizedText, { children: "entries inventoried ·" }),
           " ",
           inventory.counts.editable,
           " ",
-          i.jsx(M, { children: "editable ·" }),
+          i.jsx(LocalizedText, { children: "editable ·" }),
           " ",
           inventory.counts["preserved-opaque"],
           " ",
-          i.jsx(M, { children: "preserved opaque ·" }),
+          i.jsx(LocalizedText, { children: "preserved opaque ·" }),
           " ",
           inventory.counts.flattened,
           " ",
-          i.jsx(M, { children: "flattened · " }),
+          i.jsx(LocalizedText, { children: "flattened · " }),
           inventory.counts.dropped,
           " ",
-          i.jsx(M, { children: "dropped from the derived copy." }),
+          i.jsx(LocalizedText, { children: "dropped from the derived copy." }),
         ],
       }),
       i.jsx("p", { children: inventory.note }),
@@ -1080,7 +1112,9 @@ function Pue({ inventory }) {
         children: [
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Find a part, sheet or feature" }),
+              i.jsx(LocalizedText, {
+                children: "Find a part, sheet or feature",
+              }),
               i.jsx("input", {
                 value: n,
                 onChange: (f) => {
@@ -1092,7 +1126,7 @@ function Pue({ inventory }) {
           }),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Export outcome" }),
+              i.jsx(LocalizedText, { children: "Export outcome" }),
               i.jsxs("select", {
                 value: a,
                 onChange: (f) => {
@@ -1100,7 +1134,7 @@ function Pue({ inventory }) {
                 },
                 children: [
                   i.jsx("option", { value: "all", children: "All outcomes" }),
-                  Object.entries(Tk).map(([f, p]) =>
+                  Object.entries(partDispositionLabels).map(([f, p]) =>
                     i.jsx("option", { value: f, children: p }, f),
                   ),
                 ],
@@ -1118,12 +1152,16 @@ function Pue({ inventory }) {
             children: i.jsxs("tr", {
               children: [
                 i.jsx("th", {
-                  children: i.jsx(M, { children: "Part and source location" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Part and source location",
+                  }),
                 }),
                 i.jsx("th", {
-                  children: i.jsx(M, { children: "Derived copy" }),
+                  children: i.jsx(LocalizedText, { children: "Derived copy" }),
                 }),
-                i.jsx("th", { children: i.jsx(M, { children: "Details" }) }),
+                i.jsx("th", {
+                  children: i.jsx(LocalizedText, { children: "Details" }),
+                }),
               ],
             }),
           }),
@@ -1142,7 +1180,7 @@ function Pue({ inventory }) {
                             " · ",
                             f.bytes.toLocaleString(),
                             " ",
-                            i.jsx(M, { children: "bytes" }),
+                            i.jsx(LocalizedText, { children: "bytes" }),
                           ],
                         }),
                         f.locations.map((p, m) =>
@@ -1167,10 +1205,10 @@ function Pue({ inventory }) {
                       children: [
                         i.jsx("span", {
                           className: `lg-xlsx-outcome ${f.disposition}`,
-                          children: Tk[f.disposition],
+                          children: partDispositionLabels[f.disposition],
                         }),
                         i.jsx("small", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Retained in original",
                           }),
                         }),
@@ -1183,7 +1221,9 @@ function Pue({ inventory }) {
                           children: [
                             i.jsxs("summary", {
                               children: [
-                                i.jsx(M, { children: "Part evidence" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Part evidence",
+                                }),
                                 f.features.length
                                   ? ` (${f.features.length} features)`
                                   : "",
@@ -1192,7 +1232,7 @@ function Pue({ inventory }) {
                             i.jsx("p", { children: f.contentType }),
                             i.jsxs("p", {
                               children: [
-                                i.jsx(M, { children: "SHA-256: " }),
+                                i.jsx(LocalizedText, { children: "SHA-256: " }),
                                 i.jsx("code", { children: f.sha256 }),
                               ],
                             }),
@@ -1210,7 +1250,7 @@ function Pue({ inventory }) {
                                     " · ",
                                     p.feature,
                                     " · ",
-                                    Tk[p.disposition],
+                                    partDispositionLabels[p.disposition],
                                     " —",
                                     " ",
                                     p.reason,
@@ -1222,13 +1262,15 @@ function Pue({ inventory }) {
                             f.features.length > 200 &&
                               i.jsxs("p", {
                                 children: [
-                                  i.jsx(M, {
+                                  i.jsx(LocalizedText, {
                                     children:
                                       "Showing 200 features. Save the compatibility report for all ",
                                   }),
                                   f.features.length,
                                   " ",
-                                  i.jsx(M, { children: "entries." }),
+                                  i.jsx(LocalizedText, {
+                                    children: "entries.",
+                                  }),
                                 ],
                               }),
                           ],
@@ -1246,7 +1288,9 @@ function Pue({ inventory }) {
       !l.length &&
         i.jsx("p", {
           role: "status",
-          children: i.jsx(M, { children: "No matching source parts." }),
+          children: i.jsx(LocalizedText, {
+            children: "No matching source parts.",
+          }),
         }),
       i.jsxs("div", {
         className: "lg-xlsx-pages",
@@ -1254,31 +1298,31 @@ function Pue({ inventory }) {
           i.jsx("button", {
             disabled: h === 0,
             onClick: () => u(h - 1),
-            children: i.jsx(M, { children: "Previous parts" }),
+            children: i.jsx(LocalizedText, { children: "Previous parts" }),
           }),
           i.jsxs("span", {
             "aria-live": "polite",
             children: [
               l.length,
               " ",
-              i.jsx(M, { children: "matching parts · Page " }),
+              i.jsx(LocalizedText, { children: "matching parts · Page " }),
               h + 1,
               " ",
-              i.jsx(M, { children: "of " }),
+              i.jsx(LocalizedText, { children: "of " }),
               c + 1,
             ],
           }),
           i.jsx("button", {
             disabled: h === c,
             onClick: () => u(h + 1),
-            children: i.jsx(M, { children: "Next parts" }),
+            children: i.jsx(LocalizedText, { children: "Next parts" }),
           }),
         ],
       }),
     ],
   });
 }
-function X$({
+function XlsxConversionReview({
   report,
   blocked,
   onConfirm,
@@ -1289,7 +1333,7 @@ function X$({
   inspectOnly = false,
 }) {
   var m;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     c = ne.useId(),
     h = ne.useRef(null);
   ne.useEffect(() => {
@@ -1348,27 +1392,29 @@ function X$({
             " ",
             (report.fileBytes / 1024).toFixed(1),
             " ",
-            i.jsx(M, { children: "KiB · " }),
+            i.jsx(LocalizedText, { children: "KiB · " }),
             report.sheets.length,
             " ",
-            i.jsx(M, { children: "worksheets in current conversion ·" }),
+            i.jsx(LocalizedText, {
+              children: "worksheets in current conversion ·",
+            }),
             " ",
             report.sheets
               .reduce((v, g) => v + g.storedCells, 0)
               .toLocaleString(),
             " ",
-            i.jsx(M, { children: "stored cells" }),
+            i.jsx(LocalizedText, { children: "stored cells" }),
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "This is a derived copy with supported content. It is not a lossless Excel conversion. Keep the original file and a native JSON backup.",
           }),
         }),
         inspectOnly
           ? i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "This is the retained source snapshot. It does not include your subsequent edits. Source part locations refer to the original sheet names and addresses.",
               }),
@@ -1376,7 +1422,7 @@ function X$({
           : f
             ? i.jsxs("p", {
                 children: [
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "Opening replaces the current workbook. Cancel keeps it unchanged; Undo can restore it after opening.",
                   }),
@@ -1388,13 +1434,15 @@ function X$({
               })
             : i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "The download contains revision " }),
+                  i.jsx(LocalizedText, {
+                    children: "The download contains revision ",
+                  }),
                   report.revision,
                   " ",
-                  i.jsx(M, { children: "of" }),
+                  i.jsx(LocalizedText, { children: "of" }),
                   " ",
                   report.workbookName,
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       ". Unsupported native features remain in your current workbook and JSON backup.",
                   }),
@@ -1404,7 +1452,7 @@ function X$({
           i.jsxs("p", {
             className: "lg-xlsx-source",
             children: [
-              i.jsx(M, {
+              i.jsx(LocalizedText, {
                 children: report.alternateOriginal
                   ? "Converted XLSX retained: "
                   : "Original retained: ",
@@ -1414,11 +1462,11 @@ function X$({
               " ",
               report.originalSource.byteLength.toLocaleString(),
               " ",
-              i.jsx(M, { children: "bytes" }),
+              i.jsx(LocalizedText, { children: "bytes" }),
               i.jsx("br", {}),
               i.jsxs("small", {
                 children: [
-                  i.jsx(M, { children: "SHA-256: " }),
+                  i.jsx(LocalizedText, { children: "SHA-256: " }),
                   i.jsx("code", { children: report.originalSource.sha256 }),
                 ],
               }),
@@ -1453,7 +1501,7 @@ function X$({
           children: [
             report.partInventory &&
               i.jsx(
-                Pue,
+                SourcePackageInventory,
                 { inventory: report.partInventory },
                 report.partInventory.sourceSha256,
               ),
@@ -1461,7 +1509,7 @@ function X$({
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Worksheets" }),
+                    children: i.jsx(LocalizedText, { children: "Worksheets" }),
                   }),
                   i.jsx("ul", {
                     children: report.sheets.map((v) =>
@@ -1473,7 +1521,7 @@ function X$({
                             " — ",
                             v.storedCells.toLocaleString(),
                             " ",
-                            i.jsx(M, { children: "cells" }),
+                            i.jsx(LocalizedText, { children: "cells" }),
                             v.hidden ? " · hidden" : "",
                           ],
                         },
@@ -1482,7 +1530,9 @@ function X$({
                     ),
                   }),
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Formula results" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Formula results",
+                    }),
                   }),
                   f
                     ? i.jsxs("p", {
@@ -1490,19 +1540,19 @@ function X$({
                           p.pending ? `${p.pending} pending comparisons; ` : "",
                           p.total,
                           " ",
-                          i.jsx(M, { children: "formulas: " }),
+                          i.jsx(LocalizedText, { children: "formulas: " }),
                           p.matched,
                           " ",
-                          i.jsx(M, { children: "caches match, " }),
+                          i.jsx(LocalizedText, { children: "caches match, " }),
                           p.different,
                           " ",
-                          i.jsx(M, { children: "differ, " }),
+                          i.jsx(LocalizedText, { children: "differ, " }),
                           p.missing,
                           " ",
-                          i.jsx(M, { children: "missing, " }),
+                          i.jsx(LocalizedText, { children: "missing, " }),
                           p.neutralized,
                           " ",
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "converted to text. Local recalculation is used; a saved source cache is historical evidence, not proof of correctness.",
                           }),
@@ -1512,14 +1562,16 @@ function X$({
                         children: [
                           p.written,
                           " ",
-                          i.jsx(M, { children: "formula caches written; " }),
+                          i.jsx(LocalizedText, {
+                            children: "formula caches written; ",
+                          }),
                           p.omitted,
                           " ",
-                          i.jsx(M, { children: "omitted;" }),
+                          i.jsx(LocalizedText, { children: "omitted;" }),
                           " ",
                           p.neutralized,
                           " ",
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "formulas converted to text. Excel is asked to recalculate on open.",
                           }),
@@ -1535,20 +1587,24 @@ function X$({
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Cell" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Cell",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Saved result",
                                 }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Local result",
                                 }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Status" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Status",
+                                }),
                               }),
                             ],
                           }),
@@ -1588,7 +1644,7 @@ function X$({
                       children: [
                         p.detailsOmitted,
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "additional cache details omitted from the bounded report; counts include all formulas.",
                         }),
@@ -1597,7 +1653,9 @@ function X$({
                 ],
               }),
             i.jsx("h3", {
-              children: i.jsx(M, { children: "Compatibility notices" }),
+              children: i.jsx(LocalizedText, {
+                children: "Compatibility notices",
+              }),
             }),
             i.jsxs("ul", {
               "aria-label": text("Compatibility notices"),
@@ -1650,11 +1708,13 @@ function X$({
               onOriginal &&
               i.jsx("button", {
                 onClick: onOriginal,
-                children: i.jsx(M, { children: originalLabel }),
+                children: i.jsx(LocalizedText, { children: originalLabel }),
               }),
             i.jsx("button", {
               onClick: onReport,
-              children: i.jsx(M, { children: "Save compatibility report" }),
+              children: i.jsx(LocalizedText, {
+                children: "Save compatibility report",
+              }),
             }),
             !inspectOnly &&
               i.jsx("button", {
@@ -1670,7 +1730,7 @@ function X$({
     }),
   });
 }
-const Uue = ({ filename, blob }) => {
+const downloadBlobFile = ({ filename, blob }) => {
   const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
@@ -1679,4 +1739,10 @@ const Uue = ({ filename, blob }) => {
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };
 
-export { Bue, Fue, Lue, Uue, X$ };
+export {
+  validateConvertedSource,
+  SourceImportDialog,
+  describeSourceFile,
+  downloadBlobFile,
+  XlsxConversionReview,
+};

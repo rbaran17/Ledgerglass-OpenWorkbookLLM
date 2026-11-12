@@ -1,7 +1,7 @@
 import __fileParserWorkerSource from "../workers/file-parser.worker.js?worker-source";
 
-const R$ = __fileParserWorkerSource,
-  Jse = [
+const fileParserWorkerSource = __fileParserWorkerSource,
+  unsupportedXlsxMarkers = [
     "#BLOCKED!",
     "#CALC!",
     "#CYCLE!",
@@ -2161,7 +2161,7 @@ const R$ = __fileParserWorkerSource,
     "uncertain",
     "unsupported",
   ],
-  Qse = [
+  excelMessagePatterns = [
     [
       "",
       " at ",
@@ -2653,7 +2653,7 @@ const R$ = __fileParserWorkerSource,
     ["Invalid chart ", "."],
     ["Invalid range: ", ""],
   ],
-  sg = Object.freeze({
+  fileProcessingErrorMessages = Object.freeze({
     FILE_LIMIT:
       "File processing exceeds the supported size, range, nesting or record budget. Reduce the source and retry.",
     FILE_TYPE:
@@ -2674,4 +2674,9 @@ const R$ = __fileParserWorkerSource,
       "The file could not be read completely. Select the original file again; the open workbook is unchanged.",
   });
 
-export { Jse, Qse, R$, sg };
+export {
+  unsupportedXlsxMarkers,
+  excelMessagePatterns,
+  fileParserWorkerSource,
+  fileProcessingErrorMessages,
+};

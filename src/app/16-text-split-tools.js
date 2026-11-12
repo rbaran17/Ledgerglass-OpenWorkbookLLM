@@ -1,37 +1,47 @@
-import { Yl, hr, ts, wd, zp } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
 import {
-  GU,
-  KU,
-  Ku,
-  U1,
-  Vn,
-  YU,
-  Z5,
-  ZU,
+  transformationRecipeLimits,
+  fingerprintCanonicalValue,
+  normalizeDatePolicy,
+  dateSystemMaxSerial,
+  parseDateText,
+} from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
+import {
+  textJoinSpecSchema,
+  validateFieldTransformRecipe,
+  createWorksheetRecord,
+  findRowOrigin,
+  calculateWorkbookWithSettings,
+  validateFieldTransformEvidence,
+  textInferenceLimits,
+  sourceRowValueSchema,
   _t,
-  ct,
-  hi,
-  rn,
-  ut,
-  v0,
+  parseRangeAddress,
+  normalizeCellRecordInput,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  checkDataValidationBatch,
 } from "./03-workbook-model.js";
-import { X1, Y$, m0 } from "./12-formula-dependency-inspector.js";
 import {
-  Ace,
-  Bg,
-  Cce,
-  Nn,
-  Tce,
-  hp,
-  ih,
-  kce,
+  readSourceHeaders,
+  matchKeyPopulations,
+  inspectFormulaDependencies,
+} from "./12-formula-dependency-inspector.js";
+import {
+  validateTextToColumnsRequest,
+  assertSelectionInAuthorizedSheet,
+  splitDelimitedCell,
+  throwValidationError,
+  parseImportedCellValue,
+  rangesOverlap,
+  dataModelBudgets,
+  formatCellTextValue,
   lg,
-  wI,
-  xI,
+  validateTextToColumnsPermissions,
+  assertOutputNameUnreferenced,
 } from "./15-data-model-dialog.js";
 
-function EI(e, r, t) {
+function discoverArrayFormulaAnchors(e, r, t) {
   const n = [];
   let o = 0,
     a = 0;
@@ -39,14 +49,15 @@ function EI(e, r, t) {
     for (const [f, p] of Object.entries(h.cells)) {
       if (typeof p.raw != "string" || !p.raw.startsWith("=") || p.literal)
         continue;
-      (++o > ih.formulaCells || (a += p.raw.length) > ih.formulaCharacters) &&
-        Nn(
+      (++o > dataModelBudgets.formulaCells ||
+        (a += p.raw.length) > dataModelBudgets.formulaCharacters) &&
+        throwValidationError(
           "Array checking supports at most 1,000 formulas and 100,000 formula characters on the participating worksheets.",
         );
       const m = _t(f);
       r.some((g) => {
         if (g.sheet.id !== h.id) return false;
-        const b = ct(g.range),
+        const b = parseRangeAddress(g.range),
           y = Math.max(m.row, b.firstRow),
           w = Math.max(m.col, b.firstCol);
         return (
@@ -57,8 +68,8 @@ function EI(e, r, t) {
       }) && n.push({ sheet: h, anchor: f });
     }
   if (
-    (n.length > ih.discoveryAnchors &&
-      Nn(
+    (n.length > dataModelBudgets.discoveryAnchors &&
+      throwValidationError(
         "The selection has more than 50 possible array anchors. Choose a new output sheet or a smaller reviewed region.",
       ),
     !n.length)
@@ -71,8 +82,8 @@ function EI(e, r, t) {
       sheets: e.sheets.map((h) => (h.veryHidden ? { ...h, hidden: true } : h)),
     };
   for (const h of n) {
-    Bg(h.sheet, h.anchor, t);
-    const f = m0(u, {
+    assertSelectionInAuthorizedSheet(h.sheet, h.anchor, t);
+    const f = inspectFormulaDependencies(u, {
         sheetId: h.sheet.id,
         address: h.anchor,
         direction: "precedents",
@@ -87,19 +98,19 @@ function EI(e, r, t) {
       f.coverage.depthLimited ||
       f.cycles.length ||
       f.issues.some((v) => m.has(v.from))) &&
-      Nn(
+      throwValidationError(
         "Array discovery requires a complete, authorized static dependency closure. Resolve hidden, dynamic, cyclic or unsupported formula dependencies before splitting.",
       );
     for (const v of p) {
       const g = e.sheets.find((b) => b.id === v.sheetId);
-      (Bg(g, v.address, t),
+      (assertSelectionInAuthorizedSheet(g, v.address, t),
         (!g.cells[v.address] || g.cells[v.address].raw === null) &&
-          Nn(
+          throwValidationError(
             "Array discovery cannot infer blank or possible spill-child dependencies. Use a reviewed values snapshot before splitting.",
           ),
         s.add(d(v.sheetId, v.address)),
-        s.size > ih.dependencyCells &&
-          Nn(
+        s.size > dataModelBudgets.dependencyCells &&
+          throwValidationError(
             "Array discovery exceeds 2,000 dependency cells. Use a smaller reviewed values snapshot.",
           ));
     }
@@ -115,33 +126,36 @@ function EI(e, r, t) {
           ),
         })),
     },
-    c = Vn(l);
+    c = calculateWorkbookWithSettings(l);
   for (const { sheet, anchor } of n) {
     const p = c.getSpillRange(sheet.id, anchor);
     p &&
-      r.some((m) => m.sheet.id === sheet.id && hp(m.range, p)) &&
-      Nn(
+      r.some((m) => m.sheet.id === sheet.id && rangesOverlap(m.range, p)) &&
+      throwValidationError(
         "The selected source or destination intersects a generated array. Convert its results to ordinary values explicitly before splitting.",
       );
   }
   c.getOperationalErrors().length &&
-    Nn(
+    throwValidationError(
       "Array discovery encountered an operational calculation error. Resolve the uncertain formula state before splitting text.",
     );
 }
-function dz(e, r, t = {}) {
+function buildTextSplitResult(e, r, t = {}) {
   var w, A, k, F, I;
-  const n = wI(e, t),
-    o = Ace(r),
+  const n = validateTextToColumnsPermissions(e, t),
+    o = validateTextToColumnsRequest(r),
     a = e.sheets.find((O) => O.id === o.sourceSheetId);
-  (a || Nn("Choose an existing source worksheet."), Bg(a, o.sourceRange, n));
-  const s = ct(o.sourceRange),
+  (a || throwValidationError("Choose an existing source worksheet."),
+    assertSelectionInAuthorizedSheet(a, o.sourceRange, n));
+  const s = parseRangeAddress(o.sourceRange),
     d = s.lastRow - s.firstRow + 1;
-  ((s.firstCol !== s.lastCol || d > ih.sourceCells) &&
-    Nn("Select one source column containing at most 500 cells."),
+  ((s.firstCol !== s.lastCol || d > dataModelBudgets.sourceCells) &&
+    throwValidationError(
+      "Select one source column containing at most 500 cells.",
+    ),
     (w = a.merges) != null &&
-      w.some((O) => hp(O, o.sourceRange)) &&
-      Nn("Unmerge the source before splitting text."));
+      w.some((O) => rangesOverlap(O, o.sourceRange)) &&
+      throwValidationError("Unmerge the source before splitting text."));
   const u = [],
     l = [],
     c = [];
@@ -154,19 +168,19 @@ function dz(e, r, t = {}) {
       typeof z.raw == "string" &&
       z.raw.startsWith("=") &&
       !z.literal &&
-      Nn(
+      throwValidationError(
         `Source ${j} contains a formula. Copy its results to ordinary values explicitly before splitting.`,
       );
-    const V = kce(z?.raw ?? null);
-    (f += V.length) > ih.sourceCharacters &&
-      Nn(
+    const V = formatCellTextValue(z?.raw ?? null);
+    (f += V.length) > dataModelBudgets.sourceCharacters &&
+      throwValidationError(
         "Selected source text exceeds the 200,000-character processing budget.",
       );
     let D;
     try {
-      D = Cce(V, o.delimiter);
+      D = splitDelimitedCell(V, o.delimiter);
     } catch (B) {
-      Nn(`Source ${j}: ${B.message}`);
+      throwValidationError(`Source ${j}: ${B.message}`);
     }
     ((h = Math.max(h, D.length)),
       l.push(D),
@@ -177,12 +191,14 @@ function dz(e, r, t = {}) {
         fields: D.length,
       }));
   }
-  (h * d > ih.outputCells &&
-    Nn(
+  (h * d > dataModelBudgets.outputCells &&
+    throwValidationError(
       "Split output may contain at most 500 cells. Select fewer source rows or fields.",
     ),
     (o.formats?.length ?? 0) > h &&
-      Nn("A column conversion refers to a field outside the split result."));
+      throwValidationError(
+        "A column conversion refers to a field outside the split result.",
+      ));
   const p = Array.from({ length: h }, (O, j) => {
     return o.formats?.[j] ?? "text";
   });
@@ -191,53 +207,57 @@ function dz(e, r, t = {}) {
     g = { row: 0, col: 0 };
   if (o.destination.kind === "new-sheet")
     ((!n.allowNewSheet || ((A = e.structureProtection) != null && A.enabled)) &&
-      Nn(
+      throwValidationError(
         "Creating an output worksheet is not permitted while workbook structure is protected or the host disallows new worksheets.",
       ),
       (v = o.destination.name),
       e.sheets.some((O) => O.name.toLowerCase() === v.toLowerCase()) &&
-        Nn("The output worksheet name is already used. Choose another name."),
-      xI(e, v));
+        throwValidationError(
+          "The output worksheet name is already used. Choose another name.",
+        ),
+      assertOutputNameUnreferenced(e, v));
   else {
     const O = o.destination;
     ((m = e.sheets.find((j) => j.id === O.sheetId)),
-      m || Nn("Choose an existing output worksheet."),
+      m || throwValidationError("Choose an existing output worksheet."),
       (g = _t(o.destination.address)),
       (v = m.name),
       (k = m.protection) != null &&
         k.enabled &&
-        Nn("The output worksheet is protected."));
+        throwValidationError("The output worksheet is protected."));
   }
-  (g.row + d > Mt.maxRows || g.col + h > Mt.maxCols) &&
-    Nn("Split output exceeds the worksheet boundary.");
+  (g.row + d > workbookLimits.maxRows || g.col + h > workbookLimits.maxCols) &&
+    throwValidationError("Split output exceeds the worksheet boundary.");
   const b = `${lg(g.row, g.col)}:${lg(g.row + d - 1, g.col + h - 1)}`;
   (m &&
-    (Bg(m, b, n),
+    (assertSelectionInAuthorizedSheet(m, b, n),
     m.id === a.id &&
-      hp(o.sourceRange, b) &&
-      Nn(
+      rangesOverlap(o.sourceRange, b) &&
+      throwValidationError(
         "Choose a separate destination so the original source cells remain intact.",
       ),
-    (((F = m.tables) != null && F.some((O) => hp(O.range, b))) ||
-      ((I = m.merges) != null && I.some((O) => hp(O, b))) ||
+    (((F = m.tables) != null && F.some((O) => rangesOverlap(O.range, b))) ||
+      ((I = m.merges) != null && I.some((O) => rangesOverlap(O, b))) ||
       [...(m.pivots ?? []), ...(m.queries ?? [])].some((O) =>
-        hp(O.outputRange, b),
+        rangesOverlap(O.outputRange, b),
       )) &&
-      Nn(
+      throwValidationError(
         "Choose an output outside tables, merged areas and generated analysis results.",
       ),
-    Object.keys(m.cells).some((O) => hp(O, b)) &&
-      Nn(
+    Object.keys(m.cells).some((O) => rangesOverlap(O, b)) &&
+      throwValidationError(
         "The destination contains cells or their formatting. Choose an empty range or new worksheet.",
       ),
     [...(e.reviewThreads ?? []), ...(e.formulaWatches ?? [])].some(
       (O) =>
-        !O.orphaned && O.anchor.sheetId === m.id && hp(O.anchor.address, b),
+        !O.orphaned &&
+        O.anchor.sheetId === m.id &&
+        rangesOverlap(O.anchor.address, b),
     ) &&
-      Nn(
+      throwValidationError(
         "The destination contains a saved watch or discussion anchor. Choose another range to preserve its evidence context.",
       )),
-    EI(
+    discoverArrayFormulaAnchors(
       e,
       [
         { sheet: a, range: o.sourceRange },
@@ -256,7 +276,7 @@ function dz(e, r, t = {}) {
     for (let j = 0; j < h; j++) {
       const z = l[O][j] ?? "",
         V = o.header === "first-row" && O === 0 ? "text" : p[j],
-        D = Tce(z, V);
+        D = parseImportedCellValue(z, V);
       D.precision &&
         c.push({
           code: "numeric-text-retained",
@@ -272,7 +292,7 @@ Source cell: ${u[O].address}
 Field: ${j + 1}
 Conversion: ${V}
 ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidence remain in place."}`,
-        _ = hi({
+        _ = normalizeCellRecordInput({
           raw: D.raw,
           note: B,
           ...(typeof D.raw == "string"
@@ -303,14 +323,16 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
   }
   if (
     (e.sheets.reduce((O, j) => O + Object.keys(j.cells).length, 0) + y.length >
-      Mt.maxCells &&
-      Nn("The split would exceed the workbook's 100,000 stored-cell budget."),
+      workbookLimits.maxCells &&
+      throwValidationError(
+        "The split would exceed the workbook's 100,000 stored-cell budget.",
+      ),
     m)
   ) {
     const O = structuredClone(e),
       j = O.sheets.find((z) => z.id === m.id);
     for (const z of y) j.cells[z.address] = z.cell;
-    v0(
+    checkDataValidationBatch(
       O,
       y.map((z) => ({ sheetId: j.id, address: z.address, after: z.cell })),
     );
@@ -330,25 +352,29 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
     diagnostics: c,
   };
 }
-function Nce(e, r, t = {}) {
+function applyTextSplitPreview(e, r, t = {}) {
   r.snapshot !== JSON.stringify(e) &&
-    Nn("The workbook changed after the split preview. Preview again.");
-  const n = dz(e, r.request, t);
+    throwValidationError(
+      "The workbook changed after the split preview. Preview again.",
+    );
+  const n = buildTextSplitResult(e, r.request, t);
   JSON.stringify(n) !== JSON.stringify(r) &&
-    Nn("The split preview or authorized context changed. Preview again.");
+    throwValidationError(
+      "The split preview or authorized context changed. Preview again.",
+    );
   const o = structuredClone(e),
     a = r.request.destination,
     s =
       a.kind === "new-sheet"
-        ? Ku(a.name)
+        ? createWorksheetRecord(a.name)
         : o.sheets.find((d) => d.id === a.sheetId);
   a.kind === "new-sheet" && o.sheets.push(s);
   for (const d of r.outputs) s.cells[d.address] = structuredClone(d.cell);
-  return (rn(o), o);
+  return (normalizeWorkbookInput(o), o);
 }
-const kp = (e) =>
+const coerceCellValueToText = (e) =>
   e === null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
-function fz(e, r) {
+function applyTextCasing(e, r) {
   return r === "upper"
     ? e.toLocaleUpperCase("en-US")
     : r === "lower"
@@ -362,10 +388,10 @@ function fz(e, r) {
             })
         : e;
 }
-function Rce(e, r) {
+function extractInferredFieldPart(e, r) {
   if (r.column >= e.length)
     throw Error("The inferred rule refers to a missing field.");
-  const t = kp(e[r.column]).trim();
+  const t = coerceCellValueToText(e[r.column]).trim();
   if (r.mode === "whole") return t;
   if (r.mode === "slice") {
     const s = [...t];
@@ -388,17 +414,20 @@ function Rce(e, r) {
     throw Error("The inferred token is absent.");
   return o[a].trim();
 }
-function yT(e, r) {
-  const t = GU.parse(r),
+function applyInferredTextPattern(e, r) {
+  const t = textJoinSpecSchema.parse(r),
     n =
       t.prefix +
-      fz(t.parts.map((o) => Rce(e, o)).join(t.separator), t.casing) +
+      applyTextCasing(
+        t.parts.map((o) => extractInferredFieldPart(e, o)).join(t.separator),
+        t.casing,
+      ) +
       t.suffix;
   if (n.length > 32767)
     throw Error("The inferred result exceeds the cell text limit.");
   return n;
 }
-function hz(e) {
+function describeInferredTextRule(e) {
   const r = e.parts
     .map(
       (t) =>
@@ -407,10 +436,10 @@ function hz(e) {
     .join(` + ${JSON.stringify(e.separator)} + `);
   return `${e.prefix ? JSON.stringify(e.prefix) + " + " : ""}${e.casing === "none" ? "" : e.casing + "("}${r}${e.casing === "none" ? "" : ")"}${e.suffix ? " + " + JSON.stringify(e.suffix) : ""}`;
 }
-function Ice(e, r, t) {
+function inferTextPatternFromExamples(e, r, t) {
   if (!Array.isArray(t) || t.length < 2 || t.length > 10)
     throw Error("Provide 2–10 examples from distinct source rows.");
-  const n = t.map((f) => ZU.parse(f));
+  const n = t.map((f) => sourceRowValueSchema.parse(f));
   if (new Set(n.map((f) => f.row)).size !== n.length)
     throw Error("Provide examples from distinct source rows.");
   const o = n.map((f) => ({ example: f, row: e.find((p) => p.row === f.row) }));
@@ -460,14 +489,14 @@ function Ice(e, r, t) {
     h = false;
   e: for (const f of d)
     for (const p of ["none", "upper", "lower", "proper"]) {
-      if (++c > Z5.inferencePatterns) {
+      if (++c > textInferenceLimits.inferencePatterns) {
         (c--, (h = true));
         break e;
       }
       const m = { ...f, casing: p, prefix: "", suffix: "" };
       let v;
       try {
-        v = o.map((E) => yT(E.row.values, m));
+        v = o.map((E) => applyInferredTextPattern(E.row.values, m));
       } catch {
         continue;
       }
@@ -494,10 +523,10 @@ function Ice(e, r, t) {
             u.push({
               id: `pattern-${u.length + 1}`,
               pattern: E,
-              description: hz(E),
+              description: describeInferredTextRule(E),
               matchedExamples: n.length,
             }),
-            u.length >= Z5.inferenceCandidates)
+            u.length >= textInferenceLimits.inferenceCandidates)
           ) {
             h = true;
             break e;
@@ -508,9 +537,9 @@ function Ice(e, r, t) {
     }
   return { candidates: u, searched: c, truncated: h };
 }
-const Gh = (e, r) => `${ut(r)}${e + 1}`,
-  q2 = (e) => e === null || e === "",
-  CI = (e) =>
+const Gh = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
+  isBlankCellValue = (e) => e === null || e === "",
+  inferCellValueType = (e) =>
     e === null
       ? "blank"
       : typeof e == "number"
@@ -518,20 +547,20 @@ const Gh = (e, r) => `${ut(r)}${e + 1}`,
         : typeof e == "boolean"
           ? "boolean"
           : "text",
-  Dk = (e) => [...new Set(e.flatMap((r) => r.sources))],
-  qv = (e, r, t = CI(e)) => ({
+  uniqueSourceReferences = (e) => [...new Set(e.flatMap((r) => r.sources))],
+  createSourcedValue = (e, r, t = inferCellValueType(e)) => ({
     value: e,
     type: t,
     sources: r,
     exception: false,
   });
-function Ok(e, r) {
+function assertRecipeFieldInRange(e, r) {
   if (e.some((t) => t >= r))
     throw Error(
       `A recipe field exceeds the current ${r} columns. Review steps in order.`,
     );
 }
-function _ce(e, r) {
+function splitTextWithQuoteRules(e, r) {
   if (r.mode === "fixed") {
     const h = [...e],
       f = [0, ...r.breaks, h.length];
@@ -573,9 +602,9 @@ function _ce(e, r) {
   if (s) throw Error("The quoted field is not closed.");
   return (o.push(a), o);
 }
-function pz(e, r, t = "1900") {
-  if (r.to === "text") return kp(e);
-  if (q2(e)) return null;
+function convertFieldToTypedValue(e, r, t = "1900") {
+  if (r.to === "text") return coerceCellValueToText(e);
+  if (isBlankCellValue(e)) return null;
   if (r.to === "boolean") {
     if (typeof e == "boolean") return e;
     if (typeof e == "string" && /^(true|false)$/i.test(e.trim()))
@@ -587,7 +616,7 @@ function pz(e, r, t = "1900") {
       typeof e == "number" &&
       Number.isInteger(e) &&
       e >= (t === "1904" ? 0 : 1) &&
-      e <= wd(t)
+      e <= dateSystemMaxSerial(t)
     )
       return e;
     if (
@@ -597,7 +626,7 @@ function pz(e, r, t = "1900") {
       throw Error(
         "Expected a full-year ISO date or an explicitly ordered slash date.",
       );
-    const s = zp(e, { textDateOrder: r.dateOrder, dateSystem: t });
+    const s = parseDateText(e, { textDateOrder: r.dateOrder, dateSystem: t });
     if (s === undefined)
       throw Error(`The date is impossible or outside ${t}–9999.`);
     return s;
@@ -643,17 +672,17 @@ function pz(e, r, t = "1900") {
     throw Error("Expected a safe whole number.");
   return n;
 }
-function mz(e, r, t) {
+function prepareTransformationInput(e, r, t) {
   var p, m;
-  const n = KU(r),
-    o = wI(e, t),
+  const n = validateFieldTransformRecipe(r),
+    o = validateTextToColumnsPermissions(e, t),
     a = e.sheets.find((v) => v.id === n.sourceSheetId);
   if (!a) throw Error("Choose an existing source worksheet.");
   if (!o.allowNewSheet || ((p = e.structureProtection) != null && p.enabled))
     throw Error("Creating a derived worksheet is not permitted.");
   if (e.sheets.some((v) => v.name.toLowerCase() === n.outputName.toLowerCase()))
     throw Error("The output worksheet name is already used.");
-  const s = ct(n.sourceRange),
+  const s = parseRangeAddress(n.sourceRange),
     d = s.lastCol - s.firstCol + 1,
     u = s.lastRow - s.firstRow + 1;
   if (
@@ -664,10 +693,10 @@ function mz(e, r, t) {
   if (u <= Number(n.header))
     throw Error("Select at least one data row in addition to the heading row.");
   if (
-    (Bg(a, n.sourceRange, o),
+    (assertSelectionInAuthorizedSheet(a, n.sourceRange, o),
     (m = a.merges) != null &&
       m.some((v) => {
-        const g = ct(v);
+        const g = parseRangeAddress(v);
         return (
           g.firstRow <= s.lastRow &&
           g.lastRow >= s.firstRow &&
@@ -677,7 +706,8 @@ function mz(e, r, t) {
       }))
   )
     throw Error("Unmerge the selected source before reshaping fields.");
-  (xI(e, n.outputName), EI(e, [{ sheet: a, range: n.sourceRange }], o));
+  (assertOutputNameUnreferenced(e, n.outputName),
+    discoverArrayFormulaAnchors(e, [{ sheet: a, range: n.sourceRange }], o));
   const l = [],
     c = [];
   let h = 0;
@@ -690,28 +720,32 @@ function mz(e, r, t) {
         throw Error(
           `Source ${y} is a formula. Create a reviewed values snapshot first.`,
         );
-      if ((h += kp(w?.raw ?? null).length) > 2e5)
+      if ((h += coerceCellValueToText(w?.raw ?? null).length) > 2e5)
         throw Error(
           "Source text exceeds the 200,000-character processing budget.",
         );
-      const E = U1(e, a.id, v);
+      const E = findRowOrigin(e, a.id, v);
       (l.push({
         address: y,
         ...(w ? { original: structuredClone(w) } : {}),
         ...(E ? { origin: E } : {}),
       }),
-        g.push(qv(w?.raw ?? null, [y])));
+        g.push(createSourcedValue(w?.raw ?? null, [y])));
     }
     c.push({ row: v + 1, fields: g });
   }
   const f = n.header
-    ? c.shift().fields.map((v, g) => kp(v.value) || `Field ${g + 1}`)
+    ? c
+        .shift()
+        .fields.map(
+          (v, g) => coerceCellValueToText(v.value) || `Field ${g + 1}`,
+        )
     : Array.from({ length: d }, (v, g) => `Field ${g + 1}`);
   if (f.some((v) => v.length > 100))
     throw Error("Source headings must be at most 100 characters.");
   return { request: n, context: o, source: a, sources: l, rows: c, headers: f };
 }
-function gz(e, r, t, n = "1900") {
+function applyTransformationSteps(e, r, t, n = "1900") {
   const o = [],
     a = [],
     s = (d, u, l, c, h) => {
@@ -742,16 +776,19 @@ function gz(e, r, t, n = "1900") {
             : "column" in d
               ? [d.column]
               : d.pattern.parts.map((g) => g.column);
-      if ((Ok(f, r.length), d.kind === "split")) {
+      if ((assertRecipeFieldInRange(f, r.length), d.kind === "split")) {
         let g = d.mode === "fixed" ? d.breaks.length + 1 : 1;
         const b = e.map((w) => {
           const E = w.fields[d.column];
           if (E.exception) return [E];
           try {
-            const A = _ce(kp(E.value), d);
+            const A = splitTextWithQuoteRules(
+              coerceCellValueToText(E.value),
+              d,
+            );
             return (
               (g = Math.max(g, A.length)),
-              A.map((k) => qv(k, [...E.sources]))
+              A.map((k) => createSourcedValue(k, [...E.sources]))
             );
           } catch (A) {
             return [s(E, w.row, r[d.column], l, A)];
@@ -763,7 +800,10 @@ function gz(e, r, t, n = "1900") {
           const A = w.fields[d.column],
             k = b[E];
           for (; k.length < g;)
-            k.push({ ...qv("", [...A.sources]), exception: k[0].exception });
+            k.push({
+              ...createSourcedValue("", [...A.sources]),
+              exception: k[0].exception,
+            });
           w.fields.splice(d.column, 1, ...k);
         });
         const y = r[d.column];
@@ -777,12 +817,12 @@ function gz(e, r, t, n = "1900") {
           throw Error("Concatenation would exceed 50 fields.");
         for (const g of e) {
           const b = d.columns.map((w) => g.fields[w]),
-            y = qv(
+            y = createSourcedValue(
               b
-                .filter((w) => !d.skipBlank || !q2(w.value))
-                .map((w) => kp(w.value))
+                .filter((w) => !d.skipBlank || !isBlankCellValue(w.value))
+                .map((w) => coerceCellValueToText(w.value))
                 .join(d.separator),
-              Dk(b),
+              uniqueSourceReferences(b),
             );
           ((y.exception = b.some((w) => w.exception)), g.fields.push(y));
         }
@@ -791,7 +831,7 @@ function gz(e, r, t, n = "1900") {
         for (const g of e) g.fields = d.columns.map((b) => g.fields[b]);
         r.splice(0, r.length, ...d.columns.map((g) => r[g]));
       } else if (d.kind === "fill") {
-        Ok(d.groupColumns, r.length);
+        assertRecipeFieldInRange(d.groupColumns, r.length);
         const g = d.direction === "up" ? [...e].reverse() : e;
         for (const b of d.columns) {
           let y,
@@ -806,18 +846,22 @@ function gz(e, r, t, n = "1900") {
               y = undefined;
               continue;
             }
-            if (!q2(F.value)) {
+            if (!isBlankCellValue(F.value)) {
               y = F;
               continue;
             }
             d.direction === "value"
-              ? (E.fields[b] = qv(d.value, [...F.sources]))
-              : y && (E.fields[b] = { ...y, sources: Dk([F, y, ...A]) });
+              ? (E.fields[b] = createSourcedValue(d.value, [...F.sources]))
+              : y &&
+                (E.fields[b] = {
+                  ...y,
+                  sources: uniqueSourceReferences([F, y, ...A]),
+                });
           }
         }
       } else if (d.kind === "pattern") {
         if (
-          (Ok(d.inferenceColumns, r.length),
+          (assertRecipeFieldInRange(d.inferenceColumns, r.length),
           d.pattern.parts.some((b) => !d.inferenceColumns.includes(b.column)))
         )
           throw Error(
@@ -835,7 +879,7 @@ function gz(e, r, t, n = "1900") {
           if (
             (g.add(b.row),
             d.pattern.parts.some((w) => y.fields[w.column].exception) ||
-              yT(
+              applyInferredTextPattern(
                 y.fields.map((w) => w.value),
                 d.pattern,
               ) !== b.value)
@@ -846,13 +890,13 @@ function gz(e, r, t, n = "1900") {
         }
         for (const b of e) {
           const y = d.pattern.parts.map((E) => b.fields[E.column]),
-            w = { ...y[0], sources: Dk(y) };
+            w = { ...y[0], sources: uniqueSourceReferences(y) };
           try {
             if (y.some((E) => E.exception))
               throw Error("An inferred input has an earlier parse exception.");
             b.fields.push(
-              qv(
-                yT(
+              createSourcedValue(
+                applyInferredTextPattern(
                   b.fields.map((E) => E.value),
                   d.pattern,
                 ),
@@ -873,11 +917,15 @@ function gz(e, r, t, n = "1900") {
                 let w = y.value,
                   E = y.type;
                 if (d.kind === "convert")
-                  ((w = pz(y.value, d, n)),
+                  ((w = convertFieldToTypedValue(y.value, d, n)),
                     (E =
-                      w === null ? "blank" : d.to === "date" ? "date" : CI(w)));
-                else if (!q2(y.value)) {
-                  const A = kp(y.value);
+                      w === null
+                        ? "blank"
+                        : d.to === "date"
+                          ? "date"
+                          : inferCellValueType(w)));
+                else if (!isBlankCellValue(y.value)) {
+                  const A = coerceCellValueToText(y.value);
                   ((w =
                     d.kind === "trim"
                       ? d.mode === "collapse"
@@ -886,7 +934,7 @@ function gz(e, r, t, n = "1900") {
                       : d.kind === "clean"
                         ? A.replace(/[\u0000-\u001f]/g, "")
                         : d.kind === "case"
-                          ? fz(A, d.mode)
+                          ? applyTextCasing(A, d.mode)
                           : A.split(d.find).join(d.replacement)),
                     (E = "text"));
                 }
@@ -906,7 +954,7 @@ function gz(e, r, t, n = "1900") {
         for (const b of g.fields) {
           if (typeof b.value == "string" && b.value.length > 32767)
             throw Error("A result exceeds the 32,767-character cell limit.");
-          if ((p += kp(b.value).length) > 1e6)
+          if ((p += coerceCellValueToText(b.value).length) > 1e6)
             throw Error(
               "Intermediate results exceed the 1,000,000-character limit.",
             );
@@ -929,8 +977,8 @@ function gz(e, r, t, n = "1900") {
     { exceptions: o, stages: a }
   );
 }
-function M7(e, r, t) {
-  return hi({
+function createAnnotatedCellValue(e, r, t) {
+  return normalizeCellRecordInput({
     raw: e,
     note: r,
     ...(t === "date" ? { format: "date" } : {}),
@@ -939,11 +987,12 @@ function M7(e, r, t) {
       : {}),
   });
 }
-function a3(e, r, t = {}) {
-  const { request, context, source, sources, rows, headers } = mz(e, r, t);
+function buildTransformationPreview(e, r, t = {}) {
+  const { request, context, source, sources, rows, headers } =
+    prepareTransformationInput(e, r, t);
   if (!request.steps.length)
     throw Error("Add at least one transformation step before previewing.");
-  const { exceptions, stages } = gz(
+  const { exceptions, stages } = applyTransformationSteps(
       rows,
       headers,
       request.steps,
@@ -966,7 +1015,7 @@ Worksheet: ${JSON.stringify(source.name)} (${JSON.stringify(source.id)})
 Original cells: ${b.sources.join(", ")}
 Result type: ${b.type}
 ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Original source values are retained."}`;
-        f[w] = M7(b.value, E, b.type);
+        f[w] = createAnnotatedCellValue(b.value, E, b.type);
       }),
     ),
     exceptions.length)
@@ -996,10 +1045,10 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
           b.reason,
         ].forEach(
           (w, E) =>
-            (f[Gh(v + 2 + y, E)] = M7(
+            (f[Gh(v + 2 + y, E)] = createAnnotatedCellValue(
               w,
               `Retained parsing exception at source revision ${e.revision}`,
-              CI(w),
+              inferCellValueType(w),
             )),
         ),
       ));
@@ -1009,7 +1058,7 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
   if (
     e.sheets.reduce((v, g) => v + Object.keys(g.cells).length, 0) +
       Object.keys(f).length >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
     throw Error(
       "Derived output exceeds the 100,000 stored-cell workbook budget.",
@@ -1044,17 +1093,23 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
     },
   };
   return (
-    YU(
+    validateFieldTransformEvidence(
       [
         ...(e.fieldTransforms ?? []),
-        vz(e, p, "preview-id", "preview-output", "2026-01-01T00:00:00.000Z"),
+        buildTransformationRecord(
+          e,
+          p,
+          "preview-id",
+          "preview-output",
+          "2026-01-01T00:00:00.000Z",
+        ),
       ],
       {},
     ),
     p
   );
 }
-function vz(e, r, t, n, o) {
+function buildTransformationRecord(e, r, t, n, o) {
   return {
     id: t,
     workbookId: e.id,
@@ -1071,46 +1126,58 @@ function vz(e, r, t, n, o) {
     exceptions: structuredClone(r.exceptions),
   };
 }
-function Dce(e, r, t) {
+function commitApprovedTransformation(e, r, t) {
   if (t.approved !== true)
     throw Error(
       "Review and approve the complete transformation preview first.",
     );
   if (r.snapshot !== JSON.stringify(e))
     throw Error("The workbook changed. Preview the transformation again.");
-  const n = a3(e, r.request, t);
+  const n = buildTransformationPreview(e, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error("The preview or authorized context changed. Preview again.");
   if (r.exceptions.length && t.acceptExceptions !== true)
     throw Error("Acknowledge the retained parse exceptions before applying.");
   const o = structuredClone(e),
-    a = Ku(r.request.outputName);
+    a = createWorksheetRecord(r.request.outputName);
   return (
     (a.cells = structuredClone(r.cells)),
     o.sheets.push(a),
     (o.fieldTransforms = [
       ...(o.fieldTransforms ?? []),
-      vz(e, r, crypto.randomUUID(), a.id, new Date().toISOString()),
+      buildTransformationRecord(
+        e,
+        r,
+        crypto.randomUUID(),
+        a.id,
+        new Date().toISOString(),
+      ),
     ]),
-    rn(o)
+    normalizeWorkbookInput(o)
   );
 }
-function Oce(e, r, t, n, o = {}) {
-  const a = mz(e, r, o);
-  gz(a.rows, a.headers, a.request.steps, e.datePolicy?.dateSystem);
+function selectExceptionFreeRows(e, r, t, n, o = {}) {
+  const a = prepareTransformationInput(e, r, o);
+  applyTransformationSteps(
+    a.rows,
+    a.headers,
+    a.request.steps,
+    e.datePolicy?.dateSystem,
+  );
   const s = a.rows.filter((u) =>
     n.every((l) => u.fields[l] && !u.fields[l].exception),
   );
-  return Ice(
+  return inferTextPatternFromExamples(
     s.map((u) => ({ row: u.row, values: u.fields.map((l) => l.value) })),
     n,
     t,
   );
 }
-function Mce(e, r, t = {}) {
+function verifyTransformationPreview(e, r, t = {}) {
   if (
     r.snapshot !== JSON.stringify(e) ||
-    JSON.stringify(a3(e, r.request, t)) !== JSON.stringify(r)
+    JSON.stringify(buildTransformationPreview(e, r.request, t)) !==
+      JSON.stringify(r)
   )
     throw Error(
       "The transformation preview is stale or altered. Preview again.",
@@ -1128,7 +1195,7 @@ function Mce(e, r, t = {}) {
     2,
   );
 }
-const Mk = {
+const expressionFunctionArity = {
     ABS: [1, 1],
     ROUND: [1, 2],
     UPPER: [1, 1],
@@ -1142,24 +1209,24 @@ const Mk = {
     OR: [1, 20],
     NOT: [1, 1],
   },
-  Sv = (e) => {
+  assertFiniteNumericOperand = (e) => {
     if (typeof e != "number" || !Number.isFinite(e))
       throw Error(
         "This expression requires a finite number. Add an explicit Types step.",
       );
     return e;
   },
-  Lm = (e) => {
+  assertTextOperand = (e) => {
     if (typeof e != "string")
       throw Error("This expression requires text. Add an explicit Types step.");
     return e;
   },
-  J4 = (e) => {
+  assertBooleanCondition = (e) => {
     if (typeof e != "boolean")
       throw Error("IF/AND/OR/NOT conditions must be Boolean comparisons.");
     return e;
   },
-  Ph = (e) => {
+  assertDerivedValueLimits = (e) => {
     if (
       (typeof e == "number" && !Number.isFinite(e)) ||
       (typeof e == "string" && e.length > 32767)
@@ -1167,7 +1234,7 @@ const Mk = {
       throw Error("Derived value exceeds finite numeric or text limits.");
     return e;
   };
-function jce(e, r) {
+function parseRowExpression(e, r) {
   if (typeof e != "string" || !e.trim() || e.length > 1e3)
     throw Error("Use a row expression of 1–1,000 characters.");
   let t = 0,
@@ -1231,7 +1298,7 @@ function jce(e, r) {
       if (g)
         return (
           (t += g[0].length),
-          l({ kind: "value", value: Ph(Number(g[0])) })
+          l({ kind: "value", value: assertDerivedValueLimits(Number(g[0])) })
         );
       const b = a.slice(t).match(/^[A-Za-z_][A-Za-z0-9_]*/);
       if (!b) return u();
@@ -1245,16 +1312,16 @@ function jce(e, r) {
           });
         throw Error(`Unknown identifier ${y}. Column references use [Field].`);
       }
-      if (!Object.hasOwn(Mk, y))
+      if (!Object.hasOwn(expressionFunctionArity, y))
         throw Error(
-          `Unsupported row function ${y}. Use ${Object.keys(Mk).join(", ")}.`,
+          `Unsupported row function ${y}. Use ${Object.keys(expressionFunctionArity).join(", ")}.`,
         );
       t++;
       const w = [];
       if (d() !== ")") for (; w.push(f(0)), d() === ",";) t++;
       if (d() !== ")") return u();
       t++;
-      const [E, A] = Mk[y];
+      const [E, A] = expressionFunctionArity[y];
       if (w.length < E || w.length > A)
         throw Error(`${y} expects ${E === A ? E : `${E}–${A}`} arguments.`);
       return l({ kind: "call", name: y, args: w });
@@ -1292,7 +1359,10 @@ function jce(e, r) {
     if (v.kind === "value") return v.value;
     if (v.kind === "field") return g[v.index];
     if (v.kind === "unary")
-      return Ph(Sv(m(v.value, g)) * (v.operator === "-" ? -1 : 1));
+      return assertDerivedValueLimits(
+        assertFiniteNumericOperand(m(v.value, g)) *
+          (v.operator === "-" ? -1 : 1),
+      );
     if (v.kind === "binary") {
       const w = m(v.left, g),
         E = m(v.right, g),
@@ -1317,16 +1387,20 @@ function jce(e, r) {
               ? w <= E
               : w >= E;
       }
-      if (A === "&") return Ph(Lm(w) + Lm(E));
-      const k = Sv(w),
-        F = Sv(E);
+      if (A === "&")
+        return assertDerivedValueLimits(
+          assertTextOperand(w) + assertTextOperand(E),
+        );
+      const k = assertFiniteNumericOperand(w),
+        F = assertFiniteNumericOperand(E);
       if (A === "/" && F === 0)
         throw Error("Derived expression divides by zero.");
-      return Ph(
+      return assertDerivedValueLimits(
         A === "+" ? k + F : A === "-" ? k - F : A === "*" ? k * F : k / F,
       );
     }
-    if (v.name === "IF") return m(v.args[J4(m(v.args[0], g)) ? 1 : 2], g);
+    if (v.name === "IF")
+      return m(v.args[assertBooleanCondition(m(v.args[0], g)) ? 1 : 2], g);
     if (v.name === "COALESCE") {
       for (const w of v.args) {
         const E = m(w, g);
@@ -1338,59 +1412,67 @@ function jce(e, r) {
       y = b[0];
     switch (v.name) {
       case "ABS":
-        return Math.abs(Sv(y));
+        return Math.abs(assertFiniteNumericOperand(y));
       case "ROUND": {
-        const w = b.length === 1 ? 0 : Sv(b[1]);
+        const w = b.length === 1 ? 0 : assertFiniteNumericOperand(b[1]);
         if (!Number.isInteger(w) || Math.abs(w) > 12)
           throw Error("ROUND digits must be an integer from -12 to 12.");
-        const E = Sv(y),
+        const E = assertFiniteNumericOperand(y),
           A = 10 ** w;
-        return Ph((Math.sign(E) * Math.round(Math.abs(E) * A)) / A);
+        return assertDerivedValueLimits(
+          (Math.sign(E) * Math.round(Math.abs(E) * A)) / A,
+        );
       }
       case "UPPER":
-        return Ph(Lm(y).toLocaleUpperCase("en-US"));
+        return assertDerivedValueLimits(
+          assertTextOperand(y).toLocaleUpperCase("en-US"),
+        );
       case "LOWER":
-        return Ph(Lm(y).toLocaleLowerCase("en-US"));
+        return assertDerivedValueLimits(
+          assertTextOperand(y).toLocaleLowerCase("en-US"),
+        );
       case "TRIM":
-        return Lm(y).trim().replace(/\s+/gu, " ");
+        return assertTextOperand(y).trim().replace(/\s+/gu, " ");
       case "LEN":
-        return Array.from(Lm(y)).length;
+        return Array.from(assertTextOperand(y)).length;
       case "CONCAT":
-        return Ph(b.map(Lm).join(""));
+        return assertDerivedValueLimits(b.map(assertTextOperand).join(""));
       case "AND":
-        return b.map(J4).every(Boolean);
+        return b.map(assertBooleanCondition).every(Boolean);
       case "OR":
-        return b.map(J4).some(Boolean);
+        return b.map(assertBooleanCondition).some(Boolean);
       case "NOT":
-        return !J4(y);
+        return !assertBooleanCondition(y);
       default:
         throw Error("Unknown row expression operation.");
     }
   }
-  return (v) => Ph(m(p, v));
+  return (v) => assertDerivedValueLimits(m(p, v));
 }
-const ug = (e) => e === null || e === "",
-  AI = (e) => JSON.stringify(e.map((r) => [typeof r, r])),
-  Hf = (e, r) => {
+const isNullOrEmptyValue = (e) => e === null || e === "",
+  fingerprintTypedValues = (e) => JSON.stringify(e.map((r) => [typeof r, r])),
+  findFieldIndexOrThrow = (e, r) => {
     const t = e.fields.indexOf(r);
     if (t < 0)
       throw Error(`Field “${r}” is missing from the step input schema.`);
     return t;
   },
-  jk = (e) => [...new Set(e.flatMap((r) => r.sources))].sort(),
-  wT = (e) =>
+  uniqueSortedSources = (e) => [...new Set(e.flatMap((r) => r.sources))].sort(),
+  profileFieldTypes = (e) =>
     e.fields.map((r, t) => ({
       name: r,
       types: [
         ...new Set(
-          e.rows.map((n) => (ug(n.values[t]) ? "blank" : typeof n.values[t])),
+          e.rows.map((n) =>
+            isNullOrEmptyValue(n.values[t]) ? "blank" : typeof n.values[t],
+          ),
         ),
       ].sort(),
       ...(Object.hasOwn(e.declaredTypes, r)
         ? { declaredType: e.declaredTypes[r] }
         : {}),
     }));
-function xT(e) {
+function buildFieldControlTotals(e) {
   return e.fields.map((r, t) => {
     let n = 0,
       o = 0,
@@ -1398,7 +1480,7 @@ function xT(e) {
       s = 0;
     for (const d of e.rows) {
       const u = d.values[t];
-      if ((ug(u) && s++, typeof u == "number")) {
+      if ((isNullOrEmptyValue(u) && s++, typeof u == "number")) {
         a++;
         const l = u - o,
           c = n + l;
@@ -1413,10 +1495,10 @@ function xT(e) {
     return { field: r, numericCount: a, blankCount: s, sum: n };
   });
 }
-function bz(e) {
+function validateRecipeOutputTable(e) {
   if (
     !e.fields.length ||
-    e.fields.length > Yl.columns ||
+    e.fields.length > transformationRecipeLimits.columns ||
     e.fields.some((n) => !n.trim() || n.length > 128) ||
     new Set(e.fields.map((n) => n.toLowerCase())).size !== e.fields.length
   )
@@ -1424,8 +1506,8 @@ function bz(e) {
       "The result needs 1–50 distinct, nonblank column names of at most 128 characters.",
     );
   if (
-    e.rows.length > Yl.rows ||
-    (e.rows.length + 1) * e.fields.length > Yl.cells
+    e.rows.length > transformationRecipeLimits.rows ||
+    (e.rows.length + 1) * e.fields.length > transformationRecipeLimits.cells
   )
     throw Error(
       "A recipe step exceeds 1,000 rows or 20,000 cells. Narrow the source; no rows were truncated.",
@@ -1447,13 +1529,16 @@ function bz(e) {
       )
         throw Error("Recipe output must contain finite scalar values.");
   }
-  if (r > Yl.characters || t > Yl.lineageLinks)
+  if (
+    r > transformationRecipeLimits.characters ||
+    t > transformationRecipeLimits.lineageLinks
+  )
     throw Error(
       "Recipe text or source-lineage budget exceeded. Narrow the source; no evidence was truncated.",
     );
   return e;
 }
-function Fce(e, r, t) {
+function resolveRecipeSourceTable(e, r, t) {
   const n = e.sheets.find((c) => c.id === r.sheetId);
   if (!n || (t.allowedSheetIds && !t.allowedSheetIds.includes(n.id)))
     throw Error("A recipe source is outside the authorized host context.");
@@ -1464,12 +1549,12 @@ function Fce(e, r, t) {
       throw Error(
         "The selected source table no longer exists. Review the recipe source.",
       );
-    const h = ct(c.range);
-    o = `${ut(h.firstCol)}${h.firstRow + 1}:${ut(h.lastCol)}${h.lastRow + 1 - (c.showTotals ? 1 : 0)}`;
+    const h = parseRangeAddress(c.range);
+    o = `${columnIndexToLetters(h.firstCol)}${h.firstRow + 1}:${columnIndexToLetters(h.lastCol)}${h.lastRow + 1 - (c.showTotals ? 1 : 0)}`;
   }
-  const a = X1(e, [{ sheetId: r.sheetId, range: o }], t),
+  const a = readSourceHeaders(e, [{ sheetId: r.sheetId, range: o }], t),
     s = a.snapshots[0],
-    d = bz({
+    d = validateRecipeOutputTable({
       fields: s.headers,
       rows: s.records.map((c) => ({ values: c.values, sources: [c.locator] })),
       declaredTypes: {},
@@ -1478,23 +1563,24 @@ function Fce(e, r, t) {
       source: r,
       resolvedRange: s.source.range,
       sheetName: n.name,
-      hash: hr({
+      hash: fingerprintCanonicalValue({
         workbookId: e.id,
         source: r,
         snapshot: s,
         dependencies: a.dependencyCells,
-        datePolicy: ts(e.datePolicy),
+        datePolicy: normalizeDatePolicy(e.datePolicy),
       }),
-      schema: wT(d),
+      schema: profileFieldTypes(d),
       rows: d.rows.length,
-      controls: xT(d),
+      controls: buildFieldControlTotals(d),
     };
   return { data: d, evidence: u };
 }
-function j7(e, r, t) {
-  const n = e.map((s) => s.values[r]).filter((s) => !ug(s));
+function aggregateFieldValues(e, r, t) {
+  const n = e.map((s) => s.values[r]).filter((s) => !isNullOrEmptyValue(s));
   if (t === "count") return n.length;
-  if (t === "distinctCount") return new Set(n.map((s) => AI([s]))).size;
+  if (t === "distinctCount")
+    return new Set(n.map((s) => fingerprintTypedValues([s]))).size;
   if (n.some((s) => typeof s != "number"))
     throw Error(
       "Numeric aggregation encountered text or Boolean values. Add a Types step before aggregating.",
@@ -1511,18 +1597,18 @@ function j7(e, r, t) {
     throw Error("Aggregation exceeds finite numeric bounds.");
   return a;
 }
-function F7(e, r) {
-  const t = r.map((o) => Hf(e, o)),
+function groupRowsByFields(e, r) {
+  const t = r.map((o) => findFieldIndexOrThrow(e, o)),
     n = new Map();
   for (const o of e.rows) {
-    const a = AI(t.map((s) => o.values[s]));
+    const a = fingerprintTypedValues(t.map((s) => o.values[s]));
     n.set(a, [...(n.get(a) ?? []), o]);
   }
   return { indices: t, groups: n };
 }
-function Bce(e, r, t, n) {
+function executeRecipeStep(e, r, t, n) {
   const o = r,
-    a = (s) => s.map((d) => Hf(o, d));
+    a = (s) => s.map((d) => findFieldIndexOrThrow(o, d));
   switch (t.kind) {
     case "select": {
       const s = a(t.fields);
@@ -1579,7 +1665,7 @@ function Bce(e, r, t, n) {
                 ...d,
                 values: d.values.map((l, c) =>
                   s.includes(c)
-                    ? pz(
+                    ? convertFieldToTypedValue(
                         l,
                         {
                           kind: "convert",
@@ -1589,7 +1675,7 @@ function Bce(e, r, t, n) {
                           group: t.group,
                           dateOrder: t.dateOrder,
                         },
-                        ts(e.datePolicy).dateSystem,
+                        normalizeDatePolicy(e.datePolicy).dateSystem,
                       )
                     : l,
                 ),
@@ -1647,7 +1733,7 @@ function Bce(e, r, t, n) {
     case "derive": {
       if (o.fields.some((d) => d.toLowerCase() === t.name.toLowerCase()))
         throw Error("The derived column name already exists.");
-      const s = jce(t.expression, o.fields);
+      const s = parseRowExpression(t.expression, o.fields);
       return {
         data: {
           ...o,
@@ -1666,7 +1752,7 @@ function Bce(e, r, t, n) {
     }
     case "filter": {
       const s = t.conditions.map((u) => {
-          const l = Hf(o, u.field);
+          const l = findFieldIndexOrThrow(o, u.field);
           if (
             !["blank", "notBlank"].includes(u.operator) &&
             u.value === undefined
@@ -1690,9 +1776,9 @@ function Bce(e, r, t, n) {
               p = h.value;
             switch (h.operator) {
               case "blank":
-                return ug(f);
+                return isNullOrEmptyValue(f);
               case "notBlank":
-                return !ug(f);
+                return !isNullOrEmptyValue(f);
               case "equals":
                 return f === p;
               case "notEquals":
@@ -1704,7 +1790,7 @@ function Bce(e, r, t, n) {
               case "endsWith":
                 return typeof f == "string" && f.endsWith(p);
               default:
-                if (ug(f)) return false;
+                if (isNullOrEmptyValue(f)) return false;
                 if (typeof f != "number")
                   throw Error(
                     `Ordered filter found a nonnumeric value in “${h.field}” on input record ${l + 1}. Convert types explicitly.`,
@@ -1731,7 +1817,10 @@ function Bce(e, r, t, n) {
       };
     }
     case "sort": {
-      const s = t.fields.map((l) => ({ ...l, i: Hf(o, l.field) })),
+      const s = t.fields.map((l) => ({
+          ...l,
+          i: findFieldIndexOrThrow(o, l.field),
+        })),
         d = (l) =>
           l === null
             ? 3
@@ -1758,7 +1847,7 @@ function Bce(e, r, t, n) {
     case "unpivot": {
       const s = a(t.fields),
         d = o.fields.map((u, l) => l).filter((u) => !s.includes(u));
-      if (o.rows.length * s.length > Yl.rows)
+      if (o.rows.length * s.length > transformationRecipeLimits.rows)
         throw Error(
           "Unpivot would exceed 1,000 intermediate rows; narrow the selected fields or source.",
         );
@@ -1767,7 +1856,7 @@ function Bce(e, r, t, n) {
           fields: [...d.map((u) => o.fields[u]), t.attribute, t.value],
           rows: o.rows.flatMap((u) =>
             s
-              .filter((l) => t.keepNulls || !ug(u.values[l]))
+              .filter((l) => t.keepNulls || !isNullOrEmptyValue(u.values[l]))
               .map((l) => ({
                 values: [
                   ...d.map((c) => u.values[c]),
@@ -1786,17 +1875,20 @@ function Bce(e, r, t, n) {
       };
     }
     case "group": {
-      const { indices, groups } = F7(o, t.keys),
-        u = t.values.map((l) => ({ ...l, i: Hf(o, l.field) }));
+      const { indices, groups } = groupRowsByFields(o, t.keys),
+        u = t.values.map((l) => ({
+          ...l,
+          i: findFieldIndexOrThrow(o, l.field),
+        }));
       return {
         data: {
           fields: [...t.keys, ...u.map((l) => l.name)],
           rows: [...groups.values()].map((l) => ({
             values: [
               ...indices.map((c) => l[0].values[c]),
-              ...u.map((c) => j7(l, c.i, c.operation)),
+              ...u.map((c) => aggregateFieldValues(l, c.i, c.operation)),
             ],
-            sources: jk(l),
+            sources: uniqueSortedSources(l),
           })),
           declaredTypes: {},
         },
@@ -1809,12 +1901,15 @@ function Bce(e, r, t, n) {
         t.column === t.value
       )
         throw Error("Pivot keys, attribute and value fields must be distinct.");
-      const s = Hf(o, t.column),
-        d = Hf(o, t.value),
-        { indices, groups } = F7(o, t.keys),
+      const s = findFieldIndexOrThrow(o, t.column),
+        d = findFieldIndexOrThrow(o, t.value),
+        { indices, groups } = groupRowsByFields(o, t.keys),
         c = [
           ...new Map(
-            o.rows.map((p) => [AI([p.values[s]]), p.values[s]]),
+            o.rows.map((p) => [
+              fingerprintTypedValues([p.values[s]]),
+              p.values[s],
+            ]),
           ).values(),
         ],
         h = c.map(
@@ -1827,14 +1922,14 @@ function Bce(e, r, t, n) {
         values: [
           ...indices.map((m) => p[0].values[m]),
           ...c.map((m) =>
-            j7(
+            aggregateFieldValues(
               p.filter((v) => v.values[s] === m),
               d,
               t.operation,
             ),
           ),
         ],
-        sources: jk(p),
+        sources: uniqueSortedSources(p),
       }));
       if (!c.length && t.keys.length === 0)
         throw Error(
@@ -1857,7 +1952,7 @@ function Bce(e, r, t, n) {
         throw Error(
           "Append requires the same exact header set; column order may differ.",
         );
-      const d = o.fields.map((u) => Hf(s, u));
+      const d = o.fields.map((u) => findFieldIndexOrThrow(s, u));
       return {
         data: {
           fields: o.fields,
@@ -1876,8 +1971,8 @@ function Bce(e, r, t, n) {
     }
     case "merge": {
       const s = n(t.source),
-        d = t.keys.map((v) => Hf(o, v.left)),
-        u = t.keys.map((v) => Hf(s, v.right));
+        d = t.keys.map((v) => findFieldIndexOrThrow(o, v.left)),
+        u = t.keys.map((v) => findFieldIndexOrThrow(s, v.right));
       if (new Set(d).size !== d.length || new Set(u).size !== u.length)
         throw Error("Merge keys cannot repeat a field.");
       const l = (v, g) =>
@@ -1888,7 +1983,7 @@ function Bce(e, r, t, n) {
           })),
         c = l(o, "Left"),
         h = l(s, "Right"),
-        f = Y$(c, h, d, u, t.normalization, t.fuzzy),
+        f = matchKeyPopulations(c, h, d, u, t.normalization, t.fuzzy),
         p = [],
         m = (v, g) => {
           if (p.length >= 1e3)
@@ -1898,7 +1993,7 @@ function Bce(e, r, t, n) {
               ...(v?.values ?? o.fields.map(() => null)),
               ...(g?.values ?? s.fields.map(() => null)),
             ],
-            sources: jk([v, g].filter((b) => !!b)),
+            sources: uniqueSortedSources([v, g].filter((b) => !!b)),
           });
         };
       for (const v of c) {
@@ -1937,4 +2032,18 @@ function Bce(e, r, t, n) {
   }
 }
 
-export { Bce, Dce, EI, Fce, Mce, Nce, Oce, a3, bz, dz, hz, wT, xT };
+export {
+  executeRecipeStep,
+  commitApprovedTransformation,
+  discoverArrayFormulaAnchors,
+  resolveRecipeSourceTable,
+  verifyTransformationPreview,
+  applyTextSplitPreview,
+  selectExceptionFreeRows,
+  buildTransformationPreview,
+  validateRecipeOutputTable,
+  buildTextSplitResult,
+  describeInferredTextRule,
+  profileFieldTypes,
+  buildFieldControlTotals,
+};

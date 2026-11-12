@@ -1,66 +1,82 @@
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
-import { $3, Nc, bf, hr, iu, m1, ts } from "./01-core-schemas-and-hashing.js";
 import {
-  Aie,
-  CR,
-  Cf,
-  ER,
-  HR,
-  Tx,
-  Xw,
-  eU,
-  jn,
-  kC,
-  rU,
-  rn,
-  uh,
-  v0,
-  xR,
+  fingerprintExtensionCall,
+  extensionRuntimeLimits,
+  hashExtensionManifest,
+  fingerprintCanonicalValue,
+  sha256HexDigest,
+  validateExtensionValue,
+  normalizeDatePolicy,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  formatExternalSheetReference,
+  rewriteFormulaReferences,
+  evaluateWorkbookFormulas,
+  encodeWorkbookFingerprint,
+  alternateFormatExtensions,
+  parseExternalLinkRange,
+  workbookQualifierSchema,
+  tokenizeExternalReferences,
+  assertSheetUnprotected,
+  validateExtractedSourceTables,
+  buildExternalLinkAliases,
+  normalizeWorkbookInput,
+  workbookLinkLimits,
+  checkDataValidationBatch,
+  rewriteExternalReferences,
 } from "./03-workbook-model.js";
 import {
-  A$,
-  C$,
-  E$,
-  IC,
-  Pse,
-  Use,
-  hI,
+  resolveExtensionCachedResult,
+  evaluateExtensionFunctionCall,
+  requireApprovedExtension,
+  withExtensionHostScope,
+  runExtensionOperation,
+  applyExtensionPreview,
+  resolveExtensionSheetScope,
   k$,
-  mf,
-  pI,
-  x$,
-  y$,
+  validateExtensionHostPolicy,
+  reviewExtensionFormulas,
+  assertExtensionWriteScope,
+  getFormulaScanList,
 } from "./04-cell-input-paste-and-fill.js";
 
-function $se(e, r, t = {}) {
-  const n = mf(e, t),
-    o = E$(e, r, t),
+function buildExtensionCallReview(e, r, t = {}) {
+  const n = validateExtensionHostPolicy(e, t),
+    o = requireApprovedExtension(e, r, t),
     a = o.manifest,
-    s = IC(e, n.extensions),
+    s = withExtensionHostScope(e, n.extensions),
     d = [],
-    u = bf(a);
+    u = hashExtensionManifest(a);
   let l = 0;
-  for (const h of pI(e))
+  for (const h of reviewExtensionFormulas(e))
     for (const f of h.calls.filter((p) =>
       p.name.startsWith(a.namespace + "."),
     )) {
-      if ((x$(e, [h.sheetId], t), h.literal))
+      if ((assertExtensionWriteScope(e, [h.sheetId], t), h.literal))
         throw Error(
           "Inert imported formulas must be deliberately entered as active formulas before extension execution.",
         );
-      const p = C$(s, h, f, o);
+      const p = evaluateExtensionFunctionCall(s, h, f, o);
       if (
         ((l += p.reduce((v, g) => {
           return v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1);
         }, 0)),
-        l > Nc.inputCells || d.length >= Nc.calls)
+        l > extensionRuntimeLimits.inputCells ||
+          d.length >= extensionRuntimeLimits.calls)
       )
         throw Error(
           "Extension argument or call count exceeds its review limit.",
         );
-      const m = $3(h.sheetId, h.address, h.formula, f.name, p, u);
+      const m = fingerprintExtensionCall(
+        h.sheetId,
+        h.address,
+        h.formula,
+        f.name,
+        p,
+        u,
+      );
       d.some((v) => v.cacheKey === m) ||
         d.push({
           sheetId: h.sheetId,
@@ -86,20 +102,25 @@ function $se(e, r, t = {}) {
   };
   return (
     k$.set(c, {
-      bookHash: hr(e),
+      bookHash: fingerprintCanonicalValue(e),
       policyHash: n.hash(),
-      planHash: hr(c),
+      planHash: fingerprintCanonicalValue(c),
       binding: o,
       used: false,
     }),
     c
   );
 }
-const rT = new WeakMap();
-async function zse(e, r, t = {}, n = { approved: false }) {
+const extensionResultCandidates = new WeakMap();
+async function runReviewedExtensionCalls(
+  e,
+  r,
+  t = {},
+  n = { approved: false },
+) {
   var c, h, f;
   const o = k$.get(r),
-    a = mf(e, t);
+    a = validateExtensionHostPolicy(e, t);
   if (!o || o.used)
     throw Error("Unknown or already executed extension input review.");
   if (n.approved !== true)
@@ -108,15 +129,15 @@ async function zse(e, r, t = {}, n = { approved: false }) {
     );
   if (
     t.readOnly ||
-    o.bookHash !== hr(e) ||
+    o.bookHash !== fingerprintCanonicalValue(e) ||
     o.policyHash !== a.hash() ||
-    o.planHash !== hr(r)
+    o.planHash !== fingerprintCanonicalValue(r)
   )
     throw Error(
       "Workbook, extension or permissions changed. Review inputs again.",
     );
-  const s = n.timeoutMs ?? Nc.timeoutMs;
-  if (!Number.isInteger(s) || s < 1 || s > Nc.maxTimeoutMs)
+  const s = n.timeoutMs ?? extensionRuntimeLimits.timeoutMs;
+  if (!Number.isInteger(s) || s < 1 || s > extensionRuntimeLimits.maxTimeoutMs)
     throw Error("Extension timeout must be between 1 and 60,000 milliseconds.");
   if ((c = n.signal) != null && c.aborted)
     throw Error("Extension processing cancelled.");
@@ -138,7 +159,10 @@ async function zse(e, r, t = {}, n = { approved: false }) {
     let v = 0;
     const g = async () => {
       for (const O of r.requests) {
-        if (o.bookHash !== hr(e) || o.policyHash !== mf(e, t).hash())
+        if (
+          o.bookHash !== fingerprintCanonicalValue(e) ||
+          o.policyHash !== validateExtensionHostPolicy(e, t).hash()
+        )
           throw Error(
             "Inputs or permissions changed during extension processing.",
           );
@@ -165,14 +189,14 @@ async function zse(e, r, t = {}, n = { approved: false }) {
             (D) =>
               `${r.manifest.namespace}.${D.id}` === O.invocation.functionName,
           ),
-          V = m1(j.value, z.result);
+          V = validateExtensionValue(j.value, z.result);
         if (
           ((v += Array.isArray(V)
             ? V.length * V[0].length
             : V && typeof V == "object"
               ? Object.keys(V.fields).length
               : 1),
-          v > Nc.outputCells)
+          v > extensionRuntimeLimits.outputCells)
         )
           throw Error("Extension results exceed the total output cell budget.");
         m.push({
@@ -182,8 +206,8 @@ async function zse(e, r, t = {}, n = { approved: false }) {
           formula: O.formula,
           functionName: O.invocation.functionName,
           arguments: structuredClone(O.invocation.arguments),
-          manifestHash: bf(r.manifest),
-          scopeHash: hI(e, o.binding),
+          manifestHash: hashExtensionManifest(r.manifest),
+          scopeHash: resolveExtensionSheetScope(e, o.binding),
           result: V,
           calculatedAt: new Date().toISOString(),
           providerRevision: j.revision,
@@ -193,12 +217,12 @@ async function zse(e, r, t = {}, n = { approved: false }) {
     };
     if (
       (await Promise.race([g(), p]),
-      o.bookHash !== hr(e) ||
-        o.policyHash !== mf(e, t).hash() ||
-        o.planHash !== hr(r))
+      o.bookHash !== fingerprintCanonicalValue(e) ||
+        o.policyHash !== validateExtensionHostPolicy(e, t).hash() ||
+        o.planHash !== fingerprintCanonicalValue(r))
     )
       throw Error("Inputs or permissions changed during extension processing.");
-    const b = rn(e),
+    const b = normalizeWorkbookInput(e),
       y = structuredClone(b.extensions);
     ((y.caches = y.caches.filter(
       (O) =>
@@ -211,9 +235,9 @@ async function zse(e, r, t = {}, n = { approved: false }) {
     )),
       y.caches.push(...m),
       (b.extensions = y));
-    const w = rn(b),
-      E = IC(w, a.extensions),
-      A = Cf(E),
+    const w = normalizeWorkbookInput(b),
+      E = withExtensionHostScope(w, a.extensions),
+      A = evaluateWorkbookFormulas(E),
       k = [],
       F = [];
     for (const O of m) {
@@ -228,7 +252,7 @@ async function zse(e, r, t = {}, n = { approved: false }) {
       const z = w.sheets.find((V) => V.id === O.sheetId).cells[O.address];
       F.push({ sheetId: O.sheetId, address: O.address, before: z, after: z });
     }
-    v0(E, F);
+    checkDataValidationBatch(E, F);
     const I = {
       extensionId: r.extensionId,
       results: structuredClone(m),
@@ -237,10 +261,10 @@ async function zse(e, r, t = {}, n = { approved: false }) {
         "These are reviewed cached results, not a live service. Changed arguments require another approved run. Provider revision and entity source labels are host assertions, not proof of authenticity.",
     };
     return (
-      rT.set(I, {
-        bookHash: hr(e),
+      extensionResultCandidates.set(I, {
+        bookHash: fingerprintCanonicalValue(e),
         policyHash: a.hash(),
-        planHash: hr(I),
+        planHash: fingerprintCanonicalValue(I),
         candidate: w,
       }),
       I
@@ -251,25 +275,28 @@ async function zse(e, r, t = {}, n = { approved: false }) {
       d.abort());
   }
 }
-function Vse(e, r, t = {}) {
-  const n = rT.get(r);
+function applyReviewedExtensionResults(e, r, t = {}) {
+  const n = extensionResultCandidates.get(r);
   if (!n) throw Error("Unknown or already applied extension results.");
   if (
     t.readOnly ||
-    n.bookHash !== hr(e) ||
-    n.policyHash !== mf(e, t).hash() ||
-    n.planHash !== hr(r)
+    n.bookHash !== fingerprintCanonicalValue(e) ||
+    n.policyHash !== validateExtensionHostPolicy(e, t).hash() ||
+    n.planHash !== fingerprintCanonicalValue(r)
   )
     throw Error(
       "Workbook, extension or permissions changed. Run and review again.",
     );
-  return (rT.delete(r), rn(n.candidate));
+  return (
+    extensionResultCandidates.delete(r),
+    normalizeWorkbookInput(n.candidate)
+  );
 }
-const Wse = [];
-function Hse({ workbook, extensions, onReview }) {
+const emptyExtensionList = [];
+function CustomFunctionReviewBanner({ workbook, extensions, onReview }) {
   const n = ne.useMemo(() => {
     try {
-      const o = A$(workbook, { extensions });
+      const o = resolveExtensionCachedResult(workbook, { extensions });
       return o.cells.length
         ? `${o.cells.length} custom-function cells · ${o.cells.filter((a) => a.functions.some((s) => s.state !== "reviewed-cache")).length} need review. Extension results refresh only after approval.`
         : null;
@@ -291,13 +318,13 @@ function Hse({ workbook, extensions, onReview }) {
       })
     : null;
 }
-function qse(e) {
+function AddInsAndCustomFunctionsDialog(e) {
   const r = ne.useRef(null),
     t = ne.useRef(e),
     n = ne.useRef(null),
     o = ne.useRef(0);
   t.current = e;
-  const a = e.extensions ?? Wse,
+  const a = e.extensions ?? emptyExtensionList,
     [s, d] = ne.useState(""),
     [u, l] = ne.useState(null),
     [c, h] = ne.useState(null),
@@ -309,7 +336,10 @@ function qse(e) {
     [k, F] = ne.useState(0),
     I = ne.useMemo(() => {
       try {
-        return { data: A$(e.workbook, { extensions: a }), error: "" };
+        return {
+          data: resolveExtensionCachedResult(e.workbook, { extensions: a }),
+          error: "",
+        };
       } catch (W) {
         return { data: null, error: W.message };
       }
@@ -363,11 +393,11 @@ function qse(e) {
     },
     C = (W) =>
       _(() => {
-        (B(), l(Pse(e.workbook, j, W, D())));
+        (B(), l(runExtensionOperation(e.workbook, j, W, D())));
       }),
     T = () =>
       _(() => {
-        (B(), h($se(e.workbook, j, D())));
+        (B(), h(buildExtensionCallReview(e.workbook, j, D())));
       }),
     N = async () => {
       if (!c || !m) return;
@@ -375,7 +405,7 @@ function qse(e) {
         K = new AbortController();
       ((n.current = K), b(true), w(""));
       try {
-        const te = await zse(t.current.workbook, c, D(), {
+        const te = await runReviewedExtensionCalls(t.current.workbook, c, D(), {
           approved: m,
           signal: K.signal,
         });
@@ -389,7 +419,11 @@ function qse(e) {
     R = () =>
       _(() => {
         const W = t.current.workbook,
-          K = u ? Use(W, u, D()) : f ? Vse(W, f, D()) : null;
+          K = u
+            ? applyExtensionPreview(W, u, D())
+            : f
+              ? applyReviewedExtensionResults(W, f, D())
+              : null;
         K &&
           (t.current.onWorkbookChange(
             K,
@@ -990,20 +1024,20 @@ function qse(e) {
     }),
   });
 }
-function _C(e, r) {
+function buildWorkbookLinkPolicy(e, r) {
   if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
   const t = r.sources ?? [],
     n = r.allowedSheetIds ?? e.sheets.map((o) => o.id);
   if (
     !Array.isArray(t) ||
-    t.length > uh.sources ||
+    t.length > workbookLinkLimits.sources ||
     new Set(t.map((o) => o.target)).size !== t.length
   )
     throw Error("Approve distinct source qualifiers, at most eight workbooks.");
   for (const o of t)
     if (
-      (Xw.parse(o.target),
+      (workbookQualifierSchema.parse(o.target),
       o.workbook.id === e.id ||
         !Array.isArray(o.allowedSheetIds) ||
         o.allowedSheetIds.some(
@@ -1018,26 +1052,26 @@ function _C(e, r) {
     sources: t,
     allowed: n,
     hash: () =>
-      hr([
+      fingerprintCanonicalValue([
         !!r.readOnly,
         n,
         t.map((o) => [
           o.target,
-          ER(o.workbook),
+          encodeWorkbookFingerprint(o.workbook),
           o.allowedSheetIds,
           !!o.includeHidden,
         ]),
       ]),
   };
 }
-function Oy(e) {
+function collectWorkbookLinkFormulas(e) {
   const r = [];
   for (const t of e.sheets)
-    for (const [n, o] of y$(t.cells, "external")) {
+    for (const [n, o] of getFormulaScanList(t.cells, "external")) {
       if (typeof o.raw != "string" || !o.raw.startsWith("=")) continue;
-      const a = eU(o.raw),
-        s = xR(o.raw, () => "0"),
-        d = CR(s, e, t.id, n, false);
+      const a = tokenizeExternalReferences(o.raw),
+        s = rewriteExternalReferences(o.raw, () => "0"),
+        d = rewriteFormulaReferences(s, e, t.id, n, false);
       if (
         ((a.length || d?.kind === "external") &&
           r.push({
@@ -1054,17 +1088,17 @@ function Oy(e) {
                 }
               : {}),
           }),
-        r.length > uh.formulas)
+        r.length > workbookLinkLimits.formulas)
       )
         throw Error(
-          `Workbook link review is limited to ${uh.formulas} formula cells.`,
+          `Workbook link review is limited to ${workbookLinkLimits.formulas} formula cells.`,
         );
     }
   return r;
 }
-function nT(e, r = {}) {
-  const t = _C(e, r),
-    n = Oy(e);
+function buildWorkbookLinkReview(e, r = {}) {
+  const t = buildWorkbookLinkPolicy(e, r),
+    n = collectWorkbookLinkFormulas(e);
   return {
     links: [
       ...new Set(n.flatMap((s) => s.references.map((d) => d.target))),
@@ -1102,14 +1136,14 @@ function nT(e, r = {}) {
             : h
               ? "unauthorized-worksheet"
               : u
-                ? u.sourceFingerprint !== ER(d.workbook)
+                ? u.sourceFingerprint !== encodeWorkbookFingerprint(d.workbook)
                   ? "stale"
                   : l.some(
                         (b) =>
                           !u.sheets.find(
                             (y) =>
                               y.name.toLowerCase() === b.sheet.toLowerCase() &&
-                              Tx(b.range).every((w) =>
+                              parseExternalLinkRange(b.range).every((w) =>
                                 Object.hasOwn(y.cells, w),
                               ),
                           ),
@@ -1137,16 +1171,19 @@ function nT(e, r = {}) {
       "Values are retained snapshots. Only explicit refresh reads approved workbooks. No path or URL is fetched; matching a supplied revision does not verify a live file.",
   };
 }
-const iT = new WeakMap();
-function Xse(e, r, t, n) {
-  const o = _C(e, n).sources.find((h) => h.target === t);
+const workbookLinkPreviewRecords = new WeakMap();
+function resolveLinkedSourceCalculation(e, r, t, n) {
+  const o = buildWorkbookLinkPolicy(e, n).sources.find((h) => h.target === t);
   if (!o)
     throw Error(
       `Source ${t} is missing or not approved. Attach the exact source and approve its worksheets.`,
     );
-  const a = rn(o.workbook),
+  const a = normalizeWorkbookInput(o.workbook),
     s = new Set(o.allowedSheetIds);
-  if (ts(a.datePolicy).dateSystem !== ts(e.datePolicy).dateSystem)
+  if (
+    normalizeDatePolicy(a.datePolicy).dateSystem !==
+    normalizeDatePolicy(e.datePolicy).dateSystem
+  )
     throw Error(
       "Source and destination date systems differ. Convert and review the source date system before linking.",
     );
@@ -1156,7 +1193,11 @@ function Xse(e, r, t, n) {
         !!f && s.has(h) && (!(f.hidden || f.veryHidden) || !!o.includeHidden)
       );
     },
-    u = Cf(a, {}, { allowRead: d, allowName: () => true, step: () => {} }),
+    u = evaluateWorkbookFormulas(
+      a,
+      {},
+      { allowRead: d, allowName: () => true, step: () => {} },
+    ),
     l = [];
   let c = 0;
   for (const h of r) {
@@ -1168,9 +1209,9 @@ function Xse(e, r, t, n) {
       throw Error(`Source worksheet ${h.sheet} is outside the approved scope.`);
     let p = l.find((m) => m.id === f.id);
     p || ((p = { id: f.id, name: f.name, cells: {} }), l.push(p));
-    for (const m of Tx(h.range))
+    for (const m of parseExternalLinkRange(h.range))
       if (!Object.hasOwn(p.cells, m)) {
-        if (++c > uh.cells)
+        if (++c > workbookLinkLimits.cells)
           throw Error("External link refresh exceeds 5,000 source cells.");
         const v = u.getTypedValue(f.id, m);
         if (
@@ -1198,12 +1239,12 @@ function Xse(e, r, t, n) {
     sourceId: a.id,
     sourceName: a.name,
     sourceRevision: a.revision,
-    sourceFingerprint: ER(a),
+    sourceFingerprint: encodeWorkbookFingerprint(a),
     resolvedAt: new Date().toISOString(),
     sheets: l,
   };
 }
-function Gse(e, r) {
+function assertLinkDestinationPublishable(e, r) {
   const t = e.getTypedValue(r.sheetId, r.address);
   if (t.type === "error" || e.getSpillRange(r.sheetId, r.address))
     throw Error(
@@ -1215,22 +1256,23 @@ function Gse(e, r) {
     );
   return t;
 }
-function Zse(e, r, t = {}) {
-  const n = _C(e, t);
+function previewWorkbookLinkOperation(e, r, t = {}) {
+  const n = buildWorkbookLinkPolicy(e, t);
   if (t.readOnly) throw Error("The workbook is read-only.");
   if (!["refresh", "replace", "break"].includes(r.action))
     throw Error("Unknown link operation.");
   if (
-    (r.target !== undefined && Xw.parse(r.target),
+    (r.target !== undefined && workbookQualifierSchema.parse(r.target),
     r.action !== "refresh" && !r.target)
   )
     throw Error("Choose a target workbook link.");
   if (
     r.action === "replace" &&
-    (Xw.parse(r.replacementTarget), r.replacementTarget === r.target)
+    (workbookQualifierSchema.parse(r.replacementTarget),
+    r.replacementTarget === r.target)
   )
     throw Error("Choose a different source qualifier.");
-  const o = Oy(e),
+  const o = collectWorkbookLinkFormulas(e),
     a = o.filter((p) =>
       r.target
         ? p.references.some((m) => m.target === r.target)
@@ -1242,14 +1284,14 @@ function Zse(e, r, t = {}) {
     if (!n.allowed.includes(p.sheetId))
       throw Error("A destination worksheet is outside the host write scope.");
     if (
-      (jn(e.sheets.find((m) => m.id === p.sheetId)),
+      (assertSheetUnprotected(e.sheets.find((m) => m.id === p.sheetId)),
       p.literal && !r.activateLiteral)
     )
       throw Error(
         "Explicitly approve activation of inert imported formulas before resolving them.",
       );
   }
-  let s = rn(e);
+  let s = normalizeWorkbookInput(e);
   s.workbookLinks = structuredClone(
     s.workbookLinks ?? { schemaVersion: 1, sources: [] },
   );
@@ -1259,9 +1301,13 @@ function Zse(e, r, t = {}) {
       ...m.cells[p.address],
       raw:
         r.action === "replace"
-          ? xR(p.formula, (v) =>
+          ? rewriteExternalReferences(p.formula, (v) =>
               v.target === r.target
-                ? Aie(r.replacementTarget, v.sheet, v.range)
+                ? formatExternalSheetReference(
+                    r.replacementTarget,
+                    v.sheet,
+                    v.range,
+                  )
                 : undefined,
             )
           : p.formula,
@@ -1269,17 +1315,17 @@ function Zse(e, r, t = {}) {
       delete m.cells[p.address].literal);
   }
   if (r.action !== "break") {
-    const p = Oy(s)
+    const p = collectWorkbookLinkFormulas(s)
         .filter((v) =>
           a.some((g) => g.sheetId === v.sheetId && g.address === v.address),
         )
         .flatMap((v) => v.references),
       m = [...new Set(p.map((v) => v.target))];
     for (const v of m) {
-      const g = Oy(s)
+      const g = collectWorkbookLinkFormulas(s)
           .flatMap((y) => y.references)
           .filter((y) => y.target === v),
-        b = Xse(e, g, v, t);
+        b = resolveLinkedSourceCalculation(e, g, v, t);
       ((s.workbookLinks.sources = s.workbookLinks.sources.filter(
         (y) => y.target !== v,
       )),
@@ -1289,11 +1335,18 @@ function Zse(e, r, t = {}) {
     throw Error(
       "Acknowledge that breaking links keeps the previewed cached values and removes the complete formulas.",
     );
-  s = rn(s);
-  const d = new Set([...n.allowed, ...rU(s).sheets.map((p) => p.id)]),
-    u = Cf(s, {}, { allowRead: (p) => d.has(p), step: () => {} }),
+  s = normalizeWorkbookInput(s);
+  const d = new Set([
+      ...n.allowed,
+      ...buildExternalLinkAliases(s).sheets.map((p) => p.id),
+    ]),
+    u = evaluateWorkbookFormulas(
+      s,
+      {},
+      { allowRead: (p) => d.has(p), step: () => {} },
+    ),
     l = a.map((p) => {
-      const m = Gse(u, p);
+      const m = assertLinkDestinationPublishable(u, p);
       return {
         sheetId: p.sheetId,
         sheetName: p.sheetName,
@@ -1323,13 +1376,17 @@ function Zse(e, r, t = {}) {
         after: m.cells[p.address],
       }));
   }
-  const h = new Set(Oy(s).flatMap((p) => p.references.map((m) => m.target)));
+  const h = new Set(
+    collectWorkbookLinkFormulas(s).flatMap((p) =>
+      p.references.map((m) => m.target),
+    ),
+  );
   ((s.workbookLinks = {
     ...s.workbookLinks,
     sources: s.workbookLinks.sources.filter((p) => h.has(p.target)),
   }),
-    v0(s, c),
-    (s = rn(s)));
+    checkDataValidationBatch(s, c),
+    (s = normalizeWorkbookInput(s)));
   const f = {
     request: structuredClone(r),
     cells: l,
@@ -1340,64 +1397,76 @@ function Zse(e, r, t = {}) {
         : "These are reviewed snapshots of approved workbooks, not live network connections. Future changes require another preview and refresh.",
   };
   return (
-    iT.set(f, {
-      bookHash: hr(e),
+    workbookLinkPreviewRecords.set(f, {
+      bookHash: fingerprintCanonicalValue(e),
       contextHash: n.hash(),
-      planHash: hr(f),
+      planHash: fingerprintCanonicalValue(f),
       candidate: s,
     }),
     f
   );
 }
-function Kse(e, r, t = {}) {
-  const n = iT.get(r);
+function applyWorkbookLinkPreview(e, r, t = {}) {
+  const n = workbookLinkPreviewRecords.get(r);
   if (!n) throw Error("Unknown or already applied workbook link preview.");
   if (t.readOnly) throw Error("The workbook is read-only.");
   if (
-    n.bookHash !== hr(e) ||
-    n.contextHash !== _C(e, t).hash() ||
-    n.planHash !== hr(r)
+    n.bookHash !== fingerprintCanonicalValue(e) ||
+    n.contextHash !== buildWorkbookLinkPolicy(e, t).hash() ||
+    n.planHash !== fingerprintCanonicalValue(r)
   )
     throw Error(
       "Workbook, source, review or permissions changed. Preview links again.",
     );
-  return (iT.delete(r), rn(n.candidate));
+  return (
+    workbookLinkPreviewRecords.delete(r),
+    normalizeWorkbookInput(n.candidate)
+  );
 }
-const S$ = new WeakMap();
-function T$(e, r, t) {
+const sourceInspectionRecords = new WeakMap();
+function recordSourceInspection(e, r, t) {
   if (
-    (kC(e), e.fileName !== t || e.byteLength !== r.length || e.sha256 !== iu(r))
+    (validateExtractedSourceTables(e),
+    e.fileName !== t ||
+      e.byteLength !== r.length ||
+      e.sha256 !== sha256HexDigest(r))
   )
     throw Error("Source inspection does not match its original.");
-  S$.set(e, { signature: JSON.stringify(e), bytes: r.slice() });
+  sourceInspectionRecords.set(e, {
+    signature: JSON.stringify(e),
+    bytes: r.slice(),
+  });
 }
-function DC(e) {
-  const r = S$.get(e);
+function assertSourceInspectionCurrent(e) {
+  const r = sourceInspectionRecords.get(e);
   if (!r || r.signature !== JSON.stringify(e))
     throw Error(
       "The source inspection changed or is untrusted. Inspect the original again.",
     );
   return r.bytes.slice();
 }
-const N$ = new WeakMap();
-function Yse(e, r, t) {
+const formatInspectionRecords = new WeakMap();
+function validateIsolatedFormatInspection(e, r, t) {
   if (
     !e ||
     e.schemaVersion !== 1 ||
     e.fileName !== t ||
     e.fileBytes !== r.length ||
-    e.sha256 !== iu(r) ||
-    !HR.includes(e.format) ||
+    e.sha256 !== sha256HexDigest(r) ||
+    !alternateFormatExtensions.includes(e.format) ||
     !t.toLowerCase().endsWith("." + e.format) ||
     e.execution !== "never" ||
     !Array.isArray(e.parts) ||
     e.parts.length > 2e3
   )
     throw Error("Invalid isolated format inspection.");
-  N$.set(e, { signature: JSON.stringify(e), bytes: r.slice() });
+  formatInspectionRecords.set(e, {
+    signature: JSON.stringify(e),
+    bytes: r.slice(),
+  });
 }
-function oT(e) {
-  const r = N$.get(e);
+function assertFormatInspectionCurrent(e) {
+  const r = formatInspectionRecords.get(e);
   if (!r || r.signature !== JSON.stringify(e))
     throw Error(
       "The format inspection changed or is untrusted. Inspect the original again.",
@@ -1405,4 +1474,14 @@ function oT(e) {
   return r.bytes.slice();
 }
 
-export { DC, Hse, Kse, T$, Yse, Zse, nT, oT, qse };
+export {
+  assertSourceInspectionCurrent,
+  CustomFunctionReviewBanner,
+  applyWorkbookLinkPreview,
+  recordSourceInspection,
+  validateIsolatedFormatInspection,
+  previewWorkbookLinkOperation,
+  buildWorkbookLinkReview,
+  assertFormatInspectionCurrent,
+  AddInsAndCustomFunctionsDialog,
+};

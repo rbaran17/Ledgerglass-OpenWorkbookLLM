@@ -1,13 +1,36 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { $p, Gf, P3, Pg, lf } from "./01-core-schemas-and-hashing.js";
-import { CR, Jre, Vn, _t, cn, ct, ut } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { m0 } from "./12-formula-dependency-inspector.js";
-import { dS, d_, fW, hW, txe } from "./34-function-browser-and-names.js";
+import {
+  parseFormulaTree,
+  walkFormulaNodes,
+  normalizeFunctionName,
+  tokenizeFormulaText,
+  normalizeBindingName,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  rewriteFormulaReferences,
+  frozenConversionUnits,
+  calculateWorkbookWithSettings,
+  _t,
+  cn,
+  parseRangeAddress,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import {
+  nameScanLimits,
+  buildFunctionCatalogEntry,
+  functionBrowserCategories,
+  buildFunctionCatalog,
+  buildFunctionBrowserGroups,
+} from "./34-function-browser-and-names.js";
 
-function nxe(e, r = {}) {
+function buildFormulaCompatibilityReport(e, r = {}) {
   for (const v of ["includeHidden", "resolveNames", "includeMetadata"])
     if (r[v] !== undefined && typeof r[v] != "boolean")
       throw Error(`${v} must be boolean.`);
@@ -19,9 +42,9 @@ function nxe(e, r = {}) {
       ))
   )
     throw Error("Invalid authorized worksheet scope.");
-  const t = { ...dS, ...r.limits };
+  const t = { ...nameScanLimits, ...r.limits };
   for (const v of ["maxLocations", "maxCharacters", "maxFindings"])
-    if (!Number.isInteger(t[v]) || t[v] < 1 || t[v] > dS[v])
+    if (!Number.isInteger(t[v]) || t[v] < 1 || t[v] > nameScanLimits[v])
       throw Error(`Invalid ${v}; limits can only be narrowed.`);
   const n = r.includeHidden ?? true,
     o = r.resolveNames ?? true,
@@ -49,7 +72,7 @@ function nxe(e, r = {}) {
         ],
       },
       findings: [],
-      families: txe(),
+      families: buildFunctionBrowserGroups(),
       connectorPolicy: {
         enabled: false,
         required:
@@ -91,18 +114,19 @@ function nxe(e, r = {}) {
         );
       l.coverage.charactersScanned += v.length;
       const y = [];
-      CR(v, e, g ?? d[0]?.id ?? "", "A1") &&
+      rewriteFormulaReferences(v, e, g ?? d[0]?.id ?? "", "A1") &&
         y.push({
           kind: "external-reference",
           message:
             "A reference form is external or unsupported. Inspect the original formula in the authorized workbook.",
         });
       try {
-        Gf(Pg(v), (A, k, F, I) => {
-          if (I || (!A.qualifier && k.has(lf(A.name)))) return;
-          const O = P3(A.name);
+        walkFormulaNodes(tokenizeFormulaText(v), (A, k, F, I) => {
+          if (I || (!A.qualifier && k.has(normalizeBindingName(A.name))))
+            return;
+          const O = normalizeFunctionName(A.name);
           if (!F && ["TRUE", "FALSE"].includes(O)) return;
-          const j = d_(O);
+          const j = buildFunctionCatalogEntry(O);
           if (F && !A.qualifier && j.status === "local") return;
           const z = A.qualifier
             ? e.sheets.find(
@@ -137,7 +161,7 @@ function nxe(e, r = {}) {
               D.name.toLowerCase(),
             ]);
             if (b.includes(B)) {
-              $p(D.refersTo) ||
+              parseFormulaTree(D.refersTo) ||
                 y.push({
                   kind: "name-cycle",
                   viaName: D.name,
@@ -146,7 +170,7 @@ function nxe(e, r = {}) {
                 });
               return;
             }
-            if (b.length >= dS.maxNameDepth) {
+            if (b.length >= nameScanLimits.maxNameDepth) {
               (c(
                 "Named-definition depth reached; uninspected definitions remain.",
               ),
@@ -269,8 +293,8 @@ function nxe(e, r = {}) {
     l
   );
 }
-function ixe(e) {
-  const { text, language } = Dr(),
+function FormulaCompatibilityDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState("report"),
     [a, s] = ne.useState(true),
     [d, u] = ne.useState(""),
@@ -279,7 +303,7 @@ function ixe(e) {
     p = ne.useMemo(() => {
       try {
         return {
-          report: nxe(e.workbook, {
+          report: buildFormulaCompatibilityReport(e.workbook, {
             allowedSheetIds: e.allowedSheetIds,
             includeHidden: a,
           }),
@@ -292,7 +316,7 @@ function ixe(e) {
       }
     }, [e.workbook, e.allowedSheetIds, a]),
     v = ne
-      .useMemo(hW, [])
+      .useMemo(buildFunctionCatalog, [])
       .filter(
         (w) =>
           (!l || w.family === l) &&
@@ -332,7 +356,9 @@ function ixe(e) {
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              children: i.jsx(M, { children: "Formula compatibility" }),
+              children: i.jsx(LocalizedText, {
+                children: "Formula compatibility",
+              }),
             }),
             i.jsx("button", {
               "aria-label": text("Close compatibility"),
@@ -344,7 +370,7 @@ function ixe(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Review support limits and affected locations before relying on calculations. Excel version comparison has not been run.",
           }),
@@ -360,13 +386,15 @@ function ixe(e) {
               role: "tab",
               "aria-selected": n === "report",
               onClick: () => o("report"),
-              children: i.jsx(M, { children: "Compatibility report" }),
+              children: i.jsx(LocalizedText, {
+                children: "Compatibility report",
+              }),
             }),
             i.jsx("button", {
               role: "tab",
               "aria-selected": n === "registry",
               onClick: () => o("registry"),
-              children: i.jsx(M, { children: "Function registry" }),
+              children: i.jsx(LocalizedText, { children: "Function registry" }),
             }),
           ],
         }),
@@ -385,7 +413,7 @@ function ixe(e) {
                       checked: a,
                       onChange: (w) => s(w.target.checked),
                     }),
-                    i.jsx(M, {
+                    i.jsx(LocalizedText, {
                       children: "Include hidden worksheets, rows and columns",
                     }),
                   ],
@@ -397,16 +425,18 @@ function ixe(e) {
                       i.jsxs("p", {
                         role: "status",
                         children: [
-                          i.jsx(M, { children: "Revision " }),
+                          i.jsx(LocalizedText, { children: "Revision " }),
                           b.revision,
                           " · ",
                           b.coverage.locationsScanned,
                           " ",
-                          i.jsx(M, { children: "locations inspected ·" }),
+                          i.jsx(LocalizedText, {
+                            children: "locations inspected ·",
+                          }),
                           " ",
                           b.findings.length,
                           " ",
-                          i.jsx(M, { children: "findings ·" }),
+                          i.jsx(LocalizedText, { children: "findings ·" }),
                           " ",
                           b.coverage.complete
                             ? "Scan complete within chosen scope"
@@ -421,20 +451,24 @@ function ixe(e) {
                               children: i.jsxs("tr", {
                                 children: [
                                   i.jsx("th", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Location",
                                     }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Function / source",
                                     }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, { children: "Finding" }),
+                                    children: i.jsx(LocalizedText, {
+                                      children: "Finding",
+                                    }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, { children: "Action" }),
+                                    children: i.jsx(LocalizedText, {
+                                      children: "Action",
+                                    }),
                                   }),
                                 ],
                               }),
@@ -464,7 +498,7 @@ function ixe(e) {
                                             w.viaName &&
                                               i.jsxs("small", {
                                                 children: [
-                                                  i.jsx(M, {
+                                                  i.jsx(LocalizedText, {
                                                     children: "Via ",
                                                   }),
                                                   w.viaName,
@@ -486,7 +520,7 @@ function ixe(e) {
                                                 ),
                                                   e.onClose());
                                               },
-                                              children: i.jsx(M, {
+                                              children: i.jsx(LocalizedText, {
                                                 children: "Go to cell",
                                               }),
                                             }),
@@ -500,7 +534,7 @@ function ixe(e) {
                                   i.jsx("tr", {
                                     children: i.jsx("td", {
                                       colSpan: 4,
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children:
                                           "No unsupported function calls found in the inspected scope. This does not establish calculation accuracy.",
                                       }),
@@ -514,7 +548,7 @@ function ixe(e) {
                       b.findings.length > 200 &&
                         i.jsxs("p", {
                           children: [
-                            i.jsx(M, {
+                            i.jsx(LocalizedText, {
                               children:
                                 "Showing 200 findings. Export the report for all",
                             }),
@@ -526,7 +560,7 @@ function ixe(e) {
                       i.jsxs("details", {
                         children: [
                           i.jsx("summary", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Family inventory and engagement uses",
                             }),
                           }),
@@ -539,11 +573,13 @@ function ixe(e) {
                                   " · ",
                                   w.adopted.length,
                                   " ",
-                                  i.jsx(M, { children: "adopted ·" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "adopted ·",
+                                  }),
                                   " ",
                                   w.unavailable.length,
                                   " ",
-                                  i.jsx(M, {
+                                  i.jsx(LocalizedText, {
                                     children: "inventoried as unavailable",
                                   }),
                                   i.jsx("br", {}),
@@ -567,12 +603,12 @@ function ixe(e) {
                   children: [
                     i.jsx("button", {
                       onClick: e.onClose,
-                      children: i.jsx(M, { children: "Close" }),
+                      children: i.jsx(LocalizedText, { children: "Close" }),
                     }),
                     i.jsx("button", {
                       disabled: !b,
                       onClick: y,
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "Export compatibility report",
                       }),
                     }),
@@ -591,7 +627,9 @@ function ixe(e) {
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Search function registry" }),
+                        i.jsx(LocalizedText, {
+                          children: "Search function registry",
+                        }),
                         i.jsx("input", {
                           value: d,
                           onChange: (w) => u(w.target.value),
@@ -600,7 +638,7 @@ function ixe(e) {
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Function family" }),
+                        i.jsx(LocalizedText, { children: "Function family" }),
                         i.jsxs("select", {
                           value: l,
                           onChange: (w) => c(w.target.value),
@@ -609,7 +647,7 @@ function ixe(e) {
                               value: "",
                               children: "All families",
                             }),
-                            fW.map((w) =>
+                            functionBrowserCategories.map((w) =>
                               i.jsx(
                                 "option",
                                 { value: w.id, children: w.title },
@@ -666,15 +704,19 @@ function ixe(e) {
                             i.jsxs("dl", {
                               children: [
                                 i.jsx("dt", {
-                                  children: i.jsx(M, { children: "Output" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Output",
+                                  }),
                                 }),
                                 i.jsx("dd", { children: g.outputs }),
                                 i.jsx("dt", {
-                                  children: i.jsx(M, { children: "Errors" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Errors",
+                                  }),
                                 }),
                                 i.jsx("dd", { children: g.errors.join(", ") }),
                                 i.jsx("dt", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Numeric tolerance",
                                   }),
                                 }),
@@ -684,17 +726,19 @@ function ixe(e) {
                                     : "Not applicable — no local implementation.",
                                 }),
                                 i.jsx("dt", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Verified Excel version",
                                   }),
                                 }),
                                 i.jsx("dd", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Not run; no verified version.",
                                   }),
                                 }),
                                 i.jsx("dt", {
-                                  children: i.jsx(M, { children: "Limits" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Limits",
+                                  }),
                                 }),
                                 i.jsx("dd", { children: g.limits }),
                               ],
@@ -703,17 +747,17 @@ function ixe(e) {
                               i.jsxs("details", {
                                 children: [
                                   i.jsx("summary", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Supported base unit symbols",
                                     }),
                                   }),
                                   i.jsx("p", {
-                                    children: Jre.map((w) => w.symbol).join(
-                                      ", ",
-                                    ),
+                                    children: frozenConversionUnits
+                                      .map((w) => w.symbol)
+                                      .join(", "),
                                   }),
                                   i.jsx("p", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Decimal prefixes apply only to metric entries. Binary prefixes apply only to bit and byte. Unknown or incompatible units return #N/A.",
                                     }),
@@ -726,7 +770,7 @@ function ixe(e) {
                     })
                   : i.jsx("p", {
                       role: "status",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "No matching functions.",
                       }),
                     }),
@@ -736,7 +780,7 @@ function ixe(e) {
     }),
   });
 }
-function VT(e) {
+function describeEvaluatedValue(e) {
   if (e instanceof Error && "error" in e)
     return { kind: "error", text: String(e.error) };
   if (Array.isArray(e)) {
@@ -745,7 +789,7 @@ function VT(e) {
     for (const d of a) {
       for (const u of d) {
         if (s.length === 8) break;
-        s.push(VT(u));
+        s.push(describeEvaluatedValue(u));
       }
       if (s.length === 8) break;
     }
@@ -765,7 +809,7 @@ function VT(e) {
       const a = e.ref,
         s = (d) =>
           Number.isInteger(d.row) && Number.isInteger(d.col) && d.col > 0
-            ? `${ut(d.col - 1)}${d.row}`
+            ? `${columnIndexToLetters(d.col - 1)}${d.row}`
             : "axis reference";
       return {
         kind: "reference",
@@ -786,15 +830,15 @@ function VT(e) {
     ...(r.length <= 256 ? { value: e ?? null } : { truncated: true }),
   };
 }
-const tj = (e, r) => {
+const validateInspectionLimit = (e, r) => {
   if (e === undefined) return r;
   if (!Number.isInteger(e) || e < 1 || e > r)
     throw Error(`Inspection limits must be integers between 1 and ${r}.`);
   return e;
 };
-function oxe(e, r) {
-  const t = tj(r.limits?.maxSteps, 500),
-    n = tj(r.limits?.maxReads, 2e3);
+function inspectFormulaCalculation(e, r) {
+  const t = validateInspectionLimit(r.limits?.maxSteps, 500),
+    n = validateInspectionLimit(r.limits?.maxReads, 2e3);
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("includeHidden must be boolean.");
   if (r.includeNames !== undefined && typeof r.includeNames != "boolean")
@@ -807,13 +851,13 @@ function oxe(e, r) {
     throw Error("Invalid authorized worksheet context.");
   const o = new Set(r.allowedSheetIds ?? e.sheets.map((C) => C.id)),
     a = _t(r.address),
-    s = `${ut(a.col)}${a.row + 1}`,
+    s = `${columnIndexToLetters(a.col)}${a.row + 1}`,
     d = r.allowedRanges?.map((C) => {
       if (!o.has(C.sheetId))
         throw Error(
           "Inspection ranges must remain within authorized worksheets.",
         );
-      return { ...C, bounds: ct(C.range) };
+      return { ...C, bounds: parseRangeAddress(C.range) };
     }),
     u = new Map(
       e.sheets.map((C) => [
@@ -858,7 +902,7 @@ function oxe(e, r) {
         h.push({ kind: C, message: T });
     },
     b = r.includeNames === false ? { ...e, definedNames: [] } : e,
-    y = Vn(
+    y = calculateWorkbookWithSettings(
       b,
       {},
       {
@@ -906,8 +950,10 @@ function oxe(e, r) {
                 sheetId: C.sheetId,
                 address: C.address,
                 operation: C.operation.slice(0, 1024),
-                inputs: (C.inputs ?? []).slice(0, 10).map(VT),
-                result: VT(C.result),
+                inputs: (C.inputs ?? [])
+                  .slice(0, 10)
+                  .map(describeEvaluatedValue),
+                result: describeEvaluatedValue(C.result),
               }));
         },
       },
@@ -967,7 +1013,7 @@ function oxe(e, r) {
     ],
   };
 }
-const axe = {
+const calculationErrorHints = {
   "#DIV/0!": "Review the denominator and blank inputs.",
   "#REF!":
     "A reference is missing, invalid, or no longer points to an available spill.",
@@ -985,8 +1031,8 @@ const axe = {
   "#LIMIT!": "The bounded local calculator reached a work or size limit.",
   "#CALC!": "Review empty arrays and uninvoked reusable functions.",
 };
-function sxe(e) {
-  const { text, language } = Dr(),
+function EvaluateFormulaDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     [a, s] = ne.useState(false),
@@ -995,7 +1041,7 @@ function sxe(e) {
     h = ne.useMemo(() => {
       try {
         return {
-          report: oxe(e.workbook, {
+          report: inspectFormulaCalculation(e.workbook, {
             sheetId: e.sheetId,
             address: e.address,
             allowedSheetIds: e.allowedSheetIds,
@@ -1089,11 +1135,13 @@ function sxe(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Evaluate Formula" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Evaluate Formula",
+                  }),
                 }),
                 i.jsxs("p", {
                   children: [
-                    i.jsx(M, {
+                    i.jsx(LocalizedText, {
                       children: "Read-only calculation replay · revision ",
                     }),
                     e.workbook.revision,
@@ -1121,13 +1169,15 @@ function sxe(e) {
                     checked: a,
                     onChange: (b) => s(b.target.checked),
                   }),
-                  i.jsx(M, { children: "Include hidden cells" }),
+                  i.jsx(LocalizedText, { children: "Include hidden cells" }),
                 ],
               }),
             i.jsx("button", {
               disabled: !f,
               onClick: g,
-              children: i.jsx(M, { children: "Export calculation steps" }),
+              children: i.jsx(LocalizedText, {
+                children: "Export calculation steps",
+              }),
             }),
           ],
         }),
@@ -1150,7 +1200,9 @@ function sxe(e) {
                       i.jsxs("p", {
                         children: [
                           i.jsx("strong", {
-                            children: i.jsx(M, { children: "Final result: " }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Final result: ",
+                            }),
                           }),
                           f.resultStatus === "withheld"
                             ? "Withheld"
@@ -1163,7 +1215,9 @@ function sxe(e) {
                       f.spillRange &&
                         i.jsxs("p", {
                           children: [
-                            i.jsx(M, { children: "Spill output: " }),
+                            i.jsx(LocalizedText, {
+                              children: "Spill output: ",
+                            }),
                             f.spillRange,
                           ],
                         }),
@@ -1180,10 +1234,10 @@ function sxe(e) {
                       "· ",
                       f.coverage.reads,
                       " ",
-                      i.jsx(M, { children: "reads · " }),
+                      i.jsx(LocalizedText, { children: "reads · " }),
                       f.steps.length,
                       " ",
-                      i.jsx(M, { children: "retained steps" }),
+                      i.jsx(LocalizedText, { children: "retained steps" }),
                     ],
                   }),
                   f.issues.length > 0 &&
@@ -1215,27 +1269,35 @@ function sxe(e) {
                       i.jsx("button", {
                         onClick: () => u(0),
                         disabled: p <= 0,
-                        children: i.jsx(M, { children: "Restart" }),
+                        children: i.jsx(LocalizedText, { children: "Restart" }),
                       }),
                       i.jsx("button", {
                         onClick: () => u((b) => b - 1),
                         disabled: p <= 0,
-                        children: i.jsx(M, { children: "Previous step" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous step",
+                        }),
                       }),
                       i.jsx("button", {
                         onClick: () => u((b) => b + 1),
                         disabled: !f.steps.length || p >= f.steps.length - 1,
-                        children: i.jsx(M, { children: "Next step" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Next step",
+                        }),
                       }),
                       i.jsx("button", {
                         onClick: () => u(f.steps.length - 1),
                         disabled: !f.steps.length || p >= f.steps.length - 1,
-                        children: i.jsx(M, { children: "Last step" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Last step",
+                        }),
                       }),
                       i.jsx("button", {
                         onClick: () => u(f.firstErrorStep - 1),
                         disabled: !f.firstErrorStep,
-                        children: i.jsx(M, { children: "First error" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "First error",
+                        }),
                       }),
                     ],
                   }),
@@ -1249,10 +1311,10 @@ function sxe(e) {
                       children: [
                         i.jsxs("h3", {
                           children: [
-                            i.jsx(M, { children: "Step " }),
+                            i.jsx(LocalizedText, { children: "Step " }),
                             m.index,
                             " ",
-                            i.jsx(M, { children: "of " }),
+                            i.jsx(LocalizedText, { children: "of " }),
                             f.steps.length,
                             " · ",
                             m.kind,
@@ -1278,14 +1340,16 @@ function sxe(e) {
                         m.inputs.length > 0 &&
                           i.jsxs("p", {
                             children: [
-                              i.jsx(M, { children: "Inputs: " }),
+                              i.jsx(LocalizedText, { children: "Inputs: " }),
                               m.inputs.map((b) => b.text).join("; "),
                             ],
                           }),
                         i.jsxs("p", {
                           children: [
                             i.jsx("strong", {
-                              children: i.jsx(M, { children: "Result: " }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Result: ",
+                              }),
                             }),
                             i.jsx("code", { children: m.result.text }),
                             m.result.truncated && " (preview truncated)",
@@ -1294,7 +1358,9 @@ function sxe(e) {
                         m.result.preview &&
                           i.jsxs("p", {
                             children: [
-                              i.jsx(M, { children: "Array preview:" }),
+                              i.jsx(LocalizedText, {
+                                children: "Array preview:",
+                              }),
                               " ",
                               m.result.preview.map((b) => b.text).join(", "),
                             ],
@@ -1303,7 +1369,7 @@ function sxe(e) {
                           i.jsx("p", {
                             className: "fi-warning",
                             children:
-                              axe[m.result.text] ??
+                              calculationErrorHints[m.result.text] ??
                               "Review the source formula and arguments.",
                           }),
                       ],
@@ -1312,7 +1378,9 @@ function sxe(e) {
                     children: [
                       i.jsxs("summary", {
                         children: [
-                          i.jsx(M, { children: "Captured steps (" }),
+                          i.jsx(LocalizedText, {
+                            children: "Captured steps (",
+                          }),
                           f.steps.length,
                           ")",
                         ],
@@ -1348,7 +1416,7 @@ function sxe(e) {
                   i.jsxs("details", {
                     children: [
                       i.jsx("summary", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Scope and calculation limits",
                         }),
                       }),
@@ -1364,7 +1432,7 @@ function sxe(e) {
           ],
         }),
         i.jsx("footer", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Inspection and replay do not edit formulas, history, or calculation settings.",
           }),
@@ -1373,14 +1441,14 @@ function sxe(e) {
     }),
   });
 }
-const g2 = (e) =>
+const formatInspectedValue = (e) =>
   e === null
     ? "(blank)"
     : typeof e == "boolean"
       ? String(e).toUpperCase()
       : String(e);
-function lxe(e) {
-  const { text, language } = Dr(),
+function CalculationInspectorDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -1393,7 +1461,7 @@ function lxe(e) {
     g = ne.useMemo(() => {
       try {
         return {
-          result: m0(e.workbook, {
+          result: inspectFormulaDependencies(e.workbook, {
             sheetId: e.sheetId,
             address: e.address,
             direction: s,
@@ -1443,7 +1511,7 @@ function lxe(e) {
     E = Math.min(f, w - 1),
     A = (k) => {
       try {
-        (m0(e.workbook, {
+        (inspectFormulaDependencies(e.workbook, {
           sheetId: k.sheetId,
           address: k.address,
           direction: "precedents",
@@ -1499,11 +1567,13 @@ function lxe(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Inspect calculations" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Inspect calculations",
+                  }),
                 }),
                 i.jsxs("p", {
                   children: [
-                    i.jsx(M, {
+                    i.jsx(LocalizedText, {
                       children: "Read-only formula relationships · revision ",
                     }),
                     e.workbook.revision,
@@ -1565,7 +1635,7 @@ function lxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Traversal depth" }),
+                i.jsx(LocalizedText, { children: "Traversal depth" }),
                 i.jsx("select", {
                   "aria-label": text("Traversal depth"),
                   value: u,
@@ -1595,7 +1665,7 @@ function lxe(e) {
                     checked: c,
                     onChange: (k) => h(k.target.checked),
                   }),
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children: "Include hidden cells in the allowed context",
                   }),
                 ],
@@ -1628,13 +1698,17 @@ function lxe(e) {
                   i.jsxs("dl", {
                     children: [
                       i.jsx("dt", {
-                        children: i.jsx(M, { children: "Stored input" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Stored input",
+                        }),
                       }),
                       i.jsx("dd", {
-                        children: i.jsx("code", { children: g2(b.target.raw) }),
+                        children: i.jsx("code", {
+                          children: formatInspectedValue(b.target.raw),
+                        }),
                       }),
                       i.jsx("dt", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Current local result",
                         }),
                       }),
@@ -1642,7 +1716,7 @@ function lxe(e) {
                         children: [
                           b.target.resultStatus === "unavailable"
                             ? "Unavailable"
-                            : g2(b.target.result),
+                            : formatInspectedValue(b.target.result),
                           b.target.resultNote &&
                             i.jsx("small", { children: b.target.resultNote }),
                         ],
@@ -1663,7 +1737,7 @@ function lxe(e) {
                       " ",
                       s,
                       " ",
-                      i.jsx(M, { children: "listed ·" }),
+                      i.jsx(LocalizedText, { children: "listed ·" }),
                       " ",
                       b.coverage.complete
                         ? "Complete within the selected static scope"
@@ -1674,19 +1748,21 @@ function lxe(e) {
                     children: [
                       b.coverage.formulaCellsScanned,
                       " ",
-                      i.jsx(M, { children: "of" }),
+                      i.jsx(LocalizedText, { children: "of" }),
                       " ",
                       b.coverage.formulaCellsAvailable,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "eligible formula cells scanned; ",
                       }),
                       b.coverage.referencesScanned,
                       " ",
-                      i.jsx(M, { children: "references inspected. " }),
+                      i.jsx(LocalizedText, {
+                        children: "references inspected. ",
+                      }),
                       b.coverage.excludedCells,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "populated cells excluded by visibility or host context.",
                       }),
@@ -1702,7 +1778,7 @@ function lxe(e) {
                     ? "These cells are referenced by the selected cell, directly or through other formulas."
                     : "These formula cells contain a potential reference path to the selected cell.",
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "Results are freshly evaluated by the local calculator; volatile functions can change between inspections.",
                   }),
@@ -1718,18 +1794,22 @@ function lxe(e) {
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Cell" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Cell",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Depth" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Depth",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Stored input",
                                 }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Local result",
                                 }),
                               }),
@@ -1754,7 +1834,7 @@ function lxe(e) {
                                     i.jsx("td", { children: k.depth }),
                                     i.jsx("td", {
                                       children: i.jsx("code", {
-                                        children: g2(k.raw),
+                                        children: formatInspectedValue(k.raw),
                                       }),
                                     }),
                                     i.jsx("td", {
@@ -1762,11 +1842,11 @@ function lxe(e) {
                                         k.resultStatus === "unavailable"
                                           ? i.jsx("span", {
                                               title: k.resultNote,
-                                              children: i.jsx(M, {
+                                              children: i.jsx(LocalizedText, {
                                                 children: "Unavailable",
                                               }),
                                             })
-                                          : g2(k.result),
+                                          : formatInspectedValue(k.result),
                                     }),
                                   ],
                                 },
@@ -1779,10 +1859,10 @@ function lxe(e) {
                   })
                 : i.jsxs("p", {
                     children: [
-                      i.jsx(M, { children: "No " }),
+                      i.jsx(LocalizedText, { children: "No " }),
                       s,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "were found in the inspected subset. Review coverage and unresolved issues before concluding there are none.",
                       }),
@@ -1798,21 +1878,25 @@ function lxe(e) {
                     i.jsx("button", {
                       disabled: E === 0,
                       onClick: () => p(E - 1),
-                      children: i.jsx(M, { children: "Previous results" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Previous results",
+                      }),
                     }),
                     i.jsxs("span", {
                       children: [
-                        i.jsx(M, { children: "Page " }),
+                        i.jsx(LocalizedText, { children: "Page " }),
                         E + 1,
                         " ",
-                        i.jsx(M, { children: "of " }),
+                        i.jsx(LocalizedText, { children: "of " }),
                         w,
                       ],
                     }),
                     i.jsx("button", {
                       disabled: E + 1 >= w,
                       onClick: () => p(E + 1),
-                      children: i.jsx(M, { children: "Next results" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Next results",
+                      }),
                     }),
                   ],
                 }),
@@ -1824,7 +1908,7 @@ function lxe(e) {
                   "data-ui-label": "Detected cycles",
                   children: [
                     i.jsx("h3", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "Detected static cycles",
                       }),
                     }),
@@ -1839,7 +1923,7 @@ function lxe(e) {
                 children: [
                   i.jsxs("summary", {
                     children: [
-                      i.jsx(M, { children: "Reference ranges (" }),
+                      i.jsx(LocalizedText, { children: "Reference ranges (" }),
                       b.references.length,
                       ")",
                     ],
@@ -1860,7 +1944,7 @@ function lxe(e) {
                             " · ",
                             k.cellCount.toLocaleString(),
                             " ",
-                            i.jsx(M, { children: "cells ·" }),
+                            i.jsx(LocalizedText, { children: "cells ·" }),
                             " ",
                             k.kind,
                             " ·",
@@ -1879,7 +1963,7 @@ function lxe(e) {
                 children: [
                   i.jsxs("summary", {
                     children: [
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "Unresolved or excluded dependencies (",
                       }),
                       b.issues.length,
@@ -1914,7 +1998,7 @@ function lxe(e) {
                         ),
                       })
                     : i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "No unresolved references were identified by the static scanner.",
                         }),
@@ -1926,14 +2010,14 @@ function lxe(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("span", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Inspection does not change cells, history, or calculation settings.",
               }),
             }),
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Close" }),
+              children: i.jsx(LocalizedText, { children: "Close" }),
             }),
           ],
         }),
@@ -1941,7 +2025,7 @@ function lxe(e) {
     }),
   });
 }
-function f_(e, r) {
+function normalizeFormulaWatchContext(e, r) {
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
@@ -1961,7 +2045,7 @@ function f_(e, r) {
     ].sort(),
   };
 }
-function h_(e, r, t) {
+function classifyWatchedCell(e, r, t) {
   const n = e.sheets.find((o) => o.id === r.anchor.sheetId);
   if (!n) return "orphaned";
   if (!t.allowedSheetIds.includes(n.id)) return "excluded";
@@ -1978,4 +2062,10 @@ function h_(e, r, t) {
   return r.orphaned ? "orphaned" : "ready";
 }
 
-export { f_, h_, ixe, lxe, sxe };
+export {
+  normalizeFormulaWatchContext,
+  classifyWatchedCell,
+  FormulaCompatibilityDialog,
+  CalculationInspectorDialog,
+  EvaluateFormulaDialog,
+};

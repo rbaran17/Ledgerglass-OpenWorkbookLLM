@@ -1,49 +1,57 @@
 import i from "react/jsx-runtime";
-import { hr } from "./01-core-schemas-and-hashing.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
 import {
-  $a,
-  EU,
-  JN,
-  Ku,
-  Rc,
-  Us,
+  assertWorkbookStructureEditable,
+  parseAnalysisRequest,
+  FormulaParser,
+  createWorksheetRecord,
+  sumDecimalPartsToNumber,
+  exactAverageOfNumbers,
   _t,
-  ct,
-  ig,
-  jE,
-  jR,
-  jw,
-  pf,
-  rn,
-  ut,
+  parseRangeAddress,
+  analysisLimits,
+  evaluateRegressionFunction,
+  analysisFormatVersion,
+  validateDataValidationRule,
+  resolveDefinedNameValue,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
 } from "./03-workbook-model.js";
-import { M } from "./04-cell-input-paste-and-fill.js";
-import { X1, q1 } from "./12-formula-dependency-inspector.js";
+import { LocalizedText } from "./04-cell-input-paste-and-fill.js";
 import {
-  Xv,
-  bw,
-  gW,
+  readSourceHeaders,
+  inspectOutputNameSafety,
+} from "./12-formula-dependency-inspector.js";
+import {
+  assertSolverMagnitude,
+  parseRangeBounds,
+  assertAutomaticCalculation,
   gxe,
-  lm,
-  lp,
+  normalizeAnalysisPermissions,
+  rejectRangeAsScalar,
   p_,
-  vw,
+  validateAnalysisSource,
 } from "./36-watch-window-and-goal-seek.js";
 
-function vxe(e, r, t) {
-  gW(e);
+function linearizeSolverFormula(e, r, t) {
+  assertAutomaticCalculation(e);
   const n = r.variables.length,
     o = new Map(),
     a = new Set();
   let s = 0;
-  const d = (y) => ({ constant: Xv(y), coefficients: Array(n).fill(0) }),
+  const d = (y) => ({
+      constant: assertSolverMagnitude(y),
+      coefficients: Array(n).fill(0),
+    }),
     u = (y, w) => ({
-      constant: Xv(y.constant * w),
-      coefficients: y.coefficients.map((E) => Xv(E * w)),
+      constant: assertSolverMagnitude(y.constant * w),
+      coefficients: y.coefficients.map((E) => assertSolverMagnitude(E * w)),
     }),
     l = (y, w) => ({
-      constant: Xv(y.constant + w.constant),
-      coefficients: y.coefficients.map((E, A) => Xv(E + w.coefficients[A])),
+      constant: assertSolverMagnitude(y.constant + w.constant),
+      coefficients: y.coefficients.map((E, A) =>
+        assertSolverMagnitude(E + w.coefficients[A]),
+      ),
     }),
     c = (y, w) => {
       if (y.coefficients.some(Boolean) && w.coefficients.some(Boolean))
@@ -56,9 +64,12 @@ function vxe(e, r, t) {
       const A = gxe(y, w);
       if (a.has(A)) throw Error("Solver formulas contain a cycle.");
       if (o.has(A)) return o.get(A);
-      if (o.size + a.size >= ig.dependencyCells || E > ig.depth)
+      if (
+        o.size + a.size >= analysisLimits.dependencyCells ||
+        E > analysisLimits.depth
+      )
         throw Error("Solver dependency budget exceeded.");
-      const k = vw(e, { sheetId: y, address: w }, t),
+      const k = validateAnalysisSource(e, { sheetId: y, address: w }, t),
         F = k.cells[w],
         I = r.variables.findIndex(
           (j) => j.cell.sheetId === y && j.cell.address === w,
@@ -78,12 +89,12 @@ function vxe(e, r, t) {
         F.raw.startsWith("=") &&
         !F.literal
       ) {
-        if (F.raw.length > ig.expressionCharacters)
+        if (F.raw.length > analysisLimits.expressionCharacters)
           throw Error("Solver expression budget exceeded.");
-        const j = pf(F.raw, e, y).slice(1);
+        const j = resolveDefinedNameValue(F.raw, e, y).slice(1);
         if (j.length > 4096)
           throw Error("Expanded Solver expression budget exceeded.");
-        (a.add(A), (O = lp(f(j, y, E + 1))), a.delete(A));
+        (a.add(A), (O = rejectRangeAsScalar(f(j, y, E + 1))), a.delete(A));
       } else
         throw Error(
           "Solver dependencies must contain numbers or supported linear formulas.",
@@ -108,7 +119,7 @@ function vxe(e, r, t) {
             text: _[1] ?? _[2] ?? _[3] ?? _[4],
           }),
           (F = A.lastIndex),
-          ++s > ig.syntaxNodes)
+          ++s > analysisLimits.syntaxNodes)
         )
           throw Error("Solver syntax budget exceeded.");
       }
@@ -124,7 +135,7 @@ function vxe(e, r, t) {
           const C = k[I++];
           if (!C) throw Error("Incomplete Solver formula.");
           if (C.text === "+" || C.text === "-")
-            _ = u(lp(z()), C.text === "-" ? -1 : 1);
+            _ = u(rejectRangeAsScalar(z()), C.text === "-" ? -1 : 1);
           else if (C.type === 1) _ = d(Number(C.text));
           else if (C.type === 2) {
             const $ = C.text.lastIndexOf("!"),
@@ -146,7 +157,7 @@ function vxe(e, r, t) {
                     )?.id;
             if (!H) throw Error("A Solver worksheet reference is missing.");
             if (G.includes(":")) {
-              const Q = ct(G);
+              const Q = parseRangeAddress(G);
               if (
                 (Q.lastRow - Q.firstRow + 1) * (Q.lastCol - Q.firstCol + 1) >
                 500
@@ -155,7 +166,7 @@ function vxe(e, r, t) {
               const J = [];
               for (let q = Q.firstRow; q <= Q.lastRow; q++)
                 for (let W = Q.firstCol; W <= Q.lastCol; W++)
-                  J.push(h(H, `${ut(W)}${q + 1}`, E));
+                  J.push(h(H, `${columnIndexToLetters(W)}${q + 1}`, E));
               _ = Object.assign(J, {
                 height: Q.lastRow - Q.firstRow + 1,
                 width: Q.lastCol - Q.firstCol + 1,
@@ -200,21 +211,21 @@ function vxe(e, r, t) {
                 $ === "AVERAGE" && (_ = u(_, 1 / G.length)));
             }
           } else throw Error("Unsupported Solver expression.");
-          for (; j() === "%";) (I++, (_ = u(lp(_), 0.01)));
+          for (; j() === "%";) (I++, (_ = u(rejectRangeAsScalar(_), 0.01)));
           return (O--, _);
         },
         V = () => {
           let _ = z();
           for (; j() === "*" || j() === "/";) {
             const C = k[I++].text,
-              T = lp(z());
-            if (C === "*") _ = c(lp(_), T);
+              T = rejectRangeAsScalar(z());
+            if (C === "*") _ = c(rejectRangeAsScalar(_), T);
             else {
               if (T.coefficients.some(Boolean) || T.constant === 0)
                 throw Error(
                   "Solver division requires a nonzero constant denominator.",
                 );
-              _ = u(lp(_), 1 / T.constant);
+              _ = u(rejectRangeAsScalar(_), 1 / T.constant);
             }
           }
           return _;
@@ -223,8 +234,8 @@ function vxe(e, r, t) {
           let _ = V();
           for (; j() === "+" || j() === "-";) {
             const C = k[I++].text,
-              T = lp(V());
-            _ = l(lp(_), u(T, C === "-" ? -1 : 1));
+              T = rejectRangeAsScalar(V());
+            _ = l(rejectRangeAsScalar(_), u(T, C === "-" ? -1 : 1));
           }
           return _;
         },
@@ -235,7 +246,7 @@ function vxe(e, r, t) {
     },
     p = r.variables.map((y) => {
       var k, F;
-      const w = vw(e, y.cell, t),
+      const w = validateAnalysisSource(e, y.cell, t),
         E = w.cells[y.cell.address],
         A = _t(y.cell.address);
       if (!E || typeof E.raw != "number" || !Number.isFinite(E.raw))
@@ -246,13 +257,13 @@ function vxe(e, r, t) {
         throw Error("A changing worksheet is protected.");
       if (
         [...(w.pivots ?? []), ...(w.queries ?? [])].some((I) =>
-          bw(I.outputRange, y.cell.address),
+          parseRangeBounds(I.outputRange, y.cell.address),
         )
       )
         throw Error("Generated results cannot be changing cells.");
       for (const I of w.tables ?? []) {
-        if (!bw(I.range, y.cell.address)) continue;
-        const O = ct(I.range);
+        if (!parseRangeBounds(I.range, y.cell.address)) continue;
+        const O = parseRangeAddress(I.range);
         if (
           A.row === O.firstRow ||
           (I.showTotals && A.row === O.lastRow) ||
@@ -274,13 +285,17 @@ function vxe(e, r, t) {
             "Table headers, totals and calculated columns cannot be changing cells.",
           );
       }
-      if ((w.validations ?? []).some((I) => bw(I.range, y.cell.address)))
+      if (
+        (w.validations ?? []).some((I) =>
+          parseRangeBounds(I.range, y.cell.address),
+        )
+      )
         throw Error(
           "Changing cells with validation rules are excluded. Use explicit Solver bounds and constraints on a reviewed input copy.",
         );
       return E.raw;
     }),
-    m = vw(e, r.objective, t),
+    m = validateAnalysisSource(e, r.objective, t),
     v = m.cells[r.objective.address];
   if (!v || typeof v.raw != "string" || !v.raw.startsWith("=") || v.literal)
     throw Error("The objective must be a linear formula cell.");
@@ -303,9 +318,11 @@ function vxe(e, r, t) {
     { objective: g, constraints: b, baseline: p, dependencies: o.size }
   );
 }
-const fS = (e, r) =>
-  Xv(e.constant + e.coefficients.reduce((t, n, o) => t + n * r[o], 0));
-function bxe(e, r) {
+const evaluateLinearExpression = (e, r) =>
+  assertSolverMagnitude(
+    e.constant + e.coefficients.reduce((t, n, o) => t + n * r[o], 0),
+  );
+function solveLinearSystem(e, r) {
   const t = r.length,
     n = e.map((o, a) => {
       const s = Math.max(...o.map(Math.abs));
@@ -329,8 +346,8 @@ function bxe(e, r) {
   }
   return n.map((o) => o[t]);
 }
-function yxe(e, r, t = {}) {
-  const n = vxe(e, r, t),
+function solveBoundedLinearModel(e, r, t = {}) {
+  const n = linearizeSolverFormula(e, r, t),
     o = r.variables.length,
     a = r.variables.every((g) => g.domain !== "continuous"),
     s = {
@@ -383,7 +400,7 @@ function yxe(e, r, t = {}) {
     f = false;
   const p = (g) => {
       if (!u(g)) return;
-      const b = fS(n.objective, g);
+      const b = evaluateLinearExpression(n.objective, g);
       (!l ||
         (r.direction === "maximize" && b > c) ||
         (r.direction === "minimize" && b < c)) &&
@@ -421,7 +438,7 @@ function yxe(e, r, t = {}) {
         if (y.length === o) {
           if (!m()) return;
           const E = y.map((k) => d[k]),
-            A = bxe(
+            A = solveLinearSystem(
               E.map((k) => k.a),
               E.map((k) => k.b),
             );
@@ -456,7 +473,11 @@ function yxe(e, r, t = {}) {
       const y = r.variables[b].cell;
       if (
         (E = e.sheets.find((A) => A.id === y.sheetId).validations) != null &&
-        E.some((A) => bw(A.range, y.address) && !jw(A, g))
+        E.some(
+          (A) =>
+            parseRangeBounds(A.range, y.address) &&
+            !validateDataValidationRule(A, g),
+        )
       )
         throw Error("The solution violates a changing-cell validation rule.");
     }),
@@ -477,29 +498,31 @@ function yxe(e, r, t = {}) {
           n.baseline[b],
           v[b],
         ]),
-        ["Objective", fS(n.objective, n.baseline), c],
+        ["Objective", evaluateLinearExpression(n.objective, n.baseline), c],
         ["Constraint", "Operator", "Residual (left − right)"],
         ...n.constraints.map((g, b) => [
           `Constraint ${b + 1}`,
           g.operator,
-          fS(g.form, v),
+          evaluateLinearExpression(g.form, v),
         ]),
       ],
     }
   );
 }
-const Ms = (e) => {
+const assertFiniteStatistic = (e) => {
     if (!Number.isFinite(e))
       throw Error(
         "The statistical result exceeds finite numeric precision. Rescale the sample.",
       );
     return e;
   },
-  vW = (e) => {
-    const r = Us(e);
-    return Ms(Rc(e.map((t) => (t - r) ** 2)) / (e.length - 1));
+  computeSampleVariance = (e) => {
+    const r = exactAverageOfNumbers(e);
+    return assertFiniteStatistic(
+      sumDecimalPartsToNumber(e.map((t) => (t - r) ** 2)) / (e.length - 1),
+    );
   },
-  wxe = new JN({
+  distributionPrimitiveHost = new FormulaParser({
     onCell: () => {
       throw Error("Distribution primitives cannot read workbook cells.");
     },
@@ -507,8 +530,8 @@ const Ms = (e) => {
       throw Error("Distribution primitives cannot read workbook ranges.");
     },
   });
-function my(e, r) {
-  const t = wxe.parse(
+function evaluateDistributionPrimitive(e, r) {
+  const t = distributionPrimitiveHost.parse(
     `${e}(${r.map((n) => (typeof n == "boolean" ? String(n).toUpperCase() : String(n))).join(",")})`,
     { sheet: "Primitives", row: 1, col: 1 },
   );
@@ -516,16 +539,21 @@ function my(e, r) {
     throw Error(`The ${e} distribution primitive failed.`);
   return t;
 }
-function oj(e, r) {
+function fitLinearRegression(e, r) {
   const t = r[0].length;
   if (e.length <= t + 1)
     throw Error("Regression needs more observations than fitted coefficients.");
-  if (vW(e) === 0) throw Error("Regression requires a nonconstant response.");
-  const n = jE("LINEST", [e.map((l) => [l]), r, true, true], {
-      retrieve: (l) => l,
-      issue: (l) => new Error(l),
-      isIssue: (l) => l instanceof Error,
-    }),
+  if (computeSampleVariance(e) === 0)
+    throw Error("Regression requires a nonconstant response.");
+  const n = evaluateRegressionFunction(
+      "LINEST",
+      [e.map((l) => [l]), r, true, true],
+      {
+        retrieve: (l) => l,
+        issue: (l) => new Error(l),
+        isIssue: (l) => l instanceof Error,
+      },
+    ),
     o = n[3][1];
   if (o !== e.length - t - 1)
     throw Error(
@@ -533,12 +561,12 @@ function oj(e, r) {
     );
   const a = [...n[0]].reverse(),
     s = [...n[1]].reverse(),
-    d = jE("TREND", [e.map((l) => [l]), r, r, true], {
+    d = evaluateRegressionFunction("TREND", [e.map((l) => [l]), r, r, true], {
       retrieve: (l) => l,
       issue: (l) => new Error(l),
       isIssue: (l) => l instanceof Error,
     }).map((l) => l[0]),
-    u = e.map((l, c) => Ms(l - d[c]));
+    u = e.map((l, c) => assertFiniteStatistic(l - d[c]));
   return {
     coefficient: a,
     standardErrors: s,
@@ -552,8 +580,8 @@ function oj(e, r) {
     residuals: u,
   };
 }
-function xxe(e, r, t = {}) {
-  const n = ct(r.range),
+function computeDescriptiveStatistics(e, r, t = {}) {
+  const n = parseRangeAddress(r.range),
     o = n.lastCol - n.firstCol + 1,
     a = n.lastRow - n.firstRow;
   if (
@@ -566,11 +594,16 @@ function xxe(e, r, t = {}) {
     throw Error(
       "Select a headed rectangle with 1–500 data rows, 1–6 columns and at most 2,000 cells.",
     );
-  (vw(e, { sheetId: r.sheetId, address: r.range.split(":")[0] }, t), gW(e));
-  const s = X1(e, [{ sheetId: r.sheetId, range: r.range }], t),
+  (validateAnalysisSource(
+    e,
+    { sheetId: r.sheetId, address: r.range.split(":")[0] },
+    t,
+  ),
+    assertAutomaticCalculation(e));
+  const s = readSourceHeaders(e, [{ sheetId: r.sheetId, range: r.range }], t),
     d = s.snapshots[0];
   for (const b of s.dependencyCells)
-    vw(e, { sheetId: b.sheetId, address: b.address }, t);
+    validateAnalysisSource(e, { sheetId: b.sheetId, address: b.address }, t);
   const u = [],
     l = [];
   for (const b of d.records)
@@ -626,7 +659,7 @@ function xxe(e, r, t = {}) {
       y = f.map((w, E) => {
         const A = h.map((O) => O[E]),
           k = [...A].sort((O, j) => O - j),
-          F = vW(A),
+          F = computeSampleVariance(A),
           I = (O) => {
             const j = (c - 1) * O,
               z = Math.floor(j);
@@ -634,17 +667,17 @@ function xxe(e, r, t = {}) {
           };
         return [
           c,
-          Ms(Rc(A)),
-          Ms(Us(A)),
-          Ms(Math.sqrt(F / c)),
+          assertFiniteStatistic(sumDecimalPartsToNumber(A)),
+          assertFiniteStatistic(exactAverageOfNumbers(A)),
+          assertFiniteStatistic(Math.sqrt(F / c)),
           I(0.5),
-          Ms(Math.sqrt(F)),
+          assertFiniteStatistic(Math.sqrt(F)),
           F,
           k[0],
           I(0.25),
           I(0.75),
           k[c - 1],
-          Ms(k[c - 1] - k[0]),
+          assertFiniteStatistic(k[c - 1] - k[0]),
         ];
       });
     g = [["Statistic", ...f], ...b.map((w, E) => [w, ...y.map((A) => A[E])])];
@@ -658,8 +691,12 @@ function xxe(e, r, t = {}) {
         "Every matrix entry uses the same complete-case observations; covariance uses n − 1.",
         "Independent reference: analytic matrices and Python statistics in ANALYSIS-VERIFICATION.json.",
       ));
-    const b = f.map((w, E) => Us(h.map((A) => A[E]))),
-      y = f.map((w, E) => Ms(Rc(h.map((A) => (A[E] - b[E]) ** 2))));
+    const b = f.map((w, E) => exactAverageOfNumbers(h.map((A) => A[E]))),
+      y = f.map((w, E) =>
+        assertFiniteStatistic(
+          sumDecimalPartsToNumber(h.map((A) => (A[E] - b[E]) ** 2)),
+        ),
+      );
     if (r.method === "correlation" && y.some((w) => w === 0))
       throw Error("Correlation is undefined for a constant column.");
     g = [
@@ -667,13 +704,20 @@ function xxe(e, r, t = {}) {
       ...f.map((w, E) => [
         w,
         ...f.map((A, k) => {
-          const F = Ms(Rc(h.map((I) => (I[E] - b[E]) * (I[k] - b[k]))));
+          const F = assertFiniteStatistic(
+            sumDecimalPartsToNumber(
+              h.map((I) => (I[E] - b[E]) * (I[k] - b[k])),
+            ),
+          );
           return r.method === "correlation"
             ? Math.max(
                 -1,
-                Math.min(1, Ms(F / Math.sqrt(y[E]) / Math.sqrt(y[k]))),
+                Math.min(
+                  1,
+                  assertFiniteStatistic(F / Math.sqrt(y[E]) / Math.sqrt(y[k])),
+                ),
               )
-            : Ms(F / (c - 1));
+            : assertFiniteStatistic(F / (c - 1));
         }),
       ]),
     ];
@@ -682,11 +726,11 @@ function xxe(e, r, t = {}) {
       throw Error(
         "Regression requires Y in the first column and one or more X columns.",
       );
-    const b = oj(
+    const b = fitLinearRegression(
         h.map((A) => A[0]),
         h.map((A) => A.slice(1)),
       ),
-      y = my("T.INV.2T", [0.05, b.df]);
+      y = evaluateDistributionPrimitive("T.INV.2T", [0.05, b.df]);
     ((v = "Ordinary least squares with intercept; centered, scaled pivoted QR"),
       m.push(
         "First column is Y; remaining columns are X. Independent errors, linear mean and constant error variance; t/F inference additionally assumes normal errors.",
@@ -696,7 +740,7 @@ function xxe(e, r, t = {}) {
     const w = ["Intercept", ...f.slice(1)].map((A, k) => {
         const F = b.standardErrors[k],
           I = b.coefficient[k],
-          O = F === 0 ? null : Ms(I / F);
+          O = F === 0 ? null : assertFiniteStatistic(I / F);
         return [
           A,
           I,
@@ -704,7 +748,12 @@ function xxe(e, r, t = {}) {
           O,
           O === null
             ? null
-            : my("BETA.DIST", [b.df / (b.df + O * O), b.df / 2, 0.5, true]),
+            : evaluateDistributionPrimitive("BETA.DIST", [
+                b.df / (b.df + O * O),
+                b.df / 2,
+                0.5,
+                true,
+              ]),
           I - y * F,
           I + y * F,
         ];
@@ -723,7 +772,7 @@ function xxe(e, r, t = {}) {
         "Significance F",
         E === null
           ? null
-          : my("BETA.DIST", [
+          : evaluateDistributionPrimitive("BETA.DIST", [
               b.df / (b.df + (o - 1) * E),
               b.df / 2,
               (o - 1) / 2,
@@ -829,7 +878,11 @@ function xxe(e, r, t = {}) {
         y === "normal" ? "Density" : "Probability mass",
         "Cumulative probability",
       ],
-      ...b.map((A) => [A, my(E, w(A, false)), my(E, w(A, true))]),
+      ...b.map((A) => [
+        A,
+        evaluateDistributionPrimitive(E, w(A, false)),
+        evaluateDistributionPrimitive(E, w(A, true)),
+      ]),
     ];
   } else {
     if (o !== 2)
@@ -851,16 +904,18 @@ function xxe(e, r, t = {}) {
       );
     const E = r.horizon ?? 6,
       A = r.forecast ?? "linear",
-      k = Array.from({ length: E }, (j, z) => Ms(b[c - 1] + w * (z + 1))),
+      k = Array.from({ length: E }, (j, z) =>
+        assertFiniteStatistic(b[c - 1] + w * (z + 1)),
+      ),
       F = [],
       I = [];
     if (A === "linear") {
-      const j = oj(
+      const j = fitLinearRegression(
         y,
         b.map((V) => [V]),
       );
       v = "Linear trend forecast using centered QR least squares";
-      const z = jE(
+      const z = evaluateRegressionFunction(
         "TREND",
         [y.map((V) => [V]), b.map((V) => [V]), k.map((V) => [V]), true],
         {
@@ -877,10 +932,10 @@ function xxe(e, r, t = {}) {
         throw Error("Moving average needs more observations than its window.");
       v = `Trailing ${j}-period moving average with recursive forecasts`;
       for (let V = j; V < c; V++)
-        I.push({ index: V, value: Us(y.slice(V - j, V)) });
+        I.push({ index: V, value: exactAverageOfNumbers(y.slice(V - j, V)) });
       const z = [...y];
       for (let V = 0; V < E; V++) {
-        const D = Ms(Us(z.slice(-j)));
+        const D = assertFiniteStatistic(exactAverageOfNumbers(z.slice(-j)));
         (F.push(D), z.push(D));
       }
     } else {
@@ -891,11 +946,12 @@ function xxe(e, r, t = {}) {
         "Simple exponential smoothing with fixed alpha and first-observation initialization";
       let z = y[0];
       for (let V = 1; V < c; V++)
-        (I.push({ index: V, value: z }), (z = Ms(j * y[V] + (1 - j) * z)));
+        (I.push({ index: V, value: z }),
+          (z = assertFiniteStatistic(j * y[V] + (1 - j) * z)));
       (F.push(...k.map(() => z)),
         m.push(`Alpha ${j}; no trend or seasonal component.`));
     }
-    const O = I.map((j) => Ms(y[j.index] - j.value));
+    const O = I.map((j) => assertFiniteStatistic(y[j.index] - j.value));
     (m.push(
       "Numeric equally spaced periods; no seasonality, automatic tuning, ETS intervals or causal claims. Extrapolation can be unreliable.",
       "Error metrics use fitted/in-sample observations, not an independent holdout. No uncertainty interval is claimed.",
@@ -904,10 +960,15 @@ function xxe(e, r, t = {}) {
       (g = [
         ["Metric", "Value"],
         ["Fitted observations", I.length],
-        ["In-sample MAE", Us(O.map(Math.abs))],
-        ["In-sample RMSE", Math.sqrt(Us(O.map((j) => Ms(j * j))))],
+        ["In-sample MAE", exactAverageOfNumbers(O.map(Math.abs))],
+        [
+          "In-sample RMSE",
+          Math.sqrt(
+            exactAverageOfNumbers(O.map((j) => assertFiniteStatistic(j * j))),
+          ),
+        ],
         ["Period", "Forecast"],
-        ...k.map((j, z) => [j, Ms(F[z])]),
+        ...k.map((j, z) => [j, assertFiniteStatistic(F[z])]),
         ["Source row", "Period", "Observed", "Fitted", "Residual"],
         ...I.map((j) => [
           l[j.index].row,
@@ -918,7 +979,8 @@ function xxe(e, r, t = {}) {
         ]),
       ]));
   }
-  for (const b of g) for (const y of b) typeof y == "number" && Ms(y);
+  for (const b of g)
+    for (const y of b) typeof y == "number" && assertFiniteStatistic(y);
   return {
     status: "complete",
     success: true,
@@ -933,21 +995,24 @@ function xxe(e, r, t = {}) {
     rows: g,
   };
 }
-const WT = new WeakMap();
-function Exe(e, r, t = {}) {
-  const n = EU(r),
-    o = lm(e, t),
-    a = n.kind === "solver" ? yxe(e, n, t) : xxe(e, n, t),
+const analysisResultCache = new WeakMap();
+function runAnalysisRequest(e, r, t = {}) {
+  const n = parseAnalysisRequest(r),
+    o = normalizeAnalysisPermissions(e, t),
+    a =
+      n.kind === "solver"
+        ? solveBoundedLinearModel(e, n, t)
+        : computeDescriptiveStatistics(e, n, t),
     s = {
       request: n,
       result: a,
-      workbookHash: hr(e),
-      contextHash: hr(o),
+      workbookHash: fingerprintCanonicalValue(e),
+      contextHash: fingerprintCanonicalValue(o),
       sourceHash: p_(e),
     };
-  return (WT.set(s, hr(s)), s);
+  return (analysisResultCache.set(s, fingerprintCanonicalValue(s)), s);
 }
-function bW(e) {
+function buildAnalysisReport(e) {
   const r = e.result;
   return [
     [
@@ -958,7 +1023,7 @@ function bW(e) {
     ["Outcome", r.status],
     ["Message", r.message],
     ["Algorithm", r.algorithm],
-    ["Engine", jR],
+    ["Engine", analysisFormatVersion],
     [
       "License",
       "MIT; existing MIT distribution dependency; no proprietary engine",
@@ -975,30 +1040,33 @@ function bW(e) {
     ...r.exclusions.map((t) => [t.row, t.reason, t.locator]),
   ];
 }
-function HT(e, r) {
-  const t = ct(r);
+function buildAnalysisReportCells(e, r) {
+  const t = parseRangeAddress(r);
   if ((t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) > 2e4)
     throw Error("Analysis output exceeds 20,000 cells.");
   const n = [];
   for (let o = t.firstRow; o <= t.lastRow; o++)
     for (let a = t.firstCol; a <= t.lastCol; a++) {
-      const s = e.cells[`${ut(a)}${o + 1}`];
+      const s = e.cells[`${columnIndexToLetters(a)}${o + 1}`];
       n.push({
         raw: s?.raw ?? null,
         literal: !!(s != null && s.literal),
       });
     }
-  return hr(n);
+  return fingerprintCanonicalValue(n);
 }
-function Cxe(e, r, t, n = {}) {
-  const o = lm(e, n);
+function commitAnalysisResult(e, r, t, n = {}) {
+  const o = normalizeAnalysisPermissions(e, n);
   if (o.readOnly) throw Error("This workbook is read-only.");
-  if (($a(e), !["report", "apply-solution"].includes(t)))
+  if (
+    (assertWorkbookStructureEditable(e),
+    !["report", "apply-solution"].includes(t))
+  )
     throw Error("Choose Save report or Apply solution and report.");
   if (
-    WT.get(r) !== hr(r) ||
-    r.workbookHash !== hr(e) ||
-    r.contextHash !== hr(o)
+    analysisResultCache.get(r) !== fingerprintCanonicalValue(r) ||
+    r.workbookHash !== fingerprintCanonicalValue(e) ||
+    r.contextHash !== fingerprintCanonicalValue(o)
   )
     throw Error(
       "The preview, workbook or host permissions changed. Preview again.",
@@ -1016,8 +1084,8 @@ function Cxe(e, r, t, n = {}) {
     )
   )
     throw Error("The output worksheet name is already in use.");
-  q1(e, r.request.outputName);
-  const a = rn(e);
+  inspectOutputNameSafety(e, r.request.outputName);
+  const a = normalizeWorkbookInput(e);
   t === "apply-solution" &&
     r.request.kind === "solver" &&
     r.request.variables.forEach((h, f) => {
@@ -1027,14 +1095,14 @@ function Cxe(e, r, t, n = {}) {
         raw: r.result.solution[f],
       };
     });
-  const s = Ku(r.request.outputName),
-    d = bW(r),
+  const s = createWorksheetRecord(r.request.outputName),
+    d = buildAnalysisReport(r),
     u = Math.max(...d.map((h) => h.length));
   if (d.length * u > 2e4)
     throw Error("Analysis report exceeds the output budget.");
   (d.forEach((h, f) =>
     h.forEach((p, m) => {
-      s.cells[`${ut(m)}${f + 1}`] = {
+      s.cells[`${columnIndexToLetters(m)}${f + 1}`] = {
         raw: p,
         ...(typeof p == "string" ? { literal: true } : {}),
         ...(f === 0
@@ -1053,14 +1121,14 @@ function Cxe(e, r, t, n = {}) {
       6: 140,
     }),
     (s.frozenRows = 1));
-  const l = `A1:${ut(u - 1)}${d.length}`;
+  const l = `A1:${columnIndexToLetters(u - 1)}${d.length}`;
   ((s.analysisReport = {
-    engine: jR,
+    engine: analysisFormatVersion,
     request: structuredClone(r.request),
     result: structuredClone(r.result),
-    definitionHash: hr(r.request),
+    definitionHash: fingerprintCanonicalValue(r.request),
     sourceHash: p_(a),
-    outputHash: HT(s, l),
+    outputHash: buildAnalysisReportCells(s, l),
     outputRange: l,
     createdAt: new Date().toISOString(),
     sourceRevision: e.revision,
@@ -1068,15 +1136,15 @@ function Cxe(e, r, t, n = {}) {
     applied: t === "apply-solution",
   }),
     a.sheets.push(s));
-  const c = rn(a);
-  return (WT.delete(r), c);
+  const c = normalizeWorkbookInput(a);
+  return (analysisResultCache.delete(r), c);
 }
-function Axe(e, r, t = {}) {
+function readSavedAnalysisReport(e, r, t = {}) {
   const n = e.sheets.find((d) => d.id === r),
     o = n?.analysisReport;
   if (!n || !o)
     return { status: "unavailable", message: "No saved analysis report." };
-  const a = lm(e, t);
+  const a = normalizeAnalysisPermissions(e, t);
   if (
     !a.allowedSheetIds.includes(r) ||
     (!a.includeHidden && (n.hidden || n.veryHidden))
@@ -1095,27 +1163,27 @@ function Axe(e, r, t = {}) {
         "Reopen the original analysis within the authorized source context before trusting this historical report.",
     };
   if (
-    o.definitionHash !== hr(o.request) ||
+    o.definitionHash !== fingerprintCanonicalValue(o.request) ||
     o.sourceHash !== p_(e) ||
-    o.outputHash !== HT(n, o.outputRange)
+    o.outputHash !== buildAnalysisReportCells(n, o.outputRange)
   )
     return {
       status: "stale",
       message:
         "Source data, calculation settings or report cells changed. Preview the analysis again; saved values are historical.",
     };
-  const s = Ku("Expected");
+  const s = createWorksheetRecord("Expected");
   return (
-    bW(o).forEach((d, u) =>
+    buildAnalysisReport(o).forEach((d, u) =>
       d.forEach(
         (l, c) =>
-          (s.cells[`${ut(c)}${u + 1}`] = {
+          (s.cells[`${columnIndexToLetters(c)}${u + 1}`] = {
             raw: l,
             ...(typeof l == "string" ? { literal: true } : {}),
           }),
       ),
     ),
-    HT(s, o.outputRange) !== o.outputHash
+    buildAnalysisReportCells(s, o.outputRange) !== o.outputHash
       ? {
           status: "stale",
           message: "The saved result and report cells disagree. Preview again.",
@@ -1127,8 +1195,14 @@ function Axe(e, r, t = {}) {
         }
   );
 }
-const Oi = (e, r) =>
-    i.jsxs("label", { children: [i.jsx(M, { children: e }), r] }),
-  aj = (e) => (e.trim() === "" ? NaN : Number(e));
+const LabeledField = (e, r) =>
+    i.jsxs("label", { children: [i.jsx(LocalizedText, { children: e }), r] }),
+  parseNumericInput = (e) => (e.trim() === "" ? NaN : Number(e));
 
-export { Axe, Cxe, Exe, Oi, aj };
+export {
+  readSavedAnalysisReport,
+  commitAnalysisResult,
+  runAnalysisRequest,
+  LabeledField,
+  parseNumericInput,
+};

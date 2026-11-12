@@ -1,47 +1,50 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { Mt } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  Af,
-  Nr,
-  Ta,
-  Vn,
+  formatNumberWithPattern,
+  findSheetOrThrow,
+  formatOccupiedRangeAddress,
+  calculateWorkbookWithSettings,
   _t,
   cn,
-  ct,
-  ff,
-  hi,
-  ul,
-  ut,
-  z1,
+  parseRangeAddress,
+  parseSelectionAreas,
+  normalizeCellRecordInput,
+  createAxisVisibilityIndex,
+  columnIndexToLetters,
+  rewriteStructuredReferences,
 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { H1 } from "./07-xlsx-archive-reader.js";
-import { yh } from "./09-workbook-links.js";
 import {
-  $h,
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { importWorkbookFile } from "./07-xlsx-archive-reader.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import {
+  patternCheckBudgets,
   Bj,
-  Fj,
+  isBlankFormulaCell,
   Vf,
-  a2e,
-  i2e,
-  n2e,
-  nH,
-  r2e,
-  rH,
+  computeFormulaSignature,
+  identifierPattern,
+  sheetSpanPattern,
+  isNonReferenceToken,
+  definedNameReferencePattern,
+  referenceTokenPattern,
   ww,
   xc,
-  yp,
+  readFormulaText,
 } from "./51-pattern-checks-and-citations.js";
 
-function s2e(e, r, t, n = {}) {
+function runWorkbookComparison(e, r, t, n = {}) {
   var g;
   if (
     !t ||
     !Array.isArray(t.mappings) ||
     !t.mappings.length ||
-    t.mappings.length > $h.mappings
+    t.mappings.length > patternCheckBudgets.mappings
   )
     throw Error("Choose 1–20 explicit worksheet/range mappings.");
   if (n.includeHidden !== undefined && typeof n.includeHidden != "boolean")
@@ -97,7 +100,7 @@ function s2e(e, r, t, n = {}) {
       },
     },
     u = (b) => {
-      if (d.findings.length >= $h.findings)
+      if (d.findings.length >= patternCheckBudgets.findings)
         throw Error(
           "Comparison exceeds 30,000 findings; narrow the source workbooks.",
         );
@@ -123,12 +126,12 @@ function s2e(e, r, t, n = {}) {
         throw Error(
           "A selected source is outside the authorized comparison context.",
         );
-      const A = ct(y.range),
+      const A = parseRangeAddress(y.range),
         k = A.lastRow - A.firstRow + 1,
         F = A.lastCol - A.firstCol + 1;
       if (
-        k > $h.rowsPerRange ||
-        F > $h.columnsPerRange ||
+        k > patternCheckBudgets.rowsPerRange ||
+        F > patternCheckBudgets.columnsPerRange ||
         A.lastRow >= E.rowCount ||
         A.lastCol >= E.colCount
       )
@@ -137,7 +140,7 @@ function s2e(e, r, t, n = {}) {
         );
       if (
         ((d.coverage.selectedCells += k * F),
-        d.coverage.selectedCells > $h.selectedCells)
+        d.coverage.selectedCells > patternCheckBudgets.selectedCells)
       )
         throw Error(
           "Comparison supports at most 10,000 selected cells across both workbooks.",
@@ -154,7 +157,7 @@ function s2e(e, r, t, n = {}) {
           "A selected range contains hidden content. Explicitly include permitted hidden content or choose a visible range.",
         );
       const O = Array.from({ length: F }, (j, z) => {
-        if (!w) return ut(z);
+        if (!w) return columnIndexToLetters(z);
         const V = E.cells[xc(A.firstRow, A.firstCol + z)];
         if (Vf(V) || typeof V?.raw != "string" || !V.raw.trim())
           throw Error(
@@ -193,7 +196,7 @@ function s2e(e, r, t, n = {}) {
       );
     for (const I of ["before", "after"]) {
       const O = b[I],
-        j = ct(O.range),
+        j = parseRangeAddress(O.range),
         z = m[I].get(O.sheetId) ?? [];
       if (
         z.some(
@@ -256,7 +259,11 @@ function s2e(e, r, t, n = {}) {
             ? k("before", y, I)
             : A.push([I, I]);
     } else {
-      if (!Array.isArray(b.keys) || !b.keys.length || b.keys.length > $h.keys)
+      if (
+        !Array.isArray(b.keys) ||
+        !b.keys.length ||
+        b.keys.length > patternCheckBudgets.keys
+      )
         throw Error(
           "Key matching requires 1–8 explicit header pairs (A, B, … without headers).",
         );
@@ -273,7 +280,9 @@ function s2e(e, r, t, n = {}) {
             _ = new Map();
           return (
             V.rows.forEach((C, T) => {
-              if (B.some((L) => Fj(C.cells[L]) || Vf(C.cells[L]))) {
+              if (
+                B.some((L) => isBlankFormulaCell(C.cells[L]) || Vf(C.cells[L]))
+              ) {
                 F(
                   D,
                   V,
@@ -283,7 +292,10 @@ function s2e(e, r, t, n = {}) {
                 return;
               }
               const N = JSON.stringify(
-                  B.map((L) => [typeof yp(C.cells[L]), yp(C.cells[L])]),
+                  B.map((L) => [
+                    typeof readFormulaText(C.cells[L]),
+                    readFormulaText(C.cells[L]),
+                  ]),
                 ),
                 R = _.get(N) ?? [];
               (R.push(T), _.set(N, R));
@@ -346,13 +358,13 @@ function s2e(e, r, t, n = {}) {
               ? {}
               : {
                   ...c("before", y.sheet, xc(j.row, y.firstCol + D)),
-                  beforeValue: yp(_),
+                  beforeValue: readFormulaText(_),
                 }),
             ...(B < 0
               ? {}
               : {
                   ...c("after", w.sheet, xc(z.row, w.firstCol + B)),
-                  afterValue: yp(C),
+                  afterValue: readFormulaText(C),
                 }),
           });
       }
@@ -368,7 +380,10 @@ function s2e(e, r, t, n = {}) {
           if (Vf(_.cells[j])) {
             V++;
             try {
-              const T = a2e(_.cells[j].raw, xc(_.row, O.firstCol + j)),
+              const T = computeFormulaSignature(
+                  _.cells[j].raw,
+                  xc(_.row, O.firstCol + j),
+                ),
                 N = z.get(T) ?? [];
               (N.push(C), z.set(T, N));
             } catch {
@@ -385,7 +400,7 @@ function s2e(e, r, t, n = {}) {
           B = D[0];
         for (const _ of O.rows) {
           const C = _.cells[j];
-          if (Vf(C) || Fj(C)) continue;
+          if (Vf(C) || isBlankFormulaCell(C)) continue;
           const T =
             V > O.rows.length / 2 &&
             !!B &&
@@ -398,7 +413,7 @@ function s2e(e, r, t, n = {}) {
               ? `${O.headers[j]}: literal value in a formula-dominant column; a deliberate exception is possible.`
               : `${O.headers[j]}: stored literal input, not a formula. This inventory entry is not an error finding.`,
             ...c(I, O.sheet, xc(_.row, O.firstCol + j)),
-            [I === "before" ? "beforeValue" : "afterValue"]: yp(C),
+            [I === "before" ? "beforeValue" : "afterValue"]: readFormulaText(C),
           });
         }
         if (!(V < 2)) {
@@ -422,7 +437,8 @@ function s2e(e, r, t, n = {}) {
                 confidence: "candidate",
                 message: `${O.headers[j]}: formula differs from the dominant relative-reference pattern (${B[1].length}/${V} formulas); review against ${xc(O.rows[B[1][0]].row, O.firstCol + j)}.`,
                 ...c(I, O.sheet, N),
-                [I === "before" ? "beforeValue" : "afterValue"]: yp(T),
+                [I === "before" ? "beforeValue" : "afterValue"]:
+                  readFormulaText(T),
               });
           });
         }
@@ -475,7 +491,7 @@ function s2e(e, r, t, n = {}) {
               w,
               k === "row"
                 ? `${I.start + 1}:${I.end + 1}`
-                : `${ut(I.start)}:${ut(I.end)}`,
+                : `${columnIndexToLetters(I.start)}:${columnIndexToLetters(I.end)}`,
             ),
           });
       if (
@@ -500,7 +516,7 @@ function s2e(e, r, t, n = {}) {
               E.cols.some((z) => z.start <= I.col && z.end >= I.col))
           )
             continue;
-          if (++d.counts.scannedCells > $h.scannedCells)
+          if (++d.counts.scannedCells > patternCheckBudgets.scannedCells)
             throw Error(
               "Static comparison supports 20,000 permitted stored cells across both workbooks.",
             );
@@ -514,7 +530,7 @@ function s2e(e, r, t, n = {}) {
                 ...c(b, w, k),
               }),
             j = (z, V, D = []) => {
-              if (((v += z.length), v > $h.formulaCharacters))
+              if (((v += z.length), v > patternCheckBudgets.formulaCharacters))
                 throw Error(
                   "Static formula inspection exceeds the 2,000,000-character work budget.",
                 );
@@ -525,7 +541,7 @@ function s2e(e, r, t, n = {}) {
                 );
                 return;
               }
-              if (D.length >= $h.nameDepth) {
+              if (D.length >= patternCheckBudgets.nameDepth) {
                 O("uncertain", "Defined-name expansion exceeds depth 16.");
                 return;
               }
@@ -547,9 +563,9 @@ function s2e(e, r, t, n = {}) {
                   }
                   try {
                     const R = N.replace(/[\s$]/g, ""),
-                      L = ct(
+                      L = parseRangeAddress(
                         /^[A-Za-z]+:[A-Za-z]+$/.test(R)
-                          ? R.replace(":", "1:") + Mt.maxRows
+                          ? R.replace(":", "1:") + workbookLimits.maxRows
                           : /^\d+:\d+$/.test(R)
                             ? "A" + R.replace(":", ":XFD")
                             : R,
@@ -630,7 +646,10 @@ function s2e(e, r, t, n = {}) {
                     (B += N[0].length));
                   continue;
                 }
-                if (n2e.test(T) || /^'(?:[^']|'')*:(?:[^']|'')*'\s*!/.test(T)) {
+                if (
+                  sheetSpanPattern.test(T) ||
+                  /^'(?:[^']|'')*:(?:[^']|'')*'\s*!/.test(T)
+                ) {
                   O(
                     "uncertain",
                     "Three-dimensional references require separate review and are not expanded.",
@@ -656,7 +675,7 @@ function s2e(e, r, t, n = {}) {
                     (z[B] === "[" && J++, z[B] === "]" && J--, B++);
                   const q = z.slice(X, B);
                   try {
-                    const W = !J && z1(y, V, q, k);
+                    const W = !J && rewriteStructuredReferences(y, V, q, k);
                     W
                       ? _(
                           y.sheets.find((K) => K.id === W.sheetId),
@@ -689,8 +708,8 @@ function s2e(e, r, t, n = {}) {
                     (B += $[0].length));
                   continue;
                 }
-                const U = rH.exec(T);
-                if (U && nH(T[U[0].length] ?? "")) {
+                const U = referenceTokenPattern.exec(T);
+                if (U && isNonReferenceToken(T[U[0].length] ?? "")) {
                   const X = U[1] ? Bj(U[1]) : undefined;
                   (_(
                     X === undefined
@@ -708,7 +727,7 @@ function s2e(e, r, t, n = {}) {
                     (B += U[0].length));
                   continue;
                 }
-                const G = r2e.exec(T);
+                const G = definedNameReferencePattern.exec(T);
                 if (G) {
                   const X = y.sheets.find(
                     (J) => J.name.toLowerCase() === Bj(G[1]).toLowerCase(),
@@ -733,7 +752,7 @@ function s2e(e, r, t, n = {}) {
                   B += H[0].length;
                   continue;
                 }
-                const Q = i2e.exec(T);
+                const Q = identifierPattern.exec(T);
                 if (Q) {
                   (/^(?:TRUE|FALSE)$/i.test(Q[0]) ||
                     (/^R(?:\d+|\[-?\d+\])C(?:\d+|\[-?\d+\])$/i.test(Q[0])
@@ -765,7 +784,7 @@ function s2e(e, r, t, n = {}) {
     structuredClone(d)
   );
 }
-const l2e = [
+const comparisonFindingKinds = [
     "all",
     "inserted-row",
     "deleted-row",
@@ -781,7 +800,7 @@ const l2e = [
     "metadata",
     "unmapped-sheet",
   ],
-  Lj = (e) =>
+  formatComparisonValue = (e) =>
     e === undefined
       ? "—"
       : e === null
@@ -789,9 +808,9 @@ const l2e = [
         : typeof e == "boolean"
           ? String(e).toUpperCase()
           : String(e);
-function u2e(e) {
-  const { text, language } = Dr(),
-    n = yh(),
+function WorkbookComparisonDialog(e) {
+  const { text, language } = useWorkbookMessages(),
+    n = useCancellableOperation(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(0),
@@ -854,7 +873,7 @@ function u2e(e) {
       return {
         before: {
           sheetId: he?.id ?? "",
-          range: he ? Ta(he) : "A1",
+          range: he ? formatOccupiedRangeAddress(he) : "A1",
         },
         after: { sheetId: e.sheetId, range: e.range },
         headers: true,
@@ -891,7 +910,7 @@ function u2e(e) {
       try {
         if (!/\.(json|xlsx)$/i.test(oe.name))
           throw Error("Choose a native JSON or XLSX comparison baseline.");
-        const Se = await H1(oe, n.begin());
+        const Se = await importWorkbookFile(oe, n.begin());
         if (!d.current || de !== s.current || $.current !== he) return;
         (l(Se.workbook), h(Se.warnings), b([Q(Se.workbook, true)]));
       } catch (Se) {
@@ -908,7 +927,7 @@ function u2e(e) {
       if (B)
         try {
           (w(
-            s2e(
+            runWorkbookComparison(
               B,
               e.workbook,
               { mappings: g },
@@ -976,10 +995,12 @@ function u2e(e) {
               children: [
                 i.jsx("h2", {
                   id: `${o}-title`,
-                  children: i.jsx(M, { children: "Compare workbooks" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Compare workbooks",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Review record changes, formula consistency, links and hidden content.",
                   }),
@@ -999,14 +1020,14 @@ function u2e(e) {
           className: "wc-body",
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Comparison is read-only. Formulas, external links and imported cached values are never calculated. Both source workbooks stay unchanged.",
               }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Comparison baseline file" }),
+                i.jsx(LocalizedText, { children: "Comparison baseline file" }),
                 i.jsx("input", {
                   "aria-label": text("Comparison baseline file"),
                   type: "file",
@@ -1022,23 +1043,23 @@ function u2e(e) {
             f &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children: "Reading the comparison baseline…",
                 }),
               }),
             B &&
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "Before: " }),
+                  i.jsx(LocalizedText, { children: "Before: " }),
                   i.jsx("strong", { children: B.name }),
                   " ",
-                  i.jsx(M, { children: "· revision" }),
+                  i.jsx(LocalizedText, { children: "· revision" }),
                   " ",
                   B.revision,
-                  i.jsx(M, { children: ". After: " }),
+                  i.jsx(LocalizedText, { children: ". After: " }),
                   i.jsx("strong", { children: e.workbook.name }),
                   " ",
-                  i.jsx(M, { children: "· revision " }),
+                  i.jsx(LocalizedText, { children: "· revision " }),
                   e.workbook.revision,
                   ".",
                 ],
@@ -1048,7 +1069,9 @@ function u2e(e) {
                 children: [
                   i.jsxs("summary", {
                     children: [
-                      i.jsx(M, { children: "Baseline import notices (" }),
+                      i.jsx(LocalizedText, {
+                        children: "Baseline import notices (",
+                      }),
                       c.length,
                       ")",
                     ],
@@ -1070,11 +1093,13 @@ function u2e(e) {
                     (v(oe.target.checked), H());
                   },
                 }),
-                i.jsx(M, { children: "Include permitted hidden content" }),
+                i.jsx(LocalizedText, {
+                  children: "Include permitted hidden content",
+                }),
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Hidden structure is inventoried. Its cell content requires explicit permission. Imported files are separate user-selected baselines; host worksheet restrictions apply independently.",
               }),
@@ -1087,7 +1112,9 @@ function u2e(e) {
                     children: [
                       i.jsxs("legend", {
                         children: [
-                          i.jsx(M, { children: "Worksheet mapping " }),
+                          i.jsx(LocalizedText, {
+                            children: "Worksheet mapping ",
+                          }),
                           de + 1,
                         ],
                       }),
@@ -1096,7 +1123,9 @@ function u2e(e) {
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Before worksheet " }),
+                              i.jsx(LocalizedText, {
+                                children: "Before worksheet ",
+                              }),
                               de + 1,
                               i.jsxs("select", {
                                 value: oe.before.sheetId,
@@ -1126,7 +1155,9 @@ function u2e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Before range " }),
+                              i.jsx(LocalizedText, {
+                                children: "Before range ",
+                              }),
                               de + 1,
                               i.jsx("input", {
                                 value: oe.before.range,
@@ -1143,7 +1174,9 @@ function u2e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "After worksheet " }),
+                              i.jsx(LocalizedText, {
+                                children: "After worksheet ",
+                              }),
                               de + 1,
                               i.jsxs("select", {
                                 value: oe.after.sheetId,
@@ -1173,7 +1206,9 @@ function u2e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "After range " }),
+                              i.jsx(LocalizedText, {
+                                children: "After range ",
+                              }),
                               de + 1,
                               i.jsx("input", {
                                 value: oe.after.range,
@@ -1190,7 +1225,9 @@ function u2e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Row matching " }),
+                              i.jsx(LocalizedText, {
+                                children: "Row matching ",
+                              }),
                               de + 1,
                               i.jsxs("select", {
                                 value: oe.rowMatch,
@@ -1227,7 +1264,7 @@ function u2e(e) {
                                     headers: le.target.checked,
                                   }),
                               }),
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children: "First row contains headers ",
                               }),
                               de + 1,
@@ -1239,7 +1276,7 @@ function u2e(e) {
                         i.jsxs(i.Fragment, {
                           children: [
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Enter exact header text. Without headers, use relative column labels A, B, C. Values of different types, case or whitespace do not match.",
                               }),
@@ -1252,7 +1289,7 @@ function u2e(e) {
                                   children: [
                                     i.jsxs("label", {
                                       children: [
-                                        i.jsx(M, {
+                                        i.jsx(LocalizedText, {
                                           children: "Before key ",
                                         }),
                                         de + 1,
@@ -1277,7 +1314,7 @@ function u2e(e) {
                                     }),
                                     i.jsxs("label", {
                                       children: [
-                                        i.jsx(M, {
+                                        i.jsx(LocalizedText, {
                                           children: "After key ",
                                         }),
                                         de + 1,
@@ -1310,7 +1347,7 @@ function u2e(e) {
                                           ),
                                         }),
                                       children: [
-                                        i.jsx(M, {
+                                        i.jsx(LocalizedText, {
                                           children: "Remove key ",
                                         }),
                                         de + 1,
@@ -1334,7 +1371,9 @@ function u2e(e) {
                                   ],
                                 }),
                               children: [
-                                i.jsx(M, { children: "Add key to mapping " }),
+                                i.jsx(LocalizedText, {
+                                  children: "Add key to mapping ",
+                                }),
                                 de + 1,
                               ],
                             }),
@@ -1346,7 +1385,7 @@ function u2e(e) {
                           (b(g.filter((le, ce) => ce !== de)), H());
                         },
                         children: [
-                          i.jsx(M, { children: "Remove mapping " }),
+                          i.jsx(LocalizedText, { children: "Remove mapping " }),
                           de + 1,
                         ],
                       }),
@@ -1363,12 +1402,14 @@ function u2e(e) {
                   onClick: () => {
                     B && (b([...g, Q(B)]), H());
                   },
-                  children: i.jsx(M, { children: "Add worksheet mapping" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Add worksheet mapping",
+                  }),
                 }),
                 i.jsx("button", {
                   disabled: !B || f,
                   onClick: q,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Compare selected workbooks",
                   }),
                 }),
@@ -1379,7 +1420,7 @@ function u2e(e) {
               !G &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Comparison details are withheld because the workbook, selection, settings or access changed. Compare again.",
                 }),
@@ -1392,60 +1433,68 @@ function u2e(e) {
                 "data-ui-label": "Workbook audit comparison report",
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Comparison report" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Comparison report",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
                       y.counts.beforeRows,
                       " ",
-                      i.jsx(M, { children: "before records ·" }),
+                      i.jsx(LocalizedText, { children: "before records ·" }),
                       " ",
                       y.counts.afterRows,
                       " ",
-                      i.jsx(M, { children: "after records ·" }),
+                      i.jsx(LocalizedText, { children: "after records ·" }),
                       " ",
                       y.counts.matchedRows,
                       " ",
-                      i.jsx(M, { children: "matched ·" }),
+                      i.jsx(LocalizedText, { children: "matched ·" }),
                       " ",
                       y.counts.insertedRows,
                       " ",
-                      i.jsx(M, { children: "inserted ·" }),
+                      i.jsx(LocalizedText, { children: "inserted ·" }),
                       " ",
                       y.counts.deletedRows,
                       " ",
-                      i.jsx(M, { children: "deleted ·" }),
+                      i.jsx(LocalizedText, { children: "deleted ·" }),
                       " ",
                       y.counts.unresolvedBeforeRows,
                       "/",
                       y.counts.unresolvedAfterRows,
                       " ",
-                      i.jsx(M, { children: "unresolved before/after." }),
+                      i.jsx(LocalizedText, {
+                        children: "unresolved before/after.",
+                      }),
                     ],
                   }),
                   i.jsxs("p", {
                     children: [
                       y.coverage.selectedCells,
                       " ",
-                      i.jsx(M, { children: "selected cells." }),
+                      i.jsx(LocalizedText, { children: "selected cells." }),
                       " ",
                       y.counts.scannedCells,
                       " ",
-                      i.jsx(M, { children: "permitted stored cells /" }),
+                      i.jsx(LocalizedText, {
+                        children: "permitted stored cells /",
+                      }),
                       " ",
                       y.counts.scannedFormulas,
                       " ",
-                      i.jsx(M, { children: "formulas inspected statically." }),
+                      i.jsx(LocalizedText, {
+                        children: "formulas inspected statically.",
+                      }),
                       " ",
                       y.findings.length,
                       " ",
-                      i.jsx(M, { children: "findings." }),
+                      i.jsx(LocalizedText, { children: "findings." }),
                     ],
                   }),
                   i.jsxs("details", {
                     children: [
                       i.jsx("summary", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Match rules and coverage",
                         }),
                       }),
@@ -1456,14 +1505,18 @@ function u2e(e) {
                       }),
                       i.jsxs("p", {
                         children: [
-                          i.jsx(M, { children: "Before workbook: " }),
+                          i.jsx(LocalizedText, {
+                            children: "Before workbook: ",
+                          }),
                           y.before.id,
-                          i.jsx(M, { children: ", revision" }),
+                          i.jsx(LocalizedText, { children: ", revision" }),
                           " ",
                           y.before.revision,
-                          i.jsx(M, { children: ". After workbook: " }),
+                          i.jsx(LocalizedText, {
+                            children: ". After workbook: ",
+                          }),
                           y.after.id,
-                          i.jsx(M, { children: ", revision " }),
+                          i.jsx(LocalizedText, { children: ", revision " }),
                           y.after.revision,
                           ".",
                         ],
@@ -1473,7 +1526,7 @@ function u2e(e) {
                           "p",
                           {
                             children: [
-                              i.jsx(M, { children: "Mapping " }),
+                              i.jsx(LocalizedText, { children: "Mapping " }),
                               de + 1,
                               ": ",
                               oe.before.sheetId,
@@ -1504,13 +1557,15 @@ function u2e(e) {
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Comparison finding category" }),
+                      i.jsx(LocalizedText, {
+                        children: "Comparison finding category",
+                      }),
                       i.jsx("select", {
                         value: j,
                         onChange: (oe) => {
                           (z(oe.target.value), D(0));
                         },
-                        children: l2e.map((oe) =>
+                        children: comparisonFindingKinds.map((oe) =>
                           i.jsxs(
                             "option",
                             {
@@ -1545,30 +1600,32 @@ function u2e(e) {
                             children: i.jsxs("tr", {
                               children: [
                                 i.jsx("th", {
-                                  children: i.jsx(M, { children: "Finding" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Finding",
+                                  }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Before address",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Before raw value",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "After address",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "After raw value",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Explanation",
                                   }),
                                 }),
@@ -1596,7 +1653,9 @@ function u2e(e) {
                                           : "—",
                                       }),
                                       i.jsx("td", {
-                                        children: Lj(oe.beforeValue),
+                                        children: formatComparisonValue(
+                                          oe.beforeValue,
+                                        ),
                                       }),
                                       i.jsx("td", {
                                         children: oe.after
@@ -1604,7 +1663,9 @@ function u2e(e) {
                                           : "—",
                                       }),
                                       i.jsx("td", {
-                                        children: Lj(oe.afterValue),
+                                        children: formatComparisonValue(
+                                          oe.afterValue,
+                                        ),
                                       }),
                                       i.jsx("td", { children: oe.message }),
                                     ],
@@ -1617,7 +1678,7 @@ function u2e(e) {
                       }),
                       !W.length &&
                         i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "No findings in this category within the declared scope.",
                           }),
@@ -1630,25 +1691,29 @@ function u2e(e) {
                       i.jsx("button", {
                         disabled: te === 0,
                         onClick: () => D(te - 1),
-                        children: i.jsx(M, { children: "Previous findings" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous findings",
+                        }),
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Page " }),
+                          i.jsx(LocalizedText, { children: "Page " }),
                           te + 1,
                           " ",
-                          i.jsx(M, { children: "of " }),
+                          i.jsx(LocalizedText, { children: "of " }),
                           K,
                           " · ",
                           W.length,
                           " ",
-                          i.jsx(M, { children: "findings" }),
+                          i.jsx(LocalizedText, { children: "findings" }),
                         ],
                       }),
                       i.jsx("button", {
                         disabled: te + 1 >= K,
                         onClick: () => D(te + 1),
-                        children: i.jsx(M, { children: "Next findings" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Next findings",
+                        }),
                       }),
                     ],
                   }),
@@ -1656,7 +1721,7 @@ function u2e(e) {
               }),
             i.jsx("p", {
               className: "wc-limit",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Limits: 20 mappings, 10,000 selected cells, 1,000 rows and 100 columns per range; 20,000 permitted stored cells inspected. Large or incomplete comparisons return an explicit diagnostic.",
               }),
@@ -1666,14 +1731,14 @@ function u2e(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: ae,
-            children: i.jsx(M, { children: "Close comparison" }),
+            children: i.jsx(LocalizedText, { children: "Close comparison" }),
           }),
         }),
       ],
     }),
   });
 }
-const r0 = {
+const comparisonLimits = {
     maxQueryLength: 256,
     maxResults: 1e5,
     maxCalculatedCells: 1e4,
@@ -1683,12 +1748,12 @@ const r0 = {
     maxSpecialAreas: 256,
     maxBlankScan: 1e5,
   },
-  Eo = (e) => {
+  throwSearchError = (e) => {
     throw new Error(e);
   },
-  xw = (e, r) => `${ut(r)}${e + 1}`,
+  toA1CellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   E_ = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
-  c2e = (e) =>
+  cellValueToText = (e) =>
     e === null
       ? ""
       : typeof e == "boolean"
@@ -1696,30 +1761,30 @@ const r0 = {
           ? "TRUE"
           : "FALSE"
         : String(e);
-function oA(e) {
+function deepFreezeRecord(e) {
   return (
     e &&
       typeof e == "object" &&
-      (Object.values(e).forEach(oA), Object.freeze(e)),
+      (Object.values(e).forEach(deepFreezeRecord), Object.freeze(e)),
     e
   );
 }
-function iH(e, r) {
-  const t = Nr(e, r.sheetId),
-    n = ff(r.ranges ?? [r.range]),
-    o = n.map(ct);
-  ct(r.range);
+function normalizeSearchRequest(e, r) {
+  const t = findSheetOrThrow(e, r.sheetId),
+    n = parseSelectionAreas(r.ranges ?? [r.range]),
+    o = n.map(parseRangeAddress);
+  parseRangeAddress(r.range);
   const a = r.scope ?? "sheet",
     s = r.order ?? "rows";
   return (
     (!["selection", "sheet", "workbook"].includes(a) ||
       !["rows", "columns"].includes(s)) &&
-      Eo("Choose a valid search scope and order."),
+      throwSearchError("Choose a valid search scope and order."),
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      Eo("Include hidden must be boolean."),
+      throwSearchError("Include hidden must be boolean."),
     o.some((d) => d.lastRow >= t.rowCount || d.lastCol >= t.colCount) &&
-      Eo("The search selection exceeds the worksheet."),
+      throwSearchError("The search selection exceeds the worksheet."),
     {
       ...r,
       ranges: n,
@@ -1729,21 +1794,21 @@ function iH(e, r) {
     }
   );
 }
-function d2e(e, r) {
-  const t = iH(e, r),
+function normalizeSearchQuery(e, r) {
+  const t = normalizeSearchRequest(e, r),
     n = r.lookIn ?? "raw";
   ((typeof r.query != "string" ||
     !r.query.length ||
-    r.query.length > r0.maxQueryLength) &&
-    Eo(
+    r.query.length > comparisonLimits.maxQueryLength) &&
+    throwSearchError(
       "Enter 1–256 characters to find. Use Go To Special to select blank cells.",
     ),
     ["raw", "formulas", "calculated", "formatted"].includes(n) ||
-      Eo("Choose a supported Look in option."));
+      throwSearchError("Choose a supported Look in option."));
   for (const o of [r.matchCase, r.wholeCell, r.wildcards])
     o !== undefined &&
       typeof o != "boolean" &&
-      Eo("Search switches must be boolean.");
+      throwSearchError("Search switches must be boolean.");
   return {
     ...t,
     query: r.query,
@@ -1753,8 +1818,13 @@ function d2e(e, r) {
     wildcards: r.wildcards ?? true,
   };
 }
-const oH = () => ({ text: 0, work: 0, calculated: 0, scanned: 0 });
-function aH(e) {
+const createSearchBudget = () => ({
+  text: 0,
+  work: 0,
+  calculated: 0,
+  scanned: 0,
+});
+function compileSearchPattern(e) {
   const r = Array.from(e.query),
     t = [];
   for (let o = 0; o < r.length; o++) {
@@ -1769,14 +1839,15 @@ function aH(e) {
   }
   return t;
 }
-function sH(e, r, t, n) {
+function matchTextWithBudget(e, r, t, n) {
   const o = Array.from(e),
     a = o.length;
   if (
     ((n.text += e.length),
     (n.work += (a + 1) * t.length),
-    (n.text > r0.maxTextCharacters || n.work > r0.maxPatternWork) &&
-      Eo(
+    (n.text > comparisonLimits.maxTextCharacters ||
+      n.work > comparisonLimits.maxPatternWork) &&
+      throwSearchError(
         "This search exceeds the text-comparison budget. Narrow the selection or simplify the search.",
       ),
     !a)
@@ -1806,9 +1877,9 @@ function sH(e, r, t, n) {
     s[l] > l ? (u.push([d[l], d[s[l]]]), (l = s[l])) : l++;
   return u;
 }
-function lH(e) {
-  const r = ul(e.rowCount, cn(e, "row")),
-    t = ul(e.colCount, cn(e, "column"));
+function describeHiddenState(e) {
+  const r = createAxisVisibilityIndex(e.rowCount, cn(e, "row")),
+    t = createAxisVisibilityIndex(e.colCount, cn(e, "column"));
   return (n, o) =>
     e.hidden
       ? e.veryHidden
@@ -1820,37 +1891,40 @@ function lH(e) {
           ? "hidden column"
           : undefined;
 }
-const uH = (e, r, t) =>
+const rangeContainsCell = (e, r, t) =>
   e >= t.firstRow && e <= t.lastRow && r >= t.firstCol && r <= t.lastCol;
-function aA(e, r, t) {
+function compareCellPositions(e, r, t) {
   return e === "columns"
     ? r.col - t.col || r.row - t.row
     : r.row - t.row || r.col - t.col;
 }
-function cH(e, r) {
+function searchWorkbookCells(e, r) {
   var h;
-  const t = d2e(e, r),
-    n = oH(),
-    o = aH(t),
+  const t = normalizeSearchQuery(e, r),
+    n = createSearchBudget(),
+    o = compileSearchPattern(t),
     a = [],
-    s = Vn(e),
-    d = t.scope === "workbook" ? e.sheets : [Nr(e, t.sheetId)],
-    u = t.ranges.map(ct),
+    s = calculateWorkbookWithSettings(e),
+    d = t.scope === "workbook" ? e.sheets : [findSheetOrThrow(e, t.sheetId)],
+    u = t.ranges.map(parseRangeAddress),
     l = t.lookIn === "calculated" || t.lookIn === "formatted";
   for (const f of d) {
     if (f.hidden && !t.includeHidden) continue;
     const p = new Set(Object.keys(f.cells)),
-      m = lH(f),
+      m = describeHiddenState(f),
       v = [];
     if (l) for (const g of s.getSpillEntries(f.id)) p.add(g.address);
     for (const g of p) {
-      ++n.scanned > Mt.maxCells &&
-        Eo("This search exceeds 100,000 populated cells. Narrow its scope.");
+      ++n.scanned > workbookLimits.maxCells &&
+        throwSearchError(
+          "This search exceeds 100,000 populated cells. Narrow its scope.",
+        );
       const { row, col } = _t(g),
         w = m(row, col),
         E = f.cells[g];
       if (
-        (t.scope === "selection" && !u.some((O) => uH(row, col, O))) ||
+        (t.scope === "selection" &&
+          !u.some((O) => rangeContainsCell(row, col, O))) ||
         (w && !t.includeHidden)
       )
         continue;
@@ -1858,16 +1932,16 @@ function cH(e, r) {
       if (t.lookIn === "formulas" && !A) continue;
       let k = E?.raw ?? null;
       l &&
-        (++n.calculated > r0.maxCalculatedCells &&
-          Eo(
+        (++n.calculated > comparisonLimits.maxCalculatedCells &&
+          throwSearchError(
             "Calculated searches support at most 10,000 cells. Narrow the selection or use Raw contents.",
           ),
         (k = s(f.id, g)));
       const F =
           t.lookIn === "formatted"
-            ? Af(k, E, e.datePolicy?.dateSystem)
-            : c2e(k),
-        I = sH(F, t, o, n);
+            ? formatNumberWithPattern(k, E, e.datePolicy?.dateSystem)
+            : cellValueToText(k),
+        I = matchTextWithBudget(F, t, o, n);
       I.length &&
         (v.push({
           sheetId: f.id,
@@ -1883,12 +1957,12 @@ function cH(e, r) {
           ...(w ? { hiddenReason: w } : {}),
           occurrences: I.length,
         }),
-        a.length + v.length > r0.maxResults &&
-          Eo("Too many matching cells. Narrow the search."));
+        a.length + v.length > comparisonLimits.maxResults &&
+          throwSearchError("Too many matching cells. Narrow the search."));
     }
-    (v.sort((g, b) => aA(t.order, g, b)), a.push(...v));
+    (v.sort((g, b) => compareCellPositions(t.order, g, b)), a.push(...v));
   }
-  return oA({
+  return deepFreezeRecord({
     workbookId: e.id,
     revision: e.revision,
     snapshotGuard: JSON.stringify(e),
@@ -1899,20 +1973,23 @@ function cH(e, r) {
     results: a,
   });
 }
-function f2e(e, r = 0, t = 25) {
+function normalizeSearchPage(e, r = 0, t = 25) {
   return (
     (!Number.isSafeInteger(r) ||
       r < 0 ||
       !Number.isSafeInteger(t) ||
       t < 1 ||
       t > 200) &&
-      Eo("Search pages require a nonnegative page and 1–200 results per page."),
+      throwSearchError(
+        "Search pages require a nonnegative page and 1–200 results per page.",
+      ),
     e.results.slice(r * t, (r + 1) * t)
   );
 }
-function h2e(e, r, t = "next") {
+function findAdjacentSearchResult(e, r, t = "next") {
   if (
-    (["next", "previous"].includes(t) || Eo("Choose next or previous."),
+    (["next", "previous"].includes(t) ||
+      throwSearchError("Choose next or previous."),
     !e.total)
   )
     return null;
@@ -1928,7 +2005,8 @@ function h2e(e, r, t = "next") {
       a = new Map(e.sheetOrder.map((d, u) => [d, u])),
       s = a.get(r.sheetId);
     if (s !== undefined) {
-      const d = (u) => a.get(u.sheetId) - s || aA(e.options.order, u, o);
+      const d = (u) =>
+        a.get(u.sheetId) - s || compareCellPositions(e.options.order, u, o);
       return t === "next"
         ? (e.results.find((u) => d(u) > 0) ?? e.results[0])
         : ([...e.results].reverse().find((u) => d(u) < 0) ?? e.results.at(-1));
@@ -1936,7 +2014,7 @@ function h2e(e, r, t = "next") {
   }
   return t === "next" ? e.results[0] : e.results.at(-1);
 }
-function p2e(e, r) {
+function toComparableCellValue(e, r) {
   let t = r;
   r.length
     ? typeof e.raw == "number" &&
@@ -1952,26 +2030,26 @@ function p2e(e, r) {
     typeof t == "string" && t.startsWith("=") && !E_(e)
       ? (n.literal = true)
       : (typeof t == "string" && t.startsWith("=")) || delete n.literal,
-    hi(n)
+    normalizeCellRecordInput(n)
   );
 }
 
 export {
   E_,
-  Eo,
-  aA,
-  aH,
-  cH,
-  f2e,
-  h2e,
-  iH,
-  lH,
-  oA,
-  oH,
-  p2e,
-  r0,
-  sH,
-  u2e,
-  uH,
-  xw,
+  throwSearchError,
+  compareCellPositions,
+  compileSearchPattern,
+  searchWorkbookCells,
+  normalizeSearchPage,
+  findAdjacentSearchResult,
+  normalizeSearchRequest,
+  describeHiddenState,
+  deepFreezeRecord,
+  createSearchBudget,
+  toComparableCellValue,
+  comparisonLimits,
+  matchTextWithBudget,
+  WorkbookComparisonDialog,
+  rangeContainsCell,
+  toA1CellAddress,
 };

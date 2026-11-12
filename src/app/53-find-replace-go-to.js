@@ -2,64 +2,80 @@ import { Search, X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import A2e from "react-dom";
-import { Ig, Mt, b1, cx, ux } from "./02-financial-functions.js";
 import {
-  Af,
-  Dg,
-  Ip,
-  Np,
-  Nr,
-  Og,
+  maxRowHeight,
+  workbookLimits,
+  minRowHeight,
+  maxColumnWidth,
+  minColumnWidth,
+} from "./02-financial-functions.js";
+import {
+  formatNumberWithPattern,
+  defaultRowHeightOf,
+  columnWidthAt,
+  enumerateSelectionCells,
+  findSheetOrThrow,
+  defaultColumnWidthOf,
   Pv,
-  RC,
-  Vn,
+  findOccupiedRangeBounds,
+  calculateWorkbookWithSettings,
   _t,
-  ct,
-  fB,
-  hB,
-  hi,
-  ul,
-  ut,
+  parseRangeAddress,
+  indentToPx,
+  measureCellBorderInsets,
+  normalizeCellRecordInput,
+  createAxisVisibilityIndex,
+  columnIndexToLetters,
   vx,
-  ys,
+  resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
-import { Dr, Dx, M, tI } from "./04-cell-input-paste-and-fill.js";
-import { Lme, Pme } from "./33-page-setup-and-print.js";
+import {
+  useWorkbookMessages,
+  buildCellChangePreview,
+  LocalizedText,
+  applyCellChangePreview,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  getFormulaCompletions,
+  applyFormulaCompletion,
+} from "./33-page-setup-and-print.js";
 import {
   E_,
-  Eo,
-  aA,
-  aH,
-  cH,
-  f2e,
-  h2e,
-  iH,
-  lH,
-  oA,
-  oH,
-  p2e,
-  r0,
-  sH,
-  uH,
-  xw,
+  throwSearchError,
+  compareCellPositions,
+  compileSearchPattern,
+  searchWorkbookCells,
+  normalizeSearchPage,
+  findAdjacentSearchResult,
+  normalizeSearchRequest,
+  describeHiddenState,
+  deepFreezeRecord,
+  createSearchBudget,
+  toComparableCellValue,
+  comparisonLimits,
+  matchTextWithBudget,
+  rangeContainsCell,
+  toA1CellAddress,
 } from "./52-workbook-comparison.js";
 
-function m2e(e, r, t, n = {}) {
-  (n.readOnly && Eo("This workbook is read-only."),
+function replaceSearchMatches(e, r, t, n = {}) {
+  (n.readOnly && throwSearchError("This workbook is read-only."),
     n.readOnly !== undefined &&
       typeof n.readOnly != "boolean" &&
-      Eo("Read-only must be boolean."),
+      throwSearchError("Read-only must be boolean."),
     (typeof t != "string" || t.length > 32767) &&
-      Eo("Replacement text must contain at most 32,767 characters."),
+      throwSearchError(
+        "Replacement text must contain at most 32,767 characters.",
+      ),
     r.lookIn &&
       !["raw", "formulas"].includes(r.lookIn) &&
-      Eo(
+      throwSearchError(
         "Replace searches Raw contents or Formulas only. Calculated and formatted results are read-only search modes.",
       ));
-  const o = cH(e, r),
+  const o = searchWorkbookCells(e, r),
     a = o.options,
-    s = aH(a),
-    d = oH(),
+    s = compileSearchPattern(a),
+    d = createSearchBudget(),
     u = n.match
       ? o.results.filter(
           (g) =>
@@ -69,7 +85,7 @@ function m2e(e, r, t, n = {}) {
       : o.results;
   n.match &&
     !u.length &&
-    Eo(
+    throwSearchError(
       "The chosen cell does not match this search. Find it again before replacing.",
     );
   const l = [];
@@ -80,25 +96,25 @@ function m2e(e, r, t, n = {}) {
       c++;
       continue;
     }
-    const b = sH(g.text, a, s, d);
+    const b = matchTextWithBudget(g.text, a, s, d);
     let y = "",
       w = 0;
     g.text.length -
       b.reduce((F, [I, O]) => F + O - I, 0) +
       b.length * t.length >
       32767 &&
-      Eo(
+      throwSearchError(
         `Replacement would exceed 32,767 characters at ${g.sheetName}!${g.address}.`,
       );
     for (const [F, I] of b) ((y += g.text.slice(w, F) + t), (w = I));
     y += g.text.slice(w);
-    const A = Nr(e, g.sheetId).cells[g.address],
-      k = p2e(A, y);
-    JSON.stringify(k) !== JSON.stringify(hi(A)) &&
+    const A = findSheetOrThrow(e, g.sheetId).cells[g.address],
+      k = toComparableCellValue(A, y);
+    JSON.stringify(k) !== JSON.stringify(normalizeCellRecordInput(A)) &&
       (l.push({ sheetId: g.sheetId, address: g.address, cell: k }),
       (h += b.length),
-      l.length > Mt.maxPatches &&
-        Eo(
+      l.length > workbookLimits.maxPatches &&
+        throwSearchError(
           "Replace may change at most 500 cells, including dependent formula changes. Narrow the scope or replace one result.",
         ));
   }
@@ -119,8 +135,8 @@ function m2e(e, r, t, n = {}) {
     summary: `Replace in ${a.scope}: ${l.length} cells; ${c} protected matches excluded.`,
   };
   return l.length
-    ? Dx(e, l, f, n.readOnly)
-    : oA({
+    ? buildCellChangePreview(e, l, f, n.readOnly)
+    : deepFreezeRecord({
         ...f,
         workbookId: e.id,
         revision: e.revision,
@@ -131,24 +147,24 @@ function m2e(e, r, t, n = {}) {
         snapshotGuard: JSON.stringify(e),
       });
 }
-function g2e(e, r, t = {}) {
+function assertReplacePreviewCurrent(e, r, t = {}) {
   return r.count
-    ? tI(e, r, t)
+    ? applyCellChangePreview(e, r, t)
     : (t.readOnly !== undefined &&
         typeof t.readOnly != "boolean" &&
-        Eo("Read-only must be boolean."),
-      t.readOnly && Eo("This workbook is read-only."),
+        throwSearchError("Read-only must be boolean."),
+      t.readOnly && throwSearchError("This workbook is read-only."),
       (r.workbookId !== e.id ||
         r.revision !== e.revision ||
         r.snapshotGuard !== JSON.stringify(e)) &&
-        Eo(
+        throwSearchError(
           "The workbook changed after this preview. Create a new preview before applying it.",
         ),
       e);
 }
-function v2e(e) {
+function buildSelectionRanges(e) {
   const r = [];
-  for (const o of [...e].sort((a, s) => aA("rows", a, s))) {
+  for (const o of [...e].sort((a, s) => compareCellPositions("rows", a, s))) {
     const a = r.at(-1);
     a && a.firstRow === o.row && a.lastCol + 1 === o.col
       ? (a.lastCol = o.col)
@@ -169,43 +185,49 @@ function v2e(e) {
       : (t.push(o), n.set(a, o));
   }
   return t.map((o) => {
-    const a = xw(o.firstRow, o.firstCol),
-      s = xw(o.lastRow, o.lastCol);
+    const a = toA1CellAddress(o.firstRow, o.firstCol),
+      s = toA1CellAddress(o.lastRow, o.lastCol);
     return a === s ? a : `${a}:${s}`;
   });
 }
-function b2e(e, r, t) {
-  const n = iH(e, r),
-    o = Nr(e, n.sheetId),
-    a = Vn(e),
-    s = lH(o);
+function selectSpecialCells(e, r, t) {
+  const n = normalizeSearchRequest(e, r),
+    o = findSheetOrThrow(e, n.sheetId),
+    a = calculateWorkbookWithSettings(e),
+    s = describeHiddenState(o);
   (n.scope === "workbook" &&
-    Eo("Go To Special selects cells on one sheet. Choose Selection or Sheet."),
+    throwSearchError(
+      "Go To Special selects cells on one sheet. Choose Selection or Sheet.",
+    ),
     ["formulas", "errors", "constants", "blanks", "notes"].includes(t) ||
-      Eo("Choose a supported Go To Special category."));
-  const d = RC(o),
+      throwSearchError("Choose a supported Go To Special category."));
+  const d = findOccupiedRangeBounds(o),
     u =
       n.scope === "selection"
         ? n.ranges
         : d
-          ? [xw(d.firstRow, d.firstCol) + ":" + xw(d.lastRow, d.lastCol)]
+          ? [
+              toA1CellAddress(d.firstRow, d.firstCol) +
+                ":" +
+                toA1CellAddress(d.lastRow, d.lastCol),
+            ]
           : [],
-    l = u.map(ct),
+    l = u.map(parseRangeAddress),
     c = [],
     h = [],
     f = () => {
-      h.sort((v, g) => aA(n.order, v, g));
-      const m = v2e(h);
+      h.sort((v, g) => compareCellPositions(n.order, v, g));
+      const m = buildSelectionRanges(h);
       return (
-        m.length > r0.maxSpecialAreas &&
-          Eo(
+        m.length > comparisonLimits.maxSpecialAreas &&
+          throwSearchError(
             "This selection contains more than 256 separate areas. Narrow the selection.",
           ),
-        oA({
+        deepFreezeRecord({
           sheetId: o.id,
           kind: t,
           count: h.length,
-          addresses: h.map((v) => xw(v.row, v.col)),
+          addresses: h.map((v) => toA1CellAddress(v.row, v.col)),
           ranges: m,
           workbookId: e.id,
           revision: e.revision,
@@ -216,21 +238,22 @@ function b2e(e, r, t) {
   if (!l.length || (o.hidden && !n.includeHidden)) return f();
   if (t === "blanks")
     try {
-      c.push(...Np(u, r0.maxBlankScan));
+      c.push(...enumerateSelectionCells(u, comparisonLimits.maxBlankScan));
     } catch {
-      Eo(
+      throwSearchError(
         "Blank selection scans at most 100,000 cells. Select a smaller rectangle.",
       );
     }
   else if ((c.push(...Object.keys(o.cells)), t === "errors"))
     for (const m of a.getSpillEntries(o.id))
       Object.hasOwn(o.cells, m.address) || c.push(m.address);
-  c.length > Mt.maxCells && Eo("Go To Special scans at most 100,000 cells.");
+  c.length > workbookLimits.maxCells &&
+    throwSearchError("Go To Special scans at most 100,000 cells.");
   let p = 0;
   for (const m of c) {
     const v = _t(m);
     if (
-      !l.some((w) => uH(v.row, v.col, w)) ||
+      !l.some((w) => rangeContainsCell(v.row, v.col, w)) ||
       (!n.includeHidden && s(v.row, v.col))
     )
       continue;
@@ -242,9 +265,9 @@ function b2e(e, r, t) {
     else if (t === "constants") y = !!g && g.raw !== null && g.raw !== "" && !b;
     else {
       if (!b && g && g.raw !== null) continue;
-      ++p > r0.maxCalculatedCells &&
+      ++p > comparisonLimits.maxCalculatedCells &&
         t === "errors" &&
-        Eo(
+        throwSearchError(
           "Error selection calculates at most 10,000 cells. Narrow the selection.",
         );
       const w = a(o.id, m);
@@ -259,16 +282,16 @@ function b2e(e, r, t) {
     }
     y &&
       (h.push(v),
-      h.length > r0.maxSpecialCells &&
-        Eo(
+      h.length > comparisonLimits.maxSpecialCells &&
+        throwSearchError(
           "Go To Special may select at most 500 cells. Narrow the selection.",
         ));
   }
   return f();
 }
-const qm = (e) =>
+const describeOperationError = (e) =>
     e instanceof Error ? e.message : "This operation could not be completed.",
-  Pj = (e) =>
+  formatSearchResultValue = (e) =>
     e == null
       ? "(blank)"
       : typeof e == "boolean"
@@ -277,8 +300,8 @@ const qm = (e) =>
           : "FALSE"
         : String(e),
   Bv = 20;
-function y2e(e) {
-  const { text, language } = Dr(),
+function FindReplaceDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -361,7 +384,7 @@ function y2e(e) {
   function Se() {
     try {
       (J(""), R(null), $(null));
-      const Re = cH(s.current.workbook, ae());
+      const Re = searchWorkbookCells(s.current.workbook, ae());
       return (
         _(Re),
         T(null),
@@ -374,7 +397,7 @@ function y2e(e) {
         Re
       );
     } catch (Re) {
-      return (J(qm(Re)), _(null), null);
+      return (J(describeOperationError(Re)), _(null), null);
     }
   }
   function le(Re, Me = B) {
@@ -403,7 +426,7 @@ function y2e(e) {
           `${Re.sheetName}!${Re.address}${Re.protected ? " · protected" : ""}`,
         ));
     } catch (ke) {
-      J(qm(ke));
+      J(describeOperationError(ke));
     }
   }
   function ce(Re) {
@@ -411,15 +434,17 @@ function y2e(e) {
     if (Me)
       try {
         he(Me);
-        const ke = ct(d.current.range),
+        const ke = parseRangeAddress(d.current.range),
           je = C ?? {
             sheetId: d.current.sheetId,
-            address: e.active ?? `${ut(ke.firstCol)}${ke.firstRow + 1}`,
+            address:
+              e.active ??
+              `${columnIndexToLetters(ke.firstCol)}${ke.firstRow + 1}`,
           },
-          $e = h2e(Me, je, Re);
+          $e = findAdjacentSearchResult(Me, je, Re);
         $e ? le($e, Me) : W("No matches found.");
       } catch (ke) {
-        J(qm(ke));
+        J(describeOperationError(ke));
       }
   }
   function ge(Re) {
@@ -427,7 +452,7 @@ function y2e(e) {
       if ((J(""), Re && !C))
         throw new Error("Select a matching result before replacing one cell.");
       Re && B && he(B);
-      const Me = m2e(s.current.workbook, ae(), y, {
+      const Me = replaceSearchMatches(s.current.workbook, ae(), y, {
         readOnly: s.current.readOnly,
         ...(Re ? { match: C } : {}),
       });
@@ -435,7 +460,7 @@ function y2e(e) {
         te(
           Object.fromEntries(
             Me.previewPatches.map((ke) => {
-              const je = Nr(s.current.workbook, ke.sheetId);
+              const je = findSheetOrThrow(s.current.workbook, ke.sheetId);
               return [
                 `${ke.sheetId}:${ke.address}`,
                 {
@@ -454,7 +479,7 @@ function y2e(e) {
             : "No matches found.",
         ));
     } catch (Me) {
-      (R(null), J(qm(Me)));
+      (R(null), J(describeOperationError(Me)));
     }
   }
   function se() {
@@ -462,18 +487,20 @@ function y2e(e) {
       try {
         J("");
         const Re = s.current.workbook,
-          Me = g2e(Re, N, { readOnly: s.current.readOnly });
+          Me = assertReplacePreviewCurrent(Re, N, {
+            readOnly: s.current.readOnly,
+          });
         (Me !== Re &&
           s.current.onWorkbookChange(Me, `Replace ${N.replacedCells} cells`),
           s.current.onClose());
       } catch (Re) {
-        J(qm(Re));
+        J(describeOperationError(Re));
       }
   }
   function we() {
     try {
       J("");
-      const Re = b2e(s.current.workbook, ae(), V);
+      const Re = selectSpecialCells(s.current.workbook, ae(), V);
       ($(Re),
         R(null),
         G(0),
@@ -483,7 +510,7 @@ function y2e(e) {
             : "No matching cells found.",
         ));
     } catch (Re) {
-      ($(null), J(qm(Re)));
+      ($(null), J(describeOperationError(Re)));
     }
   }
   function Ee() {
@@ -493,12 +520,12 @@ function y2e(e) {
           throw new Error(
             "This embedding host has not connected multiple-area selection.",
           );
-        if (Nr(s.current.workbook, L.sheetId).hidden)
+        if (findSheetOrThrow(s.current.workbook, L.sheetId).hidden)
           throw new Error("Unhide this sheet before selecting its cells.");
         (s.current.onSelectRanges(L.sheetId, [...L.ranges]),
           s.current.onClose());
       } catch (Re) {
-        J(qm(Re));
+        J(describeOperationError(Re));
       }
   }
   const Ae = Math.max(1, Math.ceil((B?.total ?? 0) / Bv)),
@@ -556,7 +583,7 @@ function y2e(e) {
               id: n,
               children: [
                 i.jsx(Search, { size: 18 }),
-                i.jsx(M, { children: "Find and Replace" }),
+                i.jsx(LocalizedText, { children: "Find and Replace" }),
               ],
             }),
             i.jsx("button", {
@@ -618,7 +645,7 @@ function y2e(e) {
             i.jsxs("p", {
               className: "st-context",
               children: [
-                i.jsx(M, { children: "Selection:" }),
+                i.jsx(LocalizedText, { children: "Selection:" }),
                 " ",
                 i.jsxs("strong", {
                   children: [
@@ -638,7 +665,7 @@ function y2e(e) {
                         i.jsxs("label", {
                           className: "st-wide",
                           children: [
-                            i.jsx(M, { children: "Find what" }),
+                            i.jsx(LocalizedText, { children: "Find what" }),
                             i.jsx("input", {
                               ref: a,
                               value: g,
@@ -653,7 +680,9 @@ function y2e(e) {
                           i.jsxs("label", {
                             className: "st-wide",
                             children: [
-                              i.jsx(M, { children: "Replace with" }),
+                              i.jsx(LocalizedText, {
+                                children: "Replace with",
+                              }),
                               i.jsx("input", {
                                 value: y,
                                 maxLength: 32767,
@@ -668,7 +697,9 @@ function y2e(e) {
                   : i.jsxs("label", {
                       className: "st-wide",
                       children: [
-                        i.jsx(M, { children: "Select cells containing" }),
+                        i.jsx(LocalizedText, {
+                          children: "Select cells containing",
+                        }),
                         i.jsxs("select", {
                           value: V,
                           onChange: (Re) => {
@@ -701,7 +732,7 @@ function y2e(e) {
                     }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Within" }),
+                    i.jsx(LocalizedText, { children: "Within" }),
                     i.jsxs("select", {
                       value: c,
                       onChange: (Re) => {
@@ -724,7 +755,7 @@ function y2e(e) {
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Search order" }),
+                    i.jsx(LocalizedText, { children: "Search order" }),
                     i.jsxs("select", {
                       value: m,
                       onChange: (Re) => {
@@ -744,7 +775,7 @@ function y2e(e) {
                   i.jsxs("label", {
                     className: "st-wide",
                     children: [
-                      i.jsx(M, { children: "Look in" }),
+                      i.jsx(LocalizedText, { children: "Look in" }),
                       i.jsxs("select", {
                         value: f,
                         onChange: (Re) => {
@@ -794,7 +825,7 @@ function y2e(e) {
                               (A(Re.target.checked), oe());
                             },
                           }),
-                          i.jsx(M, { children: "Match case" }),
+                          i.jsx(LocalizedText, { children: "Match case" }),
                         ],
                       }),
                       i.jsxs("label", {
@@ -806,7 +837,9 @@ function y2e(e) {
                               (F(Re.target.checked), oe());
                             },
                           }),
-                          i.jsx(M, { children: "Match entire cell contents" }),
+                          i.jsx(LocalizedText, {
+                            children: "Match entire cell contents",
+                          }),
                         ],
                       }),
                       i.jsxs("label", {
@@ -818,7 +851,9 @@ function y2e(e) {
                               (O(Re.target.checked), oe());
                             },
                           }),
-                          i.jsx(M, { children: "Use wildcards (* ? ~)" }),
+                          i.jsx(LocalizedText, {
+                            children: "Use wildcards (* ? ~)",
+                          }),
                         ],
                       }),
                     ],
@@ -832,7 +867,9 @@ function y2e(e) {
                         (z(Re.target.checked), oe());
                       },
                     }),
-                    i.jsx(M, { children: "Include hidden cells and sheets" }),
+                    i.jsx(LocalizedText, {
+                      children: "Include hidden cells and sheets",
+                    }),
                   ],
                 }),
               ],
@@ -847,7 +884,7 @@ function y2e(e) {
             e.readOnly &&
               i.jsx("p", {
                 className: "st-notice",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This workbook is read-only. Finding and selecting cells remain available.",
                 }),
@@ -856,7 +893,7 @@ function y2e(e) {
               i.jsx("p", {
                 className: "st-notice",
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "The workbook changed. Find or preview again before continuing.",
                 }),
@@ -868,24 +905,32 @@ function y2e(e) {
                   ? i.jsx("button", {
                       type: "button",
                       onClick: we,
-                      children: i.jsx(M, { children: "Preview selection" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Preview selection",
+                      }),
                     })
                   : i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("button", {
                           type: "button",
                           onClick: Se,
-                          children: i.jsx(M, { children: "Find all" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Find all",
+                          }),
                         }),
                         i.jsx("button", {
                           type: "button",
                           onClick: () => ce("previous"),
-                          children: i.jsx(M, { children: "Find previous" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Find previous",
+                          }),
                         }),
                         i.jsx("button", {
                           type: "button",
                           onClick: () => ce("next"),
-                          children: i.jsx(M, { children: "Find next" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Find next",
+                          }),
                         }),
                         u === "replace" &&
                           i.jsxs(i.Fragment, {
@@ -894,7 +939,7 @@ function y2e(e) {
                                 type: "button",
                                 disabled: e.readOnly || !C,
                                 onClick: () => ge(true),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Preview replace selected",
                                 }),
                               }),
@@ -902,7 +947,7 @@ function y2e(e) {
                                 type: "button",
                                 disabled: e.readOnly,
                                 onClick: () => ge(false),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Preview replace all",
                                 }),
                               }),
@@ -938,24 +983,30 @@ function y2e(e) {
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Sheet" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Sheet",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Cell" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Cell",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Matching contents",
                                 }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "State" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "State",
+                                }),
                               }),
                             ],
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: f2e(B, ye, Bv).map((Re) =>
+                          children: normalizeSearchPage(B, ye, Bv).map((Re) =>
                             i.jsxs(
                               "tr",
                               {
@@ -1007,14 +1058,16 @@ function y2e(e) {
                         onClick: () => G(ye - 1),
                         lang: language("Previous results page"),
                         "data-ui-label": "Previous results page",
-                        children: i.jsx(M, { children: "Previous" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous",
+                        }),
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Results page " }),
+                          i.jsx(LocalizedText, { children: "Results page " }),
                           ye + 1,
                           " ",
-                          i.jsx(M, { children: "of " }),
+                          i.jsx(LocalizedText, { children: "of " }),
                           Ae,
                         ],
                       }),
@@ -1025,7 +1078,7 @@ function y2e(e) {
                         onClick: () => G(ye + 1),
                         lang: language("Next results page"),
                         "data-ui-label": "Next results page",
-                        children: i.jsx(M, { children: "Next" }),
+                        children: i.jsx(LocalizedText, { children: "Next" }),
                       }),
                     ],
                   }),
@@ -1039,29 +1092,37 @@ function y2e(e) {
                 "data-ui-label": "Replacement preview",
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Replacement preview" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Replacement preview",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
                       N.replacedCells,
                       " ",
-                      i.jsx(M, { children: "directly replaced cells · " }),
+                      i.jsx(LocalizedText, {
+                        children: "directly replaced cells · ",
+                      }),
                       N.count,
                       " ",
-                      i.jsx(M, { children: "total changed cells · " }),
+                      i.jsx(LocalizedText, {
+                        children: "total changed cells · ",
+                      }),
                       N.excludedProtected,
                       " ",
-                      i.jsx(M, { children: "protected matches excluded." }),
+                      i.jsx(LocalizedText, {
+                        children: "protected matches excluded.",
+                      }),
                     ],
                   }),
                   N.dependentCount > 0 &&
                     i.jsxs("p", {
                       className: "st-notice",
                       children: [
-                        i.jsx(M, { children: "Includes " }),
+                        i.jsx(LocalizedText, { children: "Includes " }),
                         N.dependentCount,
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "dependent cell changes outside the direct replacement targets. Every change is listed below.",
                         }),
@@ -1075,15 +1136,19 @@ function y2e(e) {
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Sheet / cell",
                                 }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Before" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Before",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "After" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "After",
+                                }),
                               }),
                             ],
                           }),
@@ -1106,13 +1171,15 @@ function y2e(e) {
                                     }),
                                     i.jsx("td", {
                                       className: "st-value",
-                                      children: Pj(
+                                      children: formatSearchResultValue(
                                         K[`${Re.sheetId}:${Re.address}`]?.raw,
                                       ),
                                     }),
                                     i.jsx("td", {
                                       className: "st-value",
-                                      children: Pj(Re.cell.raw),
+                                      children: formatSearchResultValue(
+                                        Re.cell.raw,
+                                      ),
                                     }),
                                   ],
                                 },
@@ -1133,14 +1200,16 @@ function y2e(e) {
                         onClick: () => Q(Pe - 1),
                         lang: language("Previous preview page"),
                         "data-ui-label": "Previous preview page",
-                        children: i.jsx(M, { children: "Previous" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous",
+                        }),
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Preview page " }),
+                          i.jsx(LocalizedText, { children: "Preview page " }),
                           Pe + 1,
                           " ",
-                          i.jsx(M, { children: "of " }),
+                          i.jsx(LocalizedText, { children: "of " }),
                           Te,
                         ],
                       }),
@@ -1151,7 +1220,7 @@ function y2e(e) {
                         onClick: () => Q(Pe + 1),
                         lang: language("Next preview page"),
                         "data-ui-label": "Next preview page",
-                        children: i.jsx(M, { children: "Next" }),
+                        children: i.jsx(LocalizedText, { children: "Next" }),
                       }),
                     ],
                   }),
@@ -1165,16 +1234,18 @@ function y2e(e) {
                 "data-ui-label": "Selection preview",
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Selection preview" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Selection preview",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
                       L.count,
                       " ",
-                      i.jsx(M, { children: "cells in " }),
+                      i.jsx(LocalizedText, { children: "cells in " }),
                       L.ranges.length,
                       " ",
-                      i.jsx(M, { children: "areas" }),
+                      i.jsx(LocalizedText, { children: "areas" }),
                     ],
                   }),
                   i.jsx("div", {
@@ -1186,7 +1257,7 @@ function y2e(e) {
                   !e.onSelectRanges &&
                     i.jsx("p", {
                       className: "st-notice",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Multiple-area selection is not connected by this embedding host.",
                       }),
@@ -1201,7 +1272,7 @@ function y2e(e) {
             i.jsx("button", {
               type: "button",
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Close" }),
+              children: i.jsx(LocalizedText, { children: "Close" }),
             }),
             u === "replace" &&
               i.jsx("button", {
@@ -1209,7 +1280,9 @@ function y2e(e) {
                 className: "st-primary",
                 disabled: e.readOnly || !(N != null && N.count) || qe,
                 onClick: se,
-                children: i.jsx(M, { children: "Apply replacement" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Apply replacement",
+                }),
               }),
             u === "special" &&
               i.jsx("button", {
@@ -1217,7 +1290,7 @@ function y2e(e) {
                 className: "st-primary",
                 disabled: !(L != null && L.count) || !e.onSelectRanges || qe,
                 onClick: Ee,
-                children: i.jsx(M, { children: "Select cells" }),
+                children: i.jsx(LocalizedText, { children: "Select cells" }),
               }),
           ],
         }),
@@ -1225,7 +1298,7 @@ function y2e(e) {
     }),
   });
 }
-function w2e(e, r, t, n) {
+function resolveCellNavigation(e, r, t, n) {
   if (!Number.isInteger(e) || !Number.isInteger(r) || r < 1 || e < 0 || e >= r)
     throw new Error("Navigation requires a valid visible cell.");
   if (n !== 1 && n !== -1) throw new Error("Choose a navigation direction.");
@@ -1241,20 +1314,28 @@ function w2e(e, r, t, n) {
   for (const d of o) (n === 1 ? d > e && d < s : d < e && d > s) && (s = d);
   return s;
 }
-const rE = ["top-left", "top-right", "bottom-left", "bottom-right"],
-  x2e = () =>
+const paneQuadrantNames = [
+    "top-left",
+    "top-right",
+    "bottom-left",
+    "bottom-right",
+  ],
+  createDefaultPaneRects = () =>
     Object.fromEntries(
-      rE.map((e) => [e, { top: 0, left: 0, width: 1e3, height: 600 }]),
+      paneQuadrantNames.map((e) => [
+        e,
+        { top: 0, left: 0, width: 1e3, height: 600 },
+      ]),
     );
-function E2e(e) {
-  const [r, t] = ne.useState(x2e),
+function useSplitPaneSizes(e) {
+  const [r, t] = ne.useState(createDefaultPaneRects),
     n = ne.useRef(r),
     o = ne.useRef({}),
     [a, s] = ne.useState("top-left"),
     d = ne.useRef("top-left");
   function u(h) {
     let f = n.current;
-    for (const p of rE)
+    for (const p of paneQuadrantNames)
       if (h[p]) {
         const m = { ...f[p], ...h[p] };
         Object.entries(m).some(([v, g]) => f[p][v] !== g) &&
@@ -1265,7 +1346,7 @@ function E2e(e) {
   const l = ne.useMemo(
     () =>
       Object.fromEntries(
-        rE.map((h) => [
+        paneQuadrantNames.map((h) => [
           h,
           (f) => {
             f ? (o.current[h] = f) : delete o.current[h];
@@ -1277,7 +1358,7 @@ function E2e(e) {
   ne.useEffect(() => {
     const h = () => {
       const p = {};
-      for (const m of rE) {
+      for (const m of paneQuadrantNames) {
         const v = o.current[m];
         v != null &&
           v.clientWidth &&
@@ -1307,8 +1388,8 @@ function E2e(e) {
     patch: u,
   };
 }
-function C2e(e) {
-  const { text, language } = Dr(),
+function SplitPaneLayout(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useRef(null),
     o = ne.useRef(e);
   o.current = e;
@@ -1469,13 +1550,13 @@ function C2e(e) {
   });
 }
 
-function dH(e, r) {
+function isWithinFormulaSuggestions(e, r) {
   var n;
   if (!(r instanceof Node)) return false;
   const t = document.getElementById(e.getAttribute("aria-controls") ?? "");
   return !!((n = t?.closest(".formula-suggestions")) != null && n.contains(r));
 }
-const fH = ne.forwardRef(function (
+const FormulaSuggestionList = ne.forwardRef(function (
     {
       value,
       caret = value.length,
@@ -1491,7 +1572,7 @@ const fH = ne.forwardRef(function (
     const c = ne.useId(),
       h = ne.useRef(null),
       f = ne.useMemo(
-        () => Lme(value, caret, workbook, sheetId),
+        () => getFormulaCompletions(value, caret, workbook, sheetId),
         [value, caret, workbook, sheetId],
       ),
       [p, m] = ne.useState(-1),
@@ -1574,7 +1655,7 @@ const fH = ne.forwardRef(function (
       const O = f.items[I];
       if (!O) return;
       (z = inputRef.current) == null || z.focus({ preventScroll: true });
-      const j = Pme(value, O);
+      const j = applyFormulaCompletion(value, O);
       (onAccept(j.value, j.caret),
         m(-1),
         g(null),
@@ -1708,7 +1789,7 @@ const fH = ne.forwardRef(function (
                       ")",
                       i.jsxs("small", {
                         children: [
-                          i.jsx(M, { children: "Argument " }),
+                          i.jsx(LocalizedText, { children: "Argument " }),
                           f.hint.argumentIndex + 1,
                         ],
                       }),
@@ -1717,7 +1798,7 @@ const fH = ne.forwardRef(function (
                 f.items.length > 0 &&
                   i.jsx("div", {
                     className: "formula-suggestion-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "↑ ↓ choose · Tab / Enter insert · Esc close",
                     }),
                   }),
@@ -1729,9 +1810,9 @@ const fH = ne.forwardRef(function (
   }),
   k2e = 6,
   S2e = 1.35,
-  hH = (e, r, t) => Math.max(r, Math.min(t, e));
-function pH(e) {
-  const r = ys(e?.style),
+  clampNumber = (e, r, t) => Math.max(r, Math.min(t, e));
+function buildCellFontString(e) {
+  const r = resolveEffectiveCellStyle(e?.style),
     t = r != null && r.fontSize ? `${r.fontSize}pt` : "14px",
     n =
       r != null && r.fontFamily
@@ -1739,7 +1820,7 @@ function pH(e) {
         : "Calibri, Aptos, Arial, sans-serif";
   return `${r != null && r.italic ? "italic" : "normal"} ${r != null && r.bold ? "700" : "400"} ${t} ${n}`;
 }
-function Wy(e, r) {
+function parseFontSizePx(e, r) {
   const t = r.match(/([\d.]+)(px|pt)/),
     n = t ? Number(t[1]) * (t[2] === "pt" ? 4 / 3 : 1) : 14,
     o = r.includes("700") ? 1.06 : 1;
@@ -1762,77 +1843,84 @@ function Wy(e, r) {
     o
   );
 }
-function T2e() {
-  if (typeof document > "u" || typeof CanvasRenderingContext2D > "u") return Wy;
+function createTextMeasurer() {
+  if (typeof document > "u" || typeof CanvasRenderingContext2D > "u")
+    return parseFontSizePx;
   try {
     const e = document.createElement("canvas").getContext("2d");
-    if (!e) return Wy;
+    if (!e) return parseFontSizePx;
     let r = "";
     return (t, n) => {
       r !== n && ((e.font = n), (r = n));
       const o = e.measureText(t).width;
-      return Number.isFinite(o) && o >= 0 ? o : Wy(t, n);
+      return Number.isFinite(o) && o >= 0 ? o : parseFontSizePx(t, n);
     };
   } catch {
-    return Wy;
+    return parseFontSizePx;
   }
 }
-function nE(e, r, t) {
+function measureTextWidth(e, r, t) {
   try {
     const n = e(r, t);
     if (Number.isFinite(n) && n >= 0) return n;
   } catch {}
-  return Wy(r, t);
+  return parseFontSizePx(r, t);
 }
-function mH(e, r, t) {
-  if (!e.includes("	")) return nE(t, e, r);
-  const n = Math.max(1, nE(t, " ", r) * 8);
+function measureTextWithTabs(e, r, t) {
+  if (!e.includes("	")) return measureTextWidth(t, e, r);
+  const n = Math.max(1, measureTextWidth(t, " ", r) * 8);
   let o = 0;
   return (
     e.split("	").forEach((a, s) => {
-      (s && (o = (Math.floor(o / n) + 1) * n), (o += nE(t, a, r)));
+      (s && (o = (Math.floor(o / n) + 1) * n),
+        (o += measureTextWidth(t, a, r)));
     }),
     o
   );
 }
-function gH(e, r, t, n, o, a) {
+function resolveDisplayedCellText(e, r, t, n, o, a) {
   return o && typeof t.raw == "string" && t.raw.startsWith("=") && !t.literal
     ? t.raw
-    : Af(n(e.id, r), t, a);
+    : formatNumberWithPattern(n(e.id, r), t, a);
 }
-function N2e(e, r) {
+function measureNoteIndicatorWidth(e, r) {
   return Math.max(
     e.note ? 5 : 0,
     e.tickmark
-      ? Math.min(40, nE(r, e.tickmark, "normal 400 8px Arial") + 4)
+      ? Math.min(
+          40,
+          measureTextWidth(r, e.tickmark, "normal 400 8px Arial") + 4,
+        )
       : 0,
   );
 }
-function vH(e, r) {
+function computeCellTextAlignment(e, r) {
   return (
     k2e +
-    hB(e.style).horizontal +
-    (e.style?.align === "center" ? 0 : fB(e.style)) +
-    N2e(e, r)
+    measureCellBorderInsets(e.style).horizontal +
+    (e.style?.align === "center" ? 0 : indentToPx(e.style)) +
+    measureNoteIndicatorWidth(e, r)
   );
 }
-function bH(e, r, t) {
+function validateAutoFitIndices(e, r, t) {
   for (const n of e)
     if (!Number.isInteger(n) || n < 0 || n >= r)
       throw new Error(`AutoFit ${t} index is outside the worksheet.`);
   return new Set(e);
 }
-function R2e(e, r, t, n, o = false, a = "1900") {
-  const s = bH(r, e.colCount, "column"),
-    d = Object.fromEntries([...s].map((l) => [String(l), Og(e)])),
+function autoFitColumnWidths(e, r, t, n, o = false, a = "1900") {
+  const s = validateAutoFitIndices(r, e.colCount, "column"),
+    d = Object.fromEntries(
+      [...s].map((l) => [String(l), defaultColumnWidthOf(e)]),
+    ),
     u = new Set();
   for (const [l, c] of Object.entries(vx(e, t))) {
     const { col } = _t(l);
     if (!s.has(col)) continue;
-    const f = gH(e, l, c, t, o, a);
+    const f = resolveDisplayedCellText(e, l, c, t, o, a);
     if (!f && !c.note && !c.tickmark) continue;
-    const p = pH(c),
-      m = ys(c.style).wrap
+    const p = buildCellFontString(c),
+      m = resolveEffectiveCellStyle(c.style).wrap
         ? f.replace(
             /\r\n?/g,
             `
@@ -1841,14 +1929,18 @@ function R2e(e, r, t, n, o = false, a = "1900") {
 `)
         : [f.replace(/[\t\n\r\f ]+/g, " ")];
     let v = 0;
-    for (const b of m) v = Math.max(v, mH(b, p, n));
-    const g = hH(Math.ceil(v + vH(c, n)), ux, cx);
+    for (const b of m) v = Math.max(v, measureTextWithTabs(b, p, n));
+    const g = clampNumber(
+      Math.ceil(v + computeCellTextAlignment(c, n)),
+      minColumnWidth,
+      maxColumnWidth,
+    );
     ((d[String(col)] = u.has(col) ? Math.max(d[String(col)], g) : g),
       u.add(col));
   }
   return d;
 }
-function I2e(e, r, t, n, o) {
+function countWrappedTextLines(e, r, t, n, o) {
   let a = 0;
   for (const s of e.replace(
     /\r\n?/g,
@@ -1868,7 +1960,9 @@ function I2e(e, r, t, n, o) {
         c = d.length;
       for (; l < c;) {
         const f = Math.ceil((l + c) / 2);
-        mH(d.slice(u, f).join(""), t, n) <= r ? (l = f) : (c = f - 1);
+        measureTextWithTabs(d.slice(u, f).join(""), t, n) <= r
+          ? (l = f)
+          : (c = f - 1);
       }
       let h = l;
       if (h >= d.length) break;
@@ -1883,22 +1977,33 @@ function I2e(e, r, t, n, o) {
   }
   return Math.max(1, a);
 }
-function _2e(e, r, t, n, o = false, a = "1900") {
-  const s = bH(r, e.rowCount, "row"),
-    d = Object.fromEntries([...s].map((l) => [String(l), Dg(e)])),
+function autoFitRowHeights(e, r, t, n, o = false, a = "1900") {
+  const s = validateAutoFitIndices(r, e.rowCount, "row"),
+    d = Object.fromEntries(
+      [...s].map((l) => [String(l), defaultRowHeightOf(e)]),
+    ),
     u = new Set();
   for (const [l, c] of Object.entries(vx(e, t))) {
     const { row, col } = _t(l);
     if (!s.has(row)) continue;
-    const p = gH(e, l, c, t, o, a);
-    if (!p && !ys(c.style).fontSize) continue;
-    const m = pH(c),
-      g = (ys(c.style).fontSize ? (ys(c.style).fontSize * 4) / 3 : 14) * S2e,
-      b = hB(c.style).vertical,
-      y = Math.ceil((Ig - b) / g),
-      w = Math.max(1, Ip(e, col) - vH(c, n)),
-      E = ys(c.style).wrap ? I2e(p, w, m, n, y) : 1,
-      A = hH(Math.ceil(Math.max(20, E * g) + b), b1, Ig);
+    const p = resolveDisplayedCellText(e, l, c, t, o, a);
+    if (!p && !resolveEffectiveCellStyle(c.style).fontSize) continue;
+    const m = buildCellFontString(c),
+      g =
+        (resolveEffectiveCellStyle(c.style).fontSize
+          ? (resolveEffectiveCellStyle(c.style).fontSize * 4) / 3
+          : 14) * S2e,
+      b = measureCellBorderInsets(c.style).vertical,
+      y = Math.ceil((maxRowHeight - b) / g),
+      w = Math.max(1, columnWidthAt(e, col) - computeCellTextAlignment(c, n)),
+      E = resolveEffectiveCellStyle(c.style).wrap
+        ? countWrappedTextLines(p, w, m, n, y)
+        : 1,
+      A = clampNumber(
+        Math.ceil(Math.max(20, E * g) + b),
+        minRowHeight,
+        maxRowHeight,
+      );
     ((d[String(row)] = u.has(row) ? Math.max(d[String(row)], A) : A),
       u.add(row));
   }
@@ -1908,8 +2013,8 @@ const D2e = 16e6;
 function Tp(e, r, t) {
   return r >= e.firstRow && r <= e.lastRow && t >= e.firstCol && t <= e.lastCol;
 }
-const sA = (e, r, t) => Math.max(r, Math.min(t, e));
-function O2e(e, r) {
+const clampValueToRange = (e, r, t) => Math.max(r, Math.min(t, e));
+function lowerBoundIndex(e, r) {
   let t = 0,
     n = e.length;
   for (; t < n;) {
@@ -1918,8 +2023,8 @@ function O2e(e, r) {
   }
   return t;
 }
-function CS(e, r, t = {}, n = []) {
-  const o = ul(e, n),
+function buildVisibleAxisLayout(e, r, t = {}, n = []) {
+  const o = createAxisVisibilityIndex(e, n),
     a = Object.fromEntries(
       Object.entries(t).flatMap(([l, c]) => {
         const h = o.viewIndex(Number(l));
@@ -1934,8 +2039,8 @@ function CS(e, r, t = {}, n = []) {
     d = [0];
   for (const l of s) d.push(d.at(-1) + a[l] - r);
   const u = (l) => {
-    const c = sA(l, 0, e);
-    return c * r + d[O2e(s, c)];
+    const c = clampValueToRange(l, 0, e);
+    return c * r + d[lowerBoundIndex(s, c)];
   };
   return {
     ...o,
@@ -1953,7 +2058,7 @@ function CS(e, r, t = {}, n = []) {
     },
   };
 }
-function Uj(e, r) {
+function sliceVisibleAxis(e, r) {
   if (!Number.isInteger(r) || r < 0 || r > e.count)
     throw Error("Choose a valid visible-axis slice.");
   const t = e.offset(r),
@@ -1986,7 +2091,7 @@ function Uj(e, r) {
       n ? Math.max(0, Math.min(n - 1, e.indexAt(d + t) - r)) : 0,
   };
 }
-function C_(e, r, t, n = D2e) {
+function resolveAxisScale(e, r, t, n = D2e) {
   const o = Math.max(1, r),
     a = e * t,
     s = Math.min(a, n);
@@ -1998,34 +2103,36 @@ function C_(e, r, t, n = D2e) {
     physicalMax: Math.max(0, s - o),
   };
 }
-function M2e(e, r, t, n) {
-  const o = C_(r, t, n);
+function physicalToLogicalPixels(e, r, t, n) {
+  const o = resolveAxisScale(r, t, n);
   return o.physicalMax
-    ? ((sA(e, 0, o.physicalMax) / o.physicalMax) * o.logicalMax) / n
+    ? ((clampValueToRange(e, 0, o.physicalMax) / o.physicalMax) *
+        o.logicalMax) /
+        n
     : 0;
 }
-function up(e, r, t, n) {
-  const o = C_(r, t, n);
+function logicalToPhysicalPixels(e, r, t, n) {
+  const o = resolveAxisScale(r, t, n);
   return o.logicalMax
-    ? (sA(e * n, 0, o.logicalMax) / o.logicalMax) * o.physicalMax
+    ? (clampValueToRange(e * n, 0, o.logicalMax) / o.logicalMax) * o.physicalMax
     : 0;
 }
 
 export {
-  C2e,
-  CS,
-  C_,
-  E2e,
-  M2e,
-  R2e,
-  T2e,
+  SplitPaneLayout,
+  buildVisibleAxisLayout,
+  resolveAxisScale,
+  useSplitPaneSizes,
+  physicalToLogicalPixels,
+  autoFitColumnWidths,
+  createTextMeasurer,
   Tp,
-  Uj,
-  _2e,
-  dH,
-  fH,
-  sA,
-  up,
-  w2e,
-  y2e,
+  sliceVisibleAxis,
+  autoFitRowHeights,
+  isWithinFormulaSuggestions,
+  FormulaSuggestionList,
+  clampValueToRange,
+  logicalToPhysicalPixels,
+  resolveCellNavigation,
+  FindReplaceDialog,
 };

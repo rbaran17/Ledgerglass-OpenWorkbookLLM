@@ -1,17 +1,24 @@
 import {
-  WS,
-  iB,
-  lx,
-  v1,
-  zp,
-  Rg,
-  es,
-  g1,
-  ts,
-  wd,
-  hr,
+  evaluateDateFunction,
+  notDateFunctionSentinel,
+  resolveLocalDateTime,
+  dateSystemSerialOffset,
+  parseDateText,
+  findVolatileFunctionNames,
+  isDeepFrozenValue,
+  getExtensionCacheEntries,
+  normalizeDatePolicy,
+  dateSystemMaxSerial,
+  fingerprintCanonicalValue,
 } from "../01-core-schemas-and-hashing.js";
-import { Ja, WJ, aB, iD, qS, u6 } from "../02-financial-functions.js";
+import {
+  fileImportLimits,
+  evaluateFinancialFunction,
+  notFinancialSentinel,
+  evaluateTextFunction,
+  notTextFunctionSentinel,
+  broadcastOverArrays,
+} from "../02-financial-functions.js";
 import {
   string,
   number,
@@ -24,51 +31,61 @@ import {
   enum as _enum,
   null as _null,
 } from "zod";
-import { Bw, zB } from "./01-cell-styles-and-themes.js";
 import {
-  GL,
-  HL,
-  JL,
-  KL,
-  Kre,
-  QL,
-  Rc,
-  Us,
-  Yre,
-  eP,
-  ene,
-  ine,
-  jE,
-  one,
-  p5,
-  rne,
-  tP,
-  vg,
-  y0,
+  validateNumberFormatCode,
+  numberFormatToIntlOptions,
+} from "./01-cell-styles-and-themes.js";
+import {
+  notRegressionSentinel,
+  notArithmeticSentinel,
+  notSpecialistSentinel,
+  notInferenceSentinel,
+  evaluateArithmeticFunction,
+  notStatisticalSentinel,
+  sumDecimalPartsToNumber,
+  exactAverageOfNumbers,
+  evaluateSignificanceTestFunction,
+  notOwnedLookupSentinel,
+  evaluateSpecialistFunction,
+  evaluateLookupFunction,
+  evaluateRegressionFunction,
+  evaluateLogicalFunction,
+  notModernFunctionSentinel,
+  evaluateStatisticalFunction,
+  notOwnedLogicalSentinel,
+  formatCellValueWithNumberFormat,
+  matrixResultFunctionNames,
 } from "./02-number-formats.js";
-import { Ba, ane, eg, g5, m5, pO } from "./03-defined-names.js";
 import {
-  Gl,
-  M5,
-  Mie,
-  Rie,
-  dp,
-  jie,
-  kR,
-  nU,
-  oU,
-  pf,
-  wn,
+  definedNameScopeKey,
+  evaluateDefinedNameFunction,
+  validateDefinedName,
+  replaceTextSpans,
+  m5,
+  pO,
+} from "./03-defined-names.js";
+import {
+  flattenNestedValues,
+  findFormulaErrorArg,
+  builtinFunctionNameSet,
+  evaluateDatabaseFunction,
+  findScopedDefinedName,
+  formulaErrorFactory,
+  createFormulaError,
+  notDatabaseFunctionMarker,
+  notReferenceFunctionMarker,
+  resolveDefinedNameValue,
+  isFormulaError,
 } from "./04-pivot-tables-and-pictures.js";
 
-function Ty(e, r, t = {}) {
+function applyDefinedNameOperation(e, r, t = {}) {
   var b;
   if (t.readOnly) throw Error("This workbook is read-only.");
   if ((b = e.structureProtection) != null && b.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before changing names.",
     );
-  const n = eg(e.definedNames, e),
+  const n = validateDefinedName(e.definedNames, e),
     o =
       r.kind === "create"
         ? undefined
@@ -80,8 +97,10 @@ function Ty(e, r, t = {}) {
   if (r.kind !== "create" && !o)
     throw Error("The defined name was not found. Reopen Name Manager.");
   let a;
-  if (r.kind === "create" || r.kind === "update") a = eg([r.definition], e)[0];
-  else if (r.kind === "rename") a = eg([{ ...o, name: r.newName }], e)[0];
+  if (r.kind === "create" || r.kind === "update")
+    a = validateDefinedName([r.definition], e)[0];
+  else if (r.kind === "rename")
+    a = validateDefinedName([{ ...o, name: r.newName }], e)[0];
   else if (r.kind !== "delete") throw Error("Unknown name operation.");
   if (
     r.kind === "update" &&
@@ -100,12 +119,14 @@ function Ty(e, r, t = {}) {
   )
     throw Error("A table already uses this name.");
   const s = structuredClone(e),
-    d = o ? Ba(o) : undefined;
-  ((s.definedNames = eg(
-    [...n.filter((y) => Ba(y) !== d), ...(a ? [a] : [])],
+    d = o ? definedNameScopeKey(o) : undefined;
+  ((s.definedNames = validateDefinedName(
+    [...n.filter((y) => definedNameScopeKey(y) !== d), ...(a ? [a] : [])],
     e,
   )),
-    o && a && (s.definedNames = n.map((y) => (Ba(y) === d ? a : y))));
+    o &&
+      a &&
+      (s.definedNames = n.map((y) => (definedNameScopeKey(y) === d ? a : y))));
   const u = a?.scopeSheetId ?? o?.scopeSheetId,
     l = (y) => {
       var E;
@@ -146,16 +167,26 @@ function Ty(e, r, t = {}) {
       if (E.length > 32)
         throw Error("The name dependency chain exceeds 32 levels.");
       for (const A of m(y)) {
-        const k = dp(A, e, w),
-          F = r.kind === "create" ? dp(A, s, w) : undefined;
-        if (F && Ba(F) === Ba(a) && (!k || Ba(k) !== Ba(F))) return true;
+        const k = findScopedDefinedName(A, e, w),
+          F = r.kind === "create" ? findScopedDefinedName(A, s, w) : undefined;
+        if (
+          F &&
+          definedNameScopeKey(F) === definedNameScopeKey(a) &&
+          (!k || definedNameScopeKey(k) !== definedNameScopeKey(F))
+        )
+          return true;
         if (!k) {
-          if (r.kind === "create" && dp(A, s, w) && Ba(dp(A, s, w)) === Ba(a))
+          if (
+            r.kind === "create" &&
+            findScopedDefinedName(A, s, w) &&
+            definedNameScopeKey(findScopedDefinedName(A, s, w)) ===
+              definedNameScopeKey(a)
+          )
             return true;
           continue;
         }
-        if (Ba(k) === d) return true;
-        const I = Ba(k);
+        if (definedNameScopeKey(k) === d) return true;
+        const I = definedNameScopeKey(k);
         if (
           !E.includes(I) &&
           v(
@@ -192,11 +223,11 @@ function Ty(e, r, t = {}) {
             `This name is referenced by ${E.label}. Remove or replace its dependencies before deletion.`,
           );
       }
-      const F = g5(y, A, (I) => {
+      const F = replaceTextSpans(y, A, (I) => {
         var z;
         if (r.kind !== "rename") return I.text;
-        const O = w.map((V) => dp(I, e, V)),
-          j = O.map((V) => !!V && Ba(V) === d);
+        const O = w.map((V) => findScopedDefinedName(I, e, V)),
+          j = O.map((V) => !!V && definedNameScopeKey(V) === d);
         if (j.some(Boolean) && !j.every(Boolean))
           throw Error(
             `The workbook-scoped definition ${E.label} resolves differently across worksheets. Qualify its references before renaming.`,
@@ -213,8 +244,8 @@ function Ty(e, r, t = {}) {
           const V = { ...I, name: a.name };
           if (
             w.some((D) => {
-              const B = dp(V, s, D);
-              return !B || Ba(B) !== Ba(a);
+              const B = findScopedDefinedName(V, s, D);
+              return !B || definedNameScopeKey(B) !== definedNameScopeKey(a);
             })
           )
             throw Error(
@@ -226,8 +257,11 @@ function Ty(e, r, t = {}) {
         }
         if (
           w.some((V, D) => {
-            const B = dp(I, s, V);
-            return (O[D] ? Ba(O[D]) : undefined) !== (B ? Ba(B) : undefined);
+            const B = findScopedDefinedName(I, s, V);
+            return (
+              (O[D] ? definedNameScopeKey(O[D]) : undefined) !==
+              (B ? definedNameScopeKey(B) : undefined)
+            );
           })
         )
           throw Error(
@@ -287,11 +321,13 @@ function Ty(e, r, t = {}) {
       ? [a.scopeSheetId]
       : e.sheets.map((w) => w.id))
       try {
-        pf(
-          s.definedNames.find((w) => Ba(w) === Ba(a)).refersTo.slice(1),
+        resolveDefinedNameValue(
+          s.definedNames
+            .find((w) => definedNameScopeKey(w) === definedNameScopeKey(a))
+            .refersTo.slice(1),
           s,
           y,
-          [Ba(a)],
+          [definedNameScopeKey(a)],
         );
       } catch (w) {
         throw Error(
@@ -303,24 +339,30 @@ function Ty(e, r, t = {}) {
     request: structuredClone(r),
     ...(o ? { before: structuredClone(o) } : {}),
     ...(a
-      ? { after: structuredClone(s.definedNames.find((y) => Ba(y) === Ba(a))) }
+      ? {
+          after: structuredClone(
+            s.definedNames.find(
+              (y) => definedNameScopeKey(y) === definedNameScopeKey(a),
+            ),
+          ),
+        }
       : {}),
     changes: c,
     dependencies: h,
     next: s,
   };
 }
-function q6(e, r, t = {}) {
+function assertNamePreviewCurrent(e, r, t = {}) {
   if (JSON.stringify(e) !== r.snapshot)
     throw Error(
       "The workbook changed after the name preview. Review the operation again.",
     );
-  const n = Ty(e, r.request, t);
+  const n = applyDefinedNameOperation(e, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error("The name preview changed. Review the operation again.");
   return JSON.stringify(n.next) === JSON.stringify(e) ? e : n.next;
 }
-function Xb(e, r) {
+function matchCriteriaValue(e, r) {
   if (typeof r != "string") return e === r;
   const t = /^(<=|>=|<>|=|<|>)?(.*)$/.exec(r),
     n = t[1] ?? "=",
@@ -336,7 +378,7 @@ function Xb(e, r) {
             wildcard: o[h] === "*" || o[h] === "?",
           });
     const l = String(e ?? "").toLowerCase();
-    if (u.length * l.length > 1e5) throw jie("#LIMIT!");
+    if (u.length * l.length > 1e5) throw formulaErrorFactory("#LIMIT!");
     let c = Array(l.length + 1).fill(false);
     c[0] = true;
     for (const h of u) {
@@ -373,7 +415,14 @@ function Xb(e, r) {
             ? s >= d
             : s === d;
 }
-function Fie(e, r, t = kR, n = lx(), o, a) {
+function createWorkbookFormulaEngine(
+  e,
+  r,
+  t = createFormulaError,
+  n = resolveLocalDateTime(),
+  o,
+  a,
+) {
   const s = e.utils._applyInfix.bind(e.utils);
   ((e.utils._applyInfix = (u, l, c) => {
     const h = (w, E) => (
@@ -397,7 +446,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
       (p[0].length !== g && p[0].length !== 1) ||
       (m[0].length !== g && m[0].length !== 1)
       ? t("#VALUE!")
-      : v * g > Ja.maxSpillCells
+      : v * g > fileImportLimits.maxSpillCells
         ? t("#LIMIT!")
         : Array.from({ length: v }, (w, E) =>
             Array.from({ length: g }, (A, k) =>
@@ -410,7 +459,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
   }),
     (e.checkFormulaResult = (u, l) => {
       const c = e.retrieveRef(u);
-      return wn(c)
+      return isFormulaError(c)
         ? c
         : Array.isArray(c)
           ? l
@@ -436,12 +485,12 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
         .toUpperCase();
       const c = (f) => (f == null ? undefined : e.retrieveRef(f));
       try {
-        if (!Mie.has(u)) return t("#NAME?");
+        if (!builtinFunctionNameSet.has(u)) return t("#NAME?");
         if (u === "RAND") return l.length ? t("#VALUE!") : Math.random();
         if (u === "RANDBETWEEN") {
           if (l.length !== 2) return t("#VALUE!");
           const D = l.map(c),
-            B = M5(D);
+            B = findFormulaErrorArg(D);
           if (B) return B;
           if (
             D.some(
@@ -462,78 +511,103 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             ? t("#NUM!")
             : _ + Math.floor(Math.random() * (C - _ + 1));
         }
-        const f = WS(u, l, { retrieve: c, issue: t, isIssue: wn, clock: n });
-        if (f !== iB) return f;
-        const p = WJ(u, l, {
+        const f = evaluateDateFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
+          isIssue: isFormulaError,
+          clock: n,
+        });
+        if (f !== notDateFunctionSentinel) return f;
+        const p = evaluateFinancialFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
           clock: n,
           report: o,
         });
-        if (p !== aB) return p;
+        if (p !== notFinancialSentinel) return p;
         const m = r(u, l, e);
-        if (m !== oU) return m;
-        const v = Rie(u, l, {
+        if (m !== notReferenceFunctionMarker) return m;
+        const v = evaluateDatabaseFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
+          isIssue: isFormulaError,
           criterionFormula: a,
         });
-        if (v !== nU) return v;
-        const g = ene(u, l, { retrieve: c, issue: t, isIssue: wn });
-        if (g !== JL) return g;
-        const b = jE(u, l, { retrieve: c, issue: t, isIssue: wn });
-        if (b !== GL) return b;
-        const y = Yre(u, l, {
+        if (v !== notDatabaseFunctionMarker) return v;
+        const g = evaluateSpecialistFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
+          isIssue: isFormulaError,
+        });
+        if (g !== notSpecialistSentinel) return g;
+        const b = evaluateRegressionFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
+        });
+        if (b !== notRegressionSentinel) return b;
+        const y = evaluateSignificanceTestFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
           distribution: d,
         });
-        if (y !== KL) return y;
-        const w = Kre(u, l, { retrieve: c, issue: t, isIssue: wn });
-        if (w !== HL) return w;
-        const E = rne(u, l, { retrieve: c, issue: t, isIssue: wn });
-        if (E !== QL) return E;
-        const A = one(u, l, { retrieve: c, issue: t, isIssue: wn });
-        if (A !== tP) return A;
-        const k = ine(u, l, {
+        if (y !== notInferenceSentinel) return y;
+        const w = evaluateArithmeticFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
-          matches: Xb,
+          isIssue: isFormulaError,
         });
-        if (k !== eP) return k;
+        if (w !== notArithmeticSentinel) return w;
+        const E = evaluateStatisticalFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
+        });
+        if (E !== notStatisticalSentinel) return E;
+        const A = evaluateLogicalFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
+        });
+        if (A !== notOwnedLogicalSentinel) return A;
+        const k = evaluateLookupFunction(u, l, {
+          retrieve: c,
+          issue: t,
+          isIssue: isFormulaError,
+          matches: matchCriteriaValue,
+        });
+        if (k !== notOwnedLookupSentinel) return k;
         if (u === "TEXTBEFORE" || u === "TEXTAFTER")
-          return u6(
+          return broadcastOverArrays(
             l.map(c),
             (D) => {
               try {
-                return iD(u, D, {
+                return evaluateTextFunction(u, D, {
                   retrieve: (B) => B,
                   issue: t,
-                  isIssue: wn,
+                  isIssue: isFormulaError,
                   format: () => t("#VALUE!"),
                 });
               } catch (B) {
-                return wn(B) ? B : t("#VALUE!");
+                return isFormulaError(B) ? B : t("#VALUE!");
               }
             },
             t,
           );
-        const F = iD(u, l, {
+        const F = evaluateTextFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
-          temporal: (D) => zp(D, n),
+          isIssue: isFormulaError,
+          temporal: (D) => parseDateText(D, n),
           format: () => {
             const D = Number(c(l[0]) ?? 0),
               B = c(l[1]);
             if (typeof D == "number" && typeof B == "string") {
               try {
-                if (Bw(B).kind === "temporal")
-                  return vg(
+                if (validateNumberFormatCode(B).kind === "temporal")
+                  return formatCellValueWithNumberFormat(
                     D,
                     { category: "custom", locale: "en-US", pattern: B },
                     n.dateSystem,
@@ -545,26 +619,26 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
                 /[ydm]/i.test(_) &&
                 !/\[[hms]+\]/i.test(_)
               )
-                return d(u, [D + v1(n.dateSystem), B]);
+                return d(u, [D + dateSystemSerialOffset(n.dateSystem), B]);
             }
             return d(u, l);
           },
         });
-        if (F !== qS) return F;
-        const I = ane(u, l, {
+        if (F !== notTextFunctionSentinel) return F;
+        const I = evaluateDefinedNameFunction(u, l, {
           retrieve: c,
           issue: t,
-          isIssue: wn,
-          matches: Xb,
+          isIssue: isFormulaError,
+          matches: matchCriteriaValue,
         });
-        if (I !== p5) return I;
+        if (I !== notModernFunctionSentinel) return I;
         if (u === "INDEX") {
           if (l.length < 2 || l.length > 4) return t("#VALUE!");
-          if (wn(l[0])) return l[0];
+          if (isFormulaError(l[0])) return l[0];
           const D = [...l];
           for (let _ = 1; _ < l.length; _++) {
             const C = l[_] == null ? (_ === 3 ? 1 : 0) : c(l[_]);
-            if (wn(C)) return C;
+            if (isFormulaError(C)) return C;
             if (
               Array.isArray(C) ||
               (typeof C == "string" && C.trim() === "") ||
@@ -589,12 +663,12 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
         if (u === "IF") {
           if (l.length < 2 || l.length > 3) return t("#VALUE!");
           const D = c(l[0]);
-          if (wn(D)) return D;
+          if (isFormulaError(D)) return D;
           if (Array.isArray(D))
-            return u6(
+            return broadcastOverArrays(
               [D, c(l[1]), l.length === 3 ? c(l[2]) : false],
               ([_, C, T]) =>
-                wn(_)
+                isFormulaError(_)
                   ? _
                   : typeof _ == "string" && !/^(TRUE|FALSE)$/i.test(_)
                     ? t("#VALUE!")
@@ -614,22 +688,24 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           if (l.length !== 2) return t("#VALUE!");
           const D = c(l[0]);
           return Array.isArray(D)
-            ? u6(
+            ? broadcastOverArrays(
                 [D, c(l[1])],
                 ([B, _]) =>
-                  wn(B) && (u === "IFERROR" || B.error === "#N/A")
+                  isFormulaError(B) && (u === "IFERROR" || B.error === "#N/A")
                     ? (_ ?? 0)
                     : (B ?? 0),
                 t,
               )
-            : wn(D) && (u === "IFERROR" || D.error === "#N/A")
+            : isFormulaError(D) && (u === "IFERROR" || D.error === "#N/A")
               ? (c(l[1]) ?? 0)
               : (D ?? 0);
         }
         const O = l.map(c),
-          j = O.flatMap(Gl).filter((D) => typeof D == "number");
+          j = O.flatMap(flattenNestedValues).filter(
+            (D) => typeof D == "number",
+          );
         if (
-          O.flatMap(Gl).length > 1e5 ||
+          O.flatMap(flattenNestedValues).length > 1e5 ||
           ([
             "REPT",
             "BASE",
@@ -654,7 +730,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           (["MUNIT", "MDETERM", "MMULT", "GROWTH"].includes(u) &&
             (u === "MUNIT"
               ? Number(O[0]) > 100
-              : O.flatMap(Gl).length > 1e3)) ||
+              : O.flatMap(flattenNestedValues).length > 1e3)) ||
           ([
             "BINOM.DIST.RANGE",
             "BINOM.INV",
@@ -682,21 +758,22 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           (Math.abs(
             Number(O[1]) - (u.startsWith("NETWORK") ? Number(O[0]) : 0),
           ) > 366e3 ||
-            O.flatMap(Gl).length > 1e3)
+            O.flatMap(flattenNestedValues).length > 1e3)
         )
           return t("#LIMIT!");
-        if (u === "ISERR") return wn(O[0]) && O[0].error !== "#N/A";
+        if (u === "ISERR") return isFormulaError(O[0]) && O[0].error !== "#N/A";
         if (u === "ISLOGICAL") return typeof O[0] == "boolean";
         if (u === "ISNONTEXT") return typeof O[0] != "string";
         if (u === "N")
-          return wn(O[0]) || typeof O[0] == "number"
+          return isFormulaError(O[0]) || typeof O[0] == "number"
             ? O[0]
             : O[0] === true
               ? 1
               : 0;
-        if (u === "T") return wn(O[0]) || typeof O[0] == "string" ? O[0] : "";
+        if (u === "T")
+          return isFormulaError(O[0]) || typeof O[0] == "string" ? O[0] : "";
         if (u === "TYPE")
-          return wn(O[0])
+          return isFormulaError(O[0])
             ? 16
             : Array.isArray(O[0])
               ? 64
@@ -715,18 +792,21 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             "#NUM!",
             "#N/A",
             "#GETTING_DATA",
-          ].indexOf(wn(O[0]) ? O[0].error : "");
+          ].indexOf(isFormulaError(O[0]) ? O[0].error : "");
           return D < 0 ? t("#N/A") : D + 1;
         }
-        if (u === "ISERROR") return wn(O[0]);
-        if (u === "ISNA") return wn(O[0]) && O[0].error === "#N/A";
+        if (u === "ISERROR") return isFormulaError(O[0]);
+        if (u === "ISNA") return isFormulaError(O[0]) && O[0].error === "#N/A";
         if (u === "ISNUMBER") return typeof O[0] == "number";
         if (u === "ISTEXT") return typeof O[0] == "string";
         if (u === "ISBLANK") return O[0] === null;
         if (u === "COUNTA")
-          return O.flatMap(Gl).filter((D) => D !== null).length;
+          return O.flatMap(flattenNestedValues).filter((D) => D !== null)
+            .length;
         if (u === "COUNTBLANK")
-          return O.flatMap(Gl).filter((D) => D === null || D === "").length;
+          return O.flatMap(flattenNestedValues).filter(
+            (D) => D === null || D === "",
+          ).length;
         if (
           [
             "SUMIF",
@@ -744,13 +824,17 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           if (D) {
             if (((T = B ? O : O.slice(1)), T.length < 2 || T.length % 2 !== 0))
               return t("#VALUE!");
-            C = B ? Gl(T[0]).map(() => 1) : Gl(O[0]);
+            C = B
+              ? flattenNestedValues(T[0]).map(() => 1)
+              : flattenNestedValues(O[0]);
           } else {
             if (O.length < 2 || O.length > (B ? 2 : 3)) return t("#VALUE!");
             ((T = O.slice(0, 2)),
               (C = B
-                ? Gl(O[0]).map(() => 1)
-                : Gl(l.length < 3 || l[2] == null ? O[0] : O[2])));
+                ? flattenNestedValues(O[0]).map(() => 1)
+                : flattenNestedValues(
+                    l.length < 3 || l[2] == null ? O[0] : O[2],
+                  )));
           }
           const N = [],
             R = [],
@@ -764,7 +848,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             },
             $ = L(B ? T[0] : D || l.length < 3 || l[2] == null ? O[0] : O[2]);
           for (let H = 0; H < T.length; H += 2) {
-            const Q = Gl(T[H]);
+            const Q = flattenNestedValues(T[H]);
             if (
               Q.length !== C.length ||
               $ === "invalid" ||
@@ -772,7 +856,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
               Array.isArray(T[H + 1])
             )
               return t("#VALUE!");
-            if (wn(T[H + 1])) return T[H + 1];
+            if (isFormulaError(T[H + 1])) return T[H + 1];
             N.push(Q);
             const X = T[H + 1];
             R.push(X == null ? "=0" : typeof X == "number" ? `=${X}` : X);
@@ -791,14 +875,23 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
               G > 2e6)
             )
               return t("#LIMIT!");
-            if (N.every((Q, X) => !wn(Q[H]) && Xb(Q[H], R[X]))) {
-              if (wn(C[H])) return C[H];
+            if (
+              N.every(
+                (Q, X) =>
+                  !isFormulaError(Q[H]) && matchCriteriaValue(Q[H], R[X]),
+              )
+            ) {
+              if (isFormulaError(C[H])) return C[H];
               typeof C[H] == "number" && U.push(C[H]);
             }
           }
-          return _ ? (U.length ? Us(U) : t("#DIV/0!")) : Rc(U);
+          return _
+            ? U.length
+              ? exactAverageOfNumbers(U)
+              : t("#DIV/0!")
+            : sumDecimalPartsToNumber(U);
         }
-        const z = M5(O);
+        const z = findFormulaErrorArg(O);
         if (z && u !== "COUNT") return z;
         if (u === "TRIM")
           return String(O[0] ?? "")
@@ -838,7 +931,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             D[0].length > 1
           )
             return t("#N/A");
-          const B = Gl(D),
+          const B = flattenNestedValues(D),
             _ = O[0],
             C = O[2] === undefined ? 1 : Number(O[2]);
           if (![0, -1, 1].includes(C)) return t("#N/A");
@@ -847,7 +940,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
               typeof _ == "string"
                 ? typeof U == "string" &&
                   (/[?*~]/.test(_)
-                    ? Xb(U, `=${_}`)
+                    ? matchCriteriaValue(U, `=${_}`)
                     : U.toLowerCase() === _.toLowerCase())
                 : U === _,
             );
@@ -890,7 +983,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             B = [];
           D.forEach((T, N) => {
             const R = !!l[N] && typeof l[N] == "object" && "ref" in l[N];
-            for (const L of Gl(T))
+            for (const L of flattenNestedValues(T))
               typeof L == "number"
                 ? B.push(L)
                 : !R &&
@@ -901,7 +994,7 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
                       Number.isFinite(Number(L)))) &&
                   B.push(Number(L));
           });
-          const _ = Rc(B);
+          const _ = sumDecimalPartsToNumber(B);
           if (u === "SUM") return _;
           if (u === "AVERAGE") return B.length ? _ / B.length : t("#DIV/0!");
           if (u === "MIN")
@@ -969,12 +1062,15 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
           }
           if (B.length * B.length * D.length > 2e6) return t("#LIMIT!");
           for (let C = _ - 1; C < B.length; C++)
-            if (Xb(B.slice(C), `${D}*`)) return C + 1;
+            if (matchCriteriaValue(B.slice(C), `${D}*`)) return C + 1;
           return t("#VALUE!");
         }
         if (
           u === "CONCATENATE" &&
-          O.flatMap(Gl).reduce((D, B) => D + String(B ?? "").length, 0) > 32767
+          O.flatMap(flattenNestedValues).reduce(
+            (D, B) => D + String(B ?? "").length,
+            0,
+          ) > 32767
         )
           return t("#LIMIT!");
         const V = d(u, l);
@@ -986,16 +1082,16 @@ function Fie(e, r, t = kR, n = lx(), o, a) {
             ? t("#LIMIT!")
             : V;
       } catch (f) {
-        return wn(f) ? t(f.error) : t("#ERROR!");
+        return isFormulaError(f) ? t(f.error) : t("#ERROR!");
       }
     }),
     e
   );
 }
-function Af(e, r, t = "1900") {
+function formatNumberWithPattern(e, r, t = "1900") {
   if (r != null && r.numberFormat)
     try {
-      return vg(e, r.numberFormat, t).text;
+      return formatCellValueWithNumberFormat(e, r.numberFormat, t).text;
     } catch {
       return "#FORMAT!";
     }
@@ -1006,14 +1102,14 @@ function Af(e, r, t = "1900") {
   if (r?.format === "date") {
     if (r.numFmt)
       try {
-        if (Bw(r.numFmt).kind === "temporal")
-          return vg(
+        if (validateNumberFormatCode(r.numFmt).kind === "temporal")
+          return formatCellValueWithNumberFormat(
             e,
             { category: "custom", locale: "en-US", pattern: r.numFmt },
             t,
           ).text;
       } catch {}
-    return vg(
+    return formatCellValueWithNumberFormat(
       e,
       { category: "date", locale: "en-US", pattern: "yyyy-mm-dd" },
       t,
@@ -1022,7 +1118,7 @@ function Af(e, r, t = "1900") {
   if (r != null && r.numFmt) {
     if (r.numFmt.toLowerCase() === "general")
       return String(Number(e.toPrecision(15)));
-    const n = zB(e, r.numFmt);
+    const n = numberFormatToIntlOptions(e, r.numFmt);
     if (n !== undefined) return n;
   }
   return r?.format === "percent"
@@ -1045,7 +1141,7 @@ function Af(e, r, t = "1900") {
           }).format(e)
         : String(Number(e.toPrecision(15)));
 }
-const EC = Object.freeze({
+const defaultCalculationSettings = Object.freeze({
     mode: "automatic",
     iterative: false,
     maxIterations: 100,
@@ -1057,15 +1153,20 @@ const EC = Object.freeze({
     typeof e == "object" &&
     !Array.isArray(e) &&
     [Object.prototype, null].includes(Object.getPrototypeOf(e)),
-  Bie = () => {
+  throwInvalidCalculationSettings = () => {
     throw Error(
       "Invalid calculation settings. Choose Automatic or Manual, explicit iteration, 1–1000 iterations, convergence from 0 to 1, a 1–10000 ms time budget, 1–128 MiB working data and 1000–10000000 work units.",
     );
   };
-function Nx(e) {
+function normalizeCalculationSettings(e) {
   return !Ny(e) ||
     Object.keys(e).some(
-      (r) => ![...Object.keys(EC), "memoryBudgetMiB", "workBudget"].includes(r),
+      (r) =>
+        ![
+          ...Object.keys(defaultCalculationSettings),
+          "memoryBudgetMiB",
+          "workBudget",
+        ].includes(r),
     ) ||
     typeof e.mode != "string" ||
     !["automatic", "manual"].includes(e.mode) ||
@@ -1088,7 +1189,7 @@ function Nx(e) {
       (!Number.isInteger(e.workBudget) ||
         Number(e.workBudget) < 1e3 ||
         Number(e.workBudget) > 1e7))
-    ? Bie()
+    ? throwInvalidCalculationSettings()
     : {
         mode: e.mode,
         iterative: e.iterative,
@@ -1103,8 +1204,9 @@ function Nx(e) {
           : {}),
       };
 }
-function Lie(e, r) {
-  e.calculation !== undefined && (r.calculation = Nx(e.calculation));
+function importFormulaCacheEvidence(e, r) {
+  e.calculation !== undefined &&
+    (r.calculation = normalizeCalculationSettings(e.calculation));
   const t = e.importedCalculationCaches;
   if (t === undefined) return;
   const n = () => {
@@ -1211,16 +1313,16 @@ function Lie(e, r) {
     entries: d,
   };
 }
-const tu = new WeakMap(),
-  ch = new WeakMap(),
+const calculatorRecords = new WeakMap(),
+  carriedCalculatorRecords = new WeakMap(),
   j5 = 2e5,
-  ng = { type: "error", value: "#PENDING!" },
-  F5 = (e) => ({ type: "error", value: e }),
-  Pie = new RegExp(
-    `\\b(?:${[...y0, "LET", "LAMBDA", "INDIRECT", "OFFSET", "ISFORMULA", "TEXTBEFORE", "TEXTAFTER"].join("|")})\\s*\\(`,
+  pendingFormulaValue = { type: "error", value: "#PENDING!" },
+  makeFormulaError = (e) => ({ type: "error", value: e }),
+  dynamicFunctionPattern = new RegExp(
+    `\\b(?:${[...matrixResultFunctionNames, "LET", "LAMBDA", "INDIRECT", "OFFSET", "ISFORMULA", "TEXTBEFORE", "TEXTAFTER"].join("|")})\\s*\\(`,
     "i",
   ),
-  _O = { test: (e) => Rg(e).length > 0 },
+  _O = { test: (e) => findVolatileFunctionNames(e).length > 0 },
   ik = (e, r) => {
     var t;
     return (
@@ -1228,7 +1330,7 @@ const tu = new WeakMap(),
       [...r.values()].some((n) => {
         const o = n.formula.replace(/"(?:[^"]|"")*"/g, '""');
         return (
-          Pie.test(o) ||
+          dynamicFunctionPattern.test(o) ||
           /[{}#]/.test(o) ||
           /^=\s*[^()+*/]*:/.test(o) ||
           (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(o) && o.includes(":"))
@@ -1236,10 +1338,12 @@ const tu = new WeakMap(),
       })
     );
   },
-  DO = new WeakMap();
-const ok = new WeakMap();
-function Uie(e) {
-  const r = es(e.cells) ? ok.get(e.cells)?.get(e.id) : undefined;
+  calculationSnapshotCache = new WeakMap();
+const sheetInputCache = new WeakMap();
+function buildSheetCalculationSnapshot(e) {
+  const r = isDeepFrozenValue(e.cells)
+    ? sheetInputCache.get(e.cells)?.get(e.id)
+    : undefined;
   if (r) return r;
   const t = [];
   let n, o;
@@ -1250,7 +1354,7 @@ function Uie(e) {
         JSON.stringify([c.raw, !!c.literal]),
       ])),
     s = () => o ?? (o = JSON.stringify(a()));
-  es(e.cells) || s();
+  isDeepFrozenValue(e.cells) || s();
   for (const l in e.cells) {
     const c = e.cells[l],
       h = `${e.id}:${l}`;
@@ -1263,24 +1367,28 @@ function Uie(e) {
     inputs: a,
     formulas: t,
     signature: s,
-    volatile: [...new Set(t.flatMap(([, l]) => Rg(l.formula)))],
+    volatile: [
+      ...new Set(t.flatMap(([, l]) => findVolatileFunctionNames(l.formula))),
+    ],
   };
-  if (es(e.cells)) {
-    const l = ok.get(e.cells) ?? new Map();
-    (l.set(e.id, d), ok.set(e.cells, l));
+  if (isDeepFrozenValue(e.cells)) {
+    const l = sheetInputCache.get(e.cells) ?? new Map();
+    (l.set(e.id, d), sheetInputCache.set(e.cells, l));
   }
   return d;
 }
-function B5(e) {
-  const r = Nx(e.calculation ?? EC);
+function buildWorkbookCalculationDescriptor(e) {
+  const r = normalizeCalculationSettings(
+    e.calculation ?? defaultCalculationSettings,
+  );
   return JSON.stringify([
     e.id,
     r,
-    ts(e.datePolicy),
+    normalizeDatePolicy(e.datePolicy),
     e.definedNames,
     e.workbookLinks,
     e.extensions,
-    g1(e),
+    getExtensionCacheEntries(e),
     e.sheets.map((n) => [
       n.id,
       n.name,
@@ -1296,13 +1404,15 @@ function B5(e) {
     ]),
   ]);
 }
-function OO(e) {
-  const r = e.sheets.map(Uie);
+function buildWorkbookCalculationSignature(e) {
+  const r = e.sheets.map(buildSheetCalculationSnapshot);
   let t;
   const n = () => t ?? (t = new Map(r.flatMap((h) => h.inputs()))),
     o = new Map(r.flatMap((h) => h.formulas)),
-    a = Nx(e.calculation ?? EC),
-    s = B5(e);
+    a = normalizeCalculationSettings(
+      e.calculation ?? defaultCalculationSettings,
+    ),
+    s = buildWorkbookCalculationDescriptor(e);
   let d, u;
   const l = () =>
       d ??
@@ -1311,7 +1421,7 @@ function OO(e) {
       u ??
       (u = `[${l()},${JSON.stringify(e.importedCalculationCaches ?? null)}]`);
   return (
-    es(e) || c(),
+    isDeepFrozenValue(e) || c(),
     {
       inputs: n,
       formulas: o,
@@ -1321,7 +1431,11 @@ function OO(e) {
         ...new Set(
           r
             .flatMap((h) => h.volatile)
-            .concat((e.definedNames ?? []).flatMap((h) => Rg(h.refersTo))),
+            .concat(
+              (e.definedNames ?? []).flatMap((h) =>
+                findVolatileFunctionNames(h.refersTo),
+              ),
+            ),
         ),
       ].sort(),
       inputSignature: l,
@@ -1329,18 +1443,24 @@ function OO(e) {
     }
   );
 }
-function W1(e) {
-  if (!es(e)) return OO(e);
-  let r = DO.get(e);
-  return (r || ((r = OO(e)), DO.set(e, r)), r);
+function getCachedCalculationSnapshot(e) {
+  if (!isDeepFrozenValue(e)) return buildWorkbookCalculationSignature(e);
+  let r = calculationSnapshotCache.get(e);
+  return (
+    r ||
+      ((r = buildWorkbookCalculationSignature(e)),
+      calculationSnapshotCache.set(e, r)),
+    r
+  );
 }
-function nm(e, r, t = W1(r)) {
-  return !!e && (es(r) || e.signature() === t.signature());
+function isCalculationRecordCurrent(e, r, t = getCachedCalculationSnapshot(r)) {
+  return !!e && (isDeepFrozenValue(r) || e.signature() === t.signature());
 }
 function MO(e, r) {
   if (
     e.revision !== r.revision ||
-    B5(e) !== B5(r) ||
+    buildWorkbookCalculationDescriptor(e) !==
+      buildWorkbookCalculationDescriptor(r) ||
     (e.importedCalculationCaches !== r.importedCalculationCaches &&
       JSON.stringify(e.importedCalculationCaches) !==
         JSON.stringify(r.importedCalculationCaches))
@@ -1360,38 +1480,42 @@ function MO(e, r) {
   }
   return true;
 }
-function $ie(e) {
-  return tu.has(e) || ch.has(e);
+function hasCalculatorRecord(e) {
+  return calculatorRecords.has(e) || carriedCalculatorRecords.has(e);
 }
-function SR(e, r) {
+function carryCalculatorRecordForward(e, r) {
   if (e === r || e.id !== r.id || r.revision <= e.revision) return;
-  const t = tu.get(e);
-  t && nm(t, e) && ch.set(r, t);
+  const t = calculatorRecords.get(e);
+  t && isCalculationRecordCurrent(t, e) && carriedCalculatorRecords.set(r, t);
 }
 function zie(e, r) {
   if (e === r) return;
-  const t = tu.get(e);
-  t && nm(t, e) && MO(e, r)
-    ? tu.set(r, t)
-    : ch.has(e) && MO(e, r) && ch.set(r, ch.get(e));
+  const t = calculatorRecords.get(e);
+  t && isCalculationRecordCurrent(t, e) && MO(e, r)
+    ? calculatorRecords.set(r, t)
+    : carriedCalculatorRecords.has(e) &&
+      MO(e, r) &&
+      carriedCalculatorRecords.set(r, carriedCalculatorRecords.get(e));
 }
-function Vie(e, r) {
-  return { ...e, calculation: Nx(r) };
+function withCalculationSettings(e, r) {
+  return { ...e, calculation: normalizeCalculationSettings(r) };
 }
-function A1(e) {
+function deepFreeze(e) {
   !e ||
     typeof e != "object" ||
     Object.isFrozen(e) ||
-    (Object.values(e).forEach(A1), Object.freeze(e));
+    (Object.values(e).forEach(deepFreeze), Object.freeze(e));
 }
-function Hie(e) {
-  const r = tu.get(e);
-  return nm(r, e) ? { calculator: r.calculator, report: r.report } : undefined;
+function getCurrentCalculatorRecord(e) {
+  const r = calculatorRecords.get(e);
+  return isCalculationRecordCurrent(r, e)
+    ? { calculator: r.calculator, report: r.report }
+    : undefined;
 }
-const PE = new WeakMap();
-function qie(e) {
+const reportCellValueMaps = new WeakMap();
+function buildReportCellValueMap(e) {
   if (!e) return new Map();
-  const r = PE.get(e.report);
+  const r = reportCellValueMaps.get(e.report);
   if (r) return r;
   const t = new Map();
   for (const n of e.report.cells) {
@@ -1403,10 +1527,10 @@ function qie(e) {
   }
   return t;
 }
-function lU(e) {
-  return W1(e).inputSignature();
+function getCalculationInputSignature(e) {
+  return getCachedCalculationSnapshot(e).inputSignature();
 }
-const Cc = Object.freeze({
+const filterEvaluationLimits = Object.freeze({
     rows: 1e4,
     cells: 1e5,
     columns: 64,
@@ -1415,14 +1539,16 @@ const Cc = Object.freeze({
     text: 1024,
     comparisonWork: 5e6,
   }),
-  Gie =
+  savedFilterViewHelpText =
     "View only. Column rules intersect (AND); advanced groups use OR of AND rules. Counts include blank records in the declared range. Manual/outline hiding is separate. Full scope includes every data row; visible scope excludes filtered and manually hidden rows. Applying a view leaves source addresses, formulas, identities and history unchanged. Native JSON, XLSX, print and AI selections use full source data. Active masks are session state; named criteria can be saved in native JSON and require a fresh preview before reuse.",
-  P5 = (e) => e === null || e === "",
-  Zw = (e, r = false) =>
+  isBlankCriterionValue = (e) => e === null || e === "",
+  normalizeComparableText = (e, r = false) =>
     r ? e.normalize("NFC") : e.normalize("NFC").toLocaleLowerCase("en-US"),
-  eh = (e, r = false) =>
-    P5(e) ? "blank" : `${typeof e}:${typeof e == "string" ? Zw(e, r) : e}`,
-  Zie = [
+  comparableCellValueKey = (e, r = false) =>
+    isBlankCriterionValue(e)
+      ? "blank"
+      : `${typeof e}:${typeof e == "string" ? normalizeComparableText(e, r) : e}`,
+  textFilterOperators = [
     "equals",
     "notEquals",
     "contains",
@@ -1437,22 +1563,30 @@ const Cc = Object.freeze({
     "blank",
     "notBlank",
   ],
-  jO = (e) =>
+  isStorableCellValue = (e) =>
     e === null ||
     typeof e == "boolean" ||
     (typeof e == "number" && Number.isFinite(e)) ||
     (typeof e == "string" && e.length <= 32767);
-function U5(e, r, t) {
+function resolveDatePolicyContext(e, r, t) {
   if (r === "number") return typeof e == "number" ? e : null;
   if (r === "date") {
-    const n = ts(t.datePolicy),
+    const n = normalizeDatePolicy(t.datePolicy),
       o =
-        typeof e == "number" ? e : typeof e == "string" ? zp(e, n) : undefined;
-    return o !== undefined && o >= 0 && o < wd(n.dateSystem) + 1 ? o : null;
+        typeof e == "number"
+          ? e
+          : typeof e == "string"
+            ? parseDateText(e, n)
+            : undefined;
+    return o !== undefined &&
+      o >= 0 &&
+      o < dateSystemMaxSerial(n.dateSystem) + 1
+      ? o
+      : null;
   }
   return typeof e == "string" ? e : null;
 }
-function Yie(e, r) {
+function parseWildcardPattern(e, r) {
   const t = [];
   for (let d = 0; d < r.length; d++) {
     const u = r[d];
@@ -1474,20 +1608,22 @@ function Yie(e, r) {
   for (; o < t.length && t[o].star;) o++;
   return o === t.length;
 }
-function Jie(e, r, t, n) {
-  if (r.operator === "blank") return P5(e);
-  if (r.operator === "notBlank") return !P5(e);
+function matchesTextFilter(e, r, t, n) {
+  if (r.operator === "blank") return isBlankCriterionValue(e);
+  if (r.operator === "notBlank") return !isBlankCriterionValue(e);
   if (r.type === "value") {
-    const s = eh(e, n) === eh(r.value, n);
+    const s =
+      comparableCellValueKey(e, n) === comparableCellValueKey(r.value, n);
     return r.operator === "equals" ? s : !s;
   }
-  let o = U5(e, r.type, t),
-    a = U5(r.value, r.type, t);
+  let o = resolveDatePolicyContext(e, r.type, t),
+    a = resolveDatePolicyContext(r.value, r.type, t);
   if (o === null || a === null) return false;
   switch (
     (typeof o == "string" &&
       typeof a == "string" &&
-      ((o = Zw(o, n)), (a = Zw(a, n))),
+      ((o = normalizeComparableText(o, n)),
+      (a = normalizeComparableText(a, n))),
     r.operator)
   ) {
     case "equals":
@@ -1511,11 +1647,11 @@ function Jie(e, r, t, n) {
     case "endsWith":
       return String(o).endsWith(String(a));
     case "wildcard":
-      return Yie(String(o), String(a));
+      return parseWildcardPattern(String(o), String(a));
   }
   return false;
 }
-function $5(e, r, t, n) {
+function assertCalculatedBeforeFilter(e, r, t, n) {
   const o = e(r, t),
     a = n?.sheets.find((d) => d.id === r)?.cells[t];
   if (
@@ -1533,8 +1669,12 @@ function $5(e, r, t, n) {
     );
   return o;
 }
-const z5 = Object.freeze({ views: 20, name: 80, characters: 512e3 });
-function xv(e, r) {
+const savedFilterViewLimits = Object.freeze({
+  views: 20,
+  name: 80,
+  characters: 512e3,
+});
+function validateSavedFilterViewMetadata(e, r) {
   if (
     !e ||
     typeof e != "object" ||
@@ -1544,7 +1684,7 @@ function xv(e, r) {
   )
     throw Error("Invalid saved filter view metadata.");
 }
-function Ry(e, r) {
+function isValidFilterViewText(e, r) {
   return (
     typeof e == "string" &&
     !!e.trim() &&
@@ -1552,15 +1692,15 @@ function Ry(e, r) {
     !/[\u0000-\u001f\u007f]/.test(e)
   );
 }
-function BO(e) {
+function normalizeNameForComparison(e) {
   return e.normalize("NFC").trim().toLocaleLowerCase("en-US");
 }
-function NR(e) {
-  if (!Ry(e, z5.name))
+function normalizeSavedFilterViewName(e) {
+  if (!isValidFilterViewText(e, savedFilterViewLimits.name))
     throw Error("Use a nonempty filter view name of up to 80 characters.");
   return e.normalize("NFC").trim();
 }
-function RR(e, r) {
+function assertSavedFilterViewsEditable(e, r) {
   var t, o;
   if (
     ((t = e.structureProtection) != null && t.enabled) ||
@@ -1570,13 +1710,13 @@ function RR(e, r) {
       "Unprotect the workbook and source worksheet before changing saved filter views.",
     );
 }
-function _R(e, r) {
+function findSavedFilterView(e, r) {
   const t = e.savedFilterViews?.find((o) => o.id === r);
   if (!t) throw Error("This saved filter view no longer exists.");
   return t;
 }
-const CC = "ledgerglass-consolidation-v1",
-  k1 = Object.freeze({
+const consolidationFormatVersion = "ledgerglass-consolidation-v1",
+  consolidationLimits = Object.freeze({
     sources: 8,
     categories: 3,
     contributions: 2e3,
@@ -1585,37 +1725,41 @@ const CC = "ledgerglass-consolidation-v1",
     groups: 1e3,
     metadataCharacters: 8e6,
   }),
-  Hu = string()
+  boundedLabelSchema = string()
     .min(1)
     .max(128)
     .refine((e) => !!e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
-  gd = string().min(1).max(100),
+  shortLabelSchema = string().min(1).max(100),
   V5 = string().regex(/^[a-f0-9]{64}$/),
-  hU = union([string().min(1).max(32767), number().finite(), boolean()]),
-  ak = discriminatedUnion("kind", [
-    strictObject({ kind: literal("constant"), value: Hu }),
-    strictObject({ kind: literal("field"), field: Hu }),
+  scalarValueSchema = union([
+    string().min(1).max(32767),
+    number().finite(),
+    boolean(),
   ]),
-  roe = strictObject({
-    id: gd,
-    workbookId: gd,
-    sheetId: gd,
+  categoryValueSchema = discriminatedUnion("kind", [
+    strictObject({ kind: literal("constant"), value: boundedLabelSchema }),
+    strictObject({ kind: literal("field"), field: boundedLabelSchema }),
+  ]),
+  consolidationSourceSchema = strictObject({
+    id: shortLabelSchema,
+    workbookId: shortLabelSchema,
+    sheetId: shortLabelSchema,
     range: string().min(1).max(50),
-    tableId: gd.optional(),
-    categories: array(Hu).min(1).max(3),
-    amountField: Hu,
-    period: ak,
-    currency: ak,
-    unit: ak,
+    tableId: shortLabelSchema.optional(),
+    categories: array(boundedLabelSchema).min(1).max(3),
+    amountField: boundedLabelSchema,
+    period: categoryValueSchema,
+    currency: categoryValueSchema,
+    unit: categoryValueSchema,
     duplicatePolicy: _enum(["reject", "sum"]),
   }),
-  pU = strictObject({
-    engine: literal(CC),
-    sources: array(roe).min(1).max(8),
-    categoryLabels: array(Hu).min(1).max(3),
-    period: Hu,
-    currency: Hu,
-    unit: Hu,
+  consolidationDefinitionSchema = strictObject({
+    engine: literal(consolidationFormatVersion),
+    sources: array(consolidationSourceSchema).min(1).max(8),
+    categoryLabels: array(boundedLabelSchema).min(1).max(3),
+    period: boundedLabelSchema,
+    currency: boundedLabelSchema,
+    unit: boundedLabelSchema,
     linkedAmounts: boolean(),
     collapseDetails: boolean(),
   }).superRefine((e, r) => {
@@ -1642,66 +1786,66 @@ const CC = "ledgerglass-consolidation-v1",
           "Use unique source IDs, distinct category fields, and distinct output headers with matching category counts.",
       });
   }),
-  noe = strictObject({
-    sourceId: gd,
-    workbookId: gd,
+  consolidationSourceSnapshotSchema = strictObject({
+    sourceId: shortLabelSchema,
+    workbookId: shortLabelSchema,
     workbookName: string().min(1).max(200),
-    sheetId: gd,
+    sheetId: shortLabelSchema,
     sheetName: string().min(1).max(31),
     row: number().int().min(2).max(1048576),
     address: string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
     locator: string().max(300),
-    categories: array(hU).min(1).max(3),
+    categories: array(scalarValueSchema).min(1).max(3),
     amount: number().finite(),
-    period: Hu,
-    currency: Hu,
-    unit: Hu,
+    period: boundedLabelSchema,
+    currency: boundedLabelSchema,
+    unit: boundedLabelSchema,
     link: _enum(["live", "snapshot", "approved snapshot"]),
   }),
-  ioe = strictObject({
-    sourceId: gd,
+  consolidationIssueSchema = strictObject({
+    sourceId: shortLabelSchema,
     row: number().int().positive().optional(),
     code: string().max(40),
     severity: _enum(["error", "warning"]),
     message: string().max(4e3),
   }),
-  ooe = strictObject({
-    sourceId: gd,
-    workbookId: gd,
+  consolidationSourceResultSchema = strictObject({
+    sourceId: shortLabelSchema,
+    workbookId: shortLabelSchema,
     workbookName: string().max(200),
-    sheetId: gd,
+    sheetId: shortLabelSchema,
     sheetName: string().max(31),
     range: string().max(50),
     fingerprint: V5,
     records: number().int().min(0).max(500),
     acceptedRecords: number().int().min(0).max(500),
     amount: number().finite(),
-    periods: array(Hu).max(500),
-    currencies: array(Hu).max(500),
-    units: array(Hu).max(500),
+    periods: array(boundedLabelSchema).max(500),
+    currencies: array(boundedLabelSchema).max(500),
+    units: array(boundedLabelSchema).max(500),
   }),
-  aoe = strictObject({
-    categories: array(hU).min(1).max(3),
+  consolidationSubtotalSchema = strictObject({
+    categories: array(scalarValueSchema).min(1).max(3),
     level: number().int().min(1).max(3),
     count: number().int().min(1).max(2e3),
     amount: number().finite(),
   }),
-  soe = strictObject({
-    sources: array(ooe).max(8),
-    contributions: array(noe).max(2e3),
-    subtotals: array(aoe).max(1e3),
-    exceptions: array(ioe).max(8e3),
+  consolidationTotalsSchema = strictObject({
+    sources: array(consolidationSourceResultSchema).max(8),
+    contributions: array(consolidationSourceSnapshotSchema).max(2e3),
+    subtotals: array(consolidationSubtotalSchema).max(1e3),
+    exceptions: array(consolidationIssueSchema).max(8e3),
     grandTotal: number().finite().nullable(),
     sourceTotal: number().finite().nullable(),
     difference: number().finite().nullable(),
     complete: boolean(),
   }),
-  loe = strictObject({
-    engine: literal(CC),
-    definition: pU,
-    review: soe,
+  consolidationEvidenceSchema = strictObject({
+    engine: literal(consolidationFormatVersion),
+    definition: consolidationDefinitionSchema,
+    review: consolidationTotalsSchema,
     origin: strictObject({
-      workbookId: gd,
+      workbookId: shortLabelSchema,
       revision: number().int().nonnegative(),
       at: string().datetime(),
     }),
@@ -1709,14 +1853,15 @@ const CC = "ledgerglass-consolidation-v1",
     outputRange: string().max(50),
     outputHash: V5,
   });
-function mU(e) {
-  const r = pU.safeParse(e);
+function parseConsolidationDefinition(e) {
+  const r = consolidationDefinitionSchema.safeParse(e);
   if (!r.success)
     throw Error(`Invalid consolidation: ${r.error.issues[0]?.message}`);
   return r.data;
 }
-const DR = (e) => JSON.stringify(e.map((r) => [typeof r, r]));
-function Op(e) {
+const serializeTypedCategoryKey = (e) =>
+  JSON.stringify(e.map((r) => [typeof r, r]));
+function sumConsolidationAmounts(e) {
   let r = 0,
     t = 0;
   for (const n of e) {
@@ -1727,15 +1872,15 @@ function Op(e) {
   }
   return Object.is(r, -0) ? 0 : r;
 }
-function gU(e) {
+function buildConsolidationSubtotals(e) {
   const r = new Map();
   for (const t of e)
     for (let n = 1; n <= t.categories.length; n++) {
-      const o = DR(t.categories.slice(0, n)),
+      const o = serializeTypedCategoryKey(t.categories.slice(0, n)),
         a = r.get(o) ?? [];
       (a.push(t), r.set(o, a));
     }
-  if (r.size > k1.groups)
+  if (r.size > consolidationLimits.groups)
     throw Error(
       "Consolidation exceeds 1,000 subtotal groups. Narrow the sources; no rows were truncated.",
     );
@@ -1745,20 +1890,23 @@ function gU(e) {
       categories: n[0].categories.slice(0, o),
       level: o,
       count: n.length,
-      amount: Op(n.map((a) => a.amount)),
+      amount: sumConsolidationAmounts(n.map((a) => a.amount)),
     };
   });
 }
-function uoe(e, r) {
+function verifyConsolidationEvidence(e, r) {
   let t = 0;
   for (const s of r.sheets) {
     const d = e.sheets?.find((f) => f.id === s.id)?.consolidation;
     if (d === undefined) continue;
-    if (((t += JSON.stringify(d).length), t > k1.metadataCharacters))
+    if (
+      ((t += JSON.stringify(d).length),
+      t > consolidationLimits.metadataCharacters)
+    )
       throw Error(
         "Consolidation evidence exceeds 8,000,000 characters. Retain native backups before removing obsolete reports.",
       );
-    const u = loe.safeParse(d);
+    const u = consolidationEvidenceSchema.safeParse(d);
     if (!u.success)
       throw Error(
         `Invalid consolidation evidence: ${u.error.issues[0]?.message}`,
@@ -1781,12 +1929,21 @@ function uoe(e, r) {
           f.currency !== l.definition.currency ||
           f.unit !== l.definition.unit,
       ) ||
-      c.grandTotal !== Op(c.contributions.map((f) => f.amount)) ||
-      c.sourceTotal !== Op(c.sources.map((f) => f.amount)) ||
+      c.grandTotal !==
+        sumConsolidationAmounts(c.contributions.map((f) => f.amount)) ||
+      c.sourceTotal !==
+        sumConsolidationAmounts(c.sources.map((f) => f.amount)) ||
       c.difference !== c.grandTotal - c.sourceTotal ||
-      hr(c.subtotals) !== hr(gU(c.contributions)) ||
+      fingerprintCanonicalValue(c.subtotals) !==
+        fingerprintCanonicalValue(
+          buildConsolidationSubtotals(c.contributions),
+        ) ||
       l.evidenceHash !==
-        hr({ definition: l.definition, review: c, origin: l.origin })
+        fingerprintCanonicalValue({
+          definition: l.definition,
+          review: c,
+          origin: l.origin,
+        })
     )
       throw Error(
         "Consolidation evidence does not reconcile to its sources, categories or retained fingerprint.",
@@ -1796,7 +1953,7 @@ function uoe(e, r) {
       if (
         f.records !== p.length ||
         f.acceptedRecords !== p.length ||
-        f.amount !== Op(p.map((m) => m.amount)) ||
+        f.amount !== sumConsolidationAmounts(p.map((m) => m.amount)) ||
         p.some((m) => m.workbookId !== f.workbookId || m.sheetId !== f.sheetId)
       )
         throw Error("Consolidation source evidence does not reconcile.");
@@ -1804,9 +1961,16 @@ function uoe(e, r) {
     s.consolidation = l;
   }
 }
-const OR = "ledgerglass-sources-v1",
-  coe = ["database", "odbc", "odata", "api", "erp", "file-folder"],
-  fl = Object.freeze({
+const externalSourceFormatVersion = "ledgerglass-sources-v1",
+  externalSourceKinds = [
+    "database",
+    "odbc",
+    "odata",
+    "api",
+    "erp",
+    "file-folder",
+  ],
+  externalSourceLimits = Object.freeze({
     sources: 20,
     columns: 50,
     rows: 5e3,
@@ -1815,25 +1979,25 @@ const OR = "ledgerglass-sources-v1",
     timeoutMs: 3e4,
     metadataCharacters: 2e5,
   }),
-  UE = string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/),
-  $E = string()
+  sourceIdSchema = string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/),
+  columnNameSchema = string()
     .min(1)
     .max(128)
     .refine((e) => e === e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
-  Jy = string().datetime({ offset: true }),
-  LO = string().regex(/^[a-f0-9]{64}$/),
-  doe = strictObject({
-    name: $E,
+  isoDateTimeSchema = string().datetime({ offset: true }),
+  sourceHashSchema = string().regex(/^[a-f0-9]{64}$/),
+  sourceColumnSchema = strictObject({
+    name: columnNameSchema,
     type: _enum(["text", "number", "boolean", "date"]),
     nullable: boolean(),
   }),
-  MR = strictObject({
-    id: UE,
-    label: $E,
-    kind: _enum(coe),
-    schemaVersion: UE,
-    columns: array(doe).min(1).max(fl.columns),
-    controlFields: array($E).max(fl.columns),
+  sourceTableSchema = strictObject({
+    id: sourceIdSchema,
+    label: columnNameSchema,
+    kind: _enum(externalSourceKinds),
+    schemaVersion: sourceIdSchema,
+    columns: array(sourceColumnSchema).min(1).max(externalSourceLimits.columns),
+    controlFields: array(columnNameSchema).max(externalSourceLimits.columns),
   }).superRefine((e, r) => {
     (new Set(e.columns.map((t) => t.name.toLowerCase())).size !==
       e.columns.length ||
@@ -1846,17 +2010,27 @@ const OR = "ledgerglass-sources-v1",
         message: "Use unique columns and declared numeric control fields.",
       });
   }),
-  foe = strictObject({ source: MR, expiresAt: Jy }),
-  hoe = union([string().max(32767), number().finite(), boolean(), _null()]),
-  poe = strictObject({
-    protocol: literal(OR),
-    source: MR,
-    sourceTimestamp: Jy,
-    version: UE,
-    rows: array(array(hoe).max(fl.columns)).max(fl.rows),
+  sourceApprovalSchema = strictObject({
+    source: sourceTableSchema,
+    expiresAt: isoDateTimeSchema,
+  }),
+  sourceCellValueSchema = union([
+    string().max(32767),
+    number().finite(),
+    boolean(),
+    _null(),
+  ]),
+  sourceResultPayloadSchema = strictObject({
+    protocol: literal(externalSourceFormatVersion),
+    source: sourceTableSchema,
+    sourceTimestamp: isoDateTimeSchema,
+    version: sourceIdSchema,
+    rows: array(
+      array(sourceCellValueSchema).max(externalSourceLimits.columns),
+    ).max(externalSourceLimits.rows),
     complete: literal(true),
   }),
-  vU = [
+  externalSourceErrorCodes = [
     "unavailable",
     "refused",
     "expired",
@@ -1867,7 +2041,7 @@ const OR = "ledgerglass-sources-v1",
     "invalid",
     "stale",
   ],
-  moe = {
+  externalSourceErrorMessages = {
     unavailable:
       "The source is unavailable. The last successful data is retained. Check the host connection, then retry.",
     refused:
@@ -1887,50 +2061,59 @@ const OR = "ledgerglass-sources-v1",
     stale:
       "The workbook, preview or source approval changed. Preview again before applying a refresh.",
   };
-class Rn extends Error {
+class ExternalSourceError extends Error {
   constructor(r) {
-    (super(moe[r]), (this.code = r), (this.name = "ExternalSourceError"));
+    (super(externalSourceErrorMessages[r]),
+      (this.code = r),
+      (this.name = "ExternalSourceError"));
   }
 }
-function Mp(e) {
-  return e instanceof Rn
+function isExternalSourceError(e) {
+  return e instanceof ExternalSourceError
     ? e
     : e instanceof Error &&
         e.name === "ExternalSourceError" &&
-        vU.includes(e.code)
-      ? new Rn(e.code)
-      : new Rn("unavailable");
+        externalSourceErrorCodes.includes(e.code)
+      ? new ExternalSourceError(e.code)
+      : new ExternalSourceError("unavailable");
 }
-function h0(e, r = Date.now()) {
-  const t = foe.safeParse(e);
-  if (!t.success) throw new Rn("invalid");
-  if (Date.parse(t.data.expiresAt) <= r) throw new Rn("expired");
+function parseActiveSourceApproval(e, r = Date.now()) {
+  const t = sourceApprovalSchema.safeParse(e);
+  if (!t.success) throw new ExternalSourceError("invalid");
+  if (Date.parse(t.data.expiresAt) <= r)
+    throw new ExternalSourceError("expired");
   return t.data;
 }
-function AC(e, r) {
-  return hr(e) === hr(r);
+function isSameContentHash(e, r) {
+  return fingerprintCanonicalValue(e) === fingerprintCanonicalValue(r);
 }
-function bU(e, r) {
+function validateExternalSourcePayload(e, r) {
   if (e && typeof e == "object") {
     const o = e.rows;
     if (
       Array.isArray(o) &&
-      (o.length > fl.rows ||
-        o.some((a) => Array.isArray(a) && a.length > fl.columns))
+      (o.length > externalSourceLimits.rows ||
+        o.some(
+          (a) => Array.isArray(a) && a.length > externalSourceLimits.columns,
+        ))
     )
-      throw new Rn("limit");
+      throw new ExternalSourceError("limit");
   }
-  const t = poe.safeParse(e);
-  if (!t.success) throw new Rn("invalid");
+  const t = sourceResultPayloadSchema.safeParse(e);
+  if (!t.success) throw new ExternalSourceError("invalid");
   const n = t.data;
-  if (r && !AC(n.source, r)) throw new Rn("schema");
+  if (r && !isSameContentHash(n.source, r))
+    throw new ExternalSourceError("schema");
   if (
-    (n.rows.length + 1) * n.source.columns.length > fl.cells ||
-    new TextEncoder().encode(JSON.stringify(n)).length > fl.responseBytes
+    (n.rows.length + 1) * n.source.columns.length >
+      externalSourceLimits.cells ||
+    new TextEncoder().encode(JSON.stringify(n)).length >
+      externalSourceLimits.responseBytes
   )
-    throw new Rn("limit");
+    throw new ExternalSourceError("limit");
   for (const o of n.rows) {
-    if (o.length !== n.source.columns.length) throw new Rn("schema");
+    if (o.length !== n.source.columns.length)
+      throw new ExternalSourceError("schema");
     o.forEach((a, s) => {
       const d = n.source.columns[s];
       if (
@@ -1944,12 +2127,12 @@ function bU(e, r) {
             : typeof a !==
               { text: "string", number: "number", boolean: "boolean" }[d.type]
       )
-        throw new Rn("schema");
+        throw new ExternalSourceError("schema");
     });
   }
   return n;
 }
-function yU(e) {
+function computeSourceControlTotals(e) {
   return e.source.controlFields.map((r) => {
     const t = e.source.columns.findIndex((d) => d.name === r);
     let n = 0,
@@ -1969,48 +2152,48 @@ function yU(e) {
         a++,
         !Number.isFinite(n) || !Number.isFinite(o))
       )
-        throw new Rn("limit");
+        throw new ExternalSourceError("limit");
     }
     return { field: r, sum: Object.is(n, -0) ? 0 : n, numeric: a, blanks: s };
   });
 }
-const goe = strictObject({
-    field: $E,
+const sourceControlFieldSchema = strictObject({
+    field: columnNameSchema,
     sum: number().finite(),
     numeric: number().int().min(0).max(5e3),
     blanks: number().int().min(0).max(5e3),
   }),
-  voe = strictObject({
-    protocol: literal(OR),
-    source: MR,
+  sourceRefreshStateSchema = strictObject({
+    protocol: literal(externalSourceFormatVersion),
+    source: sourceTableSchema,
     lastSuccess: strictObject({
-      at: Jy,
-      sourceTimestamp: Jy,
-      version: UE,
+      at: isoDateTimeSchema,
+      sourceTimestamp: isoDateTimeSchema,
+      version: sourceIdSchema,
       rows: number().int().min(0).max(5e3),
-      controls: array(goe).max(50),
-      dataHash: LO,
+      controls: array(sourceControlFieldSchema).max(50),
+      dataHash: sourceHashSchema,
     }),
     lastAttempt: strictObject({
-      at: Jy,
+      at: isoDateTimeSchema,
       outcome: _enum(["succeeded", "failed", "cancelled"]),
-      code: _enum(vU).optional(),
+      code: _enum(externalSourceErrorCodes).optional(),
     }),
-    outputHash: LO,
+    outputHash: sourceHashSchema,
   });
-function boe(e, r) {
+function buildExternalSourceRefreshState(e, r) {
   let t = 0,
     n = 0;
   for (const a of r.sheets) {
     const s = e.sheets.find((l) => l.id === a.id)?.externalConnection;
     if (s === undefined) continue;
     if (
-      ++n > fl.sources ||
-      (t += JSON.stringify(s).length) > fl.metadataCharacters
+      ++n > externalSourceLimits.sources ||
+      (t += JSON.stringify(s).length) > externalSourceLimits.metadataCharacters
     )
-      throw new Rn("limit");
-    const d = voe.safeParse(s);
-    if (!d.success) throw new Rn("invalid");
+      throw new ExternalSourceError("limit");
+    const d = sourceRefreshStateSchema.safeParse(s);
+    if (!d.success) throw new ExternalSourceError("invalid");
     const u = d.data;
     if (
       u.lastSuccess.controls.length !== u.source.controlFields.length ||
@@ -2019,71 +2202,72 @@ function boe(e, r) {
           l.field !== u.source.controlFields[c] ||
           l.numeric + l.blanks !== u.lastSuccess.rows,
       ) ||
-      (u.lastSuccess.rows + 1) * u.source.columns.length > fl.cells ||
+      (u.lastSuccess.rows + 1) * u.source.columns.length >
+        externalSourceLimits.cells ||
       Date.parse(u.lastAttempt.at) < Date.parse(u.lastSuccess.at) ||
       (u.lastAttempt.outcome === "succeeded") == !!u.lastAttempt.code
     )
-      throw new Rn("invalid");
+      throw new ExternalSourceError("invalid");
     a.externalConnection = u;
   }
 }
 
 export {
-  $5,
-  $ie,
-  A1,
-  AC,
-  Af,
-  BO,
-  CC,
-  Cc,
-  DR,
-  EC,
-  F5,
-  Fie,
-  Gie,
-  Hie,
-  Jie,
-  Lie,
-  Mp,
-  NR,
-  Nx,
-  OR,
-  Op,
-  PE,
-  RR,
-  Rn,
-  Ry,
-  SR,
-  Ty,
-  U5,
-  Vie,
-  W1,
-  Zie,
-  Zw,
+  assertCalculatedBeforeFilter,
+  hasCalculatorRecord,
+  deepFreeze,
+  isSameContentHash,
+  formatNumberWithPattern,
+  normalizeNameForComparison,
+  consolidationFormatVersion,
+  filterEvaluationLimits,
+  serializeTypedCategoryKey,
+  defaultCalculationSettings,
+  makeFormulaError,
+  createWorkbookFormulaEngine,
+  savedFilterViewHelpText,
+  getCurrentCalculatorRecord,
+  matchesTextFilter,
+  importFormulaCacheEvidence,
+  isExternalSourceError,
+  normalizeSavedFilterViewName,
+  normalizeCalculationSettings,
+  externalSourceFormatVersion,
+  sumConsolidationAmounts,
+  reportCellValueMaps,
+  assertSavedFilterViewsEditable,
+  ExternalSourceError,
+  isValidFilterViewText,
+  carryCalculatorRecordForward,
+  applyDefinedNameOperation,
+  resolveDatePolicyContext,
+  withCalculationSettings,
+  getCachedCalculationSnapshot,
+  textFilterOperators,
+  normalizeComparableText,
   _O,
-  _R,
-  bU,
-  boe,
-  ch,
-  eh,
-  fl,
-  gU,
-  h0,
+  findSavedFilterView,
+  validateExternalSourcePayload,
+  buildExternalSourceRefreshState,
+  carriedCalculatorRecords,
+  comparableCellValueKey,
+  externalSourceLimits,
+  buildConsolidationSubtotals,
+  parseActiveSourceApproval,
   ik,
   j5,
-  jO,
-  k1,
-  lU,
-  mU,
-  ng,
-  nm,
-  q6,
-  qie,
-  tu,
-  uoe,
-  xv,
-  yU,
-  z5,
+  isStorableCellValue,
+  consolidationLimits,
+  getCalculationInputSignature,
+  parseConsolidationDefinition,
+  pendingFormulaValue,
+  isCalculationRecordCurrent,
+  assertNamePreviewCurrent,
+  buildReportCellValueMap,
+  calculatorRecords,
+  verifyConsolidationEvidence,
+  validateSavedFilterViewMetadata,
+  computeSourceControlTotals,
+  savedFilterViewLimits,
   zie,
 };

@@ -1,13 +1,27 @@
-import { V3, WS, nf, of, rB, wd, zp } from "./01-core-schemas-and-hashing.js";
+import {
+  dateToSerial,
+  evaluateDateFunction,
+  daysInExcelMonth,
+  financialSolverLimits,
+  serialToDateParts,
+  dateSystemMaxSerial,
+  parseDateText,
+} from "./01-core-schemas-and-hashing.js";
 
-function $J(e, r, t = of.minRate) {
+function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
   const n = Math.log1p(t),
-    o = Math.log1p(of.maxRate),
+    o = Math.log1p(financialSolverLimits.maxRate),
     a = Math.log1p(r);
   let s = 0;
   const d = [],
     u = (g) => {
-      if (g < n || g > o || !Number.isFinite(g) || s >= of.evaluations) return;
+      if (
+        g < n ||
+        g > o ||
+        !Number.isFinite(g) ||
+        s >= financialSolverLimits.evaluations
+      )
+        return;
       s++;
       const b = e(Math.expm1(g));
       if (!(
@@ -18,7 +32,8 @@ function $J(e, r, t = of.minRate) {
         return { ...b, normalized: b.value / b.scale };
     },
     l = (g, b) => {
-      if (!b || Math.abs(b.normalized) > of.relativeResidual) return false;
+      if (!b || Math.abs(b.normalized) > financialSolverLimits.relativeResidual)
+        return false;
       const y = Math.expm1(g);
       return (
         d.some(
@@ -105,7 +120,7 @@ function $J(e, r, t = of.minRate) {
       (g, b) =>
         Math.abs(Math.log1p(g.rate) - a) - Math.abs(Math.log1p(b.rate) - a),
     )[0],
-    v = s >= of.evaluations;
+    v = s >= financialSolverLimits.evaluations;
   return {
     ...(m && !v ? { selected: m } : {}),
     candidates: d,
@@ -114,7 +129,7 @@ function $J(e, r, t = of.minRate) {
     exhaustive: false,
   };
 }
-const oB = [
+const supportedFinancialFunctionNames = [
     "PV",
     "FV",
     "PMT",
@@ -136,8 +151,8 @@ const oB = [
     "ACCRINT",
     "ACCRINTM",
   ],
-  aB = Symbol("not-financial"),
-  zJ = {
+  notFinancialSentinel = Symbol("not-financial"),
+  financialArgumentRanges = {
     PV: [3, 5],
     FV: [3, 5],
     PMT: [3, 5],
@@ -159,8 +174,9 @@ const oB = [
     ACCRINT: [6, 8],
     ACCRINTM: [4, 5],
   },
-  HS = (e) => (Array.isArray(e) ? e.flatMap(HS) : [e]),
-  Mm = (e) => {
+  flattenFinancialArgs = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenFinancialArgs) : [e],
+  compensatedSum = (e) => {
     let r = 0,
       t = 0;
     for (const n of e) {
@@ -170,18 +186,18 @@ const oB = [
     }
     return r;
   },
-  VJ = (e) => {
+  countSignChanges = (e) => {
     const r = e.filter((t) => t !== 0).map(Math.sign);
     return r.slice(1).filter((t, n) => t !== r[n]).length;
   };
-function WJ(e, r, t) {
-  if (!oB.includes(e)) return aB;
+function evaluateFinancialFunction(e, r, t) {
+  if (!supportedFinancialFunctionNames.includes(e)) return notFinancialSentinel;
   let n =
       "Cash paid out is negative; cash received is positive. Rates and periods must use the same interval. No automatic cent rounding.",
     o = false;
   const a = t.clock.dateSystem,
-    s = (k, F, I) => V3(k, F, I, a),
-    d = (k) => rB(k, a),
+    s = (k, F, I) => dateToSerial(k, F, I, a),
+    d = (k) => serialToDateParts(k, a),
     u = (k) => {
       var F;
       ((o = true),
@@ -227,8 +243,10 @@ function WJ(e, r, t) {
           "#VALUE!",
           "A cash-flow or security date is missing or is not a date.",
         );
-      const F = typeof k == "string" ? zp(k, t.clock) : f(k);
-      return F === undefined || F < (a === "1904" ? 0 : 1) || F >= wd(a) + 1
+      const F = typeof k == "string" ? parseDateText(k, t.clock) : f(k);
+      return F === undefined ||
+        F < (a === "1904" ? 0 : 1) ||
+        F >= dateSystemMaxSerial(a) + 1
         ? l(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
@@ -237,7 +255,7 @@ function WJ(e, r, t) {
     },
     m = (k) => (
       k <= 0 && l("#NUM!", "Periods must be greater than zero."),
-      k > of.periods &&
+      k > financialSolverLimits.periods &&
         l("#LIMIT!", "Financial periods exceed the 10000-period budget."),
       k
     ),
@@ -251,8 +269,8 @@ function WJ(e, r, t) {
     y = (k, F) => (k === 0 ? F : Math.expm1(F * Math.log1p(k)) / k),
     w = (k, F, I, O, j) => -(I * b(k, F) + O) / ((1 + k * j) * y(k, F)),
     E = (k, F = false) => {
-      const I = HS(k);
-      I.length > of.cashFlows &&
+      const I = flattenFinancialArgs(k);
+      I.length > financialSolverLimits.cashFlows &&
         l("#LIMIT!", "Cash-flow input exceeds 10000 positions.");
       const O = [];
       for (const j of I) {
@@ -271,9 +289,10 @@ function WJ(e, r, t) {
       );
     },
     A = (k, F, I, O) => {
-      (F < (O ?? of.minRate) || F > of.maxRate) &&
+      (F < (O ?? financialSolverLimits.minRate) ||
+        F > financialSolverLimits.maxRate) &&
         l("#NUM!", "The rate guess is outside the supported search interval.");
-      const j = $J(k, F, O),
+      const j = solveRateCandidates(k, F, O),
         z = j.status === "limit" ? "#LIMIT!" : "#NUM!";
       if (
         (u({
@@ -294,7 +313,7 @@ function WJ(e, r, t) {
       return j.selected.rate;
     };
   try {
-    const [k, F] = zJ[e];
+    const [k, F] = financialArgumentRanges[e];
     (r.length < k || r.length > F) &&
       l("#VALUE!", `${e} requires ${k}–${F} arguments.`);
     const I = r.map(t.retrieve);
@@ -311,7 +330,10 @@ function WJ(e, r, t) {
           (O = A(
             (_) => {
               const C = [V * b(_, j), z * (1 + _ * B) * y(_, j), D];
-              return { value: Mm(C), scale: Mm(C.map(Math.abs)) };
+              return {
+                value: compensatedSum(C),
+                scale: compensatedSum(C.map(Math.abs)),
+              };
             },
             f(I[5], 0.1),
           )));
@@ -377,7 +399,7 @@ function WJ(e, r, t) {
         V = E(e === "NPV" ? I.slice(1) : I[z || e === "MIRR" ? 0 : 1], j);
       let D = V.map((_, C) => C + (e === "NPV" ? 1 : 0));
       if (j) {
-        const _ = HS(I[z ? 1 : 2]);
+        const _ = flattenFinancialArgs(I[z ? 1 : 2]);
         _.length !== V.length &&
           l("#NUM!", "Every cash-flow amount must have exactly one date.");
         const C = _.map(p);
@@ -391,7 +413,10 @@ function WJ(e, r, t) {
           "Periodic cash-flow positions are equally spaced. NPV starts at period 1; IRR/MIRR start at period 0. Numeric zeros retain a period; blanks, text and booleans in cash-flow lists are ignored. No automatic cent rounding.";
       const B = (_) => {
         const C = V.map((T, N) => T / Math.exp(D[N] * Math.log1p(_)));
-        return { value: Mm(C), scale: Mm(C.map(Math.abs)) };
+        return {
+          value: compensatedSum(C),
+          scale: compensatedSum(C.map(Math.abs)),
+        };
       };
       if (z || e === "MIRR")
         if (
@@ -405,16 +430,16 @@ function WJ(e, r, t) {
           const _ = v(f(I[1])),
             C = v(f(I[2])),
             T = V.length - 1,
-            N = Mm(
+            N = compensatedSum(
               V.map((L, $) => (L < 0 ? L / Math.exp($ * Math.log1p(_)) : 0)),
             ),
-            R = Mm(
+            R = compensatedSum(
               V.map((L, $) =>
                 L > 0 ? L * Math.exp((T - $) * Math.log1p(C)) : 0,
               ),
             );
           O = Math.expm1(Math.log(-R / N) / T);
-        } else O = A(B, f(I[j ? 2 : 1], 0.1), VJ(V));
+        } else O = A(B, f(I[j ? 2 : 1], 0.1), countSignChanges(V));
       else O = B(v(f(I[0]))).value;
     } else if (["SLN", "SYD", "DB", "DDB"].includes(e)) {
       const j = f(I[0]),
@@ -481,7 +506,10 @@ function WJ(e, r, t) {
         (n = `Security basis ${z}; annual coupon/yield rates, regular maturity-anchored coupons at frequency 1/2/4, end-of-month anchoring. PRICE/YIELD are per 100 face value. Gregorian/workbook-system dates; no business-day adjustment or automatic rounding.`));
       const V = (C, T) =>
           z === 0 || z === 4
-            ? WS("DAYS360", [C, T, z === 4], { ...t, retrieve: (N) => N })
+            ? evaluateDateFunction("DAYS360", [C, T, z === 4], {
+                ...t,
+                retrieve: (N) => N,
+              })
             : T - C,
         D = (C, T, N) => (z === 1 ? T - C : (z === 3 ? 365 : 360) / N),
         B = (C) => {
@@ -498,9 +526,9 @@ function WJ(e, r, t) {
           return s(
             L,
             $,
-            N.day === nf(N.year, N.month)
-              ? nf(L, $)
-              : Math.min(N.day, nf(L, $)),
+            N.day === daysInExcelMonth(N.year, N.month)
+              ? daysInExcelMonth(L, $)
+              : Math.min(N.day, daysInExcelMonth(L, $)),
           );
         };
       if (e === "PRICE" || e === "YIELD") {
@@ -518,7 +546,7 @@ function WJ(e, r, t) {
         let U = 1,
           G = _(T, -12 / $);
         for (; G > C;)
-          (U >= of.couponPeriods &&
+          (U >= financialSolverLimits.couponPeriods &&
             l("#LIMIT!", "Security exceeds 1000 coupon periods."),
             U++,
             (G = _(T, (-U * 12) / $)));
@@ -531,7 +559,7 @@ function WJ(e, r, t) {
           K = (te) =>
             U === 1
               ? (L + W) / (1 + (te / $) * q) - (W * X) / Q
-              : Mm(
+              : compensatedSum(
                   Array.from(
                     { length: U },
                     (ae, oe) => W / (1 + te / $) ** (oe + q),
@@ -561,7 +589,10 @@ function WJ(e, r, t) {
             "#NUM!",
             "Require issue before settlement, positive coupon rate and positive par.",
           );
-        const L = WS("YEARFRAC", [C, T, z], { ...t, retrieve: ($) => $ });
+        const L = evaluateDateFunction("YEARFRAC", [C, T, z], {
+          ...t,
+          retrieve: ($) => $,
+        });
         ((O = R * N * L),
           (n = `Accrued interest at maturity: par × annual rate × YEARFRAC basis ${z}, using the published local day-count convention. Gregorian/workbook-system; no automatic rounding.`));
       } else {
@@ -588,7 +619,7 @@ function WJ(e, r, t) {
           J = 0,
           q = 0;
         for (; Q < N;) {
-          ++q > of.couponPeriods &&
+          ++q > financialSolverLimits.couponPeriods &&
             l("#LIMIT!", "Accrual exceeds 1000 quasi-coupon periods.");
           const W = Math.max(G, Q),
             K = Math.min(N, X);
@@ -623,14 +654,20 @@ function WJ(e, r, t) {
     );
   }
 }
-const sB = 84,
-  ux = 40,
-  cx = 600,
-  lB = 21,
-  b1 = 21,
-  Ig = 546,
-  dx = ["Calibri", "Aptos", "Arial", "Times New Roman", "Courier New"],
-  Mt = {
+const defaultColumnWidth = 84,
+  minColumnWidth = 40,
+  maxColumnWidth = 600,
+  defaultRowHeight = 21,
+  minRowHeight = 21,
+  maxRowHeight = 546,
+  supportedFontFamilies = [
+    "Calibri",
+    "Aptos",
+    "Arial",
+    "Times New Roman",
+    "Courier New",
+  ],
+  workbookLimits = {
     maxRows: 1048576,
     maxCols: 16384,
     maxCells: 1e5,
@@ -639,8 +676,8 @@ const sB = 84,
     maxLLMCells: 500,
     maxPatches: 500,
   },
-  Ja = {
-    ...Mt,
+  fileImportLimits = {
+    ...workbookLimits,
     maxCellTextLength: 32767,
     maxFormulaLength: 4096,
     maxFormulaRangeCells: 2e4,
@@ -650,9 +687,9 @@ const sB = 84,
     maxXlsxEntries: 2e3,
     maxXlsxExpansionRatio: 200,
     xlsxRatioThresholdBytes: 1024 * 1024,
-    maxXlsxCellRecords: Mt.maxCells,
+    maxXlsxCellRecords: workbookLimits.maxCells,
   },
-  HJ = [
+  workbookLimitTable = [
     ["Rows per worksheet", "1,048,576"],
     ["Columns per worksheet", "16,384 (A–XFD)"],
     ["Worksheets", "No fixed count; available memory and file budgets apply"],
@@ -690,7 +727,7 @@ const sB = 84,
     ],
     ["XLSX compression", "200:1 maximum for any entry larger than 1 MiB"],
   ];
-function u6(e, r, t) {
+function broadcastOverArrays(e, r, t) {
   if (!e.some(Array.isArray)) return r(e);
   const n = e.map((s) =>
       Array.isArray(s) ? (s.every(Array.isArray) ? s : [s]) : [[s]],
@@ -712,7 +749,7 @@ function u6(e, r, t) {
         (s[0].length !== a && s[0].length !== 1),
     )
     ? t("#VALUE!")
-    : o * a > Ja.maxSpillCells
+    : o * a > fileImportLimits.maxSpillCells
       ? t("#LIMIT!")
       : Array.from({ length: o }, (s, d) =>
           Array.from({ length: a }, (u, l) =>
@@ -724,7 +761,7 @@ function u6(e, r, t) {
           ),
         );
 }
-const qJ = [
+const supportedTextFunctionNames = [
     "LEFT",
     "RIGHT",
     "MID",
@@ -748,11 +785,12 @@ const qJ = [
     "TEXTBEFORE",
     "TEXTAFTER",
   ],
-  qS = Symbol("not-text-function"),
-  XS = (e) => (Array.isArray(e) ? e.flatMap(XS) : [e]),
-  Zd = (e) =>
+  notTextFunctionSentinel = Symbol("not-text-function"),
+  flattenTextArgs = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenTextArgs) : [e],
+  coerceValueToText = (e) =>
     e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
-function XJ(e) {
+function parseDateTimeText(e) {
   const r =
     /^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))(?:[ T](.+))?$/.exec(
       e,
@@ -790,9 +828,9 @@ function XJ(e) {
       t + (a * 3600 + s * 60 + d) / 86400
     );
 }
-function iD(e, r, t) {
+function evaluateTextFunction(e, r, t) {
   var g;
-  if (!qJ.includes(e)) return qS;
+  if (!supportedTextFunctionNames.includes(e)) return notTextFunctionSentinel;
   const n = (b = "#VALUE!") => {
       throw t.issue(b);
     },
@@ -823,7 +861,7 @@ function iD(e, r, t) {
     [a, s] = o[e];
   (r.length < a || r.length > s) && n();
   const d = r.map(t.retrieve),
-    u = d.flatMap(XS).find(t.isIssue);
+    u = d.flatMap(flattenTextArgs).find(t.isIssue);
   if (u) return u;
   ((!(e === "CONCAT" || e === "TEXTJOIN") && d.some(Array.isArray)) ||
     (e === "TEXTJOIN" && d.slice(0, 2).some(Array.isArray))) &&
@@ -840,7 +878,7 @@ function iD(e, r, t) {
       typeof b == "string"
         ? (/^(true|false)$/i.test(b) || n(), b.toLowerCase() === "true")
         : !!b,
-    m = Zd(d[0]);
+    m = coerceValueToText(d[0]);
   if (e === "LEN") return [...m].length;
   if (e === "TRIM") return c(m.replace(/^ +| +$/g, "").replace(/ +/g, " "));
   if (e === "CLEAN") return c(m.replace(/[\u0000-\u001f]/g, ""));
@@ -855,7 +893,7 @@ function iD(e, r, t) {
           (b, y, w) => y + w.toUpperCase(),
         ),
     );
-  if (e === "EXACT") return m === Zd(d[1]);
+  if (e === "EXACT") return m === coerceValueToText(d[1]);
   if (e === "LEFT" || e === "RIGHT") {
     const b = f(d[1], 1),
       y = [...m];
@@ -872,11 +910,15 @@ function iD(e, r, t) {
       (b < 1 || y < 0) && n(),
       e === "MID"
         ? w.slice(b - 1, b - 1 + y).join("")
-        : c(w.slice(0, b - 1).join("") + Zd(d[3]) + w.slice(b - 1 + y).join(""))
+        : c(
+            w.slice(0, b - 1).join("") +
+              coerceValueToText(d[3]) +
+              w.slice(b - 1 + y).join(""),
+          )
     );
   }
   if (e === "FIND" || e === "SEARCH") {
-    const b = [...Zd(d[1])],
+    const b = [...coerceValueToText(d[1])],
       y = f(d[2], 1);
     (y < 1 || y > Math.max(1, b.length)) && n();
     const w = [...m],
@@ -916,8 +958,8 @@ function iD(e, r, t) {
     return k < 0 ? n() : k + 1;
   }
   if (e === "SUBSTITUTE") {
-    const b = Zd(d[1]),
-      y = Zd(d[2]),
+    const b = coerceValueToText(d[1]),
+      y = coerceValueToText(d[2]),
       w = d[3] === undefined ? undefined : f(d[3]);
     if ((w !== undefined && w < 1 && n(), !b)) return m;
     const E = m.split(b),
@@ -934,13 +976,13 @@ function iD(e, r, t) {
     );
   }
   if (e === "CONCAT" || e === "CONCATENATE" || e === "TEXTJOIN") {
-    const b = e === "TEXTJOIN" ? Zd(d[0]) : "",
+    const b = e === "TEXTJOIN" ? coerceValueToText(d[0]) : "",
       y = e === "TEXTJOIN" && p(d[1]),
       w = d
         .slice(e === "TEXTJOIN" ? 2 : 0)
-        .flatMap(XS)
+        .flatMap(flattenTextArgs)
         .filter((E) => !y || (E != null && E !== ""))
-        .map(Zd);
+        .map(coerceValueToText);
     return (
       w.reduce((E, A) => E + A.length, 0) +
         Math.max(0, w.length - 1) * b.length >
@@ -949,8 +991,8 @@ function iD(e, r, t) {
     );
   }
   if (e === "NUMBERVALUE") {
-    const b = [...Zd(d[1] === undefined ? "." : d[1])][0],
-      y = [...Zd(d[2] === undefined ? "," : d[2])][0];
+    const b = [...coerceValueToText(d[1] === undefined ? "." : d[1])][0],
+      y = [...coerceValueToText(d[2] === undefined ? "," : d[2])][0];
     (!b || !y || b === y || /[0-9+\-eE%]/.test(b) || /[0-9+\-eE%]/.test(y)) &&
       n();
     let w = m.replace(/ /g, "");
@@ -967,7 +1009,7 @@ function iD(e, r, t) {
     return k;
   }
   if (e === "VALUE") {
-    const b = t.temporal ? t.temporal(m.trim()) : XJ(m.trim());
+    const b = t.temporal ? t.temporal(m.trim()) : parseDateTimeText(m.trim());
     if (b !== undefined) return b;
     let y = m.trim(),
       w = false;
@@ -990,7 +1032,7 @@ function iD(e, r, t) {
     return typeof b == "string" ? c(b) : b;
   }
   if (e === "TEXTBEFORE" || e === "TEXTAFTER") {
-    const b = Zd(d[1]),
+    const b = coerceValueToText(d[1]),
       y = f(d[2], 1),
       w = h(d[3], 0),
       E = h(d[4], 0);
@@ -1021,8 +1063,26 @@ function iD(e, r, t) {
         ? m.slice(0, I)
         : m.slice(I + b.length);
   }
-  return qS;
+  return notTextFunctionSentinel;
 }
-const Xy = 256;
+const maxSelectionAreas = 256;
 
-export { HJ, Ig, Ja, Mt, WJ, Xy, aB, b1, cx, dx, iD, lB, oB, qS, sB, u6, ux };
+export {
+  workbookLimitTable,
+  maxRowHeight,
+  fileImportLimits,
+  workbookLimits,
+  evaluateFinancialFunction,
+  maxSelectionAreas,
+  notFinancialSentinel,
+  minRowHeight,
+  maxColumnWidth,
+  supportedFontFamilies,
+  evaluateTextFunction,
+  defaultRowHeight,
+  supportedFinancialFunctionNames,
+  notTextFunctionSentinel,
+  defaultColumnWidth,
+  broadcastOverArrays,
+  minColumnWidth,
+};

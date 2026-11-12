@@ -1,13 +1,24 @@
 import { X, ArrowLeft, ArrowRight, ArrowDown, ArrowUp } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { IB, IQ } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { QT, g4e, hj, ox } from "./45-sorting-and-worksheets.js";
+import {
+  updateWorkbookProperties,
+  createWorkbookFromTemplate,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  worksheetPropertyLabels,
+  formatChangeAttribution,
+  formatAuditCellValue,
+  formatAuditDetailValue,
+} from "./45-sorting-and-worksheets.js";
 
-function v4e(e) {
+function WorkbookManagerDialog(e) {
   var N, R, L;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useRef(null),
     o = ne.useRef(e.onClose);
   o.current = e.onClose;
@@ -67,8 +78,8 @@ function v4e(e) {
       ? [
           ...v.cellChanges.map((U) => ({
             label: `${D(U.sheetId)}!${U.address}`,
-            before: hj(U.before),
-            after: hj(U.after),
+            before: formatAuditCellValue(U.before),
+            after: formatAuditCellValue(U.after),
             attribution: U.attribution,
           })),
           ...[...v.structuralChanges, ...v.metadataChanges].map((U) => {
@@ -78,16 +89,16 @@ function v4e(e) {
                 U.path === "sheets.order"
                   ? "Worksheet order"
                   : G[0] === "sheets"
-                    ? `${D(G[1])}${G[2] ? ` · ${QT[G[2]] ?? G[2]}` : ""}`
-                    : (QT[U.path] ?? U.path),
+                    ? `${D(G[1])}${G[2] ? ` · ${worksheetPropertyLabels[G[2]] ?? G[2]}` : ""}`
+                    : (worksheetPropertyLabels[U.path] ?? U.path),
               before:
                 U.path === "sheets.order" && Array.isArray(U.before)
                   ? U.before.map(D).join(" → ")
-                  : ox(U.before),
+                  : formatAuditDetailValue(U.before),
               after:
                 U.path === "sheets.order" && Array.isArray(U.after)
                   ? U.after.map(D).join(" → ")
-                  : ox(U.after),
+                  : formatAuditDetailValue(U.after),
               attribution: U.attribution,
             };
           }),
@@ -179,7 +190,7 @@ function v4e(e) {
                           throw new Error("This workbook is read-only.");
                         e.mode === "template"
                           ? (e.onCreateWorkbook(
-                              IQ(e.workbook, {
+                              createWorkbookFromTemplate(e.workbook, {
                                 name: a,
                                 engagement: d,
                                 period: l,
@@ -187,7 +198,7 @@ function v4e(e) {
                             ),
                             e.onClose())
                           : (e.onWorkbookChange(
-                              IB(e.workbook, {
+                              updateWorkbookProperties(e.workbook, {
                                 name: a,
                                 engagement: d,
                                 period: l,
@@ -200,14 +211,14 @@ function v4e(e) {
                   children: [
                     e.mode === "template" &&
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Download a new workbook with the current sheets, formulas and supported layout. Its identity and history will be independent, with a record of this template and its revision. The current workbook stays open.",
                         }),
                       }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Workbook name" }),
+                        i.jsx(LocalizedText, { children: "Workbook name" }),
                         i.jsx("input", {
                           "aria-label": text("Workbook name"),
                           required: true,
@@ -225,7 +236,7 @@ function v4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Engagement" }),
+                            i.jsx(LocalizedText, { children: "Engagement" }),
                             e.mode === "template" ? " *" : "",
                             i.jsx("input", {
                               "aria-label": text("Engagement"),
@@ -241,7 +252,7 @@ function v4e(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Period" }),
+                            i.jsx(LocalizedText, { children: "Period" }),
                             e.mode === "template" ? " *" : "",
                             i.jsx("input", {
                               "aria-label": text("Period"),
@@ -262,7 +273,9 @@ function v4e(e) {
                       i.jsxs("dl", {
                         children: [
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Created" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Created",
+                            }),
                           }),
                           i.jsx("dd", {
                             children:
@@ -273,7 +286,9 @@ function v4e(e) {
                                 : "Not recorded in this file",
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Modified" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Modified",
+                            }),
                           }),
                           i.jsx("dd", {
                             children:
@@ -284,20 +299,26 @@ function v4e(e) {
                                 : "Not recorded in this file",
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Revision" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Revision",
+                            }),
                           }),
                           i.jsx("dd", { children: e.workbook.revision }),
                           e.workbook.metadata?.template &&
                             i.jsxs(i.Fragment, {
                               children: [
                                 i.jsx("dt", {
-                                  children: i.jsx(M, { children: "Template" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Template",
+                                  }),
                                 }),
                                 i.jsxs("dd", {
                                   children: [
                                     e.workbook.metadata.template.name,
                                     " ",
-                                    i.jsx(M, { children: "· version" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "· version",
+                                    }),
                                     " ",
                                     e.workbook.metadata.template.version,
                                     e.workbook.metadata.template
@@ -329,7 +350,7 @@ function v4e(e) {
                           ? "Named checkpoints are saved in this browser with this workbook."
                           : "Named checkpoints are kept for this editor session. The embedding application can provide a persistent version store.",
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "Restoring records a new revision and keeps intervening change history.",
                         }),
@@ -352,7 +373,9 @@ function v4e(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Checkpoint name" }),
+                            i.jsx(LocalizedText, {
+                              children: "Checkpoint name",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Checkpoint name"),
                               value: h,
@@ -369,13 +392,15 @@ function v4e(e) {
                           disabled: e.readOnly || A,
                           type: "submit",
                           className: "wm-primary",
-                          children: i.jsx(M, { children: "Save checkpoint" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Save checkpoint",
+                          }),
                         }),
                       ],
                     }),
                     i.jsx("p", {
                       className: "wm-muted",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Up to 20 checkpoints are retained. Saving another checkpoint replaces the oldest checkpoint when the limit is reached.",
                       }),
@@ -402,7 +427,9 @@ function v4e(e) {
                                   i.jsx("strong", { children: U.label }),
                                   i.jsxs("span", {
                                     children: [
-                                      i.jsx(M, { children: "Revision " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "Revision ",
+                                      }),
                                       U.revision,
                                       " ·",
                                       " ",
@@ -416,7 +443,7 @@ function v4e(e) {
                           ),
                         })
                       : i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "No checkpoints have been saved.",
                           }),
                         }),
@@ -428,7 +455,7 @@ function v4e(e) {
                         "data-ui-label": "Version comparison",
                         children: [
                           i.jsx("h3", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Changes since the selected checkpoint",
                             }),
                           }),
@@ -436,15 +463,21 @@ function v4e(e) {
                             children: [
                               v.cellChanges.length,
                               " ",
-                              i.jsx(M, { children: "cell changes ·" }),
+                              i.jsx(LocalizedText, {
+                                children: "cell changes ·",
+                              }),
                               " ",
                               v.structuralChanges.length,
                               " ",
-                              i.jsx(M, { children: "structure changes ·" }),
+                              i.jsx(LocalizedText, {
+                                children: "structure changes ·",
+                              }),
                               " ",
                               v.metadataChanges.length,
                               " ",
-                              i.jsx(M, { children: "property changes" }),
+                              i.jsx(LocalizedText, {
+                                children: "property changes",
+                              }),
                             ],
                           }),
                           i.jsx("div", {
@@ -460,7 +493,9 @@ function v4e(e) {
                                         children: [U.before, " → ", U.after],
                                       }),
                                       i.jsx("small", {
-                                        children: g4e(U.attribution),
+                                        children: formatChangeAttribution(
+                                          U.attribution,
+                                        ),
                                       }),
                                     ],
                                   },
@@ -475,23 +510,23 @@ function v4e(e) {
                                 i.jsx("button", {
                                   disabled: j === 0,
                                   onClick: () => z((U) => U - 1),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Previous changes",
                                   }),
                                 }),
                                 i.jsxs("span", {
                                   children: [
-                                    i.jsx(M, { children: "Page " }),
+                                    i.jsx(LocalizedText, { children: "Page " }),
                                     j + 1,
                                     " ",
-                                    i.jsx(M, { children: "of " }),
+                                    i.jsx(LocalizedText, { children: "of " }),
                                     Math.ceil(B.length / 100),
                                   ],
                                 }),
                                 i.jsx("button", {
                                   disabled: (j + 1) * 100 >= B.length,
                                   onClick: () => z((U) => U + 1),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Next changes",
                                   }),
                                 }),
@@ -499,7 +534,7 @@ function v4e(e) {
                             }),
                           V &&
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Unprotect the workbook and its worksheets before restoring a checkpoint.",
                               }),
@@ -513,7 +548,7 @@ function v4e(e) {
                                 disabled: e.readOnly || V || A,
                                 onChange: (U) => O(U.target.checked),
                               }),
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children:
                                   "Restore this checkpoint as a new revision.",
                               }),
@@ -535,7 +570,7 @@ function v4e(e) {
                                   };
                                 return U ? U.then(G) : G();
                               }),
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Restore checkpoint",
                             }),
                           }),
@@ -546,7 +581,9 @@ function v4e(e) {
             A &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, { children: "Saving workbook changes…" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Saving workbook changes…",
+                }),
               }),
             b &&
               i.jsx("p", { role: "alert", className: "wm-error", children: b }),
@@ -562,13 +599,13 @@ function v4e(e) {
     }),
   });
 }
-const b4e = [
+const fillDirectionOptions = [
     { value: "down", label: "Fill down", icon: ArrowDown },
     { value: "right", label: "Fill right", icon: ArrowRight },
     { value: "up", label: "Fill up", icon: ArrowUp },
     { value: "left", label: "Fill left", icon: ArrowLeft },
   ],
-  pj = (e) =>
+  describeWorkbookError = (e) =>
     e instanceof Error ? e.message : "This change could not be completed.";
 
-export { b4e, pj, v4e };
+export { fillDirectionOptions, describeWorkbookError, WorkbookManagerDialog };

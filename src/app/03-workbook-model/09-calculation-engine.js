@@ -1,16 +1,16 @@
 import {
-  LJ,
-  O4,
-  SN,
-  lx,
-  z3,
-  pd,
-  yE,
-  Rg,
-  eB,
-  nB,
+  resolveExtensionFunctionCall,
+  isWithinNestingLimit,
+  createCalculationBudgetTracker,
+  resolveLocalDateTime,
+  listInstalledExtensionFunctions,
+  readMonotonicClockMs,
+  calculationFeatureSupport,
+  findVolatileFunctionNames,
+  workbookUsesNowOrToday,
+  workbookHasVolatileFunctions,
 } from "../01-core-schemas-and-hashing.js";
-import { Ja, Mt } from "../02-financial-functions.js";
+import { fileImportLimits, workbookLimits } from "../02-financial-functions.js";
 import {
   string,
   number,
@@ -23,37 +23,72 @@ import {
   unknown,
   object,
 } from "zod";
-import { FB, a1, jN, jw, n5, r5 } from "./01-cell-styles-and-themes.js";
-import { JN, y0 } from "./02-number-formats.js";
-import { pne, y5 } from "./03-defined-names.js";
-import { Fc, M5, kR, pf, rU, wn } from "./04-pivot-tables-and-pictures.js";
 import {
-  $ie,
-  A1,
-  F5,
-  Fie,
-  PE,
-  W1,
+  FB,
+  validationLimits,
+  DataValidationError,
+  validateDataValidationRule,
+  n5,
+  r5,
+} from "./01-cell-styles-and-themes.js";
+import {
+  FormulaParser,
+  matrixResultFunctionNames,
+} from "./02-number-formats.js";
+import { evaluateReusableFormula, y5 } from "./03-defined-names.js";
+import {
+  builtinFunctionNames,
+  findFormulaErrorArg,
+  createFormulaError,
+  resolveDefinedNameValue,
+  buildExternalLinkAliases,
+  isFormulaError,
+} from "./04-pivot-tables-and-pictures.js";
+import {
+  hasCalculatorRecord,
+  deepFreeze,
+  makeFormulaError,
+  createWorkbookFormulaEngine,
+  reportCellValueMaps,
+  getCachedCalculationSnapshot,
   _O,
-  ch,
+  carriedCalculatorRecords,
   ik,
   j5,
-  lU,
-  ng,
-  nm,
-  qie,
-  tu,
+  getCalculationInputSignature,
+  pendingFormulaValue,
+  isCalculationRecordCurrent,
+  buildReportCellValueMap,
+  calculatorRecords,
 } from "./05-consolidation-and-sources.js";
-import { AU, Ap, CU, Tc, ut, xd, zE } from "./06-data-model-and-analysis.js";
-import { DB, Die, FN, Fw, _t, ct } from "./07-conditional-formatting.js";
-import { CR, z1 } from "./08-chart-model.js";
+import {
+  AU,
+  nonEmptyLabelSchema,
+  reportOutputFormatVersion,
+  createBoundedTextSchema,
+  columnIndexToLetters,
+  shiftFormulaReferences,
+  reportHashSchema,
+} from "./06-data-model-and-analysis.js";
+import {
+  findDataValidationsInRange,
+  resolveFilteredRowContext,
+  normalizeConditionalRules,
+  evaluateConditionalFormatRules,
+  _t,
+  parseRangeAddress,
+} from "./07-conditional-formatting.js";
+import {
+  rewriteFormulaReferences,
+  rewriteStructuredReferences,
+} from "./08-chart-model.js";
 
-function Cf(e, r = {}, t, n) {
+function evaluateWorkbookFormulas(e, r = {}, t, n) {
   var K;
-  const o = z3(e),
-    a = new Set([...Fc, ...o.map((te) => te.name)]),
-    s = n?.budget ?? SN(e),
-    d = n?.dateContext ?? lx(e.datePolicy),
+  const o = listInstalledExtensionFunctions(e),
+    a = new Set([...builtinFunctionNames, ...o.map((te) => te.name)]),
+    s = n?.budget ?? createCalculationBudgetTracker(e),
+    d = n?.dateContext ?? resolveLocalDateTime(e.datePolicy),
     u = new Set(),
     l = new Map(),
     c = new Map(),
@@ -67,9 +102,9 @@ function Cf(e, r = {}, t, n) {
         "#TIMEOUT!",
         "#ITER!",
       ].includes(te) && u.add(te),
-      kR(te)
+      createFormulaError(te)
     ),
-    p = Die(e, r),
+    p = resolveFilteredRowContext(e, r),
     m = new Map(),
     v = new Map(),
     g = new Map(),
@@ -95,7 +130,7 @@ function Cf(e, r = {}, t, n) {
     V = (te) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te) ||
       !!(j && z != null && z.test(te)),
-    D = rU(e),
+    D = buildExternalLinkAliases(e),
     B = [...e.sheets, ...D.sheets],
     _ = new Map(B.map((te) => [te.id, te])),
     C = new Map(B.map((te) => [te.name.toLowerCase(), te]));
@@ -103,7 +138,7 @@ function Cf(e, r = {}, t, n) {
     N = 0;
   const R = new Map(),
     L = new RegExp(
-      `\\b(?:${[...y0, "ISFORMULA", "TEXTBEFORE", "TEXTAFTER", ...o.filter((te) => te.fn.result.type === "matrix").map((te) => te.name.replaceAll(".", "\\."))].join("|")})\\s*\\(`,
+      `\\b(?:${[...matrixResultFunctionNames, "ISFORMULA", "TEXTBEFORE", "TEXTAFTER", ...o.filter((te) => te.fn.result.type === "matrix").map((te) => te.name.replaceAll(".", "\\."))].join("|")})\\s*\\(`,
       "i",
     );
   for (const te of e.sheets)
@@ -134,11 +169,11 @@ function Cf(e, r = {}, t, n) {
     );
   const $ = (te, ae, oe, de = true) => {
       const he = (se, we = true) => {
-        const Ee = CR(se, e, ae, oe, we);
+        const Ee = rewriteFormulaReferences(se, e, ae, oe, we);
         if (Ee) throw (l.set(`${ae}:${oe}`, Ee), f(Ee.error));
       };
       ((te = D.rewrite(te)), he(te, false));
-      let Se = de ? pf(te, e, ae, [], t?.allowName) : te;
+      let Se = de ? resolveDefinedNameValue(te, e, ae, [], t?.allowName) : te;
       ((Se = D.rewrite(Se)), he(Se));
       let le = "",
         ce = 0;
@@ -151,10 +186,10 @@ function Cf(e, r = {}, t, n) {
           const ye = C.get((se[1]?.replace(/''/g, "'") ?? se[2]).toLowerCase());
           if (!ye) throw f("#REF!");
           const Te = _t(se[3]),
-            Pe = `${ut(Te.col)}${Te.row + 1}`,
+            Pe = `${columnIndexToLetters(Te.col)}${Te.row + 1}`,
             qe = Q(ye.id, Pe),
             ht = g.get(`${ye.id}:${Pe}`);
-          if (!ht) throw wn(qe) ? qe : f("#REF!");
+          if (!ht) throw isFormulaError(qe) ? qe : f("#REF!");
           ((le += `'${ye.name.replace(/'/g, "''")}'!${ht}`),
             (ce += se[0].length));
           continue;
@@ -185,7 +220,8 @@ function Cf(e, r = {}, t, n) {
           let Te = 1;
           for (; ce < Se.length && Te;)
             (Se[ce] === "[" && Te++, Se[ce] === "]" && Te--, ce++);
-          const Pe = !Te && z1(e, ae, Se.slice(ye, ce), oe);
+          const Pe =
+            !Te && rewriteStructuredReferences(e, ae, Se.slice(ye, ce), oe);
           if (!Pe) throw f("#REF!");
           const qe = _.get(Pe.sheetId);
           le += `'${qe.name.replace(/'/g, "''")}'!${Pe.range}`;
@@ -194,10 +230,10 @@ function Cf(e, r = {}, t, n) {
         const Ae = /^(\$?[A-Za-z]{1,3}\$?[1-9]\d*)#/.exec(Se.slice(ce));
         if (Ae) {
           const ye = _t(Ae[1]),
-            Te = `${ut(ye.col)}${ye.row + 1}`,
+            Te = `${columnIndexToLetters(ye.col)}${ye.row + 1}`,
             Pe = Q(ae, Te),
             qe = g.get(`${ae}:${Te}`);
-          if (!qe) throw wn(Pe) ? Pe : f("#REF!");
+          if (!qe) throw isFormulaError(Pe) ? Pe : f("#REF!");
           ((le += qe), (ce += Ae[0].length));
           continue;
         }
@@ -211,8 +247,8 @@ function Cf(e, r = {}, t, n) {
       return ae;
     },
     G = () => {
-      const te = Fie(
-        new JN({
+      const te = createWorkbookFormulaEngine(
+        new FormulaParser({
           onVariable: () => null,
           onCell: ({ sheet, row, col }) => {
             const se = U(sheet);
@@ -225,7 +261,7 @@ function Cf(e, r = {}, t, n) {
               col > se.colCount
             )
               throw f("#REF!");
-            return Q(se.id, `${ut(col - 1)}${row}`);
+            return Q(se.id, `${columnIndexToLetters(col - 1)}${row}`);
           },
           onRange: ({ sheet, from, to }) => {
             const se = U(sheet),
@@ -250,9 +286,9 @@ function Cf(e, r = {}, t, n) {
             for (let Te = from.row; Te <= we; Te++) {
               const Pe = [];
               for (let qe = from.col; qe <= Ee; qe++) {
-                const ht = Q(se.id, `${ut(qe - 1)}${Te}`);
+                const ht = Q(se.id, `${columnIndexToLetters(qe - 1)}${Te}`);
                 if (
-                  wn(ht) &&
+                  isFormulaError(ht) &&
                   ["#LIMIT!", "#TIMEOUT!", "#BLOCKED!"].includes(ht.error)
                 )
                   throw ht;
@@ -268,7 +304,7 @@ function Cf(e, r = {}, t, n) {
             currentSheetName: ge.position?.sheet,
             retrieve: (we) => ge.retrieveRef(we),
             issue: f,
-            isIssue: wn,
+            isIssue: isFormulaError,
             readCell: Q,
             readMetadata:
               t || n
@@ -291,7 +327,7 @@ function Cf(e, r = {}, t, n) {
             isActive: (we, Ee) => y.has(`${we}:${Ee}`),
             expandedFormula: (we, Ee) => {
               try {
-                return pf(String(we.raw), e, Ee);
+                return resolveDefinedNameValue(String(we.raw), e, Ee);
               } catch {
                 return String(we.raw);
               }
@@ -304,7 +340,7 @@ function Cf(e, r = {}, t, n) {
           const ce = te.position;
           if (!ce) return;
           const ge = U(ce.sheet).id,
-            se = `${ut(ce.col - 1)}${ce.row}`,
+            se = `${columnIndexToLetters(ce.col - 1)}${ce.row}`,
             we = `${ge}:${se}:${le.functionName}`;
           if (h.size >= 1e4 && !h.has(we)) throw f("#LIMIT!");
           h.set(we, { ...le, sheetId: ge, address: se });
@@ -314,7 +350,7 @@ function Cf(e, r = {}, t, n) {
             le && typeof le == "object" && "ref" in le ? le.ref : undefined;
           if (!(se != null && se.from) || !se.to) return;
           const we = U(se.sheet ?? te.position?.sheet),
-            Ee = `${ut(se.from.col + ge - 1)}${se.from.row + ce}`;
+            Ee = `${columnIndexToLetters(se.from.col + ge - 1)}${se.from.row + ce}`;
           if (t && !t.allowRead(we.id, Ee)) throw f("#BLOCKED!");
           n == null || n.read(`${we.id}:${Ee}`);
           const Ae = we.cells[Ee];
@@ -332,12 +368,22 @@ function Cf(e, r = {}, t, n) {
               if (
                 t != null &&
                 t.allowDatabaseCriterion &&
-                !t.allowDatabaseCriterion(we.id, xd(ye, Pe, 0))
+                !t.allowDatabaseCriterion(
+                  we.id,
+                  shiftFormulaReferences(ye, Pe, 0),
+                )
               )
                 throw f("#BLOCKED!");
-              const ht = pf(ye, e, we.id, [], t?.allowName),
-                Re = xd(ht, Pe, 0);
-              if (Re.length > Ja.maxFormulaLength) throw f("#LIMIT!");
+              const ht = resolveDefinedNameValue(
+                  ye,
+                  e,
+                  we.id,
+                  [],
+                  t?.allowName,
+                ),
+                Re = shiftFormulaReferences(ht, Pe, 0);
+              if (Re.length > fileImportLimits.maxFormulaLength)
+                throw f("#LIMIT!");
               return V(Re)
                 ? H(Re.slice(1), we.id, Ee)
                 : (I[qe] ?? (I[qe] = G())).parse(
@@ -363,11 +409,11 @@ function Cf(e, r = {}, t, n) {
           const we = te.position;
           if (!we) return f("#NAME?");
           const Ee = U(we.sheet).id,
-            Ae = `${ut(we.col - 1)}${we.row}`,
+            Ae = `${columnIndexToLetters(we.col - 1)}${we.row}`,
             ye = ge.map((ht) => te.retrieveRef(ht)),
-            Te = M5(ye);
+            Te = findFormulaErrorArg(ye);
           if (Te) return Te;
-          const Pe = LJ(e, se, ye, Ee, Ae);
+          const Pe = resolveExtensionFunctionCall(e, se, ye, Ee, Ae);
           if (Pe.error) return f(Pe.error);
           const qe = Pe.value;
           return qe && !Array.isArray(qe) && typeof qe == "object"
@@ -396,7 +442,7 @@ function Cf(e, r = {}, t, n) {
         const le = (Ee, Ae, ye, Te) => {
             const Pe = te.position,
               qe = U(Pe.sheet).id,
-              ht = `${ut(Pe.col - 1)}${Pe.row}`;
+              ht = `${columnIndexToLetters(Pe.col - 1)}${Pe.row}`;
             try {
               const Re = Te();
               return (
@@ -418,7 +464,7 @@ function Cf(e, r = {}, t, n) {
                   address: ht,
                   operation: Ae,
                   inputs: ye,
-                  result: wn(Re) ? Re : f("#ERROR!"),
+                  result: isFormulaError(Re) ? Re : f("#ERROR!"),
                 }),
                 Re
               );
@@ -440,10 +486,10 @@ function Cf(e, r = {}, t, n) {
       return te;
     },
     H = (te, ae, oe) =>
-      pne(te, e, ae, {
+      evaluateReusableFormula(te, e, ae, {
         supported: a,
         issue: f,
-        isIssue: wn,
+        isIssue: isFormulaError,
         allowName: t?.allowName,
         step: t
           ? (de, he, Se) =>
@@ -518,7 +564,7 @@ function Cf(e, r = {}, t, n) {
     },
     X = (te, ae) => {
       var ye;
-      if (++T > Mt.maxCells) return f("#LIMIT!");
+      if (++T > workbookLimits.maxCells) return f("#LIMIT!");
       let oe, de;
       try {
         ({ row: oe, col: de } = _t(ae));
@@ -527,7 +573,7 @@ function Cf(e, r = {}, t, n) {
       }
       const he = _.get(te);
       if (!he || oe >= he.rowCount || de >= he.colCount) return f("#REF!");
-      ae = `${ut(de)}${oe + 1}`;
+      ae = `${columnIndexToLetters(de)}${oe + 1}`;
       const Se = `${te}:${ae}`,
         le = D.values.get(Se);
       if (le) return le.type === "error" ? f(String(le.value)) : le.value;
@@ -550,7 +596,8 @@ function Cf(e, r = {}, t, n) {
             !(
               qe.row > oe ||
               qe.col > de ||
-              (oe - qe.row + 1) * (de - qe.col + 1) > Ja.maxSpillCells
+              (oe - qe.row + 1) * (de - qe.col + 1) >
+                fileImportLimits.maxSpillCells
             ) &&
             !(y.has(`${te}:${Pe}`) || w.has(`${te}:${Pe}`)) &&
             (Q(te, Pe), v.has(Se))
@@ -566,19 +613,22 @@ function Cf(e, r = {}, t, n) {
       let Ee = (() => {
         var $e;
         if (
-          y.size + w.size >= Ja.maxFormulaDepth ||
-          se.length > Ja.maxFormulaLength ||
-          !O4(se)
+          y.size + w.size >= fileImportLimits.maxFormulaDepth ||
+          se.length > fileImportLimits.maxFormulaLength ||
+          !isWithinNestingLimit(se)
         )
           return f("#LIMIT!");
         let Te;
         const Pe = V(se);
         w.add(Se);
         try {
-          if (((Te = Pe ? se.slice(1) : $(se.slice(1), te, ae)), !O4(Te)))
+          if (
+            ((Te = Pe ? se.slice(1) : $(se.slice(1), te, ae)),
+            !isWithinNestingLimit(Te))
+          )
             return f("#LIMIT!");
         } catch (Je) {
-          return wn(Je)
+          return isFormulaError(Je)
             ? f(Je.error)
             : f(
                 Je instanceof Error && /^#/.test(Je.message)
@@ -621,7 +671,7 @@ function Cf(e, r = {}, t, n) {
                   { sheet: he.name, row: oe + 1, col: de + 1 },
                   true,
                 );
-          if (wn(ze)) Re = f(ze.error);
+          if (isFormulaError(ze)) Re = f(ze.error);
           else if (typeof ze == "number")
             Re = Number.isFinite(ze) ? ze : f("#NUM!");
           else if (ze === null) Re = 0;
@@ -634,8 +684,8 @@ function Cf(e, r = {}, t, n) {
             if (!at.length || !_e || at.some((Ze) => Ze.length !== _e))
               Re = f("#CALC!");
             else if (
-              at.length * _e > Ja.maxSpillCells ||
-              N + at.length * _e > Mt.maxCells
+              at.length * _e > fileImportLimits.maxSpillCells ||
+              N + at.length * _e > workbookLimits.maxCells
             )
               Re = f("#LIMIT!");
             else if (oe + at.length > he.rowCount || de + _e > he.colCount)
@@ -657,7 +707,7 @@ function Cf(e, r = {}, t, n) {
                   lastCol: de + _e - 1,
                 },
                 ft = (nt) => {
-                  const mt = ct(nt);
+                  const mt = parseRangeAddress(nt);
                   return (
                     mt.firstRow <= be.lastRow &&
                     mt.lastRow >= be.firstRow &&
@@ -682,7 +732,7 @@ function Cf(e, r = {}, t, n) {
               }
               for (let nt = 0; nt < at.length && !Ze; nt++)
                 for (let mt = 0; mt < _e; mt++) {
-                  const Wt = `${ut(de + mt)}${oe + nt + 1}`,
+                  const Wt = `${columnIndexToLetters(de + mt)}${oe + nt + 1}`,
                     Zt = he.cells[Wt];
                   if (($e = E.get(Se)) != null && $e.has(`${te}:${Wt}`)) {
                     lt = true;
@@ -707,7 +757,7 @@ function Cf(e, r = {}, t, n) {
               else if (Ze) Re = f("#SPILL!");
               else {
                 const nt = (mt) =>
-                  wn(mt)
+                  isFormulaError(mt)
                     ? mt
                     : mt === null
                       ? 0
@@ -724,14 +774,17 @@ function Cf(e, r = {}, t, n) {
                             : f("#VALUE!");
                 for (let mt = 0; mt < at.length; mt++)
                   for (let Wt = 0; Wt < _e; Wt++) {
-                    const Zt = `${ut(de + Wt)}${oe + mt + 1}`;
+                    const Zt = `${columnIndexToLetters(de + Wt)}${oe + mt + 1}`;
                     Zt !== ae &&
                       v.set(`${te}:${Zt}`, {
                         value: nt(at[mt][Wt]),
                         anchor: ae,
                       });
                   }
-                (g.set(Se, `${ae}:${ut(de + _e - 1)}${oe + at.length}`),
+                (g.set(
+                  Se,
+                  `${ae}:${columnIndexToLetters(de + _e - 1)}${oe + at.length}`,
+                ),
                   (N += at.length * _e),
                   (Re = nt(at[0][0])));
               }
@@ -742,7 +795,11 @@ function Cf(e, r = {}, t, n) {
             Je && typeof Je == "object" && "details" in Je
               ? Je.details
               : undefined;
-          Re = wn(ze) ? f(ze.error) : wn(Je) ? f(Je.error) : f("#ERROR!");
+          Re = isFormulaError(ze)
+            ? f(ze.error)
+            : isFormulaError(Je)
+              ? f(Je.error)
+              : f("#ERROR!");
         } finally {
           (y.delete(Se), E.delete(Se));
         }
@@ -755,7 +812,7 @@ function Cf(e, r = {}, t, n) {
         n == null ||
           n.leave(
             Se,
-            wn(Ee)
+            isFormulaError(Ee)
               ? { type: "error", value: Ee.error }
               : {
                   type:
@@ -788,12 +845,12 @@ function Cf(e, r = {}, t, n) {
           le = _.get(te);
         if (!le || Se.row >= le.rowCount || Se.col >= le.colCount)
           return { type: "error", value: "#REF!" };
-        const ce = `${ut(Se.col)}${Se.row + 1}`,
+        const ce = `${columnIndexToLetters(Se.col)}${Se.row + 1}`,
           ge = `${te}:${ce}`,
           se = n.value(ge, false);
         if (se) return { ...se };
         const we = m.get(ge) ?? v.get(ge)?.value ?? le.cells[ce]?.raw ?? null;
-        return wn(we)
+        return isFormulaError(we)
           ? { type: "error", value: we.error }
           : {
               type:
@@ -813,7 +870,7 @@ function Cf(e, r = {}, t, n) {
     try {
       T = 0;
       const Se = Q(te, ae);
-      return wn(Se)
+      return isFormulaError(Se)
         ? { type: "error", value: Se.error }
         : {
             type:
@@ -841,11 +898,14 @@ function Cf(e, r = {}, t, n) {
         if (!he || Se.row >= he.rowCount || Se.col >= he.colCount)
           return "#REF!";
         if (typeof oe != "string" || !oe.startsWith("=")) return "#VALUE!";
-        if (oe.length > Ja.maxFormulaLength || !O4(oe))
+        if (
+          oe.length > fileImportLimits.maxFormulaLength ||
+          !isWithinNestingLimit(oe)
+        )
           return f("#LIMIT!").error;
         const le = V(oe),
           ce = le ? oe.slice(1) : $(oe.slice(1), te, ae);
-        if (!O4(ce)) return f("#LIMIT!").error;
+        if (!isWithinNestingLimit(ce)) return f("#LIMIT!").error;
         const ge = ce.replace(/"(?:[^"]|"")*"/g, '""');
         if (!le && (/[\[\]|]/.test(ge) || /(?:https?:|file:|\\\\)/i.test(ge)))
           return f("#BLOCKED!").error;
@@ -869,7 +929,7 @@ function Cf(e, r = {}, t, n) {
           we = s.value(se) ?? n?.check();
         return we
           ? f(we).error
-          : wn(se)
+          : isFormulaError(se)
             ? f(se.error).error
             : Array.isArray(se)
               ? "#VALUE!"
@@ -891,9 +951,9 @@ function Cf(e, r = {}, t, n) {
           he && typeof he == "object" && "details" in he
             ? he.details
             : undefined;
-        return wn(Se)
+        return isFormulaError(Se)
           ? f(Se.error).error
-          : wn(he)
+          : isFormulaError(he)
             ? f(he.error).error
             : he instanceof Error && /^#/.test(he.message)
               ? f(he.message).error
@@ -922,7 +982,7 @@ function Cf(e, r = {}, t, n) {
           );
         T = 0;
         for (const he of n?.running?.call(n) === false ? [] : oe)
-          if ((Q(te, he), T > Mt.maxCells))
+          if ((Q(te, he), T > workbookLimits.maxCells))
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
             );
@@ -953,8 +1013,8 @@ function Cf(e, r = {}, t, n) {
     J
   );
 }
-function OB(e) {
-  const r = Cf(e);
+function evaluateValidationRule(e) {
+  const r = evaluateWorkbookFormulas(e);
   return (t, n, o) => {
     const a = r(t, n);
     let s = false,
@@ -967,8 +1027,12 @@ function OB(e) {
       if (a === null || a === "") s = o.allowBlank;
       else if (o.kind === "custom") {
         const c = _t(n),
-          h = ct(o.range);
-        u = xd(o.formula, c.row - h.firstRow, c.col - h.firstCol);
+          h = parseRangeAddress(o.range);
+        u = shiftFormulaReferences(
+          o.formula,
+          c.row - h.firstRow,
+          c.col - h.firstCol,
+        );
         const f = r.evaluateFormula(t, n, u);
         if (
           typeof f != "boolean" &&
@@ -978,7 +1042,7 @@ function OB(e) {
             `Custom formula must return TRUE/FALSE or a finite number${typeof f == "string" && /^#[A-Z0-9/?!]+$/.test(f) ? `; returned ${f}` : ""}.`,
           );
         ((s = !!f), (d = "Custom formula returned FALSE or zero."));
-      } else s = jw(o, a, e.datePolicy);
+      } else s = validateDataValidationRule(o, a, e.datePolicy);
     } catch (c) {
       ((l = true),
         (d =
@@ -1003,16 +1067,19 @@ function OB(e) {
       };
   };
 }
-function v0(e, r, t) {
+function checkDataValidationBatch(e, r, t) {
   const n = r.flatMap((d) =>
-    DB(e, d.sheetId, d.address).map((u) => ({ ...d, rule: u })),
+    findDataValidationsInRange(e, d.sheetId, d.address).map((u) => ({
+      ...d,
+      rule: u,
+    })),
   );
   if (!n.length) return 0;
-  if (n.length > a1.checks)
+  if (n.length > validationLimits.checks)
     throw Error(
       "Data validation exceeds the 100,000-check budget; split the batch.",
     );
-  const o = OB(e),
+  const o = evaluateValidationRule(e),
     a = n.map((d) => o(d.sheetId, d.address, d.rule)).filter((d) => !!d);
   if (!a.length) return 0;
   const s = JSON.stringify({ book: e, issues: a });
@@ -1026,9 +1093,9 @@ function v0(e, r, t) {
     ? Error(
         "Validation approval is stale or invalid. Review the complete batch again.",
       )
-    : new jN(e, a);
+    : new DataValidationError(e, a);
 }
-function LQ(e, r) {
+function summarizeValidationInspection(e, r) {
   const t = {
       workbookId: e.id,
       revision: e.revision,
@@ -1040,28 +1107,29 @@ function LQ(e, r) {
       detailsTruncated: false,
       message: "",
     },
-    n = OB(e),
+    n = evaluateValidationRule(e),
     o = new Set();
   let a = 0;
   e: for (const s of e.sheets.filter((d) => !r || d.id === r))
     for (const d of s.validations ?? []) {
-      const u = ct(d.range);
+      const u = parseRangeAddress(d.range);
       for (let l = u.firstRow; l <= u.lastRow; l++)
         for (let c = u.firstCol; c <= u.lastCol; c++) {
           if (
-            t.checks >= a1.checks ||
-            (d.kind === "custom" && ++a > a1.customChecks)
+            t.checks >= validationLimits.checks ||
+            (d.kind === "custom" && ++a > validationLimits.customChecks)
           ) {
             t.complete = false;
             break e;
           }
-          const h = `${ut(c)}${l + 1}`;
+          const h = `${columnIndexToLetters(c)}${l + 1}`;
           t.checks++;
           const f = n(s.id, h, d);
           f &&
             (o.add(`${s.id}:${h}`),
             t.violations++,
-            t.issues.length < a1.displayedIssues && t.issues.push(f));
+            t.issues.length < validationLimits.displayedIssues &&
+              t.issues.push(f));
         }
     }
   return (
@@ -1132,24 +1200,28 @@ function cU(e, r, t, n) {
           ? { range: f.range, diagnostic: structuredClone(f.diagnostic) }
           : {};
       },
-      evaluateFormula: (c, h, f) => Cf(e).evaluateFormula(c, h, f),
+      evaluateFormula: (c, h, f) =>
+        evaluateWorkbookFormulas(e).evaluateFormula(c, h, f),
     }),
     l
   );
 }
-function L5(e) {
-  const r = tu.get(e);
-  if (r?.report.execution?.state === "pending" && nm(r, e))
+function getIsolatedCalculation(e) {
+  const r = calculatorRecords.get(e);
+  if (
+    r?.report.execution?.state === "pending" &&
+    isCalculationRecordCurrent(r, e)
+  )
     return { calculator: r.calculator, report: r.report };
-  const t = pd(),
-    n = W1(e),
-    o = tu.get(e) ?? ch.get(e),
+  const t = readMonotonicClockMs(),
+    n = getCachedCalculationSnapshot(e),
+    o = calculatorRecords.get(e) ?? carriedCalculatorRecords.get(e),
     a = new Map(),
     s = new Map(),
-    d = qie(o),
+    d = buildReportCellValueMap(o),
     u = new Map();
   for (const v of n.formulas.keys()) {
-    a.set(v, ng);
+    a.set(v, pendingFormulaValue);
     const g = d.get(v);
     g && u.set(v, g);
   }
@@ -1159,15 +1231,15 @@ function L5(e) {
     revision: e.revision,
     run: (o?.report.run ?? 0) + 1,
     settings: n.settings,
-    resources: SN(e).report(),
-    volatile: { functions: n.volatile, policy: yE },
-    dateContext: lx(e.datePolicy),
+    resources: createCalculationBudgetTracker(e).report(),
+    volatile: { functions: n.volatile, policy: calculationFeatureSupport },
+    dateContext: resolveLocalDateTime(e.datePolicy),
     reason: "Waiting for isolated calculation",
     formulaCount: n.formulas.size,
     evaluated: 0,
     reused: 0,
     pending: n.formulas.size,
-    elapsedMs: pd() - t,
+    elapsedMs: readMonotonicClockMs() - t,
     dependencyEdges: 0,
     cycles: [],
     iteration: {
@@ -1188,7 +1260,7 @@ function L5(e) {
       hardInterrupt: true,
     },
   };
-  A1(c);
+  deepFreeze(c);
   const h = Object.freeze({
     ...c,
     get cells() {
@@ -1196,24 +1268,24 @@ function L5(e) {
         l ||
           ((l = [...n.formulas].map(([v, g]) => ({
             ...g,
-            result: { ...ng },
+            result: { ...pendingFormulaValue },
             status: "pending",
             evaluations: 0,
             dependencies: [],
             ...(u.has(v) ? { lastKnown: u.get(v) } : {}),
           }))),
-          A1(l)),
+          deepFreeze(l)),
         l
       );
     },
   });
-  PE.set(h, u);
+  reportCellValueMaps.set(h, u);
   const f = [];
   if (o)
     for (const v of e.sheets)
       for (const g of o.calculator.getSpillEntries(v.id))
         n.formulas.has(`${v.id}:${g.anchor}`) &&
-          f.push({ ...g, sheetId: v.id, result: { ...ng } });
+          f.push({ ...g, sheetId: v.id, result: { ...pendingFormulaValue } });
   const p = cU(e, h, a, {
     spills: f,
     spillMetadata: [],
@@ -1223,17 +1295,23 @@ function L5(e) {
     operationalErrors: n.formulas.size ? ["#PENDING!"] : [],
   });
   return (
-    tu.set(e, { ...n, calculator: p, report: h, values: a, dependencies: s }),
-    ch.delete(e),
+    calculatorRecords.set(e, {
+      ...n,
+      calculator: p,
+      report: h,
+      values: a,
+      dependencies: s,
+    }),
+    carriedCalculatorRecords.delete(e),
     { calculator: p, report: h }
   );
 }
-function uU(e, r, t) {
-  const n = tu.get(e),
-    o = W1(e);
-  if (!n || n.report !== r || !nm(n, e, o)) return;
+function acceptWorkerCalculationResult(e, r, t) {
+  const n = calculatorRecords.get(e),
+    o = getCachedCalculationSnapshot(e);
+  if (!n || n.report !== r || !isCalculationRecordCurrent(n, e, o)) return;
   if (
-    t.inputSignature !== lU(e) ||
+    t.inputSignature !== getCalculationInputSignature(e) ||
     t.report.workbookId !== e.id ||
     t.report.revision !== e.revision ||
     t.report.cells.length !== o.formulas.size
@@ -1250,17 +1328,23 @@ function uU(e, r, t) {
     (a.set(h, c.result), s.set(h, new Set(c.dependencies)));
   }
   const d = { ...t.report, run: r.run };
-  A1(d);
+  deepFreeze(d);
   const u = cU(e, d, a, t);
   return (
-    tu.set(e, { ...o, calculator: u, report: d, values: a, dependencies: s }),
+    calculatorRecords.set(e, {
+      ...o,
+      calculator: u,
+      report: d,
+      values: a,
+      dependencies: s,
+    }),
     { calculator: u, report: d }
   );
 }
-function Xie(e, r, t, n, o) {
+function runIterativeCalculation(e, r, t, n, o) {
   if (t === "#PENDING!") {
-    const s = tu.get(e);
-    if (!s || s.report !== r || !nm(s, e)) return;
+    const s = calculatorRecords.get(e);
+    if (!s || s.report !== r || !isCalculationRecordCurrent(s, e)) return;
     const d = Object.freeze({
         mode: "worker",
         state: "cancelled",
@@ -1287,22 +1371,22 @@ function Xie(e, r, t, n, o) {
           },
         ),
       ),
-      l = PE.get(r);
+      l = reportCellValueMaps.get(r);
     return (
-      l && PE.set(u, l),
-      tu.set(e, { ...s, report: u }),
+      l && reportCellValueMaps.set(u, l),
+      calculatorRecords.set(e, { ...s, report: u }),
       { calculator: s.calculator, report: u }
     );
   }
   const a = r.cells.map((s) => ({
     ...s,
-    result: F5(t),
+    result: makeFormulaError(t),
     status: "error",
     evaluations: 0,
     dependencies: [],
   }));
-  return uU(e, r, {
-    inputSignature: lU(e),
+  return acceptWorkerCalculationResult(e, r, {
+    inputSignature: getCalculationInputSignature(e),
     report: {
       ...r,
       cells: a,
@@ -1335,11 +1419,11 @@ function Xie(e, r, t, n, o) {
     operationalErrors: [t],
   });
 }
-function dU(e, r, t, n) {
-  const o = pd(),
+function recalculateWorkbookFormulas(e, r, t, n) {
+  const o = readMonotonicClockMs(),
     { formulas, settings } = r,
-    d = lx(e.datePolicy),
-    u = SN(e);
+    d = resolveLocalDateTime(e.datePolicy),
+    u = createCalculationBudgetTracker(e);
   u.begin();
   const l = new Set(),
     c = new Map(),
@@ -1405,12 +1489,15 @@ function dU(e, r, t, n) {
     E = [...c.values()].reduce((U, G) => U + G.size, 0);
   const A = () => (
       y && !w && (w = u.check()),
-      y && !w && pd() - o > settings.timeBudgetMs && (w = "#TIMEOUT!"),
+      y &&
+        !w &&
+        readMonotonicClockMs() - o > settings.timeBudgetMs &&
+        (w = "#TIMEOUT!"),
       y ? w : undefined
     ),
     k = (U, G) => {
       const H = [];
-      return Cf(e, {}, undefined, {
+      return evaluateWorkbookFormulas(e, {}, undefined, {
         budget: u,
         running: () => y,
         dateContext: d,
@@ -1448,7 +1535,9 @@ function dU(e, r, t, n) {
     F = settings.mode === "manual" && !n;
   F &&
     l.forEach((U) => {
-      (h.set(U, ng), v.set(U, ng), c.set(U, new Set(t?.dependencies.get(U))));
+      (h.set(U, pendingFormulaValue),
+        v.set(U, pendingFormulaValue),
+        c.set(U, new Set(t?.dependencies.get(U))));
     });
   let I = k(v);
   const O = () => {
@@ -1522,13 +1611,13 @@ function dU(e, r, t, n) {
       j.status === "converged" && !w && b.forEach((X) => v.set(X, Q.get(X)));
     }
     ((j.status !== "converged" || w) &&
-      b.forEach((Q) => v.set(Q, F5(w ?? "#ITER!"))),
+      b.forEach((Q) => v.set(Q, makeFormulaError(w ?? "#ITER!"))),
       (I = k(v)),
       O());
   }
   (A(),
     w &&
-      (l.forEach((U) => h.set(U, F5(w))),
+      (l.forEach((U) => h.set(U, makeFormulaError(w))),
       j.status === "converged" && (j.status = "failed"),
       b.size &&
         settings.iterative &&
@@ -1563,7 +1652,7 @@ function dU(e, r, t, n) {
               : "number",
         value: Q.raw,
       };
-    if (D.has(H)) return { ...ng };
+    if (D.has(H)) return { ...pendingFormulaValue };
     const X = I.getSpillAnchor(U, G);
     return X && h.get(`${U}:${X}`)?.type === "error"
       ? { ...h.get(`${U}:${X}`) }
@@ -1622,7 +1711,7 @@ function dU(e, r, t, n) {
   }
   const $ = [...formulas].map(([U, G]) => {
     var X;
-    const H = h.get(U) ?? ng,
+    const H = h.get(U) ?? pendingFormulaValue,
       Q = t?.values.get(U);
     return {
       ...G,
@@ -1658,11 +1747,15 @@ function dU(e, r, t, n) {
         functions: [
           ...new Set(
             [...formulas.values()]
-              .flatMap((U) => Rg(U.formula))
-              .concat((e.definedNames ?? []).flatMap((U) => Rg(U.refersTo))),
+              .flatMap((U) => findVolatileFunctionNames(U.formula))
+              .concat(
+                (e.definedNames ?? []).flatMap((U) =>
+                  findVolatileFunctionNames(U.refersTo),
+                ),
+              ),
           ),
         ].sort(),
-        policy: yE,
+        policy: calculationFeatureSupport,
       },
       execution: {
         mode: "cooperative",
@@ -1688,7 +1781,7 @@ function dU(e, r, t, n) {
       evaluated: $.filter((U) => U.evaluations > 0).length,
       reused: formulas.size - l.size,
       pending: $.filter((U) => U.status === "pending").length,
-      elapsedMs: Math.max(0, pd() - o),
+      elapsedMs: Math.max(0, readMonotonicClockMs() - o),
       dependencyEdges: [...c.values()].reduce((U, G) => U + G.size, 0),
       cycles: g,
       iteration: j,
@@ -1701,33 +1794,43 @@ function dU(e, r, t, n) {
     },
   };
 }
-function Gw(e) {
-  const r = W1(e),
-    t = tu.get(e);
-  if (nm(t, e, r)) return { calculator: t.calculator, report: t.report };
-  const n = dU(e, r, t ? undefined : ch.get(e), false);
+function getWorkbookCalculation(e) {
+  const r = getCachedCalculationSnapshot(e),
+    t = calculatorRecords.get(e);
+  if (isCalculationRecordCurrent(t, e, r))
+    return { calculator: t.calculator, report: t.report };
+  const n = recalculateWorkbookFormulas(
+    e,
+    r,
+    t ? undefined : carriedCalculatorRecords.get(e),
+    false,
+  );
   return (
-    A1(n.report),
-    tu.set(e, n),
-    ch.delete(e),
+    deepFreeze(n.report),
+    calculatorRecords.set(e, n),
+    carriedCalculatorRecords.delete(e),
     { calculator: n.calculator, report: n.report }
   );
 }
-function Vn(e, r = {}, t) {
+function calculateWorkbookWithSettings(e, r = {}, t) {
   return !t &&
     !Object.keys(r).length &&
-    (e.calculation || e.datePolicy || $ie(e) || eB(e) || nB(e))
-    ? Gw(e).calculator
-    : Cf(e, r, t);
+    (e.calculation ||
+      e.datePolicy ||
+      hasCalculatorRecord(e) ||
+      workbookUsesNowOrToday(e) ||
+      workbookHasVolatileFunctions(e))
+    ? getWorkbookCalculation(e).calculator
+    : evaluateWorkbookFormulas(e, r, t);
 }
-function LB(e, r, t, n = {}) {
+function updateConditionalFormatRules(e, r, t, n = {}) {
   var p;
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = e.sheets.find((m) => m.id === r);
   if (!o) throw Error("Worksheet no longer exists.");
   if ((p = o.protection) != null && p.enabled)
     throw Error("Unprotect the worksheet before changing conditional formats.");
-  const a = FN(t),
+  const a = normalizeConditionalRules(t),
     s = o.conditionalFormats ?? [],
     d = [];
   for (const m of new Set([...s.map((v) => v.id), ...a.map((v) => v.id)])) {
@@ -1742,18 +1845,23 @@ function LB(e, r, t, n = {}) {
         ...(y ? { after: structuredClone(y), afterIndex: g } : {}),
       });
   }
-  const u = Vn(e),
-    l = Fw(o, u),
-    c = Fw({ ...o, conditionalFormats: a }, u),
+  const u = calculateWorkbookWithSettings(e),
+    l = evaluateConditionalFormatRules(o, u),
+    c = evaluateConditionalFormatRules({ ...o, conditionalFormats: a }, u),
     h = new Set();
   for (const m of [...a, ...s]) {
-    const v = ct(m.range);
-    if ((h.add(`${ut(v.firstCol)}${v.firstRow + 1}`), h.size >= 50)) break;
+    const v = parseRangeAddress(m.range);
+    if (
+      (h.add(`${columnIndexToLetters(v.firstCol)}${v.firstRow + 1}`),
+      h.size >= 50)
+    )
+      break;
   }
   if (h.size < 50) {
     for (const m of Object.keys(o.cells))
       if (
-        ([...a, ...s].some((v) => n5(ct(v.range), _t(m))) && h.add(m),
+        ([...a, ...s].some((v) => n5(parseRangeAddress(v.range), _t(m))) &&
+          h.add(m),
         h.size >= 50)
       )
         break;
@@ -1776,19 +1884,24 @@ function LB(e, r, t, n = {}) {
     previewLimit: 50,
   };
 }
-function sU(e) {
-  const r = W1(e),
-    t = tu.get(e),
-    n = dU(e, r, nm(t, e, r) ? t : undefined, true);
+function refreshCalculationReport(e) {
+  const r = getCachedCalculationSnapshot(e),
+    t = calculatorRecords.get(e),
+    n = recalculateWorkbookFormulas(
+      e,
+      r,
+      isCalculationRecordCurrent(t, e, r) ? t : undefined,
+      true,
+    );
   return (
-    A1(n.report),
-    tu.set(e, n),
-    ch.delete(e),
+    deepFreeze(n.report),
+    calculatorRecords.set(e, n),
+    carriedCalculatorRecords.delete(e),
     { calculator: n.calculator, report: n.report }
   );
 }
-function Wie(e, r) {
-  const t = Gw(e);
+function buildCalculationEvidence(e, r) {
+  const t = getWorkbookCalculation(e);
   if (t.report !== r)
     throw Error(
       "The workbook or calculation run changed. Review current calculation results before exporting evidence.",
@@ -1846,7 +1959,7 @@ function Wie(e, r) {
     2,
   );
 }
-function FR(e) {
+function parseReportRange(e) {
   if (
     !/^\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6}(?::\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6})?$/.test(
       e,
@@ -1854,10 +1967,10 @@ function FR(e) {
   )
     throw Error("Choose one explicit report range.");
   const r = e.replaceAll("$", "").toUpperCase().split(":"),
-    t = ct(e);
+    t = parseRangeAddress(e);
   if (
-    r[0] !== `${ut(t.firstCol)}${t.firstRow + 1}` ||
-    (r[1] && r[1] !== `${ut(t.lastCol)}${t.lastRow + 1}`)
+    r[0] !== `${columnIndexToLetters(t.firstCol)}${t.firstRow + 1}` ||
+    (r[1] && r[1] !== `${columnIndexToLetters(t.lastCol)}${t.lastRow + 1}`)
   )
     throw Error("Report ranges cannot be reversed.");
   if (
@@ -1868,7 +1981,7 @@ function FR(e) {
     throw Error(
       "Reports support at most 500 rows, 20 columns and 2,000 cells.",
     );
-  return `${ut(t.firstCol)}${t.firstRow + 1}:${ut(t.lastCol)}${t.lastRow + 1}`;
+  return `${columnIndexToLetters(t.firstCol)}${t.firstRow + 1}:${columnIndexToLetters(t.lastCol)}${t.lastRow + 1}`;
 }
 const PO = object({
     column: number().int().min(0).max(16383),
@@ -1895,12 +2008,19 @@ const PO = object({
       _null(),
     ]).optional(),
   }).strict(),
-  koe = object({
-    range: Tc(40),
+  filterRequestSchema = object({
+    range: createBoundedTextSchema(40),
     columns: array(
       object({
         column: number().int().min(0).max(16383),
-        values: array(union([Tc(32767), number().finite(), boolean(), _null()]))
+        values: array(
+          union([
+            createBoundedTextSchema(32767),
+            number().finite(),
+            boolean(),
+            _null(),
+          ]),
+        )
           .max(1e3)
           .optional(),
         conditions: array(PO).max(128).optional(),
@@ -1914,84 +2034,105 @@ const PO = object({
   kU = object({
     name: string().trim().min(1).max(100),
     kind: _enum(["range", "object"]),
-    sheetId: Ap,
-    range: Tc(40).transform(FR),
-    objectId: Ap.optional(),
+    sheetId: nonEmptyLabelSchema,
+    range: createBoundedTextSchema(40).transform(parseReportRange),
+    objectId: nonEmptyLabelSchema.optional(),
     mode: _enum(["snapshot", "linked"]),
     population: _enum(["full", "visible"]),
-    filter: koe.optional(),
+    filter: filterRequestSchema.optional(),
   }).strict(),
-  Soe = object({
+  cellSnapshotSchema = object({
     address: string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
-    value: union([Tc(32767), number().finite(), boolean(), _null()]),
-    text: Tc(32767),
+    value: union([
+      createBoundedTextSchema(32767),
+      number().finite(),
+      boolean(),
+      _null(),
+    ]),
+    text: createBoundedTextSchema(32767),
     style: unknown().optional(),
   }).strict(),
-  Toe = object({
-    engine: literal(CU),
-    id: Ap,
+  calculationReportSchema = object({
+    engine: literal(reportOutputFormatVersion),
+    id: nonEmptyLabelSchema,
     request: kU,
-    workbookId: Ap,
-    workbookName: Tc(200),
+    workbookId: nonEmptyLabelSchema,
+    workbookName: createBoundedTextSchema(200),
     revision: number().int().nonnegative(),
-    sheetName: Tc(31),
+    sheetName: createBoundedTextSchema(31),
     calculatedAt: AU,
-    sourceHash: zE,
+    sourceHash: reportHashSchema,
     includeHidden: boolean(),
-    authorizedSheetIds: array(Ap).max(1e3),
+    authorizedSheetIds: array(nonEmptyLabelSchema).max(1e3),
     sourceCells: array(
       object({
-        sheetId: Ap,
+        sheetId: nonEmptyLabelSchema,
         address: string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
       }).strict(),
     ).max(4e3),
     rows: array(
       object({
         row: number().int().min(1).max(1048576),
-        cells: array(Soe).max(20),
+        cells: array(cellSnapshotSchema).max(20),
       }).strict(),
     ).max(500),
     columns: array(number().int().min(0).max(16383)).max(20),
     widths: array(number().finite().min(40).max(600)).max(20),
     excludedRows: array(number().int().min(1).max(1048576)).max(500),
     object: unknown().optional(),
-    warnings: array(Tc(2e3)).max(50),
-    hash: zE,
+    warnings: array(createBoundedTextSchema(2e3)).max(50),
+    hash: reportHashSchema,
   }).strict(),
-  Noe = object({
-    id: Ap,
-    fileName: Tc(255),
+  importedCacheEvidenceSchema = object({
+    id: nonEmptyLabelSchema,
+    fileName: createBoundedTextSchema(255),
     fileBytes: number()
       .int()
       .min(1)
       .max(10 * 1024 * 1024),
-    sourceSha256: zE,
+    sourceSha256: reportHashSchema,
     inspectedAt: AU,
     execution: literal("never"),
     items: array(
       object({
-        path: Tc(4096),
-        kind: Tc(100),
+        path: createBoundedTextSchema(4096),
+        kind: createBoundedTextSchema(100),
         bytes: number()
           .int()
           .nonnegative()
           .max(50 * 1024 * 1024),
-        sha256: zE.optional(),
+        sha256: reportHashSchema.optional(),
         execution: literal("never"),
-        note: Tc(2e3),
+        note: createBoundedTextSchema(2e3),
       }).strict(),
     )
       .min(1)
       .max(1e3),
-    warnings: array(Tc(2e3)).max(100),
+    warnings: array(createBoundedTextSchema(2e3)).max(100),
   }).strict();
-function BR(e) {
+function validateObjectReportRequest(e) {
   const r = kU.parse(e);
   if ((r.kind === "object") != !!r.objectId)
     throw Error("Select an existing drawing for an object report.");
-  if (r.filter && FR(r.filter.range) !== r.range)
+  if (r.filter && parseReportRange(r.filter.range) !== r.range)
     throw Error("The report range must match its filter range.");
   return r;
 }
 
-export { BR, Cf, FR, Gw, L5, LB, LQ, Noe, Toe, Vn, Wie, Xie, sU, uU, v0 };
+export {
+  validateObjectReportRequest,
+  evaluateWorkbookFormulas,
+  parseReportRange,
+  getWorkbookCalculation,
+  getIsolatedCalculation,
+  updateConditionalFormatRules,
+  summarizeValidationInspection,
+  importedCacheEvidenceSchema,
+  calculationReportSchema,
+  calculateWorkbookWithSettings,
+  buildCalculationEvidence,
+  runIterativeCalculation,
+  refreshCalculationReport,
+  acceptWorkerCalculationResult,
+  checkDataValidationBatch,
+};

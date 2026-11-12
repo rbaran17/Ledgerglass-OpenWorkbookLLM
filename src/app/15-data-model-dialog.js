@@ -1,23 +1,34 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { PR, Ta, _t, cn, ct, ta, ut } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import {
-  O7,
-  fce,
-  gce,
-  hce,
-  mce,
-  pce,
-  ql,
-  uce,
-  uz,
+  columnarModelFormatVersion,
+  formatOccupiedRangeAddress,
+  _t,
+  cn,
+  parseRangeAddress,
+  dataModelLimits,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  createModelId,
+  previewDataModelOutput,
+  DataModelDefinitionEditor,
+  publishDataModelReport,
+  getModelReportStatus,
+  removeDataModelFromWorkbook,
+  LabeledModelField,
+  buildModelTableFromRange,
+  DaxExpressionInput,
 } from "./14-dax-data-model-engine.js";
 
-function vce(e) {
+function DataModelDialog(e) {
   var oe, Se;
-  const { text } = Dr(),
+  const { text } = useWorkbookMessages(),
     t = ne.useRef(e);
   t.current = e;
   const n = ne.useId(),
@@ -26,7 +37,7 @@ function vce(e) {
       structuredClone(
         o?.definition ??
           e.workbook.dataModel ?? {
-            engine: PR,
+            engine: columnarModelFormatVersion,
             name: "Workbook model",
             tables: [],
             relationships: [],
@@ -48,7 +59,9 @@ function vce(e) {
     [p, m] = ne.useState(
       e.range.includes(":")
         ? e.range
-        : Ta(e.workbook.sheets.find((le) => le.id === e.sheetId)),
+        : formatOccupiedRangeAddress(
+            e.workbook.sheets.find((le) => le.id === e.sheetId),
+          ),
     ),
     [v, g] = ne.useState(""),
     [b, y] = ne.useState(false),
@@ -152,7 +165,7 @@ function vce(e) {
     };
   function X$1() {
     try {
-      const le = uce(e.workbook, h, p, v || undefined, D);
+      const le = buildModelTableFromRange(e.workbook, h, p, v || undefined, D);
       let ce = le.name,
         ge = 2;
       for (; a.tables.some((se) => se.name.toLowerCase() === ce.toLowerCase());)
@@ -167,7 +180,13 @@ function vce(e) {
       (E(""),
         I(0),
         (V.current = false),
-        k(fce(e.workbook, { definition: a, query: d, outputName: O }, D)),
+        k(
+          previewDataModelOutput(
+            e.workbook,
+            { definition: a, query: d, outputName: O },
+            D,
+          ),
+        ),
         c("Preview"));
     } catch (le) {
       (k(null), E(le.message));
@@ -177,7 +196,7 @@ function vce(e) {
     if (!(!A || V.current))
       try {
         const ce = t.current,
-          ge = hce(ce.workbook, A, le, {
+          ge = publishDataModelReport(ce.workbook, A, le, {
             readOnly: ce.readOnly,
             allowedSheetIds: ce.allowedSheetIds,
             includeHidden: !!ce.allowHidden && b,
@@ -242,14 +261,16 @@ function vce(e) {
               children: [
                 i.jsx("p", {
                   className: "eyebrow",
-                  children: i.jsx(M, { children: "Data · Relationships" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Data · Relationships",
+                  }),
                 }),
                 i.jsx("h2", {
                   id: n,
-                  children: i.jsx(M, { children: "Data Model" }),
+                  children: i.jsx(LocalizedText, { children: "Data Model" }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Connect typed tables and review measures across shared dimensions.",
                   }),
@@ -278,7 +299,7 @@ function vce(e) {
               {
                 "aria-pressed": l === le,
                 onClick: () => c(le),
-                children: i.jsx(M, { children: le }),
+                children: i.jsx(LocalizedText, { children: le }),
               },
               le,
             ),
@@ -296,7 +317,7 @@ function vce(e) {
             e.readOnly &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This workbook is read-only. Preview remains available.",
                 }),
@@ -307,11 +328,11 @@ function vce(e) {
                   i.jsxs("div", {
                     className: "lg-model-controls",
                     children: [
-                      ql(
+                      LabeledModelField(
                         "Model name",
                         R("Model name", a.name, (le) => _({ ...a, name: le })),
                       ),
-                      ql(
+                      LabeledModelField(
                         "Source worksheet",
                         L(
                           "Model source worksheet",
@@ -321,14 +342,14 @@ function vce(e) {
                             (f(le),
                               g(""),
                               m(
-                                Ta(
+                                formatOccupiedRangeAddress(
                                   e.workbook.sheets.find((ce) => ce.id === le),
                                 ),
                               ));
                           },
                         ),
                       ),
-                      ql(
+                      LabeledModelField(
                         "Source table or range",
                         L(
                           "Model structured source",
@@ -343,17 +364,23 @@ function vce(e) {
                           g,
                         ),
                       ),
-                      !v && ql("Headed range", R("Model source range", p, m)),
+                      !v &&
+                        LabeledModelField(
+                          "Headed range",
+                          R("Model source range", p, m),
+                        ),
                       i.jsx("button", {
-                        disabled: a.tables.length >= ta.tables,
+                        disabled: a.tables.length >= dataModelLimits.tables,
                         onClick: X$1,
-                        children: i.jsx(M, { children: "Add table" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Add table",
+                        }),
                       }),
                     ],
                   }),
                   i.jsx("p", {
                     className: "lg-model-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Values are never converted silently. Each table supports 500 records and 2,000 cells including headers.",
                     }),
@@ -371,7 +398,9 @@ function vce(e) {
                             ),
                           }));
                       },
-                      children: i.jsx(M, { children: "Use workbook model" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Use workbook model",
+                      }),
                     }),
                   e.workbook.dataModel &&
                     i.jsx("button", {
@@ -381,7 +410,9 @@ function vce(e) {
                         try {
                           const le = t.current;
                           (le.onWorkbookChange(
-                            pce(le.workbook, { readOnly: le.readOnly }),
+                            removeDataModelFromWorkbook(le.workbook, {
+                              readOnly: le.readOnly,
+                            }),
                             "Remove relational data model",
                           ),
                             le.onClose());
@@ -389,7 +420,9 @@ function vce(e) {
                           E(le.message);
                         }
                       },
-                      children: i.jsx(M, { children: "Remove saved model" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Remove saved model",
+                      }),
                     }),
                   a.tables.map((le) => {
                     return i.jsxs(
@@ -400,7 +433,7 @@ function vce(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              ql(
+                              LabeledModelField(
                                 "Table name",
                                 R(`${le.name} table name`, le.name, (ge) =>
                                   H(le.id, { name: ge }),
@@ -420,7 +453,7 @@ function vce(e) {
                                 ],
                               }),
                               !le.tableId &&
-                                ql(
+                                LabeledModelField(
                                   "Headed range",
                                   R(`${le.name} source range`, le.range, (ge) =>
                                     H(le.id, { range: ge }),
@@ -429,7 +462,7 @@ function vce(e) {
                               i.jsx("button", {
                                 "aria-label": `Remove table ${le.name}`,
                                 onClick: () => Q(le.id),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Remove table",
                                 }),
                               }),
@@ -441,7 +474,9 @@ function vce(e) {
                                 children: [
                                   le.columns.length,
                                   " ",
-                                  i.jsx(M, { children: "typed columns" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "typed columns",
+                                  }),
                                 ],
                               }),
                               i.jsxs("table", {
@@ -456,7 +491,7 @@ function vce(e) {
                                         i.jsx(
                                           "th",
                                           {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children: ge,
                                             }),
                                           },
@@ -539,7 +574,7 @@ function vce(e) {
                 children: [
                   i.jsx("p", {
                     className: "lg-model-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Filters flow from the unique one side to the related side. Missing, blank or duplicate keys block calculation. Cycles and competing paths are refused.",
                     }),
@@ -558,7 +593,9 @@ function vce(e) {
                         children: [
                           i.jsxs("legend", {
                             children: [
-                              i.jsx(M, { children: "Relationship" }),
+                              i.jsx(LocalizedText, {
+                                children: "Relationship",
+                              }),
                               " ",
                               ce + 1,
                             ],
@@ -566,7 +603,7 @@ function vce(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              ql(
+                              LabeledModelField(
                                 "One table",
                                 U(
                                   `Relationship ${ce + 1} one table`,
@@ -578,7 +615,7 @@ function vce(e) {
                                     }),
                                 ),
                               ),
-                              ql(
+                              LabeledModelField(
                                 "Unique key",
                                 G(
                                   `Relationship ${ce + 1} one key`,
@@ -595,7 +632,7 @@ function vce(e) {
                                 "aria-hidden": "true",
                                 children: "1 → *",
                               }),
-                              ql(
+                              LabeledModelField(
                                 "Related table",
                                 U(
                                   `Relationship ${ce + 1} related table`,
@@ -607,7 +644,7 @@ function vce(e) {
                                     }),
                                 ),
                               ),
-                              ql(
+                              LabeledModelField(
                                 "Foreign key",
                                 G(
                                   `Relationship ${ce + 1} foreign key`,
@@ -620,7 +657,7 @@ function vce(e) {
                                     }),
                                 ),
                               ),
-                              ql(
+                              LabeledModelField(
                                 "Cardinality",
                                 L(
                                   `Relationship ${ce + 1} cardinality`,
@@ -641,7 +678,9 @@ function vce(e) {
                                       (se) => se.id !== le.id,
                                     ),
                                   }),
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             ],
                           }),
@@ -653,14 +692,14 @@ function vce(e) {
                   i.jsx("button", {
                     disabled:
                       a.tables.length < 2 ||
-                      a.relationships.length >= ta.relationships,
+                      a.relationships.length >= dataModelLimits.relationships,
                     onClick: () =>
                       _({
                         ...a,
                         relationships: [
                           ...a.relationships,
                           {
-                            id: O7(),
+                            id: createModelId(),
                             one: {
                               tableId: a.tables[0].id,
                               column: a.tables[0].columns[0].name,
@@ -674,18 +713,20 @@ function vce(e) {
                           },
                         ],
                       }),
-                    children: i.jsx(M, { children: "Add relationship" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Add relationship",
+                    }),
                   }),
                 ],
               }),
             l === "Calculated columns" &&
-              i.jsx(gce, { definition: a, onChange: _ }),
+              i.jsx(DataModelDefinitionEditor, { definition: a, onChange: _ }),
             l === "Measures" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
                     className: "lg-model-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Each measure aggregates its own filtered table, preventing fact-row multiplication. Choose DAX for expressions with row and filter context. Totals are recalculated in their own context.",
                     }),
@@ -704,7 +745,7 @@ function vce(e) {
                         children: [
                           i.jsxs("legend", {
                             children: [
-                              i.jsx(M, { children: "Measure" }),
+                              i.jsx(LocalizedText, { children: "Measure" }),
                               " ",
                               ce + 1,
                             ],
@@ -712,13 +753,13 @@ function vce(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              ql(
+                              LabeledModelField(
                                 "Name",
                                 R(`Measure ${ce + 1} name`, le.name, (se) =>
                                   ge({ ...le, name: se }),
                                 ),
                               ),
-                              ql(
+                              LabeledModelField(
                                 "Table",
                                 U(`Measure ${ce + 1} table`, le.tableId, (se) =>
                                   ge({
@@ -731,7 +772,7 @@ function vce(e) {
                                   }),
                                 ),
                               ),
-                              ql(
+                              LabeledModelField(
                                 "Operation",
                                 L(
                                   `Measure ${ce + 1} operation`,
@@ -762,7 +803,7 @@ function vce(e) {
                               ),
                               le.operation !== "countRows" &&
                                 le.operation !== "dax" &&
-                                ql(
+                                LabeledModelField(
                                   "Column",
                                   G(
                                     `Measure ${ce + 1} column`,
@@ -787,12 +828,14 @@ function vce(e) {
                                       ),
                                     }));
                                 },
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             ],
                           }),
                           le.operation === "dax" &&
-                            i.jsx(uz, {
+                            i.jsx(DaxExpressionInput, {
                               label: `Measure ${ce + 1} DAX expression`,
                               value: le.expression ?? "",
                               onChange: (se) => ge({ ...le, expression: se }),
@@ -804,10 +847,11 @@ function vce(e) {
                   }),
                   i.jsx("button", {
                     disabled:
-                      !a.tables.length || a.measures.length >= ta.measures,
+                      !a.tables.length ||
+                      a.measures.length >= dataModelLimits.measures,
                     onClick: () => {
                       const le = {
-                        id: O7(),
+                        id: createModelId(),
                         name: `Measure ${a.measures.length + 1}`,
                         tableId: a.tables.at(-1).id,
                         operation: "countRows",
@@ -815,7 +859,7 @@ function vce(e) {
                       (_({ ...a, measures: [...a.measures, le] }),
                         C({ ...d, measureIds: [...d.measureIds, le.id] }));
                     },
-                    children: i.jsx(M, { children: "Add measure" }),
+                    children: i.jsx(LocalizedText, { children: "Add measure" }),
                   }),
                 ],
               }),
@@ -825,7 +869,9 @@ function vce(e) {
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, { children: "Selected measures" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Selected measures",
+                        }),
                       }),
                       i.jsx("div", {
                         className: "lg-model-controls",
@@ -859,7 +905,7 @@ function vce(e) {
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Group by shared dimensions",
                         }),
                       }),
@@ -900,7 +946,9 @@ function vce(e) {
                                       (ge, se) => se !== ce,
                                     ),
                                   }),
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             ],
                           },
@@ -920,14 +968,16 @@ function vce(e) {
                               },
                             ],
                           }),
-                        children: i.jsx(M, { children: "Add group field" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Add group field",
+                        }),
                       }),
                     ],
                   }),
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Filters (all must match)",
                         }),
                       }),
@@ -1026,7 +1076,9 @@ function vce(e) {
                                       (Ae, ye) => ye !== ce,
                                     ),
                                   }),
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             ],
                           },
@@ -1035,7 +1087,8 @@ function vce(e) {
                       }),
                       i.jsx("button", {
                         disabled:
-                          !a.tables.length || d.filters.length >= ta.filters,
+                          !a.tables.length ||
+                          d.filters.length >= dataModelLimits.filters,
                         onClick: () =>
                           C({
                             ...d,
@@ -1048,7 +1101,9 @@ function vce(e) {
                               },
                             ],
                           }),
-                        children: i.jsx(M, { children: "Add model filter" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Add model filter",
+                        }),
                       }),
                     ],
                   }),
@@ -1086,15 +1141,17 @@ function vce(e) {
                               children: i.jsxs("tr", {
                                 children: [
                                   i.jsx("th", {
-                                    children: i.jsx(M, { children: "Code" }),
+                                    children: i.jsx(LocalizedText, {
+                                      children: "Code",
+                                    }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Source row",
                                     }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Diagnostic",
                                     }),
                                   }),
@@ -1141,7 +1198,11 @@ function vce(e) {
                               ].map((le) =>
                                 i.jsx(
                                   "th",
-                                  { children: i.jsx(M, { children: le }) },
+                                  {
+                                    children: i.jsx(LocalizedText, {
+                                      children: le,
+                                    }),
+                                  },
                                   le,
                                 ),
                               ),
@@ -1183,13 +1244,13 @@ function vce(e) {
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Calculated column preview",
                               }),
                             }),
                             i.jsx("p", {
                               className: "lg-model-help",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "First 25 source records per column. All records are evaluated before publication.",
                               }),
@@ -1201,12 +1262,12 @@ function vce(e) {
                                   children: i.jsxs("tr", {
                                     children: [
                                       i.jsx("th", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Table and column",
                                         }),
                                       }),
                                       i.jsx("th", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Values",
                                         }),
                                       }),
@@ -1294,7 +1355,7 @@ function vce(e) {
                                       children: [
                                         i.jsx("th", {
                                           colSpan: d.groupBy.length,
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Grand total",
                                           }),
                                         }),
@@ -1321,7 +1382,7 @@ function vce(e) {
                                 i.jsx("button", {
                                   disabled: !F,
                                   onClick: () => I((le) => le - 1),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Previous results",
                                   }),
                                 }),
@@ -1336,7 +1397,7 @@ function vce(e) {
                                 i.jsx("button", {
                                   disabled: (F + 1) * 25 >= W.rows.length,
                                   onClick: () => I((le) => le + 1),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Next results",
                                   }),
                                 }),
@@ -1346,7 +1407,7 @@ function vce(e) {
                         }),
                       i.jsx("p", {
                         className: "lg-model-help",
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Refresh publishes a new worksheet. Earlier results retain a freshness label and remain available.",
                         }),
@@ -1354,7 +1415,7 @@ function vce(e) {
                     ],
                   })
                 : i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Preview the model to inspect integrity, source counts and measures.",
                     }),
@@ -1373,10 +1434,10 @@ function vce(e) {
                       (y(le.target.checked), B());
                     },
                   }),
-                  i.jsx(M, { children: "Include hidden sources" }),
+                  i.jsx(LocalizedText, { children: "Include hidden sources" }),
                 ],
               }),
-            ql(
+            LabeledModelField(
               "Output worksheet",
               R("Model output worksheet", O, (le) => {
                 (j(le), B());
@@ -1384,18 +1445,20 @@ function vce(e) {
             ),
             i.jsx("button", {
               onClick: J,
-              children: i.jsx(M, { children: "Preview model" }),
+              children: i.jsx(LocalizedText, { children: "Preview model" }),
             }),
             i.jsx("button", {
               disabled: !K,
               onClick: () => q("save"),
-              children: i.jsx(M, { children: "Save model" }),
+              children: i.jsx(LocalizedText, { children: "Save model" }),
             }),
             i.jsx("button", {
               className: "lg-model-primary",
               disabled: !K || !d.measureIds.length,
               onClick: () => q("publish"),
-              children: i.jsx(M, { children: "Publish model result" }),
+              children: i.jsx(LocalizedText, {
+                children: "Publish model result",
+              }),
             }),
           ],
         }),
@@ -1403,9 +1466,9 @@ function vce(e) {
     }),
   });
 }
-function bce({ workbook, sheetId, options, onReview }) {
+function DataModelSnapshotNotice({ workbook, sheetId, options, onReview }) {
   const o = ne.useMemo(
-    () => mce(workbook, sheetId, options),
+    () => getModelReportStatus(workbook, sheetId, options),
     [workbook, sheetId, options?.includeHidden, options?.allowedSheetIds],
   );
   return o.status === "none"
@@ -1418,25 +1481,25 @@ function bce({ workbook, sheetId, options, onReview }) {
           i.jsxs("span", {
             children: [
               i.jsx("strong", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children: `Model snapshot · ${o.status}`,
                 }),
               }),
               " ",
               "· ",
-              i.jsx(M, { children: o.message }),
+              i.jsx(LocalizedText, { children: o.message }),
             ],
           }),
           i.jsx("button", {
             onClick: onReview,
-            children: i.jsx(M, { children: "Review model" }),
+            children: i.jsx(LocalizedText, { children: "Review model" }),
           }),
         ],
       });
 }
-const yce =
+const focusableElementSelector =
   'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
-function Hv(e) {
+function isElementVisibleForFocus(e) {
   for (let r = e; r; r = r.parentElement) {
     const t = getComputedStyle(r);
     if (
@@ -1453,18 +1516,18 @@ function Hv(e) {
   }
   return true;
 }
-function K4(e) {
-  return Array.from(e.querySelectorAll(yce)).filter(
+function getFocusableElements(e) {
+  return Array.from(e.querySelectorAll(focusableElementSelector)).filter(
     (r) =>
       !(
         r.tabIndex < 0 ||
         r.matches(":disabled") ||
-        !Hv(r) ||
+        !isElementVisibleForFocus(r) ||
         r.closest('[hidden],[inert],[aria-hidden="true"]')
       ),
   );
 }
-function wce(e) {
+function useDialogFocusTrap(e) {
   const r = ne.useRef(undefined);
   (ne.useLayoutEffect(() => {
     const t = e.current;
@@ -1492,14 +1555,14 @@ function wce(e) {
         const p = Array.from(
           t.querySelectorAll('[role="dialog"][aria-modal="true"]'),
         )
-          .filter(Hv)
+          .filter(isElementVisibleForFocus)
           .at(-1);
         if (p === n) {
           p &&
-            (!Hv(document.activeElement) ||
+            (!isElementVisibleForFocus(document.activeElement) ||
               ((v = document.activeElement) != null &&
                 v.matches(":disabled"))) &&
-            (K4(p)[0] ?? p).focus({ preventScroll: true });
+            (getFocusableElements(p)[0] ?? p).focus({ preventScroll: true });
           return;
         }
         const m = n;
@@ -1523,9 +1586,13 @@ function wce(e) {
           const y = m ? a.get(m) : undefined;
           if (!p.contains(document.activeElement)) {
             const w =
-              g && y && p.contains(y) && Hv(y) && !y.matches(":disabled")
+              g &&
+              y &&
+              p.contains(y) &&
+              isElementVisibleForFocus(y) &&
+              !y.matches(":disabled")
                 ? y
-                : (K4(p)[0] ?? p);
+                : (getFocusableElements(p)[0] ?? p);
             (w === p && (p.tabIndex = -1), w.focus({ preventScroll: true }));
           }
         } else if (
@@ -1534,18 +1601,22 @@ function wce(e) {
             m.contains(document.activeElement))
         ) {
           const g =
-            o != null && o.isConnected && Hv(o) && !o.matches(":disabled")
+            o != null &&
+            o.isConnected &&
+            isElementVisibleForFocus(o) &&
+            !o.matches(":disabled")
               ? o
               : t.querySelector(".lg-grid-scroll");
           g == null || g.focus({ preventScroll: true });
         }
-        (m && (!m.isConnected || !Hv(m)) && a.delete(m), p || a.clear());
+        (m && (!m.isConnected || !isElementVisibleForFocus(m)) && a.delete(m),
+          p || a.clear());
       },
       c = (p) => {
         const m = p.target;
         if (m instanceof HTMLElement) {
           if (n && t.contains(m) && !n.contains(m)) {
-            (K4(n)[0] ?? n).focus({ preventScroll: true });
+            (getFocusableElements(n)[0] ?? n).focus({ preventScroll: true });
             return;
           }
           ((!n && !m.closest('[role="dialog"][aria-modal="true"]')) ||
@@ -1556,7 +1627,7 @@ function wce(e) {
       h = (p) => {
         var b;
         if ((l(), !n || p.key !== "Tab")) return;
-        const m = K4(n),
+        const m = getFocusableElements(n),
           v = m[0],
           g = m.at(-1);
         if (!v) {
@@ -1595,7 +1666,7 @@ function wce(e) {
       return r.current?.call(r);
     }));
 }
-const ih = {
+const dataModelBudgets = {
   sourceCells: 500,
   outputCells: 500,
   fields: 50,
@@ -1606,21 +1677,22 @@ const ih = {
   discoveryAnchors: 50,
   dependencyCells: 2e3,
 };
-function Nn(e) {
+function throwValidationError(e) {
   throw Error(e);
 }
 const xce = (e) => !!e && typeof e == "object" && !Array.isArray(e);
-function Y4(e, r, t) {
-  (!xce(e) || Object.keys(e).some((n) => !r.includes(n))) && Nn(t);
+function assertRecordKeys(e, r, t) {
+  (!xce(e) || Object.keys(e).some((n) => !r.includes(n))) &&
+    throwValidationError(t);
 }
-const lg = (e, r) => `${ut(r)}${e + 1}`,
+const lg = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   Ece = (e) => {
-    const r = ct(e);
+    const r = parseRangeAddress(e);
     return `${lg(r.firstRow, r.firstCol)}:${lg(r.lastRow, r.lastCol)}`;
   },
-  hp = (e, r) => {
-    const t = ct(e),
-      n = ct(r);
+  rangesOverlap = (e, r) => {
+    const t = parseRangeAddress(e),
+      n = parseRangeAddress(r);
     return (
       t.firstRow <= n.lastRow &&
       t.lastRow >= n.firstRow &&
@@ -1628,14 +1700,18 @@ const lg = (e, r) => `${ut(r)}${e + 1}`,
       t.lastCol >= n.firstCol
     );
   };
-function cz(e) {
+function assertDelimiterCharacter(e) {
   (typeof e != "string" || [...e].length !== 1 || /["\r\n\0]/.test(e)) &&
-    Nn("Choose one delimiter character other than a quote, line break or NUL.");
+    throwValidationError(
+      "Choose one delimiter character other than a quote, line break or NUL.",
+    );
 }
-function Cce(e, r) {
-  (cz(r),
+function splitDelimitedCell(e, r) {
+  (assertDelimiterCharacter(r),
     (typeof e != "string" || e.length > 32767) &&
-      Nn("A source cell must contain text of at most 32,767 characters."));
+      throwValidationError(
+        "A source cell must contain text of at most 32,767 characters.",
+      ));
   const t = [];
   let n = "",
     o = false,
@@ -1644,8 +1720,8 @@ function Cce(e, r) {
   const d = [...e],
     u = () => {
       (t.push(n),
-        t.length > ih.fields &&
-          Nn(
+        t.length > dataModelBudgets.fields &&
+          throwValidationError(
             "A source cell contains more than 50 fields. Choose a different delimiter or split a smaller record.",
           ),
         (n = ""),
@@ -1663,12 +1739,12 @@ function Cce(e, r) {
       : c === r
         ? u()
         : a
-          ? Nn(
+          ? throwValidationError(
               "Unexpected text after a closing quote. A closing quote must be followed by the delimiter or end of the cell.",
             )
           : c === '"'
             ? (s &&
-                Nn(
+                throwValidationError(
                   "A quote must begin a field; escape embedded quotes by doubling them inside a quoted field.",
                 ),
               (o = true),
@@ -1677,15 +1753,15 @@ function Cce(e, r) {
   }
   return (
     o &&
-      Nn(
+      throwValidationError(
         "A quoted field is not closed. Check the source cell before splitting.",
       ),
     u(),
     t
   );
 }
-function Ace(e) {
-  (Y4(
+function validateTextToColumnsRequest(e) {
+  (assertRecordKeys(
     e,
     [
       "sourceSheetId",
@@ -1698,51 +1774,62 @@ function Ace(e) {
     "Invalid Text to Columns request.",
   ),
     (typeof e.sourceSheetId != "string" || typeof e.sourceRange != "string") &&
-      Nn("Choose a source worksheet and one-column range."),
-    cz(e.delimiter),
+      throwValidationError("Choose a source worksheet and one-column range."),
+    assertDelimiterCharacter(e.delimiter),
     ["none", "first-row"].includes(e.header) ||
-      Nn("Choose whether the first source row contains headings."),
+      throwValidationError(
+        "Choose whether the first source row contains headings.",
+      ),
     e.formats !== undefined &&
       (!Array.isArray(e.formats) ||
-        e.formats.length > ih.fields ||
+        e.formats.length > dataModelBudgets.fields ||
         e.formats.some((t) => !["text", "general"].includes(t))) &&
-      Nn("Column conversion must be Text or General, with at most 50 columns."),
-    Y4(
+      throwValidationError(
+        "Column conversion must be Text or General, with at most 50 columns.",
+      ),
+    assertRecordKeys(
       e.destination,
       ["kind", "name", "sheetId", "address"],
       "Choose a separate output range or a new worksheet.",
     ));
   let r;
   if (e.destination.kind === "new-sheet") {
-    (Y4(e.destination, ["kind", "name"], "Invalid new worksheet destination."),
+    (assertRecordKeys(
+      e.destination,
+      ["kind", "name"],
+      "Invalid new worksheet destination.",
+    ),
       typeof e.destination.name != "string" &&
-        Nn("Enter an output worksheet name."));
+        throwValidationError("Enter an output worksheet name."));
     const t = e.destination.name.trim();
     ((!t ||
       t.length > 31 ||
       /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(t) ||
       t.startsWith("'") ||
       t.endsWith("'")) &&
-      Nn(
+      throwValidationError(
         "Output worksheet names need 1–31 characters without control/Excel-reserved characters or leading/trailing apostrophes.",
       ),
       (r = { kind: "new-sheet", name: t }));
   } else if (e.destination.kind === "range") {
-    (Y4(
+    (assertRecordKeys(
       e.destination,
       ["kind", "sheetId", "address"],
       "Invalid output range destination.",
     ),
       (typeof e.destination.sheetId != "string" ||
         typeof e.destination.address != "string") &&
-        Nn("Choose an output worksheet and one starting cell."));
+        throwValidationError(
+          "Choose an output worksheet and one starting cell.",
+        ));
     const t = _t(e.destination.address.trim());
     r = {
       kind: "range",
       sheetId: e.destination.sheetId,
       address: lg(t.row, t.col),
     };
-  } else Nn("Choose a separate output range or a new worksheet.");
+  } else
+    throwValidationError("Choose a separate output range or a new worksheet.");
   return {
     sourceSheetId: e.sourceSheetId,
     sourceRange: Ece(e.sourceRange),
@@ -1752,18 +1839,18 @@ function Ace(e) {
     destination: r,
   };
 }
-function wI(e, r) {
+function validateTextToColumnsPermissions(e, r) {
   return (
     [r.readOnly, r.includeHidden, r.allowNewSheet].some(
       (t) => t !== undefined && typeof t != "boolean",
-    ) && Nn("Text to Columns permissions must be boolean."),
-    r.readOnly && Nn("This workbook is read-only."),
+    ) && throwValidationError("Text to Columns permissions must be boolean."),
+    r.readOnly && throwValidationError("This workbook is read-only."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      Nn("The authorized worksheet context is invalid."),
+      throwValidationError("The authorized worksheet context is invalid."),
     {
       includeHidden: r.includeHidden ?? false,
       allowNewSheet: r.allowNewSheet ?? true,
@@ -1773,8 +1860,8 @@ function wI(e, r) {
     }
   );
 }
-function Bg(e, r, t) {
-  const n = ct(r);
+function assertSelectionInAuthorizedSheet(e, r, t) {
+  const n = parseRangeAddress(r);
   ((!t.allowedSheetIds.includes(e.id) ||
     (!t.includeHidden &&
       (e.hidden ||
@@ -1783,13 +1870,15 @@ function Bg(e, r, t) {
         cn(e, "column").some(
           (o) => o.start <= n.lastCol && o.end >= n.firstCol,
         )))) &&
-    Nn(
+    throwValidationError(
       "The selected cells are outside the visible, authorized worksheet context.",
     ),
     (n.lastRow >= e.rowCount || n.lastCol >= e.colCount) &&
-      Nn("The selected cells exceed the worksheet boundary."));
+      throwValidationError(
+        "The selected cells exceed the worksheet boundary.",
+      ));
 }
-function kce(e) {
+function formatCellTextValue(e) {
   return e === null
     ? ""
     : typeof e == "boolean"
@@ -1798,7 +1887,7 @@ function kce(e) {
         : "FALSE"
       : String(e);
 }
-function Sce(e) {
+function stripFormulaLiterals(e) {
   let r = "",
     t = 0;
   for (; t < e.length;) {
@@ -1822,15 +1911,15 @@ function Sce(e) {
   }
   return r;
 }
-function xI(e, r) {
+function assertOutputNameUnreferenced(e, r) {
   let t = 0;
   const n = (a) => (
-      (t += a.length) > ih.nameFormulaCharacters &&
-        Nn(
+      (t += a.length) > dataModelBudgets.nameFormulaCharacters &&
+        throwValidationError(
           "Output-name safety checking exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ),
       [
-        ...Sce(a).matchAll(
+        ...stripFormulaLiterals(a).matchAll(
           /('(?:[^']|'')*'|[\p{L}\p{M}\p{N}_\\][\p{L}\p{M}\p{N}_.\\]*)\s*!/gu,
         ),
       ].some((d) => {
@@ -1858,11 +1947,11 @@ function xI(e, r) {
   }
   for (const a of e.definedNames ?? []) o.push(a.refersTo);
   o.some(n) &&
-    Nn(
+    throwValidationError(
       "The output worksheet name is already referenced by workbook formulas or formula metadata. Choose another name to avoid reconnecting an unresolved source reference.",
     );
 }
-function Tce(e, r) {
+function parseImportedCellValue(e, r) {
   if (r === "general") {
     const t = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(e);
     if (/^(TRUE|FALSE)$/i.test(e))
@@ -1884,4 +1973,19 @@ function Tce(e, r) {
   return { raw: e, precision: false };
 }
 
-export { Ace, Bg, Cce, Nn, Tce, bce, hp, ih, kce, lg, vce, wI, wce, xI };
+export {
+  validateTextToColumnsRequest,
+  assertSelectionInAuthorizedSheet,
+  splitDelimitedCell,
+  throwValidationError,
+  parseImportedCellValue,
+  DataModelSnapshotNotice,
+  rangesOverlap,
+  dataModelBudgets,
+  formatCellTextValue,
+  lg,
+  DataModelDialog,
+  validateTextToColumnsPermissions,
+  useDialogFocusTrap,
+  assertOutputNameUnreferenced,
+};

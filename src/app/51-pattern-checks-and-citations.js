@@ -1,31 +1,52 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { PJ, iu } from "./01-core-schemas-and-hashing.js";
-import { U1, _t, cn, ct, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { MC, OC } from "./07-xlsx-archive-reader.js";
-import { yh } from "./09-workbook-links.js";
-import { TI, X2, r1, s3 } from "./20-calculation-options-and-sources.js";
 import {
-  Dj,
-  ES,
-  G4e,
-  H4e,
-  Oj,
-  W4e,
-  X4e,
-  YW,
-  _j,
+  buildCalculationClock,
+  sha256HexDigest,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  findRowOrigin,
+  _t,
+  cn,
+  parseRangeAddress,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  importNativeJsonFile,
+  toFileProcessingError,
+} from "./07-xlsx-archive-reader.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import {
+  validateCitationRange,
+  validateProposedCalculation,
+  answerGroundingLimits,
+  buildAssistantSelectionContext,
+} from "./20-calculation-options-and-sources.js";
+import {
+  formatScreenCountsSummary,
+  parseNumericText,
+  rangeColumnIndexes,
+  exportScreenReportJson,
+  nanToEmptyText,
+  runPatternChecks,
+  weekdayNames,
+  checkReportCurrency,
+  buildScreenRule,
   gf,
-  iA,
-  iN,
-  q4e,
+  normalizePatternCheckSettings,
+  screenRuleLabels,
+  parseScreenReportRequest,
 } from "./50-materiality-screen.js";
 
-function Z4e(e) {
-  const { text, language } = Dr(),
-    n = yh(),
+function PatternCheckDialog(e) {
+  const { text, language } = useWorkbookMessages(),
+    n = useCancellableOperation(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(0),
@@ -41,7 +62,7 @@ function Z4e(e) {
           comparison: "calculated",
           excludeBlankRows: true,
           excludedRows: [],
-          rules: [_j("duplicates", "rule1")],
+          rules: [buildScreenRule("duplicates", "rule1")],
           combination: { mode: "all", ruleIds: [] },
         },
       ),
@@ -73,14 +94,14 @@ function Z4e(e) {
             disclose: false,
             reason: "The host selection changed. Run checks again.",
           }
-        : YW(e.workbook, y, C, T)
+        : checkReportCurrency(e.workbook, y, C, T)
       : null,
     U = $ != null && $.disclose ? y : null,
     G = U?.results.find((ce) => ce.rule.id === V) ?? U?.results[0],
     H = V === "combined" ? U?.combination : G,
     Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
     X$1 = Math.min(B, Q - 1),
-    J = G4e(C.range),
+    J = rangeColumnIndexes(C.range),
     q = e.workbook.sheets.find((ce) => ce.id === e.sheetId),
     W = (ce) => h((ge) => ({ ...ge, ...ce })),
     K = (ce, ge) =>
@@ -121,7 +142,7 @@ function Z4e(e) {
     oe = () => {
       s.current++;
       try {
-        const ce = W4e(e.workbook, C, T);
+        const ce = runPatternChecks(e.workbook, C, T);
         (w(ce), A(N), F(""), z(""), D(ce.results[0].rule.id), _(0));
       } catch (ce) {
         (w(null), te(ce));
@@ -134,9 +155,9 @@ function Z4e(e) {
       try {
         if (ce.size > gf.reportBytes)
           throw Error("Choose a configuration no larger than 2,000,000 bytes.");
-        const we = await MC(ce, n.begin());
+        const we = await importNativeJsonFile(ce, n.begin());
         if (!d.current || s.current !== ge || u.current !== se) return;
-        const Ee = q4e(e.workbook, we);
+        const Ee = parseScreenReportRequest(e.workbook, we);
         if (Ee.sheetId !== e.sheetId)
           throw Error("The saved configuration belongs to another worksheet.");
         (h(Ee),
@@ -147,22 +168,25 @@ function Z4e(e) {
             "Configuration loaded. Run checks against the current source; saved findings are not trusted.",
           ));
       } catch (we) {
-        d.current && s.current === ge && u.current === se && te(OC(we));
+        d.current &&
+          s.current === ge &&
+          u.current === se &&
+          te(toFileProcessingError(we));
       }
     },
     he = (ce) => {
       try {
-        const se = ct(C.range),
-          we = q?.cells[`${ut(ce)}${se.firstRow + 1}`]?.raw;
-        return `${ut(ce)}${C.headers && we !== null && we !== undefined ? " — " + String(we).slice(0, 60) : ""}`;
+        const se = parseRangeAddress(C.range),
+          we = q?.cells[`${columnIndexToLetters(ce)}${se.firstRow + 1}`]?.raw;
+        return `${columnIndexToLetters(ce)}${C.headers && we !== null && we !== undefined ? " — " + String(we).slice(0, 60) : ""}`;
       } catch {
-        return ut(ce);
+        return columnIndexToLetters(ce);
       }
     },
     Se = (ce, ge) =>
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: "Field" }),
+          i.jsx(LocalizedText, { children: "Field" }),
           i.jsxs("select", {
             "aria-label": `${ce.id} field`,
             value: "column" in ce ? (ce.column ?? "") : "",
@@ -195,7 +219,7 @@ function Z4e(e) {
               {
                 children: [
                   i.jsx("input", {
-                    "aria-label": `${ce.id} ${se} ${ut(Ee)}`,
+                    "aria-label": `${ce.id} ${se} ${columnIndexToLetters(Ee)}`,
                     type: "checkbox",
                     checked: we.includes(Ee),
                     onChange: (Ae) =>
@@ -247,10 +271,12 @@ function Z4e(e) {
               children: [
                 i.jsx("h2", {
                   id: o,
-                  children: i.jsx(M, { children: "Pattern checks" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Pattern checks",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Duplicates, sequence gaps and unusual postings · read-only analysis",
                   }),
@@ -267,7 +293,7 @@ function Z4e(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Choose up to 500 source cells and map each rule explicitly. Results are review candidates, not proof of error or fraud. Every data-row position remains in the evidence ledger.",
           }),
@@ -277,7 +303,7 @@ function Z4e(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source range" }),
+                i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
                   value: C.range,
@@ -289,7 +315,7 @@ function Z4e(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Compare" }),
+                i.jsx(LocalizedText, { children: "Compare" }),
                 i.jsxs("select", {
                   "aria-label": text("Comparison basis"),
                   value: C.comparison,
@@ -311,7 +337,9 @@ function Z4e(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Exclude row numbers (comma separated)" }),
+                i.jsx(LocalizedText, {
+                  children: "Exclude row numbers (comma separated)",
+                }),
                 i.jsx("input", {
                   "aria-label": text("Excluded rows"),
                   value: f,
@@ -319,7 +347,7 @@ function Z4e(e) {
                     (p(ce.target.value),
                       W({
                         excludedRows: ce.target.value.trim()
-                          ? ce.target.value.split(",").map(ES)
+                          ? ce.target.value.split(",").map(parseNumericText)
                           : [],
                       }));
                   },
@@ -336,7 +364,9 @@ function Z4e(e) {
                   checked: C.headers,
                   onChange: (ce) => W({ headers: ce.target.checked }),
                 }),
-                i.jsx(M, { children: "First row contains headers" }),
+                i.jsx(LocalizedText, {
+                  children: "First row contains headers",
+                }),
               ],
             }),
             i.jsxs("label", {
@@ -347,7 +377,9 @@ function Z4e(e) {
                   checked: C.excludeBlankRows,
                   onChange: (ce) => W({ excludeBlankRows: ce.target.checked }),
                 }),
-                i.jsx(M, { children: "Exclude entirely blank rows" }),
+                i.jsx(LocalizedText, {
+                  children: "Exclude entirely blank rows",
+                }),
               ],
             }),
             e.allowHidden &&
@@ -359,7 +391,7 @@ function Z4e(e) {
                     checked: m,
                     onChange: (ce) => v(ce.target.checked),
                   }),
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "Include authorized hidden / filtered rows and columns",
                   }),
@@ -374,14 +406,20 @@ function Z4e(e) {
               className: "pattern-rule",
               children: [
                 i.jsxs("legend", {
-                  children: [ge + 1, ". ", iN[ce.kind], " · ", ce.id],
+                  children: [
+                    ge + 1,
+                    ". ",
+                    screenRuleLabels[ce.kind],
+                    " · ",
+                    ce.id,
+                  ],
                 }),
                 i.jsxs("div", {
                   className: "pattern-rule-heading",
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Rule label" }),
+                        i.jsx(LocalizedText, { children: "Rule label" }),
                         i.jsx("input", {
                           "aria-label": `${ce.id} label`,
                           maxLength: 80,
@@ -402,7 +440,10 @@ function Z4e(e) {
                             ),
                           },
                         }),
-                      children: [i.jsx(M, { children: "Remove " }), ce.id],
+                      children: [
+                        i.jsx(LocalizedText, { children: "Remove " }),
+                        ce.id,
+                      ],
                     }),
                   ],
                 }),
@@ -422,7 +463,9 @@ function Z4e(e) {
                                 onChange: (se) =>
                                   K(ge, { caseSensitive: se.target.checked }),
                               }),
-                              i.jsx(M, { children: "Case sensitive keys" }),
+                              i.jsx(LocalizedText, {
+                                children: "Case sensitive keys",
+                              }),
                             ],
                           }),
                           i.jsxs("label", {
@@ -434,7 +477,9 @@ function Z4e(e) {
                                 onChange: (se) =>
                                   K(ge, { trimText: se.target.checked }),
                               }),
-                              i.jsx(M, { children: "Trim key whitespace" }),
+                              i.jsx(LocalizedText, {
+                                children: "Trim key whitespace",
+                              }),
                             ],
                           }),
                         ],
@@ -442,7 +487,9 @@ function Z4e(e) {
                     ce.kind === "duplicates" &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Blank key policy" }),
+                          i.jsx(LocalizedText, {
+                            children: "Blank key policy",
+                          }),
                           i.jsxs("select", {
                             "aria-label": `${ce.id} blank key policy`,
                             value: ce.blankKeys,
@@ -488,18 +535,18 @@ function Z4e(e) {
                                 children: [
                                   se,
                                   se !== "step" ? " (optional)" : "",
-                                  i.jsx(ci, {
+                                  i.jsx(LocalizedNumberField, {
                                     allowEmpty: se !== "step",
                                     "aria-label": `${ce.id} ${se}`,
                                     min: se === "step" ? 1 : 0,
                                     step: "1",
-                                    value: Oj(ce[se]),
+                                    value: nanToEmptyText(ce[se]),
                                     onValueChange: (we) =>
                                       K(ge, {
                                         [se]:
                                           se !== "step" && we === ""
                                             ? null
-                                            : ES(we),
+                                            : parseNumericText(we),
                                       }),
                                   }),
                                 ],
@@ -518,13 +565,13 @@ function Z4e(e) {
                               {
                                 children: [
                                   se,
-                                  i.jsx(ci, {
+                                  i.jsx(LocalizedNumberField, {
                                     "aria-label": `${ce.id} ${se}`,
                                     min: "0",
                                     step: se === "precision" ? "1" : "any",
-                                    value: Oj(ce[se]),
+                                    value: nanToEmptyText(ce[se]),
                                     onValueChange: (we) =>
-                                      K(ge, { [se]: ES(we) }),
+                                      K(ge, { [se]: parseNumericText(we) }),
                                   }),
                                 ],
                               },
@@ -540,7 +587,9 @@ function Z4e(e) {
                                 onChange: (se) =>
                                   K(ge, { includeZero: se.target.checked }),
                               }),
-                              i.jsx(M, { children: "Flag zero amounts" }),
+                              i.jsx(LocalizedText, {
+                                children: "Flag zero amounts",
+                              }),
                             ],
                           }),
                         ],
@@ -548,7 +597,9 @@ function Z4e(e) {
                     (ce.kind === "weekend" || ce.kind === "holiday") &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Excel date system" }),
+                          i.jsx(LocalizedText, {
+                            children: "Excel date system",
+                          }),
                           i.jsxs("select", {
                             "aria-label": `${ce.id} date system`,
                             value: ce.dateSystem,
@@ -572,7 +623,9 @@ function Z4e(e) {
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Calendar name" }),
+                              i.jsx(LocalizedText, {
+                                children: "Calendar name",
+                              }),
                               i.jsx("input", {
                                 "aria-label": `${ce.id} calendar name`,
                                 value: ce.calendarName,
@@ -583,7 +636,9 @@ function Z4e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Calendar version" }),
+                              i.jsx(LocalizedText, {
+                                children: "Calendar version",
+                              }),
                               i.jsx("input", {
                                 "aria-label": `${ce.id} calendar version`,
                                 value: ce.calendarVersion,
@@ -594,7 +649,7 @@ function Z4e(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children:
                                   "Holiday dates (YYYY-MM-DD, one per line)",
                               }),
@@ -625,7 +680,7 @@ function Z4e(e) {
                     children: [
                       le(ce, ge, "groupColumns", ce.groupColumns),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Without start/end bounds, only gaps between observed values can be inferred. Sequence gaps are intervals with boundary citations, not missing source rows.",
                         }),
@@ -637,9 +692,11 @@ function Z4e(e) {
                     className: "pattern-checks",
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, { children: "Weekend weekdays" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Weekend weekdays",
+                        }),
                       }),
-                      X4e.map((se, we) =>
+                      weekdayNames.map((se, we) =>
                         i.jsxs(
                           "label",
                           {
@@ -665,7 +722,7 @@ function Z4e(e) {
                   }),
                 ce.kind === "holiday" &&
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Use an approved, versioned calendar for the relevant jurisdiction. No official holiday dates are inferred.",
                     }),
@@ -680,14 +737,14 @@ function Z4e(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Add a rule" }),
+                i.jsx(LocalizedText, { children: "Add a rule" }),
                 i.jsx("select", {
                   "aria-label": text("New rule type"),
                   value: g,
                   onChange: (ce) => b(ce.target.value),
                   lang: language("New rule type"),
                   "data-ui-label": "New rule type",
-                  children: Object.entries(iN).map(([ce, ge]) =>
+                  children: Object.entries(screenRuleLabels).map(([ce, ge]) =>
                     i.jsx("option", { value: ce, children: ge }, ce),
                   ),
                 }),
@@ -699,15 +756,15 @@ function Z4e(e) {
                 let ce = `rule${l.current++}`;
                 for (; C.rules.some((ge) => ge.id === ce);)
                   ce = `rule${l.current++}`;
-                W({ rules: [...C.rules, _j(g, ce)] });
+                W({ rules: [...C.rules, buildScreenRule(g, ce)] });
               },
-              children: i.jsx(M, { children: "Add rule" }),
+              children: i.jsx(LocalizedText, { children: "Add rule" }),
             }),
             i.jsxs("span", {
               children: [
                 C.rules.length,
                 " ",
-                i.jsx(M, { children: "/ 12 rules" }),
+                i.jsx(LocalizedText, { children: "/ 12 rules" }),
               ],
             }),
           ],
@@ -716,11 +773,13 @@ function Z4e(e) {
           className: "pattern-rule",
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, { children: "Combine row rules (optional)" }),
+              children: i.jsx(LocalizedText, {
+                children: "Combine row rules (optional)",
+              }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Match" }),
+                i.jsx(LocalizedText, { children: "Match" }),
                 " ",
                 i.jsxs("select", {
                   "aria-label": text("Combination mode"),
@@ -780,7 +839,7 @@ function Z4e(e) {
                 ),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "A row must be tested by every selected rule. Failed or not-applicable rules block a combined conclusion.",
               }),
@@ -793,14 +852,19 @@ function Z4e(e) {
             i.jsx("button", {
               className: "materiality-primary",
               onClick: oe,
-              children: i.jsx(M, { children: "Run pattern checks" }),
+              children: i.jsx(LocalizedText, {
+                children: "Run pattern checks",
+              }),
             }),
             i.jsx("button", {
               disabled: !($ != null && $.current),
               onClick: () => {
                 try {
                   if (!y) throw Error("Run a current report first.");
-                  (ae(H4e(e.workbook, y, C, T), "pattern-checks-report.json"),
+                  (ae(
+                    exportScreenReportJson(e.workbook, y, C, T),
+                    "pattern-checks-report.json",
+                  ),
                     z(
                       "Report download requested with source evidence, settings, counts and findings.",
                     ));
@@ -808,7 +872,7 @@ function Z4e(e) {
                   te(ce);
                 }
               },
-              children: i.jsx(M, { children: "Download report" }),
+              children: i.jsx(LocalizedText, { children: "Download report" }),
             }),
             i.jsx("button", {
               onClick: () => {
@@ -818,7 +882,7 @@ function Z4e(e) {
                       {
                         schemaVersion: 1,
                         kind: "pattern-audit",
-                        request: iA(e.workbook, C),
+                        request: normalizePatternCheckSettings(e.workbook, C),
                       },
                       null,
                       2,
@@ -830,11 +894,13 @@ function Z4e(e) {
                   te(ce);
                 }
               },
-              children: i.jsx(M, { children: "Save configuration" }),
+              children: i.jsx(LocalizedText, {
+                children: "Save configuration",
+              }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Load configuration" }),
+                i.jsx(LocalizedText, { children: "Load configuration" }),
                 i.jsx("input", {
                   "aria-label": text("Load pattern configuration"),
                   type: "file",
@@ -854,7 +920,7 @@ function Z4e(e) {
           i.jsxs("p", {
             className: "materiality-error",
             role: "alert",
-            children: [i.jsx(M, { children: "Check failed: " }), k],
+            children: [i.jsx(LocalizedText, { children: "Check failed: " }), k],
           }),
         j && i.jsx("p", { role: "status", children: j }),
         $ &&
@@ -875,7 +941,7 @@ function Z4e(e) {
                 children: [
                   $ != null && $.current ? "Current" : "Previous",
                   " ",
-                  i.jsx(M, { children: "report —" }),
+                  i.jsx(LocalizedText, { children: "report —" }),
                   " ",
                   U.status,
                 ],
@@ -886,28 +952,28 @@ function Z4e(e) {
                   "!",
                   U.source.range,
                   " ",
-                  i.jsx(M, { children: "· revision" }),
+                  i.jsx(LocalizedText, { children: "· revision" }),
                   " ",
                   U.source.revision,
                   " · ",
                   U.counts.population,
                   " ",
-                  i.jsx(M, { children: "population · " }),
+                  i.jsx(LocalizedText, { children: "population · " }),
                   U.counts.excluded,
                   " ",
-                  i.jsx(M, { children: "globally excluded ·" }),
+                  i.jsx(LocalizedText, { children: "globally excluded ·" }),
                   " ",
                   U.counts.rulesComplete,
                   " ",
-                  i.jsx(M, { children: "complete /" }),
+                  i.jsx(LocalizedText, { children: "complete /" }),
                   " ",
                   U.counts.rulesFailed,
                   " ",
-                  i.jsx(M, { children: "failed /" }),
+                  i.jsx(LocalizedText, { children: "failed /" }),
                   " ",
                   U.counts.rulesNotApplicable,
                   " ",
-                  i.jsx(M, { children: "not applicable rules" }),
+                  i.jsx(LocalizedText, { children: "not applicable rules" }),
                 ],
               }),
               U.messages.map((ce, ge) =>
@@ -928,7 +994,9 @@ function Z4e(e) {
                           ce.status,
                         ],
                       }),
-                      i.jsx("p", { children: Dj(ce.counts) }),
+                      i.jsx("p", {
+                        children: formatScreenCountsSummary(ce.counts),
+                      }),
                       ce.messages.map((ge, se) =>
                         i.jsx("p", { children: ge }, se),
                       ),
@@ -939,17 +1007,19 @@ function Z4e(e) {
               ),
               i.jsxs("h4", {
                 children: [
-                  i.jsx(M, { children: "Combined result — " }),
+                  i.jsx(LocalizedText, { children: "Combined result — " }),
                   U.combination.status,
                 ],
               }),
-              i.jsx("p", { children: Dj(U.combination.counts) }),
+              i.jsx("p", {
+                children: formatScreenCountsSummary(U.combination.counts),
+              }),
               U.combination.messages.map((ce, ge) =>
                 i.jsx("p", { children: ce }, ge),
               ),
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Evidence ledger" }),
+                  i.jsx(LocalizedText, { children: "Evidence ledger" }),
                   i.jsxs("select", {
                     "aria-label": text("Evidence rule"),
                     value: V,
@@ -985,18 +1055,24 @@ function Z4e(e) {
                       children: i.jsxs("tr", {
                         children: [
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Source row" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Source row",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Disposition" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Disposition",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Reasons / finding IDs",
                             }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Source values" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Source values",
+                            }),
                           }),
                         ],
                       }),
@@ -1041,32 +1117,36 @@ function Z4e(e) {
                   i.jsx("button", {
                     disabled: !X$1,
                     onClick: () => _(X$1 - 1),
-                    children: i.jsx(M, { children: "Previous rows" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Previous rows",
+                    }),
                   }),
                   i.jsxs("span", {
                     children: [
-                      i.jsx(M, { children: "Page " }),
+                      i.jsx(LocalizedText, { children: "Page " }),
                       X$1 + 1,
                       " ",
-                      i.jsx(M, { children: "of " }),
+                      i.jsx(LocalizedText, { children: "of " }),
                       Q,
                     ],
                   }),
                   i.jsx("button", {
                     disabled: X$1 >= Q - 1,
                     onClick: () => _(X$1 + 1),
-                    children: i.jsx(M, { children: "Next rows" }),
+                    children: i.jsx(LocalizedText, { children: "Next rows" }),
                   }),
                 ],
               }),
               i.jsx("h4", {
-                children: i.jsx(M, { children: "Review candidates" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Review candidates",
+                }),
               }),
               i.jsxs("p", {
                 children: [
                   H?.findings.length ?? 0,
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "finding groups / intervals. Open a finding for complete rule settings, counts, matching group and raw/evaluated source-cell citations.",
                   }),
@@ -1085,30 +1165,34 @@ function Z4e(e) {
                         i.jsx("p", { children: ce.detail }),
                         i.jsxs("p", {
                           children: [
-                            i.jsx(M, { children: "Rule " }),
+                            i.jsx(LocalizedText, { children: "Rule " }),
                             ce.rule.id,
                             " ",
-                            i.jsx(M, { children: "v" }),
+                            i.jsx(LocalizedText, { children: "v" }),
                             ce.rule.version,
-                            i.jsx(M, { children: "; group " }),
+                            i.jsx(LocalizedText, { children: "; group " }),
                             ce.group.id,
-                            i.jsx(M, { children: "; source rows " }),
+                            i.jsx(LocalizedText, {
+                              children: "; source rows ",
+                            }),
                             ce.group.memberRows.join(", "),
                           ],
                         }),
                         ce.missing &&
                           i.jsxs("p", {
                             children: [
-                              i.jsx(M, { children: "Missing values: " }),
+                              i.jsx(LocalizedText, {
+                                children: "Missing values: ",
+                              }),
                               ce.missing.count,
-                              i.jsx(M, { children: "; interval" }),
+                              i.jsx(LocalizedText, { children: "; interval" }),
                               " ",
                               ce.missing.first,
                               "–",
                               ce.missing.last,
-                              i.jsx(M, { children: "; step " }),
+                              i.jsx(LocalizedText, { children: "; step " }),
                               ce.missing.step,
-                              i.jsx(M, { children: "; examples " }),
+                              i.jsx(LocalizedText, { children: "; examples " }),
                               ce.missing.examples.join(", "),
                               ce.missing.examplesTruncated
                                 ? " (first 20 only; complete interval above)"
@@ -1127,7 +1211,7 @@ function Z4e(e) {
               i.jsxs("details", {
                 children: [
                   i.jsx("summary", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Source ledger, settings and interpretation notes",
                     }),
@@ -1147,23 +1231,23 @@ function Z4e(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close" }),
+            children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
       ],
     }),
   });
 }
-const K4e = (e) => iu(new TextEncoder().encode(e));
-function JW(e) {
-  return K4e(
+const hashCitationText = (e) => sha256HexDigest(new TextEncoder().encode(e));
+function buildCitationContext(e) {
+  return hashCitationText(
     JSON.stringify({
       workbookId: e.workbookId,
       revision: e.revision,
       sheetId: e.sheetId,
       sheetName: e.sheetName,
       range: e.range,
-      ...PJ(e),
+      ...buildCalculationClock(e),
       cells: e.cells.map(({ address, raw, value }) => ({
         address,
         raw,
@@ -1172,14 +1256,14 @@ function JW(e) {
     }),
   );
 }
-const QW = new WeakMap(),
-  eH = (e) =>
+const citationRangeCache = new WeakMap(),
+  citationRangeKey = (e) =>
     JSON.stringify([
       e.sheetId,
-      TI(e.range),
+      validateCitationRange(e.range),
       e.ranges && e.ranges.length !== 1 ? e.ranges : undefined,
     ]);
-function tH(e, r, t) {
+function validateCitationVisibility(e, r, t) {
   const n = e.sheets.find((s) => s.id === r);
   if (!n || n.hidden || n.veryHidden)
     throw Error("Citation worksheet is unavailable or hidden.");
@@ -1197,9 +1281,9 @@ function tH(e, r, t) {
   }
   return n;
 }
-function Mj(e, r, t, n, o = {}) {
-  const a = X2(e, r, t),
-    s = s3(e, r);
+function buildAnswerCitations(e, r, t, n, o = {}) {
+  const a = validateProposedCalculation(e, r, t),
+    s = buildAssistantSelectionContext(e, r);
   if (JSON.stringify(s) !== JSON.stringify(n))
     throw Error(
       "Answer source is stale or outside the original approved context. Request a fresh answer.",
@@ -1207,15 +1291,15 @@ function Mj(e, r, t, n, o = {}) {
   if (r.ranges && r.ranges.length !== 1)
     throw Error("Citations require one approved rectangle.");
   const d = e.sheets.find((g) => g.id === s.sheetId),
-    u = JW(s),
+    u = buildCitationContext(s),
     l = new Map(s.cells.map((g) => [g.address, g])),
     c = [],
     h = new Map(),
     f = (g) => {
-      const b = TI(g);
+      const b = validateCitationRange(g);
       if (b.some((E) => !l.has(E)))
         throw Error("Citation is outside approved context.");
-      tH(e, s.sheetId, b);
+      validateCitationVisibility(e, s.sheetId, b);
       const y = b.length === 1 ? b[0] : `${b[0]}:${b.at(-1)}`;
       let w = h.get(y);
       return (
@@ -1244,7 +1328,7 @@ function Mj(e, r, t, n, o = {}) {
               sourceOrigin:
                 o.includeSourceOrigins === false
                   ? null
-                  : U1(e, d.id, _t(E).row),
+                  : findRowOrigin(e, d.id, _t(E).row),
             };
           }),
         }),
@@ -1292,29 +1376,29 @@ function Mj(e, r, t, n, o = {}) {
     };
   if (
     new TextEncoder().encode(JSON.stringify(m, null, 2)).length >
-    r1.receiptBytes
+    answerGroundingLimits.receiptBytes
   )
     throw Error(
       "Complete answer evidence exceeds 2,000,000 bytes. Reduce the selection or answer; evidence is never silently truncated.",
     );
   return (
-    QW.set(m, {
+    citationRangeCache.set(m, {
       snapshot: JSON.stringify(e),
       content: JSON.stringify(m),
-      selection: eH(r),
+      selection: citationRangeKey(r),
     }),
     m
   );
 }
-function fg(e, r, t) {
-  const n = QW.get(t),
+function evaluateAnswerEvidence(e, r, t) {
+  const n = citationRangeCache.get(t),
     o = (a) => ({ current: false, disclose: false, reason: a });
   if (!n || JSON.stringify(t) !== n.content)
     return o(
       "Answer evidence is untrusted or altered. Request a fresh answer.",
     );
   try {
-    if (eH(r) !== n.selection)
+    if (citationRangeKey(r) !== n.selection)
       return o(
         "Approved selection changed. Previous answer and citations are unavailable.",
       );
@@ -1323,12 +1407,13 @@ function fg(e, r, t) {
         "Workbook content or revision changed. Previous answer and citations are stale.",
       );
     for (const a of t.citations)
-      tH(
+      validateCitationVisibility(
         e,
         a.sheetId,
         a.cells.map((s) => s.address),
       );
-    return JW(s3(e, r)) !== t.contextSha256
+    return buildCitationContext(buildAssistantSelectionContext(e, r)) !==
+      t.contextSha256
       ? o("Calculated source values changed. Request a fresh answer.")
       : {
           current: true,
@@ -1341,27 +1426,27 @@ function fg(e, r, t) {
     );
   }
 }
-function Y4e(e, r, t, n) {
-  const o = fg(e, r, t);
+function getCitationStatus(e, r, t, n) {
+  const o = evaluateAnswerEvidence(e, r, t);
   if (!o.current) throw Error(o.reason);
   const a = t.citations.find((s) => s.id === n);
   if (!a) throw Error("Unknown citation.");
   return structuredClone(a);
 }
-function J4e(e, r, t) {
-  const n = fg(e, r, t);
+function serializeCurrentCitation(e, r, t) {
+  const n = evaluateAnswerEvidence(e, r, t);
   if (!n.current) throw Error(n.reason);
   return JSON.stringify(t, null, 2);
 }
-const jj = (e) =>
+const formatCellValueForCitation = (e) =>
   e === null ? "(blank)" : typeof e == "string" ? JSON.stringify(e) : String(e);
-function Q4e(e) {
-  const { text, language } = Dr(),
+function AssistantAnswerEvidence(e) {
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(""),
     [d, u] = ne.useState(""),
     [l, c] = ne.useState(0),
-    h = fg(e.workbook, e.selection, e.evidence);
+    h = evaluateAnswerEvidence(e.workbook, e.selection, e.evidence);
   if (!h.disclose)
     return i.jsx("p", {
       role: "status",
@@ -1374,7 +1459,7 @@ function Q4e(e) {
     v = Math.min(l, m - 1),
     g = (b, y) => {
       try {
-        const w = Y4e(e.workbook, e.selection, f, b);
+        const w = getCitationStatus(e.workbook, e.selection, f, b);
         if (y && !w.cells.some((E) => E.address === y))
           throw Error("Cell is outside this citation.");
         (e.onNavigate(w.sheetId, y ?? w.cells[0].address),
@@ -1395,14 +1480,14 @@ function Q4e(e) {
       f.mode === "legacy-unverified" &&
         i.jsx("p", {
           className: "lg-evidence-warning",
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Unverified narrative: this adapter did not link individual claims to evidence. The listed cells are references only.",
           }),
         }),
       i.jsx("p", {
         className: "lg-evidence-note",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Workbook links verify source identity, scope and revision. Review whether the evidence supports each statement.",
         }),
@@ -1442,7 +1527,7 @@ function Q4e(e) {
                         "!",
                         w.range,
                         " ",
-                        i.jsx(M, { children: "· revision " }),
+                        i.jsx(LocalizedText, { children: "· revision " }),
                         w.revision,
                       ],
                     },
@@ -1468,7 +1553,7 @@ function Q4e(e) {
                       w.url,
                       i.jsx("br", {}),
                       i.jsx("small", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Adapter-supplied external source; not fetched or verified.",
                         }),
@@ -1500,19 +1585,27 @@ function Q4e(e) {
             i.jsxs("h4", { children: [p.sheetName, "!", p.range] }),
             i.jsxs("dl", {
               children: [
-                i.jsx("dt", { children: i.jsx(M, { children: "Workbook" }) }),
+                i.jsx("dt", {
+                  children: i.jsx(LocalizedText, { children: "Workbook" }),
+                }),
                 i.jsx("dd", { children: p.workbookId }),
-                i.jsx("dt", { children: i.jsx(M, { children: "Revision" }) }),
+                i.jsx("dt", {
+                  children: i.jsx(LocalizedText, { children: "Revision" }),
+                }),
                 i.jsx("dd", { children: p.revision }),
-                i.jsx("dt", { children: i.jsx(M, { children: "Sheet ID" }) }),
+                i.jsx("dt", {
+                  children: i.jsx(LocalizedText, { children: "Sheet ID" }),
+                }),
                 i.jsx("dd", { children: p.sheetId }),
-                i.jsx("dt", { children: i.jsx(M, { children: "Captured" }) }),
+                i.jsx("dt", {
+                  children: i.jsx(LocalizedText, { children: "Captured" }),
+                }),
                 i.jsx("dd", { children: f.capturedAt }),
               ],
             }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "The cited cell is focused in the grid. The approved shared selection remains ",
                 }),
@@ -1534,11 +1627,17 @@ function Q4e(e) {
                     i.jsxs("dl", {
                       children: [
                         i.jsx("dt", {
-                          children: i.jsx(M, { children: "Stored input" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Stored input",
+                          }),
                         }),
-                        i.jsx("dd", { children: jj(b.raw) }),
+                        i.jsx("dd", {
+                          children: formatCellValueForCitation(b.raw),
+                        }),
                         i.jsx("dt", {
-                          children: i.jsx(M, { children: "Formula" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Formula",
+                          }),
                         }),
                         i.jsx("dd", {
                           children:
@@ -1548,11 +1647,17 @@ function Q4e(e) {
                               : "No formula"),
                         }),
                         i.jsx("dt", {
-                          children: i.jsx(M, { children: "Captured value" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Captured value",
+                          }),
                         }),
-                        i.jsx("dd", { children: jj(b.value) }),
+                        i.jsx("dd", {
+                          children: formatCellValueForCitation(b.value),
+                        }),
                         i.jsx("dt", {
-                          children: i.jsx(M, { children: "Source linkage" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Source linkage",
+                          }),
                         }),
                         i.jsx("dd", {
                           children: b.sourceOrigin
@@ -1563,21 +1668,27 @@ function Q4e(e) {
                                   " ",
                                   b.sourceOrigin.sourceSheet,
                                   " ",
-                                  i.jsx(M, { children: "· original row" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "· original row",
+                                  }),
                                   " ",
                                   b.sourceOrigin.originalRow,
                                   i.jsx("br", {}),
-                                  i.jsx(M, { children: "Source ID: " }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Source ID: ",
+                                  }),
                                   b.sourceOrigin.sourceId,
                                   i.jsx("br", {}),
-                                  i.jsx(M, { children: "Origin ID: " }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Origin ID: ",
+                                  }),
                                   b.sourceOrigin.id,
                                   " (",
                                   b.sourceOrigin.kind,
                                   ")",
                                   i.jsx("br", {}),
                                   i.jsx("small", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Recorded row lineage; original file bytes and original column are not verified here.",
                                     }),
@@ -1601,21 +1712,23 @@ function Q4e(e) {
                 i.jsx("button", {
                   disabled: v === 0,
                   onClick: () => c(v - 1),
-                  children: i.jsx(M, { children: "Previous cells" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Previous cells",
+                  }),
                 }),
                 i.jsxs("span", {
                   children: [
-                    i.jsx(M, { children: "Page " }),
+                    i.jsx(LocalizedText, { children: "Page " }),
                     v + 1,
                     " ",
-                    i.jsx(M, { children: "of " }),
+                    i.jsx(LocalizedText, { children: "of " }),
                     m,
                   ],
                 }),
                 i.jsx("button", {
                   disabled: v >= m - 1,
                   onClick: () => c(v + 1),
-                  children: i.jsx(M, { children: "Next cells" }),
+                  children: i.jsx(LocalizedText, { children: "Next cells" }),
                 }),
               ],
             }),
@@ -1625,7 +1738,7 @@ function Q4e(e) {
         className: "lg-button full",
         onClick: () => {
           try {
-            const b = J4e(e.workbook, e.selection, f),
+            const b = serializeCurrentCitation(e.workbook, e.selection, f),
               y = URL.createObjectURL(
                 new Blob([b], { type: "application/json" }),
               ),
@@ -1642,12 +1755,14 @@ function Q4e(e) {
             s(b instanceof Error ? b.message : "Evidence unavailable.");
           }
         },
-        children: i.jsx(M, { children: "Download answer evidence" }),
+        children: i.jsx(LocalizedText, {
+          children: "Download answer evidence",
+        }),
       }),
     ],
   });
 }
-const $h = {
+const patternCheckBudgets = {
     mappings: 20,
     selectedCells: 1e4,
     rowsPerRange: 1e3,
@@ -1660,8 +1775,9 @@ const $h = {
   },
   Vf = (e) =>
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
-  yp = (e) => e?.raw ?? null,
-  Fj = (e) => yp(e) === null || yp(e) === "",
+  readFormulaText = (e) => e?.raw ?? null,
+  isBlankFormulaCell = (e) =>
+    readFormulaText(e) === null || readFormulaText(e) === "",
   ww = (e, r) => {
     if (e === r) return true;
     if (!e || !r || typeof e != "object" || typeof r != "object") return false;
@@ -1684,14 +1800,18 @@ const $h = {
       o.length === a.length && o.every((s, d) => s === a[d] && ww(t[s], n[s]))
     );
   },
-  xc = (e, r) => `${ut(r)}${e + 1}`,
-  e2e = "[A-Za-z_.\\d\\u007F-\\uFFFF]+",
-  I3 = `(?:'(?:[^']|'')*'|${e2e})`,
-  t2e =
+  xc = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
+  unquotedSheetNamePattern = "[A-Za-z_.\\d\\u007F-\\uFFFF]+",
+  I3 = `(?:'(?:[^']|'')*'|${unquotedSheetNamePattern})`,
+  a1RangePattern =
     "(?:\\$?[A-Za-z]{1,3}\\$?[1-9]\\d*(?:\\s*:\\s*\\$?[A-Za-z]{1,3}\\$?[1-9]\\d*)?|\\$?[A-Za-z]{1,3}\\s*:\\s*\\$?[A-Za-z]{1,3}|\\$?[1-9]\\d*\\s*:\\s*\\$?[1-9]\\d*)",
-  rH = new RegExp(`^(${I3}\\s*!\\s*)?(${t2e})(#)?`),
-  r2e = new RegExp(`^(${I3})\\s*!\\s*([A-Za-z_\\\\][A-Za-z0-9_.\\\\]*)`),
-  n2e = new RegExp(`^${I3}\\s*:\\s*${I3}\\s*!`),
+  referenceTokenPattern = new RegExp(
+    `^(${I3}\\s*!\\s*)?(${a1RangePattern})(#)?`,
+  ),
+  definedNameReferencePattern = new RegExp(
+    `^(${I3})\\s*!\\s*([A-Za-z_\\\\][A-Za-z0-9_.\\\\]*)`,
+  ),
+  sheetSpanPattern = new RegExp(`^${I3}\\s*:\\s*${I3}\\s*!`),
   Bj = (e) =>
     e
       .trim()
@@ -1699,8 +1819,8 @@ const $h = {
       .trim()
       .replace(/^'|'$/g, "")
       .replace(/''/g, "'"),
-  i2e = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
-  nH = (e) => !/[A-Za-z0-9_.!:]/.test(e),
+  identifierPattern = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
+  isNonReferenceToken = (e) => !/[A-Za-z0-9_.!:]/.test(e),
   o2e = (e, r) => {
     const t = _t(r);
     return e
@@ -1725,7 +1845,7 @@ const $h = {
         },
       );
   };
-function a2e(e, r) {
+function computeFormulaSignature(e, r) {
   if (!e.startsWith("=") || e.length > 4096)
     throw Error(
       "Pattern comparison requires a formula of at most 4,096 characters.",
@@ -1758,8 +1878,12 @@ function a2e(e, r) {
       t += e.slice(l, n);
       continue;
     }
-    const d = rH.exec(a);
-    if (d && nH(a[d[0].length] ?? "") && !/^\s*\(/.test(a.slice(d[0].length))) {
+    const d = referenceTokenPattern.exec(a);
+    if (
+      d &&
+      isNonReferenceToken(a[d[0].length] ?? "") &&
+      !/^\s*\(/.test(a.slice(d[0].length))
+    ) {
       ((t += (d[1]?.toUpperCase() ?? "") + o2e(d[2], r) + (d[3] ?? "")),
         (n += d[0].length));
       continue;
@@ -1778,21 +1902,21 @@ function a2e(e, r) {
 }
 
 export {
-  $h,
+  patternCheckBudgets,
   Bj,
-  Fj,
-  Mj,
-  Q4e,
+  isBlankFormulaCell,
+  buildAnswerCitations,
+  AssistantAnswerEvidence,
   Vf,
-  Z4e,
-  a2e,
-  fg,
-  i2e,
-  n2e,
-  nH,
-  r2e,
-  rH,
+  PatternCheckDialog,
+  computeFormulaSignature,
+  evaluateAnswerEvidence,
+  identifierPattern,
+  sheetSpanPattern,
+  isNonReferenceToken,
+  definedNameReferencePattern,
+  referenceTokenPattern,
   ww,
   xc,
-  yp,
+  readFormulaText,
 };

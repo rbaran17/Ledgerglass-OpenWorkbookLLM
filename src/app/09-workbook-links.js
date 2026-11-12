@@ -3,34 +3,45 @@ import ne from "react";
 import i from "react/jsx-runtime";
 import { X } from "lucide-react";
 import { string, number, array, literal, unknown, object } from "zod";
-import { hr } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  $R,
-  $a,
-  Cd,
-  WR,
-  kC,
-  rn,
-  uh,
-  ut,
-  zR,
-  zoe,
+  validateRetainedSourceFile,
+  assertWorkbookStructureEditable,
+  sourceImportLimits,
+  requireRetainedXlsxSource,
+  validateExtractedSourceTables,
+  normalizeWorkbookInput,
+  workbookLinkLimits,
+  columnIndexToLetters,
+  resolveExtractedCellValue,
+  buildRetainedSourceRecord,
 } from "./03-workbook-model.js";
-import { DC, Kse, T$, Zse, nT } from "./05-add-ins-and-custom-functions.js";
-import { H1, im } from "./07-xlsx-archive-reader.js";
-import { F$, P$, W2, cT } from "./08-xlsx-export-and-preservation.js";
+import {
+  assertSourceInspectionCurrent,
+  applyWorkbookLinkPreview,
+  recordSourceInspection,
+  previewWorkbookLinkOperation,
+  buildWorkbookLinkReview,
+} from "./05-add-ins-and-custom-functions.js";
+import { importWorkbookFile, runFileImport } from "./07-xlsx-archive-reader.js";
+import {
+  F$,
+  buildExchangeSchemaReport,
+  importXlsxWorkbook,
+  createEmptyExportLedger,
+} from "./08-xlsx-export-and-preservation.js";
 
-function Sue(e) {
-  const r = WR(e),
-    t = W2(r.bytes, cT()),
-    n = P$("import", r.fileName, r.bytes.length, e, t);
+function buildSourceImportRecord(e) {
+  const r = requireRetainedXlsxSource(e),
+    t = importXlsxWorkbook(r.bytes, createEmptyExportLedger()),
+    n = buildExchangeSchemaReport("import", r.fileName, r.bytes.length, e, t);
   return ((n.partInventory = F$(unzipSync(r.bytes), r.sha256)), n);
 }
-const W$ = ne.createContext({}),
-  FC = () => ne.useContext(W$);
-function yh() {
-  const e = FC(),
+const operationScopeContext = ne.createContext({}),
+  useOperationScope = () => ne.useContext(operationScopeContext);
+function useCancellableOperation() {
+  const e = useOperationScope(),
     r = ne.useRef(null),
     t = ne.useCallback(() => {
       return r.current?.abort();
@@ -53,10 +64,10 @@ function yh() {
     }
   );
 }
-function Tue({ workbook, sources, onReview }) {
+function WorkbookLinkStatusBadge({ workbook, sources, onReview }) {
   const n = ne.useMemo(() => {
     try {
-      const o = nT(workbook, { sources });
+      const o = buildWorkbookLinkReview(workbook, { sources });
       return !o.links.length && !o.unsupported.length
         ? null
         : `${o.links.length} workbook link targets · ${o.links.filter((a) => a.status !== "matches-approved-snapshot").length} need source review · ${o.unsupported.length} unsupported. Displayed linked values are cached snapshots.`;
@@ -78,12 +89,12 @@ function Tue({ workbook, sources, onReview }) {
       })
     : null;
 }
-function Nue(e) {
+function WorkbookLinksDialog(e) {
   var ge;
   const r = ne.useRef(e);
   r.current = e;
   const t = ne.useRef(null),
-    n = yh(),
+    n = useCancellableOperation(),
     o = ne.useRef(0),
     a = ne.useRef(true),
     [s, d] = ne.useState([]),
@@ -106,7 +117,10 @@ function Nue(e) {
     H = e.approvedSources ?? s,
     Q = ne.useMemo(() => {
       try {
-        return { inventory: nT(e.workbook, { sources: H }), error: "" };
+        return {
+          inventory: buildWorkbookLinkReview(e.workbook, { sources: H }),
+          error: "",
+        };
       } catch (se) {
         return { inventory: null, error: se.message };
       }
@@ -160,7 +174,7 @@ function Nue(e) {
     oe = () =>
       ae(() => {
         (w(
-          Zse(
+          previewWorkbookLinkOperation(
             e.workbook,
             {
               action: f,
@@ -178,7 +192,7 @@ function Nue(e) {
     de = () =>
       ae(() => {
         if (!y) return;
-        const se = Kse(r.current.workbook, y, te());
+        const se = applyWorkbookLinkPreview(r.current.workbook, y, te());
         (r.current.onWorkbookChange(se, `${y.request.action} workbook links`),
           w(null),
           F(
@@ -189,7 +203,7 @@ function Nue(e) {
       const we = ++o.current;
       (D(true), A(""), _(null), w(null));
       try {
-        const Ee = await H1(se, n.begin());
+        const Ee = await importWorkbookFile(se, n.begin());
         if (!a.current || we !== o.current) return;
         (_(Ee.workbook),
           T(q || `[${se.name}]`),
@@ -744,7 +758,11 @@ function Nue(e) {
                               ...H.filter((we) => we.target !== C),
                               { target: C, workbook: B, allowedSheetIds: N },
                             ];
-                            (nT(e.workbook, { sources: se }), K(se), _(null));
+                            (buildWorkbookLinkReview(e.workbook, {
+                              sources: se,
+                            }),
+                              K(se),
+                              _(null));
                           }),
                         children: "Approve selected source",
                       }),
@@ -855,12 +873,12 @@ function Nue(e) {
             i.jsxs("p", {
               children: [
                 "Limits: ",
-                uh.sources,
+                workbookLinkLimits.sources,
                 " sources,",
                 " ",
-                uh.cells.toLocaleString(),
+                workbookLinkLimits.cells.toLocaleString(),
                 " cached source cells and ",
-                uh.formulas,
+                workbookLinkLimits.formulas,
                 " destination formulas. Static A1 cells/ranges only. Linked arrays, external names, DDE and automatic/network refresh are unsupported. XLSX exports link formulas as inert text; native JSON retains the reviewed cache. Breaking links does not alter an attached original file.",
               ],
             }),
@@ -881,13 +899,17 @@ function Nue(e) {
   });
 }
 function Rue(e, r) {
-  return im("source", e, r);
+  return runFileImport("source", e, r);
 }
-function H$(e) {
-  return { fileName: e.fileName, bytes: DC(e), sha256: e.sha256 };
+function toSourceFileDescriptor(e) {
+  return {
+    fileName: e.fileName,
+    bytes: assertSourceInspectionCurrent(e),
+    sha256: e.sha256,
+  };
 }
-function q$(e, r) {
-  const t = DC(e);
+function parseExtractionResult(e, r) {
+  const t = assertSourceInspectionCurrent(e);
   if (e.method !== "document-adapter")
     throw Error("JSON/XML use the native structured parser.");
   const n = object({
@@ -895,7 +917,7 @@ function q$(e, r) {
     sourceSha256: string(),
     extractor: string().min(1).max(200),
     pageCount: number().int().min(1).max(1e4),
-    tables: array(unknown()).min(1).max(Cd.tables),
+    tables: array(unknown()).min(1).max(sourceImportLimits.tables),
   })
     .strict()
     .parse(r);
@@ -903,7 +925,7 @@ function q$(e, r) {
     throw Error("Extraction does not match the selected source hash.");
   if (["png", "jpeg"].includes(e.format) && n.pageCount !== 1)
     throw Error("An image has one source page.");
-  const o = kC({
+  const o = validateExtractedSourceTables({
     ...e,
     extractor: n.extractor,
     pageCount: n.pageCount,
@@ -920,11 +942,11 @@ function q$(e, r) {
           throw Error("A source region exceeds the declared page count.");
   return (
     o.tables.length > 1 && o.tables.forEach((a) => (a.ambiguous = true)),
-    T$(o, t, e.fileName),
+    recordSourceInspection(o, t, e.fileName),
     o
   );
 }
-async function Iue(e, r, t, n = {}) {
+async function runDocumentExtraction(e, r, t, n = {}) {
   var l, c, h;
   if (t !== true)
     throw Error(
@@ -932,7 +954,7 @@ async function Iue(e, r, t, n = {}) {
     );
   if (e.method !== "document-adapter")
     throw Error("Choose a document source for extraction.");
-  const o = H$(e);
+  const o = toSourceFileDescriptor(e);
   if ((l = n.signal) != null && l.aborted)
     throw Error("Document extraction cancelled.");
   const a = n.timeoutMs ?? 3e4;
@@ -970,7 +992,7 @@ async function Iue(e, r, t, n = {}) {
             (b) => {
               if (!m)
                 try {
-                  v(undefined, q$(e, b));
+                  v(undefined, parseExtractionResult(e, b));
                 } catch {
                   v(
                     Error(
@@ -991,12 +1013,12 @@ async function Iue(e, r, t, n = {}) {
       s.abort());
   }
 }
-const dT = new WeakMap();
-function _ue(e, r, t) {
-  const n = DC(r);
+const importPreviewRegistry = new WeakMap();
+function buildSourceReview(e, r, t) {
+  const n = assertSourceInspectionCurrent(r);
   if (
-    (kC(r),
-    $a(e),
+    (validateExtractedSourceTables(r),
+    assertWorkbookStructureEditable(e),
     typeof t.sheetName != "string" ||
       !t.sheetName.trim() ||
       t.sheetName.length > 31 ||
@@ -1019,20 +1041,24 @@ function _ue(e, r, t) {
     l = 0;
   if (
     (o.columns.forEach((p, m) => {
-      a[ut(m) + "1"] = { raw: p.name, literal: true, style: { bold: true } };
+      a[columnIndexToLetters(m) + "1"] = {
+        raw: p.name,
+        literal: true,
+        style: { bold: true },
+      };
     }),
     o.rows.forEach((p, m) =>
       p.forEach((v, g) => {
         const b = `${m}:${g}`;
         s.add(b);
         const y = t.resolutions[b],
-          w = zR(v, y);
+          w = resolveExtractedCellValue(v, y);
         (y?.decision === "exclude"
           ? u++
           : y?.decision === "correct"
             ? l++
             : d++,
-          (a[ut(g) + (m + 2)] = {
+          (a[columnIndexToLetters(g) + (m + 2)] = {
             raw: w,
             ...(typeof w == "string" ? { literal: true } : {}),
           }));
@@ -1045,15 +1071,15 @@ function _ue(e, r, t) {
       id: crypto.randomUUID(),
       name: t.sheetName.trim(),
       cells: a,
-      rowCount: Mt.maxRows,
-      colCount: Mt.maxCols,
+      rowCount: workbookLimits.maxRows,
+      colCount: workbookLimits.maxCols,
     },
     h = {
       id: crypto.randomUUID(),
       sheetId: c.id,
       sheetName: c.name,
       importedAt: new Date().toISOString(),
-      original: zoe(n, r.fileName, r.format),
+      original: buildRetainedSourceRecord(n, r.fileName, r.format),
       method: r.method,
       extractor: r.extractor,
       ...(r.pageCount ? { pageCount: r.pageCount } : {}),
@@ -1061,13 +1087,13 @@ function _ue(e, r, t) {
       resolutions: structuredClone(t.resolutions),
       ambiguityReviewed: t.ambiguityReviewed,
     };
-  rn({
+  normalizeWorkbookInput({
     ...e,
     sheets: [...e.sheets, c],
     sourceImports: [...(e.sourceImports ?? []), h],
   });
   const f = {
-    workbookHash: hr(e),
+    workbookHash: fingerprintCanonicalValue(e),
     inspection: r,
     review: structuredClone(t),
     record: h,
@@ -1076,38 +1102,42 @@ function _ue(e, r, t) {
     excluded: u,
     corrected: l,
   };
-  return (dT.set(f, hr(f)), f);
+  return (importPreviewRegistry.set(f, fingerprintCanonicalValue(f)), f);
 }
-function Due(e, r, t = {}) {
+function commitSourceImport(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (($a(e), dT.get(r) !== hr(r) || r.workbookHash !== hr(e)))
+  if (
+    (assertWorkbookStructureEditable(e),
+    importPreviewRegistry.get(r) !== fingerprintCanonicalValue(r) ||
+      r.workbookHash !== fingerprintCanonicalValue(e))
+  )
     throw Error("The workbook or review changed. Preview the import again.");
-  DC(r.inspection);
-  const n = rn({
+  assertSourceInspectionCurrent(r.inspection);
+  const n = normalizeWorkbookInput({
     ...e,
     sheets: [...e.sheets, r.sheet],
     sourceImports: [...(e.sourceImports ?? []), r.record],
   });
-  return (dT.delete(r), n);
+  return (importPreviewRegistry.delete(r), n);
 }
-function Oue(e, r) {
+function findSourceImport(e, r) {
   const t = e.sourceImports?.find((o) => o.id === r);
   if (!t) throw Error("Source import is unavailable.");
   return {
-    bytes: $R(t.original),
+    bytes: validateRetainedSourceFile(t.original),
     fileName: t.original.fileName,
     sha256: t.original.sha256,
   };
 }
-function Mue(e, r, t, n) {
+function resolveImportedSourceCell(e, r, t, n) {
   const o = e.sourceImports?.find((p) => p.id === r),
     a = o?.table.rows[t]?.[n];
   if (!o || !a) throw Error("Imported source cell is unavailable.");
-  const s = ut(n) + (t + 2),
+  const s = columnIndexToLetters(n) + (t + 2),
     d = e.sheets.find((p) => p.id === o.sheetId),
     u = d?.cells[s],
     l = o.resolutions[`${t}:${n}`],
-    c = zR(a, l);
+    c = resolveExtractedCellValue(a, l);
   return {
     address: s,
     sheetId: o.sheetId,
@@ -1123,7 +1153,7 @@ function Mue(e, r, t, n) {
       : "missing-sheet",
   };
 }
-const jue = ({ filename, blob }) => {
+const downloadBlobAsFile = ({ filename, blob }) => {
   const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
@@ -1132,4 +1162,20 @@ const jue = ({ filename, blob }) => {
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };
 
-export { Due, FC, H$, Iue, Mue, Nue, Oue, Rue, Sue, Tue, W$, _ue, jue, q$, yh };
+export {
+  commitSourceImport,
+  useOperationScope,
+  toSourceFileDescriptor,
+  runDocumentExtraction,
+  resolveImportedSourceCell,
+  WorkbookLinksDialog,
+  findSourceImport,
+  Rue,
+  buildSourceImportRecord,
+  WorkbookLinkStatusBadge,
+  operationScopeContext,
+  buildSourceReview,
+  downloadBlobAsFile,
+  parseExtractionResult,
+  useCancellableOperation,
+};

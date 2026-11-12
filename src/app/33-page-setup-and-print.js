@@ -1,38 +1,45 @@
 import { X, Palette, FileText, Printer } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { $p, z3 } from "./01-core-schemas-and-hashing.js";
 import {
-  $U,
-  Fc,
-  Fw,
-  GE,
-  Ix,
-  Vn,
-  XE,
-  ZR,
-  ct,
-  jn,
-  nae,
-  oae,
-  ut,
+  parseFormulaTree,
+  listInstalledExtensionFunctions,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  verifyPrintSnapshotGuard,
+  builtinFunctionNames,
+  evaluateConditionalFormatRules,
+  validatePrintPageBreaks,
+  assertRangeCellBudget,
+  calculateWorkbookWithSettings,
+  defaultPrintHeaderFooter,
+  createDefaultPageSetup,
+  parseRangeAddress,
+  assertSheetUnprotected,
+  createPrintSnapshotGuard,
+  applyPrintLayoutChange,
+  columnIndexToLetters,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import {
-  Fme,
-  Mme,
-  Xz,
-  cW,
-  gw,
-  k3,
-  mw,
-  qz,
-  uW,
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  renderSchedulePdf,
+  printDocumentInWindow,
+  PrintPagePreview,
+  renderPrintDocument,
+  waitForPrintAssets,
+  summarizePrintIssues,
+  measurePrintLayoutIssues,
+  printPaperStyles,
+  buildPrintPages,
 } from "./32-drawing-and-chart-export.js";
 
-function Bme(e) {
+function PageSetupDialog(e) {
   var X$1, q;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useRef(e);
   n.current = e;
   const o = ne.useRef(null),
@@ -55,7 +62,7 @@ function Bme(e) {
       [],
     ));
   const [g] = ne.useState(() => ({
-      snapshot: nae(e.workbook),
+      snapshot: createPrintSnapshotGuard(e.workbook),
       sheetId: e.sheetId,
       range: e.range,
       sheet: structuredClone(e.workbook.sheets.find((W) => W.id === e.sheetId)),
@@ -64,7 +71,7 @@ function Bme(e) {
   function y(W = false) {
     const K = n.current;
     if (
-      ($U(K.workbook, g.snapshot),
+      (verifyPrintSnapshotGuard(K.workbook, g.snapshot),
       K.sheetId !== g.sheetId || K.range !== g.range)
     )
       throw Error(
@@ -72,11 +79,18 @@ function Bme(e) {
       );
     if (W) {
       if (K.readOnly) throw Error("This workbook is read-only.");
-      jn(K.workbook.sheets.find((te) => te.id === g.sheetId));
+      assertSheetUnprotected(
+        K.workbook.sheets.find((te) => te.id === g.sheetId),
+      );
     }
   }
   const [w, E] = ne.useState(() =>
-      structuredClone(b.pageLayout ?? { ...ZR(b), ...XE }),
+      structuredClone(
+        b.pageLayout ?? {
+          ...createDefaultPageSetup(b),
+          ...defaultPrintHeaderFooter,
+        },
+      ),
     ),
     [A, k] = ne.useState(""),
     [F, I] = ne.useState("office"),
@@ -86,7 +100,9 @@ function Bme(e) {
         .join(", ");
     }),
     [z, V] = ne.useState(() => {
-      return (b.pageLayout?.columnBreaks ?? []).map(ut).join(", ");
+      return (b.pageLayout?.columnBreaks ?? [])
+        .map(columnIndexToLetters)
+        .join(", ");
     });
   function D() {
     const W = (K, te) => {
@@ -98,29 +114,40 @@ function Bme(e) {
             throw Error(
               "Enter comma-separated row numbers or column letters for manual breaks.",
             );
-          return te === "row" ? Number(de) - 1 : ct(`${de}1`).firstCol;
+          return te === "row"
+            ? Number(de) - 1
+            : parseRangeAddress(`${de}1`).firstCol;
         })
         .sort((oe, de) => oe - de);
-      return GE(ae, te === "row" ? b.rowCount : b.colCount);
+      return validatePrintPageBreaks(
+        ae,
+        te === "row" ? b.rowCount : b.colCount,
+      );
     };
     return { ...w, rowBreaks: W(O, "row"), columnBreaks: W(z, "column") };
   }
   const B = /theme/i.test(e.mode),
-    _ = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
+    _ = ne.useMemo(
+      () => calculateWorkbookWithSettings(e.workbook),
+      [e.workbook],
+    ),
     C = ne.useMemo(() => {
       try {
         if (!e.workbook.sheets.some((W) => W.id === e.sheetId))
           throw Error(
             "The worksheet changed or was deleted. Close and reopen page setup.",
           );
-        return { ...uW(e.workbook, e.sheetId, D()), error: "" };
+        return { ...buildPrintPages(e.workbook, e.sheetId, D()), error: "" };
       } catch (W) {
         return {
           pages: [],
           notices: [],
           scale: 1,
           layout: w,
-          ruleStyles: Fw({ ...b, conditionalFormats: [] }, _),
+          ruleStyles: evaluateConditionalFormatRules(
+            { ...b, conditionalFormats: [] },
+            _,
+          ),
           error: W instanceof Error ? W.message : "Invalid page setup.",
         };
       }
@@ -136,9 +163,9 @@ function Bme(e) {
     if (!(!W || C.error)) {
       (l(true), k(""));
       try {
-        if ((y(), await gw(W), y(), N.current !== T))
+        if ((y(), await waitForPrintAssets(W), y(), N.current !== T))
           throw Error("Page settings changed. Run the print check again.");
-        d(mw(W));
+        d(measurePrintLayoutIssues(W));
       } catch (K) {
         k(K instanceof Error ? K.message : "Print check failed.");
       } finally {
@@ -150,7 +177,7 @@ function Bme(e) {
   function $() {
     try {
       if ((y(true), C.error)) throw Error(C.error);
-      const W = oae(e.workbook, e.sheetId, C.layout, {
+      const W = applyPrintLayoutChange(e.workbook, e.sheetId, C.layout, {
         readOnly: e.readOnly,
         expectedSnapshot: g.snapshot,
       });
@@ -163,7 +190,7 @@ function Bme(e) {
   function U() {
     try {
       y(true);
-      const te = ct(e.range);
+      const te = parseRangeAddress(e.range);
       if ((te.lastRow - te.firstRow + 1) * (te.lastCol - te.firstCol + 1) > 500)
         throw new Error("Select at most 500 cells to apply a theme.");
       const ae =
@@ -175,8 +202,8 @@ function Bme(e) {
                 ? ["#9C6500", "#FFF2CC"]
                 : ["#4472C4", "#D9E2F3"],
         oe = { ...b.cells };
-      for (const de of Ix(e.range)) {
-        const he = ct(de).firstRow === te.firstRow;
+      for (const de of assertRangeCellBudget(e.range)) {
+        const he = parseRangeAddress(de).firstRow === te.firstRow;
         oe[de] = {
           ...oe[de],
           raw: oe[de]?.raw ?? null,
@@ -210,16 +237,16 @@ function Bme(e) {
     ((a.current = K), h(true), k(""));
     try {
       if ((y(), C.error)) throw Error(C.error);
-      const te = cW(e.workbook, e.sheetId, C.layout).html;
+      const te = renderPrintDocument(e.workbook, e.sheetId, C.layout).html;
       if (((W = window.open("", "_blank")), !W))
         throw Error(
           "Allow the print preview window in your browser, then try again.",
         );
       const ae = o.current;
-      await gw(ae, { signal: K.signal });
-      const oe = mw(ae);
-      (d(oe), k3(oe));
-      const de = await Mme(W, te, {
+      await waitForPrintAssets(ae, { signal: K.signal });
+      const oe = measurePrintLayoutIssues(ae);
+      (d(oe), summarizePrintIssues(oe));
+      const de = await printDocumentInWindow(W, te, {
         signal: K.signal,
         assertCurrent: () => {
           if ((y(), K.signal.aborted))
@@ -245,10 +272,10 @@ function Bme(e) {
     ((a.current = W), h(true), p("Preparing PDF…"), k(""), v(null));
     try {
       if ((y(), C.error)) throw Error(C.error);
-      await gw(o.current, { signal: W.signal });
-      const K = mw(o.current);
-      (d(K), k3(K));
-      const te = await Fme(e.workbook, e.sheetId, {
+      await waitForPrintAssets(o.current, { signal: W.signal });
+      const K = measurePrintLayoutIssues(o.current);
+      (d(K), summarizePrintIssues(K));
+      const te = await renderSchedulePdf(e.workbook, e.sheetId, {
         layout: C.layout,
         signal: W.signal,
         assertCurrent: () => {
@@ -319,14 +346,14 @@ function Bme(e) {
               children: [
                 i.jsx("p", {
                   className: "dg-muted",
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Apply a coordinated font and header/body colors to the selected cells. Values, formulas, notes, and review marks are preserved.",
                   }),
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Theme" }),
+                    i.jsx(LocalizedText, { children: "Theme" }),
                     i.jsxs("select", {
                       "aria-label": text("Theme"),
                       value: F,
@@ -346,7 +373,10 @@ function Bme(e) {
                   ],
                 }),
                 i.jsxs("p", {
-                  children: [i.jsx(M, { children: "Selection: " }), e.range],
+                  children: [
+                    i.jsx(LocalizedText, { children: "Selection: " }),
+                    e.range,
+                  ],
                 }),
                 A &&
                   i.jsx("p", {
@@ -367,7 +397,7 @@ function Bme(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Orientation" }),
+                            i.jsx(LocalizedText, { children: "Orientation" }),
                             i.jsxs("select", {
                               "aria-label": text("Page orientation"),
                               value: w.orientation,
@@ -390,7 +420,7 @@ function Bme(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Paper" }),
+                            i.jsx(LocalizedText, { children: "Paper" }),
                             i.jsxs("select", {
                               "aria-label": text("Paper size"),
                               value: w.paper,
@@ -418,7 +448,7 @@ function Bme(e) {
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Print area" }),
+                        i.jsx(LocalizedText, { children: "Print area" }),
                         i.jsx("input", {
                           "aria-label": text("Print area"),
                           value: w.printArea,
@@ -432,18 +462,22 @@ function Bme(e) {
                     i.jsx("button", {
                       className: "dg-inline",
                       onClick: () => L({ printArea: e.range }),
-                      children: i.jsx(M, { children: "Use current selection" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Use current selection",
+                      }),
                     }),
                     i.jsxs("fieldset", {
                       children: [
                         i.jsx("legend", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Repeat print titles",
                           }),
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Rows to repeat at top" }),
+                            i.jsx(LocalizedText, {
+                              children: "Rows to repeat at top",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Rows to repeat at top"),
                               placeholder: "1:2",
@@ -457,7 +491,9 @@ function Bme(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Columns to repeat at left" }),
+                            i.jsx(LocalizedText, {
+                              children: "Columns to repeat at left",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Columns to repeat at left"),
                               placeholder: text("A:B"),
@@ -473,7 +509,7 @@ function Bme(e) {
                         }),
                         i.jsx("p", {
                           className: "dg-muted",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Titles may be outside the print area. Hidden title rows/columns are omitted. Up to 100 rows and 50 columns.",
                           }),
@@ -483,13 +519,13 @@ function Bme(e) {
                     i.jsxs("fieldset", {
                       children: [
                         i.jsx("legend", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Manual page breaks",
                           }),
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Page order" }),
+                            i.jsx(LocalizedText, { children: "Page order" }),
                             i.jsxs("select", {
                               "aria-label": text("Page order"),
                               value: w.pageOrder ?? "overThenDown",
@@ -511,14 +547,16 @@ function Bme(e) {
                         }),
                         i.jsx("p", {
                           className: "dg-muted",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Controls the order pages are numbered and printed. Page contents and the total page count stay the same.",
                           }),
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Break before rows" }),
+                            i.jsx(LocalizedText, {
+                              children: "Break before rows",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Break before rows"),
                               placeholder: "25, 50",
@@ -531,7 +569,9 @@ function Bme(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Break before columns" }),
+                            i.jsx(LocalizedText, {
+                              children: "Break before columns",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("Break before columns"),
                               placeholder: text("D, H"),
@@ -547,13 +587,13 @@ function Bme(e) {
                           onClick: () => {
                             (j(""), V(""));
                           },
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Reset manual breaks",
                           }),
                         }),
                         i.jsx("p", {
                           className: "dg-muted",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Enter row numbers or column letters separated by commas. Edit a boundary to move it; remove an entry to delete it. Fit to pages ignores manual breaks.",
                           }),
@@ -563,7 +603,9 @@ function Bme(e) {
                     i.jsxs("fieldset", {
                       children: [
                         i.jsx("legend", {
-                          children: i.jsx(M, { children: "Margins (inches)" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Margins (inches)",
+                          }),
                         }),
                         i.jsx("div", {
                           className: "dg-two",
@@ -580,7 +622,7 @@ function Bme(e) {
                               {
                                 children: [
                                   W,
-                                  i.jsx(ci, {
+                                  i.jsx(LocalizedNumberField, {
                                     min: 0,
                                     max: 3,
                                     step: 0.05,
@@ -610,7 +652,7 @@ function Bme(e) {
                           checked: w.fitToPage,
                           onChange: (W) => L({ fitToPage: W.target.checked }),
                         }),
-                        i.jsx(M, { children: "Fit to pages" }),
+                        i.jsx(LocalizedText, { children: "Fit to pages" }),
                       ],
                     }),
                     w.fitToPage
@@ -619,8 +661,10 @@ function Bme(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Pages wide" }),
-                                i.jsx(ci, {
+                                i.jsx(LocalizedText, {
+                                  children: "Pages wide",
+                                }),
+                                i.jsx(LocalizedNumberField, {
                                   min: 0,
                                   max: 10,
                                   "aria-label": text("Pages wide"),
@@ -634,8 +678,10 @@ function Bme(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Pages tall" }),
-                                i.jsx(ci, {
+                                i.jsx(LocalizedText, {
+                                  children: "Pages tall",
+                                }),
+                                i.jsx(LocalizedNumberField, {
                                   min: 0,
                                   max: 10,
                                   "aria-label": text("Pages tall"),
@@ -651,8 +697,8 @@ function Bme(e) {
                         })
                       : i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Scale (%)" }),
-                            i.jsx(ci, {
+                            i.jsx(LocalizedText, { children: "Scale (%)" }),
+                            i.jsx(LocalizedNumberField, {
                               min: 10,
                               max: 400,
                               "aria-label": text("Print scale"),
@@ -665,7 +711,7 @@ function Bme(e) {
                         }),
                     i.jsx("p", {
                       className: "dg-muted",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Zero pages means automatic. Fit to pages reduces the content as needed.",
                       }),
@@ -678,7 +724,7 @@ function Bme(e) {
                           checked: w.gridlines,
                           onChange: (W) => L({ gridlines: W.target.checked }),
                         }),
-                        i.jsx(M, { children: "Print gridlines" }),
+                        i.jsx(LocalizedText, { children: "Print gridlines" }),
                       ],
                     }),
                     i.jsxs("label", {
@@ -689,12 +735,14 @@ function Bme(e) {
                           checked: w.headings,
                           onChange: (W) => L({ headings: W.target.checked }),
                         }),
-                        i.jsx(M, { children: "Print row and column headings" }),
+                        i.jsx(LocalizedText, {
+                          children: "Print row and column headings",
+                        }),
                       ],
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Header" }),
+                        i.jsx(LocalizedText, { children: "Header" }),
                         i.jsx("textarea", {
                           "aria-label": text("Print header"),
                           rows: 3,
@@ -708,7 +756,7 @@ function Bme(e) {
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Footer" }),
+                        i.jsx(LocalizedText, { children: "Footer" }),
                         i.jsx("textarea", {
                           "aria-label": text("Print footer"),
                           rows: 2,
@@ -722,21 +770,21 @@ function Bme(e) {
                     }),
                     i.jsx("p", {
                       className: "dg-muted",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "&P page · &N total pages · &A sheet name · && literal ampersand",
                       }),
                     }),
                     i.jsx("button", {
                       type: "button",
-                      onClick: () => L(XE),
-                      children: i.jsx(M, {
+                      onClick: () => L(defaultPrintHeaderFooter),
+                      children: i.jsx(LocalizedText, {
                         children: "Insert workbook identifiers",
                       }),
                     }),
                     i.jsx("p", {
                       className: "dg-muted",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Replaces the header and footer with workbook name, engagement, period, revision and page numbers. Fields: &[Workbook], &[Engagement], &[Period], &[Revision]. Missing properties display a “not set” label. Values come from this workbook; revision is local history, not an approval or certification.",
                       }),
@@ -744,7 +792,7 @@ function Bme(e) {
                     !!((X$1 = b.merges) != null && X$1.length) &&
                       i.jsx("p", {
                         className: "dg-muted",
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Merged areas crossing a page or print-area boundary repeat their top-left content in each clipped fragment.",
                         }),
@@ -761,11 +809,11 @@ function Bme(e) {
                   className: "dg-print-preview",
                   ref: o,
                   children: [
-                    i.jsx("style", { children: qz }),
+                    i.jsx("style", { children: printPaperStyles }),
                     i.jsxs("div", {
                       className: "dg-preview-label",
                       children: [
-                        i.jsx(M, { children: "PRINT PREVIEW · " }),
+                        i.jsx(LocalizedText, { children: "PRINT PREVIEW · " }),
                         C.pages.length,
                         " ",
                         C.pages.length === 1 ? "PAGE" : "PAGES",
@@ -782,7 +830,7 @@ function Bme(e) {
                       "data-ui-label": "Print output checks",
                       children: [
                         i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Create PDF produces a local image-based snapshot at 192 dpi. Text in this download is not searchable, selectable or accessibility-tagged. All pages are checked before the download is offered.",
                           }),
@@ -790,18 +838,18 @@ function Bme(e) {
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Browser printing settings",
                               }),
                             }),
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Print / Save as PDF uses your browser’s PDF destination. Match this paper size and orientation, use 100% scale and no browser margins, and turn off browser headers/footers. Keep background graphics on for cell fills.",
                               }),
                             }),
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Printing rechecks the final document. A print dialog opening does not confirm that a PDF was saved.",
                               }),
@@ -852,12 +900,12 @@ function Bme(e) {
                               s.issues.length > 100 &&
                                 i.jsxs("p", {
                                   children: [
-                                    i.jsx(M, {
+                                    i.jsx(LocalizedText, {
                                       children: "Showing the first 100 of ",
                                     }),
                                     s.issues.length,
                                     " ",
-                                    i.jsx(M, {
+                                    i.jsx(LocalizedText, {
                                       children:
                                         "issues. Correct the affected sizes and check again.",
                                     }),
@@ -874,7 +922,9 @@ function Bme(e) {
                                 href: m.url,
                                 download: m.filename,
                                 children: [
-                                  i.jsx(M, { children: "Download PDF (" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Download PDF (",
+                                  }),
                                   m.pages,
                                   " ",
                                   m.pages === 1 ? "page" : "pages",
@@ -896,10 +946,14 @@ function Bme(e) {
                         role: "alert",
                         className: "dg-error",
                         children: [
-                          i.jsx(M, { children: "Conditional formatting: " }),
+                          i.jsx(LocalizedText, {
+                            children: "Conditional formatting: ",
+                          }),
                           C.ruleStyles.errors().length,
                           " ",
-                          i.jsx(M, { children: "evaluation error(s). " }),
+                          i.jsx(LocalizedText, {
+                            children: "evaluation error(s). ",
+                          }),
                           C.ruleStyles.errors()[0].message,
                         ],
                       }),
@@ -911,7 +965,7 @@ function Bme(e) {
                         })
                       : C.pages.map((W, K) =>
                           i.jsx(
-                            Xz,
+                            PrintPagePreview,
                             {
                               workbook: e.workbook,
                               sheet: b,
@@ -934,13 +988,13 @@ function Bme(e) {
           children: [
             i.jsx("button", {
               onClick: Q,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             !B &&
               i.jsx("button", {
                 onClick: H,
                 disabled: !!C.error || c || u,
-                children: i.jsx(M, { children: "Create PDF" }),
+                children: i.jsx(LocalizedText, { children: "Create PDF" }),
               }),
             !B &&
               i.jsxs("button", {
@@ -968,7 +1022,7 @@ function Bme(e) {
     }),
   });
 }
-const UT = {
+const functionArgumentSignatures = {
     PERMUTATIONA: "number, number_chosen",
     PERMUT: "number, number_chosen",
     VARPA: "value1, [value2, ...]",
@@ -1109,7 +1163,7 @@ const UT = {
     SYD: "cost, salvage, life, per",
     DDB: "cost, salvage, life, period, [factor]",
   },
-  $T = {
+  functionDescriptions = {
     PERMUTATIONA: "Counts ordered selections with replacement",
     PERMUT: "Counts ordered selections without replacement",
     VARPA:
@@ -1216,7 +1270,7 @@ const UT = {
     ACCRINTM: "Calculates interest accrued to maturity",
     MIRR: "Calculates modified return using explicit finance and reinvestment rates",
   };
-function Lme(e, r, t, n) {
+function getFormulaCompletions(e, r, t, n) {
   if (!e.startsWith("=")) return { items: [] };
   const o = e.slice(0, r);
   let a = false;
@@ -1243,7 +1297,7 @@ function Lme(e, r, t, n) {
           : o[I] === "," && s.length && s[s.length - 1].argumentIndex++;
   }
   if (a) return { items: [] };
-  const d = z3(t),
+  const d = listInstalledExtensionFunctions(t),
     u = s.at(-1),
     l = d.find((I) => I.name === u?.name),
     c =
@@ -1253,9 +1307,9 @@ function Lme(e, r, t, n) {
             ...(t.definedNames ?? []).filter((I) => !I.scopeSheetId),
           ].find((I) => I.name.toUpperCase() === u.name)
         : undefined,
-    h = c ? $p(c.refersTo) : undefined,
+    h = c ? parseFormulaTree(c.refersTo) : undefined,
     f =
-      u != null && u.name && (Fc.includes(u.name) || h || l)
+      u != null && u.name && (builtinFunctionNames.includes(u.name) || h || l)
         ? {
             ...u,
             signature:
@@ -1263,7 +1317,8 @@ function Lme(e, r, t, n) {
                 ? l.fn.parameters.map((I) => I.name).join(", ")
                 : h
                   ? h.join(", ")
-                  : UT[u.name]) ?? "value1, [value2], …",
+                  : functionArgumentSignatures[u.name]) ??
+              "value1, [value2], …",
           }
         : undefined,
     p = /([A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?)$/.exec(o),
@@ -1295,12 +1350,12 @@ function Lme(e, r, t, n) {
       "FILTER",
       "UNIQUE",
     ];
-  for (const I of v ? Fc : E)
+  for (const I of v ? builtinFunctionNames : E)
     w(
       I,
       "function",
       `${I}(`,
-      `${I}(${UT[I] ?? "value1, …"})${$T[I] ? ` · ${$T[I]}` : ""}`,
+      `${I}(${functionArgumentSignatures[I] ?? "value1, …"})${functionDescriptions[I] ? ` · ${functionDescriptions[I]}` : ""}`,
     );
   const A = new Set();
   for (const I of d)
@@ -1315,7 +1370,7 @@ function Lme(e, r, t, n) {
     ...(t.definedNames ?? []).filter((O) => !O.scopeSheetId),
   ]) {
     const O = I.name.toLowerCase(),
-      j = $p(I.refersTo);
+      j = parseFormulaTree(I.refersTo);
     (A.has(O) ||
       w(
         I.name,
@@ -1352,7 +1407,7 @@ function Lme(e, r, t, n) {
     { items: y.slice(0, 12), hint: f }
   );
 }
-function Pme(e, r) {
+function applyFormulaCompletion(e, r) {
   const t = e.slice(r.end),
     n =
       r.insertText.endsWith("(") && t.startsWith("(")
@@ -1361,4 +1416,10 @@ function Pme(e, r) {
   return { value: e.slice(0, r.start) + n + t, caret: r.start + n.length };
 }
 
-export { $T, Bme, Lme, Pme, UT };
+export {
+  functionDescriptions,
+  PageSetupDialog,
+  getFormulaCompletions,
+  applyFormulaCompletion,
+  functionArgumentSignatures,
+};

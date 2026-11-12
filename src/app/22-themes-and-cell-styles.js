@@ -1,30 +1,37 @@
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
-import { Xy, dx } from "./02-financial-functions.js";
 import {
-  Dw,
-  SE,
-  W3,
-  _g,
-  bB,
-  c6,
-  ct,
-  eQ,
-  ff,
-  gB,
-  md,
-  ut,
-  vB,
-  vg,
-  y1,
-  yB,
-  ys,
+  maxSelectionAreas,
+  supportedFontFamilies,
+} from "./02-financial-functions.js";
+import {
+  cellStyleToCss,
+  getImportedNumberFormatWarning,
+  isCellAddressInRanges,
+  themePaletteRoles,
+  collectStyleFallbackWarnings,
+  builtInWorkbookThemes,
+  parseRangeAddress,
+  assertThemePreviewCurrent,
+  parseSelectionAreas,
+  createDefaultStyleCatalog,
+  resolveBorderEdge,
+  columnIndexToLetters,
+  resolveNamedStyleAppearance,
+  formatCellValueWithNumberFormat,
+  countSelectionCells,
+  applyNamedStyleChange,
+  resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
-import { Dr, M, lI } from "./04-cell-input-paste-and-fill.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  formatLocalizedNumberDisplay,
+} from "./04-cell-input-paste-and-fill.js";
 
-function Cde() {
-  const { text, language } = Dr(),
+function ConnectionStatusNotice() {
+  const { text, language } = useWorkbookMessages(),
     [t, n] = ne.useState(
       () => typeof navigator > "u" || navigator.onLine !== false,
     );
@@ -49,14 +56,14 @@ function Cde() {
           "aria-label": text("Connection status"),
           lang: language("Connection status"),
           "data-ui-label": "Connection status",
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "You’re offline. Local editing, calculations, audit checks and demo assistance remain available. Connected host services may be unavailable.",
           }),
         })
   );
 }
-function Ade(e, r, t, n = {}) {
+function parseGoToReference(e, r, t, n = {}) {
   if (typeof t != "string" || !t.trim() || t.length > 8192)
     throw Error(
       "Enter an address, range, or defined range name (up to 8,192 characters).",
@@ -87,7 +94,10 @@ function Ade(e, r, t, n = {}) {
             ? m++
             : (f = !f)
           : c[m] === "," && !f && (h.push(c.slice(p, m).trim()), (p = m + 1));
-      if ((h.push(c.slice(p).trim()), f || h.some((m) => !m) || h.length > Xy))
+      if (
+        (h.push(c.slice(p).trim()),
+        f || h.some((m) => !m) || h.length > maxSelectionAreas)
+      )
         throw Error(
           "Enter valid comma-separated addresses or defined range names.",
         );
@@ -119,8 +129,13 @@ function Ade(e, r, t, n = {}) {
             w,
           ))
         ) {
-          if ((d.push({ sheetId: y, range: ff(w)[0] }), d.length > Xy))
-            throw Error(`Select at most ${Xy} rectangular areas.`);
+          if (
+            (d.push({ sheetId: y, range: parseSelectionAreas(w)[0] }),
+            d.length > maxSelectionAreas)
+          )
+            throw Error(
+              `Select at most ${maxSelectionAreas} rectangular areas.`,
+            );
           continue;
         }
         if (!/^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(w))
@@ -147,11 +162,14 @@ function Ade(e, r, t, n = {}) {
     };
   if ((l(t.trim(), r, []), d.some((c) => c.sheetId !== d[0].sheetId)))
     throw Error("Select ranges on one worksheet at a time.");
-  return { sheetId: d[0].sheetId, ranges: ff(d.map((c) => c.range)) };
+  return {
+    sheetId: d[0].sheetId,
+    ranges: parseSelectionAreas(d.map((c) => c.range)),
+  };
 }
-const Tv = (e) => structuredClone(e);
-function $7(e) {
-  const r = ys(e);
+const cloneStyleSnapshot = (e) => structuredClone(e);
+function describeStyleFormatting(e) {
+  const r = resolveEffectiveCellStyle(e);
   return (
     [
       r.fontFamily,
@@ -167,7 +185,7 @@ function $7(e) {
       .join(", ") || "Default formatting"
   );
 }
-const jz = {
+const styleFormattingLabels = {
   fontFamily: "Font",
   fontSize: "Font size",
   bold: "Bold",
@@ -182,12 +200,12 @@ const jz = {
   wrap: "Wrap",
   border: "Legacy border",
 };
-function kT({ style }) {
-  const r = ys(style);
+function CellStylePreview({ style }) {
+  const r = resolveEffectiveCellStyle(style);
   return i.jsxs("dl", {
     className: "ts-detail-fields",
     children: [
-      Object.entries(jz).map(([t, n]) =>
+      Object.entries(styleFormattingLabels).map(([t, n]) =>
         i.jsxs(
           "div",
           {
@@ -209,7 +227,7 @@ function kT({ style }) {
         ),
       ),
       ["top", "right", "bottom", "left"].map((t) => {
-        const n = md(r, t);
+        const n = resolveBorderEdge(r, t);
         return i.jsxs(
           "div",
           {
@@ -218,7 +236,7 @@ function kT({ style }) {
                 children: [
                   t[0].toUpperCase() + t.slice(1),
                   " ",
-                  i.jsx(M, { children: "border" }),
+                  i.jsx(LocalizedText, { children: "border" }),
                 ],
               }),
               i.jsx("dd", {
@@ -234,20 +252,24 @@ function kT({ style }) {
     ],
   });
 }
-function z7({ style, catalog }) {
+function CellStyleSummary({ style, catalog }) {
   const t = style?.binding,
     { binding, ...o } = style ?? {};
   return i.jsxs("details", {
     children: [
-      i.jsx("summary", { children: i.jsx(M, { children: "Full formatting" }) }),
-      i.jsx("h4", { children: i.jsx(M, { children: "Displayed formatting" }) }),
-      i.jsx(kT, { style }),
+      i.jsx("summary", {
+        children: i.jsx(LocalizedText, { children: "Full formatting" }),
+      }),
+      i.jsx("h4", {
+        children: i.jsx(LocalizedText, { children: "Displayed formatting" }),
+      }),
+      i.jsx(CellStylePreview, { style }),
       t &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsxs("h4", {
               children: [
-                i.jsx(M, { children: "Named style:" }),
+                i.jsx(LocalizedText, { children: "Named style:" }),
                 " ",
                 catalog?.styles.find((s) => s.id === t.styleId)?.name ??
                   "Missing style",
@@ -255,11 +277,13 @@ function z7({ style, catalog }) {
             }),
             t.themeFallback &&
               i.jsx("p", {
-                children: i.jsx(M, { children: "Office theme fallback" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Office theme fallback",
+                }),
               }),
-            i.jsx(kT, { style: t.base }),
+            i.jsx(CellStylePreview, { style: t.base }),
             i.jsx("h4", {
-              children: i.jsx(M, { children: "Direct overrides" }),
+              children: i.jsx(LocalizedText, { children: "Direct overrides" }),
             }),
             Object.keys(o).length
               ? i.jsx("dl", {
@@ -269,7 +293,9 @@ function z7({ style, catalog }) {
                       "div",
                       {
                         children: [
-                          i.jsx("dt", { children: jz[s] ?? s }),
+                          i.jsx("dt", {
+                            children: styleFormattingLabels[s] ?? s,
+                          }),
                           i.jsx("dd", {
                             children:
                               s === "borders"
@@ -291,24 +317,28 @@ function z7({ style, catalog }) {
                     ),
                   ),
                 })
-              : i.jsx("p", { children: i.jsx(M, { children: "None" }) }),
+              : i.jsx("p", {
+                  children: i.jsx(LocalizedText, { children: "None" }),
+                }),
           ],
         }),
     ],
   });
 }
-function V7({ definition }) {
+function ThemeRoleBindings({ definition }) {
   return definition
     ? i.jsxs(i.Fragment, {
         children: [
-          i.jsx(kT, { style: definition.base }),
+          i.jsx(CellStylePreview, { style: definition.base }),
           i.jsxs("dl", {
             className: "ts-detail-fields",
             children: [
               i.jsxs("div", {
                 children: [
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Theme font role" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Theme font role",
+                    }),
                   }),
                   i.jsx("dd", {
                     children: definition.fontRole ?? "Stored font",
@@ -318,7 +348,9 @@ function V7({ definition }) {
               i.jsxs("div", {
                 children: [
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Theme fill role" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Theme fill role",
+                    }),
                   }),
                   i.jsx("dd", {
                     children: definition.fillRole ?? "Stored fill",
@@ -328,7 +360,9 @@ function V7({ definition }) {
               i.jsxs("div", {
                 children: [
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Theme text role" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Theme text role",
+                    }),
                   }),
                   i.jsx("dd", {
                     children: definition.colorRole ?? "Stored text color",
@@ -344,7 +378,9 @@ function V7({ definition }) {
                         children: [
                           r,
                           " ",
-                          i.jsx(M, { children: "border color role" }),
+                          i.jsx(LocalizedText, {
+                            children: "border color role",
+                          }),
                         ],
                       }),
                       i.jsx("dd", {
@@ -360,9 +396,9 @@ function V7({ definition }) {
           }),
         ],
       })
-    : i.jsx("p", { children: i.jsx(M, { children: "No style" }) });
+    : i.jsx("p", { children: i.jsx(LocalizedText, { children: "No style" }) });
 }
-function kde({ plan }) {
+function ThemeChangePreview({ plan }) {
   const r = plan.catalogBefore,
     t = plan.catalogAfter;
   if (JSON.stringify(r) === JSON.stringify(t)) return null;
@@ -382,7 +418,7 @@ function kde({ plan }) {
         before: r?.theme.fonts.heading,
         after: t?.theme.fonts.heading,
       },
-      ..._g.map((a) => ({
+      ...themePaletteRoles.map((a) => ({
         name: `${a} color`,
         before: r?.theme.palette[a],
         after: t?.theme.palette[a],
@@ -404,7 +440,7 @@ function kde({ plan }) {
     open: true,
     children: [
       i.jsx("summary", {
-        children: i.jsx(M, { children: "Workbook style settings" }),
+        children: i.jsx(LocalizedText, { children: "Workbook style settings" }),
       }),
       n.length > 0 &&
         i.jsxs("table", {
@@ -412,10 +448,16 @@ function kde({ plan }) {
             i.jsx("thead", {
               children: i.jsxs("tr", {
                 children: [
-                  i.jsx("th", { children: i.jsx(M, { children: "Setting" }) }),
-                  i.jsx("th", { children: i.jsx(M, { children: "Current" }) }),
                   i.jsx("th", {
-                    children: i.jsx(M, { children: "After change" }),
+                    children: i.jsx(LocalizedText, { children: "Setting" }),
+                  }),
+                  i.jsx("th", {
+                    children: i.jsx(LocalizedText, { children: "Current" }),
+                  }),
+                  i.jsx("th", {
+                    children: i.jsx(LocalizedText, {
+                      children: "After change",
+                    }),
                   }),
                 ],
               }),
@@ -460,11 +502,11 @@ function kde({ plan }) {
                       i.jsxs("div", {
                         children: [
                           i.jsx("h4", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Current definition",
                             }),
                           }),
-                          i.jsx(V7, {
+                          i.jsx(ThemeRoleBindings, {
                             definition: s?.definition,
                           }),
                         ],
@@ -472,9 +514,11 @@ function kde({ plan }) {
                       i.jsxs("div", {
                         children: [
                           i.jsx("h4", {
-                            children: i.jsx(M, { children: "After change" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "After change",
+                            }),
                           }),
-                          i.jsx(V7, {
+                          i.jsx(ThemeRoleBindings, {
                             definition: d?.definition,
                           }),
                         ],
@@ -489,9 +533,9 @@ function kde({ plan }) {
     ],
   });
 }
-function Sde(e) {
+function ThemesAndCellStylesDialog(e) {
   var ae;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -502,22 +546,26 @@ function Sde(e) {
       ranges: JSON.stringify(e.ranges ?? [e.range]),
       active: e.active,
     })),
-    [d] = ne.useState(() => Tv(e.workbook.styleCatalog ?? gB(e.workbook.id))),
-    u = ff(e.ranges ?? [e.range]),
-    l = ct(e.range),
+    [d] = ne.useState(() =>
+      cloneStyleSnapshot(
+        e.workbook.styleCatalog ?? createDefaultStyleCatalog(e.workbook.id),
+      ),
+    ),
+    u = parseSelectionAreas(e.ranges ?? [e.range]),
+    l = parseRangeAddress(e.range),
     c = e.workbook.sheets.find((de) => de.id === e.sheetId),
     h =
-      e.active && W3(u, e.active)
+      e.active && isCellAddressInRanges(u, e.active)
         ? e.active
-        : `${ut(l.firstCol)}${l.firstRow + 1}`,
+        : `${columnIndexToLetters(l.firstCol)}${l.firstRow + 1}`,
     f = c?.cells[h]?.style?.binding?.styleId,
     [p, m] = ne.useState(
       d.styles.some((de) => de.id === f) ? f : (d.styles[0]?.id ?? ""),
     ),
     v = d.styles.find((de) => de.id === p),
     [g, b] = ne.useState("Theme"),
-    [y, w] = ne.useState(Tv(d.theme)),
-    [E, A] = ne.useState(Tv(v?.definition ?? { base: {} })),
+    [y, w] = ne.useState(cloneStyleSnapshot(d.theme)),
+    [E, A] = ne.useState(cloneStyleSnapshot(v?.definition ?? { base: {} })),
     [k, F] = ne.useState("Custom style"),
     [I, O] = ne.useState(v?.name ?? ""),
     [j, z] = ne.useState(),
@@ -529,7 +577,10 @@ function Sde(e) {
       s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.active !== e.active,
     T = e.readOnly || C || !c,
-    N = T || !!((ae = c?.protection) != null && ae.enabled) || y1(u) > 500;
+    N =
+      T ||
+      !!((ae = c?.protection) != null && ae.enabled) ||
+      countSelectionCells(u) > 500;
   function R() {
     (z(undefined), D(""), _(0));
   }
@@ -546,7 +597,7 @@ function Sde(e) {
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      z(yB(e.workbook, de, { readOnly: e.readOnly }));
+      z(applyNamedStyleChange(e.workbook, de, { readOnly: e.readOnly }));
     } catch (he) {
       (z(undefined),
         D(
@@ -563,7 +614,9 @@ function Sde(e) {
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      const de = eQ(e.workbook, j, { readOnly: e.readOnly });
+      const de = assertThemePreviewCurrent(e.workbook, j, {
+        readOnly: e.readOnly,
+      });
       (de !== e.workbook && e.onWorkbookChange(de, j.summary), e.onClose());
     } catch (de) {
       D(
@@ -574,7 +627,9 @@ function Sde(e) {
   function H(de) {
     m(de);
     const he = d.styles.find((Se) => Se.id === de);
-    (A(Tv(he?.definition ?? { base: {} })), O(he?.name ?? ""), R());
+    (A(cloneStyleSnapshot(he?.definition ?? { base: {} })),
+      O(he?.name ?? ""),
+      R());
   }
   ne.useEffect(() => {
     var Se;
@@ -587,11 +642,11 @@ function Sde(e) {
       }
     );
   }, []);
-  const Q = bB(e.workbook),
+  const Q = collectStyleFallbackWarnings(e.workbook),
     X$1 = Math.max(1, Math.ceil((j?.count ?? 0) / 20));
   let J = {};
   try {
-    J = vB(E, y);
+    J = resolveNamedStyleAppearance(E, y);
   } catch {}
   return i.jsx("div", {
     className: "ts-backdrop",
@@ -627,7 +682,9 @@ function Sde(e) {
           children: [
             i.jsx("h2", {
               id: `${n}-title`,
-              children: i.jsx(M, { children: "Themes & Cell Styles" }),
+              children: i.jsx(LocalizedText, {
+                children: "Themes & Cell Styles",
+              }),
             }),
             i.jsx("button", {
               "aria-label": text("Close Themes and Cell Styles"),
@@ -646,9 +703,9 @@ function Sde(e) {
             u.join(", "),
             " ·",
             " ",
-            y1(u).toLocaleString(),
+            countSelectionCells(u).toLocaleString(),
             " ",
-            i.jsx(M, { children: "selected cells" }),
+            i.jsx(LocalizedText, { children: "selected cells" }),
           ],
         }),
         i.jsx("div", {
@@ -707,7 +764,7 @@ function Sde(e) {
                   ? i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Theme colors and fonts update cells using named styles. Direct cell formatting remains in place.",
                           }),
@@ -717,10 +774,12 @@ function Sde(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Theme preset" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Theme preset",
+                                }),
                                 i.jsxs("select", {
                                   "aria-label": text("Theme preset"),
-                                  value: c6.some(
+                                  value: builtInWorkbookThemes.some(
                                     (de) =>
                                       JSON.stringify(de) === JSON.stringify(y),
                                   )
@@ -728,10 +787,10 @@ function Sde(e) {
                                     : "Custom",
                                   disabled: T,
                                   onChange: (de) => {
-                                    const he = c6.find(
+                                    const he = builtInWorkbookThemes.find(
                                       (Se) => Se.name === de.target.value,
                                     );
-                                    he && L(Tv(he));
+                                    he && L(cloneStyleSnapshot(he));
                                   },
                                   lang: language("Theme preset"),
                                   "data-ui-label": "Theme preset",
@@ -740,7 +799,7 @@ function Sde(e) {
                                       value: "Custom",
                                       children: "Custom",
                                     }),
-                                    c6.map((de) =>
+                                    builtInWorkbookThemes.map((de) =>
                                       i.jsx(
                                         "option",
                                         { children: de.name },
@@ -753,7 +812,9 @@ function Sde(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Theme name" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Theme name",
+                                }),
                                 i.jsx("input", {
                                   value: y.name,
                                   maxLength: 80,
@@ -786,8 +847,9 @@ function Sde(e) {
                                             [de]: he.target.value,
                                           },
                                         }),
-                                      children: dx.map((he) =>
-                                        i.jsx("option", { children: he }, he),
+                                      children: supportedFontFamilies.map(
+                                        (he) =>
+                                          i.jsx("option", { children: he }, he),
                                       ),
                                     }),
                                   ],
@@ -802,9 +864,11 @@ function Sde(e) {
                           disabled: T,
                           children: [
                             i.jsx("legend", {
-                              children: i.jsx(M, { children: "Theme colors" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Theme colors",
+                              }),
                             }),
-                            _g.map((de) =>
+                            themePaletteRoles.map((de) =>
                               i.jsxs(
                                 "label",
                                 {
@@ -839,13 +903,13 @@ function Sde(e) {
                           className: "ts-command",
                           disabled: T,
                           onClick: () => U({ kind: "setTheme", theme: y }),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Preview theme change",
                           }),
                         }),
                         i.jsx("p", {
                           className: "ts-help",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "A theme change may affect multiple sheets. The preview is limited to 500 changed cells and respects protected sheets.",
                           }),
@@ -859,7 +923,9 @@ function Sde(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Named style" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Named style",
+                                }),
                                 i.jsxs("select", {
                                   "aria-label": text("Named style"),
                                   value: p,
@@ -886,8 +952,8 @@ function Sde(e) {
                             }),
                             i.jsx("div", {
                               className: "ts-sample",
-                              style: Dw(J),
-                              children: i.jsx(M, {
+                              style: cellStyleToCss(J),
+                              children: i.jsx(LocalizedText, {
                                 children: "Audit schedule · 1,234.50",
                               }),
                             }),
@@ -905,7 +971,7 @@ function Sde(e) {
                                   ranges: u,
                                   styleId: p,
                                 }),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Apply style to selection",
                               }),
                             }),
@@ -918,7 +984,7 @@ function Sde(e) {
                                   ranges: u,
                                   styleId: p,
                                 }),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Reapply and clear direct styles",
                               }),
                             }),
@@ -930,7 +996,7 @@ function Sde(e) {
                                   sheetId: e.sheetId,
                                   ranges: u,
                                 }),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Detach and keep appearance",
                               }),
                             }),
@@ -938,7 +1004,7 @@ function Sde(e) {
                         }),
                         i.jsx("p", {
                           className: "ts-help",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Apply keeps direct formatting. Reapply clears direct font, fill, alignment and border overrides. Values, formulas, number formats and review evidence are preserved.",
                           }),
@@ -946,7 +1012,7 @@ function Sde(e) {
                         c?.protection?.enabled &&
                           i.jsx("p", {
                             className: "ts-notice",
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children:
                                 "This sheet is protected. Unprotect it before applying a style.",
                             }),
@@ -955,7 +1021,7 @@ function Sde(e) {
                           disabled: T,
                           children: [
                             i.jsx("legend", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Create or update a reusable style",
                               }),
                             }),
@@ -964,7 +1030,9 @@ function Sde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "New style name" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "New style name",
+                                    }),
                                     i.jsx("input", {
                                       value: k,
                                       maxLength: 80,
@@ -976,7 +1044,9 @@ function Sde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Style font" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Style font",
+                                    }),
                                     i.jsxs("select", {
                                       "aria-label": text("Style font"),
                                       value: E.fontRole ?? "fixed",
@@ -1034,7 +1104,7 @@ function Sde(e) {
                                               value: "fixed",
                                               children: "Keep stored color",
                                             }),
-                                            _g.map((he) =>
+                                            themePaletteRoles.map((he) =>
                                               i.jsx(
                                                 "option",
                                                 { value: he, children: he },
@@ -1063,7 +1133,7 @@ function Sde(e) {
                                           },
                                         }),
                                     }),
-                                    i.jsx(M, { children: "Bold" }),
+                                    i.jsx(LocalizedText, { children: "Bold" }),
                                   ],
                                 }),
                                 i.jsxs("label", {
@@ -1081,7 +1151,9 @@ function Sde(e) {
                                           },
                                         }),
                                     }),
-                                    i.jsx(M, { children: "Italic" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Italic",
+                                    }),
                                   ],
                                 }),
                               ],
@@ -1092,10 +1164,14 @@ function Sde(e) {
                                 i.jsx("button", {
                                   onClick: () => {
                                     return $({
-                                      base: Tv(ys(c?.cells[h]?.style)),
+                                      base: cloneStyleSnapshot(
+                                        resolveEffectiveCellStyle(
+                                          c?.cells[h]?.style,
+                                        ),
+                                      ),
                                     });
                                   },
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Use active cell formatting",
                                   }),
                                 }),
@@ -1106,7 +1182,7 @@ function Sde(e) {
                                       name: k,
                                       definition: E,
                                     }),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Preview new style",
                                   }),
                                 }),
@@ -1118,7 +1194,7 @@ function Sde(e) {
                                       styleId: p,
                                       definition: E,
                                     }),
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Preview style update",
                                   }),
                                 }),
@@ -1126,7 +1202,7 @@ function Sde(e) {
                             }),
                             i.jsx("p", {
                               className: "ts-help",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Stored formatting can include the active cell’s supported border edges. Theme roles above bind fonts and colors. Up to 50 workbook styles.",
                               }),
@@ -1137,7 +1213,7 @@ function Sde(e) {
                           disabled: T || !v,
                           children: [
                             i.jsx("legend", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Manage selected style",
                               }),
                             }),
@@ -1146,7 +1222,9 @@ function Sde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Rename style" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Rename style",
+                                    }),
                                     i.jsx("input", {
                                       value: I,
                                       maxLength: 80,
@@ -1166,14 +1244,14 @@ function Sde(e) {
                                           styleId: p,
                                           name: I,
                                         }),
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Preview rename",
                                       }),
                                     }),
                                     i.jsx("button", {
                                       onClick: () =>
                                         U({ kind: "deleteStyle", styleId: p }),
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Preview deletion",
                                       }),
                                     }),
@@ -1204,10 +1282,10 @@ function Sde(e) {
                     children: [
                       j.count,
                       " ",
-                      i.jsx(M, { children: "cell" }),
+                      i.jsx(LocalizedText, { children: "cell" }),
                       j.count === 1 ? "" : "s",
                       " ",
-                      i.jsx(M, { children: "will change" }),
+                      i.jsx(LocalizedText, { children: "will change" }),
                       JSON.stringify(j.catalogBefore) !==
                       JSON.stringify(j.catalogAfter)
                         ? "; workbook style settings will also change"
@@ -1215,7 +1293,7 @@ function Sde(e) {
                       ".",
                     ],
                   }),
-                  i.jsx(kde, { plan: j }),
+                  i.jsx(ThemeChangePreview, { plan: j }),
                   j.warnings.map((de) =>
                     i.jsx("p", { className: "ts-notice", children: de }, de),
                   ),
@@ -1230,15 +1308,17 @@ function Sde(e) {
                                 children: i.jsxs("tr", {
                                   children: [
                                     i.jsx("th", {
-                                      children: i.jsx(M, { children: "Cell" }),
+                                      children: i.jsx(LocalizedText, {
+                                        children: "Cell",
+                                      }),
                                     }),
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Current appearance",
                                       }),
                                     }),
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "After change",
                                       }),
                                     }),
@@ -1264,8 +1344,10 @@ function Sde(e) {
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              $7(de.before?.style),
-                                              i.jsx(z7, {
+                                              describeStyleFormatting(
+                                                de.before?.style,
+                                              ),
+                                              i.jsx(CellStyleSummary, {
                                                 style: de.before?.style,
                                                 catalog: j.catalogBefore,
                                               }),
@@ -1273,8 +1355,10 @@ function Sde(e) {
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              $7(de.after.style),
-                                              i.jsx(z7, {
+                                              describeStyleFormatting(
+                                                de.after.style,
+                                              ),
+                                              i.jsx(CellStyleSummary, {
                                                 style: de.after.style,
                                                 catalog: j.catalogAfter,
                                               }),
@@ -1295,23 +1379,25 @@ function Sde(e) {
                             i.jsx("button", {
                               disabled: B === 0,
                               onClick: () => _((de) => de - 1),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Previous changes",
                               }),
                             }),
                             i.jsxs("span", {
                               children: [
-                                i.jsx(M, { children: "Page " }),
+                                i.jsx(LocalizedText, { children: "Page " }),
                                 B + 1,
                                 " ",
-                                i.jsx(M, { children: "of " }),
+                                i.jsx(LocalizedText, { children: "of " }),
                                 X$1,
                               ],
                             }),
                             i.jsx("button", {
                               disabled: B + 1 >= X$1,
                               onClick: () => _((de) => de + 1),
-                              children: i.jsx(M, { children: "Next changes" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Next changes",
+                              }),
                             }),
                           ],
                         }),
@@ -1331,13 +1417,13 @@ function Sde(e) {
             }),
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "ts-primary",
               disabled: T || !j,
               onClick: G,
-              children: i.jsx(M, { children: "Apply changes" }),
+              children: i.jsx(LocalizedText, { children: "Apply changes" }),
             }),
           ],
         }),
@@ -1345,13 +1431,13 @@ function Sde(e) {
     }),
   });
 }
-function jI({ value, cell, dateSystem }) {
-  const n = Dr(),
+function CellValuePreview({ value, cell, dateSystem }) {
+  const n = useWorkbookMessages(),
     o =
       cell != null && cell.numberFormat
-        ? vg(value, cell.numberFormat, dateSystem)
+        ? formatCellValueWithNumberFormat(value, cell.numberFormat, dateSystem)
         : undefined,
-    a = cell ? SE(cell) : undefined;
+    a = cell ? getImportedNumberFormatWarning(cell) : undefined;
   if (o != null && o.accounting) {
     const { symbol, amount, symbolPosition } = o.accounting;
     return i.jsxs("span", {
@@ -1380,14 +1466,19 @@ function jI({ value, cell, dateSystem }) {
   }
   return i.jsx("span", {
     title: a || undefined,
-    children: o?.text ?? lI(value, cell, dateSystem, n.entryLocale),
+    children:
+      o?.text ??
+      formatLocalizedNumberDisplay(value, cell, dateSystem, n.entryLocale),
   });
 }
-const oy = ["Font", "Alignment", "Border"],
-  Tde = new Set(
-    Array.from({ length: 9 }, (e, r) => `${ut(r % 3)}${Math.floor(r / 3) + 1}`),
+const cellFormatTabs = ["Font", "Alignment", "Border"],
+  sampleGridAddresses = new Set(
+    Array.from(
+      { length: 9 },
+      (e, r) => `${columnIndexToLetters(r % 3)}${Math.floor(r / 3) + 1}`,
+    ),
   ),
-  $k = (e, r) =>
+  expandShortHexColor = (e, r) =>
     e?.length === 4
       ? "#" +
         e
@@ -1397,4 +1488,12 @@ const oy = ["Font", "Alignment", "Border"],
           .join("")
       : (e ?? r);
 
-export { $k, Ade, Cde, Sde, Tde, jI, oy };
+export {
+  expandShortHexColor,
+  parseGoToReference,
+  ConnectionStatusNotice,
+  ThemesAndCellStylesDialog,
+  sampleGridAddresses,
+  CellValuePreview,
+  cellFormatTabs,
+};

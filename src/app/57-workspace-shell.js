@@ -22,19 +22,28 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import Hq from "react-dom/client";
-import { rn, t5 } from "./03-workbook-model.js";
-import { BC } from "./11-workbook-formats-dialog.js";
-import { kz } from "./20-calculation-options-and-sources.js";
-import { FI } from "./24-merge-and-audit-analysis.js";
-import { oN, yH } from "./54-workbook-save-conflicts.js";
-import { IH } from "./56-main-worksheet-editor.js";
+import {
+  normalizeWorkbookInput,
+  createBlankWorkbook,
+} from "./03-workbook-model.js";
+import { createLocalWorkbookStore } from "./11-workbook-formats-dialog.js";
+import { buildLocalDemoProposal } from "./20-calculation-options-and-sources.js";
+import { buildSampleLedgerWorkbook } from "./24-merge-and-audit-analysis.js";
+import {
+  workbookLockName,
+  saveWorkbookWithLock,
+} from "./54-workbook-save-conflicts.js";
+import { WorkbookSyncBoundary } from "./56-main-worksheet-editor.js";
 
-const iEe = "embedded-excel-demo-v1",
-  Wj = "embedded-excel-demo-v2:active-document",
-  T_ = (e) => `embedded-excel-demo-v2:${e}`,
-  xp = ["ledger", "draft"],
-  Wf = { ledger: "General ledger", draft: "Draft workbook" };
-function RS({ label, trigger, children, className = "" }) {
+const legacyEmbeddedDemoKey = "embedded-excel-demo-v1",
+  embeddedDemoActiveDocumentKey = "embedded-excel-demo-v2:active-document",
+  buildEmbeddedDemoKey = (e) => `embedded-excel-demo-v2:${e}`,
+  workspaceDocumentKinds = ["ledger", "draft"],
+  workspaceDocumentLabels = {
+    ledger: "General ledger",
+    draft: "Draft workbook",
+  };
+function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
   const o = ne.useRef(null);
   return (
     ne.useEffect(() => {
@@ -85,20 +94,23 @@ function RS({ label, trigger, children, className = "" }) {
     })
   );
 }
-function _H() {
+function restoreSavedWorkspaceDocuments() {
   const e = {
     version: 1,
     activeDocument: "ledger",
-    documents: { ledger: FI(), draft: t5("Draft workbook") },
+    documents: {
+      ledger: buildSampleLedgerWorkbook(),
+      draft: createBlankWorkbook("Draft workbook"),
+    },
   };
   try {
-    const r = localStorage.getItem(iEe);
+    const r = localStorage.getItem(legacyEmbeddedDemoKey);
     if (!r) return e;
     const t = JSON.parse(r);
     if (
       t.version !== 1 ||
       !t.documents ||
-      !xp.includes(t.activeDocument) ||
+      !workspaceDocumentKinds.includes(t.activeDocument) ||
       (t.versionStores !== undefined &&
         (!t.versionStores ||
           typeof t.versionStores != "object" ||
@@ -111,8 +123,8 @@ function _H() {
       legacy: true,
       activeDocument: t.activeDocument,
       documents: {
-        ledger: rn(t.documents.ledger),
-        draft: rn(t.documents.draft),
+        ledger: normalizeWorkbookInput(t.documents.ledger),
+        draft: normalizeWorkbookInput(t.documents.draft),
       },
       versionStores: t.versionStores ?? {},
     };
@@ -124,17 +136,17 @@ function _H() {
     };
   }
 }
-function DH(e, r) {
+function persistWorkspaceDocumentVersion(e, r) {
   const t = e.documents[r];
   let n = e.versionStores?.[r] ?? JSON.stringify(t);
-  const o = BC(
+  const o = createLocalWorkbookStore(
       {
         getItem: () => n,
         setItem: (d, u) => {
           n = u;
         },
       },
-      T_(r),
+      buildEmbeddedDemoKey(r),
     ),
     a = o.load();
   return (
@@ -143,26 +155,26 @@ function DH(e, r) {
     n
   );
 }
-function oEe(e, r) {
+function createWorkspaceDocumentStore(e, r) {
   let t = null;
   try {
-    t = DH(e, r);
+    t = persistWorkspaceDocumentVersion(e, r);
   } catch {}
-  return BC(
+  return createLocalWorkbookStore(
     {
       getItem: () => t,
       setItem: (n, o) => {
         t = o;
       },
     },
-    T_(r),
+    buildEmbeddedDemoKey(r),
   );
 }
-async function aEe(e) {
+async function recoverSavedWorkspaceDocuments(e) {
   const r = await Promise.all(
-    xp.map(async (t) => {
-      const n = T_(t),
-        o = yH(
+    workspaceDocumentKinds.map(async (t) => {
+      const n = buildEmbeddedDemoKey(t),
+        o = saveWorkbookWithLock(
           {
             getItem: (a) => localStorage.getItem(a),
             setItem: (a, s) => localStorage.setItem(a, s),
@@ -179,25 +191,25 @@ async function aEe(e) {
             d = setTimeout(() => s.abort(), 5e3);
           try {
             await navigator.locks.request(
-              oN(n),
+              workbookLockName(n),
               { mode: "exclusive", signal: s.signal },
               (u) => {
                 if (
                   s.signal.aborted ||
                   !u ||
                   u.mode !== "exclusive" ||
-                  u.name !== oN(n)
+                  u.name !== workbookLockName(n)
                 )
                   throw new Error(
                     "Safe workbook recovery could not acquire its document lock.",
                   );
                 if (localStorage.getItem(n) !== null) return;
-                const l = _H();
+                const l = restoreSavedWorkspaceDocuments();
                 if (l.restoreProblem || !l.legacy)
                   throw new Error(
                     "The original saved workspace changed during recovery.",
                   );
-                localStorage.setItem(n, DH(l, t));
+                localStorage.setItem(n, persistWorkspaceDocumentVersion(l, t));
               },
             );
           } finally {
@@ -216,7 +228,7 @@ async function aEe(e) {
         const s = `${a instanceof Error ? a.message : "Saved workbooks could not be restored."} Original saved data is preserved. Changes are kept in this tab; export a copy to keep them.`;
         return {
           id: t,
-          store: oEe(e, t),
+          store: createWorkspaceDocumentStore(e, t),
           workbook: e.documents[t],
           problem: s,
         };
@@ -229,14 +241,14 @@ async function aEe(e) {
     problems: Object.fromEntries(r.map(({ id, problem }) => [id, problem])),
   };
 }
-function sEe() {
-  const [e] = ne.useState(_H),
+function EmbeddedWorkbookWorkspace() {
+  const [e] = ne.useState(restoreSavedWorkspaceDocuments),
     [r, t] = ne.useState(e.documents),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(() => {
       try {
-        const R = sessionStorage.getItem(Wj);
-        if (xp.includes(R)) return R;
+        const R = sessionStorage.getItem(embeddedDemoActiveDocumentKey);
+        if (workspaceDocumentKinds.includes(R)) return R;
       } catch {}
       return e.activeDocument;
     }),
@@ -245,7 +257,7 @@ function sEe() {
     h = ne.useMemo(
       () =>
         Object.fromEntries(
-          xp.map((R) => [
+          workspaceDocumentKinds.map((R) => [
             R,
             {
               onChange: (L) => t(($) => ({ ...$, [R]: L })),
@@ -271,20 +283,22 @@ function sEe() {
           "The workbook could not be saved. Changes remain in this tab.")
         : ""),
     j = !O && I?.status === "saved",
-    z = ne.useMemo(() => kz(), []),
+    z = ne.useMemo(() => buildLocalDemoProposal(), []),
     V = r[a],
     D = k[a]
       ? V.sheets.find((R) => R.id === k[a].sheetId)
       : V.sheets.find((R) => !R.hidden),
     B = k[a]?.range ?? "A1",
     _ = `${D?.name ?? "Sheet1"}!${B}`,
-    C = xp.filter((R) =>
-      `${Wf[R]} ${r[R].name}`.toLowerCase().includes(y.toLowerCase()),
+    C = workspaceDocumentKinds.filter((R) =>
+      `${workspaceDocumentLabels[R]} ${r[R].name}`
+        .toLowerCase()
+        .includes(y.toLowerCase()),
     );
   (ne.useEffect(() => {
     let R = true;
     return (
-      aEe(e).then((L) => {
+      recoverSavedWorkspaceDocuments(e).then((L) => {
         R && (t(L.documents), o(L));
       }),
       () => {
@@ -294,7 +308,7 @@ function sEe() {
   }, [e]),
     ne.useEffect(() => {
       try {
-        sessionStorage.setItem(Wj, a);
+        sessionStorage.setItem(embeddedDemoActiveDocumentKey, a);
       } catch {}
     }, [a]),
     ne.useEffect(() => {
@@ -372,7 +386,7 @@ function sEe() {
                 onClick: () => A(true),
                 children: i.jsx(Info, { size: 17 }),
               }),
-              i.jsxs(RS, {
+              i.jsxs(EmbeddedHeaderMenu, {
                 label: "Notifications",
                 trigger: i.jsx(Bell, { size: 20, "aria-hidden": "true" }),
                 children: [
@@ -396,7 +410,7 @@ function sEe() {
                             children:
                               O ||
                               (j
-                                ? `${Wf[a]} is saved in this browser.`
+                                ? `${workspaceDocumentLabels[a]} is saved in this browser.`
                                 : "Changes are being saved in this browser."),
                           }),
                         ],
@@ -409,7 +423,7 @@ function sEe() {
                   }),
                 ],
               }),
-              i.jsxs(RS, {
+              i.jsxs(EmbeddedHeaderMenu, {
                 label: "Profile — Example preparer",
                 className: "emb-profile-menu",
                 trigger: i.jsx("span", {
@@ -454,19 +468,22 @@ function sEe() {
         className: "emb-secondary-nav",
         "aria-label": "Workspace navigation",
         children: [
-          i.jsxs(RS, {
+          i.jsxs(EmbeddedHeaderMenu, {
             label: "Workspace switcher",
             className: "emb-workspace-switcher",
             trigger: i.jsx(LayoutGrid, { size: 21, "aria-hidden": "true" }),
             children: [
               i.jsx("h2", { children: "Your workbooks" }),
-              xp.map((R) =>
+              workspaceDocumentKinds.map((R) =>
                 i.jsxs(
                   "button",
                   {
                     type: "button",
                     onClick: () => T(R),
-                    children: [i.jsx(FileSpreadsheet, { size: 18 }), Wf[R]],
+                    children: [
+                      i.jsx(FileSpreadsheet, { size: 18 }),
+                      workspaceDocumentLabels[R],
+                    ],
                   },
                   R,
                 ),
@@ -559,7 +576,7 @@ function sEe() {
               i.jsx(ChevronDown, { size: 12 }),
               i.jsx(FolderOpen, { size: 14 }),
               i.jsx("span", { children: "Audit files" }),
-              i.jsx("span", { children: xp.length }),
+              i.jsx("span", { children: workspaceDocumentKinds.length }),
             ],
           }),
           i.jsxs("div", {
@@ -571,7 +588,7 @@ function sEe() {
                   {
                     type: "button",
                     className: `emb-document ${a === R && f ? "emb-document-active" : ""}`,
-                    "aria-label": `Open ${Wf[R]}`,
+                    "aria-label": `Open ${workspaceDocumentLabels[R]}`,
                     "aria-current": a === R && f ? "page" : undefined,
                     onClick: () => T(R),
                     children: [
@@ -581,7 +598,9 @@ function sEe() {
                       }),
                       i.jsxs("div", {
                         children: [
-                          i.jsx("strong", { children: Wf[R] }),
+                          i.jsx("strong", {
+                            children: workspaceDocumentLabels[R],
+                          }),
                           i.jsx("span", {
                             children:
                               R === "ledger"
@@ -676,15 +695,18 @@ function sEe() {
           i.jsx("div", {
             className: "emb-mobile-documents",
             "aria-label": "Choose workpaper",
-            children: xp.map((R) =>
+            children: workspaceDocumentKinds.map((R) =>
               i.jsxs(
                 "button",
                 {
                   type: "button",
                   className: a === R && f ? "emb-mobile-active" : "",
-                  "aria-label": `Open ${Wf[R]}`,
+                  "aria-label": `Open ${workspaceDocumentLabels[R]}`,
                   onClick: () => T(R),
-                  children: [i.jsx(FileSpreadsheet, { size: 14 }), Wf[R]],
+                  children: [
+                    i.jsx(FileSpreadsheet, { size: 14 }),
+                    workspaceDocumentLabels[R],
+                  ],
                 },
                 R,
               ),
@@ -718,7 +740,9 @@ function sEe() {
                       }),
                       i.jsxs("div", {
                         children: [
-                          i.jsx("strong", { children: Wf[a] }),
+                          i.jsx("strong", {
+                            children: workspaceDocumentLabels[a],
+                          }),
                           i.jsx("span", { children: V.name }),
                         ],
                       }),
@@ -788,7 +812,7 @@ function sEe() {
                       className: "emb-editor",
                       hidden: R !== a,
                       style: R !== a ? { display: "none" } : undefined,
-                      children: i.jsx(IH, {
+                      children: i.jsx(WorkbookSyncBoundary, {
                         initialWorkbook: n.documents[R],
                         ...h[R],
                         actor: "Example preparer",
@@ -813,7 +837,7 @@ function sEe() {
                       }),
                       i.jsx("span", {
                         className: "emb-host-citation",
-                        title: `${Wf[a]} · ${_}`,
+                        title: `${workspaceDocumentLabels[a]} · ${_}`,
                         children: _,
                       }),
                     ],
@@ -855,7 +879,11 @@ function sEe() {
                 i.jsxs("button", {
                   type: "button",
                   onClick: () => p(true),
-                  children: [i.jsx(FolderOpen, { size: 16 }), "Reopen ", Wf[a]],
+                  children: [
+                    i.jsx(FolderOpen, { size: 16 }),
+                    "Reopen ",
+                    workspaceDocumentLabels[a],
+                  ],
                 }),
               ],
             }),
@@ -978,15 +1006,18 @@ function sEe() {
     ],
   });
 }
-const k2 = new URLSearchParams(location.search);
+const pageUrlParams = new URLSearchParams(location.search);
 Hq.createRoot(document.getElementById("root")).render(
-  k2.has("embedded") || document.documentElement.dataset.mode === "embedded"
-    ? i.jsx(sEe, {})
-    : i.jsx(IH, {
+  pageUrlParams.has("embedded") ||
+    document.documentElement.dataset.mode === "embedded"
+    ? i.jsx(EmbeddedWorkbookWorkspace, {})
+    : i.jsx(WorkbookSyncBoundary, {
         actor: "Preparer",
-        initialWorkbook: k2.has("demo") ? FI() : undefined,
+        initialWorkbook: pageUrlParams.has("demo")
+          ? buildSampleLedgerWorkbook()
+          : undefined,
         persistenceKey:
-          k2.has("temporary") || k2.has("demo")
+          pageUrlParams.has("temporary") || pageUrlParams.has("demo")
             ? undefined
             : "excel-workbook-v2",
       }),

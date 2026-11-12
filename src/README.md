@@ -14,8 +14,12 @@ compiled application in `dist/` and is now the source the build uses.
 
 ## What to expect
 
-- The code is formatted but not original: identifiers are the minifier's, and
-  there are no types or comments.
+- The code is not the original. There are no types or comments. Module-level
+  names (about 2,200 functions, components and constants) were assigned after
+  recovery from strings, property names and usage, so they describe what the
+  code appears to do and some will be imprecise. Local variables are mostly
+  still single letters, except where a destructuring pattern preserved the
+  real name.
 - The application lives in `app/` as 57 modules, each depending only on
   lower-numbered ones; the core model is split further into twelve files
   under `app/03-workbook-model/`. `app/56-main-worksheet-editor.js` is about
@@ -50,5 +54,5 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
    that needs real refactoring rather than moving code.
 2. Share the core model between the application and the workers instead of
    keeping three copies.
-3. Give exported and frequently used identifiers meaningful names; add types.
+3. Review the assigned names, name the remaining locals, and add types.
 4. Grow the browser checks and add unit tests around the core model.

@@ -1,20 +1,38 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { yc } from "./01-core-schemas-and-hashing.js";
-import { ol, ut } from "./03-workbook-model.js";
-import { Dr, M, Xh } from "./04-cell-input-paste-and-fill.js";
-import { _$ } from "./07-xlsx-archive-reader.js";
-import { U$, V$, z$ } from "./08-xlsx-export-and-preservation.js";
-import { FC } from "./09-workbook-links.js";
-import { AW, EW, Lxe, Pxe, Uxe, kW, v_, y2 } from "./39-report-outputs.js";
+import { defineDataPropertyByKey } from "./01-core-schemas-and-hashing.js";
+import { automationLimits, columnIndexToLetters } from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  localizeDecimalPoint,
+} from "./04-cell-input-paste-and-fill.js";
+import { importDelimitedFile } from "./07-xlsx-archive-reader.js";
+import {
+  delimitedImportDefaults,
+  exportWorksheetToCsv,
+  getWorksheetUsedRange,
+} from "./08-xlsx-export-and-preservation.js";
+import { useOperationScope } from "./09-workbook-links.js";
+import {
+  buildWhatIfPreview,
+  computeWhatIfResult,
+  applyWhatIfScenario,
+  saveWhatIfAnalysis,
+  findSavedWhatIfAnalysis,
+  buildWhatIfReportRows,
+  isWhatIfAnalysisInScope,
+  parseAssumptionNumbers,
+} from "./39-report-outputs.js";
 
-function $xe(e) {
+function WhatIfAnalysisDialog(e) {
   var ce;
-  const { text, language, entryLocale } = Dr(),
+  const { text, language, entryLocale } = useWorkbookMessages(),
     o = ne.useRef(entryLocale).current,
     a = o === "de-DE" || o === "fr-FR",
-    s = (ge) => ge.map((se) => Xh(se, o)).join(a ? "; " : ", "),
+    s = (ge) =>
+      ge.map((se) => localizeDecimalPoint(se, o)).join(a ? "; " : ", "),
     d = ne.useId(),
     u = ne.useRef(null),
     [l, c] = ne.useState(e.initialKind ?? "scenarios"),
@@ -54,7 +72,9 @@ function $xe(e) {
       T.snapshot === JSON.stringify(e.workbook) &&
       T.context.includeHidden === $.includeHidden &&
       JSON.stringify(T.context.allowedSheetIds) === JSON.stringify(U),
-    J = (e.workbook.whatIfAnalyses ?? []).filter((ge) => v_(e.workbook, ge, $));
+    J = (e.workbook.whatIfAnalyses ?? []).filter((ge) =>
+      isWhatIfAnalysisInScope(e.workbook, ge, $),
+    );
   (ne.useEffect(() => {
     var we;
     const ge = document.activeElement;
@@ -122,18 +142,23 @@ function $xe(e) {
                   kind: l,
                   scenarios: O.map((we) => ({
                     name: we.name,
-                    values: y2(we.values, o),
+                    values: parseAssumptionNumbers(we.values, o),
                   })),
                 }
               : l === "one-variable"
-                ? { ...ge, kind: l, orientation: w, values: y2(A, o) }
+                ? {
+                    ...ge,
+                    kind: l,
+                    orientation: w,
+                    values: parseAssumptionNumbers(A, o),
+                  }
                 : {
                     ...ge,
                     kind: l,
-                    rowValues: y2(A, o),
-                    columnValues: y2(F, o),
+                    rowValues: parseAssumptionNumbers(A, o),
+                    columnValues: parseAssumptionNumbers(F, o),
                   };
-        (N(EW(e.workbook, se, $)), C("0"));
+        (N(computeWhatIfResult(e.workbook, se, $)), C("0"));
       }),
     ae = (ge, se = false) =>
       W(() => {
@@ -181,7 +206,7 @@ function $xe(e) {
       W(() => {
         T &&
           (e.onWorkbookChange(
-            Pxe(e.workbook, T, $, D || undefined),
+            saveWhatIfAnalysis(e.workbook, T, $, D || undefined),
             `Save what-if report: ${T.request.name}`,
           ),
           N(null));
@@ -189,7 +214,7 @@ function $xe(e) {
     de = () =>
       W(() => {
         if (!T) return;
-        const ge = Lxe(e.workbook, T, Number(_), $);
+        const ge = applyWhatIfScenario(e.workbook, T, Number(_), $);
         (ge !== e.workbook &&
           e.onWorkbookChange(ge, `Apply scenario: ${T.trials[Number(_)].name}`),
           N(null));
@@ -197,7 +222,11 @@ function $xe(e) {
     he = () =>
       W(() => {
         if (!T) return;
-        const ge = JSON.stringify(AW(e.workbook, T, $), null, 2);
+        const ge = JSON.stringify(
+          buildWhatIfPreview(e.workbook, T, $),
+          null,
+          2,
+        );
         if (e.onExport) e.onExport(ge);
         else {
           const se = URL.createObjectURL(
@@ -210,7 +239,7 @@ function $xe(e) {
             setTimeout(() => URL.revokeObjectURL(se), 1e3));
         }
       }),
-    Se = X$1 && T ? kW(T) : [],
+    Se = X$1 && T ? buildWhatIfReportRows(T) : [],
     le = Se.findIndex((ge) => ge[0] === "Source assumptions at preview");
   return i.jsx("div", {
     className: "gs-backdrop",
@@ -253,10 +282,12 @@ function $xe(e) {
               children: [
                 i.jsx("h2", {
                   id: `${d}-title`,
-                  children: i.jsx(M, { children: "What-if Analysis" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "What-if Analysis",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Compare assumptions for estimates and valuation sensitivity.",
                   }),
@@ -292,7 +323,7 @@ function $xe(e) {
               }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Analysis name" }),
+                i.jsx(LocalizedText, { children: "Analysis name" }),
                 i.jsx("input", {
                   "aria-label": text("Analysis name"),
                   value: h,
@@ -305,7 +336,7 @@ function $xe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Analysis type" }),
+                i.jsx(LocalizedText, { children: "Analysis type" }),
                 i.jsxs("select", {
                   "aria-label": text("Analysis type"),
                   value: l,
@@ -334,7 +365,7 @@ function $xe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Default worksheet" }),
+                i.jsx(LocalizedText, { children: "Default worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Default worksheet"),
                   value: G.some((ge) => ge.id === p) ? p : "",
@@ -360,7 +391,7 @@ function $xe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Saved analyses" }),
+                i.jsx(LocalizedText, { children: "Saved analyses" }),
                 i.jsxs("select", {
                   "aria-label": text("Saved analyses"),
                   value: J.some((ge) => ge.id === D) ? D : "",
@@ -382,7 +413,7 @@ function $xe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Changing cells" }),
+                i.jsx(LocalizedText, { children: "Changing cells" }),
                 i.jsx("input", {
                   "aria-label": text("Changing cells"),
                   placeholder:
@@ -398,7 +429,7 @@ function $xe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Result cells" }),
+                i.jsx(LocalizedText, { children: "Result cells" }),
                 i.jsx("input", {
                   "aria-label": text("Result cells"),
                   placeholder: text("B5, B6"),
@@ -412,7 +443,7 @@ function $xe(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Use commas between cells. Cross-sheet references may use 'Sheet name'!B2. Result cells must contain formulas.",
           }),
@@ -423,23 +454,27 @@ function $xe(e) {
             children: [
               i.jsx("button", {
                 onClick: () => ae(D, true),
-                children: i.jsx(M, { children: "Review saved baseline" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Review saved baseline",
+                }),
               }),
               i.jsx("button", {
                 disabled: e.readOnly,
                 onClick: () =>
                   W(() => {
                     (e.onWorkbookChange(
-                      Uxe(e.workbook, D, $),
+                      findSavedWhatIfAnalysis(e.workbook, D, $),
                       "Remove saved what-if definition",
                     ),
                       B(""),
                       N(null));
                   }),
-                children: i.jsx(M, { children: "Remove saved definition" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Remove saved definition",
+                }),
               }),
               i.jsx("p", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Saved locations are historical. Check them after moving or deleting source rows; preview again before any action. Removing a definition keeps its report sheets.",
                 }),
@@ -450,10 +485,12 @@ function $xe(e) {
           ? i.jsxs("fieldset", {
               children: [
                 i.jsx("legend", {
-                  children: i.jsx(M, { children: "Named scenarios" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Named scenarios",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Enter values in the same order as the changing cells. Up to 32 inputs and 100 named scenarios.",
                   }),
@@ -466,10 +503,10 @@ function $xe(e) {
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Scenario " }),
+                            i.jsx(LocalizedText, { children: "Scenario " }),
                             se + 1,
                             " ",
-                            i.jsx(M, { children: "name" }),
+                            i.jsx(LocalizedText, { children: "name" }),
                             i.jsx("input", {
                               "aria-label": `Scenario ${se + 1} name`,
                               value: ge.name,
@@ -489,10 +526,10 @@ function $xe(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Scenario " }),
+                            i.jsx(LocalizedText, { children: "Scenario " }),
                             se + 1,
                             " ",
-                            i.jsx(M, { children: "values" }),
+                            i.jsx(LocalizedText, { children: "values" }),
                             i.jsx("input", {
                               "aria-label": `Scenario ${se + 1} values`,
                               placeholder: a ? "90000; 45000" : "90000, 45000",
@@ -515,7 +552,9 @@ function $xe(e) {
                           "aria-label": `Remove scenario ${se + 1}`,
                           onClick: () =>
                             q(() => j(O.filter((we, Ee) => Ee !== se))),
-                          children: i.jsx(M, { children: "Remove" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Remove",
+                          }),
                         }),
                       ],
                     },
@@ -531,7 +570,7 @@ function $xe(e) {
                         { name: `Scenario ${O.length + 1}`, values: "" },
                       ]),
                     ),
-                  children: i.jsx(M, { children: "Add scenario" }),
+                  children: i.jsx(LocalizedText, { children: "Add scenario" }),
                 }),
               ],
             })
@@ -559,7 +598,7 @@ function $xe(e) {
                 l === "two-variable"
                   ? i.jsxs("label", {
                       children: [
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "Down-column input values (second changing cell)",
                         }),
@@ -577,7 +616,7 @@ function $xe(e) {
                     })
                   : i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Values arranged" }),
+                        i.jsx(LocalizedText, { children: "Values arranged" }),
                         i.jsxs("select", {
                           "aria-label": text("Values arranged"),
                           value: w,
@@ -608,14 +647,14 @@ function $xe(e) {
                 checked: z,
                 onChange: (ge) => q(() => V(ge.target.checked)),
               }),
-              i.jsx(M, { children: "Include hidden sources" }),
+              i.jsx(LocalizedText, { children: "Include hidden sources" }),
             ],
           }),
         R && i.jsx("p", { role: "alert", className: "gs-error", children: R }),
         i.jsx("button", {
           className: "gs-primary",
           onClick: te,
-          children: i.jsx(M, { children: "Preview analysis" }),
+          children: i.jsx(LocalizedText, { children: "Preview analysis" }),
         }),
         T &&
           i.jsxs("section", {
@@ -628,35 +667,41 @@ function $xe(e) {
                 ? i.jsxs(i.Fragment, {
                     children: [
                       i.jsx("h3", {
-                        children: i.jsx(M, { children: "Review results" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Review results",
+                        }),
                       }),
                       i.jsxs("p", {
                         role: "status",
                         children: [
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children: "Baseline inputs are unchanged.",
                           }),
                           " ",
                           T.trials.filter((ge) => !ge.error).length,
                           " ",
-                          i.jsx(M, { children: "of" }),
+                          i.jsx(LocalizedText, { children: "of" }),
                           " ",
                           T.trials.length,
                           " ",
-                          i.jsx(M, { children: "trials succeeded. " }),
+                          i.jsx(LocalizedText, {
+                            children: "trials succeeded. ",
+                          }),
                           T.dependencyCells,
                           " ",
-                          i.jsx(M, { children: "dependency cells; " }),
+                          i.jsx(LocalizedText, {
+                            children: "dependency cells; ",
+                          }),
                           T.workUnits,
                           " ",
-                          i.jsx(M, { children: "work units." }),
+                          i.jsx(LocalizedText, { children: "work units." }),
                         ],
                       }),
                       T.baseline.error &&
                         i.jsxs("p", {
                           role: "alert",
                           children: [
-                            i.jsx(M, {
+                            i.jsx(LocalizedText, {
                               children: "Baseline calculation failed: ",
                             }),
                             T.baseline.error,
@@ -699,7 +744,7 @@ function $xe(e) {
                       i.jsxs("details", {
                         children: [
                           i.jsx("summary", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children:
                                 "Inspect source assumptions and formulas",
                             }),
@@ -715,17 +760,17 @@ function $xe(e) {
                                   children: i.jsxs("tr", {
                                     children: [
                                       i.jsx("th", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Source",
                                         }),
                                       }),
                                       i.jsx("th", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Original value / formula",
                                         }),
                                       }),
                                       i.jsx("th", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Literal text",
                                         }),
                                       }),
@@ -768,7 +813,7 @@ function $xe(e) {
                         children: [
                           i.jsx("button", {
                             onClick: he,
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Export reviewed evidence",
                             }),
                           }),
@@ -787,7 +832,9 @@ function $xe(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Scenario to apply" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Scenario to apply",
+                                }),
                                 i.jsx("select", {
                                   "aria-label": text("Scenario to apply"),
                                   value: _,
@@ -819,7 +866,7 @@ function $xe(e) {
                                   (ce = T.trials[Number(_)]) != null && ce.error
                                 ),
                               onClick: de,
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Apply selected scenario",
                               }),
                             }),
@@ -829,30 +876,32 @@ function $xe(e) {
                   })
                 : i.jsx("p", {
                     role: "status",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "This preview is stale. Results and assumptions are withheld; preview again using the current workbook and permissions.",
                     }),
                   }),
               i.jsx("button", {
                 onClick: () => N(null),
-                children: i.jsx(M, { children: "Discard preview" }),
+                children: i.jsx(LocalizedText, { children: "Discard preview" }),
               }),
             ],
           }),
         i.jsxs("details", {
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, { children: "Supported scope and limits" }),
+              children: i.jsx(LocalizedText, {
+                children: "Supported scope and limits",
+              }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Numeric inputs and deterministic scalar formulas. One-variable tables support up to 16 result formulas; two-variable tables support one. Up to 100 values per axis, 400 combinations and 50,000 dependency-cell work units. Invalid assumptions and failed calculations never change the source.",
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Reports are snapshots. Refresh by loading a saved definition and previewing again; previous reports remain intact. Native JSON retains definitions and evidence. XLSX retains report cells, without native Excel scenario or data-table definitions. Volatile, dynamic, array, blank and incomplete dependencies are excluded. Multivariable Solver is separate.",
               }),
@@ -862,24 +911,31 @@ function $xe(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close" }),
+            children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
       ],
     }),
   });
 }
-function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
-  const { text, language } = Dr(),
+function DelimitedImportExportDialog({
+  source,
+  blocked,
+  onClose,
+  onImport,
+  onExport,
+  onReport,
+}) {
+  const { text, language } = useWorkbookMessages(),
     u = "bytes" in source,
     l = ne.useId(),
     c = ne.useRef(null),
-    h = FC(),
+    h = useOperationScope(),
     f = ne.useRef(0),
     p = ne.useRef(null),
     [m, v] = ne.useState(() => {
       return {
-        ...U$,
+        ...delimitedImportDefaults,
         columns: {},
         includeHeader: true,
         bom: false,
@@ -893,7 +949,8 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               newline: `\r
 `,
               range:
-                source.population?.range ?? z$(source.snapshot, source.sheetId),
+                source.population?.range ??
+                getWorksheetUsedRange(source.snapshot, source.sheetId),
               ...(source.population
                 ? {
                     population: {
@@ -912,7 +969,9 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
     g = (R) => {
       try {
         return {
-          result: u ? undefined : V$(source.snapshot, source.sheetId, R),
+          result: u
+            ? undefined
+            : exportWorksheetToCsv(source.snapshot, source.sheetId, R),
           error: "",
         };
       } catch (L) {
@@ -948,7 +1007,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
     if (((p.current = L), u)) {
       E(true);
       try {
-        const U = await _$(
+        const U = await importDelimitedFile(
           source.file ?? new File([source.bytes], source.fileName),
           m,
           {
@@ -990,7 +1049,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
   const _ = (R, L, $) =>
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: R }),
+          i.jsx(LocalizedText, { children: R }),
           i.jsx("select", {
             value: String(m[L]),
             onChange: (U) => D(L, U.target.value),
@@ -1047,7 +1106,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
           children: [
             i.jsx("h2", {
               id: l,
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: u
                   ? "Review delimited import"
                   : "Review delimited export",
@@ -1057,7 +1116,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               children: [
                 u ? source.fileName : source.snapshot.name,
                 " ",
-                i.jsx(M, { children: "· CSV / TSV" }),
+                i.jsx(LocalizedText, { children: "· CSV / TSV" }),
               ],
             }),
           ],
@@ -1074,7 +1133,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               source.population &&
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Export population" }),
+                  i.jsx(LocalizedText, { children: "Export population" }),
                   i.jsxs("select", {
                     "aria-label": text("Export population"),
                     value: m.population?.scope ?? "full",
@@ -1098,7 +1157,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                     ],
                   }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Preview again after changing scope. Save the schema report to retain criteria and original row identities.",
                     }),
@@ -1108,7 +1167,9 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
             i.jsxs("fieldset", {
               children: [
                 i.jsx("legend", {
-                  children: i.jsx(M, { children: "File and data controls" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "File and data controls",
+                  }),
                 }),
                 i.jsxs("div", {
                   className: "lg-delimited-controls",
@@ -1176,7 +1237,9 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Export range" }),
+                              i.jsx(LocalizedText, {
+                                children: "Export range",
+                              }),
                               i.jsx("input", {
                                 value: m.range ?? "",
                                 onChange: (R) => D("range", R.target.value),
@@ -1197,7 +1260,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Auto preserves leading-zero identifiers, long numbers, dates and Boolean text. Choose a column type to convert it. Dates need four-digit years. Empty records retain their source row positions.",
               }),
@@ -1206,25 +1269,27 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Column schema" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Column schema",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
                       z.records.toLocaleString(),
                       " ",
-                      i.jsx(M, { children: "records ·" }),
+                      i.jsx(LocalizedText, { children: "records ·" }),
                       " ",
                       z.columns.toLocaleString(),
                       " ",
-                      i.jsx(M, { children: "columns ·" }),
+                      i.jsx(LocalizedText, { children: "columns ·" }),
                       " ",
                       z.storedCells.toLocaleString(),
                       " ",
-                      i.jsx(M, { children: "stored cells ·" }),
+                      i.jsx(LocalizedText, { children: "stored cells ·" }),
                       " ",
                       (z.fileBytes / 1024).toFixed(1),
                       " ",
-                      i.jsx(M, { children: "KiB" }),
+                      i.jsx(LocalizedText, { children: "KiB" }),
                     ],
                   }),
                   i.jsx("div", {
@@ -1234,11 +1299,11 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                         "label",
                         {
                           children: [
-                            ut(R.index),
+                            columnIndexToLetters(R.index),
                             " — ",
                             R.label || "(blank header)",
                             i.jsx("select", {
-                              "aria-label": `Type for column ${ut(R.index)}`,
+                              "aria-label": `Type for column ${columnIndexToLetters(R.index)}`,
                               value: m.columns[R.index] ?? "auto",
                               onChange: (L) =>
                                 D("columns", {
@@ -1258,7 +1323,9 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                             }),
                             i.jsxs("small", {
                               children: [
-                                i.jsx(M, { children: "Observed: " }),
+                                i.jsx(LocalizedText, {
+                                  children: "Observed: ",
+                                }),
                                 R.observed.join(", ") || "header only",
                               ],
                             }),
@@ -1274,19 +1341,23 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                         i.jsx("button", {
                           disabled: F === 0,
                           onClick: () => I((R) => R - 1),
-                          children: i.jsx(M, { children: "Previous columns" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Previous columns",
+                          }),
                         }),
                         " ",
-                        i.jsx(M, { children: "Page " }),
+                        i.jsx(LocalizedText, { children: "Page " }),
                         F + 1,
                         " ",
-                        i.jsx(M, { children: "of " }),
+                        i.jsx(LocalizedText, { children: "of " }),
                         V,
                         " ",
                         i.jsx("button", {
                           disabled: F + 1 >= V,
                           onClick: () => I((R) => R + 1),
-                          children: i.jsx(M, { children: "Next columns" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Next columns",
+                          }),
                         }),
                       ],
                     }),
@@ -1295,19 +1366,19 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
             i.jsx("button", {
               onClick: B,
               disabled: w,
-              children: i.jsx(M, { children: "Refresh preview" }),
+              children: i.jsx(LocalizedText, { children: "Refresh preview" }),
             }),
             w &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children: "Processing file in an isolated worker…",
                 }),
               }),
             A &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Settings changed. Refresh preview before continuing.",
                 }),
@@ -1317,27 +1388,31 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Data preview" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Data preview",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "First 25 logical records and 200 columns. Validation checks the entire file or export range. ",
                       }),
                       z.issueCount,
                       " ",
-                      i.jsx(M, { children: "issues;" }),
+                      i.jsx(LocalizedText, { children: "issues;" }),
                       " ",
                       z.changeCount,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "conversions or text changes, including",
                       }),
                       " ",
                       z.safeTextChanges,
                       " ",
-                      i.jsx(M, { children: "safe-export changes." }),
+                      i.jsx(LocalizedText, {
+                        children: "safe-export changes.",
+                      }),
                     ],
                   }),
                   i.jsx("div", {
@@ -1351,14 +1426,22 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Record" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Record",
+                                }),
                               }),
                               z.schema
                                 .slice(0, 200)
                                 .map((R) =>
                                   i.jsxs(
                                     "th",
-                                    { children: [ut(R.index), " — ", R.label] },
+                                    {
+                                      children: [
+                                        columnIndexToLetters(R.index),
+                                        " — ",
+                                        R.label,
+                                      ],
+                                    },
                                     R.index,
                                   ),
                                 ),
@@ -1401,7 +1484,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                       role: "alert",
                       children: [
                         i.jsx("h3", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Resolve issues before continuing",
                           }),
                         }),
@@ -1411,7 +1494,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                               "li",
                               {
                                 children: [
-                                  i.jsx(M, { children: "Record " }),
+                                  i.jsx(LocalizedText, { children: "Record " }),
                                   R.record,
                                   R.column ? `, column ${R.column}` : "",
                                   ": ",
@@ -1428,14 +1511,16 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                         z.issueCount > z.issues.length &&
                           i.jsxs("p", {
                             children: [
-                              i.jsx(M, { children: "Showing the first " }),
+                              i.jsx(LocalizedText, {
+                                children: "Showing the first ",
+                              }),
                               z.issues.length,
                               " ",
-                              i.jsx(M, { children: "of" }),
+                              i.jsx(LocalizedText, { children: "of" }),
                               " ",
                               z.issueCount,
                               " ",
-                              i.jsx(M, { children: "issues." }),
+                              i.jsx(LocalizedText, { children: "issues." }),
                             ],
                           }),
                       ],
@@ -1444,7 +1529,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                     children: [
                       i.jsxs("summary", {
                         children: [
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children: "Conversions and changed text (",
                           }),
                           z.changeCount,
@@ -1452,7 +1537,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                         ],
                       }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "The saved report contains every changed value; the dialog shows the first 100.",
                         }),
@@ -1466,16 +1551,24 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                             children: i.jsxs("tr", {
                               children: [
                                 i.jsx("th", {
-                                  children: i.jsx(M, { children: "Cell" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Cell",
+                                  }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, { children: "Before" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Before",
+                                  }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, { children: "After" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "After",
+                                  }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, { children: "Reason" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Reason",
+                                  }),
                                 }),
                               ],
                             }),
@@ -1501,7 +1594,9 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                     ],
                   }),
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Exchange policy" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Exchange policy",
+                    }),
                   }),
                   i.jsx("ul", {
                     children: z.warnings.map((R, L) =>
@@ -1517,12 +1612,14 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
           children: [
             i.jsx("button", {
               onClick: onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               disabled: !z || A || w,
               onClick: () => z && onReport(z),
-              children: i.jsx(M, { children: "Save schema and changes" }),
+              children: i.jsx(LocalizedText, {
+                children: "Save schema and changes",
+              }),
             }),
             i.jsx("button", {
               disabled: A || w || !!blocked || !(z != null && z.valid),
@@ -1541,7 +1638,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
                     j($ instanceof Error ? $.message : "Exchange failed.");
                   }
               },
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: u ? "Import reviewed data" : "Download reviewed data",
               }),
             }),
@@ -1551,7 +1648,7 @@ function zxe({ source, blocked, onClose, onImport, onExport, onReport }) {
     }),
   });
 }
-function Vxe(e) {
+function tokenizeVbaSource(e) {
   const r = [];
   let t = 0,
     n = 1;
@@ -1641,17 +1738,17 @@ function Vxe(e) {
                 `Unsupported source token ${a}. Templates, expressions and arbitrary JavaScript are outside this adapter.`,
               );
     }
-    r.length > ol.maxTokens &&
+    r.length > automationLimits.maxTokens &&
       o("Source exceeds the 20,000-token migration limit.");
   }
   return r;
 }
-class Wxe {
+class VbaAssignmentParser {
   constructor(r) {
-    yc(this, "pos", 0);
-    yc(this, "bindings", new Map());
-    yc(this, "commands", []);
-    yc(this, "issues", []);
+    defineDataPropertyByKey(this, "pos", 0);
+    defineDataPropertyByKey(this, "bindings", new Map());
+    defineDataPropertyByKey(this, "commands", []);
+    defineDataPropertyByKey(this, "issues", []);
     this.ts = r;
   }
   peek(r) {
@@ -1695,7 +1792,8 @@ class Wxe {
           const n = this.scalar();
           if (
             (t.push(n),
-            t.length > ol.maxCells && this.error("Matrix exceeds 500 cells."),
+            t.length > automationLimits.maxCells &&
+              this.error("Matrix exceeds 500 cells."),
             this.peek(","))
           )
             this.take(",");
@@ -1704,7 +1802,7 @@ class Wxe {
         if (
           (this.take("]"),
           r.push(t),
-          (r.length > ol.maxCells ||
+          (r.length > automationLimits.maxCells ||
             r.reduce((n, o) => n + o.length, 0) > 500) &&
             this.error("Matrix exceeds 500 cells."),
           this.peek(","))
@@ -1854,7 +1952,7 @@ class Wxe {
           }
         } catch (t) {
           for (
-            this.issues.push(ZT(t));
+            this.issues.push(createVbaSyntaxError(t));
             this.pos < this.ts.length && !this.peek(";") && !this.peek("}");
           )
             this.pos++;
@@ -1866,20 +1964,20 @@ class Wxe {
             "Additional procedures or top-level executable statements are unsupported.",
           ));
     } catch (r) {
-      this.issues.push(ZT(r));
+      this.issues.push(createVbaSyntaxError(r));
     }
   }
 }
-function ZT(e) {
+function createVbaSyntaxError(e) {
   const r = e;
   return {
     line: r.line ?? 1,
     message: r.message ?? "Unsupported source syntax.",
   };
 }
-const KT = '"(?:[^"]|"")*"';
-function pS(e) {
-  if (new RegExp("^" + KT + "$").test(e))
+const vbaStringLiteralPattern = '"(?:[^"]|"")*"';
+function parseVbaAssignmentValue(e) {
+  if (new RegExp("^" + vbaStringLiteralPattern + "$").test(e))
     return e.slice(1, -1).replaceAll('""', '"');
   if (/^(true|false)$/i.test(e)) return /^true$/i.test(e);
   if (
@@ -1891,7 +1989,7 @@ function pS(e) {
     "Only literal text, finite numbers or booleans are supported in VBA assignments.",
   );
 }
-function Hxe(e) {
+function splitVbaStatements(e) {
   let r = "",
     t = false;
   for (let n = 0; n < e.length; n++) {
@@ -1913,4 +2011,13 @@ function Hxe(e) {
   return r.trim();
 }
 
-export { $xe, Hxe, KT, Vxe, Wxe, ZT, pS, zxe };
+export {
+  WhatIfAnalysisDialog,
+  splitVbaStatements,
+  vbaStringLiteralPattern,
+  tokenizeVbaSource,
+  VbaAssignmentParser,
+  createVbaSyntaxError,
+  parseVbaAssignmentValue,
+  DelimitedImportExportDialog,
+};
