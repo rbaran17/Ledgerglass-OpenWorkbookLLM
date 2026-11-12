@@ -1,7 +1,8 @@
 import type { Workbook, RawCellContent } from "../index";
 
 /** The column types a table column can carry. "any" means no type is set. */
-export type TableColumnDataType = "any" | "text" | "number" | "boolean" | "date";
+export type TableColumnDataType =
+  "any" | "text" | "number" | "boolean" | "date";
 
 /** One column of a table, as stored in `sheet.tables[i].columns`. */
 export interface TableColumn {
@@ -183,7 +184,7 @@ export interface FilterRequest {
 }
 
 /** A run of consecutive rows, with zero-based indexes: `{ start: 2, end: 2 }` is the third row. */
-export interface RowInterval {
+export interface TableRowInterval {
   start: number;
   end: number;
 }
@@ -191,9 +192,9 @@ export interface RowInterval {
 /** The outcome of applying a filter. */
 export interface FilterResult {
   /** Rows to hide, as zero-based intervals. */
-  hiddenRows: RowInterval[];
+  hiddenRows: TableRowInterval[];
   /** Rows that did not match, as zero-based intervals. */
-  excludedRows: RowInterval[];
+  excludedRows: TableRowInterval[];
   fields: Array<{ column: number; label: string }>;
   context: {
     workbookId: string;
@@ -229,7 +230,7 @@ export interface SavedFilterView {
   sourceRevision: number;
   savedAt: string;
   definition: FilterRequest;
-  /** Row counts at the moment the view was saved. They do not update. */
+  /** Row counts recorded when the view was saved. */
   population: {
     totalRows: number;
     matchedRows: number;
@@ -241,12 +242,7 @@ export interface SavedFilterView {
 
 /** A column of the source, or a pivot field, referenced by its header text. */
 export type PivotAggregateOperation =
-  | "sum"
-  | "count"
-  | "average"
-  | "min"
-  | "max"
-  | "distinctCount";
+  "sum" | "count" | "average" | "min" | "max" | "distinctCount";
 
 export interface PivotValueField {
   /** The header text of a source column. */
@@ -341,7 +337,12 @@ export interface PivotDrillDown {
   /** The source column headers. */
   fields: string[];
   records: Array<{
-    locator: { sheetName: string; row: number; range: string; [extra: string]: unknown };
+    locator: {
+      sheetName: string;
+      row: number;
+      range: string;
+      [extra: string]: unknown;
+    };
     values: RawCellContent[];
     cells: Array<{ address: string; cell: unknown }>;
   }>;
@@ -358,6 +359,8 @@ export interface PivotViewChanges {
   values?: PivotValueField[];
   /** Chart settings. `valueIndex` is the position in the value fields. */
   chart?: { kind: "column" | "bar" | "line"; valueIndex: number };
+  /** Date timelines. Accepted, but not described here: they need an explicit period and date system. */
+  timelines?: Array<Record<string, unknown>>;
 }
 
 /** The data behind a pivot chart. */
@@ -448,7 +451,8 @@ export function setTableColumnDataType(
 
 /**
  * Previews a change of column type. Returns a plan with the changed values, the exceptions, and `canApply`.
- * Does not change the workbook. Throws for an invalid request, an unknown table or column, or a protected sheet.
+ * Does not change the workbook. Throws for an invalid request, an unknown table or column, a protected sheet, or a
+ * table with more than 500 data rows.
  */
 export function previewColumnTypeChange(
   workbook: Workbook,
@@ -470,8 +474,7 @@ export function applyColumnTypePreview(
 
 /**
  * Applies a filter to the rows below a header and returns the outcome. It does not change the workbook; apply
- * `hiddenRows` yourself if you want the rows hidden. Throws for an invalid range, column or condition, or for a
- * range over the size limit.
+ * `hiddenRows` yourself if you want the rows hidden. Throws for an invalid range, column or condition.
  */
 export function applyFilterConditions(
   workbook: Workbook,
@@ -516,7 +519,10 @@ export function addSavedFilterView(
 /**
  * Deletes a saved filter view and returns a new workbook. Throws if the view does not exist.
  */
-export function removeSavedFilterView(workbook: Workbook, viewId: string): Workbook;
+export function removeSavedFilterView(
+  workbook: Workbook,
+  viewId: string,
+): Workbook;
 
 /**
  * Resolves a structured reference such as `Sales[Units]`, `Sales[[Units]:[Price]]` or `[@Units]` to a range.
@@ -540,9 +546,12 @@ export function getPivotSourceFields(
 
 /**
  * Builds a pivot table and returns a new workbook. The output goes to a new sheet unless `destination` is given.
- * Throws for an invalid request, an unknown source field, or a source that is too large.
+ * Throws for an invalid request or for a field that is not in the source.
  */
-export function buildPivotTableOutput(workbook: Workbook, request: PivotRequest): Workbook;
+export function buildPivotTableOutput(
+  workbook: Workbook,
+  request: PivotRequest,
+): Workbook;
 
 /**
  * Rebuilds an existing pivot from its source. Without `destination` the result goes to a new sheet; with it,
@@ -558,7 +567,10 @@ export function refreshPivotTable(
  * Reports whether a pivot's output still matches its source and whether the output was edited. Does not change
  * the workbook. Throws if the pivot is not found.
  */
-export function getPivotRefreshState(workbook: Workbook, pivotId: string): PivotRefreshState;
+export function getPivotRefreshState(
+  workbook: Workbook,
+  pivotId: string,
+): PivotRefreshState;
 
 /**
  * Lists the source rows behind one pivot value cell, the grand total or a subtotal. Throws if the cell is a
@@ -593,7 +605,7 @@ export function getPivotSlicerItems(
 /**
  * Builds a filtered, sorted, re-valued or charted copy of a pivot on a new sheet and returns the new workbook.
  * The original pivot is not changed. Throws if the workbook has changed since `previewContext.snapshot`, or for a
- * change key other than slicers, sorts, values or chart.
+ * change key other than slicers, timelines, sorts, values or chart.
  */
 export function applyPivotViewChange(
   workbook: Workbook,
@@ -603,7 +615,10 @@ export function applyPivotViewChange(
 ): Workbook;
 
 /**
- * Returns the points of a pivot chart: one label and value for each row group of the first value field, or the
- * field chosen by `chart.valueIndex`. Throws if there are more than 200 groups or a value is an error.
+ * Returns the points of a pivot chart: one label and value for each row group of the value field that the pivot
+ * chart setting names (the first value field by default). Throws if the pivot is not found.
  */
-export function buildPivotChartModel(book: Workbook, pivotId: string): PivotChartModel;
+export function buildPivotChartModel(
+  book: Workbook,
+  pivotId: string,
+): PivotChartModel;

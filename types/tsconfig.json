@@ -11,8 +11,16 @@
     "baseUrl": "..",
     "paths": {
       "@ledgerglass/workbook": ["types/index.d.ts"],
-      "@ledgerglass/workbook/mcp": ["types/mcp.d.ts"]
+      "@ledgerglass/workbook/mcp": ["types/mcp.d.ts"],
+      "@ledgerglass/workbook/node": ["types/node.d.ts"]
     }
   },
-  "include": ["index.d.ts", "mcp.d.ts", "tests/consumer.tsx"]
+  "include": [
+    "index.d.ts",
+    "mcp.d.ts",
+    "node.d.ts",
+    "sdk/*.d.ts",
+    "tests/consumer.tsx",
+    "tests/node-consumer.ts"
+  ]
 }

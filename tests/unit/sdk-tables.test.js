@@ -55,7 +55,11 @@ function tableBook() {
     name: "Sales",
     range: "A1:C4",
   });
-  return { workbook, sheetId: workbook.sheets[0].id, table: workbook.sheets[0].tables[0] };
+  return {
+    workbook,
+    sheetId: workbook.sheets[0].id,
+    table: workbook.sheets[0].tables[0],
+  };
 }
 
 /** The sales book with a pivot of Units by Region, written to a new sheet. */
@@ -130,17 +134,22 @@ describe("createWorksheetTable", () => {
 
   test("refuses a name that is already used, ignoring case", () => {
     const { workbook, sheetId } = tableBook();
-    const other = createBlankWorkbook("Other");
-    other.sheets[0].cells.E1 = { raw: "x" };
     expect(() =>
-      createWorksheetTable(workbook, sheetId, { name: "sales", range: "E1:E1", headers: ["x"] }),
+      createWorksheetTable(workbook, sheetId, {
+        name: "sales",
+        range: "E1:E2",
+        headers: ["x"],
+      }),
     ).toThrow("A table with that name already exists.");
   });
 
   test("refuses a name that is not a valid table name", () => {
     const book = salesBook();
     expect(() =>
-      createWorksheetTable(book, book.sheets[0].id, { name: "bad name!", range: "A1:C4" }),
+      createWorksheetTable(book, book.sheets[0].id, {
+        name: "bad name!",
+        range: "A1:C4",
+      }),
     ).toThrow("Use a table name beginning with a letter or underscore");
   });
 
@@ -148,7 +157,10 @@ describe("createWorksheetTable", () => {
     const book = salesBook();
     book.sheets[0].cells.A1 = { raw: "" };
     expect(() =>
-      createWorksheetTable(book, book.sheets[0].id, { name: "Sales", range: "A1:C4" }),
+      createWorksheetTable(book, book.sheets[0].id, {
+        name: "Sales",
+        range: "A1:C4",
+      }),
     ).toThrow("Review table headers");
   });
 });
@@ -170,8 +182,13 @@ describe("applyTableOperation and applyTableOperationPreview", () => {
 
   test("a row count appends empty rows", () => {
     const { workbook, sheetId, table } = tableBook();
-    const plan = applyTableOperation(workbook, sheetId, table.id, { kind: "appendRows", count: 2 });
-    expect(applyTableOperationPreview(workbook, plan).sheets[0].tables[0].range).toBe("A1:C6");
+    const plan = applyTableOperation(workbook, sheetId, table.id, {
+      kind: "appendRows",
+      count: 2,
+    });
+    expect(
+      applyTableOperationPreview(workbook, plan).sheets[0].tables[0].range,
+    ).toBe("A1:C6");
   });
 
   test("appending both rows and a count is refused", () => {
@@ -194,7 +211,9 @@ describe("applyTableOperation and applyTableOperationPreview", () => {
       formula: "=[@Price]*2",
     });
     const next = applyTableOperationPreview(workbook, plan);
-    expect(next.sheets[0].tables[0].columns[1].calculatedFormula).toBe("=[@Price]*2");
+    expect(next.sheets[0].tables[0].columns[1].calculatedFormula).toBe(
+      "=[@Price]*2",
+    );
     expect(valueOf(next, sheetId, "B2")).toEqual({ type: "number", value: 5 });
     expect(valueOf(next, sheetId, "B4")).toEqual({ type: "number", value: 2 });
   });
@@ -216,7 +235,9 @@ describe("applyTableOperation and applyTableOperationPreview", () => {
         columnId: table.columns[2].id,
       }),
     );
-    expect(cleared.sheets[0].tables[0].columns[2].calculatedFormula).toBeUndefined();
+    expect(
+      cleared.sheets[0].tables[0].columns[2].calculatedFormula,
+    ).toBeUndefined();
   });
 
   test("a formula that does not begin with = is refused", () => {
@@ -244,7 +265,10 @@ describe("applyTableOperation and applyTableOperationPreview", () => {
   test("an unknown table is refused", () => {
     const { workbook, sheetId } = tableBook();
     expect(() =>
-      applyTableOperation(workbook, sheetId, "missing", { kind: "resize", range: "A1:C6" }),
+      applyTableOperation(workbook, sheetId, "missing", {
+        kind: "resize",
+        range: "A1:C6",
+      }),
     ).toThrow("Select an existing table.");
   });
 
@@ -278,7 +302,13 @@ describe("applyTableOperation and applyTableOperationPreview", () => {
     const { workbook, sheetId, table } = tableBook();
     const plan = applyTableOperation(workbook, sheetId, table.id, {
       kind: "updateTable",
-      options: { name: "Sales", range: "A1:C4", style: "blue", showTotals: false, totals: {} },
+      options: {
+        name: "Sales",
+        range: "A1:C4",
+        style: "blue",
+        showTotals: false,
+        totals: {},
+      },
     });
     expect(applyTableOperationPreview(workbook, plan)).toBe(workbook);
   });
@@ -295,14 +325,20 @@ describe("findTableForRange", () => {
     const sheetId = book.sheets[0].id;
     book.sheets[0].cells.B2 = { raw: "x" };
     book.sheets[0].cells.D5 = { raw: "y" };
-    const workbook = createWorksheetTable(book, sheetId, { name: "Dat", range: "B2:B3", headers: ["Hdr"] });
+    const workbook = createWorksheetTable(book, sheetId, {
+      name: "Dat",
+      range: "B2:B3",
+      headers: ["Hdr"],
+    });
     expect(findTableForRange(workbook, sheetId, "B3")).toBe("B2:B3");
     expect(findTableForRange(workbook, sheetId, "D5")).toBe("B2:D5");
   });
 
   test("throws for a sheet that does not exist", () => {
     const { workbook } = tableBook();
-    expect(() => findTableForRange(workbook, "missing", "A1")).toThrow("Sheet not found: missing");
+    expect(() => findTableForRange(workbook, "missing", "A1")).toThrow(
+      "Sheet not found: missing",
+    );
   });
 });
 
@@ -310,14 +346,22 @@ describe("suggestTableHeaderName", () => {
   test("accepts clean headers without a review", () => {
     const { workbook, sheetId } = tableBook();
     const suggestions = suggestTableHeaderName(workbook, sheetId, "A1:C1");
-    expect(suggestions.map((s) => s.suggested)).toEqual(["Region", "Units", "Price"]);
+    expect(suggestions.map((s) => s.suggested)).toEqual([
+      "Region",
+      "Units",
+      "Price",
+    ]);
     expect(suggestions.every((s) => s.requiresResolution === false)).toBe(true);
   });
 
   test("suggests a numbered name for a repeated header and marks it for review", () => {
     const book = salesBook();
     book.sheets[0].cells.B1 = { raw: "Region" };
-    const [, repeated] = suggestTableHeaderName(book, book.sheets[0].id, "A1:C1");
+    const [, repeated] = suggestTableHeaderName(
+      book,
+      book.sheets[0].id,
+      "A1:C1",
+    );
     expect(repeated).toMatchObject({
       address: "B1",
       original: "Region",
@@ -330,12 +374,18 @@ describe("suggestTableHeaderName", () => {
     const book = salesBook();
     delete book.sheets[0].cells.C1;
     const blank = suggestTableHeaderName(book, book.sheets[0].id, "A1:C1")[2];
-    expect(blank).toMatchObject({ suggested: "Column3", original: null, requiresResolution: true });
+    expect(blank).toMatchObject({
+      suggested: "Column3",
+      original: null,
+      requiresResolution: true,
+    });
   });
 
   test("throws for a sheet that does not exist", () => {
     const { workbook } = tableBook();
-    expect(() => suggestTableHeaderName(workbook, "missing", "A1:C1")).toThrow("Sheet not found");
+    expect(() => suggestTableHeaderName(workbook, "missing", "A1:C1")).toThrow(
+      "Sheet not found",
+    );
   });
 });
 
@@ -353,8 +403,18 @@ describe("setTableColumnDataType", () => {
         invalid: "keep",
       }),
     );
-    const check = setTableColumnDataType(typed, sheetId, table.id, table.columns[1].id);
-    expect(check).toMatchObject({ dataType: "number", checked: 3, total: 3, truncated: false });
+    const check = setTableColumnDataType(
+      typed,
+      sheetId,
+      table.id,
+      table.columns[1].id,
+    );
+    expect(check).toMatchObject({
+      dataType: "number",
+      checked: 3,
+      total: 3,
+      truncated: false,
+    });
     expect(check.exceptions.map((e) => e.address)).toEqual(["B3"]);
   });
 
@@ -362,7 +422,9 @@ describe("setTableColumnDataType", () => {
     const book = salesBook();
     book.sheets[0].cells.B3 = { raw: "x" };
     const { workbook, sheetId, table } = tableBook2(book);
-    expect(setTableColumnDataType(workbook, sheetId, table.id, table.columns[1].id)).toMatchObject({
+    expect(
+      setTableColumnDataType(workbook, sheetId, table.id, table.columns[1].id),
+    ).toMatchObject({
       dataType: "any",
       exceptions: [],
     });
@@ -377,16 +439,23 @@ describe("setTableColumnDataType", () => {
 
   test("throws for a column that is not in the table", () => {
     const { workbook, sheetId, table } = tableBook();
-    expect(() => setTableColumnDataType(workbook, sheetId, table.id, "missing")).toThrow(
-      "Select an existing table column.",
-    );
+    expect(() =>
+      setTableColumnDataType(workbook, sheetId, table.id, "missing"),
+    ).toThrow("Select an existing table column.");
   });
 });
 
 /** Like tableBook, for a book already changed by the caller. */
 function tableBook2(book) {
-  const workbook = createWorksheetTable(book, book.sheets[0].id, { name: "Sales", range: "A1:C4" });
-  return { workbook, sheetId: workbook.sheets[0].id, table: workbook.sheets[0].tables[0] };
+  const workbook = createWorksheetTable(book, book.sheets[0].id, {
+    name: "Sales",
+    range: "A1:C4",
+  });
+  return {
+    workbook,
+    sheetId: workbook.sheets[0].id,
+    table: workbook.sheets[0].tables[0],
+  };
 }
 
 describe("previewColumnTypeChange and applyColumnTypePreview", () => {
@@ -401,7 +470,9 @@ describe("previewColumnTypeChange and applyColumnTypePreview", () => {
       invalid: "reject",
     });
     expect(plan.canApply).toBe(true);
-    expect(plan.changes.map((c) => [c.address, c.after.raw])).toEqual([["C2", 1234.5]]);
+    expect(plan.changes.map((c) => [c.address, c.after.raw])).toEqual([
+      ["C2", 1234.5],
+    ]);
     const next = applyColumnTypePreview(workbook, plan);
     expect(next.sheets[0].tables[0].columns[2].dataType).toBe("number");
     expect(next.sheets[0].cells.C2.raw).toBe(1234.5);
@@ -418,7 +489,9 @@ describe("previewColumnTypeChange and applyColumnTypePreview", () => {
       invalid: "reject",
     });
     expect(plan.canApply).toBe(false);
-    expect(plan.exceptions.map((e) => [e.address, e.value])).toEqual([["B3", "x"]]);
+    expect(plan.exceptions.map((e) => [e.address, e.value])).toEqual([
+      ["B3", "x"],
+    ]);
     expect(() => applyColumnTypePreview(workbook, plan)).toThrow(
       "Resolve the listed exceptions or explicitly choose to retain them unchanged.",
     );
@@ -522,7 +595,13 @@ describe("previewColumnTypeChange and applyColumnTypePreview", () => {
 
 describe("tableColumnDataTypes", () => {
   test("lists the five column types", () => {
-    expect(tableColumnDataTypes).toEqual(["any", "text", "number", "boolean", "date"]);
+    expect(tableColumnDataTypes).toEqual([
+      "any",
+      "text",
+      "number",
+      "boolean",
+      "date",
+    ]);
   });
 
   test("every listed type is accepted by a column type preview", () => {
@@ -552,7 +631,10 @@ describe("tableColumnDataTypes", () => {
   });
 });
 
-const northOnly = { range: "A1:C4", columns: [{ column: 0, values: ["North"] }] };
+const northOnly = {
+  range: "A1:C4",
+  columns: [{ column: 0, values: ["North"] }],
+};
 
 describe("applyFilterConditions", () => {
   test("a value list keeps the matching rows and reports the others as hidden", () => {
@@ -562,7 +644,11 @@ describe("applyFilterConditions", () => {
     expect(result.context.totalRows).toBe(3);
     expect(result.hiddenRows).toEqual([{ start: 2, end: 2 }]);
     expect(result.excludedRows).toEqual([{ start: 2, end: 2 }]);
-    expect(result.fields.map((field) => field.label)).toEqual(["Region", "Units", "Price"]);
+    expect(result.fields.map((field) => field.label)).toEqual([
+      "Region",
+      "Units",
+      "Price",
+    ]);
   });
 
   test("a number condition compares numerically", () => {
@@ -598,16 +684,32 @@ describe("applyFilterConditions", () => {
   test("advanced groups combine with or, and their conditions with and", () => {
     const { workbook, sheetId } = tableBook();
     const matched = (advanced) =>
-      applyFilterConditions(workbook, sheetId, { range: "A1:C4", columns: [], advanced })
-        .context.matchedRows;
+      applyFilterConditions(workbook, sheetId, {
+        range: "A1:C4",
+        columns: [],
+        advanced,
+      }).context.matchedRows;
     expect(
-      matched([[{ column: 1, type: "number", operator: "gt", value: 8 }], [{ column: 1, type: "number", operator: "lt", value: 5 }]]),
+      matched([
+        [{ column: 1, type: "number", operator: "gt", value: 8 }],
+        [{ column: 1, type: "number", operator: "lt", value: 5 }],
+      ]),
     ).toBe(2);
     expect(
-      matched([[{ column: 1, type: "number", operator: "gt", value: 3 }, { column: 1, type: "number", operator: "lt", value: 8 }]]),
+      matched([
+        [
+          { column: 1, type: "number", operator: "gt", value: 3 },
+          { column: 1, type: "number", operator: "lt", value: 8 },
+        ],
+      ]),
     ).toBe(2);
     expect(
-      matched([[{ column: 1, type: "number", operator: "gt", value: 5 }, { column: 1, type: "number", operator: "lt", value: 8 }]]),
+      matched([
+        [
+          { column: 1, type: "number", operator: "gt", value: 5 },
+          { column: 1, type: "number", operator: "lt", value: 8 },
+        ],
+      ]),
     ).toBe(1);
   });
 
@@ -615,11 +717,17 @@ describe("applyFilterConditions", () => {
     const { workbook, sheetId } = tableBook();
     const lower = { column: 0, values: ["north"] };
     expect(
-      applyFilterConditions(workbook, sheetId, { range: "A1:C4", columns: [lower] }).context.matchedRows,
+      applyFilterConditions(workbook, sheetId, {
+        range: "A1:C4",
+        columns: [lower],
+      }).context.matchedRows,
     ).toBe(2);
     expect(
-      applyFilterConditions(workbook, sheetId, { range: "A1:C4", caseSensitive: true, columns: [lower] })
-        .context.matchedRows,
+      applyFilterConditions(workbook, sheetId, {
+        range: "A1:C4",
+        caseSensitive: true,
+        columns: [lower],
+      }).context.matchedRows,
     ).toBe(0);
   });
 
@@ -628,23 +736,29 @@ describe("applyFilterConditions", () => {
     book.sheets[0].cells.A4 = { raw: "North" };
     book.sheets[0].cells.B4 = { raw: 10 };
     book.sheets[0].cells.C4 = { raw: 2.5 };
-    const { sheetId } = { sheetId: book.sheets[0].id };
-    const result = applyFilterConditions(book, sheetId, { range: "A1:C4", unique: true, columns: [] });
+    const result = applyFilterConditions(book, book.sheets[0].id, {
+      range: "A1:C4",
+      unique: true,
+      columns: [],
+    });
     expect(result.context.visibleRows).toBe(2);
   });
 
   test("a column that is not in the range is refused", () => {
     const { workbook, sheetId } = tableBook();
     expect(() =>
-      applyFilterConditions(workbook, sheetId, { range: "A1:C4", columns: [{ column: 9, values: ["x"] }] }),
+      applyFilterConditions(workbook, sheetId, {
+        range: "A1:C4",
+        columns: [{ column: 9, values: ["x"] }],
+      }),
     ).toThrow("Filter columns must be valid and distinct.");
   });
 
   test("a range with no data rows is refused", () => {
     const { workbook, sheetId } = tableBook();
-    expect(() => applyFilterConditions(workbook, sheetId, { range: "A1:C1", columns: [] })).toThrow(
-      "Filter range needs one header row and at least one data row",
-    );
+    expect(() =>
+      applyFilterConditions(workbook, sheetId, { range: "A1:C1", columns: [] }),
+    ).toThrow("Filter range needs one header row and at least one data row");
   });
 
   test("a text condition needs a text value", () => {
@@ -655,7 +769,9 @@ describe("applyFilterConditions", () => {
         columns: [
           {
             column: 0,
-            conditions: [{ column: 0, type: "text", operator: "equals", value: 3 }],
+            conditions: [
+              { column: 0, type: "text", operator: "equals", value: 3 },
+            ],
           },
         ],
       }),
@@ -673,7 +789,12 @@ describe("applyFilterConditions", () => {
 describe("buildFilterFacetValues", () => {
   test("lists each distinct value with its row count", () => {
     const { workbook, sheetId } = tableBook();
-    const facet = buildFilterFacetValues(workbook, sheetId, { range: "A1:C4", columns: [] }, 0);
+    const facet = buildFilterFacetValues(
+      workbook,
+      sheetId,
+      { range: "A1:C4", columns: [] },
+      0,
+    );
     expect(facet.distinct).toBe(2);
     expect(facet.values.map((v) => [v.value, v.count])).toEqual([
       ["North", 2],
@@ -683,7 +804,13 @@ describe("buildFilterFacetValues", () => {
 
   test("the search text narrows the list, ignoring case", () => {
     const { workbook, sheetId } = tableBook();
-    const facet = buildFilterFacetValues(workbook, sheetId, { range: "A1:C4", columns: [] }, 0, "NO");
+    const facet = buildFilterFacetValues(
+      workbook,
+      sheetId,
+      { range: "A1:C4", columns: [] },
+      0,
+      "NO",
+    );
     expect(facet.values.map((v) => v.value)).toEqual(["North"]);
   });
 
@@ -695,29 +822,49 @@ describe("buildFilterFacetValues", () => {
 
   test("a facet column outside the range is refused", () => {
     const { workbook, sheetId } = tableBook();
-    expect(() => buildFilterFacetValues(workbook, sheetId, { range: "A1:C4", columns: [] }, 5)).toThrow(
-      "Facet column is outside the filter range.",
-    );
+    expect(() =>
+      buildFilterFacetValues(
+        workbook,
+        sheetId,
+        { range: "A1:C4", columns: [] },
+        5,
+      ),
+    ).toThrow("Facet column is outside the filter range.");
   });
 });
 
 describe("saved filter views", () => {
   test("createSavedFilterView stores the definition and the counts when it was saved", () => {
     const { workbook, sheetId } = tableBook();
-    const saved = createSavedFilterView(workbook, sheetId, northOnly, "North only");
+    const saved = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
     expect(saved.savedFilterViews).toHaveLength(1);
     expect(saved.savedFilterViews[0]).toMatchObject({
       name: "North only",
       sheetId,
       sheetName: "Sheet1",
-      population: { totalRows: 3, matchedRows: 2, visibleRows: 2, hiddenMatchingRows: 0 },
+      population: {
+        totalRows: 3,
+        matchedRows: 2,
+        visibleRows: 2,
+        hiddenMatchingRows: 0,
+      },
     });
     expect(workbook.savedFilterViews).toBeUndefined();
   });
 
   test("passing a view id replaces that view", () => {
     const { workbook, sheetId } = tableBook();
-    const first = createSavedFilterView(workbook, sheetId, northOnly, "North only");
+    const first = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
     const id = first.savedFilterViews[0].id;
     const replaced = createSavedFilterView(
       first,
@@ -736,15 +883,29 @@ describe("saved filter views", () => {
 
   test("addSavedFilterView renames a view", () => {
     const { workbook, sheetId } = tableBook();
-    const saved = createSavedFilterView(workbook, sheetId, northOnly, "North only");
-    const renamed = addSavedFilterView(saved, saved.savedFilterViews[0].id, "Northern");
+    const saved = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
+    const renamed = addSavedFilterView(
+      saved,
+      saved.savedFilterViews[0].id,
+      "Northern",
+    );
     expect(renamed.savedFilterViews[0].name).toBe("Northern");
     expect(saved.savedFilterViews[0].name).toBe("North only");
   });
 
   test("addSavedFilterView refuses an empty name and an unknown view", () => {
     const { workbook, sheetId } = tableBook();
-    const saved = createSavedFilterView(workbook, sheetId, northOnly, "North only");
+    const saved = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
     const id = saved.savedFilterViews[0].id;
     expect(() => addSavedFilterView(saved, id, "   ")).toThrow(
       "Use a nonempty filter view name of up to 80 characters.",
@@ -756,8 +917,16 @@ describe("saved filter views", () => {
 
   test("removeSavedFilterView deletes the view and refuses an unknown one", () => {
     const { workbook, sheetId } = tableBook();
-    const saved = createSavedFilterView(workbook, sheetId, northOnly, "North only");
-    expect(removeSavedFilterView(saved, saved.savedFilterViews[0].id).savedFilterViews).toEqual([]);
+    const saved = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
+    expect(
+      removeSavedFilterView(saved, saved.savedFilterViews[0].id)
+        .savedFilterViews,
+    ).toEqual([]);
     expect(() => removeSavedFilterView(saved, "missing")).toThrow(
       "This saved filter view no longer exists.",
     );
@@ -774,7 +943,9 @@ describe("saved filter views", () => {
 describe("rewriteStructuredReferences", () => {
   test("resolves a named column to its data range", () => {
     const { workbook, sheetId } = tableBook();
-    expect(rewriteStructuredReferences(workbook, sheetId, "Sales[Units]")).toEqual({
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[Units]"),
+    ).toEqual({
       sheetId,
       range: "B2:B4",
     });
@@ -783,13 +954,16 @@ describe("rewriteStructuredReferences", () => {
   test("resolves adjacent columns given as a span", () => {
     const { workbook, sheetId } = tableBook();
     expect(
-      rewriteStructuredReferences(workbook, sheetId, "Sales[[Units]:[Price]]")?.range,
+      rewriteStructuredReferences(workbook, sheetId, "Sales[[Units]:[Price]]")
+        ?.range,
     ).toBe("B2:C4");
   });
 
   test("[@Column] resolves to the row the address is in", () => {
     const { workbook, sheetId } = tableBook();
-    expect(rewriteStructuredReferences(workbook, sheetId, "[@Units]", "B3")).toEqual({
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "[@Units]", "B3"),
+    ).toEqual({
       sheetId,
       range: "B3:B3",
     });
@@ -797,15 +971,25 @@ describe("rewriteStructuredReferences", () => {
 
   test("[@Column] returns null outside the table's data rows", () => {
     const { workbook, sheetId } = tableBook();
-    expect(rewriteStructuredReferences(workbook, sheetId, "[@Units]", "E3")).toBeNull();
-    expect(rewriteStructuredReferences(workbook, sheetId, "[@Units]", "B1")).toBeNull();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "[@Units]", "E3"),
+    ).toBeNull();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "[@Units]", "B1"),
+    ).toBeNull();
   });
 
   test("returns null for an unknown column, an unknown table and a totals row that does not exist", () => {
     const { workbook, sheetId } = tableBook();
-    expect(rewriteStructuredReferences(workbook, sheetId, "Sales[Nope]")).toBeNull();
-    expect(rewriteStructuredReferences(workbook, sheetId, "Missing[Units]")).toBeNull();
-    expect(rewriteStructuredReferences(workbook, sheetId, "Sales[#Totals]")).toBeNull();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[Nope]"),
+    ).toBeNull();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Missing[Units]"),
+    ).toBeNull();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[#Totals]"),
+    ).toBeNull();
   });
 
   test("returns null for text that is not a structured reference", () => {
@@ -826,26 +1010,36 @@ describe("getPivotSourceFields", () => {
 
   test("throws for a sheet that does not exist", () => {
     const book = salesBook();
-    expect(() => getPivotSourceFields(book, "missing", "A1:C4")).toThrow("Sheet not found");
+    expect(() => getPivotSourceFields(book, "missing", "A1:C4")).toThrow(
+      "Sheet not found",
+    );
   });
 });
 
 describe("buildPivotTableOutput", () => {
   test("writes a pivot to a new sheet with a grand total and records its figures", () => {
     const { workbook, sheetId } = pivotBook();
-    expect(workbook.sheets.map((sheet) => sheet.name)).toEqual(["Sheet1", "By region"]);
+    expect(workbook.sheets.map((sheet) => sheet.name)).toEqual([
+      "Sheet1",
+      "By region",
+    ]);
     const output = workbook.sheets[1];
     expect(output.cells.B4).toMatchObject({ raw: 21 });
     expect(output.cells.A4).toMatchObject({ raw: "Grand Total" });
     const pivot = output.pivots[0];
     expect(pivot.source).toEqual({ sheetId, range: "A1:C4" });
-    expect(pivot.refresh.measures[0]).toMatchObject({ name: "Sum of Units", result: 21 });
+    expect(pivot.refresh.measures[0]).toMatchObject({
+      name: "Sum of Units",
+      result: 21,
+    });
     expect(pivot.refresh.includedRows).toBe(3);
   });
 
   test("grandTotals false leaves out the grand total row", () => {
     const { workbook } = pivotBook({ grandTotals: false });
-    expect(Object.values(workbook.sheets[1].cells).map((c) => c.raw)).not.toContain("Grand Total");
+    expect(
+      Object.values(workbook.sheets[1].cells).map((c) => c.raw),
+    ).not.toContain("Grand Total");
   });
 
   test("a source filter excludes rows before aggregation", () => {
@@ -932,14 +1126,22 @@ describe("refreshPivotTable", () => {
     const { workbook, pivotId, sheetId } = pivotBook();
     const edited = structuredClone(workbook);
     edited.sheets[0].cells.B2 = { raw: 100 };
-    const refreshed = refreshPivotTable(edited, pivotId, { sheetId, address: "E1" });
+    const refreshed = refreshPivotTable(edited, pivotId, {
+      sheetId,
+      address: "E1",
+    });
     expect(refreshed.sheets[0].cells.F2).toMatchObject({ raw: 107 });
-    expect(refreshed.sheets.map((sheet) => sheet.name)).toEqual(["Sheet1", "By region"]);
+    expect(refreshed.sheets.map((sheet) => sheet.name)).toEqual([
+      "Sheet1",
+      "By region",
+    ]);
   });
 
   test("throws for a pivot that does not exist", () => {
     const { workbook } = pivotBook();
-    expect(() => refreshPivotTable(workbook, "missing")).toThrow("Pivot definition not found.");
+    expect(() => refreshPivotTable(workbook, "missing")).toThrow(
+      "Pivot definition not found.",
+    );
   });
 });
 
@@ -987,7 +1189,9 @@ describe("getPivotRefreshState", () => {
 
   test("throws for a pivot that does not exist", () => {
     const { workbook } = pivotBook();
-    expect(() => getPivotRefreshState(workbook, "missing")).toThrow("Pivot definition not found.");
+    expect(() => getPivotRefreshState(workbook, "missing")).toThrow(
+      "Pivot definition not found.",
+    );
   });
 });
 
@@ -1006,7 +1210,9 @@ describe("buildPivotDrillDown", () => {
 
   test("the grand total can be drilled", () => {
     const { workbook, pivotId } = pivotBook();
-    expect(buildPivotDrillDown(workbook, pivotId, "B4").records).toHaveLength(3);
+    expect(buildPivotDrillDown(workbook, pivotId, "B4").records).toHaveLength(
+      3,
+    );
   });
 
   test("a header cell cannot be drilled", () => {
@@ -1018,7 +1224,9 @@ describe("buildPivotDrillDown", () => {
 
   test("throws for a pivot that does not exist", () => {
     const { workbook } = pivotBook();
-    expect(() => buildPivotDrillDown(workbook, "missing", "B2")).toThrow("Pivot definition not found.");
+    expect(() => buildPivotDrillDown(workbook, "missing", "B2")).toThrow(
+      "Pivot definition not found.",
+    );
   });
 });
 
@@ -1057,7 +1265,10 @@ describe("extractPivotDrillThrough", () => {
 describe("getPivotSlicerItems", () => {
   test("lists the distinct items of a row field", () => {
     const { workbook, pivotId } = pivotBook();
-    expect(getPivotSlicerItems(workbook, pivotId, "Region")).toEqual(["North", "South"]);
+    expect(getPivotSlicerItems(workbook, pivotId, "Region")).toEqual([
+      "North",
+      "South",
+    ]);
   });
 
   test("lists the numbers of a value field in source order", () => {
@@ -1067,16 +1278,23 @@ describe("getPivotSlicerItems", () => {
 
   test("a field that is not in the source is refused", () => {
     const { workbook, pivotId } = pivotBook();
-    expect(() => getPivotSlicerItems(workbook, pivotId, "Nope")).toThrow("Broken pivot field");
+    expect(() => getPivotSlicerItems(workbook, pivotId, "Nope")).toThrow(
+      "Broken pivot field",
+    );
   });
 });
 
 describe("applyPivotViewChange", () => {
   test("a slicer writes a filtered copy to a new sheet and leaves the original", () => {
     const { workbook, pivotId } = pivotBook();
-    const filtered = applyPivotViewChange(workbook, pivotId, {
-      slicers: [{ field: "Region", selected: ["South"] }],
-    }, { snapshot: JSON.stringify(workbook) });
+    const filtered = applyPivotViewChange(
+      workbook,
+      pivotId,
+      {
+        slicers: [{ field: "Region", selected: ["South"] }],
+      },
+      { snapshot: JSON.stringify(workbook) },
+    );
     expect(filtered.sheets.map((sheet) => sheet.name)).toEqual([
       "Sheet1",
       "By region",
@@ -1089,17 +1307,29 @@ describe("applyPivotViewChange", () => {
 
   test("a sort is recorded on the new pivot", () => {
     const { workbook, pivotId } = pivotBook();
-    const sorted = applyPivotViewChange(workbook, pivotId, {
-      sorts: [{ field: "Region", direction: "descending" }],
-    }, { snapshot: JSON.stringify(workbook) });
-    expect(sorted.sheets[2].pivots[0].sorts).toEqual([{ field: "Region", direction: "descending" }]);
+    const sorted = applyPivotViewChange(
+      workbook,
+      pivotId,
+      {
+        sorts: [{ field: "Region", direction: "descending" }],
+      },
+      { snapshot: JSON.stringify(workbook) },
+    );
+    expect(sorted.sheets[2].pivots[0].sorts).toEqual([
+      { field: "Region", direction: "descending" },
+    ]);
   });
 
   test("a chart setting changes the kind reported by buildPivotChartModel", () => {
     const { workbook, pivotId } = pivotBook();
-    const charted = applyPivotViewChange(workbook, pivotId, {
-      chart: { kind: "bar", valueIndex: 0 },
-    }, { snapshot: JSON.stringify(workbook) });
+    const charted = applyPivotViewChange(
+      workbook,
+      pivotId,
+      {
+        chart: { kind: "bar", valueIndex: 0 },
+      },
+      { snapshot: JSON.stringify(workbook) },
+    );
     const newId = charted.sheets[2].pivots[0].id;
     expect(buildPivotChartModel(charted, newId).kind).toBe("bar");
   });
@@ -1107,16 +1337,28 @@ describe("applyPivotViewChange", () => {
   test("a view change that is not a view setting is refused", () => {
     const { workbook, pivotId } = pivotBook();
     expect(() =>
-      applyPivotViewChange(workbook, pivotId, { destination: { address: "Z1" } }, {
-        snapshot: JSON.stringify(workbook),
-      }),
-    ).toThrow("Pivot view changes can only set filters, sorting, value display and chart settings.");
+      applyPivotViewChange(
+        workbook,
+        pivotId,
+        { destination: { address: "Z1" } },
+        {
+          snapshot: JSON.stringify(workbook),
+        },
+      ),
+    ).toThrow(
+      "Pivot view changes can only set filters, sorting, value display and chart settings.",
+    );
   });
 
   test("a stale snapshot is refused", () => {
     const { workbook, pivotId } = pivotBook();
     expect(() =>
-      applyPivotViewChange(workbook, pivotId, { slicers: [] }, { snapshot: "{}" }),
+      applyPivotViewChange(
+        workbook,
+        pivotId,
+        { slicers: [] },
+        { snapshot: "{}" },
+      ),
     ).toThrow("The workbook changed. Preview pivot filters again.");
   });
 });
@@ -1138,13 +1380,22 @@ describe("buildPivotChartModel", () => {
 
   test("throws for a pivot that does not exist", () => {
     const { workbook } = pivotBook();
-    expect(() => buildPivotChartModel(workbook, "missing")).toThrow("Pivot definition not found.");
+    expect(() => buildPivotChartModel(workbook, "missing")).toThrow(
+      "Pivot definition not found.",
+    );
   });
 });
 
 describe("pivotAggregateOperations", () => {
   test("lists the six aggregations a value field may use", () => {
-    expect(pivotAggregateOperations).toEqual(["sum", "count", "average", "min", "max", "distinctCount"]);
+    expect(pivotAggregateOperations).toEqual([
+      "sum",
+      "count",
+      "average",
+      "min",
+      "max",
+      "distinctCount",
+    ]);
   });
 
   test("each listed aggregation builds a pivot", () => {
@@ -1160,5 +1411,330 @@ describe("pivotAggregateOperations", () => {
         }),
       ).not.toThrow();
     }
+  });
+});
+
+describe("additional checks on refusals and limits", () => {
+  test("createWorksheetTable refuses a protected sheet and a range that overlaps merged cells", () => {
+    const protectedBook = salesBook();
+    protectedBook.sheets[0].protection = { enabled: true };
+    expect(() =>
+      createWorksheetTable(protectedBook, protectedBook.sheets[0].id, {
+        name: "Sales",
+        range: "A1:C4",
+      }),
+    ).toThrow("This sheet is protected.");
+    const merged = salesBook();
+    merged.sheets[0].merges = ["B3:C3"];
+    expect(() =>
+      createWorksheetTable(merged, merged.sheets[0].id, {
+        name: "Sales",
+        range: "A1:C4",
+      }),
+    ).toThrow("A table cannot overlap merged cells.");
+  });
+
+  test("appending rows of the wrong width is refused", () => {
+    const { workbook, sheetId, table } = tableBook();
+    expect(() =>
+      applyTableOperation(workbook, sheetId, table.id, {
+        kind: "appendRows",
+        rows: [["East"]],
+      }),
+    ).toThrow(
+      "Each appended row must contain one raw value for every table column.",
+    );
+  });
+
+  test("a resize that shrinks the table is refused", () => {
+    const { workbook, sheetId, table } = tableBook();
+    expect(() =>
+      applyTableOperation(workbook, sheetId, table.id, {
+        kind: "resize",
+        range: "A1:B2",
+      }),
+    ).toThrow("Calculated tables support downward resize only");
+  });
+
+  test("the table name and the pivot name have length limits", () => {
+    const book = salesBook();
+    expect(() =>
+      createWorksheetTable(book, book.sheets[0].id, {
+        name: "",
+        range: "A1:C4",
+      }),
+    ).toThrow("Table name must contain 1–255 characters.");
+    const { workbook, sheetId } = pivotBook();
+    const source = { sheetId, range: "A1:C4" };
+    const request = (name) => ({
+      name,
+      source,
+      rowFields: ["Region"],
+      columnFields: [],
+      values: [{ field: "Units", operation: "sum" }],
+    });
+    expect(() =>
+      buildPivotTableOutput(workbook, request("x".repeat(101))),
+    ).toThrow("Pivot name must contain 1–100 characters.");
+    expect(
+      buildPivotTableOutput(workbook, request("x".repeat(100))).sheets,
+    ).toHaveLength(3);
+  });
+
+  test("a header that is a formula is marked for review even when its text is clean", () => {
+    const book = salesBook();
+    book.sheets[0].cells.A1 = { raw: "=1+1" };
+    const [first] = suggestTableHeaderName(book, book.sheets[0].id, "A1:C1");
+    expect(first).toMatchObject({ original: "=1+1", requiresResolution: true });
+  });
+
+  test("findTableForRange returns a multi-cell range in upper-case A1 form", () => {
+    const { workbook, sheetId } = tableBook();
+    expect(findTableForRange(workbook, sheetId, "b2:c3")).toBe("B2:C3");
+  });
+
+  test("decimal and group separators can be set explicitly", () => {
+    const book = salesBook();
+    book.sheets[0].cells.C2 = { raw: "2,5" };
+    const { workbook, sheetId, table } = tableBook2(book);
+    const plan = previewColumnTypeChange(workbook, sheetId, table.id, {
+      columnId: table.columns[2].id,
+      dataType: "number",
+      mode: "convert",
+      invalid: "reject",
+      decimal: ",",
+      group: ".",
+    });
+    expect(plan.canApply).toBe(true);
+    expect(plan.changes.map((c) => [c.address, c.after.raw])).toEqual([
+      ["C2", 2.5],
+    ]);
+  });
+
+  test("a column type preview refuses a protected sheet", () => {
+    const { workbook, sheetId, table } = tableBook();
+    const locked = structuredClone(workbook);
+    locked.sheets[0].protection = { enabled: true };
+    expect(() =>
+      previewColumnTypeChange(locked, sheetId, table.id, {
+        columnId: table.columns[1].id,
+        dataType: "number",
+        mode: "tag",
+        invalid: "keep",
+      }),
+    ).toThrow("This sheet is protected.");
+  });
+
+  test("a column type check reads at most 500 data rows and says it was truncated", () => {
+    const book = salesBook();
+    for (let row = 5; row <= 502; row++) {
+      book.sheets[0].cells[`A${row}`] = { raw: `x${row}` };
+      book.sheets[0].cells[`B${row}`] = { raw: row };
+      book.sheets[0].cells[`C${row}`] = { raw: 1 };
+    }
+    const sheetId = book.sheets[0].id;
+    const sized = createWorksheetTable(book, sheetId, {
+      name: "Big",
+      range: "A1:C502",
+    });
+    const big = sized.sheets[0].tables[0];
+    expect(
+      setTableColumnDataType(sized, sheetId, big.id, big.columns[1].id),
+    ).toMatchObject({
+      checked: 500,
+      total: 501,
+      truncated: true,
+    });
+    expect(() =>
+      previewColumnTypeChange(sized, sheetId, big.id, {
+        columnId: big.columns[1].id,
+        dataType: "number",
+        mode: "tag",
+        invalid: "keep",
+      }),
+    ).toThrow(
+      "A reviewed column type operation supports at most 500 data rows.",
+    );
+  });
+
+  test("every value percentage mode is accepted by a pivot", () => {
+    const book = salesBook();
+    const sheetId = book.sheets[0].id;
+    for (const showAs of [
+      "value",
+      "percentGrand",
+      "percentRow",
+      "percentColumn",
+    ]) {
+      expect(() =>
+        buildPivotTableOutput(book, {
+          name: showAs,
+          source: { sheetId, range: "A1:C4" },
+          rowFields: ["Region"],
+          columnFields: [],
+          values: [{ field: "Units", operation: "sum", showAs }],
+        }),
+      ).not.toThrow();
+    }
+    expect(() =>
+      buildPivotTableOutput(book, {
+        name: "Rank",
+        source: { sheetId, range: "A1:C4" },
+        rowFields: ["Region"],
+        columnFields: [],
+        values: [{ field: "Units", operation: "sum", showAs: "rank" }],
+      }),
+    ).toThrow("Choose a supported Show values as setting.");
+  });
+
+  test("a drill-through on a header cell is refused", () => {
+    const { workbook, pivotId } = pivotBook();
+    expect(() =>
+      extractPivotDrillThrough(workbook, pivotId, "A1", {
+        snapshot: JSON.stringify(workbook),
+      }),
+    ).toThrow("headers and group labels cannot be drilled");
+  });
+});
+
+describe("buildPivotChartModel with a second value field", () => {
+  test("the chart setting's valueIndex picks which value field is charted", () => {
+    const book = salesBook();
+    const sheetId = book.sheets[0].id;
+    const workbook = buildPivotTableOutput(book, {
+      name: "Two",
+      source: { sheetId, range: "A1:C4" },
+      rowFields: ["Region"],
+      columnFields: [],
+      values: [
+        { field: "Units", operation: "sum" },
+        { field: "Price", operation: "sum" },
+      ],
+    });
+    const pivotId = workbook.sheets[1].pivots[0].id;
+    const charted = applyPivotViewChange(
+      workbook,
+      pivotId,
+      { chart: { kind: "line", valueIndex: 1 } },
+      { snapshot: JSON.stringify(workbook) },
+    );
+    const model = buildPivotChartModel(charted, charted.sheets[2].pivots[0].id);
+    expect(model).toMatchObject({ kind: "line", measure: "Sum of Price" });
+    expect(model.points).toEqual([
+      { label: "North", value: 3.5 },
+      { label: "South", value: 3 },
+    ]);
+  });
+});
+
+describe("structured reference forms and read-only previews", () => {
+  test("#All, #Headers and #This Row resolve to their rows", () => {
+    const { workbook, sheetId } = tableBook();
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[#All]")?.range,
+    ).toBe("A1:C4");
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[#Headers]")?.range,
+    ).toBe("A1:C1");
+    expect(
+      rewriteStructuredReferences(workbook, sheetId, "Sales[#This Row]", "B3")
+        ?.range,
+    ).toBe("A3:C3");
+  });
+
+  test("a table-qualified [@Column] works from outside the table's columns", () => {
+    const { workbook, sheetId } = tableBook();
+    expect(
+      rewriteStructuredReferences(
+        workbook,
+        sheetId,
+        "Sales[[#This Row],[Units]]",
+        "E3",
+      )?.range,
+    ).toBe("B3:B3");
+  });
+
+  test("a read-only preview of a table operation is refused", () => {
+    const { workbook, sheetId, table } = tableBook();
+    const plan = applyTableOperation(workbook, sheetId, table.id, {
+      kind: "resize",
+      range: "A1:C6",
+    });
+    expect(() =>
+      applyTableOperationPreview(workbook, plan, { readOnly: true }),
+    ).toThrow("This workbook is read-only.");
+  });
+
+  test("a view change may carry timelines, which this reference does not describe", () => {
+    const { workbook, pivotId } = pivotBook();
+    expect(() =>
+      applyPivotViewChange(
+        workbook,
+        pivotId,
+        { timelines: [] },
+        { snapshot: JSON.stringify(workbook) },
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe("applyPivotViewChange sorts and values", () => {
+  test("a descending sort puts the row labels in reverse order on the new sheet", () => {
+    const { workbook, pivotId } = pivotBook();
+    const sorted = applyPivotViewChange(
+      workbook,
+      pivotId,
+      { sorts: [{ field: "Region", direction: "descending" }] },
+      { snapshot: JSON.stringify(workbook) },
+    );
+    const output = sorted.sheets[2];
+    expect([output.cells.A2.raw, output.cells.A3.raw]).toEqual([
+      "South",
+      "North",
+    ]);
+  });
+
+  test("a values change replaces the aggregation of the new pivot", () => {
+    const { workbook, pivotId } = pivotBook();
+    const averaged = applyPivotViewChange(
+      workbook,
+      pivotId,
+      { values: [{ field: "Units", operation: "average" }] },
+      { snapshot: JSON.stringify(workbook) },
+    );
+    const pivot = averaged.sheets[2].pivots[0];
+    expect(pivot.refresh.measures[0]).toMatchObject({
+      name: "Average of Units",
+      operation: "average",
+      result: 7,
+    });
+    expect(averaged.sheets[1].pivots[0].refresh.measures[0].operation).toBe(
+      "sum",
+    );
+  });
+});
+
+describe("removeSavedFilterView keeps other views", () => {
+  test("removing one of two views leaves the other in place", () => {
+    const { workbook, sheetId } = tableBook();
+    const first = createSavedFilterView(
+      workbook,
+      sheetId,
+      northOnly,
+      "North only",
+    );
+    const both = createSavedFilterView(
+      first,
+      sheetId,
+      { range: "A1:C4", columns: [] },
+      "All rows",
+    );
+    const [north, all] = both.savedFilterViews;
+    const after = removeSavedFilterView(both, north.id);
+    expect(after.savedFilterViews.map((view) => view.name)).toEqual([
+      "All rows",
+    ]);
+    expect(after.savedFilterViews[0].id).toBe(all.id);
+    expect(both.savedFilterViews).toHaveLength(2);
   });
 });

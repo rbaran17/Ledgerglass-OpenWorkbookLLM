@@ -4,11 +4,13 @@
 
 > The library was rebuilt after the original SDK source was lost. The export names below were chosen for the rebuild, and the original package's exact API was not recovered. TypeScript declarations for everything listed here are in `types/` (hand-written, and checked by `npm run test:types`); the application's internals are untyped JavaScript. The package is not published to a registry (`"private": true`).
 
+> **More of the model is public now.** About 125 further functions (files, worksheets, cells, tables and pivots, rules, calculation) are documented in the [API reference](api/README.md), and the same functions run in Node through [`@ledgerglass/workbook/node`](api/node.md).
+
 ## Build
 
 ```sh
 npm ci
-npm run build:lib   # writes lib/ledgerglass.js, lib/ledgerglass.css and code-split chunks
+npm run build:lib   # writes lib/ledgerglass.js, lib/ledgerglass.css, code-split chunks and lib/node.js
 npm run test:lib    # mounts the built library in a host page and drives it in a browser
 ```
 

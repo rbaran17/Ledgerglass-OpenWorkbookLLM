@@ -464,3 +464,11 @@ export function createWorkbookCatalog<TCatalog>(
   },
   options?: WorkbookCatalogOptions,
 ): TCatalog;
+
+/** The wider model API, by area. Reference pages are in docs/api/. */
+export * from "./sdk/calculation";
+export * from "./sdk/cells";
+export * from "./sdk/files";
+export * from "./sdk/rules";
+export * from "./sdk/tables";
+export * from "./sdk/worksheets";

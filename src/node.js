@@ -44,6 +44,7 @@ export {
 export {
   RENDER_WORKBOOK_TOOL_NAME,
   createWorkbookToolResult,
+  createWorkbookToolSubscriber,
   readRenderWorkbookCall,
   renderWorkbookTool,
 } from "./agent-ui/ag-ui.js";

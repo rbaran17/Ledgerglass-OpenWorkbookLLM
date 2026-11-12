@@ -149,7 +149,7 @@ export function Workbook() {
 }
 ```
 
-The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, its TypeScript declarations (`types/`) are hand-written for the public surface, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions.
+The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, its TypeScript declarations (`types/`) are hand-written for the public surface, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions. The [API reference](docs/api/README.md) covers the wider model API (files, worksheets, cells, tables and pivots, rules, calculation), and [`@ledgerglass/workbook/node`](docs/api/node.md) runs the same functions in Node without a browser: read an XLSX file, calculate it and write it back from a script.
 
 An AI agent can also show a workbook itself: as an AG-UI frontend tool (`render_workbook`) or as an A2UI catalog component (`Workbook`). `npm run test:agent-ui` checks both against the official AG-UI client and A2UI React renderer. See [Showing a workbook from an agent](docs/AGENT-UI.md).
 
@@ -305,6 +305,7 @@ Embedded-Workbook.html  Launcher for the embedded mode
 ## Documentation
 
 - **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
+- **API reference:** [docs/api/README.md](docs/api/README.md) (about 125 model functions by area, and the Node entry).
 - **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, adapters and model functions).
 - **Agent-rendered workbook:** [docs/AGENT-UI.md](docs/AGENT-UI.md) (AG-UI frontend tool and A2UI catalog component).
 - **MCP:** [docs/MCP.md](docs/MCP.md) (tools, configuration and integration).
