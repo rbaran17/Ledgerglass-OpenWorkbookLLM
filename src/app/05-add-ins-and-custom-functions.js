@@ -1,3 +1,10 @@
+import {
+  formatInspectionRecords,
+  recordSourceInspection,
+  sourceInspectionRecords,
+  validateIsolatedFormatInspection,
+} from "./06c-file-format-core.js";
+
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
@@ -6,7 +13,6 @@ import {
   extensionRuntimeLimits,
   hashExtensionManifest,
   fingerprintCanonicalValue,
-  sha256HexDigest,
   validateExtensionValue,
   normalizeDatePolicy,
 } from "./01-core-schemas-and-hashing.js";
@@ -15,12 +21,10 @@ import {
   rewriteFormulaReferences,
   evaluateWorkbookFormulas,
   encodeWorkbookFingerprint,
-  alternateFormatExtensions,
   parseExternalLinkRange,
   workbookQualifierSchema,
   tokenizeExternalReferences,
   assertSheetUnprotected,
-  validateExtractedSourceTables,
   buildExternalLinkAliases,
   normalizeWorkbookInput,
   workbookLinkLimits,
@@ -1414,20 +1418,7 @@ function applyWorkbookLinkPreview(e, r, t = {}) {
     normalizeWorkbookInput(n.candidate)
   );
 }
-const sourceInspectionRecords = new WeakMap();
-function recordSourceInspection(e, r, t) {
-  if (
-    (validateExtractedSourceTables(e),
-    e.fileName !== t ||
-      e.byteLength !== r.length ||
-      e.sha256 !== sha256HexDigest(r))
-  )
-    throw Error("Source inspection does not match its original.");
-  sourceInspectionRecords.set(e, {
-    signature: JSON.stringify(e),
-    bytes: r.slice(),
-  });
-}
+
 function assertSourceInspectionCurrent(e) {
   const r = sourceInspectionRecords.get(e);
   if (!r || r.signature !== JSON.stringify(e))
@@ -1436,26 +1427,7 @@ function assertSourceInspectionCurrent(e) {
     );
   return r.bytes.slice();
 }
-const formatInspectionRecords = new WeakMap();
-function validateIsolatedFormatInspection(e, r, t) {
-  if (
-    !e ||
-    e.schemaVersion !== 1 ||
-    e.fileName !== t ||
-    e.fileBytes !== r.length ||
-    e.sha256 !== sha256HexDigest(r) ||
-    !alternateFormatExtensions.includes(e.format) ||
-    !t.toLowerCase().endsWith("." + e.format) ||
-    e.execution !== "never" ||
-    !Array.isArray(e.parts) ||
-    e.parts.length > 2e3
-  )
-    throw Error("Invalid isolated format inspection.");
-  formatInspectionRecords.set(e, {
-    signature: JSON.stringify(e),
-    bytes: r.slice(),
-  });
-}
+
 function assertFormatInspectionCurrent(e) {
   const r = formatInspectionRecords.get(e);
   if (!r || r.signature !== JSON.stringify(e))

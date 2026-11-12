@@ -1,5 +1,47 @@
-import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
-import Ox from "saxes";
+import { parseDelimitedCellValue } from "./06c-file-format-core.js";
+
+import {
+  F$,
+  Hle,
+  Wle,
+  buildContainsTextFormula,
+  buildDelimitedImportReport,
+  buildExchangeSchemaReport,
+  byteCharacterTable,
+  computeCrc32,
+  convertTemplateToXlsx,
+  createEmptyExportLedger,
+  createWorkbookParseState,
+  dataValidationOperators,
+  decodeXmlEntities,
+  delimitedImportDefaults,
+  formatCellAddress,
+  formatRangeCornerCells,
+  getXmlAttribute,
+  inspectXlsxPackage,
+  isExternalActionFormula,
+  isExternalReferenceFormula,
+  maxXlsxExpandedByteLimit,
+  normalizeDelimitedOptions,
+  numericPrecisionPolicy,
+  parseCalculationProperties,
+  parseWorksheetCells,
+  parseWorksheetXml,
+  parseXlsxDataValidations,
+  parseXmlPartStrict,
+  readPackageRelationships,
+  recordDelimitedChange,
+  recordDelimitedIssue,
+  relationshipsPathFor,
+  resolvePackagePartPath,
+  scanXlsxNumericTokens,
+  summarizePreservedParts,
+  validateConditionalFormatRules,
+  validateWorkbookPackage,
+  validateXlsxNumericValue,
+  xlsxExchangeSupportNotice,
+} from "./06c-file-format-core.js";
+
 import {
   strFromU8,
   strToU8,
@@ -28,8 +70,6 @@ import {
   defaultColumnWidthOf,
   buildNumberFormatCode,
   findOccupiedRangeBounds,
-  xlsxInspectionLimits,
-  stripFormulaStringLiterals,
   calculateWorkbookWithSettings,
   requireRetainedXlsxSource,
   encodeBytesToBase64,
@@ -49,19 +89,11 @@ import {
   worksheetCapacityLimits,
   resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
-import { parseSeriesSeedDate } from "./04-cell-input-paste-and-fill.js";
+
 import {
-  validateWorkbookPackage,
-  parseWorksheetXml,
-  computeCrc32,
-  createWorkbookParseState,
   inspectionSignatureCache,
   describeImportSource,
   readGeneratedTemplateBuffer,
-  convertTemplateToXlsx,
-  inspectXlsxPackage,
-  parseWorksheetCells,
-  resolveRelationshipTarget,
 } from "./07-xlsx-archive-reader.js";
 
 async function exportXltxTemplate(e) {
@@ -90,14 +122,8 @@ async function exportXltxTemplate(e) {
   };
 }
 const g7 = "http://schemas.openxmlformats.org/package/2006/relationships",
-  z2 = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/",
   contentTypesNamespace =
     "http://schemas.openxmlformats.org/package/2006/content-types",
-  customPropertiesContentType =
-    "application/vnd.openxmlformats-officedocument.custom-properties+xml",
-  customXmlPropertiesContentType =
-    "application/vnd.openxmlformats-officedocument.customXmlProperties+xml",
-  Dle = { scope: "workbook" },
   escapeXmlAttribute = (e) =>
     e.replace(
       /[&<>"']/g,
@@ -110,483 +136,7 @@ const g7 = "http://schemas.openxmlformats.org/package/2006/relationships",
           "'": "&apos;",
         })[r],
     );
-function parseXmlPartStrict(e, r, t, n) {
-  const o = new Ox.SaxesParser({ xmlns: true });
-  (o.on("opentag", r),
-    t && o.on("closetag", t),
-    n && o.on("text", n),
-    o.on("doctype", () => {
-      throw Error("DTD is not permitted in preservation metadata.");
-    }),
-    o.write(strFromU8(e)).close());
-}
-function ownerPartForRelsPath(e) {
-  return e === "_rels/.rels"
-    ? ""
-    : e.replace(/(^|\/)\_rels\/([^/]+)\.rels$/, "$1$2");
-}
-function relationshipsPathFor(e) {
-  if (!e) return "_rels/.rels";
-  const r = e.lastIndexOf("/");
-  return `${e.slice(0, r + 1)}_rels/${e.slice(r + 1)}.rels`;
-}
-function readPackageRelationships(e) {
-  const r = new Map(),
-    t = new Map(),
-    n = [],
-    o = new Map();
-  parseXmlPartStrict(e["[Content_Types].xml"], (a) => {
-    (a.local === "Override" &&
-      r.set(
-        (a.attributes.PartName?.value ?? "").slice(1),
-        a.attributes.ContentType?.value ?? "",
-      ),
-      a.local === "Default" &&
-        t.set(
-          a.attributes.Extension?.value ?? "",
-          a.attributes.ContentType?.value ?? "",
-        ));
-  });
-  for (const [a, s] of Object.entries(e))
-    a.endsWith(".rels") &&
-      parseXmlPartStrict(s, (d) => {
-        if (d.local !== "Relationship") return;
-        const u = d.attributes.TargetMode?.value === "External",
-          l = d.attributes.Target?.value ?? "";
-        n.push({
-          owner: ownerPartForRelsPath(a),
-          rels: a,
-          id: d.attributes.Id?.value ?? "",
-          type: d.attributes.Type?.value ?? "",
-          external: u,
-          target: u ? l : resolveRelationshipTarget(a, l),
-        });
-      });
-  return (
-    parseXmlPartStrict(e["xl/workbook.xml"], (a) => {
-      if (a.local === "sheet") {
-        const d = n.find(
-          (u) =>
-            u.owner === "xl/workbook.xml" &&
-            u.id ===
-              Object.values(a.attributes).find(
-                (c) => c.local === "id" && c.uri === z2.slice(0, -1),
-              )?.value,
-        );
-        d && o.set(d.target, a.attributes.name?.value ?? "Unknown worksheet");
-      }
-    }),
-    {
-      relationships: n,
-      sheets: o,
-      contentType: (a) =>
-        r.get(a) ?? t.get(a.split(".").at(-1)) ?? "undeclared",
-      types: r,
-    }
-  );
-}
-function classifyPreservedPart(e, r) {
-  return e.endsWith("/")
-    ? "directory"
-    : e === "[Content_Types].xml" || e.endsWith(".rels")
-      ? "package relationships"
-      : /vba|macrosheet|activeX|embedding/i.test(e + r)
-        ? "active content"
-        : /^customXml\//.test(e)
-          ? "custom XML"
-          : e === "docProps/custom.xml"
-            ? "custom properties"
-            : /^xl\/charts\//.test(e)
-              ? "charts"
-              : /^xl\/(?:model|dataModel)\//i.test(e) ||
-                  /model\+data|dataModel/i.test(r)
-                ? "Excel Data Model"
-                : /^xl\/(pivotTables|pivotCache)\//.test(e)
-                  ? "pivots"
-                  : /connections|queryTables|externalLinks/.test(e)
-                    ? "connections and external links"
-                    : /slicers|slicerCaches|timelines/.test(e)
-                      ? "slicers and timelines"
-                      : /threadedComments|persons/.test(e)
-                        ? "threaded comments"
-                        : /^_xmlsignatures\//.test(e)
-                          ? "signatures"
-                          : /^xl\/worksheets\/[^/]+\.xml$/.test(e)
-                            ? "worksheet"
-                            : e === "xl/workbook.xml"
-                              ? "workbook and names"
-                              : /^xl\/tables\//.test(e)
-                                ? "tables"
-                                : /^xl\/drawings\//.test(e)
-                                  ? "drawings"
-                                  : /^xl\/media\//.test(e)
-                                    ? "media"
-                                    : /^xl\/comments/.test(e)
-                                      ? "notes"
-                                      : e === "xl/sharedStrings.xml"
-                                        ? "shared strings"
-                                        : e === "xl/styles.xml" ||
-                                            /^xl\/theme\//.test(e)
-                                          ? "formatting"
-                                          : /^docProps\//.test(e)
-                                            ? "document properties"
-                                            : "unknown part";
-}
-function F$(e, r) {
-  const t = readPackageRelationships(e),
-    n = new Map(),
-    o = new Map();
-  for (const m of t.relationships)
-    (n.set(m.owner, [...(n.get(m.owner) ?? []), m]),
-      m.external || o.set(m.target, [...(o.get(m.target) ?? []), m]));
-  const a = new Map();
-  for (const [m, v] of t.sheets) {
-    const g = [m],
-      b = new Set();
-    for (; g.length;) {
-      const y = g.pop();
-      if (b.has(y)) continue;
-      b.add(y);
-      const w = a.get(y) ?? new Set();
-      (w.add(v), a.set(y, w));
-      for (const E of n.get(y) ?? []) E.external || g.push(E.target);
-    }
-  }
-  const s = new Set(),
-    d = new Map(),
-    u = Object.keys(e).filter(
-      (m) => m.startsWith("customXml/") && !m.endsWith("/"),
-    );
-  if (u.length) {
-    const m = new Set(u),
-      v = t.relationships.filter(
-        (E) => m.has(E.owner) || (!E.external && m.has(E.target)),
-      );
-    let g = !Object.keys(e).some((E) => /xmlMaps|singleXmlCells/i.test(E));
-    ((g &&= u.every(
-      (E) =>
-        E.endsWith(".rels") ||
-        (/\.xml$/.test(E) &&
-          [
-            "application/xml",
-            "text/xml",
-            customXmlPropertiesContentType,
-          ].includes(t.contentType(E))),
-    )),
-      (g &&= v.every(
-        (E) =>
-          !E.external &&
-          ((E.owner === "xl/workbook.xml" &&
-            E.type === z2 + "customXml" &&
-            m.has(E.target)) ||
-            (m.has(E.owner) &&
-              m.has(E.target) &&
-              E.type === z2 + "customXmlProps")),
-      )),
-      (g &&= v.every((E) =>
-        E.owner === "xl/workbook.xml"
-          ? ["application/xml", "text/xml"].includes(t.contentType(E.target))
-          : t.contentType(E.owner) !== customXmlPropertiesContentType &&
-            t.contentType(E.target) === customXmlPropertiesContentType,
-      )));
-    const b = v.filter((E) => E.owner === "xl/workbook.xml"),
-      y = new Set(),
-      w = b.map((E) => E.target);
-    for (; w.length;) {
-      const E = w.pop();
-      if (!y.has(E)) {
-        (y.add(E),
-          e[relationshipsPathFor(E)] && y.add(relationshipsPathFor(E)));
-        for (const A of n.get(E) ?? []) A.external || w.push(A.target);
-      }
-    }
-    g &&= b.length > 0 && u.every((E) => y.has(E));
-    for (const E of u)
-      g
-        ? s.add(E)
-        : d.set(
-            E,
-            "Custom XML has bindings, unrecognized types, orphaned parts or relationships outside the passive metadata island. Retained only in the original.",
-          );
-  }
-  const l = "docProps/custom.xml";
-  if (e[l]) {
-    const m = o.get(l) ?? [];
-    let v =
-      t.contentType(l) === customPropertiesContentType &&
-      m.length === 1 &&
-      m[0].owner === "" &&
-      m[0].type === z2 + "custom-properties" &&
-      !n.get(l)?.length;
-    (parseXmlPartStrict(e[l], (g) => {
-      (g.local === "property" && g.attributes.linkTarget && (v = false),
-        (g.uri ===
-          "http://schemas.openxmlformats.org/officeDocument/2006/custom-properties" &&
-          ["Properties", "property"].includes(g.local)) ||
-          (g.uri ===
-            "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes" &&
-            [
-              "lpwstr",
-              "lpstr",
-              "bstr",
-              "i1",
-              "i2",
-              "i4",
-              "i8",
-              "int",
-              "ui1",
-              "ui2",
-              "ui4",
-              "ui8",
-              "uint",
-              "r4",
-              "r8",
-              "decimal",
-              "bool",
-              "date",
-              "filetime",
-              "empty",
-              "null",
-            ].includes(g.local)) ||
-          (v = false));
-    }),
-      v
-        ? s.add(l)
-        : d.set(
-            l,
-            "Custom properties contain links, unsupported value types or relationships; retained only in the original.",
-          ));
-  }
-  const c = new Set();
-  if (e["xl/sharedStrings.xml"]) {
-    let m = -1;
-    parseXmlPartStrict(e["xl/sharedStrings.xml"], (v) => {
-      (v.local === "si" && m++, v.local === "r" && c.add(m));
-    });
-  }
-  let h = 0;
-  const f = Object.entries(e)
-    .sort(([m], [v]) => m.localeCompare(v))
-    .map(([m, v]) => {
-      const g = classifyPreservedPart(m, t.contentType(m)),
-        b = [
-          ...(a.get(m.endsWith(".rels") ? ownerPartForRelsPath(m) : m) ?? []),
-        ].map((k) => ({
-          sheet: k,
-          scope: "sheet",
-        }));
-      b.length ||
-        b.push(
-          [
-            "charts",
-            "pivots",
-            "drawings",
-            "notes",
-            "unknown part",
-            "media",
-          ].includes(g)
-            ? {
-                scope: "unresolved",
-                detail:
-                  "No worksheet relationship identifies the affected cells.",
-              }
-            : Dle,
-        );
-      let y = "dropped",
-        w =
-          "No safe editable mapping. Exact source bytes remain in the original file.";
-      (g === "Excel Data Model" &&
-        (w =
-          "Imported Excel Data Model, relationships and DAX are not executed or translated. Worksheet results are historical snapshots. Exact model bytes remain only in the original source; rebuild reviewed local typed tables and relationships to calculate new results."),
-        ["worksheet", "workbook and names", "tables", "notes"].includes(g) &&
-          ((y = "editable"),
-          (w =
-            "Supported content is editable and regenerated; inspect the feature details and conversion notices for losses. XML bytes are not preserved.")),
-        [
-          "package relationships",
-          "shared strings",
-          "formatting",
-          "document properties",
-          "drawings",
-        ].includes(g) &&
-          ((y = "flattened"),
-          (w =
-            "Supported content is regenerated or flattened. Unsupported settings and original XML are retained only in the source.")),
-        g === "media" &&
-          /^image\/(png|jpeg)$/.test(t.contentType(m)) &&
-          ((y = "flattened"),
-          (w =
-            "Supported worksheet pictures are re-encoded with their supported placement; orphaned images and chart assets are not carried over.")),
-        s.has(m) &&
-          ((y = "preserved-opaque"),
-          (w =
-            "Passive metadata snapshot copied byte-for-byte, without interpreting or refreshing its contents. Its original meaning may be stale after edits.")),
-        d.has(m) && (w = d.get(m)),
-        g === "signatures" &&
-          (w =
-            "Signatures cannot authenticate an edited workbook; retained only in the original file."));
-      const E = [],
-        A = (k, F, I, O, j) => {
-          if (++h > xlsxInspectionLimits.maxDetails)
-            throw Error(
-              "XLSX compatibility details exceed the 100,000-entry budget. Split the source workbook before importing.",
-            );
-          E.push({
-            feature: k,
-            disposition: F,
-            location: {
-              ...b[0],
-              ...(I ? { range: I, scope: "cell" } : {}),
-              ...(O ? { detail: O } : {}),
-            },
-            reason:
-              j ??
-              (F === "editable"
-                ? "Supported subset is editable; review conversion notices for unsupported attributes."
-                : "This source feature is not preserved as an editable feature in the derived workbook."),
-          });
-        };
-      if (
-        g === "worksheet" ||
-        g === "workbook and names" ||
-        g === "tables" ||
-        g === "drawings" ||
-        g === "pivots" ||
-        g === "charts"
-      ) {
-        let k = "",
-          F = "",
-          I,
-          O = "",
-          j = false,
-          z = false,
-          V = "";
-        parseXmlPartStrict(
-          v,
-          (D) => {
-            const B = (_) => D.attributes[_]?.value;
-            (D.local === "c" &&
-              ((k = B("r") ?? ""),
-              (F = B("t") ?? ""),
-              F === "e" && A("error cell", "flattened", k)),
-              D.local === "v" && ((z = true), (V = "")),
-              D.local === "f" && ((j = true), (O = "")),
-              D.local === "definedName" &&
-                ((I = B("name")), A("defined name", "editable", undefined, I)),
-              D.local === "dataValidation" &&
-                A("data validation", "editable", B("sqref"), B("type")),
-              D.local === "conditionalFormatting" &&
-                A("conditional formatting", "editable", B("sqref")),
-              D.local === "mergeCell" &&
-                A("merged cells", "editable", B("ref")),
-              D.local === "table" &&
-                A("structured table", "editable", B("ref"), B("name")),
-              D.local === "location" && A("pivot output", "dropped", B("ref")),
-              D.local === "worksheetSource" &&
-                A("pivot source", "dropped", B("ref"), B("sheet")),
-              D.local === "r" &&
-                k &&
-                F === "inlineStr" &&
-                A("rich text", "flattened", k),
-              [
-                "sheetProtection",
-                "workbookProtection",
-                "autoFilter",
-                "extLst",
-                "hyperlink",
-                "legacyDrawingHF",
-                "webPublishItems",
-                "controls",
-                "oleObjects",
-                "pivotTable",
-                "pivotTablePart",
-                "slicer",
-                "timeline",
-                "sp",
-                "graphicFrame",
-              ].includes(D.local) &&
-                A(D.local, "dropped", B("ref"), B("name")));
-          },
-          (D) => {
-            (D.local === "v" &&
-              ((z = false),
-              k &&
-                F === "s" &&
-                c.has(Number(V)) &&
-                A("rich text", "flattened", k)),
-              D.local === "c" && (k = ""),
-              D.local === "f" &&
-                ((j = false),
-                g === "charts"
-                  ? A(
-                      "chart source reference",
-                      "dropped",
-                      undefined,
-                      O.slice(0, 1024),
-                    )
-                  : /(?:\[|https?:|file:|WEBSERVICE|HYPERLINK|RTD|DDE|CALL\s*\(|EXEC\s*\()/i.test(
-                      O,
-                    ) &&
-                    A(
-                      "external/action formula",
-                      "flattened",
-                      k,
-                      undefined,
-                      "External/action references may be neutralized to literal text; the formula cache report provides the actual conversion outcome.",
-                    )));
-          },
-          (D) => {
-            (j && (O += D), z && (V += D));
-          },
-        );
-      }
-      for (const k of n.get(m) ?? [])
-        k.external &&
-          A(
-            "external relationship",
-            "dropped",
-            undefined,
-            k.type.split("/").at(-1),
-            "External target is never fetched or carried into the derived copy; its URI remains only in the original.",
-          );
-      return {
-        path: m,
-        contentType: m.endsWith("/") ? "directory" : t.contentType(m),
-        bytes: v.length,
-        sha256: sha256HexDigest(v),
-        family: g,
-        disposition: y,
-        reason: w,
-        locations: b,
-        features: E,
-        retainedInOriginal: true,
-      };
-    });
-  return summarizePreservedParts({
-    schemaVersion: 1,
-    policy: "passive-metadata-v1",
-    complete: true,
-    phase: "eligible-for-export",
-    sourceSha256: r,
-    parts: f,
-    counts: { editable: 0, "preserved-opaque": 0, flattened: 0, dropped: 0 },
-    opaqueBytes: 0,
-    note: "All package entries are inventoried. Locations come from source relationships and XML; unresolved locations are explicit. Dispositions describe the derived copy, while all parts remain byte-exact in the retained original. Editable parts can also contain flattened or dropped features. No source part is executed or fetched.",
-  });
-}
-function summarizePreservedParts(e) {
-  ((e.counts = {
-    editable: 0,
-    "preserved-opaque": 0,
-    flattened: 0,
-    dropped: 0,
-  }),
-    (e.opaqueBytes = 0));
-  for (const r of e.parts)
-    (e.counts[r.disposition]++,
-      r.disposition === "preserved-opaque" && (e.opaqueBytes += r.bytes));
-  return e;
-}
+
 function rebuildPreservedPackage(e, r, t) {
   const n = structuredClone(t),
     o = readPackageRelationships(e),
@@ -668,103 +218,13 @@ function describePreservationDisposition(e, r) {
       ((n.disposition = "dropped"), (n.reason = r));
   return summarizePreservedParts(t);
 }
-const numericPrecisionPolicy = Object.freeze({
-  storage: "IEEE-754 binary64",
-  excelSignificantDigits: 15,
-  rounding:
-    "ROUND uses decimal ties away from zero; monetary rounding is explicit, never automatic.",
-  display:
-    "General displays 15 significant digits. Display precision does not round stored values or calculations.",
-});
-function validateXlsxNumericValue(e) {
-  const r = /^[+-]?(\d+\.?\d*|\.\d+)(?:e([+-]?\d+))?$/i.exec(e.trim());
-  if (!r) return;
-  const t = r[1].replace(".", "").replace(/^0+/, "").replace(/0+$/, ""),
-    n = Number(e);
-  if (!Number.isFinite(n)) return "outside the finite numeric range";
-  if (t && (n === 0 || Math.abs(n) < 22250738585072014e-324))
-    return "below Excel's normal floating-point range";
-  if (t.length > 15) return "more than 15 significant digits";
-  if (Number.isInteger(n) && !Number.isSafeInteger(n))
-    return "outside the exact integer range";
-}
-function scanXlsxNumericTokens(e) {
-  const r = new Map(),
-    t = new Ox.SaxesParser({ xmlns: true });
-  let n = "",
-    o = "",
-    a = "",
-    s = false;
-  t.on("opentag", (u) => {
-    u.local === "c"
-      ? ((n = String(u.attributes.r?.value ?? "")),
-        (o = String(u.attributes.t?.value ?? "n")))
-      : u.local === "v" && n && ((s = true), (a = ""));
-  });
-  const d = (u) => {
-    if (s && ((a += u), a.length > 1024))
-      throw Error("An XLSX numeric token exceeds 1,024 characters.");
-  };
-  return (
-    t.on("text", d),
-    t.on("cdata", d),
-    t.on("closetag", (u) => {
-      if (u.local === "v") {
-        if (o === "n" && a.trim()) {
-          const l = a.trim();
-          if (
-            !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(l) ||
-            !Number.isFinite(Number(l))
-          )
-            throw Error(`Invalid finite numeric value at ${n}.`);
-          r.set(n, l);
-        }
-        s = false;
-      } else u.local === "c" && (n = "");
-    }),
-    t.write(e).close(),
-    r
-  );
-}
-const formatRangeCornerCells = (e) => {
-    const r = parseRangeAddress(e);
-    return `${formatCellAddress(r.firstRow, r.firstCol)}:${formatCellAddress(r.lastRow, r.lastCol)}`;
-  },
-  countRangeCells = (e) => {
+
+const countRangeCells = (e) => {
     const r = parseRangeAddress(e);
     return (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1);
   },
   hexColorToArgb = (e) => `FF${e.slice(1).toUpperCase()}`;
-function parseXlsxDataValidations(e) {
-  const r = [];
-  for (const t of e.matchAll(
-    /<(?:\w+:)?dataValidation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?dataValidation>)/g,
-  )) {
-    const n = (d) =>
-        new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(t[1])?.[1],
-      o = (n("sqref") ?? "").trim().split(/\s+/).filter(Boolean);
-    if (!o.length) continue;
-    const a = formatRangeCornerCells(o[0]).split(":")[0];
-    if (r.length + o.length > 1e3)
-      throw Error(
-        "XLSX has more than 1,000 validation areas; narrow the source rules before import.",
-      );
-    const s = [
-      ...(t[2] ?? "").matchAll(
-        /<(?:\w+:)?formula[12]\b[^>]*>([\s\S]*?)<\/(?:\w+:)?formula[12]>/g,
-      ),
-    ].map((d) => d[1].trim());
-    for (const d of o)
-      r.push({
-        range: formatRangeCornerCells(d),
-        anchor: a,
-        operands: s,
-        dropdown: !["1", "true"].includes(n("showDropDown") ?? "0"),
-        alert: ["1", "true"].includes(n("showErrorMessage") ?? "0"),
-      });
-  }
-  return r;
-}
+
 function applyValidationDropdownFlags(e, r) {
   return e.replace(/<dataValidation\b[^>]*>/g, (t) => {
     const n = /\bsqref="([^"]+)"/.exec(t)?.[1],
@@ -779,16 +239,7 @@ function applyValidationDropdownFlags(e, r) {
       : t;
   });
 }
-const dataValidationOperators = {
-  between: "between",
-  notBetween: "notBetween",
-  greater: "greaterThan",
-  greaterEqual: "greaterThanOrEqual",
-  less: "lessThan",
-  lessEqual: "lessThanOrEqual",
-  equal: "equal",
-  notEqual: "notEqual",
-};
+
 function serializeDataValidationRule(e) {
   const r = {
     list: "list",
@@ -840,82 +291,7 @@ function serializeDataValidationRule(e) {
             ),
   };
 }
-const isExternalReferenceFormula = (e) => {
-    const r = stripFormulaStringLiterals(e).replace(/"(?:[^"]|"")*"/g, '""');
-    return (
-      /[\[\]|]/.test(r) ||
-      /(?:https?:|file:|javascript:|data:|\\\\)/i.test(r) ||
-      /\b(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY)\s*\(/i.test(
-        r.replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet"),
-      )
-    );
-  },
-  quoteFormulaString = (e) => '"' + e.replace(/"/g, '""') + '"';
-function buildContainsTextFormula(e, r) {
-  return (
-    "ISNUMBER(FIND(LOWER(" + quoteFormulaString(e) + "),LOWER(" + r + '&"")))'
-  );
-}
-function Wle(e, r) {
-  const t = parseRangeAddress(r),
-    n = formatCellAddress(t.firstRow, t.firstCol),
-    o = formatRangeCornerCells(r).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2"),
-    a =
-      "SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(" +
-      n +
-      ',"~","~~"),"*","~*"),"?","~?")';
-  return (
-    "AND(LEN(" +
-    n +
-    ")>0,COUNTIF(" +
-    o +
-    ',"="&' +
-    a +
-    ")" +
-    (e === "duplicate" ? ">1" : "=1") +
-    ")"
-  );
-}
-function Hle(e) {
-  if (e === null || e === "") return true;
-  if (typeof e == "number") return Number.isFinite(e);
-  if (typeof e != "string") return false;
-  const r = e.trim() !== "" && Number.isFinite(Number(e));
-  return !(
-    /[^\x20-\x7e]/.test(e) ||
-    /^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|ERROR!|CYCLE!|SPILL!|CALC!|LIMIT!|BLOCKED!)/.test(
-      e,
-    ) ||
-    e.replace(/[~*?]/g, "~~").length > 254 ||
-    (r && String(Number(e)) !== e) ||
-    (!r && /^[\s+-]*\d/.test(e))
-  );
-}
-function validateConditionalFormatRules(e) {
-  const r = {},
-    t = new Set();
-  for (const s of e.matchAll(/<(?:\w+:)?cfRule\b([^>]*)>/g)) {
-    const d = /\bpriority=["']([^"']*)["']/.exec(s[1])?.[1],
-      u = /\bstopIfTrue=["']([^"']+)["']/.exec(s[1])?.[1];
-    if (d === undefined && /\bid=["']/.test(s[1])) continue;
-    const l = Number(d);
-    if (!d || !/^\d+$/.test(d) || !Number.isSafeInteger(l) || l < 1 || t.has(l))
-      throw Error("Invalid or duplicate conditional-format priority.");
-    if ((t.add(l), d && u !== undefined)) {
-      if (!["1", "0", "true", "false"].includes(u))
-        throw Error("Invalid conditional-format stop flag.");
-      r[String(l)] = u === "1" || u === "true";
-    }
-  }
-  for (const s of e.matchAll(/<(?:\w+:)?cfvo\b([^>]*)>/g)) {
-    const d = /\bgte=["']([^"']*)["']/.exec(s[1])?.[1];
-    if (d !== undefined && d !== "1" && d !== "true")
-      throw Error(
-        "Strict or malformed conditional icon thresholds are not supported. Use inclusive thresholds or native JSON.",
-      );
-  }
-  return r;
-}
+
 function appendStopIfTrueAttribute(e, r) {
   const t = sortConditionalRulesByPriority(r.conditionalFormats ?? []);
   return e.replace(/<cfRule\b[^>]*>/g, (n) => {
@@ -1114,63 +490,7 @@ function serializeWorksheetRuleXml(e, r) {
     }),
   );
 }
-function parseCalculationProperties(e) {
-  let r = {
-    mode: "auto",
-    iterative: false,
-    maxIterations: null,
-    maxChange: null,
-  };
-  const t = new Ox.SaxesParser({ xmlns: true });
-  let n = false;
-  return (
-    t.on("opentag", (o) => {
-      if (o.local !== "calcPr" || !/spreadsheetml/.test(o.uri)) return;
-      if (n)
-        throw Error(
-          "Duplicate XLSX calculation properties. Repair the source workbook.",
-        );
-      n = true;
-      const a = (h) => {
-          const f = o.attributes[h];
-          return f && typeof f != "string" ? f.value : f;
-        },
-        s = a("calcMode") ?? "auto",
-        d = a("iterate"),
-        u = a("iterateCount"),
-        l = a("iterateDelta"),
-        c = a("fullPrecision");
-      if (
-        !["auto", "autoNoTable", "manual"].includes(s) ||
-        (c !== undefined && !["true", "false", "1", "0"].includes(c)) ||
-        (d !== undefined && !["true", "false", "1", "0"].includes(d)) ||
-        (u !== undefined &&
-          (!/^\d+$/.test(u) ||
-            !Number.isSafeInteger(Number(u)) ||
-            Number(u) < 1)) ||
-        (l !== undefined &&
-          (!l.trim() || !Number.isFinite(Number(l)) || Number(l) < 0))
-      )
-        throw Error(
-          "Invalid XLSX calculation properties. Repair the source workbook.",
-        );
-      r = {
-        mode: s,
-        iterative: d === "true" || d === "1",
-        maxIterations: u === undefined ? null : Number(u),
-        maxChange: l === undefined ? null : Number(l),
-        ...(c === undefined
-          ? {}
-          : { fullPrecision: c === "true" || c === "1" }),
-      };
-    }),
-    t.on("doctype", () => {
-      throw Error("XLSX calculation properties cannot contain a DTD.");
-    }),
-    t.write(e).close(),
-    r
-  );
-}
+
 function serializeCalculationProperties(e, r) {
   const t = normalizeCalculationSettings(
       r.calculation ?? defaultCalculationSettings,
@@ -1245,76 +565,7 @@ function retainEmbeddedObjectInventory(e, r, t = {}) {
     embeddedObjectInventories: [...(e.embeddedObjectInventories ?? []), n],
   });
 }
-function flattenEmbeddedObjectItems(e) {
-  return (e.embeddedObjectInventories ?? []).flatMap((r) =>
-    r.items.map((t) => ({
-      sourceFile: r.fileName,
-      sourceSha256: r.sourceSha256,
-      path: t.path,
-      kind: t.kind,
-      bytes: t.bytes,
-      ...(t.sha256 ? { sha256: t.sha256 } : {}),
-      disposition: "dropped",
-      execution: "never",
-      reason:
-        "Inventory retained in native JSON only; unsupported OLE/ActiveX payload was not imported and is not emitted in derived XLSX.",
-    })),
-  );
-}
-function buildExchangeSchemaReport(e, r, t, n, o) {
-  return {
-    schemaVersion: 1,
-    direction: e,
-    fileName: r,
-    fileBytes: t,
-    workbookName: n.name,
-    revision: n.revision,
-    compatibility: "derived-subset",
-    lossless: false,
-    originalFileRetained: !!n.xlsxSource,
-    ...(n.alternateSource
-      ? {
-          alternateOriginal: {
-            fileName: n.alternateSource.fileName,
-            byteLength: n.alternateSource.byteLength,
-            sha256: n.alternateSource.sha256,
-            format: n.alternateSource.format,
-          },
-        }
-      : {}),
-    ...(n.xlsxSource
-      ? {
-          originalSource: {
-            fileName: n.xlsxSource.fileName,
-            byteLength: n.xlsxSource.byteLength,
-            sha256: n.xlsxSource.sha256,
-          },
-        }
-      : {}),
-    sheets: n.sheets.map((s) => ({
-      name: s.name,
-      storedCells: Object.keys(s.cells).length,
-      hidden: !!(s.hidden || s.veryHidden),
-    })),
-    warnings: [...new Set(o)],
-    ...(e === "export" && n.embeddedObjectInventories?.length
-      ? { embeddedObjectLosses: flattenEmbeddedObjectItems(n) }
-      : {}),
-    caches: {
-      total: 0,
-      pending: 0,
-      matched: 0,
-      different: 0,
-      missing: 0,
-      neutralized: 0,
-      written: 0,
-      omitted: 0,
-      issues: [],
-      matches: [],
-      detailsOmitted: 0,
-    },
-  };
-}
+
 const excelErrorLiterals = new Set([
   "#NULL!",
   "#DIV/0!",
@@ -1367,170 +618,8 @@ function classifyArrayFormula(e, r) {
 
 const oue = unwrapDefaultExport(iue);
 
-const x7 = unwrapDefaultExport(lue),
-  delimitedImportDefaults = {
-    delimiter: "auto",
-    encoding: "auto",
-    quote: '"',
-    escape: "double",
-    newline: "auto",
-    hasHeader: true,
-    decimal: ".",
-    grouping: "none",
-    dateOrder: "ymd",
-    empty: "blank",
-    trim: false,
-    columns: {},
-  },
-  delimitedColumnTypes = [
-    "auto",
-    "text",
-    "number",
-    "integer",
-    "boolean",
-    "date",
-  ],
-  byteCharacterTable = Array.from({ length: 256 }, (e, r) =>
-    String.fromCharCode(r),
-  );
-[
-  8364, 129, 8218, 402, 8222, 8230, 8224, 8225, 710, 8240, 352, 8249, 338, 141,
-  381, 143, 144, 8216, 8217, 8220, 8221, 8226, 8211, 8212, 732, 8482, 353, 8250,
-  339, 157, 382, 376,
-].forEach((e, r) => (byteCharacterTable[128 + r] = String.fromCharCode(e)));
-const recordDelimitedIssue = (e, r, t, n, o) => {
-    (e.issueCount++,
-      e.issues.length < 100 &&
-        e.issues.push({
-          record: r,
-          column: t,
-          message: n,
-          ...(o !== undefined ? { value: o.slice(0, 200) } : {}),
-        }));
-  },
-  recordDelimitedChange = (e, r, t, n, o, a, s) => {
-    (e.changeCount++,
-      e.changes.push({
-        record: r,
-        column: t,
-        address: n,
-        reason: o,
-        before: a,
-        after: s,
-      }));
-  };
-function normalizeDelimitedOptions(e = {}) {
-  const r = {
-    ...delimitedImportDefaults,
-    ...e,
-    columns: { ...(e.columns ?? {}) },
-  };
-  for (const [t, n] of Object.entries({
-    delimiter: ["auto", ",", ";", "	", "|"],
-    encoding: ["auto", "utf-8", "utf-16le", "utf-16be", "windows-1252"],
-    quote: ['"', "'", "none"],
-    escape: ["double", "backslash"],
-    newline: [
-      "auto",
-      `\r
-`,
-      `
-`,
-      "\r",
-    ],
-    decimal: [".", ","],
-    grouping: ["none", ".", ",", " "],
-    dateOrder: ["ymd", "dmy", "mdy"],
-    empty: ["blank", "text"],
-  }))
-    if (!n.includes(String(r[t])))
-      throw Error(`Unsupported delimited ${t} setting.`);
-  if (typeof r.hasHeader != "boolean" || typeof r.trim != "boolean")
-    throw Error("Header and whitespace controls must be boolean.");
-  if (r.decimal === r.grouping)
-    throw Error("Decimal and grouping separators must differ.");
-  for (const [t, n] of Object.entries(r.columns))
-    if (
-      !/^(0|[1-9]\d*)$/.test(t) ||
-      Number(t) >= workbookLimits.maxCols ||
-      !delimitedColumnTypes.includes(n)
-    )
-      throw Error("Invalid column type selection.");
-  return r;
-}
-function buildDelimitedImportReport(e, r, t, n) {
-  return {
-    schemaVersion: 1,
-    direction: e,
-    fileName: r,
-    fileBytes: t,
-    options: n,
-    records: 0,
-    columns: 0,
-    storedCells: 0,
-    blankRecords: 0,
-    schema: [],
-    preview: [],
-    issueCount: 0,
-    issues: [],
-    changeCount: 0,
-    changes: [],
-    safeTextChanges: 0,
-    complete: true,
-    valid: false,
-    warnings: [],
-    safeExportPolicy: "apostrophe-prefix-formula-like-text",
-  };
-}
-const escapeRegExpSource = (e) => e.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-function parseDelimitedNumber(e, r) {
-  const t = r.grouping === "none" ? "" : r.grouping,
-    n = t ? `(?:\\d+|\\d{1,3}(?:${escapeRegExpSource(t)}\\d{3})+)` : "\\d+";
-  if (
-    !new RegExp(
-      `^[+-]?(?:${n}(?:${escapeRegExpSource(r.decimal)}\\d*)?|${escapeRegExpSource(r.decimal)}\\d+)(?:[eE][+-]?\\d+)?$`,
-    ).test(e)
-  )
-    throw Error("Invalid number for the selected decimal/grouping separators.");
-  const a = (t ? e.split(t).join("") : e).replace(r.decimal, "."),
-    s = a
-      .split(/[eE]/)[0]
-      .replace(/[^0-9]/g, "")
-      .replace(/^0+/, "")
-      .replace(/0+$/, "").length,
-    d = Number(a);
-  if (
-    !Number.isFinite(d) ||
-    s > 15 ||
-    (d === 0 && /[1-9]/.test(a.split(/[eE]/)[0]))
-  )
-    throw Error(
-      "Number is outside supported precision/range; select Text to retain every digit.",
-    );
-  return d;
-}
-function parseDelimitedDateText(e, r, t = "1900") {
-  const n =
-    /^(\d{1,4})([-/])(\d{1,2})\2(\d{1,4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(
-      e,
-    );
-  if (!n)
-    throw Error(
-      "Date must match the selected year/month/day order, optionally HH:mm:ss.",
-    );
-  const o = [n[1], n[3], n[4]],
-    [a, s, d] =
-      r === "ymd" ? o : r === "dmy" ? [o[2], o[1], o[0]] : [o[2], o[0], o[1]];
-  if (a.length !== 4) throw Error("Dates require a four-digit year.");
-  const u = Number(n[5] ?? 0),
-    l = Number(n[6] ?? 0),
-    c = Number(n[7] ?? 0);
-  if (u > 23 || l > 59 || c > 59) throw Error("Invalid date/time component.");
-  return (
-    parseSeriesSeedDate(`${a}-${s.padStart(2, "0")}-${d.padStart(2, "0")}`, t) +
-    (u * 3600 + l * 60 + c) / 86400
-  );
-}
+const x7 = unwrapDefaultExport(lue);
+
 function dateSerialToIsoText(e, r, t = "1900") {
   if (!Number.isFinite(e) || e < 0 || e >= dateSystemMaxSerial(t) + 1)
     throw Error(
@@ -1558,38 +647,7 @@ function dateSerialToIsoText(e, r, t = "1900") {
       : "")
   );
 }
-function parseDelimitedCellValue(e, r, t, n = "1900") {
-  if (e === "") return { raw: t.empty === "text" ? "" : null };
-  const o = t.trim ? e.trim() : e;
-  if (r === "auto") {
-    if (
-      /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(o) &&
-      o.split(/[eE]/)[0].replace(/[^0-9]/g, "").length <= 15 &&
-      t.decimal === "." &&
-      t.grouping === "none"
-    )
-      try {
-        return { raw: parseDelimitedNumber(o, t) };
-      } catch {}
-    return { raw: o, ...(o.startsWith("=") ? { literal: true } : {}) };
-  }
-  if (r === "text")
-    return { raw: o, ...(o.startsWith("=") ? { literal: true } : {}) };
-  if (r === "date")
-    return {
-      raw: parseDelimitedDateText(o, t.dateOrder, n),
-      format: "date",
-      numFmt: /[ T]\d\d:/.test(o) ? "yyyy-mm-dd hh:mm:ss" : "yyyy-mm-dd",
-    };
-  if (r === "boolean") {
-    if (/^(true|false)$/i.test(o)) return { raw: o.toLowerCase() === "true" };
-    throw Error("Boolean values must be TRUE or FALSE (case-insensitive).");
-  }
-  const a = parseDelimitedNumber(o, t);
-  if (r === "integer" && !Number.isSafeInteger(a))
-    throw Error("Integer column requires a safe whole number.");
-  return { raw: a };
-}
+
 function getWorksheetUsedRange(e, r) {
   const t = e.sheets.find((s) => s.id === r);
   if (!t) throw Error("Worksheet not found.");
@@ -1881,47 +939,7 @@ function exportWorksheetToCsv(e, r, t = {}) {
     { text: m, bytes: l.valid ? v : new Uint8Array(), report: l }
   );
 }
-const maxXlsxExpandedByteLimit = fileImportLimits.maxXlsxExpandedBytes,
-  xlsxExchangeSupportNotice =
-    "XLSX exchange supports cell values, formulas, common formats, supported fonts/strike/alignment/indent/per-edge borders, notes, hidden sheets, column widths, explicit row heights, worksheet default dimensions, bounded hidden rows/columns, frozen rows and columns, basic tables, safe merges, supported validation/conditional-format rules, PNG/JPEG pictures, repeated print titles, full-axis manual print breaks and page setup. XLSX processes at most 100,000 hidden rows per workbook; native JSON keeps larger visibility intervals compactly. Workbook and worksheet-scoped defined names, constant/formula definitions and supported name comments are preserved. Unsupported name attributes are reported; unsafe or malformed definitions stop import/export. Enhanced number formats export supported masks; locale, scaling labels, duration/date-system and accounting alignment fidelity may differ, and enhanced format metadata remains native JSON only. Reusable calculated-column rules are native JSON only; XLSX imports retain supported cell formulas but do not infer rules for future appends. Editable outline groups, threaded discussions and interactive hyperlink metadata remain native-JSON features; XLSX retains only collapsed outline visibility. Native pivot/query refresh definitions, charts/shapes, filters, split panes, default-hidden-row settings, password protection and other unsupported Excel metadata are not preserved. External or executable formulas are converted to literal text on import and export. Keep the original workbook; use native JSON for a lossless application backup.",
-  isExternalActionFormula = (e) =>
-    /[\[\]|]/.test(
-      stripFormulaStringLiterals(e).replace(/"(?:[^"]|"")*"/g, '""'),
-    ) ||
-    /(?:https?:|file:|javascript:|data:|\\\\)/i.test(e) ||
-    /\b(?:_xlfn\.)?(?:WEBSERVICE|HYPERLINK|IMAGE|RTD|DDE|CALL|EXEC|REGISTER(?:\.ID)?|RUN|SQL\.REQUEST|STOCKHISTORY)\s*\(/i.test(
-      e,
-    );
-function getXmlAttribute(e, r) {
-  return new RegExp("(?:^|\\s)" + r + `\\s*=\\s*(["'])([\\s\\S]*?)\\1`).exec(
-    e,
-  )?.[2];
-}
-function resolvePackagePartPath(e) {
-  const r = [];
-  for (const t of (e.startsWith("/") ? e.slice(1) : "xl/" + e).split("/"))
-    t === ".." ? r.pop() : t !== "." && r.push(t);
-  return r.join("/");
-}
-const decodeXmlEntities = (e) =>
-  e.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (r) =>
-    r === "&amp;"
-      ? "&"
-      : r === "&lt;"
-        ? "<"
-        : r === "&gt;"
-          ? ">"
-          : r === "&quot;"
-            ? '"'
-            : r === "&apos;"
-              ? "'"
-              : String.fromCodePoint(
-                  Number.parseInt(
-                    r.slice(r[2]?.toLowerCase() === "x" ? 3 : 2, -1),
-                    r[2]?.toLowerCase() === "x" ? 16 : 10,
-                  ),
-                ),
-  );
+
 function importXlsxWorkbook(e, r) {
   const t = inspectXlsxPackage(e),
     n = new Set(t.keys()),
@@ -2781,21 +1799,6 @@ function encodeNativeWorkbook(e) {
       "Native workbook exceeds the 50 MB save limit. Reduce the workbook size before saving.",
     );
   return r;
-}
-function createEmptyExportLedger() {
-  return {
-    names: [],
-    nameWarnings: [],
-    numericTokens: new Map(),
-    builtinNameXml: "",
-    hiddenRows: new Map(),
-    conditionalStops: new Map(),
-    validationAreas: new Map(),
-    printBreaks: new Map(),
-    columns: new Map(),
-    sheetRelationships: new Map(),
-    sheetNames: new Map(),
-  };
 }
 
 export {

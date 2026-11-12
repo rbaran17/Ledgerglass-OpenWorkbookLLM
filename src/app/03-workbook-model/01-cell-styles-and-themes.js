@@ -2157,3 +2157,6 @@ export {
   validateNamedStyleBinding,
   validateStyleColor,
 };
+
+/* Also used by the workers. */
+export { validateDefaultSizePixels };
