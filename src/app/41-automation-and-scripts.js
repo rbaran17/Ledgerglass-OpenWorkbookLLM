@@ -1,16 +1,37 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { iu } from "./01-core-schemas-and-hashing.js";
-import { Vn, X5, ct, ol, p0, rn, ut } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { ow } from "./07-xlsx-archive-reader.js";
-import { L$, jC } from "./08-xlsx-export-and-preservation.js";
-import { FC } from "./09-workbook-links.js";
-import { NI } from "./20-calculation-options-and-sources.js";
-import { sw } from "./24-merge-and-audit-analysis.js";
-import { Hxe, KT, Vxe, Wxe, ZT, pS } from "./40-what-if-analysis.js";
+import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
+import {
+  calculateWorkbookWithSettings,
+  decodeAutomationArtifact,
+  parseRangeAddress,
+  automationLimits,
+  applyCellPatchTransaction,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { importAutomationFile } from "./07-xlsx-archive-reader.js";
+import {
+  retainSourceArtifact,
+  verifyAutomationInspection,
+} from "./08-xlsx-export-and-preservation.js";
+import { useOperationScope } from "./09-workbook-links.js";
+import { validateAssistantFormula } from "./20-calculation-options-and-sources.js";
+import { applyWorkbookChange } from "./24-merge-and-audit-analysis.js";
+import {
+  splitVbaStatements,
+  vbaStringLiteralPattern,
+  tokenizeVbaSource,
+  VbaAssignmentParser,
+  createVbaSyntaxError,
+  parseVbaAssignmentValue,
+} from "./40-what-if-analysis.js";
 
-function qxe(e) {
+function parseVbaCommands(e) {
   const r = [],
     t = [],
     n = new Map(),
@@ -21,18 +42,27 @@ function qxe(e) {
     u = "";
   const l = (c) => {
     let h = new RegExp(
-      `^(?:ThisWorkbook\\.)?(?:Worksheets|Sheets)\\((${KT})\\)$`,
+      `^(?:ThisWorkbook\\.)?(?:Worksheets|Sheets)\\((${vbaStringLiteralPattern})\\)$`,
       "i",
     ).exec(c);
-    if (h) return { kind: "sheet", sheet: String(pS(h[1])) };
+    if (h)
+      return { kind: "sheet", sheet: String(parseVbaAssignmentValue(h[1])) };
     if (/^ActiveSheet$/i.test(c)) return { kind: "sheet" };
     if (
-      ((h = new RegExp(`^(?:(.+)\\.)?Range\\((${KT})\\)$`, "i").exec(c)), h)
+      ((h = new RegExp(
+        `^(?:(.+)\\.)?Range\\((${vbaStringLiteralPattern})\\)$`,
+        "i",
+      ).exec(c)),
+      h)
     ) {
       const p = h[1] ? l(h[1]) : { kind: "sheet" };
       if (p.kind !== "sheet")
         throw Error("Range requires a worksheet binding.");
-      return { kind: "range", sheet: p.sheet, range: String(pS(h[2])) };
+      return {
+        kind: "range",
+        sheet: p.sheet,
+        range: String(parseVbaAssignmentValue(h[2])),
+      };
     }
     const f = n.get(c.toLowerCase());
     if (f) return f;
@@ -44,7 +74,7 @@ function qxe(e) {
     const f = c + 1;
     try {
       if (/^\s*Rem(?:\s|$)/i.test(h)) continue;
-      const p = Hxe(h);
+      const p = splitVbaStatements(h);
       if (!p || /^Rem(?:\s|$)/i.test(p)) continue;
       if (!s && !d && /^Option Explicit$/i.test(p)) {
         a = true;
@@ -103,7 +133,7 @@ function qxe(e) {
             m[2].toLowerCase() === "formula" ? "set-formulas" : "set-values",
           sheet: v.sheet,
           range: v.range,
-          values: pS(m[3]),
+          values: parseVbaAssignmentValue(m[3]),
         });
         continue;
       }
@@ -137,10 +167,10 @@ function qxe(e) {
     { commands: r, issues: t, entryPoint: u }
   );
 }
-function SW(e, r) {
+function migrateAutomationSource(e, r) {
   if (
     typeof e != "string" ||
-    new TextEncoder().encode(e).length > ol.maxSourceBytes ||
+    new TextEncoder().encode(e).length > automationLimits.maxSourceBytes ||
     e.includes("\0")
   )
     throw Error(
@@ -152,23 +182,24 @@ function SW(e, r) {
     n = [],
     o = r === "office-script" ? "main" : "";
   try {
-    if (r === "vba") ({ commands: t, issues: n, entryPoint: o } = qxe(e));
+    if (r === "vba")
+      ({ commands: t, issues: n, entryPoint: o } = parseVbaCommands(e));
     else {
-      const a = new Wxe(Vxe(e));
+      const a = new VbaAssignmentParser(tokenizeVbaSource(e));
       (a.parse(), (t = a.commands), (n = a.issues));
     }
   } catch (a) {
-    n.push(ZT(a));
+    n.push(createVbaSyntaxError(a));
   }
   return (
-    t.length > ol.maxCommands &&
+    t.length > automationLimits.maxCommands &&
       n.push({ line: 1, message: "Migration is limited to 100 commands." }),
     t.length ||
       n.push({ line: 1, message: "No supported range commands were found." }),
     {
       adapter: "literal-ranges-v1",
       language: r,
-      codeSha256: iu(new TextEncoder().encode(e)),
+      codeSha256: sha256HexDigest(new TextEncoder().encode(e)),
       supported: !n.length,
       entryPoint: o,
       commands: t,
@@ -181,20 +212,20 @@ function SW(e, r) {
     }
   );
 }
-const YT = new WeakMap(),
-  TW = (e) => {
-    const r = ct(e.range);
+const compiledMigrationCache = new WeakMap(),
+  validateAutomationScope = (e) => {
+    const r = parseRangeAddress(e.range);
     if (
       (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1) >
-      ol.maxCells
+      automationLimits.maxCells
     )
       throw Error("Approve one rectangular scope of at most 500 cells.");
     return {
       sheetId: e.sheetId,
-      range: `${ut(r.firstCol)}${r.firstRow + 1}:${ut(r.lastCol)}${r.lastRow + 1}`,
+      range: `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`,
     };
   };
-function NW(e, r, t = false) {
+function assertAutomationSheetAllowed(e, r, t = false) {
   var o;
   if (t) throw Error("This workbook is read-only.");
   const n = e.sheets.find((a) => a.id === r.sheetId);
@@ -205,23 +236,24 @@ function NW(e, r, t = false) {
     throw Error("The approved worksheet is protected.");
   return n;
 }
-const Xxe = (e) => {
-  const r = ct(e.range),
+const toApprovedRectangle = (e) => {
+  const r = parseRangeAddress(e.range),
     t = new Set();
   for (let n = r.firstRow; n <= r.lastRow; n++)
-    for (let o = r.firstCol; o <= r.lastCol; o++) t.add(`${ut(o)}${n + 1}`);
+    for (let o = r.firstCol; o <= r.lastCol; o++)
+      t.add(`${columnIndexToLetters(o)}${n + 1}`);
   return t;
 };
-function Gxe(e, r, t, n = {}) {
-  if ((jC(r), !r.script))
+function buildAutomationChanges(e, r, t, n = {}) {
+  if ((verifyAutomationInspection(r), !r.script))
     throw Error(
       "This artifact supports inventory only. Export/import UTF-8 VBA or Office Scripts source for migration.",
     );
-  const o = rn(e),
-    a = TW(t),
-    s = NW(o, a, n.readOnly),
-    d = Xxe(a),
-    u = SW(r.script.text, r.script.language),
+  const o = normalizeWorkbookInput(e),
+    a = validateAutomationScope(t),
+    s = assertAutomationSheetAllowed(o, a, n.readOnly),
+    d = toApprovedRectangle(a),
+    u = migrateAutomationSource(r.script.text, r.script.language),
     l = {
       schemaVersion: 1,
       workbookId: o.id,
@@ -253,11 +285,11 @@ function Gxe(e, r, t, n = {}) {
           throw Error(
             `Worksheet ${m.sheet} is outside the approved sheet ${s.name}.`,
           );
-        const v = ct(m.range),
+        const v = parseRangeAddress(m.range),
           g = v.lastRow - v.firstRow + 1,
           b = v.lastCol - v.firstCol + 1,
           y = g * b;
-        if (((l.touchedCells += y), l.touchedCells > ol.maxCells))
+        if (((l.touchedCells += y), l.touchedCells > automationLimits.maxCells))
           throw Error(
             "Migration exceeds 500 touched cells across all commands.",
           );
@@ -275,7 +307,7 @@ function Gxe(e, r, t, n = {}) {
           );
         for (let E = v.firstRow; E <= v.lastRow; E++)
           for (let A = v.firstCol; A <= v.lastCol; A++) {
-            const k = `${ut(A)}${E + 1}`;
+            const k = `${columnIndexToLetters(A)}${E + 1}`;
             if (!d.has(k))
               throw Error(
                 `Target ${k} is outside the approved range ${a.range}.`,
@@ -305,7 +337,7 @@ function Gxe(e, r, t, n = {}) {
                 throw Error(
                   "Formula commands require explicit A1 formulas beginning with =.",
                 );
-              NI(F, d);
+              validateAssistantFormula(F, d);
             }
             c.set(k, { sheetId: s.id, address: k, cell: O });
           }
@@ -317,9 +349,14 @@ function Gxe(e, r, t, n = {}) {
   const h = [...c.values()];
   if (!l.issues.length)
     try {
-      const m = p0(o, h, "Migration preview", "Preview migrated automation"),
+      const m = applyCellPatchTransaction(
+          o,
+          h,
+          "Migration preview",
+          "Preview migrated automation",
+        ),
         v = m.events.at(-1)?.changes ?? [],
-        g = Vn(m);
+        g = calculateWorkbookWithSettings(m);
       for (const b of h) {
         if (typeof b.cell.raw != "string" || !b.cell.raw.startsWith("="))
           continue;
@@ -356,7 +393,7 @@ function Gxe(e, r, t, n = {}) {
       );
     }
   return (
-    YT.set(l, {
+    compiledMigrationCache.set(l, {
       signature: JSON.stringify(l),
       snapshot: JSON.stringify(e),
       inspection: r,
@@ -365,31 +402,34 @@ function Gxe(e, r, t, n = {}) {
     l
   );
 }
-function RW(e, r) {
+function findAutomationArtifact(e, r) {
   var t;
   return (t = e.automationArtifacts) != null &&
     t.some((n) => n.sha256 === r.sha256 && n.fileName === r.fileName)
     ? e
-    : rn({ ...e, automationArtifacts: [...(e.automationArtifacts ?? []), r] });
+    : normalizeWorkbookInput({
+        ...e,
+        automationArtifacts: [...(e.automationArtifacts ?? []), r],
+      });
 }
-function Zxe(e, r, t) {
+function preserveAutomationArtifact(e, r, t) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  const n = RW(e, L$(r, t.actor));
+  const n = findAutomationArtifact(e, retainSourceArtifact(r, t.actor));
   return n === e
     ? e
-    : sw(
+    : applyWorkbookChange(
         e,
         n,
         t.actor,
         `Preserve automation source: ${r.fileName.slice(0, 100)}`,
       );
 }
-function Kxe(e, r, t) {
+function removeAutomationArtifact(e, r, t) {
   var n;
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (!((n = e.automationArtifacts) != null && n.some((o) => o.id === r)))
     throw Error("Automation artifact was not found.");
-  return sw(
+  return applyWorkbookChange(
     e,
     {
       ...e,
@@ -399,31 +439,37 @@ function Kxe(e, r, t) {
     "Remove preserved automation artifact",
   );
 }
-function Yxe(e, r, t) {
-  const n = YT.get(r);
+function runApprovedMigration(e, r, t) {
+  const n = compiledMigrationCache.get(r);
   if (!n || n.signature !== JSON.stringify(r) || !r.valid)
     throw Error(
       "The migration plan is invalid, modified or untrusted. Create and review a fresh plan.",
     );
   if (JSON.stringify(e) !== n.snapshot)
     throw Error("The workbook changed. Review a fresh migration plan.");
-  if (JSON.stringify(TW(t.scope)) !== JSON.stringify(r.scope))
+  if (
+    JSON.stringify(validateAutomationScope(t.scope)) !== JSON.stringify(r.scope)
+  )
     throw Error("The approved automation scope changed. Review again.");
   if (
-    (NW(e, r.scope, t.readOnly),
-    jC(n.inspection),
-    (e.automationRuns?.length ?? 0) >= ol.maxRuns)
+    (assertAutomationSheetAllowed(e, r.scope, t.readOnly),
+    verifyAutomationInspection(n.inspection),
+    (e.automationRuns?.length ?? 0) >= automationLimits.maxRuns)
   )
     throw Error(
       "Automation run evidence is full (100 runs). Export native JSON before continuing.",
     );
-  let o = p0(
+  let o = applyCellPatchTransaction(
     e,
     n.patches,
     t.actor,
     `Run migrated ${r.compatibility.language}: ${r.sourceName.slice(0, 90)} · ${r.sourceSha256.slice(0, 12)}`,
   );
-  t.retainSource !== false && (o = RW(o, L$(n.inspection, t.actor)));
+  t.retainSource !== false &&
+    (o = findAutomationArtifact(
+      o,
+      retainSourceArtifact(n.inspection, t.actor),
+    ));
   const a = o.events.at(-1),
     s = {
       id: crypto.randomUUID(),
@@ -444,15 +490,18 @@ function Yxe(e, r, t) {
       sourceLines: r.compatibility.commands.map((u) => u.line),
     };
   return (
-    (o = rn({ ...o, automationRuns: [...(e.automationRuns ?? []), s] })),
-    YT.delete(r),
+    (o = normalizeWorkbookInput({
+      ...o,
+      automationRuns: [...(e.automationRuns ?? []), s],
+    })),
+    compiledMigrationCache.delete(r),
     o
   );
 }
-function Jxe(e) {
+function AutomationScriptsDialog(e) {
   var J;
-  const { text, language } = Dr(),
-    n = FC(),
+  const { text, language } = useWorkbookMessages(),
+    n = useOperationScope(),
     o = ne.useRef(null),
     a = ne.useId(),
     s = ne.useRef(null),
@@ -478,7 +527,9 @@ function Jxe(e) {
     [C, T] = ne.useState(""),
     N = ne.useMemo(
       () =>
-        c != null && c.script ? SW(c.script.text, c.script.language) : null,
+        c != null && c.script
+          ? migrateAutomationSource(c.script.text, c.script.language)
+          : null,
       [c],
     ),
     R = { sheetId: E, range: k },
@@ -523,7 +574,7 @@ function Jxe(e) {
     try {
       if (q.size > 10 * 1024 * 1024)
         throw Error("Automation files must be 10 MB or smaller.");
-      const ae = await ow(q, {
+      const ae = await importAutomationFile(q, {
         ...n,
         signal: n.signal ? AbortSignal.any([W.signal, n.signal]) : W.signal,
       });
@@ -576,10 +627,12 @@ function Jxe(e) {
           children: [
             i.jsx("h2", {
               id: a,
-              children: i.jsx(M, { children: "Automation & Scripts" }),
+              children: i.jsx(LocalizedText, {
+                children: "Automation & Scripts",
+              }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Inspect, preserve and migrate approved workbook operations.",
               }),
@@ -597,7 +650,7 @@ function Jxe(e) {
           className: "lg-automation-scroll",
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Imported VBA, XLM and Office Scripts never run automatically. This adapter accepts a strict subset of literal range operations; unsupported APIs block the whole migration.",
               }),
@@ -610,7 +663,9 @@ function Jxe(e) {
                   onClick: () => {
                     return d.current?.click();
                   },
-                  children: i.jsx(M, { children: "Inspect automation file" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Inspect automation file",
+                  }),
                 }),
                 i.jsx("input", {
                   ref: d,
@@ -627,7 +682,7 @@ function Jxe(e) {
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Preserved source" }),
+                    i.jsx(LocalizedText, { children: "Preserved source" }),
                     i.jsxs("select", {
                       value: C,
                       onChange: (q) =>
@@ -636,7 +691,14 @@ function Jxe(e) {
                           const W = e.workbook.automationArtifacts?.find(
                             (te) => te.id === q.target.value,
                           );
-                          W && (G(new File([X5(W.base64)], W.fileName)), L());
+                          W &&
+                            (G(
+                              new File(
+                                [decodeAutomationArtifact(W.base64)],
+                                W.fileName,
+                              ),
+                            ),
+                            L());
                         }),
                       children: [
                         i.jsx("option", {
@@ -667,14 +729,16 @@ function Jxe(e) {
                     U(() => {
                       (e.onRemove(C), T(""), L());
                     }),
-                  children: i.jsx(M, { children: "Remove preserved source" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Remove preserved source",
+                  }),
                 }),
               ],
             }),
             i.jsxs("details", {
               children: [
                 i.jsx("summary", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Paste source for compatibility review",
                   }),
                 }),
@@ -683,7 +747,7 @@ function Jxe(e) {
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Source language" }),
+                        i.jsx(LocalizedText, { children: "Source language" }),
                         i.jsxs("select", {
                           value: g,
                           onChange: (q) => {
@@ -712,7 +776,7 @@ function Jxe(e) {
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Source file name" }),
+                        i.jsx(LocalizedText, { children: "Source file name" }),
                         i.jsx("input", {
                           value: y,
                           onChange: (q) => {
@@ -725,7 +789,7 @@ function Jxe(e) {
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Source code" }),
+                    i.jsx(LocalizedText, { children: "Source code" }),
                     i.jsx("textarea", {
                       spellCheck: false,
                       rows: 8,
@@ -749,20 +813,26 @@ function Jxe(e) {
                         );
                       (G(new File([m], y)), L(), T(""));
                     }),
-                  children: i.jsx(M, { children: "Inspect pasted source" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Inspect pasted source",
+                  }),
                 }),
               ],
             }),
             j &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, { children: "Inspecting source bytes…" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Inspecting source bytes…",
+                }),
               }),
             c &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Automation inventory" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Automation inventory",
+                    }),
                   }),
                   i.jsxs("p", {
                     children: [
@@ -771,7 +841,7 @@ function Jxe(e) {
                       " ",
                       (c.fileBytes / 1024).toFixed(1),
                       " ",
-                      i.jsx(M, { children: "KiB ·" }),
+                      i.jsx(LocalizedText, { children: "KiB ·" }),
                       " ",
                       c.execution === "inventory-only"
                         ? "Inventory only — execution unsupported"
@@ -780,7 +850,10 @@ function Jxe(e) {
                   }),
                   i.jsxs("p", {
                     className: "lg-automation-hash",
-                    children: [i.jsx(M, { children: "SHA-256: " }), c.sha256],
+                    children: [
+                      i.jsx(LocalizedText, { children: "SHA-256: " }),
+                      c.sha256,
+                    ],
                   }),
                   i.jsxs("table", {
                     "aria-label": text("Automation inventory"),
@@ -791,16 +864,24 @@ function Jxe(e) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Artifact" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Artifact",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Kind" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Kind",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Support" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Support",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Notes" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Notes",
+                              }),
                             }),
                           ],
                         }),
@@ -825,7 +906,7 @@ function Jxe(e) {
                   }),
                   !c.items.length &&
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "No known package automation parts detected. Separate or external scripts remain unknown.",
                       }),
@@ -844,7 +925,7 @@ function Jxe(e) {
                           U(() => {
                             (e.onPreserve(c), p(null), D(false));
                           }),
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Preserve original source",
                         }),
                       }),
@@ -861,9 +942,12 @@ function Jxe(e) {
                               throw Error(
                                 "Preserve the original source before downloading it from the workbook.",
                               );
-                            e.onDownload(X5(q.base64), q.fileName);
+                            e.onDownload(
+                              decodeAutomationArtifact(q.base64),
+                              q.fileName,
+                            );
                           }),
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Download preserved original",
                         }),
                       }),
@@ -873,7 +957,7 @@ function Jxe(e) {
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("h3", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Migration compatibility",
                           }),
                         }),
@@ -883,14 +967,16 @@ function Jxe(e) {
                               ? "Supported source grammar; workbook scope checks still required."
                               : "Unsupported source — migration blocked.",
                             " ",
-                            i.jsx(M, { children: "Entry point:" }),
+                            i.jsx(LocalizedText, { children: "Entry point:" }),
                             " ",
                             N.entryPoint || "(not identified)",
                             ".",
                             " ",
                             N.commands.length,
                             " ",
-                            i.jsx(M, { children: "recognized commands." }),
+                            i.jsx(LocalizedText, {
+                              children: "recognized commands.",
+                            }),
                           ],
                         }),
                         i.jsx("ul", {
@@ -902,7 +988,7 @@ function Jxe(e) {
                               "li",
                               {
                                 children: [
-                                  i.jsx(M, { children: "Line " }),
+                                  i.jsx(LocalizedText, { children: "Line " }),
                                   q.line,
                                   ": ",
                                   q.message,
@@ -920,7 +1006,7 @@ function Jxe(e) {
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Reviewed source text",
                               }),
                             }),
@@ -934,7 +1020,9 @@ function Jxe(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Approved worksheet" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Approved worksheet",
+                                }),
                                 i.jsx("select", {
                                   value: E,
                                   onChange: (q) => {
@@ -954,7 +1042,7 @@ function Jxe(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, {
+                                i.jsx(LocalizedText, {
                                   children:
                                     "Approved range (maximum 500 cells)",
                                 }),
@@ -974,12 +1062,12 @@ function Jxe(e) {
                             U(() => {
                               (D(false),
                                 p(
-                                  Gxe(e.workbook, c, R, {
+                                  buildAutomationChanges(e.workbook, c, R, {
                                     readOnly: e.readOnly,
                                   }),
                                 ));
                             }),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Preview migrated commands",
                           }),
                         }),
@@ -991,7 +1079,7 @@ function Jxe(e) {
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Command and change review",
                     }),
                   }),
@@ -999,14 +1087,16 @@ function Jxe(e) {
                     children: [
                       f.compatibility.commands.length,
                       " ",
-                      i.jsx(M, { children: "commands ·" }),
+                      i.jsx(LocalizedText, { children: "commands ·" }),
                       " ",
                       f.touchedCells,
                       " ",
-                      i.jsx(M, { children: "touched cells · " }),
+                      i.jsx(LocalizedText, { children: "touched cells · " }),
                       f.changes.length,
                       " ",
-                      i.jsx(M, { children: "final cell writes · revision " }),
+                      i.jsx(LocalizedText, {
+                        children: "final cell writes · revision ",
+                      }),
                       f.revision,
                       ".",
                     ],
@@ -1034,13 +1124,19 @@ function Jxe(e) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Source line" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Source line",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Command" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Command",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Target" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Target",
+                              }),
                             }),
                           ],
                         }),
@@ -1077,13 +1173,19 @@ function Jxe(e) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Cell" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Cell",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Before" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Before",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "After" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "After",
+                              }),
                             }),
                           ],
                         }),
@@ -1119,7 +1221,7 @@ function Jxe(e) {
                           (_(q.target.checked), D(false));
                         },
                       }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "Retain original source with the run (native JSON)",
                       }),
@@ -1134,7 +1236,7 @@ function Jxe(e) {
                         disabled: !f.valid || e.readOnly,
                         onChange: (q) => D(q.target.checked),
                       }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "I approve these commands and their changes within this scope",
                       }),
@@ -1147,7 +1249,9 @@ function Jxe(e) {
                 children: [
                   i.jsxs("summary", {
                     children: [
-                      i.jsx(M, { children: "Recorded automation runs (" }),
+                      i.jsx(LocalizedText, {
+                        children: "Recorded automation runs (",
+                      }),
                       e.workbook.automationRuns.length,
                       ")",
                     ],
@@ -1164,7 +1268,7 @@ function Jxe(e) {
                             " · ",
                             q.timestamp,
                             " ",
-                            i.jsx(M, { children: "· revision" }),
+                            i.jsx(LocalizedText, { children: "· revision" }),
                             " ",
                             q.beforeRevision,
                             " → ",
@@ -1172,7 +1276,9 @@ function Jxe(e) {
                             " · ",
                             q.changedCells,
                             " ",
-                            i.jsx(M, { children: "writes · source " }),
+                            i.jsx(LocalizedText, {
+                              children: "writes · source ",
+                            }),
                             q.sourceSha256,
                           ],
                         },
@@ -1181,7 +1287,7 @@ function Jxe(e) {
                     ),
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Native JSON contains the full retained run record. Local history is editable and is not an immutable audit service.",
                     }),
@@ -1193,7 +1299,7 @@ function Jxe(e) {
         e.readOnly &&
           i.jsx("p", {
             role: "status",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Read-only: inspection and report download remain available; preservation and execution are disabled.",
             }),
@@ -1203,7 +1309,7 @@ function Jxe(e) {
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               disabled: !c,
@@ -1212,7 +1318,9 @@ function Jxe(e) {
                   H(),
                   `${c?.fileName ?? "automation"}.compatibility.json`,
                 ),
-              children: i.jsx(M, { children: "Save automation report" }),
+              children: i.jsx(LocalizedText, {
+                children: "Save automation report",
+              }),
             }),
             i.jsx("button", {
               disabled: !V || !(f != null && f.valid) || e.readOnly,
@@ -1220,7 +1328,9 @@ function Jxe(e) {
                 U(() => {
                   !f || !V || (e.onApply(f, R, B), p(null), D(false));
                 }),
-              children: i.jsx(M, { children: "Run approved migration" }),
+              children: i.jsx(LocalizedText, {
+                children: "Run approved migration",
+              }),
             }),
           ],
         }),
@@ -1229,11 +1339,18 @@ function Jxe(e) {
   });
 }
 const w2 = 25,
-  Qxe = (e) =>
+  formatAutomationValue = (e) =>
     e === null
       ? "(blank)"
       : typeof e == "boolean"
         ? String(e).toUpperCase()
         : String(e);
 
-export { Jxe, Kxe, Qxe, Yxe, Zxe, w2 };
+export {
+  AutomationScriptsDialog,
+  removeAutomationArtifact,
+  formatAutomationValue,
+  runApprovedMigration,
+  preserveAutomationArtifact,
+  w2,
+};

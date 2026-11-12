@@ -2,46 +2,53 @@ import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import {
-  Ku,
-  LU,
-  Ls,
-  PU,
-  Vn,
-  Vu,
+  createWorksheetRecord,
+  validateWhatIfDefinition,
+  whatIfLimits,
+  expandWhatIfScenarios,
+  calculateWorkbookWithSettings,
+  cellAddressKey,
   _t,
   cn,
-  ct,
-  jw,
-  pf,
+  parseRangeAddress,
+  validateDataValidationRule,
+  resolveDefinedNameValue,
   qE,
-  rn,
-  ut,
-  y0,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  matrixResultFunctionNames,
 } from "./03-workbook-model.js";
-import { Dr, M, sI } from "./04-cell-input-paste-and-fill.js";
-import { ow } from "./07-xlsx-archive-reader.js";
-import { Jle, uT } from "./08-xlsx-export-and-preservation.js";
-import { yh } from "./09-workbook-links.js";
-import { m0 } from "./12-formula-dependency-inspector.js";
 import {
-  Dxe,
-  Ixe,
-  Mxe,
-  Oxe,
-  Rxe,
-  XT,
-  _xe,
-  g_,
-  jxe,
-  m_,
-  sj,
+  useWorkbookMessages,
+  LocalizedText,
+  validateLocalizedNumberEntry,
+} from "./04-cell-input-paste-and-fill.js";
+import { importAutomationFile } from "./07-xlsx-archive-reader.js";
+import {
+  retainEmbeddedObjectInventory,
+  inspectEmbeddedObjects,
+} from "./08-xlsx-export-and-preservation.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import {
+  describeReportOutputStatus,
+  publishReportOutput,
+  buildReportHtmlFile,
+  buildReportSvgFile,
+  refreshReportOutput,
+  ReportOutputView,
+  removeReportOutput,
+  renderReportSvg,
+  renderReportPngBlob,
+  validateReportSourceScope,
+  downloadReportFile,
 } from "./38-data-analysis-dialog.js";
 
-function Fxe(e) {
-  const { text } = Dr(),
+function ReportOutputsDialog(e) {
+  const { text } = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
-    o = yh(),
+    o = useCancellableOperation(),
     a = ne.useRef(e);
   a.current = e;
   const [s, d] = ne.useState("Publish"),
@@ -73,7 +80,7 @@ function Fxe(e) {
     N = !!m && y === e.workbook && E === T,
     R = e.workbook.sheets.find((ae) => ae.id === u.sheetId),
     L = e.workbook.reportOutputs?.find((ae) => ae.id === j),
-    $ = L ? Dxe(e.workbook, L.id, C) : null,
+    $ = L ? describeReportOutputStatus(e.workbook, L.id, C) : null,
     U =
       s === "Saved outputs"
         ? $?.status !== "unavailable"
@@ -105,7 +112,7 @@ function Fxe(e) {
     Q = (ae, oe) =>
       G(() => {
         var Se, le;
-        const de = Rxe(e.workbook, ae, C, oe);
+        const de = refreshReportOutput(e.workbook, ae, C, oe);
         (v(de),
           b(oe),
           l(de.request),
@@ -122,7 +129,7 @@ function Fxe(e) {
       try {
         const de = a.current,
           he = () =>
-            m_(a.current.workbook, oe, {
+            validateReportSourceScope(a.current.workbook, oe, {
               readOnly: a.current.readOnly,
               allowedSheetIds: a.current.allowedSheetIds,
               includeHidden: !!a.current.allowHidden && c,
@@ -130,10 +137,14 @@ function Fxe(e) {
         he();
         const Se =
           ae === "png"
-            ? await jxe(oe)
+            ? await renderReportPngBlob(oe)
             : (() => {
                 const le =
-                  ae === "svg" ? g_(oe) : ae === "html" ? Mxe(oe) : Oxe(oe);
+                  ae === "svg"
+                    ? renderReportSvg(oe)
+                    : ae === "html"
+                      ? buildReportHtmlFile(oe)
+                      : buildReportSvgFile(oe);
                 return {
                   filename: le.filename,
                   blob: new Blob([le.content], { type: le.mime }),
@@ -141,7 +152,7 @@ function Fxe(e) {
               })();
         if ((he(), de.onDownload !== a.current.onDownload))
           throw Error("The report destination changed. Export again.");
-        (await (a.current.onDownload ?? sj)(Se),
+        (await (a.current.onDownload ?? downloadReportFile)(Se),
           O(`${ae.toUpperCase()} snapshot exported.`));
       } catch (de) {
         F(de.message);
@@ -152,8 +163,8 @@ function Fxe(e) {
     J = async (ae) => {
       (_(true), D(null), F(""));
       try {
-        const oe = await ow(ae, o.begin());
-        (uT(oe), D(oe));
+        const oe = await importAutomationFile(ae, o.begin());
+        (inspectEmbeddedObjects(oe), D(oe));
       } catch (oe) {
         F(oe.message);
       } finally {
@@ -194,7 +205,7 @@ function Fxe(e) {
                 i.jsx("p", { children: "REPORTING" }),
                 i.jsx("h2", {
                   id: t,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Report outputs & embedded objects",
                   }),
                 }),
@@ -466,7 +477,9 @@ function Fxe(e) {
                         }),
                         i.jsx("div", {
                           className: "lg-reports-visual",
-                          children: i.jsx(XT, { snapshot: m.snapshot }),
+                          children: i.jsx(ReportOutputView, {
+                            snapshot: m.snapshot,
+                          }),
                         }),
                       ],
                     }),
@@ -542,7 +555,11 @@ function Fxe(e) {
                                     onClick: () =>
                                       G(() => {
                                         (e.onWorkbookChange(
-                                          _xe(e.workbook, L.id, C),
+                                          removeReportOutput(
+                                            e.workbook,
+                                            L.id,
+                                            C,
+                                          ),
                                           "Remove report output",
                                         ),
                                           z(""));
@@ -553,7 +570,9 @@ function Fxe(e) {
                               }),
                               i.jsx("div", {
                                 className: "lg-reports-visual",
-                                children: i.jsx(XT, { snapshot: L.snapshot }),
+                                children: i.jsx(ReportOutputView, {
+                                  snapshot: L.snapshot,
+                                }),
                               }),
                             ],
                           }),
@@ -589,13 +608,17 @@ function Fxe(e) {
                       children: [
                         i.jsx("h3", { children: V.fileName }),
                         i.jsx("p", { children: V.sha256 }),
-                        i.jsx(lj, { items: uT(V).items }),
+                        i.jsx(ObjectInventoryTable, {
+                          items: inspectEmbeddedObjects(V).items,
+                        }),
                         i.jsx("button", {
                           disabled: e.readOnly || B,
                           onClick: () =>
                             G(() => {
                               (e.onWorkbookChange(
-                                Jle(e.workbook, V, { readOnly: e.readOnly }),
+                                retainEmbeddedObjectInventory(e.workbook, V, {
+                                  readOnly: e.readOnly,
+                                }),
                                 "Retain embedded-object inventory",
                               ),
                                 O(
@@ -620,11 +643,11 @@ function Fxe(e) {
                               " · execution: never",
                             ],
                           }),
-                          i.jsx(lj, { items: ae.items }),
+                          i.jsx(ObjectInventoryTable, { items: ae.items }),
                           i.jsx("button", {
                             disabled: B,
                             onClick: () =>
-                              void (e.onDownload ?? sj)({
+                              void (e.onDownload ?? downloadReportFile)({
                                 filename: "Embedded-object-inventory.json",
                                 blob: new Blob([JSON.stringify(ae, null, 2)], {
                                   type: "application/json",
@@ -677,7 +700,7 @@ function Fxe(e) {
                     onClick: () =>
                       G(() => {
                         const ae = !!(m != null && m.refreshId),
-                          oe = Ixe(e.workbook, m, C);
+                          oe = publishReportOutput(e.workbook, m, C);
                         (e.onWorkbookChange(
                           oe,
                           ae
@@ -707,7 +730,7 @@ function Fxe(e) {
     }),
   });
 }
-function lj({ items }) {
+function ObjectInventoryTable({ items }) {
   return i.jsx("div", {
     className: "lg-reports-inventory",
     children: i.jsxs("table", {
@@ -744,8 +767,8 @@ function lj({ items }) {
     }),
   });
 }
-const b2 = (e, r) => {
-  const t = ct(e),
+const toRangeBounds = (e, r) => {
+  const t = parseRangeAddress(e),
     n = _t(r);
   return (
     n.row >= t.firstRow &&
@@ -754,7 +777,7 @@ const b2 = (e, r) => {
     n.col <= t.lastCol
   );
 };
-function xW(e, r) {
+function resolveWhatIfHostScope(e, r) {
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
@@ -772,7 +795,7 @@ function xW(e, r) {
     ].sort(),
   };
 }
-function GT(e, r, t) {
+function isVisibleAuthorizedCell(e, r, t) {
   const n = e.sheets.find((a) => a.id === r.sheetId);
   if (!n || !t.allowedSheetIds.includes(n.id)) return false;
   const o = _t(r.address);
@@ -784,8 +807,8 @@ function GT(e, r, t) {
       !cn(n, "column").some((a) => a.start <= o.col && o.col <= a.end))
   );
 }
-const Bxe = new Set([
-  ...y0,
+const whatIfAllowedFunctions = new Set([
+  ...matrixResultFunctionNames,
   "ISFORMULA",
   "INDEX",
   "CHOOSE",
@@ -806,12 +829,12 @@ const Bxe = new Set([
   "EVALUATE",
   "GET.CELL",
 ]);
-function EW(e, r, t = {}) {
-  const n = LU(r),
-    o = xW(e, t),
-    a = PU(n);
+function computeWhatIfResult(e, r, t = {}) {
+  const n = validateWhatIfDefinition(r),
+    o = resolveWhatIfHostScope(e, t),
+    a = expandWhatIfScenarios(n);
   for (const f of [...n.inputs, ...n.outputs])
-    if (!GT(e, f, o))
+    if (!isVisibleAuthorizedCell(e, f, o))
       throw Error(
         "A what-if source is missing or outside the visible, authorized host context.",
       );
@@ -828,17 +851,17 @@ function EW(e, r, t = {}) {
         throw Error(
           "A changing worksheet is protected. Unprotect it before analyzing scenarios.",
         );
-      if ((w = m.merges) != null && w.some((E) => b2(E, f.address)))
+      if ((w = m.merges) != null && w.some((E) => toRangeBounds(E, f.address)))
         throw Error("Merged cells cannot be what-if inputs.");
       if (
         [...(m.pivots ?? []), ...(m.queries ?? [])].some((E) =>
-          b2(E.outputRange, f.address),
+          toRangeBounds(E.outputRange, f.address),
         )
       )
         throw Error("Generated pivot/query results cannot be what-if inputs.");
       for (const E of m.tables ?? []) {
-        if (!b2(E.range, f.address)) continue;
-        const A = ct(E.range),
+        if (!toRangeBounds(E.range, f.address)) continue;
+        const A = parseRangeAddress(E.range),
           k = E.columns[g.col - A.firstCol];
         if (
           g.row === A.firstRow ||
@@ -860,10 +883,12 @@ function EW(e, r, t = {}) {
             "Table headers, totals and calculated columns cannot be what-if inputs.",
           );
       }
-      const b = (m.validations ?? []).filter((E) => b2(E.range, f.address));
+      const b = (m.validations ?? []).filter((E) =>
+        toRangeBounds(E.range, f.address),
+      );
       if (
         [v.raw, ...a.map((E) => E.inputs[p])].some((E) =>
-          b.some((A) => !jw(A, E)),
+          b.some((A) => !validateDataValidationRule(A, E)),
         )
       )
         throw Error(
@@ -878,7 +903,7 @@ function EW(e, r, t = {}) {
       throw Error(
         "Every result cell must contain an actual calculation formula.",
       );
-    const m = m0(
+    const m = inspectFormulaDependencies(
         {
           ...e,
           sheets: e.sheets.map((y) =>
@@ -892,7 +917,7 @@ function EW(e, r, t = {}) {
           ...o,
           limits: {
             maxFormulaCells: 5e3,
-            maxNodes: Ls.dependencyCells,
+            maxNodes: whatIfLimits.dependencyCells,
             maxReferences: 1e4,
           },
         },
@@ -910,16 +935,16 @@ function EW(e, r, t = {}) {
       );
     for (const y of v) d.set(y.key, { sheetId: y.sheetId, address: y.address });
   }
-  if (d.size > Ls.dependencyCells)
+  if (d.size > whatIfLimits.dependencyCells)
     throw Error(
       "What-if analysis supports at most 500 dependency cells across all results.",
     );
-  if (n.inputs.some((f) => !d.has(Vu(f))))
+  if (n.inputs.some((f) => !d.has(cellAddressKey(f))))
     throw Error(
       "Each changing input must be a precedent of at least one selected formula result.",
     );
   const u = [...d.values()].map((f) => {
-      if (!GT(e, f, o))
+      if (!isVisibleAuthorizedCell(e, f, o))
         throw Error(
           "A formula dependency is outside the visible, authorized host context.",
         );
@@ -930,7 +955,7 @@ function EW(e, r, t = {}) {
           "What-if analysis requires populated static dependencies; blank or possible spill-child cells are unsupported.",
         );
       if (!m.literal && typeof m.raw == "string" && m.raw.startsWith("=")) {
-        const v = pf(m.raw, e, p.id).replace(
+        const v = resolveDefinedNameValue(m.raw, e, p.id).replace(
           /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
           "",
         );
@@ -942,7 +967,7 @@ function EW(e, r, t = {}) {
                 .replace(/^_XLFN\./, "")
                 .replace(/^_XLWS\./, ""),
             )
-            .some((b) => Bxe.has(b)) ||
+            .some((b) => whatIfAllowedFunctions.has(b)) ||
           /[{}#]/.test(v)
         )
           throw Error(
@@ -957,7 +982,7 @@ function EW(e, r, t = {}) {
       };
     }),
     l = d.size * (a.length + 1);
-  if (l > Ls.workUnits)
+  if (l > whatIfLimits.workUnits)
     throw Error(
       "What-if evaluation would exceed 50,000 dependency-cell work units. Reduce the values, scenarios or dependencies.",
     );
@@ -969,27 +994,27 @@ function EW(e, r, t = {}) {
         ...f,
         cells: Object.fromEntries(
           Object.entries(f.cells).filter(([p]) =>
-            d.has(Vu({ sheetId: f.id, address: p })),
+            d.has(cellAddressKey({ sheetId: f.id, address: p })),
           ),
         ),
       })),
   };
   function h(f, p) {
     try {
-      const m = new Map(n.inputs.map((y, w) => [Vu(y), p[w]])),
+      const m = new Map(n.inputs.map((y, w) => [cellAddressKey(y), p[w]])),
         v = {
           ...c,
           sheets: c.sheets.map((y) => ({
             ...y,
             cells: Object.fromEntries(
               Object.entries(y.cells).map(([w, E]) => {
-                const A = m.get(Vu({ sheetId: y.id, address: w }));
+                const A = m.get(cellAddressKey({ sheetId: y.id, address: w }));
                 return [w, A === undefined ? E : { ...E, raw: A }];
               }),
             ),
           })),
         },
-        g = Vn(v),
+        g = calculateWorkbookWithSettings(v),
         b = n.outputs.map((y) => g(y.sheetId, y.address));
       if (g.getOperationalErrors().length)
         throw Error(
@@ -1034,25 +1059,26 @@ function EW(e, r, t = {}) {
     workUnits: l,
   };
 }
-function CW(e, r, t) {
+function createWhatIfPreviewSnapshot(e, r, t) {
   if (JSON.stringify(e) !== r.snapshot)
     throw Error(
       "The workbook changed after preview. Preview and review the analysis again.",
     );
-  const n = EW(e, r.request, t);
+  const n = computeWhatIfResult(e, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error(
       "The what-if preview or host context changed. Preview and review again.",
     );
   return n;
 }
-function AW(e, r, t = {}) {
-  const { snapshot, requestSnapshot, context, ...s } = CW(e, r, t);
+function buildWhatIfPreview(e, r, t = {}) {
+  const { snapshot, requestSnapshot, context, ...s } =
+    createWhatIfPreviewSnapshot(e, r, t);
   return s;
 }
-function Lxe(e, r, t, n = {}) {
+function applyWhatIfScenario(e, r, t, n = {}) {
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = CW(e, r, n);
+  const o = createWhatIfPreviewSnapshot(e, r, n);
   if (o.request.kind !== "scenarios")
     throw Error(
       "Sensitivity tables are reports. Only named scenarios can be applied.",
@@ -1083,12 +1109,12 @@ function Lxe(e, r, t, n = {}) {
         }),
       };
 }
-const hS = (e, r) => {
-  return `${e.assumptions.find((n) => Vu(n) === Vu(r))?.sheetName ?? r.sheetId}!${r.address}`;
+const formatAssumptionReference = (e, r) => {
+  return `${e.assumptions.find((n) => cellAddressKey(n) === cellAddressKey(r))?.sheetName ?? r.sheetId}!${r.address}`;
 };
-function kW(e) {
-  const r = e.request.inputs.map((a) => hS(e, a)),
-    t = e.request.outputs.map((a) => hS(e, a)),
+function buildWhatIfReportRows(e) {
+  const r = e.request.inputs.map((a) => formatAssumptionReference(e, a)),
+    t = e.request.outputs.map((a) => formatAssumptionReference(e, a)),
     n = [
       [e.request.name],
       ["Historical what-if report", e.request.kind],
@@ -1133,7 +1159,11 @@ function kW(e) {
         "Original value or formula",
         "Literal text",
       ],
-      ...e.assumptions.map((a) => [hS(e, a), a.raw, a.literal ?? false]),
+      ...e.assumptions.map((a) => [
+        formatAssumptionReference(e, a),
+        a.raw,
+        a.literal ?? false,
+      ]),
       [],
       ["Dependency cells", e.dependencyCells],
       ["Dependency-cell work units", e.workUnits],
@@ -1141,27 +1171,27 @@ function kW(e) {
     n
   );
 }
-function Pxe(e, r, t = {}, n) {
+function saveWhatIfAnalysis(e, r, t = {}, n) {
   var f;
   if (t.readOnly) throw Error("This workbook is read-only.");
   if ((f = e.structureProtection) != null && f.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before saving a new report.",
     );
-  const o = AW(e, r, t),
+  const o = buildWhatIfPreview(e, r, t),
     a = e.whatIfAnalyses ?? [];
   if (n && !a.some((p) => p.id === n))
     throw Error("The saved analysis no longer exists.");
   if (
     n &&
-    !v_(
+    !isWhatIfAnalysisInScope(
       e,
       a.find((p) => p.id === n),
       t,
     )
   )
     throw Error("The saved analysis is outside the authorized context.");
-  if (!n && a.length >= Ls.savedAnalyses)
+  if (!n && a.length >= whatIfLimits.savedAnalyses)
     throw Error(
       "At most 40 saved analyses are supported. Remove an unused definition first.",
     );
@@ -1187,10 +1217,10 @@ function Pxe(e, r, t = {}, n) {
     const p = ` ${l++}`;
     u = `${s.slice(0, 31 - p.length)}${p}`;
   }
-  const c = Ku(u);
-  for (const [p, m] of kW(o).entries())
+  const c = createWorksheetRecord(u);
+  for (const [p, m] of buildWhatIfReportRows(o).entries())
     for (const [v, g] of m.entries())
-      c.cells[`${ut(v)}${p + 1}`] = {
+      c.cells[`${columnIndexToLetters(v)}${p + 1}`] = {
         raw: g,
         ...(typeof g == "string" ? { literal: true } : {}),
         ...(p === 0 || p === 4 || p === 7
@@ -1199,37 +1229,37 @@ function Pxe(e, r, t = {}, n) {
       };
   ((c.columnWidths = { 0: 300, 1: 240, 2: 180, 3: 160 }), (c.frozenRows = 4));
   const h = { id: n ?? crypto.randomUUID(), reportSheetId: c.id, ...o };
-  return rn({
+  return normalizeWorkbookInput({
     ...e,
     sheets: [...e.sheets, c],
     whatIfAnalyses: n ? a.map((p) => (p.id === n ? h : p)) : [...a, h],
   });
 }
-function v_(e, r, t = {}) {
-  const n = xW(e, t);
+function isWhatIfAnalysisInScope(e, r, t = {}) {
+  const n = resolveWhatIfHostScope(e, t);
   return r.assumptions.every((o) =>
     e.sheets.some((a) => a.id === o.sheetId)
-      ? GT(e, o, n)
+      ? isVisibleAuthorizedCell(e, o, n)
       : t.allowedSheetIds === undefined,
   );
 }
-function Uxe(e, r, t = {}) {
+function findSavedWhatIfAnalysis(e, r, t = {}) {
   var o;
   if (t.readOnly) throw Error("This workbook is read-only.");
   if ((o = e.structureProtection) != null && o.enabled)
     throw Error("Workbook structure is protected.");
   const n = e.whatIfAnalyses?.find((s) => s.id === r);
-  if (!n || !v_(e, n, t))
+  if (!n || !isWhatIfAnalysisInScope(e, n, t))
     throw Error(
       "The saved analysis is missing or outside the authorized context.",
     );
   return { ...e, whatIfAnalyses: e.whatIfAnalyses.filter((s) => s.id !== r) };
 }
-function y2(e, r) {
+function parseAssumptionNumbers(e, r) {
   const t = r === "de-DE" || r === "fr-FR",
     n = e.split(t ? /[;\n]/ : /[,;\n]/);
   try {
-    return n.map((o) => sI(o, "Assumption", r));
+    return n.map((o) => validateLocalizedNumberEntry(o, "Assumption", r));
   } catch {
     throw Error(
       t
@@ -1239,4 +1269,14 @@ function y2(e, r) {
   }
 }
 
-export { AW, EW, Fxe, Lxe, Pxe, Uxe, kW, v_, y2 };
+export {
+  buildWhatIfPreview,
+  computeWhatIfResult,
+  ReportOutputsDialog,
+  applyWhatIfScenario,
+  saveWhatIfAnalysis,
+  findSavedWhatIfAnalysis,
+  buildWhatIfReportRows,
+  isWhatIfAnalysisInScope,
+  parseAssumptionNumbers,
+};

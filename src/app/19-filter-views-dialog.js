@@ -1,22 +1,42 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { ts } from "./01-core-schemas-and-hashing.js";
-import { FO, Kie, Qie, ct, eh, eoe, f0, toe, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { Bk, qce } from "./18-transformation-recipes-dialog.js";
+import { normalizeDatePolicy } from "./01-core-schemas-and-hashing.js";
+import {
+  buildFilterFacetValues,
+  resolveTableDataRange,
+  createSavedFilterView,
+  parseRangeAddress,
+  comparableCellValueKey,
+  addSavedFilterView,
+  applyFilterConditions,
+  removeSavedFilterView,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  createDefaultFilterCriterion,
+  filterOperatorLabels,
+} from "./18-transformation-recipes-dialog.js";
 
-function Xce(e) {
+function FilterViewsDialog(e) {
   var L, U, G, Q;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(null),
     [s, d] = ne.useState(() =>
       e.definition
         ? structuredClone(e.definition)
-        : { range: Kie(e.workbook, e.sheetId, e.range), columns: [] },
+        : {
+            range: resolveTableDataRange(e.workbook, e.sheetId, e.range),
+            columns: [],
+          },
     ),
-    [u, l] = ne.useState(e.column ?? ct(s.range).firstCol),
+    [u, l] = ne.useState(e.column ?? parseRangeAddress(s.range).firstCol),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
     [m, v] = ne.useState(""),
@@ -43,14 +63,14 @@ function Xce(e) {
       ),
     O = ne.useMemo(() => {
       try {
-        const oe = ct(s.range);
+        const oe = parseRangeAddress(s.range);
         return Array.from(
           { length: Math.min(64, oe.lastCol - oe.firstCol + 1) },
           (de, he) => {
             const Se = oe.firstCol + he;
             return {
               column: Se,
-              label: `${ut(Se)} · ${String(e.workbook.sheets.find((ge) => ge.id === e.sheetId)?.cells[`${ut(Se)}${oe.firstRow + 1}`]?.raw ?? "Column")}`,
+              label: `${columnIndexToLetters(Se)} · ${String(e.workbook.sheets.find((ge) => ge.id === e.sheetId)?.cells[`${columnIndexToLetters(Se)}${oe.firstRow + 1}`]?.raw ?? "Column")}`,
             };
           },
         );
@@ -60,7 +80,10 @@ function Xce(e) {
     }, [s.range, e.workbook, e.sheetId]),
     j = ne.useMemo(() => {
       try {
-        return { result: FO(e.workbook, e.sheetId, s, u, c), error: "" };
+        return {
+          result: buildFilterFacetValues(e.workbook, e.sheetId, s, u, c),
+          error: "",
+        };
       } catch (oe) {
         return {
           result: undefined,
@@ -78,7 +101,7 @@ function Xce(e) {
       throw Error(
         "Preview the current population before saving or applying a view.",
       );
-    const oe = f0(e.workbook, e.sheetId, s);
+    const oe = applyFilterConditions(e.workbook, e.sheetId, s);
     if (JSON.stringify(oe.context) !== JSON.stringify(V.context))
       throw Error(
         "Population membership changed. Preview again before saving or applying.",
@@ -90,7 +113,7 @@ function Xce(e) {
       if (!F || (oe && (!k || k.sheetId !== e.sheetId)))
         throw Error("This saved view cannot be changed here.");
       const de = D(),
-        he = Qie(
+        he = createSavedFilterView(
           e.workbook,
           e.sheetId,
           de.context.definition,
@@ -126,7 +149,7 @@ function Xce(e) {
       v(""));
   }
   function C(oe) {
-    const de = FO(e.workbook, e.sheetId, s, u);
+    const de = buildFilterFacetValues(e.workbook, e.sheetId, s, u);
     if (z.values === undefined && de.truncated) {
       v(
         "Choose Select no values first, then select specific values, or use a custom condition.",
@@ -134,12 +157,12 @@ function Xce(e) {
       return;
     }
     const he = z.values ?? de.values.map((ce) => ce.value),
-      Se = eh(oe, s.caseSensitive),
-      le = he.some((ce) => eh(ce, s.caseSensitive) === Se);
+      Se = comparableCellValueKey(oe, s.caseSensitive),
+      le = he.some((ce) => comparableCellValueKey(ce, s.caseSensitive) === Se);
     _({
       ...z,
       values: le
-        ? he.filter((ce) => eh(ce, s.caseSensitive) !== Se)
+        ? he.filter((ce) => comparableCellValueKey(ce, s.caseSensitive) !== Se)
         : [...he, oe],
     });
   }
@@ -160,7 +183,7 @@ function Xce(e) {
         Se &&
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Column" }),
+              i.jsx(LocalizedText, { children: "Column" }),
               i.jsx("select", {
                 "aria-label": `${he} column`,
                 value: oe.column,
@@ -178,7 +201,7 @@ function Xce(e) {
           }),
         i.jsxs("label", {
           children: [
-            i.jsx(M, { children: "Type" }),
+            i.jsx(LocalizedText, { children: "Type" }),
             i.jsx("select", {
               "aria-label": `${he} type`,
               value: oe.type,
@@ -207,12 +230,12 @@ function Xce(e) {
         }),
         i.jsxs("label", {
           children: [
-            i.jsx(M, { children: "Comparison" }),
+            i.jsx(LocalizedText, { children: "Comparison" }),
             i.jsx("select", {
               "aria-label": `${he} comparison`,
               value: oe.operator,
               onChange: (le) => de({ ...oe, operator: le.target.value }),
-              children: Object.entries(qce)
+              children: Object.entries(filterOperatorLabels)
                 .filter(
                   ([le]) =>
                     oe.type === "text" ||
@@ -235,9 +258,9 @@ function Xce(e) {
         !["blank", "notBlank"].includes(oe.operator) &&
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Value" }),
+              i.jsx(LocalizedText, { children: "Value" }),
               oe.type === "number"
-                ? i.jsx(ci, {
+                ? i.jsx(LocalizedNumberField, {
                     "aria-label": `${he} value`,
                     value: typeof oe.value == "number" ? oe.value : "",
                     onValueChange: (le) => de({ ...oe, value: Number(le) }),
@@ -301,10 +324,12 @@ function Xce(e) {
                 children: [
                   i.jsx("h2", {
                     id: n,
-                    children: i.jsx(M, { children: "Filter population" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Filter population",
+                    }),
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Keep complete records and their original worksheet addresses.",
                     }),
@@ -325,7 +350,7 @@ function Xce(e) {
             children: [
               i.jsx("p", {
                 className: "lg-filter-disclosure",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "View only · first range row is the header. Edits pause this view until you review and reapply it. Native JSON, XLSX, printing, other analysis tools and AI selections use full source data. CSV/TSV and Audit Checks offer an explicit full or visible population.",
                 }),
@@ -335,13 +360,15 @@ function Xce(e) {
                 children: [
                   i.jsxs("summary", {
                     children: [
-                      i.jsx(M, { children: "Saved filter views (" }),
+                      i.jsx(LocalizedText, {
+                        children: "Saved filter views (",
+                      }),
                       e.workbook.savedFilterViews?.length ?? 0,
                       ")",
                     ],
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Save named criteria in the native workbook and browser save. Loading never hides rows automatically: check the range, headers and date rules, then preview and apply. XLSX does not retain saved views.",
                     }),
@@ -351,7 +378,7 @@ function Xce(e) {
                     children: [
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Saved view" }),
+                          i.jsx(LocalizedText, { children: "Saved view" }),
                           i.jsxs("select", {
                             "aria-label": text("Saved filter view"),
                             value: g,
@@ -396,7 +423,7 @@ function Xce(e) {
                       }),
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "View name" }),
+                          i.jsx(LocalizedText, { children: "View name" }),
                           i.jsx("input", {
                             "aria-label": text("Filter view name"),
                             maxLength: 80,
@@ -412,23 +439,27 @@ function Xce(e) {
                   k &&
                     i.jsxs("p", {
                       children: [
-                        i.jsx(M, { children: "Saved range " }),
+                        i.jsx(LocalizedText, { children: "Saved range " }),
                         k.definition.range,
                         " ·",
                         " ",
                         k.population.visibleRows,
                         " ",
-                        i.jsx(M, { children: "visible /" }),
+                        i.jsx(LocalizedText, { children: "visible /" }),
                         " ",
                         k.population.totalRows,
                         " ",
-                        i.jsx(M, { children: "total at source revision" }),
+                        i.jsx(LocalizedText, {
+                          children: "total at source revision",
+                        }),
                         " ",
                         k.sourceRevision,
-                        i.jsx(M, { children: ". Current revision" }),
+                        i.jsx(LocalizedText, {
+                          children: ". Current revision",
+                        }),
                         " ",
                         e.workbook.revision,
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             ". These are historical counts, not current results.",
                         }),
@@ -437,7 +468,9 @@ function Xce(e) {
                         k.sheetId !== e.sheetId &&
                           " Open the source worksheet to load these criteria. A missing worksheet must be restored first.",
                         JSON.stringify(k.datePolicy) !==
-                          JSON.stringify(ts(e.workbook.datePolicy)) &&
+                          JSON.stringify(
+                            normalizeDatePolicy(e.workbook.datePolicy),
+                          ) &&
                           " Date policy changed. Check all date criteria against the current workbook policy.",
                       ],
                     }),
@@ -450,7 +483,7 @@ function Xce(e) {
                           !k ||
                             k.sheetId !== e.sheetId ||
                             (d(structuredClone(k.definition)),
-                            l(ct(k.definition.range).firstCol),
+                            l(parseRangeAddress(k.definition.range).firstCol),
                             h(""),
                             p(null),
                             v(""),
@@ -458,14 +491,16 @@ function Xce(e) {
                               "Criteria loaded for review. Saved coordinates do not move with inserted, deleted or sorted records. Check the range and headers, then preview current results.",
                             ));
                         },
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Load criteria for review",
                         }),
                       }),
                       i.jsx("button", {
                         disabled: !F || !V || !y.trim(),
                         onClick: () => B(),
-                        children: i.jsx(M, { children: "Save as new view" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Save as new view",
+                        }),
                       }),
                       i.jsx("button", {
                         disabled:
@@ -475,7 +510,7 @@ function Xce(e) {
                           k.sheetId !== e.sheetId ||
                           !y.trim(),
                         onClick: () => B(true),
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Replace saved criteria",
                         }),
                       }),
@@ -485,7 +520,7 @@ function Xce(e) {
                           try {
                             if (!I) return;
                             (e.onWorkbookChange(
-                              eoe(e.workbook, g, y),
+                              addSavedFilterView(e.workbook, g, y),
                               "Rename saved filter view",
                             ),
                               A(
@@ -500,7 +535,9 @@ function Xce(e) {
                             );
                           }
                         },
-                        children: i.jsx(M, { children: "Rename view" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Rename view",
+                        }),
                       }),
                       i.jsx("button", {
                         disabled: !I,
@@ -508,7 +545,7 @@ function Xce(e) {
                           try {
                             if (!I) return;
                             (e.onWorkbookChange(
-                              toe(e.workbook, g),
+                              removeSavedFilterView(e.workbook, g),
                               "Delete saved filter view",
                             ),
                               b(""),
@@ -525,13 +562,15 @@ function Xce(e) {
                             );
                           }
                         },
-                        children: i.jsx(M, { children: "Delete view" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Delete view",
+                        }),
                       }),
                     ],
                   }),
                   !F &&
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Saving is unavailable in this read-only, protected or view-only host. Loading, previewing and applying session views remain available.",
                       }),
@@ -544,7 +583,7 @@ function Xce(e) {
                 children: [
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Population range" }),
+                      i.jsx(LocalizedText, { children: "Population range" }),
                       i.jsx("input", {
                         "aria-label": text("Population range"),
                         value: s.range,
@@ -563,7 +602,7 @@ function Xce(e) {
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Column" }),
+                      i.jsx(LocalizedText, { children: "Column" }),
                       i.jsx("select", {
                         "aria-label": text("Filter column"),
                         value: u,
@@ -593,7 +632,7 @@ function Xce(e) {
                             caseSensitive: oe.target.checked,
                           })),
                       }),
-                      i.jsx(M, { children: "Case sensitive" }),
+                      i.jsx(LocalizedText, { children: "Case sensitive" }),
                     ],
                   }),
                 ],
@@ -604,7 +643,9 @@ function Xce(e) {
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, { children: "Values / slicer" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Values / slicer",
+                        }),
                       }),
                       i.jsx("input", {
                         "aria-label": text("Search filter values"),
@@ -619,20 +660,20 @@ function Xce(e) {
                         children: [
                           i.jsx("button", {
                             onClick: () => _({ ...z, values: undefined }),
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Select all values",
                             }),
                           }),
                           i.jsx("button", {
                             onClick: () => _({ ...z, values: [] }),
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Select no values",
                             }),
                           }),
                         ],
                       }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Other column and advanced criteria limit available values. Search narrows this list only. Manual hiding does not change the value list.",
                         }),
@@ -643,10 +684,12 @@ function Xce(e) {
                         i.jsxs("p", {
                           role: "status",
                           children: [
-                            i.jsx(M, { children: "Showing 1,000 of " }),
+                            i.jsx(LocalizedText, {
+                              children: "Showing 1,000 of ",
+                            }),
                             j.result.distinct,
                             " ",
-                            i.jsx(M, {
+                            i.jsx(LocalizedText, {
                               children:
                                 "values. Search or use conditions. Clear this column to include all values.",
                             }),
@@ -663,7 +706,9 @@ function Xce(e) {
                           const de =
                             z.values === undefined ||
                             z.values.some(
-                              (Se) => eh(Se, s.caseSensitive) === oe.key,
+                              (Se) =>
+                                comparableCellValueKey(Se, s.caseSensitive) ===
+                                oe.key,
                             );
                           return i.jsxs(
                             "button",
@@ -701,19 +746,21 @@ function Xce(e) {
                             ...oe,
                             columns: oe.columns.filter((de) => de.column !== u),
                           })),
-                        children: i.jsx(M, { children: "Clear this column" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Clear this column",
+                        }),
                       }),
                     ],
                   }),
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Custom column filter",
                         }),
                       }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Column filters intersect. Value selections and custom conditions both apply.",
                         }),
@@ -745,7 +792,9 @@ function Xce(e) {
                                   });
                                 },
                                 children: [
-                                  i.jsx(M, { children: "Remove condition " }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Remove condition ",
+                                  }),
                                   de + 1,
                                 ],
                               }),
@@ -759,16 +808,21 @@ function Xce(e) {
                         onClick: () =>
                           _({
                             ...z,
-                            conditions: [...(z.conditions ?? []), Bk(u)],
+                            conditions: [
+                              ...(z.conditions ?? []),
+                              createDefaultFilterCriterion(u),
+                            ],
                           }),
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Add column condition",
                         }),
                       }),
                       (z.conditions?.length ?? 0) > 1 &&
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Combine conditions" }),
+                            i.jsx(LocalizedText, {
+                              children: "Combine conditions",
+                            }),
                             i.jsxs("select", {
                               "aria-label": text("Combine column conditions"),
                               value: z.join ?? "and",
@@ -790,7 +844,7 @@ function Xce(e) {
                           ],
                         }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Numbers match numeric cells only; text numbers remain text. Dates use the workbook's 1900/1904 and MDY/DMY policy. Blank means an empty cell or empty text.",
                         }),
@@ -802,10 +856,12 @@ function Xce(e) {
               i.jsxs("fieldset", {
                 children: [
                   i.jsx("legend", {
-                    children: i.jsx(M, { children: "Advanced criteria" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Advanced criteria",
+                    }),
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Meet every condition within a group (AND), and at least one group (OR). These groups also intersect with all column filters.",
                     }),
@@ -818,7 +874,7 @@ function Xce(e) {
                         children: [
                           i.jsxs("strong", {
                             children: [
-                              i.jsx(M, { children: "OR group " }),
+                              i.jsx(LocalizedText, { children: "OR group " }),
                               de + 1,
                             ],
                           }),
@@ -850,12 +906,14 @@ function Xce(e) {
                                         };
                                       }),
                                     children: [
-                                      i.jsx(M, {
+                                      i.jsx(LocalizedText, {
                                         children: "Remove group ",
                                       }),
                                       de + 1,
                                       " ",
-                                      i.jsx(M, { children: "condition " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "condition ",
+                                      }),
                                       Se + 1,
                                     ],
                                   }),
@@ -870,12 +928,14 @@ function Xce(e) {
                                 return {
                                   ...he,
                                   advanced: he.advanced?.map((le, ce) =>
-                                    ce === de ? [...le, Bk(u)] : le,
+                                    ce === de
+                                      ? [...le, createDefaultFilterCriterion(u)]
+                                      : le,
                                   ),
                                 };
                               }),
                             children: [
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children: "Add AND condition to group ",
                               }),
                               de + 1,
@@ -892,7 +952,9 @@ function Xce(e) {
                                 };
                               }),
                             children: [
-                              i.jsx(M, { children: "Remove group " }),
+                              i.jsx(LocalizedText, {
+                                children: "Remove group ",
+                              }),
                               de + 1,
                             ],
                           }),
@@ -905,9 +967,14 @@ function Xce(e) {
                     onClick: () =>
                       d((oe) => ({
                         ...oe,
-                        advanced: [...(oe.advanced ?? []), [Bk(u)]],
+                        advanced: [
+                          ...(oe.advanced ?? []),
+                          [createDefaultFilterCriterion(u)],
+                        ],
                       })),
-                    children: i.jsx(M, { children: "Add OR group" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Add OR group",
+                    }),
                   }),
                   i.jsxs("label", {
                     children: [
@@ -917,7 +984,7 @@ function Xce(e) {
                         onChange: (oe) =>
                           d((de) => ({ ...de, unique: oe.target.checked })),
                       }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "Unique complete records only (keep first matching source row)",
                       }),
@@ -936,12 +1003,18 @@ function Xce(e) {
                         advanced: [],
                         unique: false,
                       })),
-                    children: i.jsx(M, { children: "Clear all criteria" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Clear all criteria",
+                    }),
                   }),
                   i.jsx("button", {
                     onClick: () => {
                       try {
-                        const oe = f0(e.workbook, e.sheetId, s);
+                        const oe = applyFilterConditions(
+                          e.workbook,
+                          e.sheetId,
+                          s,
+                        );
                         (p({
                           book: e.workbook,
                           definition: JSON.stringify(s),
@@ -957,7 +1030,9 @@ function Xce(e) {
                           p(null));
                       }
                     },
-                    children: i.jsx(M, { children: "Preview population" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Preview population",
+                    }),
                   }),
                 ],
               }),
@@ -972,39 +1047,41 @@ function Xce(e) {
                       children: [
                         V.context.visibleRows,
                         " ",
-                        i.jsx(M, { children: "visible / " }),
+                        i.jsx(LocalizedText, { children: "visible / " }),
                         V.context.totalRows,
                         " ",
-                        i.jsx(M, { children: "total data rows" }),
+                        i.jsx(LocalizedText, { children: "total data rows" }),
                       ],
                     }),
                     i.jsxs("p", {
                       children: [
                         V.context.matchedRows,
                         " ",
-                        i.jsx(M, { children: "match criteria ·" }),
+                        i.jsx(LocalizedText, { children: "match criteria ·" }),
                         " ",
                         V.context.filteredRows,
                         " ",
-                        i.jsx(M, { children: "filtered out ·" }),
+                        i.jsx(LocalizedText, { children: "filtered out ·" }),
                         " ",
                         V.context.hiddenMatchingRows,
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children: "matching rows manually hidden.",
                         }),
                       ],
                     }),
                     V.context.visibleRows === 0
                       ? i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "No matching visible records. The full source population is unchanged.",
                           }),
                         })
                       : i.jsxs("p", {
                           children: [
-                            i.jsx(M, { children: "Original worksheet rows:" }),
+                            i.jsx(LocalizedText, {
+                              children: "Original worksheet rows:",
+                            }),
                             " ",
                             V.context.visibleSourceRows.slice(0, 25).join(", "),
                             V.context.visibleRows > 25
@@ -1020,7 +1097,7 @@ function Xce(e) {
             children: [
               i.jsx("button", {
                 onClick: e.onClose,
-                children: i.jsx(M, { children: "Cancel" }),
+                children: i.jsx(LocalizedText, { children: "Cancel" }),
               }),
               i.jsx("button", {
                 className: "lg-filter-primary",
@@ -1039,7 +1116,9 @@ function Xce(e) {
                         p(null));
                     }
                 },
-                children: i.jsx(M, { children: "Apply filter view" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Apply filter view",
+                }),
               }),
             ],
           }),
@@ -1048,7 +1127,13 @@ function Xce(e) {
     })
   );
 }
-function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
+function ValidationReviewDialog({
+  error,
+  readOnly,
+  onAccept,
+  onCancel,
+  onRetry,
+}) {
   const a = ne.useRef(null),
     s = error.issues.some((d) => d.style === "stop" || d.evaluationError);
   return (
@@ -1098,7 +1183,7 @@ function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
             children: [
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "No cells have changed." }),
+                  i.jsx(LocalizedText, { children: "No cells have changed." }),
                   " ",
                   s
                     ? "Correct these entries or discard the entire batch."
@@ -1109,7 +1194,7 @@ function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
                 children: [
                   error.issues.length,
                   " ",
-                  i.jsx(M, { children: "rule violations" }),
+                  i.jsx(LocalizedText, { children: "rule violations" }),
                 ],
               }),
               error.issues.slice(0, 500).map((d, u) =>
@@ -1139,17 +1224,17 @@ function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
             children: [
               i.jsx("button", {
                 onClick: onRetry,
-                children: i.jsx(M, { children: "Return to edit" }),
+                children: i.jsx(LocalizedText, { children: "Return to edit" }),
               }),
               i.jsx("button", {
                 onClick: onCancel,
-                children: i.jsx(M, { children: "Discard changes" }),
+                children: i.jsx(LocalizedText, { children: "Discard changes" }),
               }),
               !s &&
                 i.jsx("button", {
                   disabled: readOnly,
                   onClick: onAccept,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Accept warnings and apply batch",
                   }),
                 }),
@@ -1161,4 +1246,4 @@ function Gce({ error, readOnly, onAccept, onCancel, onRetry }) {
   );
 }
 
-export { Gce, Xce };
+export { ValidationReviewDialog, FilterViewsDialog };

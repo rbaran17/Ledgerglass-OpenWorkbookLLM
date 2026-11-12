@@ -12,12 +12,20 @@ import {
   object,
   record,
 } from "zod";
-import { hr, iu } from "../01-core-schemas-and-hashing.js";
-import { Mt } from "../02-financial-functions.js";
-import { DQ, _Q, f6, p6 } from "./01-cell-styles-and-themes.js";
+import {
+  fingerprintCanonicalValue,
+  sha256HexDigest,
+} from "../01-core-schemas-and-hashing.js";
+import { workbookLimits } from "../02-financial-functions.js";
+import {
+  columnLettersToIndex,
+  sheetReferencePrefixPattern,
+  unquotedNameCharPattern,
+  offsetRowReference,
+} from "./01-cell-styles-and-themes.js";
 
-const jR = "ledgerglass-analysis-v1",
-  ig = Object.freeze({
+const analysisFormatVersion = "ledgerglass-analysis-v1",
+  analysisLimits = Object.freeze({
     variables: 6,
     constraints: 16,
     candidates: 5e4,
@@ -31,13 +39,13 @@ const jR = "ledgerglass-analysis-v1",
     outputCells: 2e4,
     metadataCharacters: 2e6,
   }),
-  th = number().finite(),
-  Qv = th.min(-1e9).max(1e9),
-  V4 = strictObject({
+  finiteNumberSchema = number().finite(),
+  boundedNumberSchema = finiteNumberSchema.min(-1e9).max(1e9),
+  cellReferenceSchema = strictObject({
     sheetId: string().min(1).max(100),
     address: string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
   }),
-  wU = string()
+  outputWorksheetNameSchema = string()
     .trim()
     .min(1)
     .max(31)
@@ -45,17 +53,17 @@ const jR = "ledgerglass-analysis-v1",
       (e) => !/[\\/?*\[\]:\u0000-\u001f]/.test(e),
       "Invalid output worksheet name",
     ),
-  yoe = strictObject({
+  solverAnalysisSpecSchema = strictObject({
     kind: literal("solver"),
-    outputName: wU,
-    objective: V4,
+    outputName: outputWorksheetNameSchema,
+    objective: cellReferenceSchema,
     direction: _enum(["maximize", "minimize", "target"]),
-    target: Qv.optional(),
+    target: boundedNumberSchema.optional(),
     variables: array(
       strictObject({
-        cell: V4,
-        lower: Qv,
-        upper: Qv,
+        cell: cellReferenceSchema,
+        lower: boundedNumberSchema,
+        upper: boundedNumberSchema,
         domain: _enum(["continuous", "integer", "binary"]),
       }),
     )
@@ -63,17 +71,17 @@ const jR = "ledgerglass-analysis-v1",
       .max(6),
     constraints: array(
       strictObject({
-        left: V4,
+        left: cellReferenceSchema,
         operator: _enum(["<=", ">=", "="]),
-        right: union([Qv, V4]),
+        right: union([boundedNumberSchema, cellReferenceSchema]),
       }),
     ).max(16),
-    tolerance: th.min(1e-10).max(1e-5).default(1e-8),
+    tolerance: finiteNumberSchema.min(1e-10).max(1e-5).default(1e-8),
     maxCandidates: number().int().min(1).max(5e4).default(5e4),
   }),
-  woe = strictObject({
+  statisticsAnalysisSpecSchema = strictObject({
     kind: literal("statistics"),
-    outputName: wU,
+    outputName: outputWorksheetNameSchema,
     sheetId: string().min(1).max(100),
     range: string().min(1).max(50),
     method: _enum([
@@ -86,21 +94,29 @@ const jR = "ledgerglass-analysis-v1",
       "forecast",
     ]),
     missing: _enum(["reject", "exclude"]).default("reject"),
-    bins: array(Qv).min(1).max(50).optional(),
+    bins: array(boundedNumberSchema).min(1).max(50).optional(),
     distribution: _enum(["normal", "binomial", "poisson"]).optional(),
-    mean: Qv.optional(),
-    standardDeviation: th.positive().max(1e9).optional(),
+    mean: boundedNumberSchema.optional(),
+    standardDeviation: finiteNumberSchema.positive().max(1e9).optional(),
     trials: number().int().min(0).max(1e3).optional(),
-    probability: th.min(0).max(1).optional(),
-    lambda: th.positive().max(1e3).optional(),
+    probability: finiteNumberSchema.min(0).max(1).optional(),
+    lambda: finiteNumberSchema.positive().max(1e3).optional(),
     forecast: _enum(["linear", "moving-average", "exponential"]).optional(),
     horizon: number().int().min(1).max(24).optional(),
     window: number().int().min(2).max(100).optional(),
-    alpha: th.positive().max(1).optional(),
+    alpha: finiteNumberSchema.positive().max(1).optional(),
   }),
-  xU = discriminatedUnion("kind", [yoe, woe]),
-  xoe = union([string().max(32767), th, boolean(), _null()]),
-  Eoe = strictObject({
+  analysisSpecSchema = discriminatedUnion("kind", [
+    solverAnalysisSpecSchema,
+    statisticsAnalysisSpecSchema,
+  ]),
+  analysisCellValueSchema = union([
+    string().max(32767),
+    finiteNumberSchema,
+    boolean(),
+    _null(),
+  ]),
+  analysisOutcomeSchema = strictObject({
     status: _enum([
       "complete",
       "optimal",
@@ -122,16 +138,16 @@ const jR = "ledgerglass-analysis-v1",
     included: number().int().nonnegative(),
     inspected: number().int().nonnegative(),
     iterations: number().int().nonnegative(),
-    rows: array(array(xoe).max(16)).max(3e3),
-    solution: array(th).max(6).optional(),
-    objective: th.optional(),
-    baseline: array(th).max(6).optional(),
+    rows: array(array(analysisCellValueSchema).max(16)).max(3e3),
+    solution: array(finiteNumberSchema).max(6).optional(),
+    objective: finiteNumberSchema.optional(),
+    baseline: array(finiteNumberSchema).max(6).optional(),
   }),
   sk = string().regex(/^[a-f0-9]{64}$/),
-  Coe = strictObject({
-    engine: literal(jR),
-    request: xU,
-    result: Eoe,
+  analysisReportRecordSchema = strictObject({
+    engine: literal(analysisFormatVersion),
+    request: analysisSpecSchema,
+    result: analysisOutcomeSchema,
     definitionHash: sk,
     sourceHash: sk,
     outputHash: sk,
@@ -141,8 +157,8 @@ const jR = "ledgerglass-analysis-v1",
     includeHidden: boolean(),
     applied: boolean(),
   });
-function EU(e) {
-  const r = xU.safeParse(e);
+function parseAnalysisRequest(e) {
+  const r = analysisSpecSchema.safeParse(e);
   if (!r.success)
     throw Error(
       `Invalid analysis request: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
@@ -176,24 +192,27 @@ function EU(e) {
   }
   return t;
 }
-function Aoe(e, r) {
+function validateAnalysisReport(e, r) {
   const t = e;
   let n = 0;
   for (const u of r.sheets) {
     const l = t.sheets.find((m) => m.id === u.id)?.analysisReport;
     if (l === undefined) continue;
-    if (((n += JSON.stringify(l).length), n > ig.metadataCharacters))
+    if (
+      ((n += JSON.stringify(l).length), n > analysisLimits.metadataCharacters)
+    )
       throw Error("Analysis metadata exceeds 2,000,000 characters.");
-    const c = Coe.safeParse(l);
+    const c = analysisReportRecordSchema.safeParse(l);
     if (!c.success)
       throw Error(`Invalid analysis report: ${c.error.issues[0]?.message}`);
     const h = c.data;
     if (
-      ((h.request = EU(h.request)),
-      h.definitionHash !== hr(h.request) ||
+      ((h.request = parseAnalysisRequest(h.request)),
+      h.definitionHash !== fingerprintCanonicalValue(h.request) ||
         !h.result.success ||
         !["complete", "optimal"].includes(h.result.status) ||
-        h.result.rows.reduce((m, v) => m + v.length, 0) > ig.outputCells)
+        h.result.rows.reduce((m, v) => m + v.length, 0) >
+          analysisLimits.outputCells)
     )
       throw Error("Analysis report metadata is inconsistent.");
     const f = /^([A-Z]{1,3})([1-9]\d{0,6}):([A-Z]{1,3})([1-9]\d{0,6})$/.exec(
@@ -207,7 +226,7 @@ function Aoe(e, r) {
       p(f[3]) < p(f[1]) ||
       Number(f[4]) < Number(f[2]) ||
       (p(f[3]) - p(f[1]) + 1) * (Number(f[4]) - Number(f[2]) + 1) >
-        ig.outputCells
+        analysisLimits.outputCells
     )
       throw Error("Invalid or oversized analysis output range.");
     if (
@@ -223,8 +242,8 @@ function Aoe(e, r) {
     u.analysisReport = h;
   }
 }
-const CU = "ledgerglass-report-output-v1",
-  Vv = Object.freeze({
+const reportOutputFormatVersion = "ledgerglass-report-output-v1",
+  reportOutputLimits = Object.freeze({
     outputs: 20,
     cells: 2e3,
     rows: 500,
@@ -236,21 +255,21 @@ const CU = "ledgerglass-report-output-v1",
     inventories: 20,
     inventoryItems: 1e3,
   }),
-  Tc = (e) => string().max(e),
-  Ap = string().min(1).max(200),
-  zE = string().regex(/^[a-f0-9]{64}$/),
+  createBoundedTextSchema = (e) => string().max(e),
+  nonEmptyLabelSchema = string().min(1).max(200),
+  reportHashSchema = string().regex(/^[a-f0-9]{64}$/),
   AU = string().datetime();
-const W5 = (e) => {
+const hashRecordExcludingHash = (e) => {
   const { hash, ...t } = e;
-  return hr(t);
+  return fingerprintCanonicalValue(t);
 };
-const t0 = Object.freeze({
+const daxExpressionLimits = Object.freeze({
     expressionCharacters: 4096,
     syntaxNodes: 512,
     depth: 48,
     calculatedColumns: 16,
   }),
-  H5 = Object.freeze({
+  daxFunctionNames = Object.freeze({
     BLANK: [0, 0],
     TRUE: [0, 0],
     FALSE: [0, 0],
@@ -272,17 +291,24 @@ const t0 = Object.freeze({
     SELECTEDVALUE: [1, 2],
     TOTALYTD: [2, 2],
   });
-class LR extends Error {
+class DaxError extends Error {
   constructor(r, t) {
     (super(t), (this.code = r), (this.name = "DaxError"));
   }
 }
-const on = (e, r) => {
-  throw new LR(e, `DAX: ${r}`);
+const throwDaxError = (e, r) => {
+  throw new DaxError(e, `DAX: ${r}`);
 };
-function UO(e) {
-  if (typeof e != "string" || !e.trim() || e.length > t0.expressionCharacters)
-    return on("DAX_LIMIT", "Enter an expression of 1–4,096 characters.");
+function parseDaxExpression(e) {
+  if (
+    typeof e != "string" ||
+    !e.trim() ||
+    e.length > daxExpressionLimits.expressionCharacters
+  )
+    return throwDaxError(
+      "DAX_LIMIT",
+      "Enter an expression of 1–4,096 characters.",
+    );
   const r = e.trim().replace(/^=/, ""),
     t = [];
   let n = 0;
@@ -300,7 +326,7 @@ function UO(e) {
         }
       else y += E;
     }
-    (w || on("DAX_SYNTAX", `Unclosed ${m} at position ${b + 1}.`),
+    (w || throwDaxError("DAX_SYNTAX", `Unclosed ${m} at position ${b + 1}.`),
       t.push({ kind: g, value: y, position: b }));
   };
   for (; n < r.length;) {
@@ -326,7 +352,7 @@ function UO(e) {
       b = /^(?:==|<>|<=|>=|&&|\|\||[+\-*/^&=<>(),])/.exec(m),
       y = v ?? g ?? b;
     (y ||
-      on(
+      throwDaxError(
         "DAX_UNSUPPORTED",
         `Unsupported syntax at position ${n + 1}. Use the documented DAX subset; worksheet and query syntax are not evaluated.`,
       ),
@@ -336,8 +362,8 @@ function UO(e) {
         position: n,
       }),
       (n += y[0].length),
-      t.length > t0.syntaxNodes * 3 &&
-        on("DAX_LIMIT", "Expression token budget exceeded."));
+      t.length > daxExpressionLimits.syntaxNodes * 3 &&
+        throwDaxError("DAX_LIMIT", "Expression token budget exceeded."));
   }
   t.push({ kind: "end", value: "", position: n });
   let a = 0,
@@ -345,11 +371,11 @@ function UO(e) {
   const d = () => t[a],
     u = () => t[a++],
     l = (m) => {
-      u().value !== m && on("DAX_SYNTAX", `Expected ${m}.`);
+      u().value !== m && throwDaxError("DAX_SYNTAX", `Expected ${m}.`);
     },
     c = (m) => (
-      ++s > t0.syntaxNodes &&
-        on("DAX_LIMIT", "Expression exceeds 512 syntax nodes."),
+      ++s > daxExpressionLimits.syntaxNodes &&
+        throwDaxError("DAX_LIMIT", "Expression exceeds 512 syntax nodes."),
       m
     ),
     h = {
@@ -370,13 +396,17 @@ function UO(e) {
       "^": 9,
     },
     f = (m = 0, v = 0) => {
-      v > t0.depth && on("DAX_LIMIT", "Expression nesting exceeds 48 levels.");
+      v > daxExpressionLimits.depth &&
+        throwDaxError("DAX_LIMIT", "Expression nesting exceeds 48 levels.");
       const g = u();
       let b;
       if (g.kind === "number") {
         const y = Number(g.value);
         (Number.isFinite(y) ||
-          on("DAX_NUMBER", "Numeric literal exceeds finite precision."),
+          throwDaxError(
+            "DAX_NUMBER",
+            "Numeric literal exceeds finite precision.",
+          ),
           (b = c({ kind: "literal", value: y })));
       } else if (g.kind === "string")
         b = c({ kind: "literal", value: g.value });
@@ -395,8 +425,8 @@ function UO(e) {
       else if (g.kind === "identifier" || g.kind === "quoted")
         if (d().value === "(" && g.kind === "identifier") {
           const y = g.value.toUpperCase();
-          (Object.prototype.hasOwnProperty.call(H5, y) ||
-            on(
+          (Object.prototype.hasOwnProperty.call(daxFunctionNames, y) ||
+            throwDaxError(
               "DAX_UNSUPPORTED",
               `Unsupported function ${g.value}. No worksheet fallback is used.`,
             ),
@@ -408,9 +438,9 @@ function UO(e) {
               u();
             } while (true);
           l(")");
-          const E = H5[y];
+          const E = daxFunctionNames[y];
           ((w.length < E[0] || w.length > E[1]) &&
-            on(
+            throwDaxError(
               "DAX_ARGUMENT",
               `${y} expects ${E[0] === E[1] ? E[0] : `${E[0]}–${E[1]}`} arguments in this subset.`,
             ),
@@ -426,7 +456,7 @@ function UO(e) {
                 }))
               : (b = c({ kind: "table", name: g.value }));
       else
-        return on(
+        return throwDaxError(
           "DAX_SYNTAX",
           `Expected an expression at position ${g.position + 1}.`,
         );
@@ -443,23 +473,23 @@ function UO(e) {
     p = f();
   return (
     d().kind !== "end" &&
-      on(
+      throwDaxError(
         "DAX_UNSUPPORTED",
         `Unexpected ${d().value}. VAR, RETURN, EVALUATE, worksheet references and unsupported syntax are not evaluated.`,
       ),
     p
   );
 }
-function Kh(e, r) {
+function walkDaxSyntaxTree(e, r) {
   (r(e),
     e.kind === "call"
-      ? e.args.forEach((t) => Kh(t, r))
+      ? e.args.forEach((t) => walkDaxSyntaxTree(t, r))
       : e.kind === "binary"
-        ? (Kh(e.left, r), Kh(e.right, r))
-        : e.kind === "unary" && Kh(e.value, r));
+        ? (walkDaxSyntaxTree(e.left, r), walkDaxSyntaxTree(e.right, r))
+        : e.kind === "unary" && walkDaxSyntaxTree(e.value, r));
 }
-const PR = "ledgerglass-columnar-v1",
-  ta = Object.freeze({
+const columnarModelFormatVersion = "ledgerglass-columnar-v1",
+  dataModelLimits = Object.freeze({
     tables: 8,
     columns: 50,
     rowsPerTable: 500,
@@ -474,43 +504,50 @@ const PR = "ledgerglass-columnar-v1",
     operations: 2e6,
     metadataCharacters: 2e6,
   }),
-  S1 = string()
+  tableIdentifierSchema = string()
     .min(1)
     .max(100)
     .regex(/^[A-Za-z0-9_.-]+$/),
-  jg = string()
+  modelNameSchema = string()
     .trim()
     .min(1)
     .max(128)
     .refine((e) => !/[\u0000-\u001f\u007f]/.test(e)),
-  Ioe = strictObject({
-    name: jg,
+  modelColumnSchema = strictObject({
+    name: modelNameSchema,
     type: _enum(["text", "number", "boolean", "date"]),
     nullable: boolean(),
-    expression: string().trim().min(1).max(t0.expressionCharacters).optional(),
+    expression: string()
+      .trim()
+      .min(1)
+      .max(daxExpressionLimits.expressionCharacters)
+      .optional(),
   }),
-  _oe = strictObject({
-    id: S1,
-    name: jg,
+  modelTableSourceSchema = strictObject({
+    id: tableIdentifierSchema,
+    name: modelNameSchema,
     sheetId: string().min(1).max(100),
     range: string().min(1).max(50),
     tableId: string().min(1).max(100).optional(),
-    columns: array(Ioe).min(1).max(ta.columns),
-    dateColumn: jg.optional(),
+    columns: array(modelColumnSchema).min(1).max(dataModelLimits.columns),
+    dateColumn: modelNameSchema.optional(),
   }),
-  VE = strictObject({ tableId: S1, column: jg }),
-  Doe = strictObject({
-    id: S1,
-    one: VE,
-    many: VE,
+  modelGroupFieldSchema = strictObject({
+    tableId: tableIdentifierSchema,
+    column: modelNameSchema,
+  }),
+  relationshipOptionsSchema = strictObject({
+    id: tableIdentifierSchema,
+    one: modelGroupFieldSchema,
+    many: modelGroupFieldSchema,
     cardinality: _enum(["one-to-many", "one-to-one"]),
     direction: literal("single"),
   }),
-  Ooe = strictObject({
-    id: S1,
-    name: jg,
-    tableId: S1,
-    column: jg.optional(),
+  modelMeasureSchema = strictObject({
+    id: tableIdentifierSchema,
+    name: modelNameSchema,
+    tableId: tableIdentifierSchema,
+    column: modelNameSchema.optional(),
     operation: _enum([
       "sum",
       "count",
@@ -521,18 +558,29 @@ const PR = "ledgerglass-columnar-v1",
       "distinctCount",
       "dax",
     ]),
-    expression: string().trim().min(1).max(t0.expressionCharacters).optional(),
+    expression: string()
+      .trim()
+      .min(1)
+      .max(daxExpressionLimits.expressionCharacters)
+      .optional(),
   }),
-  SU = strictObject({
-    engine: literal(PR),
-    name: jg,
-    tables: array(_oe).min(1).max(ta.tables),
-    relationships: array(Doe).max(ta.relationships),
-    measures: array(Ooe).max(ta.measures),
+  dataModelDefinitionSchema = strictObject({
+    engine: literal(columnarModelFormatVersion),
+    name: modelNameSchema,
+    tables: array(modelTableSourceSchema).min(1).max(dataModelLimits.tables),
+    relationships: array(relationshipOptionsSchema).max(
+      dataModelLimits.relationships,
+    ),
+    measures: array(modelMeasureSchema).max(dataModelLimits.measures),
   }),
-  Moe = union([string().max(32767), number().finite(), boolean(), _null()]),
-  joe = strictObject({
-    ...VE.shape,
+  modelCellValueSchema = union([
+    string().max(32767),
+    number().finite(),
+    boolean(),
+    _null(),
+  ]),
+  modelFilterSchema = strictObject({
+    ...modelGroupFieldSchema.shape,
     operator: _enum([
       "equals",
       "notEquals",
@@ -543,54 +591,54 @@ const PR = "ledgerglass-columnar-v1",
       "blank",
       "notBlank",
     ]),
-    value: Moe.optional(),
+    value: modelCellValueSchema.optional(),
   }),
-  TU = strictObject({
-    groupBy: array(VE).max(ta.groupFields),
-    filters: array(joe).max(ta.filters),
-    measureIds: array(S1).max(ta.measures),
+  modelQuerySchema = strictObject({
+    groupBy: array(modelGroupFieldSchema).max(dataModelLimits.groupFields),
+    filters: array(modelFilterSchema).max(dataModelLimits.filters),
+    measureIds: array(tableIdentifierSchema).max(dataModelLimits.measures),
   }),
-  mp = (e, r) => {
+  assertUniqueCaseInsensitive = (e, r) => {
     if (new Set(e.map((t) => t.toLowerCase())).size !== e.length)
       throw Error(`${r} must be unique, including case variants.`);
   };
-function WE(e) {
-  const r = SU.safeParse(e);
+function validateDataModel(e) {
+  const r = dataModelDefinitionSchema.safeParse(e);
   if (!r.success)
     throw Error(
       `Invalid data model: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
     );
   const t = r.data;
   if (
-    (mp(
+    (assertUniqueCaseInsensitive(
       t.tables.map((s) => s.id),
       "Model table IDs",
     ),
-    mp(
+    assertUniqueCaseInsensitive(
       t.tables.map((s) => s.name),
       "Model table names",
     ),
-    mp(
+    assertUniqueCaseInsensitive(
       t.relationships.map((s) => s.id),
       "Relationship IDs",
     ),
-    mp(
+    assertUniqueCaseInsensitive(
       t.measures.map((s) => s.id),
       "Measure IDs",
     ),
-    mp(
+    assertUniqueCaseInsensitive(
       t.measures.map((s) => s.name),
       "Measure names",
     ),
     t.tables.reduce(
       (s, d) => s + d.columns.filter((u) => u.expression !== undefined).length,
       0,
-    ) > t0.calculatedColumns)
+    ) > daxExpressionLimits.calculatedColumns)
   )
     throw Error("The model supports at most 16 DAX calculated columns.");
   for (const s of t.tables) {
     if (
-      (mp(
+      (assertUniqueCaseInsensitive(
         s.columns.map((d) => d.name),
         `Columns in ${s.name}`,
       ),
@@ -659,14 +707,14 @@ function WE(e) {
   }
   return t;
 }
-function UR(e, r) {
+function validateModelQuery(e, r) {
   var a;
-  const t = TU.safeParse(e);
+  const t = modelQuerySchema.safeParse(e);
   if (!t.success)
     throw Error(`Invalid model query: ${t.error.issues[0]?.message}`);
   const n = t.data;
-  (mp(n.measureIds, "Selected measures"),
-    mp(
+  (assertUniqueCaseInsensitive(n.measureIds, "Selected measures"),
+    assertUniqueCaseInsensitive(
       n.groupBy.map((s) => JSON.stringify(s)),
       "Group fields",
     ));
@@ -681,9 +729,9 @@ function UR(e, r) {
   return n;
 }
 const lk = string().regex(/^[a-f0-9]{64}$/),
-  Foe = strictObject({
-    definition: SU,
-    query: TU,
+  dataModelReportSchema = strictObject({
+    definition: dataModelDefinitionSchema,
+    query: modelQuerySchema,
     sourceHash: lk,
     definitionHash: lk,
     outputHash: lk,
@@ -691,29 +739,34 @@ const lk = string().regex(/^[a-f0-9]{64}$/),
     createdAt: string().datetime(),
     sourceRevision: number().int().nonnegative(),
     includeHidden: boolean(),
-    totals: array(number().finite().nullable()).max(ta.measures),
+    totals: array(number().finite().nullable()).max(dataModelLimits.measures),
   });
-function Boe(e, r) {
+function validateDataModelReport(e, r) {
   const t = e;
   let n = 0;
   if (t.dataModel !== undefined) {
-    if (((n += JSON.stringify(t.dataModel).length), n > ta.metadataCharacters))
+    if (
+      ((n += JSON.stringify(t.dataModel).length),
+      n > dataModelLimits.metadataCharacters)
+    )
       throw Error("Data model metadata exceeds 2,000,000 characters.");
-    r.dataModel = WE(t.dataModel);
+    r.dataModel = validateDataModel(t.dataModel);
   }
   for (const s of r.sheets) {
     const d = t.sheets.find((c) => c.id === s.id)?.dataModelReport;
     if (d === undefined) continue;
-    if (((n += JSON.stringify(d).length), n > ta.metadataCharacters))
+    if (
+      ((n += JSON.stringify(d).length), n > dataModelLimits.metadataCharacters)
+    )
       throw Error("Data model metadata exceeds 2,000,000 characters.");
-    const u = Foe.safeParse(d);
+    const u = dataModelReportSchema.safeParse(d);
     if (!u.success)
       throw Error(`Invalid model report: ${u.error.issues[0]?.message}`);
     const l = u.data;
     if (
-      ((l.definition = WE(l.definition)),
-      (l.query = UR(l.query, l.definition)),
-      l.definitionHash !== hr(l.definition) ||
+      ((l.definition = validateDataModel(l.definition)),
+      (l.query = validateModelQuery(l.query, l.definition)),
+      l.definitionHash !== fingerprintCanonicalValue(l.definition) ||
         l.totals.length !== l.query.measureIds.length)
     )
       throw Error(
@@ -722,7 +775,7 @@ function Boe(e, r) {
     s.dataModelReport = l;
   }
 }
-const Cd = Object.freeze({
+const sourceImportLimits = Object.freeze({
     bytes: 4 * 1024 * 1024,
     retainedBytes: 12 * 1024 * 1024,
     imports: 10,
@@ -734,11 +787,16 @@ const Cd = Object.freeze({
     nodes: 1e5,
     confidence: 0.9,
   }),
-  NU = ["json", "xml", "pdf", "png", "jpeg", "html"],
-  Il = (e) => string().max(e),
-  RU = string().regex(/^[a-f0-9]{64}$/),
-  IU = union([Il(32767), number().finite(), boolean(), _null()]),
-  Loe = object({
+  documentSourceFormats = ["json", "xml", "pdf", "png", "jpeg", "html"],
+  createLimitedTextSchema = (e) => string().max(e),
+  retainedSourceHashSchema = string().regex(/^[a-f0-9]{64}$/),
+  IU = union([
+    createLimitedTextSchema(32767),
+    number().finite(),
+    boolean(),
+    _null(),
+  ]),
+  sourceRegionSchema = object({
     page: number().int().min(1).max(1e4),
     x: number().min(0).max(1),
     y: number().min(0).max(1),
@@ -761,15 +819,15 @@ function Poe(e, r) {
     return false;
   }
 }
-const Uoe = object({
+const nativeCellValueSchema = object({
     value: IU,
     type: _enum(["string", "number", "boolean", "null", "array", "object"]),
-    path: Il(2048),
-    lexical: Il(32767).optional(),
-    declaredType: Il(200).optional(),
+    path: createLimitedTextSchema(2048),
+    lexical: createLimitedTextSchema(32767).optional(),
+    declaredType: createLimitedTextSchema(200).optional(),
     missing: boolean().optional(),
     confidence: number().min(0).max(1),
-    region: Loe.optional(),
+    region: sourceRegionSchema.optional(),
   })
     .strict()
     .refine(
@@ -785,15 +843,22 @@ const Uoe = object({
       (e) => !e.missing || (e.value === null && e.type === "null"),
       "Missing fields must be null placeholders.",
     ),
-  _U = object({
-    id: Il(200).min(1),
-    name: Il(200).min(1),
-    path: Il(2048),
+  extractedTableSchema = object({
+    id: createLimitedTextSchema(200).min(1),
+    name: createLimitedTextSchema(200).min(1),
+    path: createLimitedTextSchema(2048),
     ambiguous: boolean(),
-    columns: array(object({ name: Il(200).min(1), path: Il(2048) }).strict())
+    columns: array(
+      object({
+        name: createLimitedTextSchema(200).min(1),
+        path: createLimitedTextSchema(2048),
+      }).strict(),
+    )
       .min(1)
-      .max(Cd.columns),
-    rows: array(array(Uoe).max(Cd.columns)).min(1).max(Cd.rows),
+      .max(sourceImportLimits.columns),
+    rows: array(array(nativeCellValueSchema).max(sourceImportLimits.columns))
+      .min(1)
+      .max(sourceImportLimits.rows),
   })
     .strict()
     .superRefine((e, r) => {
@@ -804,28 +869,30 @@ const Uoe = object({
           message: "Table columns and rows must align with unique paths.",
         });
     }),
-  HE = object({
-    fileName: Il(255)
+  retainedSourceFileSchema = object({
+    fileName: createLimitedTextSchema(255)
       .min(1)
       .refine((e) => !/[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(e)),
-    format: _enum(NU),
-    byteLength: number().int().min(1).max(Cd.bytes),
-    sha256: RU,
-    base64: Il(Math.ceil(Cd.bytes / 3) * 4),
+    format: _enum(documentSourceFormats),
+    byteLength: number().int().min(1).max(sourceImportLimits.bytes),
+    sha256: retainedSourceHashSchema,
+    base64: createLimitedTextSchema(
+      Math.ceil(sourceImportLimits.bytes / 3) * 4,
+    ),
   }).strict(),
-  DU = object({
+  extractedDocumentSchema = object({
     schemaVersion: literal(1),
-    fileName: HE.shape.fileName,
-    format: _enum(NU),
-    byteLength: HE.shape.byteLength,
-    sha256: RU,
-    tables: array(_U).max(Cd.tables),
+    fileName: retainedSourceFileSchema.shape.fileName,
+    format: _enum(documentSourceFormats),
+    byteLength: retainedSourceFileSchema.shape.byteLength,
+    sha256: retainedSourceHashSchema,
+    tables: array(extractedTableSchema).max(sourceImportLimits.tables),
     method: _enum(["native-json", "native-xml", "document-adapter"]),
-    extractor: Il(200).min(1),
+    extractor: createLimitedTextSchema(200).min(1),
     pageCount: number().int().min(1).max(1e4).optional(),
-    warnings: array(Il(2048)).max(30),
+    warnings: array(createLimitedTextSchema(2048)).max(30),
   }).strict(),
-  OU = object({
+  reviewCorrectionSchema = object({
     decision: _enum(["accept", "exclude", "correct"]),
     value: IU.optional(),
   })
@@ -834,28 +901,29 @@ const Uoe = object({
       (e) => e.decision !== "correct" || e.value !== undefined,
       "A corrected value is required.",
     ),
-  $oe = object({
-    id: Il(100).min(1),
-    sheetId: Il(100).min(1),
-    sheetName: Il(31).min(1),
+  sourceImportRecordSchema = object({
+    id: createLimitedTextSchema(100).min(1),
+    sheetId: createLimitedTextSchema(100).min(1),
+    sheetName: createLimitedTextSchema(31).min(1),
     importedAt: string().datetime(),
-    original: HE,
-    method: DU.shape.method,
-    extractor: Il(200).min(1),
+    original: retainedSourceFileSchema,
+    method: extractedDocumentSchema.shape.method,
+    extractor: createLimitedTextSchema(200).min(1),
     pageCount: number().int().min(1).max(1e4).optional(),
-    table: _U,
-    resolutions: record(string().regex(/^\d+:\d+$/), OU),
+    table: extractedTableSchema,
+    resolutions: record(string().regex(/^\d+:\d+$/), reviewCorrectionSchema),
     ambiguityReviewed: boolean(),
   }).strict();
-function kC(e) {
-  const r = DU.parse(e);
+function validateExtractedSourceTables(e) {
+  const r = extractedDocumentSchema.parse(e);
   let t = 0;
   if (new Set(r.tables.map((n) => n.id)).size !== r.tables.length)
     throw Error("Source table IDs must be unique.");
   for (const n of r.tables)
     for (const o of n.rows)
       for (const a of o) {
-        if (++t > Cd.cells) throw Error("Source cell budget exceeded.");
+        if (++t > sourceImportLimits.cells)
+          throw Error("Source cell budget exceeded.");
         if (
           r.method === "document-adapter" &&
           (!a.region ||
@@ -875,8 +943,8 @@ function kC(e) {
     throw Error("Source format and extraction method disagree.");
   return r;
 }
-function $R(e) {
-  const r = HE.parse(e),
+function validateRetainedSourceFile(e) {
+  const r = retainedSourceFileSchema.parse(e),
     t = r.fileName.split(".").at(-1)?.toLowerCase();
   if ((t === "jpg" ? "jpeg" : t === "htm" ? "html" : t) !== r.format)
     throw Error("Source extension and format disagree.");
@@ -889,10 +957,11 @@ function $R(e) {
   if (btoa(n) !== r.base64 || n.length !== r.byteLength)
     throw Error("Retained source byte length changed.");
   const o = Uint8Array.from(n, (s) => s.charCodeAt(0));
-  if (iu(o) !== r.sha256) throw Error("Retained source checksum mismatch.");
+  if (sha256HexDigest(o) !== r.sha256)
+    throw Error("Retained source checksum mismatch.");
   return o;
 }
-function zoe(e, r, t) {
+function buildRetainedSourceRecord(e, r, t) {
   let n = "";
   for (let a = 0; a < e.length; a += 8192)
     n += String.fromCharCode(...e.subarray(a, a + 8192));
@@ -900,16 +969,16 @@ function zoe(e, r, t) {
     fileName: r,
     format: t,
     byteLength: e.length,
-    sha256: iu(e),
+    sha256: sha256HexDigest(e),
     base64: btoa(n),
   };
-  return ($R(o), o);
+  return (validateRetainedSourceFile(o), o);
 }
-function zR(e, r) {
-  if (e.confidence < Cd.confidence && !r)
+function resolveExtractedCellValue(e, r) {
+  if (e.confidence < sourceImportLimits.confidence && !r)
     throw Error("Review every low-confidence cell before importing.");
   if (!r) return e.value;
-  const t = OU.parse(r);
+  const t = reviewCorrectionSchema.parse(r);
   return t.decision === "exclude"
     ? null
     : t.decision === "correct"
@@ -921,9 +990,12 @@ function MU(e) {
   Object.freeze(e);
   for (const r of Object.values(e)) r && typeof r == "object" && MU(r);
 }
-function Voe(e, r) {
+function validateSourceImports(e, r) {
   if (e.sourceImports === undefined) return;
-  if (!Array.isArray(e.sourceImports) || e.sourceImports.length > Cd.imports)
+  if (
+    !Array.isArray(e.sourceImports) ||
+    e.sourceImports.length > sourceImportLimits.imports
+  )
     throw Error("Source import count exceeded.");
   if (
     e.sourceImports.some((o) => !o || typeof o != "object" || !uk.has(o)) &&
@@ -941,10 +1013,10 @@ function Voe(e, r) {
           throw Error("Duplicate source import ID.");
         return (n.add(d.id), d);
       }
-      const a = $oe.parse(o);
+      const a = sourceImportRecordSchema.parse(o);
       if (
-        ($R(a.original),
-        kC({
+        (validateRetainedSourceFile(a.original),
+        validateExtractedSourceTables({
           schemaVersion: 1,
           fileName: a.original.fileName,
           format: a.original.format,
@@ -964,7 +1036,7 @@ function Voe(e, r) {
         (a.table.rows.forEach((d, u) =>
           d.forEach((l, c) => {
             const h = `${u}:${c}`;
-            (s.add(h), zR(l, a.resolutions[h]));
+            (s.add(h), resolveExtractedCellValue(l, a.resolutions[h]));
           }),
         ),
         Object.keys(a.resolutions).some((d) => !s.has(d)))
@@ -973,17 +1045,17 @@ function Voe(e, r) {
       if (n.has(a.id)) throw Error("Duplicate source import ID.");
       return (n.add(a.id), (t += a.original.byteLength), MU(a), uk.add(a), a);
     })),
-    t > Cd.retainedBytes)
+    t > sourceImportLimits.retainedBytes)
   )
     throw Error("Retained source byte budget exceeded.");
 }
-const VR = Object.freeze({
+const xlsxInspectionLimits = Object.freeze({
     maxBytes: 10 * 1024 * 1024,
     maxParts: 2e3,
     maxDetails: 1e5,
   }),
   q5 = new WeakSet();
-function SC(e) {
+function validateRetainedXlsxSource(e) {
   if (
     !e ||
     typeof e != "object" ||
@@ -994,7 +1066,7 @@ function SC(e) {
     /[\\/\x00-\x1f\x7f]/.test(e.fileName) ||
     !Number.isSafeInteger(e.byteLength) ||
     e.byteLength < 22 ||
-    e.byteLength > VR.maxBytes ||
+    e.byteLength > xlsxInspectionLimits.maxBytes ||
     typeof e.sha256 != "string" ||
     !/^[a-f0-9]{64}$/.test(e.sha256) ||
     typeof e.base64 != "string" ||
@@ -1013,12 +1085,12 @@ function SC(e) {
   if (btoa(r) !== e.base64 || r.length !== e.byteLength)
     throw Error("Retained XLSX source byte length or encoding changed.");
   const t = Uint8Array.from(r, (n) => n.charCodeAt(0));
-  if (iu(t) !== e.sha256)
+  if (sha256HexDigest(t) !== e.sha256)
     throw Error("Retained XLSX source checksum does not match its bytes.");
   return t;
 }
-function Woe(e, r) {
-  if (e.byteLength > VR.maxBytes)
+function retainOriginalXlsx(e, r) {
+  if (e.byteLength > xlsxInspectionLimits.maxBytes)
     throw Error("Original XLSX exceeds the 10 MiB retention limit.");
   let t = "";
   for (let o = 0; o < e.length; o += 8192)
@@ -1027,19 +1099,19 @@ function Woe(e, r) {
     schemaVersion: 1,
     fileName: r,
     byteLength: e.length,
-    sha256: iu(e),
+    sha256: sha256HexDigest(e),
     base64: btoa(t),
   };
-  return (SC(n), Object.freeze(n), q5.add(n), n);
+  return (validateRetainedXlsxSource(n), Object.freeze(n), q5.add(n), n);
 }
-function Hoe(e, r) {
+function readRetainedXlsxSource(e, r) {
   if (e.xlsxSource === undefined) return;
   const t = e.xlsxSource;
   if (t && typeof t == "object" && q5.has(t)) {
     r.xlsxSource = t;
     return;
   }
-  (SC(t),
+  (validateRetainedXlsxSource(t),
     (r.xlsxSource = Object.freeze({
       schemaVersion: 1,
       fileName: t.fileName,
@@ -1049,37 +1121,44 @@ function Hoe(e, r) {
     })),
     q5.add(r.xlsxSource));
 }
-function WR(e) {
+function requireRetainedXlsxSource(e) {
   if (!e.xlsxSource)
     throw Error(
       "This workbook has no retained XLSX source. Open an XLSX file to retain its original bytes.",
     );
   return {
-    bytes: SC(e.xlsxSource),
+    bytes: validateRetainedXlsxSource(e.xlsxSource),
     fileName: e.xlsxSource.fileName,
     sha256: e.xlsxSource.sha256,
   };
 }
-const HR = ["xls", "xlsb", "xlsm", "xltx", "xltm", "ods"],
-  $O = (e) =>
+const alternateFormatExtensions = [
+    "xls",
+    "xlsb",
+    "xlsm",
+    "xltx",
+    "xltm",
+    "ods",
+  ],
+  isSafeFileName = (e) =>
     typeof e == "string" &&
     e.length > 0 &&
     e.length <= 255 &&
     !/[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(e),
   jU = new WeakSet();
-function qR(e) {
+function validateAlternateSource(e) {
   if (
     !e ||
     typeof e != "object" ||
-    !HR.includes(e.format) ||
-    !$O(e.fileName) ||
+    !alternateFormatExtensions.includes(e.format) ||
+    !isSafeFileName(e.fileName) ||
     !e.fileName.toLowerCase().endsWith("." + e.format) ||
     !e.conversion ||
     !["template-adapter", "external-conversion"].includes(
       e.conversion.method,
     ) ||
     (e.conversion.method === "template-adapter" && e.format !== "xltx") ||
-    !$O(e.conversion.convertedFileName) ||
+    !isSafeFileName(e.conversion.convertedFileName) ||
     !/\.xlsx$/i.test(e.conversion.convertedFileName) ||
     typeof e.conversion.convertedSha256 != "string" ||
     !/^[a-f0-9]{64}$/.test(e.conversion.convertedSha256) ||
@@ -1089,39 +1168,50 @@ function qR(e) {
     e.conversion.equivalence !== "not-verified"
   )
     throw Error("Invalid alternate workbook source or conversion provenance.");
-  return SC({ ...e, fileName: "retained.xlsx" });
+  return validateRetainedXlsxSource({ ...e, fileName: "retained.xlsx" });
 }
-function FU(e, r, t, n) {
+function retainAlternateFormatSource(e, r, t, n) {
   const o = {
-    ...Woe(e, "retained.xlsx"),
+    ...retainOriginalXlsx(e, "retained.xlsx"),
     fileName: r,
     format: t,
     conversion: { ...n },
   };
-  return (qR(o), Object.freeze(o.conversion), Object.freeze(o), jU.add(o), o);
+  return (
+    validateAlternateSource(o),
+    Object.freeze(o.conversion),
+    Object.freeze(o),
+    jU.add(o),
+    o
+  );
 }
-function qoe(e, r) {
+function normalizeAlternateFormatSource(e, r) {
   if (e.alternateSource === undefined) return;
   const t = e.alternateSource;
   if (jU.has(t)) {
     r.alternateSource = t;
     return;
   }
-  const n = qR(t);
-  r.alternateSource = FU(n, t.fileName, t.format, t.conversion);
+  const n = validateAlternateSource(t);
+  r.alternateSource = retainAlternateFormatSource(
+    n,
+    t.fileName,
+    t.format,
+    t.conversion,
+  );
 }
-function Xoe(e) {
+function requireAlternateFormatOriginal(e) {
   const r = e.alternateSource;
   if (!r)
     throw Error("This workbook has no retained alternate-format original.");
   return {
-    bytes: qR(r),
+    bytes: validateAlternateSource(r),
     fileName: r.fileName,
     sha256: r.sha256,
     format: r.format,
   };
 }
-const ol = Object.freeze({
+const automationLimits = Object.freeze({
     maxFileBytes: 10 * 1024 * 1024,
     maxSourceBytes: 256 * 1024,
     maxArtifactBytes: 2 * 1024 * 1024,
@@ -1132,23 +1222,23 @@ const ol = Object.freeze({
     maxCells: 500,
     maxTokens: 2e4,
   }),
-  Goe = [
+  automationArtifactKinds = [
     "vba",
     "office-script",
     "office-script-container",
     "excel-container",
     "legacy-container",
   ];
-function Zoe(e) {
+function encodeBytesToBase64(e) {
   let r = "";
   for (let t = 0; t < e.length; t += 8192)
     r += String.fromCharCode(...e.subarray(t, t + 8192));
   return btoa(r);
 }
-function X5(e) {
+function decodeAutomationArtifact(e) {
   if (
     typeof e != "string" ||
-    e.length > Math.ceil(ol.maxArtifactBytes / 3) * 4 ||
+    e.length > Math.ceil(automationLimits.maxArtifactBytes / 3) * 4 ||
     !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(e)
   )
     throw Error("Invalid automation artifact encoding or size.");
@@ -1157,29 +1247,29 @@ function X5(e) {
     throw Error("Automation artifact is not canonical base64.");
   return Uint8Array.from(r, (t) => t.charCodeAt(0));
 }
-const qh = (e, r, t) => {
+const requireAutomationText = (e, r, t) => {
     if (typeof e != "string" || !e.trim() || e.length > r)
       throw Error(`Invalid automation ${t}.`);
     return e;
   },
-  ck = (e) => {
+  requireAutomationSourceHash = (e) => {
     if (typeof e != "string" || !/^[a-f0-9]{64}$/.test(e))
       throw Error("Invalid automation source hash.");
     return e;
   },
-  Gb = (e, r, t) => {
+  requireAutomationEvidenceCount = (e, r, t) => {
     if (!Number.isSafeInteger(e) || Number(e) < r || Number(e) > t)
       throw Error("Invalid automation evidence count.");
     return Number(e);
   },
-  zO = (e) => {
-    const r = qh(e, 40, "timestamp");
+  requireAutomationTimestamp = (e) => {
+    const r = requireAutomationText(e, 40, "timestamp");
     if (!/^\d{4}-\d\d-\d\dT/.test(r) || !Number.isFinite(Date.parse(r)))
       throw Error("Invalid automation timestamp.");
     return r;
   },
-  Koe = (e) => {
-    const r = qh(e, 40, "approved range"),
+  validateAutomationApprovedRange = (e) => {
+    const r = requireAutomationText(e, 40, "approved range"),
       t = /^([A-Z]{1,3})([1-9]\d*):([A-Z]{1,3})([1-9]\d*)$/.exec(r);
     if (!t) throw Error("Invalid automation approved range.");
     const n = (u) => [...u].reduce((l, c) => l * 26 + c.charCodeAt(0) - 64, 0),
@@ -1189,22 +1279,22 @@ const qh = (e, r, t) => {
       a > d ||
       s > 16384 ||
       d > 1048576 ||
-      (s - o + 1) * (d - a + 1) > ol.maxCells
+      (s - o + 1) * (d - a + 1) > automationLimits.maxCells
     )
       throw Error("Invalid automation approved range.");
     return r;
   };
-function VO(e) {
-  const r = qh(e, 255, "file name");
+function requireAutomationFileName(e) {
+  const r = requireAutomationText(e, 255, "file name");
   if (/[\\/\x00-\x1f\x7f]/.test(r) || r === "." || r === "..")
     throw Error("Invalid automation file name.");
   return r;
 }
-function Yoe(e, r) {
+function validateAutomationArtifacts(e, r) {
   if (e.automationArtifacts !== undefined) {
     if (
       !Array.isArray(e.automationArtifacts) ||
-      e.automationArtifacts.length > ol.maxArtifacts
+      e.automationArtifacts.length > automationLimits.maxArtifacts
     )
       throw Error("Keep at most 20 automation artifacts.");
     let t = 0;
@@ -1213,42 +1303,42 @@ function Yoe(e, r) {
       if (!o || typeof o != "object" || Array.isArray(o))
         throw Error("Invalid automation artifact.");
       const a = o,
-        s = qh(a.id, 100, "artifact ID");
+        s = requireAutomationText(a.id, 100, "artifact ID");
       if (n.has(s)) throw Error("Duplicate automation artifact ID.");
       n.add(s);
-      const d = X5(a.base64);
+      const d = decodeAutomationArtifact(a.base64);
       if (
         ((t += d.length),
         !d.length ||
           d.length !== a.byteLength ||
-          d.length > ol.maxArtifactBytes ||
-          t > ol.maxStoredBytes)
+          d.length > automationLimits.maxArtifactBytes ||
+          t > automationLimits.maxStoredBytes)
       )
         throw Error(
           "Automation artifacts exceed their 2 MB per-file or 10 MB retained-byte budget.",
         );
-      if (iu(d) !== ck(a.sha256))
+      if (sha256HexDigest(d) !== requireAutomationSourceHash(a.sha256))
         throw Error(
           "Automation artifact checksum does not match its preserved bytes.",
         );
-      if (!Goe.includes(a.kind))
+      if (!automationArtifactKinds.includes(a.kind))
         throw Error("Unknown automation artifact kind.");
       return {
         id: s,
-        fileName: VO(a.fileName),
+        fileName: requireAutomationFileName(a.fileName),
         kind: a.kind,
         sha256: a.sha256,
         byteLength: d.length,
         base64: a.base64,
-        retainedAt: zO(a.retainedAt),
-        retainedBy: qh(a.retainedBy, 100, "retainer"),
+        retainedAt: requireAutomationTimestamp(a.retainedAt),
+        retainedBy: requireAutomationText(a.retainedBy, 100, "retainer"),
       };
     });
   }
   if (e.automationRuns !== undefined) {
     if (
       !Array.isArray(e.automationRuns) ||
-      e.automationRuns.length > ol.maxRuns
+      e.automationRuns.length > automationLimits.maxRuns
     )
       throw Error("Automation run evidence is limited to 100 runs.");
     const t = new Set();
@@ -1256,7 +1346,7 @@ function Yoe(e, r) {
       if (!n || typeof n != "object" || Array.isArray(n))
         throw Error("Invalid automation run evidence.");
       const o = n,
-        a = qh(o.id, 100, "run ID");
+        a = requireAutomationText(o.id, 100, "run ID");
       if (t.has(a)) throw Error("Duplicate automation run ID.");
       if (
         (t.add(a),
@@ -1266,11 +1356,19 @@ function Yoe(e, r) {
         throw Error("Unknown automation migration adapter.");
       if (
         !Array.isArray(o.sourceLines) ||
-        o.sourceLines.length > ol.maxCommands
+        o.sourceLines.length > automationLimits.maxCommands
       )
         throw Error("Invalid automation source lines.");
-      const s = Gb(o.beforeRevision, 0, Number.MAX_SAFE_INTEGER - 2),
-        d = Gb(o.afterRevision, 1, Number.MAX_SAFE_INTEGER - 1);
+      const s = requireAutomationEvidenceCount(
+          o.beforeRevision,
+          0,
+          Number.MAX_SAFE_INTEGER - 2,
+        ),
+        d = requireAutomationEvidenceCount(
+          o.afterRevision,
+          1,
+          Number.MAX_SAFE_INTEGER - 1,
+        );
       if (d !== s + 1)
         throw Error("Automation run revisions are inconsistent.");
       if (o.sourceLines.length !== o.commands)
@@ -1279,26 +1377,40 @@ function Yoe(e, r) {
         );
       return {
         id: a,
-        eventId: qh(o.eventId, 100, "event ID"),
-        sourceName: VO(o.sourceName),
-        sourceSha256: ck(o.sourceSha256),
-        codeSha256: ck(o.codeSha256),
+        eventId: requireAutomationText(o.eventId, 100, "event ID"),
+        sourceName: requireAutomationFileName(o.sourceName),
+        sourceSha256: requireAutomationSourceHash(o.sourceSha256),
+        codeSha256: requireAutomationSourceHash(o.codeSha256),
         language: o.language,
         adapter: o.adapter,
-        actor: qh(o.actor, 100, "actor"),
-        timestamp: zO(o.timestamp),
+        actor: requireAutomationText(o.actor, 100, "actor"),
+        timestamp: requireAutomationTimestamp(o.timestamp),
         beforeRevision: s,
         afterRevision: d,
-        sheetId: qh(o.sheetId, 100, "sheet ID"),
-        range: Koe(o.range),
-        commands: Gb(o.commands, 1, ol.maxCommands),
-        changedCells: Gb(o.changedCells, 0, ol.maxCells),
-        sourceLines: o.sourceLines.map((u) => Gb(u, 1, ol.maxSourceBytes + 1)),
+        sheetId: requireAutomationText(o.sheetId, 100, "sheet ID"),
+        range: validateAutomationApprovedRange(o.range),
+        commands: requireAutomationEvidenceCount(
+          o.commands,
+          1,
+          automationLimits.maxCommands,
+        ),
+        changedCells: requireAutomationEvidenceCount(
+          o.changedCells,
+          0,
+          automationLimits.maxCells,
+        ),
+        sourceLines: o.sourceLines.map((u) =>
+          requireAutomationEvidenceCount(
+            u,
+            1,
+            automationLimits.maxSourceBytes + 1,
+          ),
+        ),
       };
     });
   }
 }
-function Joe(e, r) {
+function validateDelimitedSourceFootprint(e, r) {
   if (e === undefined) return;
   if (!e || typeof e != "object" || Array.isArray(e))
     throw Error("Invalid delimited source footprint.");
@@ -1306,10 +1418,10 @@ function Joe(e, r) {
   if (
     !Number.isInteger(t.records) ||
     Number(t.records) < 1 ||
-    Number(t.records) > Mt.maxRows ||
+    Number(t.records) > workbookLimits.maxRows ||
     !Number.isInteger(t.columns) ||
     Number(t.columns) < 1 ||
-    Number(t.columns) > Mt.maxCols ||
+    Number(t.columns) > workbookLimits.maxCols ||
     typeof t.hasHeader != "boolean"
   )
     throw Error(
@@ -1322,7 +1434,7 @@ function Joe(e, r) {
   };
 }
 const B2 = 100,
-  Qoe = [
+  referenceImpactKinds = [
     "deleted-cells",
     "deleted-sheet",
     "overwritten",
@@ -1335,12 +1447,12 @@ const B2 = 100,
     !Array.isArray(e) &&
     [Object.prototype, null].includes(Object.getPrototypeOf(e)),
   HO = (e, r) => Object.keys(e).every((t) => r.includes(t)),
-  dk = (e, r) =>
+  isBoundedPlainText = (e, r) =>
     typeof e == "string" &&
     !!e.trim() &&
     e.length <= r &&
     !/[\u0000-\u001f]/.test(e);
-const Ls = {
+const whatIfLimits = {
     inputs: 32,
     outputs: 16,
     scenarios: 100,
@@ -1350,9 +1462,9 @@ const Ls = {
     workUnits: 5e4,
     savedAnalyses: 40,
   },
-  Vu = (e) => JSON.stringify([e.sheetId, e.address]),
+  cellAddressKey = (e) => JSON.stringify([e.sheetId, e.address]),
   qE = (e) => typeof e == "number" && Number.isFinite(e);
-function Yh(e, r) {
+function validateWhatIfFields(e, r) {
   if (
     !e ||
     typeof e != "object" ||
@@ -1363,7 +1475,7 @@ function Yh(e, r) {
     throw Error("Invalid what-if analysis fields.");
   return e;
 }
-function Ep(e, r = 100) {
+function requireWhatIfName(e, r = 100) {
   if (
     typeof e != "string" ||
     !e.trim() ||
@@ -1375,19 +1487,19 @@ function Ep(e, r = 100) {
     );
   return e.trim();
 }
-function l1(e, r, t = 1) {
+function requireWhatIfList(e, r, t = 1) {
   if (!Array.isArray(e) || e.length < t || e.length > r)
     throw Error(`What-if lists require ${t}–${r} entries.`);
   return Array.from(e);
 }
-function e1(e, r) {
-  return l1(e, r).map((t) => {
+function validateWhatIfValues(e, r) {
+  return requireWhatIfList(e, r).map((t) => {
     if (!qE(t))
       throw Error("Every what-if input value must be a finite number.");
     return t;
   });
 }
-function PU(e) {
+function expandWhatIfScenarios(e) {
   return e.kind === "scenarios"
     ? e.scenarios.map((r) => ({ name: r.name, inputs: r.values }))
     : e.kind === "one-variable"
@@ -1396,7 +1508,7 @@ function PU(e) {
           e.rowValues.map((t) => ({ name: `${t} / ${r}`, inputs: [t, r] })),
         );
 }
-const wg = {
+const printRenderLimits = {
     areaCells: 5e3,
     pages: 100,
     titleRows: 100,
@@ -1404,13 +1516,14 @@ const wg = {
     breaksPerAxis: 100,
     renderedCells: 1e5,
   },
-  XE = {
+  defaultPrintHeaderFooter = {
     header: `&[Workbook]
 Engagement: &[Engagement] · Period: &[Period]`,
     footer: "Revision &[Revision] · &A · Page &P of &N",
   },
-  GR = /&&|&\[(Workbook|Revision|Engagement|Period)\]|&[PNA]/g;
-function UU(e, r) {
+  headerFooterTokenPattern =
+    /&&|&\[(Workbook|Revision|Engagement|Period)\]|&[PNA]/g;
+function resolvePrintIdentityToken(e, r) {
   return e === "Workbook"
     ? (r?.name ?? "[Workbook not available]")
     : e === "Revision"
@@ -1421,10 +1534,10 @@ function UU(e, r) {
         ? r?.metadata?.engagement || "[Engagement not set]"
         : r?.metadata?.period || "[Period not set]";
 }
-function rae(e, r, t, n, o) {
-  return e.replace(GR, (a, s) =>
+function expandHeaderFooterTemplate(e, r, t, n, o) {
+  return e.replace(headerFooterTokenPattern, (a, s) =>
     s
-      ? UU(s, r)
+      ? resolvePrintIdentityToken(s, r)
       : a === "&&"
         ? "&"
         : a === "&A"
@@ -1432,14 +1545,14 @@ function rae(e, r, t, n, o) {
           : String(a === "&P" ? n : o),
   );
 }
-function XO(e, r) {
-  const t = e.replace(GR, (n, o) => {
+function exportHeaderFooterTemplate(e, r) {
+  const t = e.replace(headerFooterTokenPattern, (n, o) => {
     if (!o) return n;
     if (!r)
       throw Error(
         "Exporting print identity fields requires the current workbook snapshot.",
       );
-    return UU(o, r).replace(/&/g, "&&");
+    return resolvePrintIdentityToken(o, r).replace(/&/g, "&&");
   });
   if (t.length > 255)
     throw Error(
@@ -1447,11 +1560,11 @@ function XO(e, r) {
     );
   return t;
 }
-function GE(e, r) {
+function validatePrintPageBreaks(e, r) {
   if (e !== undefined) {
     if (
       !Array.isArray(e) ||
-      e.length > wg.breaksPerAxis ||
+      e.length > printRenderLimits.breaksPerAxis ||
       e.some(
         (t, n) =>
           !Number.isSafeInteger(t) ||
@@ -1466,14 +1579,14 @@ function GE(e, r) {
     return e.length ? [...e] : undefined;
   }
 }
-function nae(e) {
+function createPrintSnapshotGuard(e) {
   return Object.freeze({
     workbookId: e.id,
     revision: e.revision,
     snapshotGuard: JSON.stringify(e),
   });
 }
-function $U(e, r) {
+function verifyPrintSnapshotGuard(e, r) {
   if (
     r.workbookId !== e.id ||
     r.revision !== e.revision ||
@@ -1483,7 +1596,7 @@ function $U(e, r) {
       "The workbook changed after page setup opened. Close and reopen page setup.",
     );
 }
-function KR(e) {
+function resolvePageDimensions(e) {
   const r =
     e.paper === "a4"
       ? [793.7007874015749, 1122.5196850393702]
@@ -1494,7 +1607,7 @@ function KR(e) {
     ? { width: r[1], height: r[0] }
     : { width: r[0], height: r[1] };
 }
-const VU = [
+const textCleanupFunctionNames = [
     "TRIM",
     "CLEAN",
     "UPPER",
@@ -1522,13 +1635,14 @@ const VU = [
     typeof e == "object" &&
     !Array.isArray(e) &&
     [Object.prototype, null].includes(Object.getPrototypeOf(e)),
-  gp = () => {
+  throwTextCleanupEvidenceError = () => {
     throw Error(
       "Invalid or over-capacity text cleanup evidence. Keep the original native backup.",
     );
   };
-function L2(e, r) {
-  (!sae(e) || Object.keys(e).some((t) => !r.includes(t))) && gp();
+function assertPlainObjectKeys(e, r) {
+  (!sae(e) || Object.keys(e).some((t) => !r.includes(t))) &&
+    throwTextCleanupEvidenceError();
 }
 function WU(e) {
   return (
@@ -1541,23 +1655,23 @@ function WU(e) {
 function jm(e, r) {
   return typeof e == "string" && e.length > 0 && e.length <= r;
 }
-function YR(e) {
+function validateTextCleanupSteps(e) {
   if (!Array.isArray(e) || !e.length || e.length > 12)
     throw Error("Choose 1–12 text cleanup steps.");
   return e.map(
     (r) => (
-      L2(r, ["function", "args"]),
-      (!VU.includes(r.function) ||
+      assertPlainObjectKeys(r, ["function", "args"]),
+      (!textCleanupFunctionNames.includes(r.function) ||
         !Array.isArray(r.args) ||
         r.args.length > 5 ||
         r.args.some((t) => t === null || !WU(t)) ||
         JSON.stringify(r.args).length > 4096) &&
-        gp(),
+        throwTextCleanupEvidenceError(),
       { function: r.function, args: [...r.args] }
     ),
   );
 }
-function lae(e, r) {
+function assertTextCleanupEvidenceUnchanged(e, r) {
   var n;
   if (!((n = e.textCleanups) != null && n.length)) return r;
   const t = new Map(e.textCleanups.map((o) => [o.id, o]));
@@ -1574,62 +1688,74 @@ function lae(e, r) {
     ],
   };
 }
-const Z5 = {
+const textInferenceLimits = {
     inferencePatterns: 8e3,
     inferenceCandidates: 30,
     evidenceCharacters: 5e6,
   },
-  ZE = number().int().min(0).max(49),
-  Bh = array(ZE)
+  columnIndexSchema = number().int().min(0).max(49),
+  distinctColumnPositions = array(columnIndexSchema)
     .min(1)
     .max(50)
     .refine(
       (e) => new Set(e).size === e.length,
       "Choose distinct column positions.",
     ),
-  qU = string().max(32767),
-  JR = union([qU, number().finite(), boolean(), _null()]),
-  XU = _enum(["none", "upper", "lower", "proper"]),
-  uae = strictObject({
-    column: ZE,
+  cellTextValueSchema = string().max(32767),
+  transformCellValueSchema = union([
+    cellTextValueSchema,
+    number().finite(),
+    boolean(),
+    _null(),
+  ]),
+  textCaseModeSchema = _enum(["none", "upper", "lower", "proper"]),
+  textExtractStepSchema = strictObject({
+    column: columnIndexSchema,
     mode: _enum(["whole", "token", "slice", "before", "after"]),
     delimiter: string().min(1).max(16).default(" "),
     index: number().int().min(-50).max(49).default(0),
     start: number().int().min(0).max(32767).default(0),
     length: number().int().min(1).max(32767).default(1),
   }),
-  GU = strictObject({
-    parts: array(uae).min(1).max(8),
+  textJoinSpecSchema = strictObject({
+    parts: array(textExtractStepSchema).min(1).max(8),
     separator: string().max(100),
     prefix: string().max(1e3),
     suffix: string().max(1e3),
-    casing: XU,
+    casing: textCaseModeSchema,
   }),
-  ZU = strictObject({ row: number().int().min(1).max(1048576), value: qU }),
-  cae = array(ZU)
+  sourceRowValueSchema = strictObject({
+    row: number().int().min(1).max(1048576),
+    value: cellTextValueSchema,
+  }),
+  distinctExampleRowsSchema = array(sourceRowValueSchema)
     .min(2)
     .max(10)
     .refine(
       (e) => new Set(e.map((r) => r.row)).size === e.length,
       "Use examples from distinct source rows.",
     ),
-  dae = discriminatedUnion("kind", [
+  fieldTransformStepSchema = discriminatedUnion("kind", [
     strictObject({
       kind: literal("trim"),
-      columns: Bh,
+      columns: distinctColumnPositions,
       mode: _enum(["edges", "collapse"]),
     }),
-    strictObject({ kind: literal("clean"), columns: Bh }),
-    strictObject({ kind: literal("case"), columns: Bh, mode: XU }),
+    strictObject({ kind: literal("clean"), columns: distinctColumnPositions }),
+    strictObject({
+      kind: literal("case"),
+      columns: distinctColumnPositions,
+      mode: textCaseModeSchema,
+    }),
     strictObject({
       kind: literal("replace"),
-      columns: Bh,
+      columns: distinctColumnPositions,
       find: string().min(1).max(1e3),
       replacement: string().max(1e3),
     }),
     strictObject({
       kind: literal("split"),
-      column: ZE,
+      column: columnIndexSchema,
       mode: _enum(["delimited", "fixed"]),
       delimiters: string().max(16),
       collapse: boolean(),
@@ -1637,14 +1763,14 @@ const Z5 = {
     }),
     strictObject({
       kind: literal("concat"),
-      columns: Bh,
+      columns: distinctColumnPositions,
       separator: string().max(100),
       name: string().min(1).max(100),
       skipBlank: boolean(),
     }),
     strictObject({
       kind: literal("convert"),
-      columns: Bh,
+      columns: distinctColumnPositions,
       to: _enum(["text", "number", "integer", "boolean", "date"]),
       decimal: _enum([".", ","]),
       group: _enum(["", ".", ",", " ", "'"]),
@@ -1652,29 +1778,29 @@ const Z5 = {
     }),
     strictObject({
       kind: literal("fill"),
-      columns: Bh,
+      columns: distinctColumnPositions,
       direction: _enum(["down", "up", "value"]),
-      value: JR,
-      groupColumns: array(ZE).max(50),
+      value: transformCellValueSchema,
+      groupColumns: array(columnIndexSchema).max(50),
     }),
-    strictObject({ kind: literal("select"), columns: Bh }),
+    strictObject({ kind: literal("select"), columns: distinctColumnPositions }),
     strictObject({
       kind: literal("pattern"),
       name: string().min(1).max(100),
-      pattern: GU,
-      examples: cae,
-      inferenceColumns: Bh.max(8),
+      pattern: textJoinSpecSchema,
+      examples: distinctExampleRowsSchema,
+      inferenceColumns: distinctColumnPositions.max(8),
     }),
   ]),
-  fae = strictObject({
+  fieldTransformRecipeSchema = strictObject({
     sourceSheetId: string().min(1).max(100),
     sourceRange: string().min(1).max(50),
     header: boolean(),
     outputName: string().min(1).max(31),
-    steps: array(dae).max(12),
+    steps: array(fieldTransformStepSchema).max(12),
   });
-function KU(e) {
-  const r = fae.safeParse(e);
+function validateFieldTransformRecipe(e) {
+  const r = fieldTransformRecipeSchema.safeParse(e);
   if (!r.success)
     throw Error(
       `Invalid field transformation: ${r.error.issues[0]?.message ?? "review the recipe"}`,
@@ -1721,7 +1847,7 @@ function KU(e) {
   }
   return t;
 }
-function bae(e, r) {
+function assertFieldTransformsUnchanged(e, r) {
   var n;
   if (!((n = e.fieldTransforms) != null && n.length)) return r;
   const t = new Map(e.fieldTransforms.map((o) => [o.id, o]));
@@ -1742,13 +1868,19 @@ const JU = new WeakSet(),
   NC = new WeakSet(),
   YE = new WeakMap(),
   QU = new WeakMap(),
-  yae = new Set(["general", "number", "currency", "percent", "date"]),
-  wae = (e, r) => Object.prototype.hasOwnProperty.call(e, r),
-  Vh = (e) => !!e && typeof e == "object" && !Array.isArray(e),
+  numberFormatCategories = new Set([
+    "general",
+    "number",
+    "currency",
+    "percent",
+    "date",
+  ]),
+  hasOwnKey = (e, r) => Object.prototype.hasOwnProperty.call(e, r),
+  isNonArrayObject = (e) => !!e && typeof e == "object" && !Array.isArray(e),
   Hn = (e) => {
     throw new Error(e);
   },
-  Bu = (e, r, t = 32767) =>
+  requireBoundedText = (e, r, t = 32767) =>
     typeof e == "string" && e.length <= t
       ? e
       : Hn(`${r} must be text of at most ${t} characters.`),
@@ -1756,18 +1888,20 @@ const JU = new WeakSet(),
     typeof e == "number" && Number.isInteger(e) && e >= r && e <= t
       ? e
       : Hn(`${n} must be an integer between ${r} and ${t}.`);
-function ut(e) {
-  P2(e, 0, Mt.maxCols - 1, "Column");
+function columnIndexToLetters(e) {
+  P2(e, 0, workbookLimits.maxCols - 1, "Column");
   let r = "";
   for (let t = e + 1; t > 0; t = Math.floor((t - 1) / 26))
     r = String.fromCharCode(65 + ((t - 1) % 26)) + r;
   return r;
 }
-function h6(e, r, t) {
-  const n = DQ(r) + (e ? 0 : t);
-  return n < 0 || n >= Mt.maxCols ? "#REF!" : e + ut(n);
+function shiftColumnReference(e, r, t) {
+  const n = columnLettersToIndex(r) + (e ? 0 : t);
+  return n < 0 || n >= workbookLimits.maxCols
+    ? "#REF!"
+    : e + columnIndexToLetters(n);
 }
-function xd(e, r, t) {
+function shiftFormulaReferences(e, r, t) {
   if (!Number.isSafeInteger(r) || !Number.isSafeInteger(t))
     throw new Error("Formula offsets must be integers.");
   if (!e.startsWith("=")) return e;
@@ -1776,7 +1910,9 @@ function xd(e, r, t) {
   for (; o < e.length;) {
     const a = e.slice(o),
       s = e[o],
-      d = (o === 0 || !f6.test(e[o - 1])) && a.match(_Q);
+      d =
+        (o === 0 || !unquotedNameCharPattern.test(e[o - 1])) &&
+        a.match(sheetReferencePrefixPattern);
     if (d) {
       ((n += d[0]), (o += d[0].length));
       continue;
@@ -1798,21 +1934,23 @@ function xd(e, r, t) {
       n += e.slice(p, o);
       continue;
     }
-    const u = o === 0 || !f6.test(e[o - 1]),
+    const u = o === 0 || !unquotedNameCharPattern.test(e[o - 1]),
       l = u ? /^(\$?)([A-Za-z]{1,3}):(\$?)([A-Za-z]{1,3})/.exec(a) : null,
       c = u ? /^(\$?)([1-9]\d*):(\$?)([1-9]\d*)/.exec(a) : null,
       h = u ? /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)/.exec(a) : null,
       f = l ?? c ?? h;
     if (
       f &&
-      !f6.test(a[f[0].length] ?? "") &&
+      !unquotedNameCharPattern.test(a[f[0].length] ?? "") &&
       !/^\s*[(!]/.test(a.slice(f[0].length))
     ) {
-      if (l) n += `${h6(l[1], l[2], t)}:${h6(l[3], l[4], t)}`;
-      else if (c) n += `${p6(c[1], c[2], r)}:${p6(c[3], c[4], r)}`;
+      if (l)
+        n += `${shiftColumnReference(l[1], l[2], t)}:${shiftColumnReference(l[3], l[4], t)}`;
+      else if (c)
+        n += `${offsetRowReference(c[1], c[2], r)}:${offsetRowReference(c[3], c[4], r)}`;
       else if (h) {
-        const p = h6(h[1], h[2], t),
-          m = p6(h[3], h[4], r);
+        const p = shiftColumnReference(h[1], h[2], t),
+          m = offsetRowReference(h[3], h[4], r);
         n += p === "#REF!" || m === "#REF!" ? "#REF!" : p + m;
       }
       o += f[0].length;
@@ -1824,91 +1962,91 @@ function xd(e, r, t) {
 }
 
 export {
-  $R,
-  $U,
+  validateRetainedSourceFile,
+  verifyPrintSnapshotGuard,
   AU,
-  Aoe,
-  Ap,
+  validateAnalysisReport,
+  nonEmptyLabelSchema,
   B2,
-  Boe,
-  Bu,
-  CU,
-  Cd,
-  EU,
-  Ep,
-  FU,
-  GE,
-  GR,
-  GU,
-  H5,
+  validateDataModelReport,
+  requireBoundedText,
+  reportOutputFormatVersion,
+  sourceImportLimits,
+  parseAnalysisRequest,
+  requireWhatIfName,
+  retainAlternateFormatSource,
+  validatePrintPageBreaks,
+  headerFooterTokenPattern,
+  textJoinSpecSchema,
+  daxFunctionNames,
   HO,
-  HR,
+  alternateFormatExtensions,
   Hn,
-  Hoe,
-  JR,
+  readRetainedXlsxSource,
+  transformCellValueSchema,
   JU,
-  Joe,
-  KR,
-  KU,
-  Kh,
-  L2,
-  LR,
-  Ls,
+  validateDelimitedSourceFootprint,
+  resolvePageDimensions,
+  validateFieldTransformRecipe,
+  walkDaxSyntaxTree,
+  assertPlainObjectKeys,
+  DaxError,
+  whatIfLimits,
   NC,
   P2,
-  PR,
-  PU,
+  columnarModelFormatVersion,
+  expandWhatIfScenarios,
   QU,
-  Qoe,
-  Tc,
-  UO,
-  UR,
-  VR,
-  VU,
-  Vh,
-  Voe,
-  Vu,
-  Vv,
-  W5,
-  WE,
+  referenceImpactKinds,
+  createBoundedTextSchema,
+  parseDaxExpression,
+  validateModelQuery,
+  xlsxInspectionLimits,
+  textCleanupFunctionNames,
+  isNonArrayObject,
+  validateSourceImports,
+  cellAddressKey,
+  reportOutputLimits,
+  hashRecordExcludingHash,
+  validateDataModel,
   WO,
-  WR,
+  requireRetainedXlsxSource,
   WU,
-  X5,
-  XE,
-  XO,
-  Xoe,
+  decodeAutomationArtifact,
+  defaultPrintHeaderFooter,
+  exportHeaderFooterTemplate,
+  requireAlternateFormatOriginal,
   YE,
-  YR,
-  Yh,
-  Yoe,
-  Z5,
-  ZU,
-  Zoe,
-  bae,
-  dk,
-  e1,
-  gp,
-  ig,
-  jR,
+  validateTextCleanupSteps,
+  validateWhatIfFields,
+  validateAutomationArtifacts,
+  textInferenceLimits,
+  sourceRowValueSchema,
+  encodeBytesToBase64,
+  assertFieldTransformsUnchanged,
+  isBoundedPlainText,
+  validateWhatIfValues,
+  throwTextCleanupEvidenceError,
+  analysisLimits,
+  analysisFormatVersion,
   jm,
-  kC,
-  l1,
-  lae,
-  nae,
-  ol,
-  on,
+  validateExtractedSourceTables,
+  requireWhatIfList,
+  assertTextCleanupEvidenceUnchanged,
+  createPrintSnapshotGuard,
+  automationLimits,
+  throwDaxError,
   qE,
-  qoe,
-  rae,
-  t0,
-  ta,
-  ut,
-  wae,
-  wg,
-  xd,
-  yae,
-  zE,
-  zR,
-  zoe,
+  normalizeAlternateFormatSource,
+  expandHeaderFooterTemplate,
+  daxExpressionLimits,
+  dataModelLimits,
+  columnIndexToLetters,
+  hasOwnKey,
+  printRenderLimits,
+  shiftFormulaReferences,
+  numberFormatCategories,
+  reportHashSchema,
+  resolveExtractedCellValue,
+  buildRetainedSourceRecord,
 };

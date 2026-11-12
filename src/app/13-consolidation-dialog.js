@@ -1,35 +1,47 @@
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
-import { hr } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  $a,
-  CC,
-  DR,
-  Ku,
-  Op,
-  Ta,
-  Vn,
-  ct,
-  k1,
-  on,
-  rn,
-  ut,
+  assertWorkbookStructureEditable,
+  consolidationFormatVersion,
+  serializeTypedCategoryKey,
+  createWorksheetRecord,
+  sumConsolidationAmounts,
+  formatOccupiedRangeAddress,
+  calculateWorkbookWithSettings,
+  parseRangeAddress,
+  consolidationLimits,
+  throwDaxError,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { H1 } from "./07-xlsx-archive-reader.js";
-import { yh } from "./09-workbook-links.js";
-import { ez, nz, rz, tz } from "./12-formula-dependency-inspector.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { importWorkbookFile } from "./07-xlsx-archive-reader.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import {
+  readSourceTableRecords,
+  buildConsolidationOutputCells,
+  createConsolidationPreview,
+  buildAuthorizedContextSnapshot,
+} from "./12-formula-dependency-inspector.js";
 
-function ece(e, r, t = {}) {
+function publishConsolidatedSchedule(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (($a(e), hr(e) !== r.workbookHash || tz(e, t) !== r.contextHash))
+  if (
+    (assertWorkbookStructureEditable(e),
+    fingerprintCanonicalValue(e) !== r.workbookHash ||
+      buildAuthorizedContextSnapshot(e, t) !== r.contextHash)
+  )
     throw Error(
       "Workbook or authorization changed. Preview consolidation again.",
     );
-  const n = rz(e, r.request, t);
-  if (hr(n) !== hr(r))
+  const n = createConsolidationPreview(e, r.request, t);
+  if (fingerprintCanonicalValue(n) !== fingerprintCanonicalValue(r))
     throw Error(
       "Source data or the reviewed plan changed. Preview consolidation again.",
     );
@@ -39,9 +51,9 @@ function ece(e, r, t = {}) {
     );
   const o = n.request.definition,
     a = n.review,
-    s = Ku(r.request.outputName),
+    s = createWorksheetRecord(r.request.outputName),
     d = o.categoryLabels.length + 4,
-    u = ut(d),
+    u = columnIndexToLetters(d),
     l = o.categoryLabels.length + 7,
     c = [
       "Row type",
@@ -59,7 +71,7 @@ function ece(e, r, t = {}) {
       const F = h++;
       return (
         E.forEach((I, O) => {
-          s.cells[`${ut(O)}${F}`] = {
+          s.cells[`${columnIndexToLetters(O)}${F}`] = {
             raw: I,
             ...(typeof I == "string" && I.startsWith("=") && O !== A
               ? { literal: true }
@@ -107,7 +119,7 @@ function ece(e, r, t = {}) {
     v = (E, A) => {
       const k = new Map();
       for (const F of E) {
-        const I = DR(F.categories.slice(0, A)),
+        const I = serializeTypedCategoryKey(F.categories.slice(0, A)),
           O = k.get(I) ?? [];
         (O.push(F), k.set(I, O));
       }
@@ -116,7 +128,7 @@ function ece(e, r, t = {}) {
         (A < o.categoryLabels.length ? v(F, A + 1) : F.forEach(m),
           f.push({
             address: `${u}${h}`,
-            expected: Op(F.map((z) => z.amount)),
+            expected: sumConsolidationAmounts(F.map((z) => z.amount)),
             count: F.length,
           }));
         const O = h - 1,
@@ -166,11 +178,11 @@ function ece(e, r, t = {}) {
       d,
       `Reviewed grand total ${a.grandTotal}; source controls ${a.sourceTotal}; difference ${a.difference}. No implicit conversion.`,
     ),
-    h - 1 > k1.outputRows ||
-      (h - 1) * l > k1.outputCells ||
+    h - 1 > consolidationLimits.outputRows ||
+      (h - 1) * l > consolidationLimits.outputCells ||
       e.sheets.reduce((E, A) => E + Object.keys(A.cells).length, 0) +
         Object.keys(s.cells).length >
-        Mt.maxCells)
+        workbookLimits.maxCells)
   )
     throw Error(
       "Consolidation exceeds the output or workbook cell budget. No worksheet was published.",
@@ -179,23 +191,27 @@ function ece(e, r, t = {}) {
     (s.columnWidths = Object.fromEntries(
       c.map((E, A) => [A, A === l - 2 ? 340 : A === l - 1 ? 260 : 130]),
     )));
-  const g = `A1:${ut(l - 1)}${h - 1}`,
+  const g = `A1:${columnIndexToLetters(l - 1)}${h - 1}`,
     b = {
       workbookId: e.id,
       revision: e.revision,
       at: new Date().toISOString(),
     };
   s.consolidation = {
-    engine: CC,
+    engine: consolidationFormatVersion,
     definition: o,
     review: a,
     origin: b,
-    evidenceHash: hr({ definition: o, review: a, origin: b }),
+    evidenceHash: fingerprintCanonicalValue({
+      definition: o,
+      review: a,
+      origin: b,
+    }),
     outputRange: g,
-    outputHash: nz(s, g),
+    outputHash: buildConsolidationOutputCells(s, g),
   };
-  const y = rn({ ...e, sheets: [...e.sheets, s] }),
-    w = Vn(y);
+  const y = normalizeWorkbookInput({ ...e, sheets: [...e.sheets, s] }),
+    w = calculateWorkbookWithSettings(y);
   for (const E of f) {
     const A = w(s.id, E.address),
       k = Number.EPSILON * Math.max(1, Math.abs(E.expected)) * E.count * 4;
@@ -210,7 +226,7 @@ function ece(e, r, t = {}) {
   }
   return y;
 }
-function tce(e, r, t = {}) {
+function checkConsolidationFreshness(e, r, t = {}) {
   const n = r.consolidation;
   if (!n) throw Error("This worksheet has no consolidation record.");
   const o = [];
@@ -219,13 +235,13 @@ function tce(e, r, t = {}) {
       o.push(
         "Historical result from another workbook identity. Review and rebind its sources before refreshing.",
       ),
-      nz(r, n.outputRange) !== n.outputHash &&
+      buildConsolidationOutputCells(r, n.outputRange) !== n.outputHash &&
         o.push(
           "Published result cells or source notes were edited. Reconcile or publish a fresh result.",
         ));
     for (const a of n.definition.sources)
       try {
-        const s = ez(e, a, t),
+        const s = readSourceTableRecords(e, a, t),
           d = n.review.sources.find((u) => u.sourceId === a.id);
         s.fingerprint !== d?.fingerprint &&
           o.push(
@@ -247,21 +263,25 @@ function rce(e, r) {
     n.click(),
     setTimeout(() => URL.revokeObjectURL(t), 5e3));
 }
-function iz(e, r) {
+function findTableRangesForSource(e, r) {
   try {
     const o = e?.sheets.find((s) => s.id === r.sheetId);
     if (!o) return [];
-    const a = ct(o.tables?.find((s) => s.id === r.tableId)?.range ?? r.range);
+    const a = parseRangeAddress(
+      o.tables?.find((s) => s.id === r.tableId)?.range ?? r.range,
+    );
     return a.lastCol - a.firstCol >= 50
       ? []
       : Array.from({ length: a.lastCol - a.firstCol + 1 }, (s, d) => {
-          return o.cells[`${ut(a.firstCol + d)}${a.firstRow + 1}`]?.raw;
+          return o.cells[
+            `${columnIndexToLetters(a.firstCol + d)}${a.firstRow + 1}`
+          ]?.raw;
         }).filter((s) => typeof s == "string" && !!s);
   } catch {
     return [];
   }
 }
-function Z4(e, r, t, n) {
+function createConsolidationDefinition(e, r, t, n) {
   const o = {
       id: crypto.randomUUID(),
       workbookId: e.id,
@@ -274,7 +294,7 @@ function Z4(e, r, t, n) {
       unit: { kind: "constant", value: n.unit },
       duplicatePolicy: "reject",
     },
-    a = iz(e, o);
+    a = findTableRangesForSource(e, o);
   ((o.categories = n.categoryLabels.map((s, d) =>
     a.includes(s) ? s : (a[d] ?? s),
   )),
@@ -285,12 +305,20 @@ function Z4(e, r, t, n) {
   }
   return o;
 }
-function nce({ workbook, sheetId, options = {}, onReview }) {
-  const { text, language } = Dr(),
+function ConsolidationStatusBanner({
+  workbook,
+  sheetId,
+  options = {},
+  onReview,
+}) {
+  const { text, language } = useWorkbookMessages(),
     s = workbook.sheets.find((l) => l.id === sheetId),
     d = s != null && s.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
-      () => (s != null && s.consolidation ? tce(workbook, s, options) : null),
+      () =>
+        s != null && s.consolidation
+          ? checkConsolidationFreshness(workbook, s, options)
+          : null,
       [d, sheetId],
     );
   return u
@@ -319,16 +347,16 @@ function nce({ workbook, sheetId, options = {}, onReview }) {
           }),
           i.jsx("button", {
             onClick: onReview,
-            children: i.jsx(M, { children: "Review / refresh" }),
+            children: i.jsx(LocalizedText, { children: "Review / refresh" }),
           }),
         ],
       })
     : null;
 }
-function ice(e) {
+function ConsolidationDialog(e) {
   var W;
-  const { text, language } = Dr(),
-    n = yh(),
+  const { text, language } = useWorkbookMessages(),
+    n = useCancellableOperation(),
     o = ne.useRef(null),
     a = ne.useRef(null),
     s = ne.useRef(0),
@@ -353,7 +381,7 @@ function ice(e) {
           ?.definition;
       if (K) return structuredClone(K);
       const te = {
-          engine: CC,
+          engine: consolidationFormatVersion,
           categoryLabels: ["Category"],
           period: "2026-Q1",
           currency: "USD",
@@ -363,8 +391,13 @@ function ice(e) {
           sources: [],
         },
         ae = e.workbook.sheets.find((Se) => Se.id === e.sheetId),
-        oe = e.range.includes(":") ? e.range : Ta(ae);
-      return ((te.sources = [Z4(e.workbook, ae.id, oe, te)]), te);
+        oe = e.range.includes(":") ? e.range : formatOccupiedRangeAddress(ae);
+      return (
+        (te.sources = [
+          createConsolidationDefinition(e.workbook, ae.id, oe, te),
+        ]),
+        te
+      );
     }),
     [p, m] = ne.useState(() => {
       let K = "Consolidated",
@@ -454,7 +487,7 @@ function ice(e) {
     try {
       if (!/\.(json|xlsx)$/i.test(K.name))
         throw Error("Choose a native workbook JSON or an XLSX file.");
-      const oe = await H1(K, n.begin());
+      const oe = await importWorkbookFile(K, n.begin());
       if (!u.current || te !== s.current || ae !== d.current) return;
       if (oe.workbook.id === e.workbook.id)
         throw Error(
@@ -516,16 +549,18 @@ function ice(e) {
               children: [
                 i.jsx("p", {
                   className: "eyebrow",
-                  children: i.jsx(M, { children: "Data · Consolidation" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Data · Consolidation",
+                  }),
                 }),
                 i.jsx("h2", {
                   id: "consolidation-title",
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Consolidate schedules & subtotals",
                   }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Align categories, verify source context, then publish a grouped schedule.",
                   }),
@@ -552,7 +587,7 @@ function ice(e) {
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Output worksheet" }),
+                    i.jsx(LocalizedText, { children: "Output worksheet" }),
                     i.jsx("input", {
                       "aria-label": text("Output worksheet"),
                       value: p,
@@ -570,7 +605,7 @@ function ice(e) {
                     "label",
                     {
                       children: [
-                        i.jsx(M, { children: "Target " }),
+                        i.jsx(LocalizedText, { children: "Target " }),
                         K,
                         i.jsx("input", {
                           "aria-label": `Target ${K}`,
@@ -584,7 +619,7 @@ function ice(e) {
                 ),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Category levels" }),
+                    i.jsx(LocalizedText, { children: "Category levels" }),
                     i.jsx("select", {
                       "aria-label": text("Category levels"),
                       value: h.categoryLabels.length,
@@ -619,10 +654,10 @@ function ice(e) {
                     "label",
                     {
                       children: [
-                        i.jsx(M, { children: "Category " }),
+                        i.jsx(LocalizedText, { children: "Category " }),
                         te + 1,
                         " ",
-                        i.jsx(M, { children: "label" }),
+                        i.jsx(LocalizedText, { children: "label" }),
                         i.jsx("input", {
                           "aria-label": `Category ${te + 1} label`,
                           value: K,
@@ -652,7 +687,9 @@ function ice(e) {
                       onChange: (K) =>
                         $({ ...h, linkedAmounts: K.target.checked }),
                     }),
-                    i.jsx(M, { children: "Link amounts from this workbook" }),
+                    i.jsx(LocalizedText, {
+                      children: "Link amounts from this workbook",
+                    }),
                   ],
                 }),
                 i.jsxs("label", {
@@ -663,7 +700,9 @@ function ice(e) {
                       onChange: (K) =>
                         $({ ...h, collapseDetails: K.target.checked }),
                     }),
-                    i.jsx(M, { children: "Collapse detail groups" }),
+                    i.jsx(LocalizedText, {
+                      children: "Collapse detail groups",
+                    }),
                   ],
                 }),
                 e.allowHidden &&
@@ -676,7 +715,7 @@ function ice(e) {
                           (g(K.target.checked), j(null));
                         },
                       }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "Include authorized hidden source cells",
                       }),
                     ],
@@ -685,7 +724,7 @@ function ice(e) {
             }),
             i.jsx("p", {
               className: "lg-consolidation-hint",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Periods, currencies and units must match exactly. Amounts are summed; no implicit conversion. Same-workbook links recalculate amounts; changed source context still requires review. Approved external workbooks use refreshable snapshots.",
               }),
@@ -707,7 +746,7 @@ function ice(e) {
                             (v && ae.includeHidden)),
                       ) ?? [],
                     he = de.find((se) => se.id === K.sheetId),
-                    Se = he ? iz(oe, K) : [],
+                    Se = he ? findTableRangesForSource(oe, K) : [],
                     le = (se, we, Ee) =>
                       i.jsxs("label", {
                         children: [
@@ -743,7 +782,7 @@ function ice(e) {
                           children: [
                             i.jsxs("strong", {
                               children: [
-                                i.jsx(M, { children: "Source " }),
+                                i.jsx(LocalizedText, { children: "Source " }),
                                 te + 1,
                               ],
                             }),
@@ -757,7 +796,9 @@ function ice(e) {
                                   ),
                                 }),
                               children: [
-                                i.jsx(M, { children: "Remove source " }),
+                                i.jsx(LocalizedText, {
+                                  children: "Remove source ",
+                                }),
                                 te + 1,
                               ],
                             }),
@@ -768,7 +809,7 @@ function ice(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Workbook" }),
+                                i.jsx(LocalizedText, { children: "Workbook" }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Workbook`,
                                   value: K.workbookId,
@@ -785,7 +826,12 @@ function ice(e) {
                                       );
                                     Ee &&
                                       U(te, {
-                                        ...Z4(we.workbook, Ee.id, Ta(Ee), h),
+                                        ...createConsolidationDefinition(
+                                          we.workbook,
+                                          Ee.id,
+                                          formatOccupiedRangeAddress(Ee),
+                                          h,
+                                        ),
                                         id: K.id,
                                       });
                                   },
@@ -817,7 +863,7 @@ function ice(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Worksheet" }),
+                                i.jsx(LocalizedText, { children: "Worksheet" }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Worksheet`,
                                   value: K.sheetId,
@@ -826,7 +872,12 @@ function ice(e) {
                                       (Ee) => Ee.id === se.target.value,
                                     );
                                     U(te, {
-                                      ...Z4(oe, we.id, Ta(we), h),
+                                      ...createConsolidationDefinition(
+                                        oe,
+                                        we.id,
+                                        formatOccupiedRangeAddress(we),
+                                        h,
+                                      ),
                                       id: K.id,
                                     });
                                   },
@@ -850,7 +901,9 @@ function ice(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Source type" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Source type",
+                                }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Source type`,
                                   value: K.tableId ?? "",
@@ -890,7 +943,9 @@ function ice(e) {
                             }),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Header & data range" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Header & data range",
+                                }),
                                 i.jsx("input", {
                                   "aria-label": `Source ${te + 1} Header & data range`,
                                   value: K.range,
@@ -924,7 +979,9 @@ function ice(e) {
                             ),
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Repeated categories" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Repeated categories",
+                                }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Repeated categories`,
                                   value: K.duplicatePolicy,
@@ -956,7 +1013,9 @@ function ice(e) {
                                       children: [
                                         se,
                                         " ",
-                                        i.jsx(M, { children: "source" }),
+                                        i.jsx(LocalizedText, {
+                                          children: "source",
+                                        }),
                                         i.jsxs("select", {
                                           "aria-label": `Source ${te + 1} ${se} source`,
                                           value: K[se].kind,
@@ -1032,10 +1091,18 @@ function ice(e) {
                     K &&
                       $({
                         ...h,
-                        sources: [...h.sources, Z4(e.workbook, K.id, Ta(K), h)],
+                        sources: [
+                          ...h.sources,
+                          createConsolidationDefinition(
+                            e.workbook,
+                            K.id,
+                            formatOccupiedRangeAddress(K),
+                            h,
+                          ),
+                        ],
                       });
                   },
-                  children: i.jsx(M, { children: "Add source" }),
+                  children: i.jsx(LocalizedText, { children: "Add source" }),
                 }),
               ],
             }),
@@ -1044,17 +1111,21 @@ function ice(e) {
                 className: "lg-consolidation-import",
                 children: [
                   i.jsx("summary", {
-                    children: i.jsx(M, { children: "Approved workbook files" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Approved workbook files",
+                    }),
                   }),
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Choose a local native JSON or XLSX workbook, review the import, then explicitly approve its visible worksheets. Files stay in this session; nothing is fetched automatically.",
                     }),
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Inspect workbook file" }),
+                      i.jsx(LocalizedText, {
+                        children: "Inspect workbook file",
+                      }),
                       i.jsx("input", {
                         type: "file",
                         accept: ".json,.xlsx",
@@ -1071,7 +1142,9 @@ function ice(e) {
                   A &&
                     i.jsx("p", {
                       role: "status",
-                      children: i.jsx(M, { children: "Inspecting workbook…" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Inspecting workbook…",
+                      }),
                     }),
                   w?.stamp === c &&
                     i.jsxs("div", {
@@ -1105,11 +1178,15 @@ function ice(e) {
                             ]),
                               E(null));
                           },
-                          children: i.jsx(M, { children: "Approve workbook" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Approve workbook",
+                          }),
                         }),
                         i.jsx("button", {
                           onClick: () => E(null),
-                          children: i.jsx(M, { children: "Discard file" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Discard file",
+                          }),
                         }),
                       ],
                     }),
@@ -1123,7 +1200,7 @@ function ice(e) {
                           " · ",
                           K.allowedSheetIds.length,
                           " ",
-                          i.jsx(M, { children: "approved sheets" }),
+                          i.jsx(LocalizedText, { children: "approved sheets" }),
                           " ",
                           i.jsxs("button", {
                             disabled:
@@ -1141,7 +1218,7 @@ function ice(e) {
                                 ),
                               ),
                             children: [
-                              i.jsx(M, { children: "Revoke " }),
+                              i.jsx(LocalizedText, { children: "Revoke " }),
                               K.workbook.name,
                             ],
                           }),
@@ -1176,13 +1253,13 @@ function ice(e) {
                     children: [
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Contributions " }),
+                          i.jsx(LocalizedText, { children: "Contributions " }),
                           i.jsx("strong", { children: R.contributions.length }),
                         ],
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Grand total " }),
+                          i.jsx(LocalizedText, { children: "Grand total " }),
                           i.jsx("strong", {
                             children: R.grandTotal ?? "Blocked",
                           }),
@@ -1190,7 +1267,7 @@ function ice(e) {
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Source controls" }),
+                          i.jsx(LocalizedText, { children: "Source controls" }),
                           " ",
                           i.jsx("strong", {
                             children: R.sourceTotal ?? "Blocked",
@@ -1199,7 +1276,7 @@ function ice(e) {
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Difference " }),
+                          i.jsx(LocalizedText, { children: "Difference " }),
                           i.jsx("strong", { children: R.difference ?? "—" }),
                         ],
                       }),
@@ -1216,7 +1293,7 @@ function ice(e) {
                       " ",
                       R.exceptions.length,
                       " ",
-                      i.jsx(M, { children: "exceptions." }),
+                      i.jsx(LocalizedText, { children: "exceptions." }),
                       " ",
                       R.complete
                         ? "Review all contributions and source controls before publishing."
@@ -1262,7 +1339,9 @@ function ice(e) {
                             ),
                             "Consolidation-review.json",
                           ),
-                        children: i.jsx(M, { children: "Save review" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Save review",
+                        }),
                       }),
                     ],
                   }),
@@ -1410,7 +1489,9 @@ function ice(e) {
                                         children: [
                                           i.jsxs("td", {
                                             children: [
-                                              i.jsx(M, { children: "Source" }),
+                                              i.jsx(LocalizedText, {
+                                                children: "Source",
+                                              }),
                                               " ",
                                               h.sources.findIndex(
                                                 (ae) => ae.id === K.sourceId,
@@ -1433,7 +1514,11 @@ function ice(e) {
                       }),
                       !X$1.length &&
                         i.jsxs("p", {
-                          children: [i.jsx(M, { children: "No " }), D, "."],
+                          children: [
+                            i.jsx(LocalizedText, { children: "No " }),
+                            D,
+                            ".",
+                          ],
                         }),
                     ],
                   }),
@@ -1443,25 +1528,29 @@ function ice(e) {
                       i.jsx("button", {
                         disabled: q === 0,
                         onClick: () => V(q - 1),
-                        children: i.jsx(M, { children: "Previous page" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous page",
+                        }),
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Page " }),
+                          i.jsx(LocalizedText, { children: "Page " }),
                           q + 1,
                           " ",
-                          i.jsx(M, { children: "of " }),
+                          i.jsx(LocalizedText, { children: "of " }),
                           J,
                           " · ",
                           X$1.length,
                           " ",
-                          i.jsx(M, { children: "records" }),
+                          i.jsx(LocalizedText, { children: "records" }),
                         ],
                       }),
                       i.jsx("button", {
                         disabled: q + 1 >= J,
                         onClick: () => V(q + 1),
-                        children: i.jsx(M, { children: "Next page" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Next page",
+                        }),
                       }),
                     ],
                   }),
@@ -1478,17 +1567,23 @@ function ice(e) {
             }),
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               onClick: () =>
                 G(() => {
-                  const K = rz(e.workbook, { definition: h, outputName: p }, C);
+                  const K = createConsolidationPreview(
+                    e.workbook,
+                    { definition: h, outputName: p },
+                    C,
+                  );
                   (j({ plan: K, stamp: T }),
                     V(0),
                     B(K.review.complete ? "contributions" : "exceptions"));
                 }),
-              children: i.jsx(M, { children: "Preview consolidation" }),
+              children: i.jsx(LocalizedText, {
+                children: "Preview consolidation",
+              }),
             }),
             i.jsx("button", {
               className: "primary",
@@ -1499,12 +1594,14 @@ function ice(e) {
               onClick: () =>
                 G(() => {
                   if (!N) return;
-                  const K = ece(e.workbook, O.plan, C);
+                  const K = publishConsolidatedSchedule(e.workbook, O.plan, C);
                   (j(null),
                     e.onWorkbookChange(K, "Publish consolidated schedule"),
                     e.onClose());
                 }),
-              children: i.jsx(M, { children: "Publish consolidated schedule" }),
+              children: i.jsx(LocalizedText, {
+                children: "Publish consolidated schedule",
+              }),
             }),
           ],
         }),
@@ -1512,41 +1609,42 @@ function ice(e) {
     }),
   });
 }
-const qf = (e) => e.toLowerCase(),
-  ry = (e) => JSON.stringify([typeof e, typeof e == "string" ? qf(e) : e]),
-  Cv = (e) => `${e.tableId}\0${e.column}`,
-  Lh = (e) =>
+const caseFoldText = (e) => e.toLowerCase(),
+  buildTypedValueKey = (e) =>
+    JSON.stringify([typeof e, typeof e == "string" ? caseFoldText(e) : e]),
+  buildTableColumnKey = (e) => `${e.tableId}\0${e.column}`,
+  requireScalarValue = (e) =>
     typeof e == "object" && e !== null
-      ? on("DAX_TYPE", "A table cannot be used as a scalar.")
+      ? throwDaxError("DAX_TYPE", "A table cannot be used as a scalar.")
       : e,
-  Bm = (e) =>
+  requireLogicalOperand = (e) =>
     e === null
       ? false
       : typeof e == "boolean"
         ? e
         : typeof e == "number"
           ? e !== 0
-          : on(
+          : throwDaxError(
               "DAX_TYPE",
               "A logical condition requires a boolean, number or BLANK.",
             ),
-  Av = (e) =>
+  requireNumericOperand = (e) =>
     e === null
       ? 0
       : typeof e == "number"
         ? e
-        : on(
+        : throwDaxError(
             "DAX_TYPE",
             "Numeric expressions require numbers or BLANK; implicit text/date conversion is unsupported.",
           ),
-  My = (e) =>
+  requireFiniteNumber = (e) =>
     Number.isFinite(e)
       ? e
-      : on(
+      : throwDaxError(
           "DAX_NUMBER",
           "The result is not finite. Use DIVIDE for a blank or zero denominator.",
         );
-function oce(e, r, t = false) {
+function compareDaxValues(e, r, t = false) {
   if (t && (e === null || r === null)) return e === r ? 0 : undefined;
   if (e === null && r === null) return 0;
   if (
@@ -1556,12 +1654,15 @@ function oce(e, r, t = false) {
       (r = typeof e == "string" ? "" : typeof e == "boolean" ? false : 0),
     typeof e != typeof r)
   )
-    return on("DAX_TYPE", "Comparison operands must have compatible types.");
-  const n = typeof e == "string" ? qf(e) : e,
-    o = typeof r == "string" ? qf(r) : r;
+    return throwDaxError(
+      "DAX_TYPE",
+      "Comparison operands must have compatible types.",
+    );
+  const n = typeof e == "string" ? caseFoldText(e) : e,
+    o = typeof r == "string" ? caseFoldText(r) : r;
   return n === o ? 0 : n < o ? -1 : 1;
 }
-function ny(e) {
+function sumWithCompensation(e) {
   let r = 0,
     t = 0,
     n = 0;
@@ -1570,7 +1671,19 @@ function ny(e) {
     const a = r + o;
     ((t += Math.abs(r) >= Math.abs(o) ? r - a + o : o - a + r), (r = a), n++);
   }
-  return n ? My(r + t) : null;
+  return n ? requireFiniteNumber(r + t) : null;
 }
 
-export { Av, Bm, Cv, Lh, My, ice, nce, ny, oce, qf, ry };
+export {
+  requireNumericOperand,
+  requireLogicalOperand,
+  buildTableColumnKey,
+  requireScalarValue,
+  requireFiniteNumber,
+  ConsolidationDialog,
+  ConsolidationStatusBanner,
+  sumWithCompensation,
+  compareDaxValues,
+  caseFoldText,
+  buildTypedValueKey,
+};

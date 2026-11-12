@@ -8,33 +8,44 @@ import {
   discriminatedUnion,
   literal,
 } from "zod";
-import { hr } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  $a,
-  AC,
-  Ku,
-  Mp,
-  OR,
-  Rn,
-  bU,
-  ct,
-  fl,
-  h0,
-  rh,
-  rn,
-  ut,
-  yU,
+  assertWorkbookStructureEditable,
+  isSameContentHash,
+  createWorksheetRecord,
+  isExternalSourceError,
+  externalSourceFormatVersion,
+  ExternalSourceError,
+  validateExternalSourcePayload,
+  parseRangeAddress,
+  externalSourceLimits,
+  parseActiveSourceApproval,
+  buildCanonicalWorkbookSnapshot,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  computeSourceControlTotals,
 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { BC, Oo, fT } from "./11-workbook-formats-dialog.js";
-import { q1 } from "./12-formula-dependency-inspector.js";
-import { C_, M2e, sA } from "./53-find-replace-go-to.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  createLocalWorkbookStore,
+  WorkbookRevisionConflictError,
+  compareWorkbookVersions,
+} from "./11-workbook-formats-dialog.js";
+import { inspectOutputNameSafety } from "./12-formula-dependency-inspector.js";
+import {
+  resolveAxisScale,
+  physicalToLogicalPixels,
+  clampValueToRange,
+} from "./53-find-replace-go-to.js";
 
-function A2(e, r, t, n, o = 5) {
-  const a = C_(e.total, t, n),
-    s = sA(r, 0, a.physicalMax),
-    d = M2e(s, e.total, t, n),
+function computeVirtualizedRange(e, r, t, n, o = 5) {
+  const a = resolveAxisScale(e.total, t, n),
+    s = clampValueToRange(r, 0, a.physicalMax),
+    d = physicalToLogicalPixels(s, e.total, t, n),
     u = e.count ? Math.max(0, e.indexAt(d) - o) : 0,
     l = e.count ? Math.min(e.count, e.indexAt(d + a.viewport / n) + o + 1) : 0,
     c = Math.max(0, s / n + e.offset(u) - d),
@@ -48,42 +59,42 @@ function A2(e, r, t, n, o = 5) {
     total: a.physicalPixels / n,
   };
 }
-function oN(e) {
+function workbookLockName(e) {
   return `ledgerglass:workbook:${e}`;
 }
-function j2e() {
+function getBrowserLockManager() {
   try {
     return typeof navigator < "u" ? (navigator.locks ?? null) : null;
   } catch {
     return null;
   }
 }
-function AS(e) {
+function cloneSaveInputs(e) {
   try {
     return structuredClone(e);
   } catch {
-    throw new Oo(
+    throw new WorkbookRevisionConflictError(
       "invalid",
       "The workbook save inputs could not be captured. Keep your unsaved work open and correct the invalid input before retrying.",
     );
   }
 }
-function yH(e, r, t = {}) {
-  const n = BC(e, r, {
+function saveWorkbookWithLock(e, r, t = {}) {
+  const n = createLocalWorkbookStore(e, r, {
       maxBytes: t.maxBytes,
       maxCheckpoints: t.maxCheckpoints,
     }),
-    o = t.locks === undefined ? j2e() : t.locks,
+    o = t.locks === undefined ? getBrowserLockManager() : t.locks,
     a = t.lockTimeoutMs ?? 5e3,
-    s = oN(r);
+    s = workbookLockName(r);
   if (!Number.isInteger(a) || a < 1 || a > 6e4)
-    throw new Oo(
+    throw new WorkbookRevisionConflictError(
       "invalid",
       "The browser save lock timeout must be between 1 and 60,000 milliseconds.",
     );
   function d(u, l) {
     return new Promise((c, h) => {
-      const f = (j) => new Oo("unavailable", j),
+      const f = (j) => new WorkbookRevisionConflictError("unavailable", j),
         p = new AbortController(),
         m = performance.now() + a;
       let v = true,
@@ -115,7 +126,7 @@ function yH(e, r, t = {}) {
             h(
               b
                 ? y
-                : j instanceof Oo
+                : j instanceof WorkbookRevisionConflictError
                   ? j
                   : f(
                       "Browser save locking is unavailable. No changes were written; keep the workbook open and export your unsaved work.",
@@ -169,7 +180,7 @@ function yH(e, r, t = {}) {
     listCheckpoints: n.listCheckpoints,
     compareCheckpoint: n.compareCheckpoint,
     async save(u, l, c, h = {}) {
-      const f = AS({
+      const f = cloneSaveInputs({
           workbook: u,
           view: l,
           expected: c,
@@ -179,12 +190,12 @@ function yH(e, r, t = {}) {
       return d(() => n.save(f.workbook, f.view, f.expected, f.options), p);
     },
     async checkpoint(u, l, c = {}) {
-      const h = AS({ label: u, expected: l }),
+      const h = cloneSaveInputs({ label: u, expected: l }),
         f = c.signal;
       return d(() => n.checkpoint(h.label, h.expected), f);
     },
     async restoreCheckpoint(u, l, c, h, f = {}) {
-      const p = AS({ id: u, workbook: l, expected: c, actor: h }),
+      const p = cloneSaveInputs({ id: u, workbook: l, expected: c, actor: h }),
         m = f.signal;
       return d(
         () => n.restoreCheckpoint(p.id, p.workbook, p.expected, p.actor),
@@ -193,7 +204,7 @@ function yH(e, r, t = {}) {
     },
   };
 }
-const F2e = {
+const workbookSectionLabels = {
     name: "Name",
     metadata: "Workbook properties",
     createdAt: "Created",
@@ -246,24 +257,25 @@ const F2e = {
     color: "Text color",
     align: "Alignment",
   },
-  iE = (e) =>
-    F2e[e] ??
+  humanizeFieldName = (e) =>
+    workbookSectionLabels[e] ??
     e
       .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
       .replace(/[_-]/g, " ")
       .replace(/^./, (r) => r.toUpperCase()),
   wp = (e) => e !== null && typeof e == "object" && !Array.isArray(e),
-  O1 = (e) =>
+  stableSerialize = (e) =>
     Array.isArray(e)
-      ? `[${e.map(O1).join(",")}]`
+      ? `[${e.map(stableSerialize).join(",")}]`
       : wp(e)
         ? `{${Object.keys(e)
             .sort()
-            .map((r) => `${JSON.stringify(r)}:${O1(e[r])}`)
+            .map((r) => `${JSON.stringify(r)}:${stableSerialize(e[r])}`)
             .join(",")}}`
         : (JSON.stringify(e) ?? "undefined"),
-  oE = (e, r = 220) => (e.length > r ? `${e.slice(0, r)}…` : e);
-function _3(e, r = 0) {
+  truncateDisplayText = (e, r = 220) =>
+    e.length > r ? `${e.slice(0, r)}…` : e;
+function summarizeConflictValue(e, r = 0) {
   if (e === undefined) return "Not set";
   if (e === null || e === "") return "Blank";
   if (typeof e == "boolean") return e ? "Yes" : "No";
@@ -281,15 +293,15 @@ function _3(e, r = 0) {
             fractionalSecondDigits: 3,
             timeZoneName: "short",
           })
-        : oE(e);
+        : truncateDisplayText(e);
   if (Array.isArray(e))
     return e.length
       ? r >= 2
         ? `${e.length} items`
-        : oE(
+        : truncateDisplayText(
             e
               .slice(0, 4)
-              .map((t) => _3(t, r + 1))
+              .map((t) => summarizeConflictValue(t, r + 1))
               .join("; ") +
               (e.length > 4 ? `; ${e.length - 4} more items` : ""),
           )
@@ -299,10 +311,13 @@ function _3(e, r = 0) {
     return t.length
       ? r >= 2
         ? `${t.length} settings`
-        : oE(
+        : truncateDisplayText(
             t
               .slice(0, 4)
-              .map(([n, o]) => `${iE(n)}: ${_3(o, r + 1)}`)
+              .map(
+                ([n, o]) =>
+                  `${humanizeFieldName(n)}: ${summarizeConflictValue(o, r + 1)}`,
+              )
               .join(" · ") +
               (t.length > 4 ? ` · ${t.length - 4} more settings` : ""),
           )
@@ -310,7 +325,7 @@ function _3(e, r = 0) {
   }
   return String(e);
 }
-function B2e(e) {
+function describeCellContent(e) {
   return e
     ? e.raw === null || e.raw === ""
       ? "Blank"
@@ -320,14 +335,14 @@ function B2e(e) {
           : "FALSE"
         : typeof e.raw == "string"
           ? (e.literal ? "Text: " : e.raw.startsWith("=") ? "Formula: " : "") +
-            oE(e.raw)
+            truncateDisplayText(e.raw)
           : String(e.raw)
     : "Empty cell";
 }
-function L2e(e) {
+function collectConflictChanges(e) {
   const r = [],
     t = (n, o, a, s) => {
-      if (O1(o) !== O1(a)) {
+      if (stableSerialize(o) !== stableSerialize(a)) {
         if (
           s < 3 &&
           (wp(o) || wp(a)) &&
@@ -347,8 +362,8 @@ function L2e(e) {
     };
   return (t(e.path.split("."), e.before, e.after, 0), r);
 }
-function P2e(e) {
-  const { text, language } = Dr(),
+function WorkbookSaveConflictDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(null),
     [d, u] = ne.useState(""),
@@ -362,7 +377,7 @@ function P2e(e) {
         (o(w),
           s(
             w?.workbook.id === e.workbook.id
-              ? fT(w.workbook, e.workbook)
+              ? compareWorkbookVersions(w.workbook, e.workbook)
               : null,
           ),
           u(
@@ -402,13 +417,17 @@ function P2e(e) {
       w[0] === "sheets" && w[1] === "order"
         ? "Worksheet order"
         : w[0] === "sheets"
-          ? [v(w[1]), ...w.slice(2).map(iE)].join(" · ")
-          : w.map(iE).join(" · "),
-    b = a ? [...a.metadataChanges, ...a.structuralChanges].flatMap(L2e) : [],
+          ? [v(w[1]), ...w.slice(2).map(humanizeFieldName)].join(" · ")
+          : w.map(humanizeFieldName).join(" · "),
+    b = a
+      ? [...a.metadataChanges, ...a.structuralChanges].flatMap(
+          collectConflictChanges,
+        )
+      : [],
     y = (w, E) =>
       w[0] === "sheets" && w[1] === "order" && Array.isArray(E)
         ? E.map((A) => v(String(A))).join(" → ") || "No worksheets"
-        : _3(E);
+        : summarizeConflictValue(E);
   return i.jsx("div", {
     className: "wm-backdrop",
     children: i.jsxs("div", {
@@ -443,7 +462,9 @@ function P2e(e) {
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              children: i.jsx(M, { children: "Workbook save conflict" }),
+              children: i.jsx(LocalizedText, {
+                children: "Workbook save conflict",
+              }),
             }),
             i.jsx("button", {
               "aria-label": text("Close save conflict"),
@@ -458,7 +479,7 @@ function P2e(e) {
           className: "wm-body",
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Your edits are still in this editor. Export them to keep a portable copy, or compare them with the saved version before reloading.",
               }),
@@ -466,12 +487,14 @@ function P2e(e) {
             i.jsxs("p", {
               children: [
                 i.jsx("strong", {
-                  children: i.jsx(M, { children: "My local workbook:" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "My local workbook:",
+                  }),
                 }),
                 " ",
                 e.workbook.name,
                 " ",
-                i.jsx(M, { children: "· revision" }),
+                i.jsx(LocalizedText, { children: "· revision" }),
                 " ",
                 e.workbook.revision,
               ],
@@ -480,12 +503,14 @@ function P2e(e) {
               i.jsxs("p", {
                 children: [
                   i.jsx("strong", {
-                    children: i.jsx(M, { children: "Current saved workbook:" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Current saved workbook:",
+                    }),
                   }),
                   " ",
                   n.workbook.name,
                   " ",
-                  i.jsx(M, { children: "· revision " }),
+                  i.jsx(LocalizedText, { children: "· revision " }),
                   n.workbook.revision,
                 ],
               }),
@@ -494,18 +519,22 @@ function P2e(e) {
               children: [
                 i.jsx("button", {
                   onClick: e.onExport,
-                  children: i.jsx(M, { children: "Export my changes" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Export my changes",
+                  }),
                 }),
                 i.jsx("button", {
                   onClick: m,
-                  children: i.jsx(M, { children: "Refresh comparison" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Refresh comparison",
+                  }),
                 }),
               ],
             }),
             n &&
               n.workbook.id !== e.workbook.id &&
               i.jsx("p", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "The saved location now contains a different workbook. Export your local workbook before deciding whether to load it.",
                 }),
@@ -517,7 +546,7 @@ function P2e(e) {
                 "data-ui-label": "Conflicting workbook changes",
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Changes from saved to my local workbook",
                     }),
                   }),
@@ -525,15 +554,15 @@ function P2e(e) {
                     children: [
                       a.cellChanges.length,
                       " ",
-                      i.jsx(M, { children: "cell changes ·" }),
+                      i.jsx(LocalizedText, { children: "cell changes ·" }),
                       " ",
                       a.metadataChanges.length,
                       " ",
-                      i.jsx(M, { children: "workbook changes ·" }),
+                      i.jsx(LocalizedText, { children: "workbook changes ·" }),
                       " ",
                       a.structuralChanges.length,
                       " ",
-                      i.jsx(M, { children: "worksheet changes" }),
+                      i.jsx(LocalizedText, { children: "worksheet changes" }),
                     ],
                   }),
                   a.cellChanges.length > 0 &&
@@ -545,15 +574,19 @@ function P2e(e) {
                             children: [
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, { children: "Cell" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Cell",
+                                }),
                               }),
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, { children: "Saved" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Saved",
+                                }),
                               }),
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "My local value",
                                 }),
                               }),
@@ -570,7 +603,8 @@ function P2e(e) {
                             ].filter((A) => {
                               return (
                                 A !== "raw" &&
-                                O1(w.before?.[A]) !== O1(w.after?.[A])
+                                stableSerialize(w.before?.[A]) !==
+                                  stableSerialize(w.after?.[A])
                               );
                             });
                             return i.jsxs(
@@ -588,7 +622,7 @@ function P2e(e) {
                                         children: [
                                           i.jsx("span", {
                                             className: "pc-cell-value",
-                                            children: B2e(A),
+                                            children: describeCellContent(A),
                                           }),
                                           E.length > 0 &&
                                             i.jsx("ul", {
@@ -599,10 +633,15 @@ function P2e(e) {
                                                   {
                                                     children: [
                                                       i.jsxs("strong", {
-                                                        children: [iE(F), ":"],
+                                                        children: [
+                                                          humanizeFieldName(F),
+                                                          ":",
+                                                        ],
                                                       }),
                                                       " ",
-                                                      _3(A?.[F]),
+                                                      summarizeConflictValue(
+                                                        A?.[F],
+                                                      ),
                                                     ],
                                                   },
                                                   F,
@@ -624,7 +663,7 @@ function P2e(e) {
                     }),
                   a.cellChanges.length > 100 &&
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Showing the first 100 changed cells. Full comparison details include every change.",
                       }),
@@ -638,15 +677,19 @@ function P2e(e) {
                             children: [
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, { children: "Property" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Property",
+                                }),
                               }),
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, { children: "Saved" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Saved",
+                                }),
                               }),
                               i.jsx("th", {
                                 scope: "col",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "My local setting",
                                 }),
                               }),
@@ -679,7 +722,7 @@ function P2e(e) {
                     }),
                   b.length > 100 &&
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Showing the first 100 changed properties. Full comparison details include every change.",
                       }),
@@ -691,7 +734,7 @@ function P2e(e) {
                       onToggle: (w) => f(w.currentTarget.open),
                       children: [
                         i.jsx("summary", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Full comparison details",
                           }),
                         }),
@@ -699,7 +742,7 @@ function P2e(e) {
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("p", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Complete recorded values, formulas, notes, formatting and properties, including long values and additional items summarized above.",
                                 }),
@@ -729,14 +772,14 @@ function P2e(e) {
                   disabled: !n,
                   onChange: (w) => c(w.target.checked),
                 }),
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "Discard my local changes and load the saved workbook.",
                 }),
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Reloading replaces this editor's data and clears its local Undo/Redo history. Other open workbooks remain unchanged.",
               }),
@@ -758,11 +801,13 @@ function P2e(e) {
                         ));
                     }
                   },
-                  children: i.jsx(M, { children: "Reload saved workbook" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Reload saved workbook",
+                  }),
                 }),
                 i.jsx("button", {
                   onClick: e.onClose,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Keep editing my local copy",
                   }),
                 }),
@@ -774,7 +819,7 @@ function P2e(e) {
     }),
   });
 }
-const kS = {
+const diagnosticGroupDefinitions = {
     persistence: ["load", "save", "checkpoint", "list", "compare", "restore"],
     calculation: ["run"],
     file: [
@@ -802,7 +847,7 @@ const kS = {
     "refused",
     "unknown",
   ]),
-  $j = {
+  workbookErrorCodes = {
     expired: "refused",
     schema: "invalid",
     stale: "conflict",
@@ -822,13 +867,14 @@ const kS = {
     "#BLOCKED!": "unavailable",
     "#PENDING!": "cancelled",
   };
-function U2e(e) {
+function isAbortOrQuotaError(e) {
   try {
     if (e && typeof e == "object") {
       const { code, name } = e;
       if (typeof code == "string") {
         if (wH.has(code)) return code;
-        if (Object.hasOwn($j, code)) return $j[code];
+        if (Object.hasOwn(workbookErrorCodes, code))
+          return workbookErrorCodes[code];
       }
       if (name === "AbortError") return "cancelled";
       if (name === "TimeoutError") return "timeout";
@@ -837,7 +883,7 @@ function U2e(e) {
   } catch {}
   return "unknown";
 }
-function xH(e = {}) {
+function createWorkbookDiagnosticsMonitor(e = {}) {
   const r = e.maxEvents ?? 200;
   if (!Number.isInteger(r) || r < 2 || r > 1e3)
     throw new Error(
@@ -848,7 +894,7 @@ function xH(e = {}) {
   let o = 0,
     a = 0;
   const s = Object.fromEntries(
-    Object.keys(kS).map((m) => [
+    Object.keys(diagnosticGroupDefinitions).map((m) => [
       m,
       Object.freeze({
         active: 0,
@@ -917,7 +963,10 @@ function xH(e = {}) {
       }
     },
     p = (m, v) => {
-      if (!Object.hasOwn(kS, m) || !kS[m].includes(v))
+      if (
+        !Object.hasOwn(diagnosticGroupDefinitions, m) ||
+        !diagnosticGroupDefinitions[m].includes(v)
+      )
         throw new Error("Unknown diagnostic adapter or operation.");
       const g = ++a,
         b = performance.now(),
@@ -976,7 +1025,7 @@ function xH(e = {}) {
       return {
         finish: E,
         fail(A) {
-          const k = U2e(A);
+          const k = isAbortOrQuotaError(A);
           E(k === "cancelled" ? "cancelled" : "failed", k);
         },
       };
@@ -1013,28 +1062,30 @@ function xH(e = {}) {
     },
   };
 }
-const Ew = () =>
-    new Oo(
+const invalidStorageAckError = () =>
+    new WorkbookRevisionConflictError(
       "invalid",
       "The storage adapter returned an invalid acknowledgement. Your local changes are retained; check the saved copy before retrying.",
     ),
-  aN = (e, r) => e === r || JSON.stringify(e) === JSON.stringify(r);
-function sN(e, r) {
+  workbookSnapshotsEqual = (e, r) =>
+    e === r || JSON.stringify(e) === JSON.stringify(r);
+function captureWorkbookView(e, r) {
   const t = e.sheets.find((s) => !s.hidden && s.id === r.activeSheetId);
-  if (!t || r.selection.sheetId !== t.id) throw Ew();
-  const n = ct(r.selection.range);
-  if (n.lastRow >= t.rowCount || n.lastCol >= t.colCount) throw Ew();
-  const o = `${ut(n.firstCol)}${n.firstRow + 1}`,
-    a = `${ut(n.lastCol)}${n.lastRow + 1}`;
+  if (!t || r.selection.sheetId !== t.id) throw invalidStorageAckError();
+  const n = parseRangeAddress(r.selection.range);
+  if (n.lastRow >= t.rowCount || n.lastCol >= t.colCount)
+    throw invalidStorageAckError();
+  const o = `${columnIndexToLetters(n.firstCol)}${n.firstRow + 1}`,
+    a = `${columnIndexToLetters(n.lastCol)}${n.lastRow + 1}`;
   return {
     activeSheetId: t.id,
     selection: { sheetId: t.id, range: o === a ? o : `${o}:${a}` },
   };
 }
-function aE(e, r) {
+function normalizeCheckpointRecord(e, r) {
   try {
-    const t = rh(e.workbook),
-      n = sN(t, e.view),
+    const t = buildCanonicalWorkbookSnapshot(e.workbook),
+      n = captureWorkbookView(t, e.view),
       o = e.guard;
     if (
       !o ||
@@ -1060,9 +1111,14 @@ function aE(e, r) {
           typeof a.createdAt != "string" ||
           !Number.isFinite(Date.parse(a.createdAt)),
       ) ||
-      (r && (!aN(t, rh(r.workbook)) || !aN(n, sN(r.workbook, r.view))))
+      (r &&
+        (!workbookSnapshotsEqual(
+          t,
+          buildCanonicalWorkbookSnapshot(r.workbook),
+        ) ||
+          !workbookSnapshotsEqual(n, captureWorkbookView(r.workbook, r.view))))
     )
-      throw Ew();
+      throw invalidStorageAckError();
     return {
       ...e,
       workbook: t,
@@ -1071,21 +1127,21 @@ function aE(e, r) {
       checkpoints: e.checkpoints.map((a) => ({ ...a })),
     };
   } catch {
-    throw Ew();
+    throw invalidStorageAckError();
   }
 }
-function $2e(e, r) {
+function instrumentWorkbookPersistence(e, r) {
   const t = (n, o) =>
     n && typeof n.then == "function"
-      ? Promise.resolve(n).then((a) => aE(a, o))
-      : aE(n, o);
+      ? Promise.resolve(n).then((a) => normalizeCheckpointRecord(a, o))
+      : normalizeCheckpointRecord(n, o);
   return {
     ...("coordination" in e ? { coordination: e.coordination } : {}),
     load: () => {
       const n = r.start("persistence", "load");
       try {
         const o = e.load(),
-          a = o ? aE(o) : null;
+          a = o ? normalizeCheckpointRecord(o) : null;
         return (
           n.finish(a != null && a.recovered ? "recovered" : "succeeded"),
           a
@@ -1096,7 +1152,10 @@ function $2e(e, r) {
     },
     save: (n, o, a, s) =>
       r.run("persistence", "save", () => {
-        const d = { workbook: rh(n), view: sN(n, o) };
+        const d = {
+          workbook: buildCanonicalWorkbookSnapshot(n),
+          view: captureWorkbookView(n, o),
+        };
         return t(
           e.save(d.workbook, structuredClone(d.view), a ? { ...a } : null, s),
           d,
@@ -1114,13 +1173,17 @@ function $2e(e, r) {
       ),
   };
 }
-function z2e(e, r, t) {
+function findRecoverableCheckpoint(e, r, t) {
   const n = e.load();
   if (!n) return null;
-  const o = aE(n);
-  return o.recovered || !aN(o.workbook, rh(r)) || t ? null : o;
+  const o = normalizeCheckpointRecord(n);
+  return o.recovered ||
+    !workbookSnapshotsEqual(o.workbook, buildCanonicalWorkbookSnapshot(r)) ||
+    t
+    ? null
+    : o;
 }
-const zj = {
+const diagnosticGroupLabels = {
   persistence: "Saving and recovery",
   calculation: "Calculation",
   file: "File processing",
@@ -1128,7 +1191,7 @@ const zj = {
   source: "External sources",
   host: "Application callbacks",
 };
-function V2e({ monitor, onClose }) {
+function WorkbookHealthDialog({ monitor, onClose }) {
   const t = ne.useSyncExternalStore(
       monitor.subscribe,
       monitor.getSnapshot,
@@ -1136,7 +1199,7 @@ function V2e({ monitor, onClose }) {
     ),
     n = ne.useId(),
     o = ne.useRef(null),
-    a = Dr();
+    a = useWorkbookMessages();
   ne.useEffect(() => {
     var u;
     const d = document.activeElement;
@@ -1197,19 +1260,19 @@ function V2e({ monitor, onClose }) {
           children: [
             i.jsx("h2", {
               id: n,
-              children: i.jsx(M, { children: "Workbook health" }),
+              children: i.jsx(LocalizedText, { children: "Workbook health" }),
             }),
             i.jsx("button", {
               ref: o,
               type: "button",
               "aria-label": a.text("Close workbook health"),
               onClick: onClose,
-              children: i.jsx(M, { children: "Close" }),
+              children: i.jsx(LocalizedText, { children: "Close" }),
             }),
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Diagnostics contain operation categories, outcomes and timings. Workbook contents, names, prompts and error details are excluded.",
           }),
@@ -1229,14 +1292,17 @@ function V2e({ monitor, onClose }) {
                   ].map((d) =>
                     i.jsx(
                       "th",
-                      { scope: "col", children: i.jsx(M, { children: d }) },
+                      {
+                        scope: "col",
+                        children: i.jsx(LocalizedText, { children: d }),
+                      },
                       d,
                     ),
                   ),
                 }),
               }),
               i.jsx("tbody", {
-                children: Object.keys(zj).map((d) => {
+                children: Object.keys(diagnosticGroupLabels).map((d) => {
                   const u = t.health[d],
                     l = Object.keys(u.issues).length
                       ? "Needs attention"
@@ -1251,9 +1317,13 @@ function V2e({ monitor, onClose }) {
                       children: [
                         i.jsx("th", {
                           scope: "row",
-                          children: i.jsx(M, { children: zj[d] }),
+                          children: i.jsx(LocalizedText, {
+                            children: diagnosticGroupLabels[d],
+                          }),
                         }),
-                        i.jsx("td", { children: i.jsx(M, { children: l }) }),
+                        i.jsx("td", {
+                          children: i.jsx(LocalizedText, { children: l }),
+                        }),
                         i.jsx("td", { children: u.completed }),
                         i.jsx("td", { children: u.failures }),
                         i.jsxs("td", {
@@ -1277,25 +1347,25 @@ function V2e({ monitor, onClose }) {
         i.jsxs("p", {
           role: "status",
           children: [
-            i.jsx(M, { children: "Retained events" }),
+            i.jsx(LocalizedText, { children: "Retained events" }),
             ": ",
             t.events.length,
             " ",
             "· ",
-            i.jsx(M, { children: "Discarded older events" }),
+            i.jsx(LocalizedText, { children: "Discarded older events" }),
             ":",
             " ",
             t.droppedEvents,
             " ·",
             " ",
-            i.jsx(M, { children: "Diagnostic delivery failures" }),
+            i.jsx(LocalizedText, { children: "Diagnostic delivery failures" }),
             ":",
             " ",
             t.sinkFailures,
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Save failures remain visible in the editor. Export your local changes before reloading a saved copy. A pending save must finish before another retry.",
           }),
@@ -1305,12 +1375,16 @@ function V2e({ monitor, onClose }) {
             i.jsx("button", {
               type: "button",
               onClick: s,
-              children: i.jsx(M, { children: "Download diagnostics" }),
+              children: i.jsx(LocalizedText, {
+                children: "Download diagnostics",
+              }),
             }),
             i.jsx("button", {
               type: "button",
               onClick: () => monitor.clearEvents(),
-              children: i.jsx(M, { children: "Clear diagnostic history" }),
+              children: i.jsx(LocalizedText, {
+                children: "Clear diagnostic history",
+              }),
             }),
           ],
         }),
@@ -1318,9 +1392,9 @@ function V2e({ monitor, onClose }) {
     }),
   });
 }
-const Cw = new WeakMap();
-function A_(e) {
-  return hr({
+const cellSnapshotCache = new WeakMap();
+function snapshotSheetContent(e) {
+  return fingerprintCanonicalValue({
     cells: Object.fromEntries(
       Object.entries(e.cells).map(([r, t]) => [
         r,
@@ -1332,11 +1406,11 @@ function A_(e) {
     rowOrigins: e.rowOriginIds,
   });
 }
-function k_(e, r, t) {
+function checkSourceSheetAccess(e, r, t) {
   var o;
-  if (t.readOnly) throw new Rn("refused");
+  if (t.readOnly) throw new ExternalSourceError("refused");
   if (!r) {
-    $a(e);
+    assertWorkbookStructureEditable(e);
     return;
   }
   const n = e.sheets.find((a) => a.id === r);
@@ -1347,24 +1421,27 @@ function k_(e, r, t) {
     ((o = n.protection) != null && o.enabled) ||
     (t.allowedSheetIds && !t.allowedSheetIds.includes(r))
   )
-    throw new Rn("refused");
-  if (!n.externalConnection) throw new Rn("invalid");
-  if (A_(n) !== n.externalConnection.outputHash) throw new Rn("stale");
+    throw new ExternalSourceError("refused");
+  if (!n.externalConnection) throw new ExternalSourceError("invalid");
+  if (snapshotSheetContent(n) !== n.externalConnection.outputHash)
+    throw new ExternalSourceError("stale");
 }
 function EH(e, r, t, n, o = {}) {
-  return CH(e, r, t, n, o);
+  return evaluateExternalSourceQuery(e, r, t, n, o);
 }
-function CH(e, r, t, n, o = {}, a = []) {
-  k_(e, n.sheetId, o);
-  const s = h0(t),
-    d = bU(r, s.source),
+function evaluateExternalSourceQuery(e, r, t, n, o = {}, a = []) {
+  checkSourceSheetAccess(e, n.sheetId, o);
+  const s = parseActiveSourceApproval(t),
+    d = validateExternalSourcePayload(r, s.source),
     u = n.sheetId
       ? e.sheets.find((h) => h.id === n.sheetId).externalConnection
       : undefined;
-  if (u && !AC(u.source, d.source)) throw new Rn("schema");
+  if (u && !isSameContentHash(u.source, d.source))
+    throw new ExternalSourceError("schema");
   if (
     !n.sheetId &&
-    (e.sheets.filter((h) => h.externalConnection).length >= fl.sources ||
+    (e.sheets.filter((h) => h.externalConnection).length >=
+      externalSourceLimits.sources ||
       !n.outputName.trim() ||
       n.outputName !== n.outputName.trim() ||
       n.outputName.length > 31 ||
@@ -1372,18 +1449,18 @@ function CH(e, r, t, n, o = {}, a = []) {
       /^'|'$/.test(n.outputName) ||
       e.sheets.some((h) => h.name.toLowerCase() === n.outputName.toLowerCase()))
   )
-    throw new Rn("invalid");
+    throw new ExternalSourceError("invalid");
   if (
-    (n.sheetId || q1(e, n.outputName),
+    (n.sheetId || inspectOutputNameSafety(e, n.outputName),
     e.sheets
       .filter((h) => h.id !== n.sheetId && !a.includes(h.id))
       .reduce((h, f) => h + Object.keys(f.cells).length, 0) +
       (d.rows.length + 1) * d.source.columns.length >
-      Mt.maxCells)
+      workbookLimits.maxCells)
   )
-    throw new Rn("limit");
+    throw new ExternalSourceError("limit");
   const c = {
-    workbookHash: hr(e),
+    workbookHash: fingerprintCanonicalValue(e),
     outputName: n.outputName,
     ...(n.sheetId ? { sheetId: n.sheetId } : {}),
     snapshot: d,
@@ -1397,7 +1474,7 @@ function CH(e, r, t, n, o = {}, a = []) {
           },
         }
       : {}),
-    controls: yU(d),
+    controls: computeSourceControlTotals(d),
   };
   if (
     c.controls.some((h) => {
@@ -1407,33 +1484,41 @@ function CH(e, r, t, n, o = {}, a = []) {
       );
     })
   )
-    throw new Rn("limit");
-  return (Cw.set(c, hr(c)), c);
+    throw new ExternalSourceError("limit");
+  return (cellSnapshotCache.set(c, fingerprintCanonicalValue(c)), c);
 }
-function W2e(e, r, t, n = {}) {
-  if (!Cw.has(r) || Cw.get(r) !== hr(r) || hr(e) !== r.workbookHash)
-    throw new Rn("stale");
-  k_(e, r.sheetId, n);
-  const o = h0(t);
-  if ((h0(r.grant), !AC(o.source, r.snapshot.source))) throw new Rn("schema");
+function grantSheetSnapshotSource(e, r, t, n = {}) {
+  if (
+    !cellSnapshotCache.has(r) ||
+    cellSnapshotCache.get(r) !== fingerprintCanonicalValue(r) ||
+    fingerprintCanonicalValue(e) !== r.workbookHash
+  )
+    throw new ExternalSourceError("stale");
+  checkSourceSheetAccess(e, r.sheetId, n);
+  const o = parseActiveSourceApproval(t);
+  if (
+    (parseActiveSourceApproval(r.grant),
+    !isSameContentHash(o.source, r.snapshot.source))
+  )
+    throw new ExternalSourceError("schema");
   EH(e, r.snapshot, o, r, n);
-  const a = AH(e, r),
-    s = rn({
+  const a = buildSourceSheetSnapshot(e, r),
+    s = normalizeWorkbookInput({
       ...e,
       sheets: r.sheetId
         ? e.sheets.map((d) => (d.id === a.id ? a : d))
         : [...e.sheets, a],
     });
-  return (Cw.delete(r), s);
+  return (cellSnapshotCache.delete(r), s);
 }
-function AH(e, r) {
+function buildSourceSheetSnapshot(e, r) {
   const t = e.sheets.find((d) => d.id === r.sheetId),
-    n = t ? { ...t } : Ku(r.outputName),
+    n = t ? { ...t } : createWorksheetRecord(r.outputName),
     o = {};
   ([r.snapshot.source.columns.map((d) => d.name), ...r.snapshot.rows].forEach(
     (d, u) =>
       d.forEach((l, c) => {
-        const h = `${ut(c)}${u + 1}`,
+        const h = `${columnIndexToLetters(c)}${u + 1}`,
           f = t?.cells[h];
         o[h] = {
           raw: l,
@@ -1455,7 +1540,7 @@ function AH(e, r) {
   const s = new Date().toISOString();
   return (
     (n.externalConnection = {
-      protocol: OR,
+      protocol: externalSourceFormatVersion,
       source: structuredClone(r.snapshot.source),
       lastSuccess: {
         at: s,
@@ -1463,29 +1548,34 @@ function AH(e, r) {
         version: r.snapshot.version,
         rows: r.snapshot.rows.length,
         controls: structuredClone(r.controls),
-        dataHash: hr(r.snapshot),
+        dataHash: fingerprintCanonicalValue(r.snapshot),
       },
       lastAttempt: { at: s, outcome: "succeeded" },
-      outputHash: A_(n),
+      outputHash: snapshotSheetContent(n),
     }),
     n
   );
 }
-const sE = new WeakMap();
-function kH(e, r, t = {}) {
-  if (!r.length || r.length > fl.sources || new Set(r).size !== r.length)
-    throw new Rn("invalid");
-  for (const n of r) k_(e, n, t);
+const sourceGrantCache = new WeakMap();
+function assertSourceGrantsValid(e, r, t = {}) {
+  if (
+    !r.length ||
+    r.length > externalSourceLimits.sources ||
+    new Set(r).size !== r.length
+  )
+    throw new ExternalSourceError("invalid");
+  for (const n of r) checkSourceSheetAccess(e, n, t);
 }
-function SH(e, r, t = {}) {
+function planSourceGrants(e, r, t = {}) {
   const n = r.map((d) => d.sheetId);
   if (
-    (kH(e, n, t),
-    new TextEncoder().encode(JSON.stringify(r)).length > fl.responseBytes)
+    (assertSourceGrantsValid(e, n, t),
+    new TextEncoder().encode(JSON.stringify(r)).length >
+      externalSourceLimits.responseBytes)
   )
-    throw new Rn("limit");
+    throw new ExternalSourceError("limit");
   const o = r.map((d) =>
-    CH(
+    evaluateExternalSourceQuery(
       e,
       d.snapshot,
       d.grant,
@@ -1506,29 +1596,34 @@ function SH(e, r, t = {}) {
           d + (u.snapshot.rows.length + 1) * u.snapshot.source.columns.length,
         0,
       ) >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
-    throw new Rn("limit");
-  const s = { workbookHash: hr(e), plans: o };
-  return (sE.set(s, hr(s)), s);
+    throw new ExternalSourceError("limit");
+  const s = { workbookHash: fingerprintCanonicalValue(e), plans: o };
+  return (sourceGrantCache.set(s, fingerprintCanonicalValue(s)), s);
 }
-function H2e(e, r, t, n = {}) {
-  if (!sE.has(r) || sE.get(r) !== hr(r) || r.workbookHash !== hr(e))
-    throw new Rn("stale");
-  const o = t.map((u) => h0(u)),
+function applySourceGrantPlans(e, r, t, n = {}) {
+  if (
+    !sourceGrantCache.has(r) ||
+    sourceGrantCache.get(r) !== fingerprintCanonicalValue(r) ||
+    r.workbookHash !== fingerprintCanonicalValue(e)
+  )
+    throw new ExternalSourceError("stale");
+  const o = t.map((u) => parseActiveSourceApproval(u)),
     a = new Set(r.plans.map((u) => u.snapshot.source.id));
   if (
     o.length !== a.size ||
     new Set(o.map((u) => u.source.id)).size !== o.length ||
     o.some((u) => !a.has(u.source.id))
   )
-    throw new Rn("refused");
+    throw new ExternalSourceError("refused");
   for (const u of r.plans) {
-    h0(u.grant);
+    parseActiveSourceApproval(u.grant);
     const l = o.find((c) => c.source.id === u.snapshot.source.id);
-    if (!l || !AC(l.source, u.snapshot.source)) throw new Rn("schema");
+    if (!l || !isSameContentHash(l.source, u.snapshot.source))
+      throw new ExternalSourceError("schema");
   }
-  SH(
+  planSourceGrants(
     e,
     r.plans.map((u) => ({
       sheetId: u.sheetId,
@@ -1537,13 +1632,18 @@ function H2e(e, r, t, n = {}) {
     })),
     n,
   );
-  const s = new Map(r.plans.map((u) => [u.sheetId, AH(e, u)])),
-    d = rn({ ...e, sheets: e.sheets.map((u) => s.get(u.id) ?? u) });
-  sE.delete(r);
-  for (const u of r.plans) Cw.delete(u);
+  const s = new Map(
+      r.plans.map((u) => [u.sheetId, buildSourceSheetSnapshot(e, u)]),
+    ),
+    d = normalizeWorkbookInput({
+      ...e,
+      sheets: e.sheets.map((u) => s.get(u.id) ?? u),
+    });
+  sourceGrantCache.delete(r);
+  for (const u of r.plans) cellSnapshotCache.delete(u);
   return d;
 }
-function lN(e, r, t, n, o = {}) {
+function normalizeExternalSourceState(e, r, t, n, o = {}) {
   var u;
   if (o.readOnly) return e;
   const a = e.sheets.find((l) => l.id === r);
@@ -1560,7 +1660,7 @@ function lN(e, r, t, n, o = {}) {
     d = new Date(
       Math.max(Date.now(), Date.parse(s.lastSuccess.at)),
     ).toISOString();
-  return rn({
+  return normalizeWorkbookInput({
     ...e,
     sheets: e.sheets.map((l) =>
       l === a
@@ -1579,71 +1679,76 @@ function lN(e, r, t, n, o = {}) {
     ),
   });
 }
-async function $x(e, r, t = {}) {
+async function runSourceWithTimeout(e, r, t = {}) {
   var l, c;
-  const n = t.timeoutMs ?? fl.timeoutMs;
-  if (!Number.isInteger(n) || n < 1 || n > fl.timeoutMs)
-    throw new Rn("invalid");
+  const n = t.timeoutMs ?? externalSourceLimits.timeoutMs;
+  if (!Number.isInteger(n) || n < 1 || n > externalSourceLimits.timeoutMs)
+    throw new ExternalSourceError("invalid");
   const o = t.reliability?.start("source", e),
     a = new AbortController();
   let s,
     d = () => {};
   try {
-    if ((l = t.signal) != null && l.aborted) throw new Rn("cancelled");
+    if ((l = t.signal) != null && l.aborted)
+      throw new ExternalSourceError("cancelled");
     const h = new Promise((p, m) => {
         var v;
         ((d = () => {
-          (a.abort(), m(new Rn("cancelled")));
+          (a.abort(), m(new ExternalSourceError("cancelled")));
         }),
           (v = t.signal) == null ||
             v.addEventListener("abort", d, { once: true }),
           (s = setTimeout(() => {
-            (a.abort(), m(new Rn("timeout")));
+            (a.abort(), m(new ExternalSourceError("timeout")));
           }, n)));
       }),
       f = await Promise.race([Promise.resolve().then(() => r(a.signal)), h]);
-    if (a.signal.aborted) throw new Rn("cancelled");
+    if (a.signal.aborted) throw new ExternalSourceError("cancelled");
     return (o == null || o.finish(), f);
   } catch (h) {
-    const f = Mp(h);
+    const f = isExternalSourceError(h);
     throw (o == null || o.fail(f), f);
   } finally {
     (clearTimeout(s),
       (c = t.signal) == null || c.removeEventListener("abort", d));
   }
 }
-async function q2e(e, r = {}) {
-  return $x(
+async function fetchSourceCatalog(e, r = {}) {
+  return runSourceWithTimeout(
     "catalog",
     async (t) => {
       const n = await e.catalog({ signal: t });
-      if (!Array.isArray(n) || n.length > fl.sources) throw new Rn("invalid");
-      const o = n.map((a) => h0(a));
+      if (!Array.isArray(n) || n.length > externalSourceLimits.sources)
+        throw new ExternalSourceError("invalid");
+      const o = n.map((a) => parseActiveSourceApproval(a));
       if (new Set(o.map((a) => a.source.id)).size !== o.length)
-        throw new Rn("invalid");
+        throw new ExternalSourceError("invalid");
       return o;
     },
     r,
   );
 }
-async function S_(e, r, t = {}) {
-  return $x(
+async function authorizeSourceAccess(e, r, t = {}) {
+  return runSourceWithTimeout(
     "authorize",
     async (n) => {
-      const o = h0(await e.authorize(r, { signal: n }));
-      if (o.source.id !== r) throw new Rn("refused");
+      const o = parseActiveSourceApproval(await e.authorize(r, { signal: n }));
+      if (o.source.id !== r) throw new ExternalSourceError("refused");
       return o;
     },
     t,
   );
 }
-async function TH(e, r, t = {}) {
-  const n = await S_(e, r, t),
-    o = await $x(
+async function refreshSourceSnapshot(e, r, t = {}) {
+  const n = await authorizeSourceAccess(e, r, t),
+    o = await runSourceWithTimeout(
       "refresh",
       async (a) => {
-        const s = bU(await e.refresh(r, { signal: a }), n.source);
-        return (h0(n), s);
+        const s = validateExternalSourcePayload(
+          await e.refresh(r, { signal: a }),
+          n.source,
+        );
+        return (parseActiveSourceApproval(n), s);
       },
       t,
     );
@@ -1656,28 +1761,28 @@ discriminatedUnion("operation", [
     sourceId: string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/),
   }),
 ]);
-async function X2e(e, r, t, n = {}) {
-  kH(e, t, n);
+async function runSourceRefreshBatch(e, r, t, n = {}) {
+  assertSourceGrantsValid(e, t, n);
   const o = [],
     a = new Map();
   let s;
   try {
-    await $x(
+    await runSourceWithTimeout(
       "refresh",
       async (d) => {
         var u;
         for (const l of t) {
-          if (d.aborted) throw new Rn("cancelled");
+          if (d.aborted) throw new ExternalSourceError("cancelled");
           const c = e.sheets.find((f) => f.id === l).externalConnection.source
             .id;
           let h = a.get(c);
           if (!h) {
             try {
-              h = await TH(r, c, { ...n, signal: d });
+              h = await refreshSourceSnapshot(r, c, { ...n, signal: d });
             } catch (f) {
-              h = Mp(f).code;
+              h = isExternalSourceError(f).code;
             }
-            if (d.aborted) throw new Rn("cancelled");
+            if (d.aborted) throw new ExternalSourceError("cancelled");
             a.set(c, h);
           }
           if (
@@ -1687,16 +1792,16 @@ async function X2e(e, r, t, n = {}) {
                 : { sheetId: l, sourceId: c, ...h },
             ),
             new TextEncoder().encode(JSON.stringify(o)).length >
-              fl.responseBytes)
+              externalSourceLimits.responseBytes)
           )
-            throw new Rn("limit");
+            throw new ExternalSourceError("limit");
           (u = n.onProgress) == null || u.call(n, o.length, t.length);
         }
       },
       n,
     );
   } catch (d) {
-    s = Mp(d).code;
+    s = isExternalSourceError(d).code;
   }
   if (s) {
     for (const d of t)
@@ -1720,7 +1825,7 @@ async function X2e(e, r, t, n = {}) {
   }
   if (o.some((d) => d.error)) return { entries: o };
   try {
-    const d = SH(
+    const d = planSourceGrants(
       e,
       o.map((u) => ({
         sheetId: u.sheetId,
@@ -1731,41 +1836,41 @@ async function X2e(e, r, t, n = {}) {
     );
     return { entries: o, plan: d };
   } catch (d) {
-    return { entries: o, error: Mp(d).code };
+    return { entries: o, error: isExternalSourceError(d).code };
   }
 }
 async function G2e(e, r, t = {}) {
-  return $x(
+  return runSourceWithTimeout(
     "authorize",
     async (n) => {
       const o = [];
       for (const a of new Set(r.plans.map((s) => s.snapshot.source.id))) {
-        if (n.aborted) throw new Rn("cancelled");
-        o.push(await S_(e, a, { ...t, signal: n }));
+        if (n.aborted) throw new ExternalSourceError("cancelled");
+        o.push(await authorizeSourceAccess(e, a, { ...t, signal: n }));
       }
-      return o.map((a) => h0(a));
+      return o.map((a) => parseActiveSourceApproval(a));
     },
     t,
   );
 }
 
 export {
-  $2e,
-  A2,
-  A_,
+  instrumentWorkbookPersistence,
+  computeVirtualizedRange,
+  snapshotSheetContent,
   EH,
   G2e,
-  H2e,
-  P2e,
-  S_,
-  TH,
-  V2e,
-  W2e,
-  X2e,
-  lN,
-  oN,
-  q2e,
-  xH,
-  yH,
-  z2e,
+  applySourceGrantPlans,
+  WorkbookSaveConflictDialog,
+  authorizeSourceAccess,
+  refreshSourceSnapshot,
+  WorkbookHealthDialog,
+  grantSheetSnapshotSource,
+  runSourceRefreshBatch,
+  normalizeExternalSourceState,
+  workbookLockName,
+  fetchSourceCatalog,
+  createWorkbookDiagnosticsMonitor,
+  saveWorkbookWithLock,
+  findRecoverableCheckpoint,
 };

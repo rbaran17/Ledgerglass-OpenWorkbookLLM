@@ -1,20 +1,32 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { VU, cn } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { hz } from "./16-text-split-tools.js";
-import { Hi, IW, mS, o4e, vy } from "./42-combine-populations.js";
+import { textCleanupFunctionNames, cn } from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { describeInferredTextRule } from "./16-text-split-tools.js";
+import {
+  createTextFunctionField,
+  previewTextCleanup,
+  getTextFunctionSpec,
+  createTextCleanupOutput,
+  stringifyEscapedJson,
+} from "./42-combine-populations.js";
 
-function s4e(e) {
-  const { text, language } = Dr(),
+function TextCleanupDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(false),
     [s, d] = ne.useState(e.range),
     [u, l] = ne.useState("Cleaned text"),
     [c, h] = ne.useState(false),
-    [f, p] = ne.useState([mS("CLEAN"), mS("TRIM")]),
+    [f, p] = ne.useState([
+      getTextFunctionSpec("CLEAN"),
+      getTextFunctionSpec("TRIM"),
+    ]),
     [m, v] = ne.useState("SUBSTITUTE"),
     [g, b] = ne.useState(null),
     [y, w] = ne.useState(""),
@@ -83,7 +95,7 @@ function s4e(e) {
         }));
         b({
           key: V,
-          plan: IW(
+          plan: previewTextCleanup(
             e.workbook,
             {
               sourceSheetId: e.sheetId,
@@ -103,7 +115,11 @@ function s4e(e) {
         try {
           if (_.current.key !== g?.key)
             throw Error("The cleanup settings changed. Preview again.");
-          const H = o4e(_.current.p.workbook, B, _.current.options);
+          const H = createTextCleanupOutput(
+            _.current.p.workbook,
+            B,
+            _.current.options,
+          );
           ((a.current = true),
             _.current.p.onWorkbookChange(
               H,
@@ -167,7 +183,7 @@ function s4e(e) {
           children: [
             i.jsx("h2", {
               id: `${n}-title`,
-              children: i.jsx(M, { children: "Clean up text" }),
+              children: i.jsx(LocalizedText, { children: "Clean up text" }),
             }),
             i.jsx("button", {
               "aria-label": text("Close text cleanup"),
@@ -179,7 +195,7 @@ function s4e(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Review text changes before creating a separate worksheet. Original cells, evidence notes and source identities stay in place.",
           }),
@@ -189,11 +205,11 @@ function s4e(e) {
           disabled: e.readOnly || e.allowNewSheet === false,
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, { children: "Source and output" }),
+              children: i.jsx(LocalizedText, { children: "Source and output" }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source range" }),
+                i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Cleanup source range"),
                   value: s,
@@ -207,7 +223,7 @@ function s4e(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "New worksheet name" }),
+                i.jsx(LocalizedText, { children: "New worksheet name" }),
                 i.jsx("input", {
                   value: u,
                   onChange: (H) => {
@@ -227,7 +243,9 @@ function s4e(e) {
                       (h(H.target.checked), C());
                     },
                   }),
-                  i.jsx(M, { children: "Include hidden source cells" }),
+                  i.jsx(LocalizedText, {
+                    children: "Include hidden source cells",
+                  }),
                 ],
               }),
           ],
@@ -235,7 +253,7 @@ function s4e(e) {
         e.readOnly &&
           i.jsx("p", {
             role: "status",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "This workbook is read-only. Saved cleanup evidence can still be reviewed.",
             }),
@@ -245,7 +263,7 @@ function s4e(e) {
           className: "cleanup-steps",
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, { children: "Steps in order" }),
+              children: i.jsx(LocalizedText, { children: "Steps in order" }),
             }),
             f.map((H, Q) =>
               i.jsxs(
@@ -332,7 +350,7 @@ function s4e(e) {
                       onClick: () => {
                         (p(f.filter((X, J) => Q !== J)), C());
                       },
-                      children: i.jsx(M, { children: "Remove" }),
+                      children: i.jsx(LocalizedText, { children: "Remove" }),
                     }),
                   ],
                 },
@@ -344,11 +362,11 @@ function s4e(e) {
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Add function" }),
+                    i.jsx(LocalizedText, { children: "Add function" }),
                     i.jsx("select", {
                       value: m,
                       onChange: (H) => v(H.target.value),
-                      children: VU.map((H) =>
+                      children: textCleanupFunctionNames.map((H) =>
                         i.jsx("option", { children: H }, H),
                       ),
                     }),
@@ -357,9 +375,9 @@ function s4e(e) {
                 i.jsx("button", {
                   disabled: f.length >= 12,
                   onClick: () => {
-                    (p([...f, mS(m)]), C());
+                    (p([...f, getTextFunctionSpec(m)]), C());
                   },
-                  children: i.jsx(M, { children: "Add step" }),
+                  children: i.jsx(LocalizedText, { children: "Add step" }),
                 }),
                 i.jsx("button", {
                   onClick: () => {
@@ -368,16 +386,21 @@ function s4e(e) {
                       {
                         name: "SUBSTITUTE",
                         fields: [
-                          Hi("Old text", " "),
-                          Hi("New text", " "),
-                          Hi("Occurrence (blank = all)", "", "number", true),
+                          createTextFunctionField("Old text", " "),
+                          createTextFunctionField("New text", " "),
+                          createTextFunctionField(
+                            "Occurrence (blank = all)",
+                            "",
+                            "number",
+                            true,
+                          ),
                         ],
                       },
                     ]),
                       C());
                   },
                   disabled: f.length >= 12,
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Replace nonbreaking spaces",
                   }),
                 }),
@@ -387,7 +410,7 @@ function s4e(e) {
         }),
         i.jsx("p", {
           className: "ttc-boundary",
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "TRIM removes ordinary spaces; CLEAN removes ASCII control characters. Nonbreaking spaces need an explicit SUBSTITUTE step before TRIM. Character positions count Unicode code points. VALUE uses US numeric notation; NUMBERVALUE accepts explicit decimal and group separators. Numeric conversion removes leading zeros.",
           }),
@@ -395,14 +418,14 @@ function s4e(e) {
         i.jsx("button", {
           onClick: N,
           disabled: e.readOnly || e.allowNewSheet === false,
-          children: i.jsx(M, { children: "Preview cleanup" }),
+          children: i.jsx(LocalizedText, { children: "Preview cleanup" }),
         }),
         y && i.jsx("p", { className: "ttc-error", role: "alert", children: y }),
         g &&
           !B &&
           i.jsx("p", {
             role: "status",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "The workbook or settings changed. Preview again before applying.",
             }),
@@ -418,17 +441,17 @@ function s4e(e) {
                 children: [
                   B.rows.length,
                   " ",
-                  i.jsx(M, { children: "results · " }),
+                  i.jsx(LocalizedText, { children: "results · " }),
                   B.errors.length,
                   " ",
-                  i.jsx(M, { children: "errors" }),
+                  i.jsx(LocalizedText, { children: "errors" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "Source revision " }),
+                  i.jsx(LocalizedText, { children: "Source revision " }),
                   e.workbook.revision,
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       ". Quoted values expose spaces; nonbreaking spaces appear as \\u00a0.",
                   }),
@@ -443,18 +466,24 @@ function s4e(e) {
                       children: i.jsxs("tr", {
                         children: [
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Source cell" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Source cell",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Original evidence value",
                             }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Result" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Result",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Type / error" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Type / error",
+                            }),
                           }),
                         ],
                       }),
@@ -468,12 +497,14 @@ function s4e(e) {
                               i.jsx("td", { children: H.sourceAddress }),
                               i.jsx("td", {
                                 children: i.jsx("code", {
-                                  children: vy(H.original?.raw ?? null),
+                                  children: stringifyEscapedJson(
+                                    H.original?.raw ?? null,
+                                  ),
                                 }),
                               }),
                               i.jsx("td", {
                                 children: i.jsx("code", {
-                                  children: vy(H.result),
+                                  children: stringifyEscapedJson(H.result),
                                 }),
                               }),
                               i.jsx("td", {
@@ -497,28 +528,32 @@ function s4e(e) {
                   i.jsx("button", {
                     disabled: E === 0,
                     onClick: () => A(E - 1),
-                    children: i.jsx(M, { children: "Previous results" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Previous results",
+                    }),
                   }),
                   i.jsxs("span", {
                     children: [
-                      i.jsx(M, { children: "Page " }),
+                      i.jsx(LocalizedText, { children: "Page " }),
                       E + 1,
                       " ",
-                      i.jsx(M, { children: "of " }),
+                      i.jsx(LocalizedText, { children: "of " }),
                       Math.ceil(B.rows.length / 20),
                     ],
                   }),
                   i.jsx("button", {
                     disabled: (E + 1) * 20 >= B.rows.length,
                     onClick: () => A(E + 1),
-                    children: i.jsx(M, { children: "Next results" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Next results",
+                    }),
                   }),
                 ],
               }),
               B.errors.length > 0 &&
                 i.jsx("p", {
                   role: "alert",
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Resolve all errors before applying. No partial output will be created.",
                   }),
@@ -530,14 +565,16 @@ function s4e(e) {
             children: [
               i.jsxs("summary", {
                 children: [
-                  i.jsx(M, { children: "Saved text cleanup evidence (" }),
+                  i.jsx(LocalizedText, {
+                    children: "Saved text cleanup evidence (",
+                  }),
                   L.length,
                   ")",
                 ],
               }),
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Cleanup record" }),
+                  i.jsx(LocalizedText, { children: "Cleanup record" }),
                   i.jsx("select", {
                     value: $?.id ?? "",
                     onChange: (H) => {
@@ -568,22 +605,22 @@ function s4e(e) {
                   children: [
                     i.jsxs("p", {
                       children: [
-                        i.jsx(M, { children: "Source: " }),
+                        i.jsx(LocalizedText, { children: "Source: " }),
                         $.sourceSheetName,
                         " ",
-                        i.jsx(M, { children: "· workbook" }),
+                        i.jsx(LocalizedText, { children: "· workbook" }),
                         " ",
                         $.workbookId,
                         " ",
-                        i.jsx(M, { children: "· revision " }),
+                        i.jsx(LocalizedText, { children: "· revision " }),
                         $.sourceRevision,
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             ". Addresses and values are snapshots from the cleanup, even if cells later move or are deleted.",
                         }),
                       ],
                     }),
-                    i.jsx("code", { children: vy($.steps) }),
+                    i.jsx("code", { children: stringifyEscapedJson($.steps) }),
                     i.jsx("div", {
                       className: "ttc-scroll",
                       children: i.jsxs("table", {
@@ -592,22 +629,22 @@ function s4e(e) {
                             children: i.jsxs("tr", {
                               children: [
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Source at cleanup",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Original value and note",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Result at cleanup",
                                   }),
                                 }),
                                 i.jsx("th", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Original file row",
                                   }),
                                 }),
@@ -627,14 +664,16 @@ function s4e(e) {
                                       }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
-                                          children: vy(
+                                          children: stringifyEscapedJson(
                                             H.original ?? { raw: null },
                                           ),
                                         }),
                                       }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
-                                          children: vy(H.result),
+                                          children: stringifyEscapedJson(
+                                            H.result,
+                                          ),
                                         }),
                                       }),
                                       i.jsx("td", {
@@ -654,12 +693,16 @@ function s4e(e) {
                     i.jsx("button", {
                       disabled: I === 0,
                       onClick: () => O(I - 1),
-                      children: i.jsx(M, { children: "Previous evidence" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Previous evidence",
+                      }),
                     }),
                     i.jsx("button", {
                       disabled: (I + 1) * 20 >= $.rows.length,
                       onClick: () => O(I + 1),
-                      children: i.jsx(M, { children: "Next evidence" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Next evidence",
+                      }),
                     }),
                   ],
                 }),
@@ -667,7 +710,7 @@ function s4e(e) {
           }),
         i.jsx("p", {
           className: "ttc-boundary",
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Up to 500 ordinary source cells, 200,000 source characters and 12 steps. Keep a native JSON backup to retain cleanup history; CSV/XLSX do not preserve that history.",
           }),
@@ -676,13 +719,15 @@ function s4e(e) {
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Close" }),
+              children: i.jsx(LocalizedText, { children: "Close" }),
             }),
             i.jsx("button", {
               className: "ttc-primary",
               disabled: !B || !!B.errors.length || e.readOnly || a.current,
               onClick: R,
-              children: i.jsx(M, { children: "Create cleaned worksheet" }),
+              children: i.jsx(LocalizedText, {
+                children: "Create cleaned worksheet",
+              }),
             }),
           ],
         }),
@@ -690,7 +735,7 @@ function s4e(e) {
     }),
   });
 }
-const DW = [
+const textCleanupStepLabels = [
     ["trim", "Trim whitespace"],
     ["clean", "Remove control characters"],
     ["case", "Change case"],
@@ -702,7 +747,7 @@ const DW = [
     ["select", "Select and reorder fields"],
     ["pattern", "Infer from examples"],
   ],
-  gS = (e, r = false) => {
+  parseFieldPositions = (e, r = false) => {
     if (!e.trim() && r) return [];
     if (!/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(e))
       throw Error("Enter field positions separated by commas, such as 1, 3.");
@@ -712,13 +757,19 @@ const DW = [
     return t;
   },
   vS = (e) => JSON.stringify(e);
-function cj(e) {
+function describeSplitFieldStep(e) {
   if (e.kind === "pattern")
-    return `Infer “${e.name}”: ${hz(e.pattern)} (${e.examples.length} examples)`;
+    return `Infer “${e.name}”: ${describeInferredTextRule(e.pattern)} (${e.examples.length} examples)`;
   if (e.kind === "split")
     return `Split field ${e.column + 1}: ${e.mode === "fixed" ? "breaks " + e.breaks.join(", ") : "delimiters " + JSON.stringify(e.delimiters) + (e.collapse ? ", collapse consecutive" : "")}`;
   const r = e.columns.map((n) => n + 1).join(", ");
-  return `${DW.find((n) => n[0] === e.kind)?.[1]} · fields ${r}${e.kind === "convert" ? ` → ${e.to} (decimal ${e.decimal}, groups ${e.group || "none"}, dates ${e.dateOrder})` : e.kind === "fill" ? ` → ${e.direction}${e.groupColumns.length ? " within fields " + e.groupColumns.map((n) => n + 1).join(", ") : ""}` : e.kind === "concat" ? ` → ${e.name}; separator ${JSON.stringify(e.separator)}` : e.kind === "case" || e.kind === "trim" ? ` → ${e.mode}` : e.kind === "replace" ? ` ${JSON.stringify(e.find)} → ${JSON.stringify(e.replacement)}` : ""}`;
+  return `${textCleanupStepLabels.find((n) => n[0] === e.kind)?.[1]} · fields ${r}${e.kind === "convert" ? ` → ${e.to} (decimal ${e.decimal}, groups ${e.group || "none"}, dates ${e.dateOrder})` : e.kind === "fill" ? ` → ${e.direction}${e.groupColumns.length ? " within fields " + e.groupColumns.map((n) => n + 1).join(", ") : ""}` : e.kind === "concat" ? ` → ${e.name}; separator ${JSON.stringify(e.separator)}` : e.kind === "case" || e.kind === "trim" ? ` → ${e.mode}` : e.kind === "replace" ? ` ${JSON.stringify(e.find)} → ${JSON.stringify(e.replacement)}` : ""}`;
 }
 
-export { DW, cj, gS, s4e, vS };
+export {
+  textCleanupStepLabels,
+  describeSplitFieldStep,
+  parseFieldPositions,
+  TextCleanupDialog,
+  vS,
+};

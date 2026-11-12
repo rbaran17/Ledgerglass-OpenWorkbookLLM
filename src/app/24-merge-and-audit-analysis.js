@@ -3,45 +3,51 @@ import i from "react/jsx-runtime";
 import ne from "react";
 import __calculationWorkerSource from "../workers/calculation.worker.js?worker-source";
 import {
-  JF,
-  QF,
-  es,
-  g1,
-  kN,
-  nB,
-  pd,
-  yc,
+  resolveCalculationBudget,
+  estimateWorkbookMemoryBytes,
+  isDeepFrozenValue,
+  getExtensionCacheEntries,
+  estimateValueFootprintBytes,
+  workbookHasVolatileFunctions,
+  readMonotonicClockMs,
+  defineDataPropertyByKey,
 } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  Gw,
-  Hie,
-  Ix,
-  L5,
-  Nr,
-  SR,
-  Ta,
-  Vn,
-  Xie,
+  getWorkbookCalculation,
+  getCurrentCalculatorRecord,
+  assertRangeCellBudget,
+  getIsolatedCalculation,
+  findSheetOrThrow,
+  carryCalculatorRecordForward,
+  formatOccupiedRangeAddress,
+  calculateWorkbookWithSettings,
+  runIterativeCalculation,
   _t,
-  bae,
-  f0,
-  gx,
-  lae,
-  mx,
-  qne,
-  rn,
-  sU,
-  sie,
-  uU,
-  ut,
-  v0,
+  assertFieldTransformsUnchanged,
+  applyFilterConditions,
+  touchWorkbookModifiedAt,
+  assertTextCleanupEvidenceUnchanged,
+  createWorkbookMetadata,
+  applyTableSourceEvidence,
+  normalizeWorkbookInput,
+  refreshCalculationReport,
+  validateRowOrigins,
+  acceptWorkerCalculationResult,
+  columnIndexToLetters,
+  checkDataValidationBatch,
 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { Bz, _de } from "./23-format-cells-dialog.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  previewMergeCells,
+  assertMergePreviewCurrent,
+} from "./23-format-cells-dialog.js";
 
-function Dde(e) {
-  const { text, language } = Dr(),
+function MergeCellsPreviewDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef({
@@ -62,7 +68,12 @@ function Dde(e) {
     v = ne.useMemo(() => {
       try {
         return {
-          plan: Bz(a.current.book, a.current.sheetId, a.current.range, d),
+          plan: previewMergeCells(
+            a.current.book,
+            a.current.sheetId,
+            a.current.range,
+            d,
+          ),
           error: "",
         };
       } catch (E) {
@@ -98,7 +109,7 @@ function Dde(e) {
         );
       if (!g) throw Error(v.error);
       (E.onWorkbookChange(
-        _de(E.workbook, g, { readOnly: E.readOnly }),
+        assertMergePreviewCurrent(E.workbook, g, { readOnly: E.readOnly }),
         d ? "Unmerge cells" : "Merge cells",
       ),
         E.onClose());
@@ -161,7 +172,7 @@ function Dde(e) {
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Merge shows and centers the upper-left cell. Covered values, formulas, notes and review evidence stay in the native workbook and reappear on Unmerge. Calculated previews are informational; volatile formulas may recalculate.",
               }),
@@ -174,14 +185,16 @@ function Dde(e) {
                     (u(false), c(0), f(""));
                   },
                   "aria-pressed": !d,
-                  children: i.jsx(M, { children: "Preview merge" }),
+                  children: i.jsx(LocalizedText, { children: "Preview merge" }),
                 }),
                 i.jsx("button", {
                   onClick: () => {
                     (u(true), c(0), f(""));
                   },
                   "aria-pressed": d,
-                  children: i.jsx(M, { children: "Unmerge selected cells" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Unmerge selected cells",
+                  }),
                 }),
               ],
             }),
@@ -197,7 +210,7 @@ function Dde(e) {
                       " · ",
                       g.hiddenValues,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "populated cells hidden by this merge.",
                       }),
                     ],
@@ -205,7 +218,7 @@ function Dde(e) {
                   g.xlsxBlocked &&
                     i.jsx("p", {
                       role: "status",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Excel export would discard covered values, so XLSX export is blocked until this range is unmerged. Native JSON retains every cell.",
                       }),
@@ -217,15 +230,17 @@ function Dde(e) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Cell" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Cell",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Value and evidence retained",
                               }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Display effect",
                               }),
                             }),
@@ -247,21 +262,25 @@ function Dde(e) {
                                     }),
                                     i.jsxs("div", {
                                       children: [
-                                        i.jsx(M, { children: "Raw: " }),
+                                        i.jsx(LocalizedText, {
+                                          children: "Raw: ",
+                                        }),
                                         String(E.cell.raw ?? "(blank)"),
                                       ],
                                     }),
                                     E.cell.note !== undefined &&
                                       i.jsxs("div", {
                                         children: [
-                                          i.jsx(M, { children: "Note: " }),
+                                          i.jsx(LocalizedText, {
+                                            children: "Note: ",
+                                          }),
                                           E.cell.note,
                                         ],
                                       }),
                                     E.cell.tickmark !== undefined &&
                                       i.jsxs("div", {
                                         children: [
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "Tickmark: ",
                                           }),
                                           E.cell.tickmark,
@@ -270,7 +289,9 @@ function Dde(e) {
                                     E.cell.hyperlink &&
                                       i.jsxs("div", {
                                         children: [
-                                          i.jsx(M, { children: "Link:" }),
+                                          i.jsx(LocalizedText, {
+                                            children: "Link:",
+                                          }),
                                           " ",
                                           E.cell.hyperlink.kind === "external"
                                             ? E.cell.hyperlink.url
@@ -282,7 +303,7 @@ function Dde(e) {
                                         children: [
                                           E.discussions,
                                           " ",
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children:
                                               "review discussions retained",
                                           }),
@@ -300,7 +321,7 @@ function Dde(e) {
                                       i.jsxs("details", {
                                         children: [
                                           i.jsx("summary", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "Formatting and cell metadata",
                                             }),
@@ -332,23 +353,25 @@ function Dde(e) {
                       i.jsx("button", {
                         disabled: y === 0,
                         onClick: () => c(y - 1),
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children: "Previous preview page",
                         }),
                       }),
                       i.jsxs("span", {
                         children: [
-                          i.jsx(M, { children: "Page " }),
+                          i.jsx(LocalizedText, { children: "Page " }),
                           y + 1,
                           " ",
-                          i.jsx(M, { children: "of " }),
+                          i.jsx(LocalizedText, { children: "of " }),
                           b,
                         ],
                       }),
                       i.jsx("button", {
                         disabled: y === b - 1,
                         onClick: () => c(y + 1),
-                        children: i.jsx(M, { children: "Next preview page" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Next preview page",
+                        }),
                       }),
                     ],
                   }),
@@ -371,13 +394,13 @@ function Dde(e) {
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "et-primary",
               disabled: !g || m || e.readOnly,
               onClick: w,
-              children: i.jsx(M, { children: "Apply" }),
+              children: i.jsx(LocalizedText, { children: "Apply" }),
             }),
           ],
         }),
@@ -385,13 +408,13 @@ function Dde(e) {
     }),
   });
 }
-function sw(e, r, t, n, o = {}) {
+function applyWorkbookChange(e, r, t, n, o = {}) {
   var h;
   if (
-    ((r = lae(e, r)),
-    (r = bae(e, r)),
-    (r = qne(e, r)),
-    sie(e, r),
+    ((r = assertTextCleanupEvidenceUnchanged(e, r)),
+    (r = assertFieldTransformsUnchanged(e, r)),
+    (r = applyTableSourceEvidence(e, r)),
+    validateRowOrigins(e, r),
     e.id !== r.id || e.revision !== r.revision)
   )
     throw new Error(
@@ -433,7 +456,7 @@ function sw(e, r, t, n, o = {}) {
             ...(g ? { before: g } : {}),
             ...(b ? { after: b } : {}),
           }),
-          a.length > Mt.maxCells)
+          a.length > workbookLimits.maxCells)
         )
           throw new Error(
             "This operation exceeds the 100,000 cell-change history limit.",
@@ -442,12 +465,12 @@ function sw(e, r, t, n, o = {}) {
   }
   if (
     e.events.reduce((f, p) => f + p.changes.length, 0) + a.length >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
     throw new Error(
       "Change history has reached its 100,000 cell-change limit. Export this workbook before continuing.",
     );
-  const s = Math.max(1, Math.ceil(a.length / Mt.maxPatches));
+  const s = Math.max(1, Math.ceil(a.length / workbookLimits.maxPatches));
   if (e.events.length + s > 2e3)
     throw new Error(
       "Change history is full. Export this workbook before continuing.",
@@ -459,7 +482,7 @@ function sw(e, r, t, n, o = {}) {
       for (const p of f.changes)
         (d.add(u(p.sheetId, p.address, p.before)),
           d.add(u(p.sheetId, p.address, p.after)));
-  v0(
+  checkDataValidationBatch(
     r,
     a.filter((f) => {
       var v, g;
@@ -477,12 +500,19 @@ function sw(e, r, t, n, o = {}) {
       timestamp: new Date().toISOString(),
       actor: t,
       action: s > 1 ? `${n} (${p + 1}/${s})` : n,
-      changes: a.slice(p * Mt.maxPatches, (p + 1) * Mt.maxPatches),
+      changes: a.slice(
+        p * workbookLimits.maxPatches,
+        (p + 1) * workbookLimits.maxPatches,
+      ),
     })),
-    c = { ...gx(r), revision: e.revision + 1, events: [...e.events, ...l] };
-  return (SR(e, c), c);
+    c = {
+      ...touchWorkbookModifiedAt(r),
+      revision: e.revision + 1,
+      events: [...e.events, ...l],
+    };
+  return (carryCalculatorRecordForward(e, c), c);
 }
-function H7(e) {
+function buildWorkbookSnapshot(e) {
   return {
     schemaVersion: e.schemaVersion,
     id: e.id,
@@ -515,9 +545,14 @@ function H7(e) {
     })),
   };
 }
-function Ode(e, r, t, n) {
-  if (!r || !es(e) || !es(r) || r.id !== e.id)
-    return { id: t, force: n, workbook: H7(e), extensionAvailability: g1(e) };
+function buildCalculationRequest(e, r, t, n) {
+  if (!r || !isDeepFrozenValue(e) || !isDeepFrozenValue(r) || r.id !== e.id)
+    return {
+      id: t,
+      force: n,
+      workbook: buildWorkbookSnapshot(e),
+      extensionAvailability: getExtensionCacheEntries(e),
+    };
   const o = {},
     a = e.sheets.map((s) => {
       const d = r.sheets.find((l) => l.id === s.id),
@@ -539,18 +574,18 @@ function Ode(e, r, t, n) {
   return {
     id: t,
     force: n,
-    extensionAvailability: g1(e),
+    extensionAvailability: getExtensionCacheEntries(e),
     baseRevision: r.revision,
     removedCells: o,
-    workbook: H7({ ...e, sheets: a }),
+    workbook: buildWorkbookSnapshot({ ...e, sheets: a }),
   };
 }
-class Mde {
+class CalculationWorkerSession {
   constructor(r, t) {
-    yc(this, "worker");
-    yc(this, "nextId", 0);
-    yc(this, "completed");
-    yc(this, "active");
+    defineDataPropertyByKey(this, "worker");
+    defineDataPropertyByKey(this, "nextId", 0);
+    defineDataPropertyByKey(this, "completed");
+    defineDataPropertyByKey(this, "active");
     ((this.factory = r), (this.reliability = t));
   }
   terminateWorker() {
@@ -571,10 +606,10 @@ class Mde {
   }
   run(r, t = {}) {
     this.cancel("A newer calculation replaced this request.");
-    const n = L5(r).report,
+    const n = getIsolatedCalculation(r).report,
       o = ++this.nextId,
-      a = pd(),
-      { memoryBudgetBytes } = JF(r.calculation),
+      a = readMonotonicClockMs(),
+      { memoryBudgetBytes } = resolveCalculationBudget(r.calculation),
       d = this.reliability?.start("calculation", "run");
     return new Promise((l) => {
       var v, g;
@@ -603,7 +638,10 @@ class Mde {
                   ? "cancelled"
                   : "unavailable";
           (d == null || d.finish(E === "cancelled" ? "cancelled" : "failed", E),
-            f(Xie(r, n, y, w, pd() - a), true));
+            f(
+              runIterativeCalculation(r, n, y, w, readMonotonicClockMs() - a),
+              true,
+            ));
         },
         m = () =>
           p(
@@ -626,7 +664,7 @@ class Mde {
       if (
         ((g = t.signal) == null ||
           g.addEventListener("abort", m, { once: true }),
-        QF(r, memoryBudgetBytes) > memoryBudgetBytes)
+        estimateWorkbookMemoryBytes(r, memoryBudgetBytes) > memoryBudgetBytes)
       ) {
         p(
           "#LIMIT!",
@@ -649,7 +687,10 @@ class Mde {
             if (c) return;
             const w = data;
             if (!(!w || w.id !== o)) {
-              if (pd() - a > (r.calculation?.timeBudgetMs ?? 2500)) {
+              if (
+                readMonotonicClockMs() - a >
+                (r.calculation?.timeBudgetMs ?? 2500)
+              ) {
                 p(
                   "#TIMEOUT!",
                   "The worker result arrived after the calculation deadline and was discarded.",
@@ -665,7 +706,10 @@ class Mde {
                 );
                 return;
               }
-              if (kN(w.result, memoryBudgetBytes) > memoryBudgetBytes) {
+              if (
+                estimateValueFootprintBytes(w.result, memoryBudgetBytes) >
+                memoryBudgetBytes
+              ) {
                 p(
                   "#LIMIT!",
                   "Calculation results exceed the working-data budget; no partial results were published.",
@@ -688,11 +732,14 @@ class Mde {
                           : w.result.report.pending > 0
                             ? "Manual calculation is pending. Use Calculate Now to refresh results. Source inputs were not modified."
                             : "Calculated in an isolated worker. Source inputs were not modified.",
-                      wallElapsedMs: pd() - a,
+                      wallElapsedMs: readMonotonicClockMs() - a,
                     },
                     limits: { ...w.result.report.limits, hardInterrupt: true },
                   },
-                  j = uU(r, n, { ...w.result, report: O });
+                  j = acceptWorkerCalculationResult(r, n, {
+                    ...w.result,
+                    report: O,
+                  });
                 j && (this.completed = r);
                 const z = j?.report.resources?.stopped;
                 (d == null ||
@@ -714,7 +761,9 @@ class Mde {
               "#BLOCKED!",
               "The calculation worker could not run. Check the host's worker policy, then retry; inputs are intact.",
             )),
-          this.worker.postMessage(Ode(r, this.completed, o, !!t.force)));
+          this.worker.postMessage(
+            buildCalculationRequest(r, this.completed, o, !!t.force),
+          ));
       } catch {
         p(
           "#BLOCKED!",
@@ -724,9 +773,11 @@ class Mde {
     });
   }
 }
-const jde = __calculationWorkerSource;
-function Fde() {
-  const e = URL.createObjectURL(new Blob([jde], { type: "text/javascript" }));
+const calculationWorkerSourceText = __calculationWorkerSource;
+function createCalculationWorker() {
+  const e = URL.createObjectURL(
+    new Blob([calculationWorkerSourceText], { type: "text/javascript" }),
+  );
   try {
     const r = new Worker(e, { name: "workbook-calculation" }),
       t = {
@@ -750,22 +801,26 @@ function Fde() {
     throw (URL.revokeObjectURL(e), r);
   }
 }
-function Bde(e, r, t, n) {
+function useCalculationRun(e, r, t, n) {
   const a =
       r === null
         ? undefined
-        : (r ?? (typeof Worker == "function" ? Fde : undefined)),
-    s = ne.useMemo(() => (a ? new Mde(a, n) : undefined), [a, n]),
+        : (r ??
+          (typeof Worker == "function" ? createCalculationWorker : undefined)),
+    s = ne.useMemo(
+      () => (a ? new CalculationWorkerSession(a, n) : undefined),
+      [a, n],
+    ),
     [d, u] = ne.useState(0),
     l = ne.useRef(t);
   l.current = t;
   const c = ne.useRef(undefined),
     h = ne.useRef(undefined);
-  s && h.current !== e && (L5(e), (h.current = e));
+  s && h.current !== e && (getIsolatedCalculation(e), (h.current = e));
   const f = (g = false) => {
       const b = n?.start("calculation", "run");
       try {
-        const w = g ? sU(e) : Gw(e),
+        const w = g ? refreshCalculationReport(e) : getWorkbookCalculation(e),
           E = w.report.resources?.stopped;
         return (
           b == null ||
@@ -779,7 +834,11 @@ function Bde(e, r, t, n) {
         throw (b == null || b.fail(w), w);
       }
     },
-    p = ne.useMemo(() => (s ? (Hie(e) ?? L5(e)) : f()), [e, s, d]);
+    p = ne.useMemo(
+      () =>
+        s ? (getCurrentCalculatorRecord(e) ?? getIsolatedCalculation(e)) : f(),
+      [e, s, d],
+    );
   return (
     ne.useEffect(() => () => s?.dispose(), [s]),
     ne.useEffect(() => {
@@ -826,19 +885,22 @@ function Bde(e, r, t, n) {
     }
   );
 }
-const Lde = { bold: true, fill: "#163c45", color: "#ffffff" };
-function Wk(e, r, t) {
+const headerCellStyle = { bold: true, fill: "#163c45", color: "#ffffff" };
+function buildSampleSheetCells(e, r, t) {
   const n = {};
   return (
     t.forEach((o, a) =>
       o.forEach((s, d) => {
-        n[`${ut(d)}${a + 1}`] = { raw: s, ...(a === 0 ? { style: Lde } : {}) };
+        n[`${columnIndexToLetters(d)}${a + 1}`] = {
+          raw: s,
+          ...(a === 0 ? { style: headerCellStyle } : {}),
+        };
       }),
     ),
     { id: e, name: r, cells: n, rowCount: 100, colCount: 10, frozenRows: 1 }
   );
 }
-function FI() {
+function buildSampleLedgerWorkbook() {
   const e = [
       [
         "2025-01-03",
@@ -1046,7 +1108,7 @@ function FI() {
       null,
       null,
     ]));
-  const t = Wk("general-ledger", "General ledger", r);
+  const t = buildSampleSheetCells("general-ledger", "General ledger", r);
   for (let l = 2; l <= 42; l++)
     for (const c of ["E", "F", "G"]) t.cells[`${c}${l}`].format = "number";
   ((t.cells.A18.note =
@@ -1080,12 +1142,12 @@ function FI() {
     `=SUM(D2:D${a})`,
     `=IF(ABS(D${s})<0.01,"Balanced","Investigate")`,
   ]);
-  const d = Wk("trial-balance", "Trial balance", o);
+  const d = buildSampleSheetCells("trial-balance", "Trial balance", o);
   for (let l = 2; l <= s; l++)
     for (const c of ["B", "C", "D"]) d.cells[`${c}${l}`].format = "number";
   for (const l of ["A", "B", "C", "D", "E"])
     d.cells[`${l}${s}`].style = { bold: true, fill: "#e4eef0" };
-  const u = Wk("audit-plan", "Audit plan", [
+  const u = buildSampleSheetCells("audit-plan", "Audit plan", [
     ["Procedure", "Purpose", "Owner", "Status", "Reference"],
     [
       "Ledger reconciliation",
@@ -1137,37 +1199,37 @@ function FI() {
       "Not a real client workbook",
     ],
   ]);
-  return rn({
+  return normalizeWorkbookInput({
     schemaVersion: 1,
     id: "demo-northstar-fy2025",
     name: "Northstar Advisory · FY2025",
     revision: 0,
-    metadata: mx(),
+    metadata: createWorkbookMetadata(),
     sheets: [t, d, u],
     events: [],
   });
 }
-const ap = (e) =>
+const formatAmountTwoDecimals = (e) =>
     new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(e),
-  q7 = (e) =>
+  normalizeHeaderLabel = (e) =>
     String(e ?? "")
       .trim()
       .toLowerCase()
       .replace(/[ _-]+/g, " "),
-  X7 = (e) => {
+  parseDateOnlyText = (e) => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return NaN;
     const r = Date.parse(`${e}T00:00:00Z`);
     return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
       ? r
       : NaN;
   };
-function Pde(e, r, t, n = {}) {
-  const o = Nr(e, r),
-    a = Vn(e),
-    s = Ta(o, false),
+function runAuditAnalysis(e, r, t, n = {}) {
+  const o = findSheetOrThrow(e, r),
+    a = calculateWorkbookWithSettings(e),
+    s = formatOccupiedRangeAddress(o, false),
     d = n.range ?? n.population?.definition.range ?? s;
   if (
     n.population &&
@@ -1176,7 +1238,7 @@ function Pde(e, r, t, n = {}) {
   )
     throw Error("Choose full or visible analysis scope.");
   const u = n.population
-    ? f0(e, r, n.population.definition, a).context
+    ? applyFilterConditions(e, r, n.population.definition, a).context
     : undefined;
   if (u && d !== u.range && d !== n.population.definition.range)
     throw Error(
@@ -1184,7 +1246,7 @@ function Pde(e, r, t, n = {}) {
     );
   const l =
       n.population?.scope === "visible" ? new Set(u.visibleSourceRows) : null,
-    c = Ix(d);
+    c = assertRangeCellBudget(d);
   if (
     c.some((U) => {
       const G = _t(U);
@@ -1201,7 +1263,7 @@ function Pde(e, r, t, n = {}) {
   }
   const f = [...h.values()],
     p = f.shift(),
-    m = p.values.map(q7),
+    m = p.values.map(normalizeHeaderLabel),
     v = f.filter(
       (U) =>
         (!l || l.has(U.row + 1)) &&
@@ -1246,7 +1308,7 @@ function Pde(e, r, t, n = {}) {
       w >= 0 && E >= 0
         ? "Debit minus Credit"
         : k.length
-          ? `${String(p.values[k[0]] ?? "unnamed column")} (${ut(_t(p.addresses[k[0]]).col)})${A < 0 && w < 0 && E < 0 ? "; first numeric column fallback" : ""}`
+          ? `${String(p.values[k[0]] ?? "unnamed column")} (${columnIndexToLetters(_t(p.addresses[k[0]]).col)})${A < 0 && w < 0 && E < 0 ? "; first numeric column fallback" : ""}`
           : "no numeric amount column",
     I = (U) => {
       if (!k.length) return null;
@@ -1262,7 +1324,10 @@ function Pde(e, r, t, n = {}) {
     j = [],
     z = `${o.name}!${d}; first selected row is the header; ${v.length} nonempty data rows. Population scope: ${n.population?.scope === "visible" ? `visible filter population (${u.visibleRows} visible / ${u.totalRows} total data rows); original source addresses retained.` : "full selected source range, including hidden and filtered rows."}`,
     V = v.filter(
-      (U) => !["total", "grand total", "totals"].includes(q7(U.values[0])),
+      (U) =>
+        !["total", "grand total", "totals"].includes(
+          normalizeHeaderLabel(U.values[0]),
+        ),
     ),
     D = v.length - V.length,
     B = `${z}${D ? ` Excluded ${D} row(s) labelled Total, Totals, or Grand total in the first selected column.` : ""}`,
@@ -1320,14 +1385,14 @@ function Pde(e, r, t, n = {}) {
       Math.abs(amount) >= U &&
         j.push({
           id: `materiality-${row.row + 1}`,
-          title: `Row ${row.row + 1} · ${ap(amount)}`,
-          detail: `Absolute row amount ${ap(Math.abs(amount))} meets or exceeds the screening threshold ${ap(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
+          title: `Row ${row.row + 1} · ${formatAmountTwoDecimals(amount)}`,
+          detail: `Absolute row amount ${formatAmountTwoDecimals(Math.abs(amount))} meets or exceeds the screening threshold ${formatAmountTwoDecimals(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
           severity: "high",
           citations: b(row),
         });
     return {
       title: "Materiality screen",
-      summary: `${B}${N} ${j.length} row(s) meet the absolute-value threshold of ${ap(U)}.`,
+      summary: `${B}${N} ${j.length} row(s) meet the absolute-value threshold of ${formatAmountTwoDecimals(U)}.`,
       findings: j,
     };
   }
@@ -1369,7 +1434,7 @@ function Pde(e, r, t, n = {}) {
         ),
       {
         title: "Reproducible sample",
-        summary: `${B} Selected ${j.length} of ${V.length} rows (requested ${U}), seed “${G}”, FNV-1a seed + Mulberry32/Fisher–Yates. Simple random row selection; no statistical confidence or population conclusion is inferred.${nB(e) ? " This workbook contains volatile formulas. The seed reproduces row selection for the same population and order, not changing formula values; preserve a reviewed value snapshot for evidence." : ""}`,
+        summary: `${B} Selected ${j.length} of ${V.length} rows (requested ${U}), seed “${G}”, FNV-1a seed + Mulberry32/Fisher–Yates. Simple random row selection; no statistical confidence or population conclusion is inferred.${workbookHasVolatileFunctions(e) ? " This workbook contains volatile formulas. The seed reproduces row selection for the same population and order, not changing formula values; preserve a reviewed value snapshot for evidence." : ""}`,
         findings: j,
       }
     );
@@ -1393,8 +1458,8 @@ function Pde(e, r, t, n = {}) {
         .forEach(([H, Q], X) =>
           j.push({
             id: `summary-${X}`,
-            title: `${H} · ${ap(Q.total)}`,
-            detail: `${Q.rows.length} row(s); signed ${F} totals ${ap(Q.total)}.`,
+            title: `${H} · ${formatAmountTwoDecimals(Q.total)}`,
+            detail: `${Q.rows.length} row(s); signed ${F} totals ${formatAmountTwoDecimals(Q.total)}.`,
             severity: "info",
             citations: Q.rows.flatMap((J) => [
               ...(U >= 0 ? [g(J.addresses[U])] : []),
@@ -1404,13 +1469,13 @@ function Pde(e, r, t, n = {}) {
         ),
       {
         title: "Account summary",
-        summary: `${B}${N} ${G.size} group(s); signed total ${ap(C.reduce((H, Q) => H + Q.amount, 0))}. Groups use exact evaluated account labels.`,
+        summary: `${B}${N} ${G.size} group(s); signed total ${formatAmountTwoDecimals(C.reduce((H, Q) => H + Q.amount, 0))}. Groups use exact evaluated account labels.`,
         findings: j,
       }
     );
   }
   if (t === "aging") {
-    if (!n.asOf || !Number.isFinite(X7(n.asOf)))
+    if (!n.asOf || !Number.isFinite(parseDateOnlyText(n.asOf)))
       throw new Error(
         "Aging requires a valid as-of date in YYYY-MM-DD format.",
       );
@@ -1438,7 +1503,7 @@ function Pde(e, r, t, n = {}) {
             ? Date.UTC(1899, 11, 31) +
               (Math.floor(q) > 60 ? Math.floor(q) - 1 : Math.floor(q)) * 864e5
             : typeof q == "string"
-              ? X7(q)
+              ? parseDateOnlyText(q)
               : NaN;
       if (!Number.isFinite(W) || q === 60) {
         Q++;
@@ -1462,7 +1527,7 @@ function Pde(e, r, t, n = {}) {
       [...H].forEach(([X, J], q) =>
         j.push({
           id: `aging-${q}`,
-          title: `${X} · ${ap(J.total)}`,
+          title: `${X} · ${formatAmountTwoDecimals(J.total)}`,
           detail: `${J.rows.length} row(s) as of ${n.asOf}, based on ${String(p.values[U])}. ${m[U] !== "due date" ? "Age since transaction date; this is not a days-past-due assessment." : "Days relative to due date."}`,
           severity: X === "Over 90 days" && J.rows.length ? "warning" : "info",
           citations: J.rows.flatMap((W) => [g(W.addresses[U]), ...O(W)]),
@@ -1477,10 +1542,10 @@ function Pde(e, r, t, n = {}) {
   }
   throw new Error("Unsupported audit analysis.");
 }
-function Ude(e, r, t, n) {
+function recordCrossWorkbookImport(e, r, t, n) {
   if (e.id === r.id)
     throw Error("Use the ordinary transaction path for the same workbook.");
-  const o = rn(structuredClone(r)),
+  const o = normalizeWorkbookInput(structuredClone(r)),
     a = Math.max(e.revision, o.revision) + 1;
   if (!Number.isSafeInteger(a))
     throw Error("The workbook revision limit has been reached.");
@@ -1488,8 +1553,8 @@ function Ude(e, r, t, n) {
     throw Error(
       "The target workbook history is full. Export a saved copy before continuing.",
     );
-  return rn(
-    gx({
+  return normalizeWorkbookInput(
+    touchWorkbookModifiedAt({
       ...o,
       revision: a,
       events: [
@@ -1505,7 +1570,7 @@ function Ude(e, r, t, n) {
     }),
   );
 }
-const $de = [
+const keyboardShortcutGroups = [
   ["F1", "Open commands and shortcuts", "Workbook, outside dialogs"],
   [
     "Ctrl / Command + F1",
@@ -1580,7 +1645,7 @@ const $de = [
   ["Ctrl / Command + 1", "Open Format Cells", "Grid"],
   ["F6 / Shift + F6", "Cycle worksheet panes", "Split grid"],
 ];
-function zde(e, r) {
+function handleDialogKeyDown(e, r) {
   if (!e.defaultPrevented) {
     if (e.key === "Escape") (e.preventDefault(), e.stopPropagation(), r());
     else if (e.key === "Tab") {
@@ -1599,7 +1664,7 @@ function zde(e, r) {
     }
   }
 }
-function Vde({ commands, onClose, onLocate }) {
+function CommandReferenceDialog({ commands, onClose, onLocate }) {
   const [n, o] = ne.useState(""),
     a = ne.useRef(null),
     s = ne.useId();
@@ -1615,7 +1680,7 @@ function Vde({ commands, onClose, onLocate }) {
   }, []);
   const d = (c) => c.toLowerCase().includes(n.trim().toLowerCase()),
     u = commands.filter((c) => d(`${c.name} ${c.location} ${c.reason ?? ""}`)),
-    l = $de.filter((c) => d(c.join(" ")));
+    l = keyboardShortcutGroups.filter((c) => d(c.join(" ")));
   return i.jsx("div", {
     className: "lg-modal-backdrop",
     children: i.jsxs("section", {
@@ -1623,30 +1688,34 @@ function Vde({ commands, onClose, onLocate }) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": s,
-      onKeyDown: (c) => zde(c, onClose),
+      onKeyDown: (c) => handleDialogKeyDown(c, onClose),
       children: [
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
               id: s,
-              children: i.jsx(M, { children: "Commands & shortcuts" }),
+              children: i.jsx(LocalizedText, {
+                children: "Commands & shortcuts",
+              }),
             }),
             i.jsx("button", {
               type: "button",
               onClick: onClose,
-              children: i.jsx(M, { children: "Close command reference" }),
+              children: i.jsx(LocalizedText, {
+                children: "Close command reference",
+              }),
             }),
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Find a command from any ribbon tab or File. “Show command” opens its location and focuses the control. Use Tab to move and Enter or Space to activate. Unavailable commands explain the current condition below.",
           }),
         }),
         i.jsxs("label", {
           children: [
-            i.jsx(M, { children: "Search commands and shortcuts" }),
+            i.jsx(LocalizedText, { children: "Search commands and shortcuts" }),
             i.jsx("input", {
               ref: a,
               value: n,
@@ -1659,10 +1728,10 @@ function Vde({ commands, onClose, onLocate }) {
           children: [
             u.length,
             " ",
-            i.jsx(M, { children: "commands and " }),
+            i.jsx(LocalizedText, { children: "commands and " }),
             l.length,
             " ",
-            i.jsx(M, { children: "shortcuts" }),
+            i.jsx(LocalizedText, { children: "shortcuts" }),
           ],
         }),
         i.jsxs("div", {
@@ -1672,7 +1741,9 @@ function Vde({ commands, onClose, onLocate }) {
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
-                    children: i.jsx(M, { children: "Keyboard reference" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Keyboard reference",
+                    }),
                   }),
                   i.jsxs("table", {
                     children: [
@@ -1680,13 +1751,19 @@ function Vde({ commands, onClose, onLocate }) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Keys" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Keys",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Action" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Action",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Where" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Where",
+                              }),
                             }),
                           ],
                         }),
@@ -1713,7 +1790,9 @@ function Vde({ commands, onClose, onLocate }) {
             u.length > 0 &&
               i.jsxs(i.Fragment, {
                 children: [
-                  i.jsx("h3", { children: i.jsx(M, { children: "Commands" }) }),
+                  i.jsx("h3", {
+                    children: i.jsx(LocalizedText, { children: "Commands" }),
+                  }),
                   i.jsx("ul", {
                     children: u.map((c) =>
                       i.jsxs(
@@ -1727,7 +1806,9 @@ function Vde({ commands, onClose, onLocate }) {
                                 c.reason &&
                                   i.jsxs("p", {
                                     children: [
-                                      i.jsx(M, { children: "Unavailable: " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "Unavailable: ",
+                                      }),
                                       c.reason,
                                     ],
                                   }),
@@ -1738,7 +1819,7 @@ function Vde({ commands, onClose, onLocate }) {
                                 type: "button",
                                 "aria-label": `Show ${c.name} in ${c.location}`,
                                 onClick: () => onLocate(c),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Show command",
                                 }),
                               }),
@@ -1753,7 +1834,7 @@ function Vde({ commands, onClose, onLocate }) {
             !u.length &&
               !l.length &&
               i.jsx("p", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "No matching commands. Try a ribbon tab, action or shortcut name.",
                 }),
@@ -1761,7 +1842,7 @@ function Vde({ commands, onClose, onLocate }) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Shortcuts are scoped to this workbook. Text fields keep native editing shortcuts. Browser, operating-system and host shortcuts not listed here pass through; a host may reserve a shortcut by cancelling it before the workbook handles it. Escape from the grid returns to the ribbon; Shift+Tab from File returns to the host.",
           }),
@@ -1770,20 +1851,20 @@ function Vde({ commands, onClose, onLocate }) {
     }),
   });
 }
-function ST(e) {
+function extractElementText(e) {
   return ne.Children.toArray(e)
     .map((r) =>
       typeof r == "string" || typeof r == "number"
         ? String(r)
         : ne.isValidElement(r)
-          ? ST(r.props.children)
+          ? extractElementText(r.props.children)
           : "",
     )
     .filter(Boolean)
     .join(" ")
     .trim();
 }
-function G7(e, r, t, n) {
+function collectRibbonCommands(e, r, t, n) {
   const o = [];
   function a(s, d = r, u) {
     return ne.Children.map(s, (l) => {
@@ -1805,7 +1886,11 @@ function G7(e, r, t, n) {
               ? (h = c.kind === "fill" ? "Fill Color" : "Font Color")
               : ["button", "select", "input"].includes(l.type) &&
                 c.role !== "tab" &&
-                (h = c["aria-label"] ?? c.title ?? u ?? ST(c.children)),
+                (h =
+                  c["aria-label"] ??
+                  c.title ??
+                  u ??
+                  extractElementText(c.children)),
         h)
       ) {
         h = h.replace(/ \(Ctrl\+[A-Z]\)$/, "");
@@ -1828,7 +1913,11 @@ function G7(e, r, t, n) {
         p,
         c.children === undefined
           ? undefined
-          : a(c.children, d, l.type === "label" ? ST(c.children) : u),
+          : a(
+              c.children,
+              d,
+              l.type === "label" ? extractElementText(c.children) : u,
+            ),
       );
     });
   }
@@ -1875,7 +1964,7 @@ const Uh = [
     "#002060",
     "#7030A0",
   ],
-  Lz = (e) =>
+  resolveRibbonCommandLabel = (e) =>
     ({
       "New Note": "Add note",
       "New / Edit Note": "Add note",
@@ -1888,7 +1977,7 @@ const Uh = [
       "AI Assistant": "AI assistant",
       "Ask AI Assistant": "AI assistant",
     })[e] ?? e.replace(/ \(Ctrl\+[A-Z]\)$/, "");
-function Mn({
+function RibbonGroup({
   commandId,
   reason,
   label,
@@ -1933,7 +2022,7 @@ function Mn({
     ],
   });
 }
-function lr({
+function RibbonCommandButton({
   commandId,
   reason,
   icon,
@@ -1954,7 +2043,7 @@ function lr({
     onClick,
     disabled,
     title: reason ? `${label}: ${reason}` : (title ?? label),
-    "aria-label": Lz(label),
+    "aria-label": resolveRibbonCommandLabel(label),
     "aria-pressed": active === undefined ? undefined : active,
     children: [
       i.jsx("span", { className: "xl-command-icon", children: icon }),
@@ -1964,7 +2053,7 @@ function lr({
     ],
   });
 }
-function Xl({
+function RibbonIconButton({
   commandId,
   reason,
   icon,
@@ -1979,7 +2068,7 @@ function Xl({
     "aria-description": reason,
     type: "button",
     className: `xl-icon-button ${active ? "xl-command-active" : ""} ${className}`,
-    "aria-label": Lz(label),
+    "aria-label": resolveRibbonCommandLabel(label),
     title: reason ? `${label}: ${reason}` : label,
     onClick,
     disabled,
@@ -1988,4 +2077,18 @@ function Xl({
   });
 }
 
-export { Bde, Dde, FI, G7, Mn, Pde, Ude, Uh, Vde, Wde, Xl, lr, sw };
+export {
+  useCalculationRun,
+  MergeCellsPreviewDialog,
+  buildSampleLedgerWorkbook,
+  collectRibbonCommands,
+  RibbonGroup,
+  runAuditAnalysis,
+  recordCrossWorkbookImport,
+  Uh,
+  CommandReferenceDialog,
+  Wde,
+  RibbonIconButton,
+  RibbonCommandButton,
+  applyWorkbookChange,
+};

@@ -1,13 +1,31 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { Mt } from "./02-financial-functions.js";
-import { U1, Vn, _t, ct, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { LC, Uz, Z7, cg, lw, qk, rfe } from "./27-data-validation-dialog.js";
+import { workbookLimits } from "./02-financial-functions.js";
+import {
+  findRowOrigin,
+  calculateWorkbookWithSettings,
+  _t,
+  parseRangeAddress,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  applyStructuralEdit,
+  createDuplicateReviewSheet,
+  describeCellValueType,
+  assertInsertionWithinSheet,
+  structuralEditLimits,
+  qk,
+  applyDuplicateReviewPreview,
+} from "./27-data-validation-dialog.js";
 
-function $z(e) {
-  const { text, language } = Dr(),
+function DuplicateReviewDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -73,7 +91,7 @@ function $z(e) {
   }, []);
   const K = () => {
       try {
-        const le = Uz(
+        const le = createDuplicateReviewSheet(
           e.workbook,
           {
             sheetId: e.sheetId,
@@ -100,7 +118,10 @@ function $z(e) {
             throw Error(
               "The source selection or preview changed. Preview and review again.",
             );
-          const le = rfe(e.workbook, I, { ...G, readOnly: e.readOnly });
+          const le = applyDuplicateReviewPreview(e.workbook, I, {
+            ...G,
+            readOnly: e.readOnly,
+          });
           (e.onWorkbookChange(
             le,
             `Create duplicate-reviewed population: ${I.counts.retained} retained, ${I.counts.excluded} excluded`,
@@ -116,27 +137,37 @@ function $z(e) {
         (le) =>
           C === "all" || (C === "groups" ? !!le.groupId : le.disposition === C),
       ) ?? [],
-    oe = Math.max(1, Math.ceil(ae.length / lw.pageSize)),
+    oe = Math.max(1, Math.ceil(ae.length / structuralEditLimits.pageSize)),
     de = Math.min(N, oe - 1),
     he = ae.slice(de * 20, de * 20 + 20),
     Se = (le, ce) =>
       i.jsxs("details", {
         children: [
-          i.jsx("summary", { children: Z7(ce) }),
+          i.jsx("summary", { children: describeCellValueType(ce) }),
           i.jsxs("dl", {
             children: [
-              i.jsx("dt", { children: i.jsx(M, { children: "Stored value" }) }),
-              i.jsx("dd", { children: Z7(le.raw) }),
               i.jsx("dt", {
-                children: i.jsx(M, { children: "Stored as literal" }),
+                children: i.jsx(LocalizedText, { children: "Stored value" }),
+              }),
+              i.jsx("dd", { children: describeCellValueType(le.raw) }),
+              i.jsx("dt", {
+                children: i.jsx(LocalizedText, {
+                  children: "Stored as literal",
+                }),
               }),
               i.jsx("dd", { children: le.literal ? "Yes" : "No" }),
-              i.jsx("dt", { children: i.jsx(M, { children: "Note" }) }),
+              i.jsx("dt", {
+                children: i.jsx(LocalizedText, { children: "Note" }),
+              }),
               i.jsx("dd", { children: le.note ?? "None" }),
-              i.jsx("dt", { children: i.jsx(M, { children: "Tickmark" }) }),
+              i.jsx("dt", {
+                children: i.jsx(LocalizedText, { children: "Tickmark" }),
+              }),
               i.jsx("dd", { children: le.tickmark ?? "None" }),
               i.jsx("dt", {
-                children: i.jsx(M, { children: "Cell formatting / link" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Cell formatting / link",
+                }),
               }),
               i.jsx("dd", {
                 children: i.jsx("code", {
@@ -194,10 +225,12 @@ function $z(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Remove duplicates" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Remove duplicates",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Create a reviewed unique population on a new worksheet.",
                   }),
@@ -214,7 +247,7 @@ function $z(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "The original worksheet stays intact. The new worksheet contains retained rows and an exclusion appendix with every later duplicate and its original source locator.",
           }),
@@ -224,7 +257,7 @@ function $z(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source worksheet" }),
+                i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
                   children: H ? $.name : "Outside current context",
                 }),
@@ -232,7 +265,7 @@ function $z(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source range" }),
+                i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
                   value: H ? s : "",
@@ -248,7 +281,7 @@ function $z(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "New worksheet name" }),
+                i.jsx(LocalizedText, { children: "New worksheet name" }),
                 i.jsx("input", {
                   "aria-label": text("New worksheet name"),
                   value: E,
@@ -263,7 +296,7 @@ function $z(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Compare" }),
+                i.jsx(LocalizedText, { children: "Compare" }),
                 i.jsxs("select", {
                   "aria-label": text("Comparison basis"),
                   value: f,
@@ -288,7 +321,7 @@ function $z(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Blank key policy" }),
+                i.jsx(LocalizedText, { children: "Blank key policy" }),
                 i.jsxs("select", {
                   "aria-label": text("Blank key policy"),
                   value: y,
@@ -322,7 +355,9 @@ function $z(e) {
                     (h(le.target.checked), q());
                   },
                 }),
-                i.jsx(M, { children: "First row contains headers" }),
+                i.jsx(LocalizedText, {
+                  children: "First row contains headers",
+                }),
               ],
             }),
             i.jsxs("label", {
@@ -336,7 +371,7 @@ function $z(e) {
                     (v(le.target.checked), q());
                   },
                 }),
-                i.jsx(M, { children: "Case-sensitive text" }),
+                i.jsx(LocalizedText, { children: "Case-sensitive text" }),
               ],
             }),
             i.jsxs("label", {
@@ -350,7 +385,9 @@ function $z(e) {
                     (b(le.target.checked), q());
                   },
                 }),
-                i.jsx(M, { children: "Trim outer text whitespace" }),
+                i.jsx(LocalizedText, {
+                  children: "Trim outer text whitespace",
+                }),
               ],
             }),
             e.allowHidden &&
@@ -364,7 +401,7 @@ function $z(e) {
                       (F(le.target.checked), q());
                     },
                   }),
-                  i.jsx(M, { children: "Include hidden sources" }),
+                  i.jsx(LocalizedText, { children: "Include hidden sources" }),
                 ],
               }),
           ],
@@ -373,7 +410,7 @@ function $z(e) {
           disabled: e.readOnly || !H,
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Key columns — all selected keys must match",
               }),
             }),
@@ -388,7 +425,7 @@ function $z(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          "aria-label": `Key column ${ut(le)}`,
+                          "aria-label": `Key column ${columnIndexToLetters(le)}`,
                           checked: u.includes(le),
                           onChange: (ce) => {
                             (l(
@@ -399,7 +436,7 @@ function $z(e) {
                               q());
                           },
                         }),
-                        ut(le),
+                        columnIndexToLetters(le),
                       ],
                     },
                     le,
@@ -409,7 +446,7 @@ function $z(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "First source row wins. Numbers, text and Booleans remain distinct. Matching rules affect keys only; exported values preserve their original text. Raw formulas compare exactly and become literal text in the derived snapshot. Calculated mode freezes supported scalar results; cell display formats do not determine equality.",
           }),
@@ -421,7 +458,9 @@ function $z(e) {
           className: "dup-primary",
           disabled: e.readOnly || !H || !u.length,
           onClick: K,
-          children: i.jsx(M, { children: "Preview duplicate review" }),
+          children: i.jsx(LocalizedText, {
+            children: "Preview duplicate review",
+          }),
         }),
         I &&
           i.jsxs("section", {
@@ -437,13 +476,13 @@ function $z(e) {
                         children: [
                           I.counts.input,
                           " ",
-                          i.jsx(M, { children: "source rows · " }),
+                          i.jsx(LocalizedText, { children: "source rows · " }),
                           I.counts.retained,
                           " ",
-                          i.jsx(M, { children: "retained · " }),
+                          i.jsx(LocalizedText, { children: "retained · " }),
                           I.counts.excluded,
                           " ",
-                          i.jsx(M, { children: "excluded" }),
+                          i.jsx(LocalizedText, { children: "excluded" }),
                         ],
                       }),
                       i.jsxs("p", {
@@ -451,15 +490,19 @@ function $z(e) {
                         children: [
                           I.counts.duplicateGroups,
                           " ",
-                          i.jsx(M, { children: "duplicate groups;" }),
+                          i.jsx(LocalizedText, {
+                            children: "duplicate groups;",
+                          }),
                           " ",
                           I.counts.blankKeyRows,
                           " ",
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children: "rows with a blank key. New worksheet: ",
                           }),
                           I.request.outputSheetName,
-                          i.jsx(M, { children: ". Unique population:" }),
+                          i.jsx(LocalizedText, {
+                            children: ". Unique population:",
+                          }),
                           " ",
                           I.populationRange,
                           ".",
@@ -473,7 +516,7 @@ function $z(e) {
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Source header evidence",
                               }),
                             }),
@@ -485,9 +528,10 @@ function $z(e) {
                                   {
                                     children: [
                                       i.jsx("strong", {
-                                        children: ut(
+                                        children: columnIndexToLetters(
                                           I.request.keyColumns.length
-                                            ? ct(I.request.range).firstCol + ce
+                                            ? parseRangeAddress(I.request.range)
+                                                .firstCol + ce
                                             : ce,
                                         ),
                                       }),
@@ -502,7 +546,7 @@ function $z(e) {
                         }),
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Preview view" }),
+                          i.jsx(LocalizedText, { children: "Preview view" }),
                           i.jsxs("select", {
                             "aria-label": text("Preview view"),
                             value: C,
@@ -541,30 +585,32 @@ function $z(e) {
                                 children: i.jsxs("tr", {
                                   children: [
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Source row / range",
                                       }),
                                     }),
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Decision / derived row",
                                       }),
                                     }),
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Group / first row / members",
                                       }),
                                     }),
                                     i.jsx("th", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children: "Normalized typed key",
                                       }),
                                     }),
                                     Array.from(
                                       {
                                         length:
-                                          ct(I.request.range).lastCol -
-                                          ct(I.request.range).firstCol +
+                                          parseRangeAddress(I.request.range)
+                                            .lastCol -
+                                          parseRangeAddress(I.request.range)
+                                            .firstCol +
                                           1,
                                       },
                                       (le, ce) =>
@@ -572,11 +618,14 @@ function $z(e) {
                                           "th",
                                           {
                                             children: [
-                                              i.jsx(M, { children: "Column" }),
+                                              i.jsx(LocalizedText, {
+                                                children: "Column",
+                                              }),
                                               " ",
-                                              ut(
-                                                ct(I.request.range).firstCol +
-                                                  ce,
+                                              columnIndexToLetters(
+                                                parseRangeAddress(
+                                                  I.request.range,
+                                                ).firstCol + ce,
                                               ),
                                             ],
                                           },
@@ -626,7 +675,7 @@ function $z(e) {
                                               i.jsxs("span", {
                                                 children: [
                                                   " ",
-                                                  i.jsx(M, {
+                                                  i.jsx(LocalizedText, {
                                                     children: "· Blank key",
                                                   }),
                                                 ],
@@ -650,7 +699,7 @@ function $z(e) {
                           }),
                           !ae.length &&
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "No rows in this view.",
                               }),
                             }),
@@ -664,26 +713,32 @@ function $z(e) {
                           i.jsx("button", {
                             disabled: de === 0,
                             onClick: () => R(de - 1),
-                            children: i.jsx(M, { children: "Previous page" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Previous page",
+                            }),
                           }),
                           i.jsxs("span", {
                             role: "status",
                             children: [
-                              i.jsx(M, { children: "Page " }),
+                              i.jsx(LocalizedText, { children: "Page " }),
                               de + 1,
                               " ",
-                              i.jsx(M, { children: "of " }),
+                              i.jsx(LocalizedText, { children: "of " }),
                               oe,
                               " · ",
                               ae.length,
                               " ",
-                              i.jsx(M, { children: "rows in this view" }),
+                              i.jsx(LocalizedText, {
+                                children: "rows in this view",
+                              }),
                             ],
                           }),
                           i.jsx("button", {
                             disabled: de + 1 >= oe,
                             onClick: () => R(de + 1),
-                            children: i.jsx(M, { children: "Next page" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Next page",
+                            }),
                           }),
                         ],
                       }),
@@ -691,7 +746,7 @@ function $z(e) {
                   })
                 : i.jsx("p", {
                     role: "status",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "This preview is stale. Source locations, values and groups are withheld. Preview again in the current workbook and access context.",
                     }),
@@ -701,13 +756,15 @@ function $z(e) {
                 children: [
                   i.jsx("button", {
                     onClick: () => O(null),
-                    children: i.jsx(M, { children: "Discard preview" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Discard preview",
+                    }),
                   }),
                   i.jsx("button", {
                     className: "dup-primary",
                     disabled: e.readOnly || !J,
                     onClick: te,
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Create reviewed population",
                     }),
                   }),
@@ -718,16 +775,18 @@ function $z(e) {
         i.jsxs("details", {
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, { children: "Scope and evidence limits" }),
+              children: i.jsx(LocalizedText, {
+                children: "Scope and evidence limits",
+              }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Maximum 500 selected cells. Calculated comparison requires a complete static scalar dependency closure within 1,000 cells, 5,000 scanned formulas and depth 8. Volatile, dynamic, array/spill and unresolved calculations are excluded. Formula work limits cannot be hidden by error handlers. Calculated sources and dependencies must always be populated to avoid mistaking runtime spill children for blanks. Use raw comparison for null or absent source cells.",
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Null and empty normalized text are blanks. Case folding uses Unicode lowercase; trimming removes outer whitespace only. Formatting, locale-specific collation and numerical display rounding do not merge distinct values. Sheet objects, table styles, conditional rules and discussion threads remain on the original source; direct cell metadata is copied. Source locators describe this snapshot and are not immutable lineage or live links. A protected source may be read, but read-only hosts and workbook structure protection block creation.",
               }),
@@ -737,25 +796,29 @@ function $z(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close" }),
+            children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
       ],
     }),
   });
 }
-const zz = new WeakMap(),
-  K7 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
-  n2 = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
-  nfe = (e, r) => (e.axis === "row" ? String(r + 1) : ut(r));
-function ife(e, r, t, n = {}) {
+const structurePreviewRegistry = new WeakMap(),
+  isFormulaCellValue = (e) =>
+    typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
+  containsRefError = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
+  formatAxisAddress = (e, r) =>
+    e.axis === "row" ? String(r + 1) : columnIndexToLetters(r);
+function buildStructurePreview(e, r, t, n = {}) {
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = Vn(e),
-    a = LC(e, r, t),
-    s = Vn(a);
+  const o = calculateWorkbookWithSettings(e),
+    a = applyStructuralEdit(e, r, t),
+    s = calculateWorkbookWithSettings(a);
   if (
-    e.sheets.reduce((v, g) => v + Object.values(g.cells).filter(K7).length, 0) >
-    5e3
+    e.sheets.reduce(
+      (v, g) => v + Object.values(g.cells).filter(isFormulaCellValue).length,
+      0,
+    ) > 5e3
   )
     throw Error(
       "Structural preview can verify up to 5,000 formula cells. Reduce or separate the formula population before changing worksheet structure.",
@@ -763,7 +826,7 @@ function ife(e, r, t, n = {}) {
   const u = e.sheets.find((v) => v.id === r),
     l =
       t.moveBefore !== undefined
-        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : nfe(t, t.moveBefore)}`
+        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
         : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
     c = {
       sheetId: r,
@@ -780,14 +843,14 @@ function ife(e, r, t, n = {}) {
   for (const v of e.sheets) {
     const g = a.sheets.find((b) => b.id === v.id);
     for (const [b, y] of Object.entries(v.cells)) {
-      const w = v.id === r ? cg(b, t) : b;
+      const w = v.id === r ? assertInsertionWithinSheet(b, t) : b;
       if (!w) {
         c.deletedCells++;
         continue;
       }
       w !== b && c.movedCells++;
       const E = g.cells[w];
-      K7(y) &&
+      isFormulaCellValue(y) &&
         (E?.raw !== y.raw &&
           c.formulaChanges.push({
             sheetId: v.id,
@@ -810,8 +873,8 @@ function ife(e, r, t, n = {}) {
     for (const b of g.conditionalFormats ?? []) {
       const y = v.conditionalFormats?.find((w) => w.id === b.id);
       b.formula &&
-        n2(b.formula) &&
-        !n2(y?.formula ?? "") &&
+        containsRefError(b.formula) &&
+        !containsRefError(y?.formula ?? "") &&
         c.referenceIssues.push({
           kind: "conditional rule",
           sheetName: g.name,
@@ -844,8 +907,8 @@ function ife(e, r, t, n = {}) {
     const g = e.definedNames?.find(
       (b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId,
     );
-    n2(v.refersTo) &&
-      !n2(g?.refersTo ?? "") &&
+    containsRefError(v.refersTo) &&
+      !containsRefError(g?.refersTo ?? "") &&
       c.referenceIssues.push({
         kind: "name",
         sheetName:
@@ -858,7 +921,7 @@ function ife(e, r, t, n = {}) {
   const h = new Map((e.rowOrigins ?? []).map((v) => [v.id, v]));
   if (t.axis === "row")
     for (const [v, g] of Object.entries(u.rowOriginIds ?? {})) {
-      const b = cg(`A${Number(v) + 1}`, t),
+      const b = assertInsertionWithinSheet(`A${Number(v) + 1}`, t),
         y = b ? _t(b).row + 1 : null;
       if (y === Number(v) + 1) continue;
       const w = h.get(g);
@@ -872,11 +935,11 @@ function ife(e, r, t, n = {}) {
           afterRow: y,
         });
     }
-  return (zz.set(c, JSON.stringify(c)), c);
+  return (structurePreviewRegistry.set(c, JSON.stringify(c)), c);
 }
-function ofe(e, r, t = {}) {
+function assertStructurePreviewCurrent(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (zz.get(r) !== JSON.stringify(r))
+  if (structurePreviewRegistry.get(r) !== JSON.stringify(r))
     throw Error(
       "This structural preview was changed or restored from another session. Create a fresh preview before applying.",
     );
@@ -884,9 +947,9 @@ function ofe(e, r, t = {}) {
     throw Error(
       "The workbook changed after this preview. Refresh the preview before applying.",
     );
-  return LC(e, r.sheetId, r.edit);
+  return applyStructuralEdit(e, r.sheetId, r.edit);
 }
-function afe({
+function StructureToolDialog({
   workbook,
   sheetId,
   range,
@@ -895,11 +958,13 @@ function afe({
   onClose,
   onWorkbookChange,
 }) {
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     l = mode === "insertRow" ? "row" : "column",
-    c = ct(range),
-    h = l === "row" ? Mt.maxRows : Mt.maxCols,
-    [f, p] = ne.useState(l === "row" ? String(c.firstRow + 1) : ut(c.firstCol)),
+    c = parseRangeAddress(range),
+    h = l === "row" ? workbookLimits.maxRows : workbookLimits.maxCols,
+    [f, p] = ne.useState(
+      l === "row" ? String(c.firstRow + 1) : columnIndexToLetters(c.firstCol),
+    ),
     [m, v] = ne.useState(1),
     [g, b] = ne.useState("insert"),
     [y, w] = ne.useState(""),
@@ -935,12 +1000,12 @@ function afe({
         throw Error(
           "Enter a column letter such as A or XFD, or use end for the move destination.",
         );
-      return ct(G.trim().toUpperCase() + "1").firstCol;
+      return parseRangeAddress(G.trim().toUpperCase() + "1").firstCol;
     };
   function N() {
     try {
       F("");
-      const G = ife(
+      const G = buildStructurePreview(
         workbook,
         sheetId,
         {
@@ -964,7 +1029,7 @@ function afe({
         throw Error(
           "Confirm the deletion and reference changes before applying.",
         );
-      const G = ofe(workbook, E, { readOnly });
+      const G = assertStructurePreviewCurrent(workbook, E, { readOnly });
       (onWorkbookChange(
         G,
         `${E.action}${E.referenceIssues.length ? `; ${E.referenceIssues.length} new reference error(s) — reviewed` : ""}`,
@@ -1000,7 +1065,7 @@ function afe({
       : [];
   let U = null;
   try {
-    U = U1(workbook, sheetId, l === "row" ? T(f) : c.firstRow);
+    U = findRowOrigin(workbook, sheetId, l === "row" ? T(f) : c.firstRow);
   } catch {}
   return i.jsx("div", {
     className: "st-backdrop",
@@ -1056,7 +1121,7 @@ function afe({
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Operation" }),
+                    i.jsx(LocalizedText, { children: "Operation" }),
                     i.jsxs("select", {
                       "aria-label": text("Structure operation"),
                       value: g,
@@ -1098,8 +1163,8 @@ function afe({
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Count" }),
-                    i.jsx(ci, {
+                    i.jsx(LocalizedText, { children: "Count" }),
+                    i.jsx(LocalizedNumberField, {
                       "aria-label": text("Structure count"),
                       min: 1,
                       max: 1e4,
@@ -1118,10 +1183,10 @@ function afe({
               i.jsxs("label", {
                 className: "st-destination",
                 children: [
-                  i.jsx(M, { children: "Before " }),
+                  i.jsx(LocalizedText, { children: "Before " }),
                   l,
                   " ",
-                  i.jsx(M, { children: "(original position)" }),
+                  i.jsx(LocalizedText, { children: "(original position)" }),
                   i.jsx("input", {
                     "aria-label": text("Structure destination"),
                     value: y,
@@ -1136,9 +1201,9 @@ function afe({
               }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Entire " }),
+                i.jsx(LocalizedText, { children: "Entire " }),
                 l === "row" ? "rows" : "columns",
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     ", including hidden cells, move together. A move inserts the selection before the destination and shifts the intervening data.",
                 }),
@@ -1148,7 +1213,7 @@ function afe({
               className: "st-source",
               children: [
                 i.jsx("strong", {
-                  children: i.jsx(M, { children: "Source row" }),
+                  children: i.jsx(LocalizedText, { children: "Source row" }),
                 }),
                 i.jsx("p", {
                   children: U
@@ -1170,43 +1235,53 @@ function afe({
                     children: [
                       E.movedCells,
                       " ",
-                      i.jsx(M, { children: "stored cells relocate · " }),
+                      i.jsx(LocalizedText, {
+                        children: "stored cells relocate · ",
+                      }),
                       E.deletedCells,
                       " ",
-                      i.jsx(M, { children: "cells deleted · " }),
+                      i.jsx(LocalizedText, { children: "cells deleted · " }),
                       E.formulaChanges.length,
                       " ",
-                      i.jsx(M, { children: "formulas rewritten ·" }),
+                      i.jsx(LocalizedText, {
+                        children: "formulas rewritten ·",
+                      }),
                       " ",
                       i.jsxs("strong", {
                         children: [
                           E.referenceIssues.length,
                           " ",
-                          i.jsx(M, { children: "new reference errors" }),
+                          i.jsx(LocalizedText, {
+                            children: "new reference errors",
+                          }),
                         ],
                       }),
                       " ",
                       "· ",
                       E.originChanges.length,
                       " ",
-                      i.jsx(M, { children: "source-row associations change." }),
+                      i.jsx(LocalizedText, {
+                        children: "source-row associations change.",
+                      }),
                     ],
                   }),
                   i.jsxs("p", {
                     children: [
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "Original source IDs and original row numbers stay fixed. Deleted-row origins remain in the native source registry.",
                       }),
                       " ",
                       E.metadataChanges.length,
                       " ",
-                      i.jsx(M, { children: "worksheet settings update." }),
+                      i.jsx(LocalizedText, {
+                        children: "worksheet settings update.",
+                      }),
                     ],
                   }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Review" }),
+                      i.jsx(LocalizedText, { children: "Review" }),
                       i.jsxs("select", {
                         "aria-label": text("Structure review category"),
                         value: j,
@@ -1249,7 +1324,7 @@ function afe({
                     children:
                       $.length === 0
                         ? i.jsx("p", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "No changes in this category.",
                             }),
                           })
@@ -1275,7 +1350,9 @@ function afe({
                         i.jsx("button", {
                           disabled: I === 0,
                           onClick: () => O((G) => G - 1),
-                          children: i.jsx(M, { children: "Previous" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Previous",
+                          }),
                         }),
                         i.jsxs("span", {
                           children: [
@@ -1283,7 +1360,7 @@ function afe({
                             "–",
                             Math.min($.length, (I + 1) * 25),
                             " ",
-                            i.jsx(M, { children: "of" }),
+                            i.jsx(LocalizedText, { children: "of" }),
                             " ",
                             $.length,
                           ],
@@ -1291,7 +1368,7 @@ function afe({
                         i.jsx("button", {
                           disabled: (I + 1) * 25 >= $.length,
                           onClick: () => O((G) => G + 1),
-                          children: i.jsx(M, { children: "Next" }),
+                          children: i.jsx(LocalizedText, { children: "Next" }),
                         }),
                       ],
                     }),
@@ -1299,7 +1376,7 @@ function afe({
                     i.jsxs("details", {
                       children: [
                         i.jsx("summary", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Changed worksheet settings",
                           }),
                         }),
@@ -1341,7 +1418,7 @@ function afe({
               }),
             i.jsx("p", {
               className: "st-hint",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Up to 10,000 positions and 5,000 formula cells can be reviewed. Split references or structures are refused. Native JSON retains row provenance; XLSX and CSV do not preserve the source registry.",
               }),
@@ -1361,7 +1438,7 @@ function afe({
                     checked: V,
                     onChange: (G) => D(G.target.checked),
                   }),
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "I reviewed the deletions and resulting reference errors.",
                   }),
@@ -1371,7 +1448,7 @@ function afe({
               children: [
                 i.jsx("button", {
                   onClick: onClose,
-                  children: i.jsx(M, { children: "Cancel" }),
+                  children: i.jsx(LocalizedText, { children: "Cancel" }),
                 }),
                 i.jsx("button", {
                   disabled: readOnly,
@@ -1382,7 +1459,7 @@ function afe({
                   className: "st-primary",
                   disabled: !E || readOnly || (L && !V),
                   onClick: R,
-                  children: i.jsx(M, { children: "Apply changes" }),
+                  children: i.jsx(LocalizedText, { children: "Apply changes" }),
                 }),
               ],
             }),
@@ -1393,4 +1470,4 @@ function afe({
   });
 }
 
-export { $z, afe };
+export { DuplicateReviewDialog, StructureToolDialog };

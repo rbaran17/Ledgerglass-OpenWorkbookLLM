@@ -1,479 +1,786 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { $p, VS } from "./01-core-schemas-and-hashing.js";
-import { AR, Fc, QN, Ty, Vn, q6 } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { $T, UT } from "./33-page-setup-and-print.js";
+import {
+  parseFormulaTree,
+  dateFunctionNames,
+} from "./01-core-schemas-and-hashing.js";
+import {
+  databaseFunctionNames,
+  builtinFunctionNames,
+  statisticalFunctionNames,
+  applyDefinedNameOperation,
+  calculateWorkbookWithSettings,
+  assertNamePreviewCurrent,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  functionDescriptions,
+  functionArgumentSignatures,
+} from "./33-page-setup-and-print.js";
 
-const Ume = { family: "local", signature: "number" },
-  $me = {
+const absFunctionSpec = { family: "local", signature: "number" },
+  accrintFunctionSpec = {
     family: "financial",
     signature:
       "issue, first_interest, settlement, rate, par, frequency, [basis], [calc_method]",
   },
-  zme = {
+  accrintmFunctionSpec = {
     family: "financial",
     signature: "issue, settlement, rate, par, [basis]",
   },
-  Vme = { family: "local", signature: "number" },
-  Wme = { family: "local", signature: "number" },
-  Hme = { family: "local", signature: "number" },
-  qme = { family: "local", signature: "number" },
-  Xme = {
+  acosFunctionSpec = { family: "local", signature: "number" },
+  acoshFunctionSpec = { family: "local", signature: "number" },
+  acotFunctionSpec = { family: "local", signature: "number" },
+  acothFunctionSpec = { family: "local", signature: "number" },
+  addressFunctionSpec = {
     family: "reference",
     signature: "rowNumber, columnNumber, [absNum], [a1], [sheetText]",
   },
-  Gme = {
+  aggregateFunctionSpec = {
     family: "math",
     signature: "function_num, options, ref1 or array, [ref2 or k], …",
   },
-  Zme = { family: "logical", signature: "params1, [params2], …" },
-  Kme = { family: "local", signature: "text" },
-  Yme = { family: "local", signature: "reference" },
-  Jme = { family: "text", signature: "text" },
-  Qme = { family: "local", signature: "number" },
-  ege = { family: "local", signature: "number" },
-  tge = { family: "local", signature: "number" },
-  rge = { family: "trigonometry", signature: "x, y" },
-  nge = { family: "local", signature: "number" },
-  ige = { family: "statistical", signature: "numbers1, [numbers2], …" },
-  oge = { family: "statistical", signature: "number1, [number2], …" },
-  age = { family: "statistical", signature: "numbers1, [numbers2], …" },
-  sge = { family: "statistical", signature: "range, criteria, averageRange" },
-  lge = {
+  andFunctionSpec = { family: "logical", signature: "params1, [params2], …" },
+  arabicFunctionSpec = { family: "local", signature: "text" },
+  areasFunctionSpec = { family: "local", signature: "reference" },
+  ascFunctionSpec = { family: "text", signature: "text" },
+  asinFunctionSpec = { family: "local", signature: "number" },
+  asinhFunctionSpec = { family: "local", signature: "number" },
+  atanFunctionSpec = { family: "local", signature: "number" },
+  atan2FunctionSpec = { family: "trigonometry", signature: "x, y" },
+  atanhFunctionSpec = { family: "local", signature: "number" },
+  avedevFunctionSpec = {
+    family: "statistical",
+    signature: "numbers1, [numbers2], …",
+  },
+  averageFunctionSpec = {
+    family: "statistical",
+    signature: "number1, [number2], …",
+  },
+  averageaFunctionSpec = {
+    family: "statistical",
+    signature: "numbers1, [numbers2], …",
+  },
+  averageifFunctionSpec = {
+    family: "statistical",
+    signature: "range, criteria, averageRange",
+  },
+  averageifsFunctionSpec = {
     family: "statistical",
     signature: "average_range, criteria_range1, criteria1, …",
   },
-  uge = { family: "text", signature: "number" },
-  cge = { family: "math", signature: "number, radix, [minLength]" },
-  dge = { family: "engineering", signature: "x, n" },
-  fge = { family: "engineering", signature: "x, n" },
-  hge = { family: "engineering", signature: "x, n" },
-  pge = { family: "engineering", signature: "x, n" },
-  mge = { family: "engineering", signature: "number" },
-  gge = { family: "engineering", signature: "number, [places]" },
-  vge = { family: "engineering", signature: "number, [places]" },
-  bge = { family: "engineering", signature: "number1, number2" },
-  yge = { family: "engineering", signature: "number, shiftAmount" },
-  wge = { family: "engineering", signature: "number1, number2" },
-  xge = { family: "engineering", signature: "number, shiftAmount" },
-  Ege = { family: "engineering", signature: "number1, number2" },
-  Cge = { family: "math", signature: "number, significance" },
-  Age = { family: "text", signature: "number" },
-  kge = { family: "reference", signature: "index_num, value1, [value2], …" },
-  Sge = { family: "local", signature: "array, col_num1, …" },
-  Tge = { family: "local", signature: "array, row_num1, …" },
-  Nge = { family: "text", signature: "text" },
-  Rge = { family: "text", signature: "text" },
-  Ige = { family: "reference", signature: "obj" },
-  _ge = { family: "reference", signature: "obj" },
-  Dge = { family: "math", signature: "number, numberChosen" },
-  Oge = { family: "math", signature: "number, numberChosen" },
-  Mge = { family: "engineering", signature: "realNum, iNum, [suffix]" },
-  jge = { family: "text", signature: "text1, [text2], …" },
-  Fge = { family: "text", signature: "params1, [params2], …" },
-  Bge = { family: "local", signature: "number, from_unit, to_unit" },
-  Lge = { family: "distribution", signature: "[array1], [array2]" },
-  Pge = { family: "local", signature: "number" },
-  Uge = { family: "local", signature: "number" },
-  $ge = { family: "local", signature: "number" },
-  zge = { family: "local", signature: "number" },
-  Vge = { family: "statistical", signature: "number" },
-  Wge = { family: "local", signature: "number" },
-  Hge = { family: "local", signature: "range" },
-  qge = { family: "statistical", signature: "range, criteria" },
-  Xge = { family: "local", signature: "criteria_range1, criteria1, …" },
-  Gge = { family: "local", signature: "number" },
-  Zge = { family: "local", signature: "number" },
-  Kge = { family: "date", signature: "year, month, day" },
-  Yge = { family: "date", signature: "startDate, endDate, unit" },
-  Jge = { family: "date", signature: "dateText" },
-  Qge = { family: "local", signature: "database, field, criteria" },
-  eve = { family: "local", signature: "serial_number" },
-  tve = { family: "date", signature: "endDate, startDate" },
-  rve = { family: "date", signature: "startDate, endDate, [method]" },
-  nve = {
+  bahttextFunctionSpec = { family: "text", signature: "number" },
+  baseFunctionSpec = {
+    family: "math",
+    signature: "number, radix, [minLength]",
+  },
+  besseliFunctionSpec = { family: "engineering", signature: "x, n" },
+  besseljFunctionSpec = { family: "engineering", signature: "x, n" },
+  besselkFunctionSpec = { family: "engineering", signature: "x, n" },
+  besselyFunctionSpec = { family: "engineering", signature: "x, n" },
+  bin2decFunctionSpec = { family: "engineering", signature: "number" },
+  bin2hexFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  bin2octFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  bitandFunctionSpec = { family: "engineering", signature: "number1, number2" },
+  bitlshiftFunctionSpec = {
+    family: "engineering",
+    signature: "number, shiftAmount",
+  },
+  bitorFunctionSpec = { family: "engineering", signature: "number1, number2" },
+  bitrshiftFunctionSpec = {
+    family: "engineering",
+    signature: "number, shiftAmount",
+  },
+  bitxorFunctionSpec = { family: "engineering", signature: "number1, number2" },
+  ceilingFunctionSpec = { family: "math", signature: "number, significance" },
+  charFunctionSpec = { family: "text", signature: "number" },
+  chooseFunctionSpec = {
+    family: "reference",
+    signature: "index_num, value1, [value2], …",
+  },
+  choosecolsFunctionSpec = { family: "local", signature: "array, col_num1, …" },
+  chooserowsFunctionSpec = { family: "local", signature: "array, row_num1, …" },
+  cleanFunctionSpec = { family: "text", signature: "text" },
+  codeFunctionSpec = { family: "text", signature: "text" },
+  columnFunctionSpec = { family: "reference", signature: "obj" },
+  columnsFunctionSpec = { family: "reference", signature: "obj" },
+  combinFunctionSpec = { family: "math", signature: "number, numberChosen" },
+  combinaFunctionSpec = { family: "math", signature: "number, numberChosen" },
+  complexFunctionSpec = {
+    family: "engineering",
+    signature: "realNum, iNum, [suffix]",
+  },
+  concatFunctionSpec = { family: "text", signature: "text1, [text2], …" },
+  concatenateFunctionSpec = {
+    family: "text",
+    signature: "params1, [params2], …",
+  },
+  convertFunctionSpec = {
+    family: "local",
+    signature: "number, from_unit, to_unit",
+  },
+  correlFunctionSpec = {
+    family: "distribution",
+    signature: "[array1], [array2]",
+  },
+  cosFunctionSpec = { family: "local", signature: "number" },
+  coshFunctionSpec = { family: "local", signature: "number" },
+  cotFunctionSpec = { family: "local", signature: "number" },
+  cothFunctionSpec = { family: "local", signature: "number" },
+  countFunctionSpec = { family: "statistical", signature: "number" },
+  countaFunctionSpec = { family: "local", signature: "number" },
+  countblankFunctionSpec = { family: "local", signature: "range" },
+  countifFunctionSpec = { family: "statistical", signature: "range, criteria" },
+  countifsFunctionSpec = {
+    family: "local",
+    signature: "criteria_range1, criteria1, …",
+  },
+  cscFunctionSpec = { family: "local", signature: "number" },
+  cschFunctionSpec = { family: "local", signature: "number" },
+  dateFunctionSpec = { family: "date", signature: "year, month, day" },
+  datedifFunctionSpec = {
+    family: "date",
+    signature: "startDate, endDate, unit",
+  },
+  datevalueFunctionSpec = { family: "date", signature: "dateText" },
+  daverageFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dayFunctionSpec = { family: "local", signature: "serial_number" },
+  daysFunctionSpec = { family: "date", signature: "endDate, startDate" },
+  days360FunctionSpec = {
+    family: "date",
+    signature: "startDate, endDate, [method]",
+  },
+  dbFunctionSpec = {
     family: "financial",
     signature: "cost, salvage, life, period, [month]",
   },
-  ive = { family: "text", signature: "text" },
-  ove = { family: "local", signature: "database, [field], criteria" },
-  ave = { family: "local", signature: "database, [field], criteria" },
-  sve = { family: "local", signature: "cost, salvage, life, period, [factor]" },
-  lve = { family: "engineering", signature: "number, [places]" },
-  uve = { family: "engineering", signature: "number, [places]" },
-  cve = { family: "engineering", signature: "number, [places]" },
-  dve = { family: "math", signature: "text, radix" },
-  fve = { family: "math", signature: "radians" },
-  hve = { family: "engineering", signature: "number1, [number2]" },
-  pve = { family: "distribution", signature: "numbers1, [numbers2], …" },
-  mve = { family: "local", signature: "database, field, criteria" },
-  gve = { family: "local", signature: "database, field, criteria" },
-  vve = { family: "local", signature: "database, field, criteria" },
-  bve = { family: "text", signature: "number, [decimals]" },
-  yve = { family: "local", signature: "database, field, criteria" },
-  wve = { family: "local", signature: "array, rows, [columns]" },
-  xve = { family: "local", signature: "database, field, criteria" },
-  Eve = { family: "local", signature: "database, field, criteria" },
-  Cve = { family: "local", signature: "database, field, criteria" },
-  Ave = { family: "local", signature: "database, field, criteria" },
-  kve = { family: "local", signature: "database, field, criteria" },
-  Sve = { family: "date", signature: "startDate, months" },
-  Tve = { family: "local", signature: "text" },
-  Nve = { family: "date", signature: "startDate, months" },
-  Rve = { family: "engineering", signature: "lowerLimit, [upperLimit]" },
-  Ive = { family: "engineering", signature: "x" },
-  _ve = { family: "math", signature: "number" },
-  Dve = { family: "text", signature: "text1, text2" },
-  Ove = { family: "math", signature: "number" },
-  Mve = { family: "local", signature: "array, rows, [columns], [pad_with]" },
-  jve = { family: "math", signature: "number" },
-  Fve = { family: "math", signature: "number" },
-  Bve = { family: "logical", signature: "" },
-  Lve = { family: "local", signature: "array, include, [if_empty]" },
-  Pve = { family: "text", signature: "findText, withinText, [startNum]" },
-  Uve = { family: "text", signature: "params1, [params2], …" },
-  $ve = { family: "distribution", signature: "x" },
-  zve = { family: "distribution", signature: "x" },
-  Vve = { family: "text", signature: "number, [decimals], [noCommas]" },
-  Wve = { family: "math", signature: "number, significance" },
-  Hve = { family: "distribution", signature: "x, [knownYs], [knownXs]" },
-  qve = { family: "local", signature: "reference" },
-  Xve = { family: "distribution", signature: "[dataArray], [binsArray]" },
-  Gve = { family: "local", signature: "rate, nper, pmt, [pv], [type]" },
-  Zve = { family: "distribution", signature: "x" },
-  Kve = { family: "distribution", signature: "x" },
-  Yve = { family: "distribution", signature: "z" },
-  Jve = { family: "math", signature: "params1, [params2], …" },
-  Qve = { family: "distribution", signature: "numbers1, [numbers2], …" },
-  e1e = { family: "engineering", signature: "number, [step]" },
-  t1e = {
+  dbcsFunctionSpec = { family: "text", signature: "text" },
+  dcountFunctionSpec = {
+    family: "local",
+    signature: "database, [field], criteria",
+  },
+  dcountaFunctionSpec = {
+    family: "local",
+    signature: "database, [field], criteria",
+  },
+  ddbFunctionSpec = {
+    family: "local",
+    signature: "cost, salvage, life, period, [factor]",
+  },
+  dec2binFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  dec2hexFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  dec2octFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  decimalFunctionSpec = { family: "math", signature: "text, radix" },
+  degreesFunctionSpec = { family: "math", signature: "radians" },
+  deltaFunctionSpec = {
+    family: "engineering",
+    signature: "number1, [number2]",
+  },
+  devsqFunctionSpec = {
+    family: "distribution",
+    signature: "numbers1, [numbers2], …",
+  },
+  dgetFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dmaxFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dminFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dollarFunctionSpec = { family: "text", signature: "number, [decimals]" },
+  dproductFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dropFunctionSpec = { family: "local", signature: "array, rows, [columns]" },
+  dstdevFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dstdevpFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dsumFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dvarFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  dvarpFunctionSpec = {
+    family: "local",
+    signature: "database, field, criteria",
+  },
+  edateFunctionSpec = { family: "date", signature: "startDate, months" },
+  encodeurlFunctionSpec = { family: "local", signature: "text" },
+  eomonthFunctionSpec = { family: "date", signature: "startDate, months" },
+  erfFunctionSpec = {
+    family: "engineering",
+    signature: "lowerLimit, [upperLimit]",
+  },
+  erfcFunctionSpec = { family: "engineering", signature: "x" },
+  evenFunctionSpec = { family: "math", signature: "number" },
+  exactFunctionSpec = { family: "text", signature: "text1, text2" },
+  expFunctionSpec = { family: "math", signature: "number" },
+  expandFunctionSpec = {
+    family: "local",
+    signature: "array, rows, [columns], [pad_with]",
+  },
+  factFunctionSpec = { family: "math", signature: "number" },
+  factdoubleFunctionSpec = { family: "math", signature: "number" },
+  falseFunctionSpec = { family: "logical", signature: "" },
+  filterFunctionSpec = {
+    family: "local",
+    signature: "array, include, [if_empty]",
+  },
+  findFunctionSpec = {
+    family: "text",
+    signature: "findText, withinText, [startNum]",
+  },
+  findbFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  fisherFunctionSpec = { family: "distribution", signature: "x" },
+  fisherinvFunctionSpec = { family: "distribution", signature: "x" },
+  fixedFunctionSpec = {
+    family: "text",
+    signature: "number, [decimals], [noCommas]",
+  },
+  floorFunctionSpec = { family: "math", signature: "number, significance" },
+  forecastFunctionSpec = {
+    family: "distribution",
+    signature: "x, [knownYs], [knownXs]",
+  },
+  formulatextFunctionSpec = { family: "local", signature: "reference" },
+  frequencyFunctionSpec = {
+    family: "distribution",
+    signature: "[dataArray], [binsArray]",
+  },
+  fvFunctionSpec = {
+    family: "local",
+    signature: "rate, nper, pmt, [pv], [type]",
+  },
+  gammaFunctionSpec = { family: "distribution", signature: "x" },
+  gammalnFunctionSpec = { family: "distribution", signature: "x" },
+  gaussFunctionSpec = { family: "distribution", signature: "z" },
+  gcdFunctionSpec = { family: "math", signature: "params1, [params2], …" },
+  geomeanFunctionSpec = {
+    family: "distribution",
+    signature: "numbers1, [numbers2], …",
+  },
+  gestepFunctionSpec = { family: "engineering", signature: "number, [step]" },
+  growthFunctionSpec = {
     family: "regression",
     signature: "known_ys, [known_xs], [new_xs], [const]",
   },
-  r1e = { family: "distribution", signature: "numbers1, [numbers2], …" },
-  n1e = { family: "engineering", signature: "number, [places]" },
-  i1e = { family: "engineering", signature: "number" },
-  o1e = { family: "engineering", signature: "number, places" },
-  a1e = {
+  harmeanFunctionSpec = {
+    family: "distribution",
+    signature: "numbers1, [numbers2], …",
+  },
+  hex2binFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  hex2decFunctionSpec = { family: "engineering", signature: "number" },
+  hex2octFunctionSpec = { family: "engineering", signature: "number, places" },
+  hlookupFunctionSpec = {
     family: "reference",
     signature: "lookup_value, table_array, row_index_num, [range_lookup]",
   },
-  s1e = { family: "local", signature: "serial_number" },
-  l1e = { family: "local", signature: "array1, [array2], …" },
-  u1e = {
+  hourFunctionSpec = { family: "local", signature: "serial_number" },
+  hstackFunctionSpec = { family: "local", signature: "array1, [array2], …" },
+  ifFunctionSpec = {
     family: "logical",
     signature: "logical_test, value_if_true, [value_if_false]",
   },
-  c1e = { family: "logical", signature: "value, value_if_error" },
-  d1e = { family: "local", signature: "value, value_if_na" },
-  f1e = { family: "logical", signature: "logical_test1, value_if_true1, …" },
-  h1e = { family: "engineering", signature: "iNumber" },
-  p1e = { family: "engineering", signature: "iNumber" },
-  m1e = { family: "engineering", signature: "iNumber" },
-  g1e = { family: "engineering", signature: "iNumber" },
-  v1e = { family: "engineering", signature: "iNumber" },
-  b1e = { family: "engineering", signature: "iNumber" },
-  y1e = { family: "engineering", signature: "iNumber" },
-  w1e = { family: "engineering", signature: "iNumber" },
-  x1e = { family: "engineering", signature: "iNumber" },
-  E1e = { family: "engineering", signature: "iNumber1, iNumber2" },
-  C1e = { family: "engineering", signature: "iNumber" },
-  A1e = { family: "engineering", signature: "iNumber" },
-  k1e = { family: "engineering", signature: "iNumber" },
-  S1e = { family: "engineering", signature: "iNumber" },
-  T1e = { family: "engineering", signature: "iNumber, number" },
-  N1e = { family: "engineering", signature: "params1, [params2], …" },
-  R1e = { family: "engineering", signature: "iNumber" },
-  I1e = { family: "engineering", signature: "iNumber" },
-  _1e = { family: "engineering", signature: "iNumber" },
-  D1e = { family: "engineering", signature: "iNumber" },
-  O1e = { family: "engineering", signature: "iNumber" },
-  M1e = { family: "engineering", signature: "iNumber" },
-  j1e = { family: "engineering", signature: "iNumber1, iNumber2" },
-  F1e = { family: "engineering", signature: "params1, [params2], …" },
-  B1e = { family: "engineering", signature: "iNumber" },
-  L1e = { family: "reference", signature: "array, row_num, [column_num]" },
-  P1e = { family: "math", signature: "number" },
-  U1e = { family: "distribution", signature: "[knownYs], [knownXs]" },
-  $1e = { family: "financial", signature: "rate, per, nper, pv, [fv], [type]" },
-  z1e = { family: "local", signature: "values, [guess]" },
-  V1e = { family: "information", signature: "value" },
-  W1e = { family: "information", signature: "value" },
-  H1e = { family: "information", signature: "value" },
-  q1e = { family: "local", signature: "number" },
-  X1e = { family: "local", signature: "reference" },
-  G1e = { family: "information", signature: "value" },
-  Z1e = { family: "information", signature: "value" },
-  K1e = { family: "information", signature: "value" },
-  Y1e = { family: "information", signature: "value" },
-  J1e = { family: "date", signature: "serialOrString" },
-  Q1e = { family: "information", signature: "value" },
-  ebe = { family: "information", signature: "value" },
-  tbe = { family: "distribution", signature: "numbers1, [numbers2], …" },
-  rbe = {
+  iferrorFunctionSpec = {
+    family: "logical",
+    signature: "value, value_if_error",
+  },
+  ifnaFunctionSpec = { family: "local", signature: "value, value_if_na" },
+  ifsFunctionSpec = {
+    family: "logical",
+    signature: "logical_test1, value_if_true1, …",
+  },
+  imabsFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imaginaryFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imargumentFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imconjugateFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imcosFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imcoshFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imcotFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imcscFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imcschFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imdivFunctionSpec = {
+    family: "engineering",
+    signature: "iNumber1, iNumber2",
+  },
+  imexpFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imlnFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imlog10FunctionSpec = { family: "engineering", signature: "iNumber" },
+  imlog2FunctionSpec = { family: "engineering", signature: "iNumber" },
+  impowerFunctionSpec = { family: "engineering", signature: "iNumber, number" },
+  improductFunctionSpec = {
+    family: "engineering",
+    signature: "params1, [params2], …",
+  },
+  imrealFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsecFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsechFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsinFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsinhFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsqrtFunctionSpec = { family: "engineering", signature: "iNumber" },
+  imsubFunctionSpec = {
+    family: "engineering",
+    signature: "iNumber1, iNumber2",
+  },
+  imsumFunctionSpec = {
+    family: "engineering",
+    signature: "params1, [params2], …",
+  },
+  imtanFunctionSpec = { family: "engineering", signature: "iNumber" },
+  indexFunctionSpec = {
+    family: "reference",
+    signature: "array, row_num, [column_num]",
+  },
+  intFunctionSpec = { family: "math", signature: "number" },
+  interceptFunctionSpec = {
+    family: "distribution",
+    signature: "[knownYs], [knownXs]",
+  },
+  ipmtFunctionSpec = {
+    family: "financial",
+    signature: "rate, per, nper, pv, [fv], [type]",
+  },
+  irrFunctionSpec = { family: "local", signature: "values, [guess]" },
+  isblankFunctionSpec = { family: "information", signature: "value" },
+  iserrFunctionSpec = { family: "information", signature: "value" },
+  iserrorFunctionSpec = { family: "information", signature: "value" },
+  isevenFunctionSpec = { family: "local", signature: "number" },
+  isformulaFunctionSpec = { family: "local", signature: "reference" },
+  islogicalFunctionSpec = { family: "information", signature: "value" },
+  isnaFunctionSpec = { family: "information", signature: "value" },
+  isnontextFunctionSpec = { family: "information", signature: "value" },
+  isnumberFunctionSpec = { family: "information", signature: "value" },
+  isoweeknumFunctionSpec = { family: "date", signature: "serialOrString" },
+  isrefFunctionSpec = { family: "information", signature: "value" },
+  istextFunctionSpec = { family: "information", signature: "value" },
+  kurtFunctionSpec = {
+    family: "distribution",
+    signature: "numbers1, [numbers2], …",
+  },
+  lambdaFunctionSpec = {
     family: "local",
     signature: "[parameter1, parameter2, …], calculation",
   },
-  nbe = { family: "statistical", signature: "array, k" },
-  ibe = { family: "math", signature: "params1, [params2], …" },
-  obe = { family: "text", signature: "text, [num_chars]" },
-  abe = { family: "text", signature: "params1, [params2], …" },
-  sbe = { family: "text", signature: "text" },
-  lbe = {
+  largeFunctionSpec = { family: "statistical", signature: "array, k" },
+  lcmFunctionSpec = { family: "math", signature: "params1, [params2], …" },
+  leftFunctionSpec = { family: "text", signature: "text, [num_chars]" },
+  leftbFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  lenFunctionSpec = { family: "text", signature: "text" },
+  letFunctionSpec = {
     family: "local",
     signature: "name1, value1, [name2, value2], …, calculation",
   },
-  ube = {
+  linestFunctionSpec = {
     family: "regression",
     signature: "known_ys, [known_xs], [const], [stats]",
   },
-  cbe = { family: "local", signature: "number" },
-  dbe = { family: "math", signature: "number, [base]" },
-  fbe = { family: "local", signature: "number" },
-  hbe = {
+  lnFunctionSpec = { family: "local", signature: "number" },
+  logFunctionSpec = { family: "math", signature: "number, [base]" },
+  log10FunctionSpec = { family: "local", signature: "number" },
+  logestFunctionSpec = {
     family: "regression",
     signature: "known_ys, [known_xs], [const], [stats]",
   },
-  pbe = {
+  lookupFunctionSpec = {
     family: "local",
     signature: "lookup_value, lookup_vector, [result_vector]",
   },
-  mbe = { family: "text", signature: "text" },
-  gbe = {
+  lowerFunctionSpec = { family: "text", signature: "text" },
+  matchFunctionSpec = {
     family: "reference",
     signature: "lookup_value, lookup_array, [match_type]",
   },
-  vbe = { family: "statistical", signature: "number1, [number2], …" },
-  bbe = { family: "statistical", signature: "value1, [value2, ...]" },
-  ybe = {
+  maxFunctionSpec = {
+    family: "statistical",
+    signature: "number1, [number2], …",
+  },
+  maxaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  maxifsFunctionSpec = {
     family: "statistical",
     signature: "max_range, criteria_range1, criteria1, …",
   },
-  wbe = { family: "math", signature: "array" },
-  xbe = { family: "statistical", signature: "number1, [number2], …" },
-  Ebe = { family: "text", signature: "text, start_num, num_chars" },
-  Cbe = { family: "text", signature: "params1, [params2], …" },
-  Abe = { family: "statistical", signature: "number1, [number2], …" },
-  kbe = { family: "statistical", signature: "value1, [value2, ...]" },
-  Sbe = {
+  mdetermFunctionSpec = { family: "math", signature: "array" },
+  medianFunctionSpec = {
+    family: "statistical",
+    signature: "number1, [number2], …",
+  },
+  midFunctionSpec = { family: "text", signature: "text, start_num, num_chars" },
+  midbFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  minFunctionSpec = {
+    family: "statistical",
+    signature: "number1, [number2], …",
+  },
+  minaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  minifsFunctionSpec = {
     family: "statistical",
     signature: "min_range, criteria_range1, criteria1, …",
   },
-  Tbe = { family: "local", signature: "serial_number" },
-  Nbe = { family: "math", signature: "array" },
-  Rbe = {
+  minuteFunctionSpec = { family: "local", signature: "serial_number" },
+  minverseFunctionSpec = { family: "math", signature: "array" },
+  mirrFunctionSpec = {
     family: "financial",
     signature: "values, finance_rate, reinvest_rate",
   },
-  Ibe = { family: "math", signature: "array1, array2" },
-  _be = { family: "math", signature: "number, divisor" },
-  Dbe = { family: "local", signature: "number1, [number2], …" },
-  Obe = { family: "local", signature: "serial_number" },
-  Mbe = { family: "math", signature: "number, multiple" },
-  jbe = { family: "math", signature: "numbers1, [numbers2], …" },
-  Fbe = { family: "math", signature: "dimension" },
-  Bbe = { family: "local", signature: "value" },
-  Lbe = { family: "information", signature: "" },
-  Pbe = { family: "date", signature: "startDate, endDate, holidays" },
-  Ube = { family: "logical", signature: "logical" },
-  $be = { family: "date", signature: "" },
-  zbe = { family: "local", signature: "rate, pmt, pv, [fv], [type]" },
-  Vbe = { family: "local", signature: "rate, value1, [value2], …" },
-  Wbe = {
+  mmultFunctionSpec = { family: "math", signature: "array1, array2" },
+  modFunctionSpec = { family: "math", signature: "number, divisor" },
+  modeFunctionSpec = { family: "local", signature: "number1, [number2], …" },
+  monthFunctionSpec = { family: "local", signature: "serial_number" },
+  mroundFunctionSpec = { family: "math", signature: "number, multiple" },
+  multinomialFunctionSpec = {
+    family: "math",
+    signature: "numbers1, [numbers2], …",
+  },
+  munitFunctionSpec = { family: "math", signature: "dimension" },
+  nFunctionSpec = { family: "local", signature: "value" },
+  naFunctionSpec = { family: "information", signature: "" },
+  networkdaysFunctionSpec = {
+    family: "date",
+    signature: "startDate, endDate, holidays",
+  },
+  notFunctionSpec = { family: "logical", signature: "logical" },
+  nowFunctionSpec = { family: "date", signature: "" },
+  nperFunctionSpec = {
+    family: "local",
+    signature: "rate, pmt, pv, [fv], [type]",
+  },
+  npvFunctionSpec = { family: "local", signature: "rate, value1, [value2], …" },
+  numbervalueFunctionSpec = {
     family: "text",
     signature: "text, [decimalSeparator], [groupSeparator]",
   },
-  Hbe = { family: "engineering", signature: "number, [places]" },
-  qbe = { family: "engineering", signature: "number" },
-  Xbe = { family: "engineering", signature: "number, [places]" },
-  Gbe = { family: "math", signature: "number" },
-  Zbe = { family: "logical", signature: "params1, [params2], …" },
-  Kbe = { family: "regression", signature: "array1, array2" },
-  Ybe = { family: "local", signature: "array, k" },
-  Jbe = { family: "statistical", signature: "number, number_chosen" },
-  Qbe = { family: "statistical", signature: "number, number_chosen" },
-  eye = { family: "distribution", signature: "x" },
-  tye = { family: "math", signature: "" },
-  rye = { family: "local", signature: "rate, nper, pv, [fv], [type]" },
-  nye = { family: "math", signature: "number, power" },
-  iye = { family: "financial", signature: "rate, per, nper, pv, [fv], [type]" },
-  oye = {
+  oct2binFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  oct2decFunctionSpec = { family: "engineering", signature: "number" },
+  oct2hexFunctionSpec = {
+    family: "engineering",
+    signature: "number, [places]",
+  },
+  oddFunctionSpec = { family: "math", signature: "number" },
+  orFunctionSpec = { family: "logical", signature: "params1, [params2], …" },
+  pearsonFunctionSpec = { family: "regression", signature: "array1, array2" },
+  percentileFunctionSpec = { family: "local", signature: "array, k" },
+  permutFunctionSpec = {
+    family: "statistical",
+    signature: "number, number_chosen",
+  },
+  permutationaFunctionSpec = {
+    family: "statistical",
+    signature: "number, number_chosen",
+  },
+  phiFunctionSpec = { family: "distribution", signature: "x" },
+  piFunctionSpec = { family: "math", signature: "" },
+  pmtFunctionSpec = {
+    family: "local",
+    signature: "rate, nper, pv, [fv], [type]",
+  },
+  powerFunctionSpec = { family: "math", signature: "number, power" },
+  ppmtFunctionSpec = {
+    family: "financial",
+    signature: "rate, per, nper, pv, [fv], [type]",
+  },
+  priceFunctionSpec = {
     family: "financial",
     signature:
       "settlement, maturity, rate, yld, redemption, frequency, [basis]",
   },
-  aye = { family: "math", signature: "numbers1, [numbers2], …" },
-  sye = { family: "text", signature: "text" },
-  lye = { family: "local", signature: "rate, nper, pmt, [fv], [type]" },
-  uye = { family: "local", signature: "array, quart" },
-  cye = { family: "math", signature: "numerator, denominator" },
-  dye = { family: "math", signature: "degrees" },
-  fye = { family: "math", signature: "" },
-  hye = { family: "math", signature: "bottom, top" },
-  pye = { family: "local", signature: "number, ref, [order]" },
-  mye = { family: "local", signature: "nper, pmt, pv, [fv], [type], [guess]" },
-  gye = {
+  productFunctionSpec = {
+    family: "math",
+    signature: "numbers1, [numbers2], …",
+  },
+  properFunctionSpec = { family: "text", signature: "text" },
+  pvFunctionSpec = {
+    family: "local",
+    signature: "rate, nper, pmt, [fv], [type]",
+  },
+  quartileFunctionSpec = { family: "local", signature: "array, quart" },
+  quotientFunctionSpec = {
+    family: "math",
+    signature: "numerator, denominator",
+  },
+  radiansFunctionSpec = { family: "math", signature: "degrees" },
+  randFunctionSpec = { family: "math", signature: "" },
+  randbetweenFunctionSpec = { family: "math", signature: "bottom, top" },
+  rankFunctionSpec = { family: "local", signature: "number, ref, [order]" },
+  rateFunctionSpec = {
+    family: "local",
+    signature: "nper, pmt, pv, [fv], [type], [guess]",
+  },
+  replaceFunctionSpec = {
     family: "text",
     signature: "old_text, start_num, num_chars, new_text",
   },
-  vye = { family: "text", signature: "params1, [params2], …" },
-  bye = { family: "text", signature: "text, number_times" },
-  yye = { family: "text", signature: "text, [num_chars]" },
-  wye = { family: "text", signature: "params1, [params2], …" },
-  xye = { family: "math", signature: "number, [form]" },
-  Eye = { family: "math", signature: "number, num_digits" },
-  Cye = { family: "math", signature: "number, num_digits" },
-  Aye = { family: "math", signature: "number, num_digits" },
-  kye = { family: "reference", signature: "obj" },
-  Sye = { family: "reference", signature: "obj" },
-  Tye = { family: "distribution", signature: "known_ys, known_xs" },
-  Nye = { family: "text", signature: "findText, withinText, [startNum]" },
-  Rye = { family: "text", signature: "params1, [params2], …" },
-  Iye = { family: "local", signature: "number" },
-  _ye = { family: "local", signature: "number" },
-  Dye = { family: "date", signature: "serialOrString" },
-  Oye = { family: "local", signature: "rows, [columns], [start], [step]" },
-  Mye = { family: "math", signature: "x, n, m, coefficients" },
-  jye = { family: "local", signature: "number" },
-  Fye = { family: "local", signature: "number" },
-  Bye = { family: "local", signature: "number" },
-  Lye = { family: "statistical", signature: "number1, [number2], …" },
-  Pye = { family: "local", signature: "cost, salvage, life" },
-  Uye = { family: "distribution", signature: "known_ys, known_xs" },
-  $ye = { family: "statistical", signature: "array, k" },
-  zye = {
+  replacebFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  reptFunctionSpec = { family: "text", signature: "text, number_times" },
+  rightFunctionSpec = { family: "text", signature: "text, [num_chars]" },
+  rightbFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  romanFunctionSpec = { family: "math", signature: "number, [form]" },
+  roundFunctionSpec = { family: "math", signature: "number, num_digits" },
+  rounddownFunctionSpec = { family: "math", signature: "number, num_digits" },
+  roundupFunctionSpec = { family: "math", signature: "number, num_digits" },
+  rowFunctionSpec = { family: "reference", signature: "obj" },
+  rowsFunctionSpec = { family: "reference", signature: "obj" },
+  rsqFunctionSpec = { family: "distribution", signature: "known_ys, known_xs" },
+  searchFunctionSpec = {
+    family: "text",
+    signature: "findText, withinText, [startNum]",
+  },
+  searchbFunctionSpec = { family: "text", signature: "params1, [params2], …" },
+  secFunctionSpec = { family: "local", signature: "number" },
+  sechFunctionSpec = { family: "local", signature: "number" },
+  secondFunctionSpec = { family: "date", signature: "serialOrString" },
+  sequenceFunctionSpec = {
+    family: "local",
+    signature: "rows, [columns], [start], [step]",
+  },
+  seriessumFunctionSpec = {
+    family: "math",
+    signature: "x, n, m, coefficients",
+  },
+  signFunctionSpec = { family: "local", signature: "number" },
+  sinFunctionSpec = { family: "local", signature: "number" },
+  sinhFunctionSpec = { family: "local", signature: "number" },
+  skewFunctionSpec = {
+    family: "statistical",
+    signature: "number1, [number2], …",
+  },
+  slnFunctionSpec = { family: "local", signature: "cost, salvage, life" },
+  slopeFunctionSpec = {
+    family: "distribution",
+    signature: "known_ys, known_xs",
+  },
+  smallFunctionSpec = { family: "statistical", signature: "array, k" },
+  sortFunctionSpec = {
     family: "local",
     signature: "array, [sort_index], [sort_order], [by_col]",
   },
-  Vye = { family: "local", signature: "array, by_array1, [sort_order1], …" },
-  Wye = { family: "local", signature: "number" },
-  Hye = { family: "local", signature: "number" },
-  qye = { family: "distribution", signature: "x, mean, standard_dev" },
-  Xye = { family: "statistical", signature: "value1, [value2, ...]" },
-  Gye = { family: "statistical", signature: "value1, [value2, ...]" },
-  Zye = { family: "distribution", signature: "known_ys, known_xs" },
-  Kye = {
+  sortbyFunctionSpec = {
+    family: "local",
+    signature: "array, by_array1, [sort_order1], …",
+  },
+  sqrtFunctionSpec = { family: "local", signature: "number" },
+  sqrtpiFunctionSpec = { family: "local", signature: "number" },
+  standardizeFunctionSpec = {
+    family: "distribution",
+    signature: "x, mean, standard_dev",
+  },
+  stdevaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  stdevpaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  steyxFunctionSpec = {
+    family: "distribution",
+    signature: "known_ys, known_xs",
+  },
+  substituteFunctionSpec = {
     family: "text",
     signature: "text, old_text, new_text, [instance_num]",
   },
-  Yye = { family: "math", signature: "function_num, ref1, [ref2], …" },
-  Jye = { family: "math", signature: "number1, [number2], …" },
-  Qye = { family: "math", signature: "range, criteria, [sum_range]" },
-  ewe = {
+  subtotalFunctionSpec = {
+    family: "math",
+    signature: "function_num, ref1, [ref2], …",
+  },
+  sumFunctionSpec = { family: "math", signature: "number1, [number2], …" },
+  sumifFunctionSpec = {
+    family: "math",
+    signature: "range, criteria, [sum_range]",
+  },
+  sumifsFunctionSpec = {
     family: "math",
     signature: "sum_range, criteria_range1, criteria1, …",
   },
-  twe = { family: "math", signature: "[array1], arrays1, [arrays2], …" },
-  rwe = { family: "math", signature: "params1, [params2], …" },
-  nwe = { family: "math", signature: "arrayX, arrayY" },
-  iwe = { family: "math", signature: "arrayX, arrayY" },
-  owe = { family: "math", signature: "arrayX, arrayY" },
-  awe = {
+  sumproductFunctionSpec = {
+    family: "math",
+    signature: "[array1], arrays1, [arrays2], …",
+  },
+  sumsqFunctionSpec = { family: "math", signature: "params1, [params2], …" },
+  sumx2my2FunctionSpec = { family: "math", signature: "arrayX, arrayY" },
+  sumx2py2FunctionSpec = { family: "math", signature: "arrayX, arrayY" },
+  sumxmy2FunctionSpec = { family: "math", signature: "arrayX, arrayY" },
+  switchFunctionSpec = {
     family: "logical",
     signature: "expression, value1, result1, …, [default]",
   },
-  swe = { family: "local", signature: "cost, salvage, life, per" },
-  lwe = { family: "text", signature: "value" },
-  uwe = { family: "local", signature: "array, rows, [columns]" },
-  cwe = { family: "local", signature: "number" },
-  dwe = { family: "local", signature: "number" },
-  fwe = { family: "text", signature: "value, format_text" },
-  hwe = {
+  sydFunctionSpec = { family: "local", signature: "cost, salvage, life, per" },
+  tFunctionSpec = { family: "text", signature: "value" },
+  takeFunctionSpec = { family: "local", signature: "array, rows, [columns]" },
+  tanFunctionSpec = { family: "local", signature: "number" },
+  tanhFunctionSpec = { family: "local", signature: "number" },
+  textFunctionSpec = { family: "text", signature: "value, format_text" },
+  textafterFunctionSpec = {
     family: "local",
     signature:
       "text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found]",
   },
-  pwe = {
+  textbeforeFunctionSpec = {
     family: "local",
     signature:
       "text, delimiter, [instance_num], [match_mode], [match_end], [if_not_found]",
   },
-  mwe = { family: "text", signature: "delimiter, ignore_empty, text1, …" },
-  gwe = {
+  textjoinFunctionSpec = {
+    family: "text",
+    signature: "delimiter, ignore_empty, text1, …",
+  },
+  textsplitFunctionSpec = {
     family: "local",
     signature:
       "text, col_delimiter, [row_delimiter], [ignore_empty], [match_mode], [pad_with]",
   },
-  vwe = { family: "date", signature: "hour, minute, second" },
-  bwe = { family: "date", signature: "timeText" },
-  ywe = { family: "local", signature: "array, [ignore], [scan_by_column]" },
-  wwe = { family: "date", signature: "" },
-  xwe = { family: "local", signature: "array, [ignore], [scan_by_column]" },
-  Ewe = { family: "reference", signature: "array" },
-  Cwe = {
+  timeFunctionSpec = { family: "date", signature: "hour, minute, second" },
+  timevalueFunctionSpec = { family: "date", signature: "timeText" },
+  tocolFunctionSpec = {
+    family: "local",
+    signature: "array, [ignore], [scan_by_column]",
+  },
+  todayFunctionSpec = { family: "date", signature: "" },
+  torowFunctionSpec = {
+    family: "local",
+    signature: "array, [ignore], [scan_by_column]",
+  },
+  transposeFunctionSpec = { family: "reference", signature: "array" },
+  trendFunctionSpec = {
     family: "regression",
     signature: "known_ys, [known_xs], [new_xs], [const]",
   },
-  Awe = { family: "text", signature: "text" },
-  kwe = { family: "statistical", signature: "array, percent" },
-  Swe = { family: "logical", signature: "" },
-  Twe = { family: "math", signature: "number" },
-  Nwe = { family: "local", signature: "value" },
-  Rwe = { family: "text", signature: "number" },
-  Iwe = { family: "text", signature: "text" },
-  _we = { family: "local", signature: "array, [by_col], [exactly_once]" },
-  Dwe = { family: "local", signature: "text" },
-  Owe = { family: "local", signature: "text" },
-  Mwe = { family: "statistical", signature: "value1, [value2, ...]" },
-  jwe = { family: "statistical", signature: "value1, [value2, ...]" },
-  Fwe = {
+  trimFunctionSpec = { family: "text", signature: "text" },
+  trimmeanFunctionSpec = { family: "statistical", signature: "array, percent" },
+  trueFunctionSpec = { family: "logical", signature: "" },
+  truncFunctionSpec = { family: "math", signature: "number" },
+  typeFunctionSpec = { family: "local", signature: "value" },
+  unicharFunctionSpec = { family: "text", signature: "number" },
+  unicodeFunctionSpec = { family: "text", signature: "text" },
+  uniqueFunctionSpec = {
+    family: "local",
+    signature: "array, [by_col], [exactly_once]",
+  },
+  upperFunctionSpec = { family: "local", signature: "text" },
+  valueFunctionSpec = { family: "local", signature: "text" },
+  varaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  varpaFunctionSpec = {
+    family: "statistical",
+    signature: "value1, [value2, ...]",
+  },
+  vlookupFunctionSpec = {
     family: "reference",
     signature: "lookup_value, table_array, col_index_num, [range_lookup]",
   },
-  Bwe = { family: "local", signature: "array1, [array2], …" },
-  Lwe = { family: "date", signature: "serialOrString, [returnType]" },
-  Pwe = { family: "date", signature: "serialOrString, [returnType]" },
-  Uwe = { family: "date", signature: "startDate, days, holidays" },
-  $we = { family: "local", signature: "values, dates, [guess]" },
-  zwe = {
+  vstackFunctionSpec = { family: "local", signature: "array1, [array2], …" },
+  weekdayFunctionSpec = {
+    family: "date",
+    signature: "serialOrString, [returnType]",
+  },
+  weeknumFunctionSpec = {
+    family: "date",
+    signature: "serialOrString, [returnType]",
+  },
+  workdayFunctionSpec = {
+    family: "date",
+    signature: "startDate, days, holidays",
+  },
+  xirrFunctionSpec = { family: "local", signature: "values, dates, [guess]" },
+  xlookupFunctionSpec = {
     family: "local",
     signature:
       "lookup_value, lookup_array, return_array, [if_not_found], [match_mode], [search_mode]",
   },
-  Vwe = {
+  xmatchFunctionSpec = {
     family: "local",
     signature: "lookup_value, lookup_array, [match_mode], [search_mode]",
   },
-  Wwe = { family: "local", signature: "rate, values, dates" },
-  Hwe = { family: "logical", signature: "params1, [params2], …" },
-  qwe = { family: "date", signature: "serialOrString" },
-  Xwe = { family: "date", signature: "startDate, endDate, [basis]" },
-  Gwe = {
+  xnpvFunctionSpec = { family: "local", signature: "rate, values, dates" },
+  xorFunctionSpec = { family: "logical", signature: "params1, [params2], …" },
+  yearFunctionSpec = { family: "date", signature: "serialOrString" },
+  yearfracFunctionSpec = {
+    family: "date",
+    signature: "startDate, endDate, [basis]",
+  },
+  yieldFunctionSpec = {
     family: "financial",
     signature: "settlement, maturity, rate, pr, redemption, frequency, [basis]",
   },
-  dW = {
-    ABS: Ume,
-    ACCRINT: $me,
-    ACCRINTM: zme,
-    ACOS: Vme,
-    ACOSH: Wme,
-    ACOT: Hme,
-    ACOTH: qme,
-    ADDRESS: Xme,
-    AGGREGATE: Gme,
-    AND: Zme,
-    ARABIC: Kme,
-    AREAS: Yme,
-    ASC: Jme,
-    ASIN: Qme,
-    ASINH: ege,
-    ATAN: tge,
-    ATAN2: rge,
-    ATANH: nge,
-    AVEDEV: ige,
-    AVERAGE: oge,
-    AVERAGEA: age,
-    AVERAGEIF: sge,
-    AVERAGEIFS: lge,
-    BAHTTEXT: uge,
-    BASE: cge,
-    BESSELI: dge,
-    BESSELJ: fge,
-    BESSELK: hge,
-    BESSELY: pge,
+  functionSpecsByName = {
+    ABS: absFunctionSpec,
+    ACCRINT: accrintFunctionSpec,
+    ACCRINTM: accrintmFunctionSpec,
+    ACOS: acosFunctionSpec,
+    ACOSH: acoshFunctionSpec,
+    ACOT: acotFunctionSpec,
+    ACOTH: acothFunctionSpec,
+    ADDRESS: addressFunctionSpec,
+    AGGREGATE: aggregateFunctionSpec,
+    AND: andFunctionSpec,
+    ARABIC: arabicFunctionSpec,
+    AREAS: areasFunctionSpec,
+    ASC: ascFunctionSpec,
+    ASIN: asinFunctionSpec,
+    ASINH: asinhFunctionSpec,
+    ATAN: atanFunctionSpec,
+    ATAN2: atan2FunctionSpec,
+    ATANH: atanhFunctionSpec,
+    AVEDEV: avedevFunctionSpec,
+    AVERAGE: averageFunctionSpec,
+    AVERAGEA: averageaFunctionSpec,
+    AVERAGEIF: averageifFunctionSpec,
+    AVERAGEIFS: averageifsFunctionSpec,
+    BAHTTEXT: bahttextFunctionSpec,
+    BASE: baseFunctionSpec,
+    BESSELI: besseliFunctionSpec,
+    BESSELJ: besseljFunctionSpec,
+    BESSELK: besselkFunctionSpec,
+    BESSELY: besselyFunctionSpec,
     "BETA.DIST": {
       family: "distribution",
       signature: "x, alpha, beta, cumulative, [a], [b]",
@@ -482,9 +789,9 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "probability, alpha, beta, [a], [b]",
     },
-    BIN2DEC: mge,
-    BIN2HEX: gge,
-    BIN2OCT: vge,
+    BIN2DEC: bin2decFunctionSpec,
+    BIN2HEX: bin2hexFunctionSpec,
+    BIN2OCT: bin2octFunctionSpec,
     "BINOM.DIST": {
       family: "distribution",
       signature: "numberS, trials, probabilityS, cumulative",
@@ -497,18 +804,18 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "trials, probabilityS, alpha",
     },
-    BITAND: bge,
-    BITLSHIFT: yge,
-    BITOR: wge,
-    BITRSHIFT: xge,
-    BITXOR: Ege,
-    CEILING: Cge,
+    BITAND: bitandFunctionSpec,
+    BITLSHIFT: bitlshiftFunctionSpec,
+    BITOR: bitorFunctionSpec,
+    BITRSHIFT: bitrshiftFunctionSpec,
+    BITXOR: bitxorFunctionSpec,
+    CEILING: ceilingFunctionSpec,
     "CEILING.MATH": {
       family: "math",
       signature: "number, [significance], [mode]",
     },
     "CEILING.PRECISE": { family: "math", signature: "number, [significance]" },
-    CHAR: Age,
+    CHAR: charFunctionSpec,
     "CHISQ.DIST": {
       family: "distribution",
       signature: "x, degFreedom, cumulative",
@@ -526,78 +833,78 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "[actualRange], [expectedRange]",
     },
-    CHOOSE: kge,
-    CHOOSECOLS: Sge,
-    CHOOSEROWS: Tge,
-    CLEAN: Nge,
-    CODE: Rge,
-    COLUMN: Ige,
-    COLUMNS: _ge,
-    COMBIN: Dge,
-    COMBINA: Oge,
-    COMPLEX: Mge,
-    CONCAT: jge,
-    CONCATENATE: Fge,
+    CHOOSE: chooseFunctionSpec,
+    CHOOSECOLS: choosecolsFunctionSpec,
+    CHOOSEROWS: chooserowsFunctionSpec,
+    CLEAN: cleanFunctionSpec,
+    CODE: codeFunctionSpec,
+    COLUMN: columnFunctionSpec,
+    COLUMNS: columnsFunctionSpec,
+    COMBIN: combinFunctionSpec,
+    COMBINA: combinaFunctionSpec,
+    COMPLEX: complexFunctionSpec,
+    CONCAT: concatFunctionSpec,
+    CONCATENATE: concatenateFunctionSpec,
     "CONFIDENCE.NORM": {
       family: "distribution",
       signature: "alpha, std, size",
     },
     "CONFIDENCE.T": { family: "distribution", signature: "alpha, std, size" },
-    CONVERT: Bge,
-    CORREL: Lge,
-    COS: Pge,
-    COSH: Uge,
-    COT: $ge,
-    COTH: zge,
-    COUNT: Vge,
-    COUNTA: Wge,
-    COUNTBLANK: Hge,
-    COUNTIF: qge,
-    COUNTIFS: Xge,
+    CONVERT: convertFunctionSpec,
+    CORREL: correlFunctionSpec,
+    COS: cosFunctionSpec,
+    COSH: coshFunctionSpec,
+    COT: cotFunctionSpec,
+    COTH: cothFunctionSpec,
+    COUNT: countFunctionSpec,
+    COUNTA: countaFunctionSpec,
+    COUNTBLANK: countblankFunctionSpec,
+    COUNTIF: countifFunctionSpec,
+    COUNTIFS: countifsFunctionSpec,
     "COVARIANCE.P": { family: "distribution", signature: "[array1], [array2]" },
     "COVARIANCE.S": { family: "distribution", signature: "[array1], [array2]" },
-    CSC: Gge,
-    CSCH: Zge,
-    DATE: Kge,
-    DATEDIF: Yge,
-    DATEVALUE: Jge,
-    DAVERAGE: Qge,
-    DAY: eve,
-    DAYS: tve,
-    DAYS360: rve,
-    DB: nve,
-    DBCS: ive,
-    DCOUNT: ove,
-    DCOUNTA: ave,
-    DDB: sve,
-    DEC2BIN: lve,
-    DEC2HEX: uve,
-    DEC2OCT: cve,
-    DECIMAL: dve,
-    DEGREES: fve,
-    DELTA: hve,
-    DEVSQ: pve,
-    DGET: mve,
-    DMAX: gve,
-    DMIN: vve,
-    DOLLAR: bve,
-    DPRODUCT: yve,
-    DROP: wve,
-    DSTDEV: xve,
-    DSTDEVP: Eve,
-    DSUM: Cve,
-    DVAR: Ave,
-    DVARP: kve,
-    EDATE: Sve,
-    ENCODEURL: Tve,
-    EOMONTH: Nve,
-    ERF: Rve,
-    ERFC: Ive,
+    CSC: cscFunctionSpec,
+    CSCH: cschFunctionSpec,
+    DATE: dateFunctionSpec,
+    DATEDIF: datedifFunctionSpec,
+    DATEVALUE: datevalueFunctionSpec,
+    DAVERAGE: daverageFunctionSpec,
+    DAY: dayFunctionSpec,
+    DAYS: daysFunctionSpec,
+    DAYS360: days360FunctionSpec,
+    DB: dbFunctionSpec,
+    DBCS: dbcsFunctionSpec,
+    DCOUNT: dcountFunctionSpec,
+    DCOUNTA: dcountaFunctionSpec,
+    DDB: ddbFunctionSpec,
+    DEC2BIN: dec2binFunctionSpec,
+    DEC2HEX: dec2hexFunctionSpec,
+    DEC2OCT: dec2octFunctionSpec,
+    DECIMAL: decimalFunctionSpec,
+    DEGREES: degreesFunctionSpec,
+    DELTA: deltaFunctionSpec,
+    DEVSQ: devsqFunctionSpec,
+    DGET: dgetFunctionSpec,
+    DMAX: dmaxFunctionSpec,
+    DMIN: dminFunctionSpec,
+    DOLLAR: dollarFunctionSpec,
+    DPRODUCT: dproductFunctionSpec,
+    DROP: dropFunctionSpec,
+    DSTDEV: dstdevFunctionSpec,
+    DSTDEVP: dstdevpFunctionSpec,
+    DSUM: dsumFunctionSpec,
+    DVAR: dvarFunctionSpec,
+    DVARP: dvarpFunctionSpec,
+    EDATE: edateFunctionSpec,
+    ENCODEURL: encodeurlFunctionSpec,
+    EOMONTH: eomonthFunctionSpec,
+    ERF: erfFunctionSpec,
+    ERFC: erfcFunctionSpec,
     "ERROR.TYPE": { family: "information", signature: "value" },
-    EVEN: _ve,
-    EXACT: Dve,
-    EXP: Ove,
-    EXPAND: Mve,
+    EVEN: evenFunctionSpec,
+    EXACT: exactFunctionSpec,
+    EXP: expFunctionSpec,
+    EXPAND: expandFunctionSpec,
     "EXPON.DIST": {
       family: "distribution",
       signature: "x, lambda, cumulative",
@@ -607,30 +914,30 @@ const Ume = { family: "local", signature: "number" },
     "F.INV": { family: "distribution", signature: "probability, d1, d2" },
     "F.INV.RT": { family: "distribution", signature: "probability, d1, d2" },
     "F.TEST": { family: "distribution", signature: "[array1], [array2]" },
-    FACT: jve,
-    FACTDOUBLE: Fve,
-    FALSE: Bve,
-    FILTER: Lve,
-    FIND: Pve,
-    FINDB: Uve,
-    FISHER: $ve,
-    FISHERINV: zve,
-    FIXED: Vve,
-    FLOOR: Wve,
+    FACT: factFunctionSpec,
+    FACTDOUBLE: factdoubleFunctionSpec,
+    FALSE: falseFunctionSpec,
+    FILTER: filterFunctionSpec,
+    FIND: findFunctionSpec,
+    FINDB: findbFunctionSpec,
+    FISHER: fisherFunctionSpec,
+    FISHERINV: fisherinvFunctionSpec,
+    FIXED: fixedFunctionSpec,
+    FLOOR: floorFunctionSpec,
     "FLOOR.MATH": {
       family: "math",
       signature: "number, [significance], [mode]",
     },
     "FLOOR.PRECISE": { family: "math", signature: "number, [significance]" },
-    FORECAST: Hve,
+    FORECAST: forecastFunctionSpec,
     "FORECAST.LINEAR": {
       family: "distribution",
       signature: "params1, [params2], …",
     },
-    FORMULATEXT: qve,
-    FREQUENCY: Xve,
-    FV: Gve,
-    GAMMA: Zve,
+    FORMULATEXT: formulatextFunctionSpec,
+    FREQUENCY: frequencyFunctionSpec,
+    FV: fvFunctionSpec,
+    GAMMA: gammaFunctionSpec,
     "GAMMA.DIST": {
       family: "distribution",
       signature: "x, alpha, beta, cumulative",
@@ -639,85 +946,85 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "probability, alpha, beta",
     },
-    GAMMALN: Kve,
+    GAMMALN: gammalnFunctionSpec,
     "GAMMALN.PRECISE": { family: "distribution", signature: "x" },
-    GAUSS: Yve,
-    GCD: Jve,
-    GEOMEAN: Qve,
-    GESTEP: e1e,
-    GROWTH: t1e,
-    HARMEAN: r1e,
-    HEX2BIN: n1e,
-    HEX2DEC: i1e,
-    HEX2OCT: o1e,
-    HLOOKUP: a1e,
-    HOUR: s1e,
-    HSTACK: l1e,
+    GAUSS: gaussFunctionSpec,
+    GCD: gcdFunctionSpec,
+    GEOMEAN: geomeanFunctionSpec,
+    GESTEP: gestepFunctionSpec,
+    GROWTH: growthFunctionSpec,
+    HARMEAN: harmeanFunctionSpec,
+    HEX2BIN: hex2binFunctionSpec,
+    HEX2DEC: hex2decFunctionSpec,
+    HEX2OCT: hex2octFunctionSpec,
+    HLOOKUP: hlookupFunctionSpec,
+    HOUR: hourFunctionSpec,
+    HSTACK: hstackFunctionSpec,
     "HYPGEOM.DIST": {
       family: "distribution",
       signature:
         "sample_s, number_sample, population_s, number_pop, cumulative",
     },
-    IF: u1e,
-    IFERROR: c1e,
-    IFNA: d1e,
-    IFS: f1e,
-    IMABS: h1e,
-    IMAGINARY: p1e,
-    IMARGUMENT: m1e,
-    IMCONJUGATE: g1e,
-    IMCOS: v1e,
-    IMCOSH: b1e,
-    IMCOT: y1e,
-    IMCSC: w1e,
-    IMCSCH: x1e,
-    IMDIV: E1e,
-    IMEXP: C1e,
-    IMLN: A1e,
-    IMLOG10: k1e,
-    IMLOG2: S1e,
-    IMPOWER: T1e,
-    IMPRODUCT: N1e,
-    IMREAL: R1e,
-    IMSEC: I1e,
-    IMSECH: _1e,
-    IMSIN: D1e,
-    IMSINH: O1e,
-    IMSQRT: M1e,
-    IMSUB: j1e,
-    IMSUM: F1e,
-    IMTAN: B1e,
-    INDEX: L1e,
-    INT: P1e,
-    INTERCEPT: U1e,
-    IPMT: $1e,
-    IRR: z1e,
-    ISBLANK: V1e,
-    ISERR: W1e,
-    ISERROR: H1e,
-    ISEVEN: q1e,
-    ISFORMULA: X1e,
-    ISLOGICAL: G1e,
-    ISNA: Z1e,
-    ISNONTEXT: K1e,
-    ISNUMBER: Y1e,
+    IF: ifFunctionSpec,
+    IFERROR: iferrorFunctionSpec,
+    IFNA: ifnaFunctionSpec,
+    IFS: ifsFunctionSpec,
+    IMABS: imabsFunctionSpec,
+    IMAGINARY: imaginaryFunctionSpec,
+    IMARGUMENT: imargumentFunctionSpec,
+    IMCONJUGATE: imconjugateFunctionSpec,
+    IMCOS: imcosFunctionSpec,
+    IMCOSH: imcoshFunctionSpec,
+    IMCOT: imcotFunctionSpec,
+    IMCSC: imcscFunctionSpec,
+    IMCSCH: imcschFunctionSpec,
+    IMDIV: imdivFunctionSpec,
+    IMEXP: imexpFunctionSpec,
+    IMLN: imlnFunctionSpec,
+    IMLOG10: imlog10FunctionSpec,
+    IMLOG2: imlog2FunctionSpec,
+    IMPOWER: impowerFunctionSpec,
+    IMPRODUCT: improductFunctionSpec,
+    IMREAL: imrealFunctionSpec,
+    IMSEC: imsecFunctionSpec,
+    IMSECH: imsechFunctionSpec,
+    IMSIN: imsinFunctionSpec,
+    IMSINH: imsinhFunctionSpec,
+    IMSQRT: imsqrtFunctionSpec,
+    IMSUB: imsubFunctionSpec,
+    IMSUM: imsumFunctionSpec,
+    IMTAN: imtanFunctionSpec,
+    INDEX: indexFunctionSpec,
+    INT: intFunctionSpec,
+    INTERCEPT: interceptFunctionSpec,
+    IPMT: ipmtFunctionSpec,
+    IRR: irrFunctionSpec,
+    ISBLANK: isblankFunctionSpec,
+    ISERR: iserrFunctionSpec,
+    ISERROR: iserrorFunctionSpec,
+    ISEVEN: isevenFunctionSpec,
+    ISFORMULA: isformulaFunctionSpec,
+    ISLOGICAL: islogicalFunctionSpec,
+    ISNA: isnaFunctionSpec,
+    ISNONTEXT: isnontextFunctionSpec,
+    ISNUMBER: isnumberFunctionSpec,
     "ISO.CEILING": { family: "math", signature: "params1, [params2], …" },
-    ISOWEEKNUM: J1e,
-    ISREF: Q1e,
-    ISTEXT: ebe,
-    KURT: tbe,
-    LAMBDA: rbe,
-    LARGE: nbe,
-    LCM: ibe,
-    LEFT: obe,
-    LEFTB: abe,
-    LEN: sbe,
-    LET: lbe,
-    LINEST: ube,
-    LN: cbe,
-    LOG: dbe,
-    LOG10: fbe,
-    LOGEST: hbe,
+    ISOWEEKNUM: isoweeknumFunctionSpec,
+    ISREF: isrefFunctionSpec,
+    ISTEXT: istextFunctionSpec,
+    KURT: kurtFunctionSpec,
+    LAMBDA: lambdaFunctionSpec,
+    LARGE: largeFunctionSpec,
+    LCM: lcmFunctionSpec,
+    LEFT: leftFunctionSpec,
+    LEFTB: leftbFunctionSpec,
+    LEN: lenFunctionSpec,
+    LET: letFunctionSpec,
+    LINEST: linestFunctionSpec,
+    LN: lnFunctionSpec,
+    LOG: logFunctionSpec,
+    LOG10: log10FunctionSpec,
+    LOGEST: logestFunctionSpec,
     "LOGNORM.DIST": {
       family: "distribution",
       signature: "x, mean, standard_dev, cumulative",
@@ -726,38 +1033,38 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "probability, mean, standard_dev",
     },
-    LOOKUP: pbe,
-    LOWER: mbe,
-    MATCH: gbe,
-    MAX: vbe,
-    MAXA: bbe,
-    MAXIFS: ybe,
-    MDETERM: wbe,
-    MEDIAN: xbe,
-    MID: Ebe,
-    MIDB: Cbe,
-    MIN: Abe,
-    MINA: kbe,
-    MINIFS: Sbe,
-    MINUTE: Tbe,
-    MINVERSE: Nbe,
-    MIRR: Rbe,
-    MMULT: Ibe,
-    MOD: _be,
-    MODE: Dbe,
+    LOOKUP: lookupFunctionSpec,
+    LOWER: lowerFunctionSpec,
+    MATCH: matchFunctionSpec,
+    MAX: maxFunctionSpec,
+    MAXA: maxaFunctionSpec,
+    MAXIFS: maxifsFunctionSpec,
+    MDETERM: mdetermFunctionSpec,
+    MEDIAN: medianFunctionSpec,
+    MID: midFunctionSpec,
+    MIDB: midbFunctionSpec,
+    MIN: minFunctionSpec,
+    MINA: minaFunctionSpec,
+    MINIFS: minifsFunctionSpec,
+    MINUTE: minuteFunctionSpec,
+    MINVERSE: minverseFunctionSpec,
+    MIRR: mirrFunctionSpec,
+    MMULT: mmultFunctionSpec,
+    MOD: modFunctionSpec,
+    MODE: modeFunctionSpec,
     "MODE.MULT": { family: "statistical", signature: "number1, [number2], …" },
     "MODE.SNGL": { family: "distribution", signature: "number1, [number2], …" },
-    MONTH: Obe,
-    MROUND: Mbe,
-    MULTINOMIAL: jbe,
-    MUNIT: Fbe,
-    N: Bbe,
-    NA: Lbe,
+    MONTH: monthFunctionSpec,
+    MROUND: mroundFunctionSpec,
+    MULTINOMIAL: multinomialFunctionSpec,
+    MUNIT: munitFunctionSpec,
+    N: nFunctionSpec,
+    NA: naFunctionSpec,
     "NEGBINOM.DIST": {
       family: "distribution",
       signature: "number_f, number_s, probability_s, cumulative",
     },
-    NETWORKDAYS: Pbe,
+    NETWORKDAYS: networkdaysFunctionSpec,
     "NETWORKDAYS.INTL": {
       family: "date",
       signature: "startDate, endDate, weekend, holidays",
@@ -772,96 +1079,96 @@ const Ume = { family: "local", signature: "number" },
     },
     "NORM.S.DIST": { family: "distribution", signature: "z, cumulative" },
     "NORM.S.INV": { family: "distribution", signature: "probability" },
-    NOT: Ube,
-    NOW: $be,
-    NPER: zbe,
-    NPV: Vbe,
-    NUMBERVALUE: Wbe,
-    OCT2BIN: Hbe,
-    OCT2DEC: qbe,
-    OCT2HEX: Xbe,
-    ODD: Gbe,
-    OR: Zbe,
-    PEARSON: Kbe,
-    PERCENTILE: Ybe,
+    NOT: notFunctionSpec,
+    NOW: nowFunctionSpec,
+    NPER: nperFunctionSpec,
+    NPV: npvFunctionSpec,
+    NUMBERVALUE: numbervalueFunctionSpec,
+    OCT2BIN: oct2binFunctionSpec,
+    OCT2DEC: oct2decFunctionSpec,
+    OCT2HEX: oct2hexFunctionSpec,
+    ODD: oddFunctionSpec,
+    OR: orFunctionSpec,
+    PEARSON: pearsonFunctionSpec,
+    PERCENTILE: percentileFunctionSpec,
     "PERCENTILE.EXC": { family: "distribution", signature: "array, k" },
     "PERCENTILE.INC": { family: "distribution", signature: "array, k" },
-    PERMUT: Jbe,
-    PERMUTATIONA: Qbe,
-    PHI: eye,
-    PI: tye,
-    PMT: rye,
+    PERMUT: permutFunctionSpec,
+    PERMUTATIONA: permutationaFunctionSpec,
+    PHI: phiFunctionSpec,
+    PI: piFunctionSpec,
+    PMT: pmtFunctionSpec,
     "POISSON.DIST": {
       family: "distribution",
       signature: "x, mean, cumulative",
     },
-    POWER: nye,
-    PPMT: iye,
-    PRICE: oye,
-    PRODUCT: aye,
-    PROPER: sye,
-    PV: lye,
-    QUARTILE: uye,
+    POWER: powerFunctionSpec,
+    PPMT: ppmtFunctionSpec,
+    PRICE: priceFunctionSpec,
+    PRODUCT: productFunctionSpec,
+    PROPER: properFunctionSpec,
+    PV: pvFunctionSpec,
+    QUARTILE: quartileFunctionSpec,
     "QUARTILE.EXC": { family: "distribution", signature: "array, quart" },
     "QUARTILE.INC": { family: "distribution", signature: "array, quart" },
-    QUOTIENT: cye,
-    RADIANS: dye,
-    RAND: fye,
-    RANDBETWEEN: hye,
-    RANK: pye,
+    QUOTIENT: quotientFunctionSpec,
+    RADIANS: radiansFunctionSpec,
+    RAND: randFunctionSpec,
+    RANDBETWEEN: randbetweenFunctionSpec,
+    RANK: rankFunctionSpec,
     "RANK.AVG": { family: "distribution", signature: "number, ref, [order]" },
     "RANK.EQ": { family: "distribution", signature: "number, ref, [order]" },
-    RATE: mye,
-    REPLACE: gye,
-    REPLACEB: vye,
-    REPT: bye,
-    RIGHT: yye,
-    RIGHTB: wye,
-    ROMAN: xye,
-    ROUND: Eye,
-    ROUNDDOWN: Cye,
-    ROUNDUP: Aye,
-    ROW: kye,
-    ROWS: Sye,
-    RSQ: Tye,
-    SEARCH: Nye,
-    SEARCHB: Rye,
-    SEC: Iye,
-    SECH: _ye,
-    SECOND: Dye,
-    SEQUENCE: Oye,
-    SERIESSUM: Mye,
-    SIGN: jye,
-    SIN: Fye,
-    SINH: Bye,
-    SKEW: Lye,
+    RATE: rateFunctionSpec,
+    REPLACE: replaceFunctionSpec,
+    REPLACEB: replacebFunctionSpec,
+    REPT: reptFunctionSpec,
+    RIGHT: rightFunctionSpec,
+    RIGHTB: rightbFunctionSpec,
+    ROMAN: romanFunctionSpec,
+    ROUND: roundFunctionSpec,
+    ROUNDDOWN: rounddownFunctionSpec,
+    ROUNDUP: roundupFunctionSpec,
+    ROW: rowFunctionSpec,
+    ROWS: rowsFunctionSpec,
+    RSQ: rsqFunctionSpec,
+    SEARCH: searchFunctionSpec,
+    SEARCHB: searchbFunctionSpec,
+    SEC: secFunctionSpec,
+    SECH: sechFunctionSpec,
+    SECOND: secondFunctionSpec,
+    SEQUENCE: sequenceFunctionSpec,
+    SERIESSUM: seriessumFunctionSpec,
+    SIGN: signFunctionSpec,
+    SIN: sinFunctionSpec,
+    SINH: sinhFunctionSpec,
+    SKEW: skewFunctionSpec,
     "SKEW.P": { family: "statistical", signature: "number1, [number2], …" },
-    SLN: Pye,
-    SLOPE: Uye,
-    SMALL: $ye,
-    SORT: zye,
-    SORTBY: Vye,
-    SQRT: Wye,
-    SQRTPI: Hye,
-    STANDARDIZE: qye,
+    SLN: slnFunctionSpec,
+    SLOPE: slopeFunctionSpec,
+    SMALL: smallFunctionSpec,
+    SORT: sortFunctionSpec,
+    SORTBY: sortbyFunctionSpec,
+    SQRT: sqrtFunctionSpec,
+    SQRTPI: sqrtpiFunctionSpec,
+    STANDARDIZE: standardizeFunctionSpec,
     "STDEV.P": { family: "distribution", signature: "number1, [number2], …" },
     "STDEV.S": { family: "distribution", signature: "number1, [number2], …" },
-    STDEVA: Xye,
-    STDEVPA: Gye,
-    STEYX: Zye,
-    SUBSTITUTE: Kye,
-    SUBTOTAL: Yye,
-    SUM: Jye,
-    SUMIF: Qye,
-    SUMIFS: ewe,
-    SUMPRODUCT: twe,
-    SUMSQ: rwe,
-    SUMX2MY2: nwe,
-    SUMX2PY2: iwe,
-    SUMXMY2: owe,
-    SWITCH: awe,
-    SYD: swe,
-    T: lwe,
+    STDEVA: stdevaFunctionSpec,
+    STDEVPA: stdevpaFunctionSpec,
+    STEYX: steyxFunctionSpec,
+    SUBSTITUTE: substituteFunctionSpec,
+    SUBTOTAL: subtotalFunctionSpec,
+    SUM: sumFunctionSpec,
+    SUMIF: sumifFunctionSpec,
+    SUMIFS: sumifsFunctionSpec,
+    SUMPRODUCT: sumproductFunctionSpec,
+    SUMSQ: sumsqFunctionSpec,
+    SUMX2MY2: sumx2my2FunctionSpec,
+    SUMX2PY2: sumx2py2FunctionSpec,
+    SUMXMY2: sumxmy2FunctionSpec,
+    SWITCH: switchFunctionSpec,
+    SYD: sydFunctionSpec,
+    T: tFunctionSpec,
     "T.DIST": {
       family: "distribution",
       signature: "x, deg_freedom, cumulative",
@@ -877,61 +1184,61 @@ const Ume = { family: "local", signature: "number" },
       family: "distribution",
       signature: "array1, array2, tails, type",
     },
-    TAKE: uwe,
-    TAN: cwe,
-    TANH: dwe,
-    TEXT: fwe,
-    TEXTAFTER: hwe,
-    TEXTBEFORE: pwe,
-    TEXTJOIN: mwe,
-    TEXTSPLIT: gwe,
-    TIME: vwe,
-    TIMEVALUE: bwe,
-    TOCOL: ywe,
-    TODAY: wwe,
-    TOROW: xwe,
-    TRANSPOSE: Ewe,
-    TREND: Cwe,
-    TRIM: Awe,
-    TRIMMEAN: kwe,
-    TRUE: Swe,
-    TRUNC: Twe,
-    TYPE: Nwe,
-    UNICHAR: Rwe,
-    UNICODE: Iwe,
-    UNIQUE: _we,
-    UPPER: Dwe,
-    VALUE: Owe,
+    TAKE: takeFunctionSpec,
+    TAN: tanFunctionSpec,
+    TANH: tanhFunctionSpec,
+    TEXT: textFunctionSpec,
+    TEXTAFTER: textafterFunctionSpec,
+    TEXTBEFORE: textbeforeFunctionSpec,
+    TEXTJOIN: textjoinFunctionSpec,
+    TEXTSPLIT: textsplitFunctionSpec,
+    TIME: timeFunctionSpec,
+    TIMEVALUE: timevalueFunctionSpec,
+    TOCOL: tocolFunctionSpec,
+    TODAY: todayFunctionSpec,
+    TOROW: torowFunctionSpec,
+    TRANSPOSE: transposeFunctionSpec,
+    TREND: trendFunctionSpec,
+    TRIM: trimFunctionSpec,
+    TRIMMEAN: trimmeanFunctionSpec,
+    TRUE: trueFunctionSpec,
+    TRUNC: truncFunctionSpec,
+    TYPE: typeFunctionSpec,
+    UNICHAR: unicharFunctionSpec,
+    UNICODE: unicodeFunctionSpec,
+    UNIQUE: uniqueFunctionSpec,
+    UPPER: upperFunctionSpec,
+    VALUE: valueFunctionSpec,
     "VAR.P": { family: "distribution", signature: "number1, [number2], …" },
     "VAR.S": { family: "distribution", signature: "number1, [number2], …" },
-    VARA: Mwe,
-    VARPA: jwe,
-    VLOOKUP: Fwe,
-    VSTACK: Bwe,
-    WEEKDAY: Lwe,
-    WEEKNUM: Pwe,
+    VARA: varaFunctionSpec,
+    VARPA: varpaFunctionSpec,
+    VLOOKUP: vlookupFunctionSpec,
+    VSTACK: vstackFunctionSpec,
+    WEEKDAY: weekdayFunctionSpec,
+    WEEKNUM: weeknumFunctionSpec,
     "WEIBULL.DIST": {
       family: "distribution",
       signature: "x, alpha, beta, cumulative",
     },
-    WORKDAY: Uwe,
+    WORKDAY: workdayFunctionSpec,
     "WORKDAY.INTL": {
       family: "date",
       signature: "startDate, days, weekend, holidays",
     },
-    XIRR: $we,
-    XLOOKUP: zwe,
-    XMATCH: Vwe,
-    XNPV: Wwe,
-    XOR: Hwe,
-    YEAR: qwe,
-    YEARFRAC: Xwe,
-    YIELD: Gwe,
+    XIRR: xirrFunctionSpec,
+    XLOOKUP: xlookupFunctionSpec,
+    XMATCH: xmatchFunctionSpec,
+    XNPV: xnpvFunctionSpec,
+    XOR: xorFunctionSpec,
+    YEAR: yearFunctionSpec,
+    YEARFRAC: yearfracFunctionSpec,
+    YIELD: yieldFunctionSpec,
     "Z.TEST": { family: "distribution", signature: "array, x, [sigma]" },
   },
-  Zwe = new Set(Fc),
-  S3 = (e, r) => r.includes(e),
-  fW = [
+  localFunctionNameSet = new Set(builtinFunctionNames),
+  arrayIncludesValue = (e, r) => r.includes(e),
+  functionBrowserCategories = [
     {
       id: "database",
       title: "Database summaries",
@@ -995,7 +1302,7 @@ const Ume = { family: "local", signature: "number" },
         "General calculation, text, date, reference and reusable formulas.",
     },
   ],
-  Kwe = [
+  regressionFunctionNames = [
     "SLOPE",
     "RSQ",
     "STEYX",
@@ -1009,8 +1316,8 @@ const Ume = { family: "local", signature: "number" },
     "TREND",
     "PEARSON",
   ],
-  Ywe = ["MINVERSE", "MDETERM", "MMULT", "MUNIT"],
-  Jwe = [
+  matrixFunctionNames = ["MINVERSE", "MDETERM", "MMULT", "MUNIT"],
+  financialFunctionNames = [
     "IPMT",
     "PPMT",
     "DB",
@@ -1032,7 +1339,7 @@ const Ume = { family: "local", signature: "number" },
     "SYD",
     "DDB",
   ],
-  zT = Object.freeze({
+  connectorFunctionFamilies = Object.freeze({
     CUBEVALUE: "cube",
     CUBEMEMBER: "cube",
     CUBEMEMBERPROPERTY: "cube",
@@ -1054,23 +1361,24 @@ const Ume = { family: "local", signature: "number" },
     CALL: "actuarial",
     "REGISTER.ID": "actuarial",
   });
-function Qwe(e) {
-  if (((e = e.toUpperCase()), S3(e, AR))) return "database";
-  if (Kwe.includes(e)) return "regression";
-  if (Ywe.includes(e)) return "matrix";
-  if (Jwe.includes(e)) return "financial";
+function classifyFunctionFamily(e) {
+  if (((e = e.toUpperCase()), arrayIncludesValue(e, databaseFunctionNames)))
+    return "database";
+  if (regressionFunctionNames.includes(e)) return "regression";
+  if (matrixFunctionNames.includes(e)) return "matrix";
+  if (financialFunctionNames.includes(e)) return "financial";
   if (e === "CONVERT") return "engineering";
-  if (S3(e, QN)) return "statistics";
-  if (zT[e]) return zT[e];
+  if (arrayIncludesValue(e, statisticalFunctionNames)) return "statistics";
+  if (connectorFunctionFamilies[e]) return connectorFunctionFamilies[e];
   if (e.startsWith("CUBE")) return "cube";
-  const r = dW[e]?.family;
+  const r = functionSpecsByName[e]?.family;
   return r === "statistical"
     ? "statistics"
     : r === "distribution" || r === "engineering" || r === "financial"
       ? r
       : "other";
 }
-const exe = {
+const familyResultContracts = {
   database: {
     output: "Selected-field aggregate or single DGET value",
     limits:
@@ -1166,11 +1474,11 @@ const exe = {
     tests: "tests/formula-extended.test.ts;tests/core.test.ts",
   },
 };
-function d_(e) {
+function buildFunctionCatalogEntry(e) {
   const r = e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
-    t = Qwe(r),
-    n = exe[t],
-    o = Zwe.has(r);
+    t = classifyFunctionFamily(r),
+    n = familyResultContracts[t],
+    o = localFunctionNameSet.has(r);
   return {
     name: r,
     family: t,
@@ -1180,9 +1488,11 @@ function d_(e) {
         ? "connector-required"
         : "unimplemented",
     inputs:
-      dW[r]?.signature ??
+      functionSpecsByName[r]?.signature ??
       "Not adopted; consult the source function or add-in contract.",
-    outputs: o ? ($T[r] ?? n.output) : "No local implementation",
+    outputs: o
+      ? (functionDescriptions[r] ?? n.output)
+      : "No local implementation",
     errors: [
       ...n.errors,
       "#LIMIT!",
@@ -1199,7 +1509,7 @@ function d_(e) {
       : null,
     excelVerification: { status: "not-run", version: null, evidence: null },
     limits:
-      (S3(r, VS)
+      (arrayIncludesValue(r, dateFunctionNames)
         ? "Gregorian 1900 serials 0–2958465 (compatibility serial 60) or 1904 serials 0–2957003; full-year ISO/configured MDY or DMY text; recorded IANA-zone clock shared per calculation. Up to 1000 holiday inputs, 366000 business-day offsets/date spans. The date system persists in native JSON and XLSX; text order and time zone are native JSON only. DATEDIF MD/YD and US day-count edge conventions follow the documented local policy; independent Excel parity unverified."
         : n.limits) +
       (o
@@ -1209,7 +1519,7 @@ function d_(e) {
         ? " Unseeded runtime pseudorandom values are stable within the revision calculation and refresh on recalculation. They are not reproducible audit samples. RANDBETWEEN uses ceil(bottom)/floor(top) and refuses bounds or inclusive spans outside safe integers."
         : ""),
     evidence: o
-      ? S3(r, VS)
+      ? arrayIncludesValue(r, dateFunctionNames)
         ? [
             "tests/date-calendar.test.ts",
             "tests/date-calendar-integration.test.ts",
@@ -1219,12 +1529,19 @@ function d_(e) {
       : [],
   };
 }
-function hW() {
-  return [...new Set([...Fc, ...Object.keys(zT)])].sort().map(d_);
+function buildFunctionCatalog() {
+  return [
+    ...new Set([
+      ...builtinFunctionNames,
+      ...Object.keys(connectorFunctionFamilies),
+    ]),
+  ]
+    .sort()
+    .map(buildFunctionCatalogEntry);
 }
-function txe() {
-  const e = hW();
-  return fW.map((r) => ({
+function buildFunctionBrowserGroups() {
+  const e = buildFunctionCatalog();
+  return functionBrowserCategories.map((r) => ({
     ...r,
     adopted: e
       .filter((t) => t.family === r.id && t.status === "local")
@@ -1235,7 +1552,7 @@ function txe() {
     excelVersionVerified: false,
   }));
 }
-function rxe({
+function FunctionAndNameDialog({
   mode,
   workbook,
   sheetId,
@@ -1246,7 +1563,7 @@ function rxe({
   onInsertFormula,
 }) {
   var de, he;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     c = workbook.sheets.find((se) => se.id === sheetId),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState("SUM"),
@@ -1264,7 +1581,7 @@ function rxe({
     [T, N] = ne.useState(null),
     [R, L] = ne.useState("100,0.2"),
     [$, U] = ne.useState(""),
-    G = $p(w),
+    G = parseFormulaTree(w),
     H = (se, we) => {
       (_ || B(JSON.stringify(workbook)), C(true), N(null), U(""), se(we));
     },
@@ -1275,11 +1592,14 @@ function rxe({
     X$1 = (se) =>
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
-      () => Fc.filter((se) => se.toLowerCase().includes(h.toLowerCase())),
+      () =>
+        builtinFunctionNames.filter((se) =>
+          se.toLowerCase().includes(h.toLowerCase()),
+        ),
       [h],
     ),
     q = `=${p}(${v})`,
-    W = d_(p),
+    W = buildFunctionCatalogEntry(p),
     K = ne.useMemo(() => {
       if (mode !== "function") return "";
       const se = range.split(":")[0].replace(/\$/g, "").toUpperCase(),
@@ -1292,7 +1612,7 @@ function rxe({
           ),
         };
       try {
-        return String(Vn(we)(sheetId, se) ?? "");
+        return String(calculateWorkbookWithSettings(we)(sheetId, se) ?? "");
       } catch {
         return "Check the function arguments.";
       }
@@ -1338,7 +1658,7 @@ function rxe({
               "Rename separately from changing the definition or comment. Existing scope cannot be changed.",
             );
           (N(
-            Ty(
+            applyDefinedNameOperation(
               workbook,
               {
                 kind: "rename",
@@ -1352,7 +1672,7 @@ function rxe({
             V(""));
           return;
         }
-        const Ae = Ty(
+        const Ae = applyDefinedNameOperation(
             workbook,
             Ee
               ? {
@@ -1364,7 +1684,7 @@ function rxe({
               : { kind: "create", definition: we },
             { readOnly },
           ),
-          ye = q6(workbook, Ae, { readOnly });
+          ye = assertNamePreviewCurrent(workbook, Ae, { readOnly });
         (ye !== workbook &&
           onWorkbookChange(ye, `${Ee ? "Edit" : "Define"} name: ${we.name}`),
           te());
@@ -1388,11 +1708,14 @@ function rxe({
               Me.scopeSheetId === Ee.scopeSheetId
             ),
         );
-        const Ae = Ty(we, { kind: "create", definition: Ee }).next,
+        const Ae = applyDefinedNameOperation(we, {
+            kind: "create",
+            definition: Ee,
+          }).next,
           ye = A || sheetId,
           Te = Ae.sheets.find((Me) => Me.id === ye);
         Te.cells[se] = { raw: `=${b.trim()}${G ? `(${R})` : ""}` };
-        const Pe = Vn(Ae),
+        const Pe = calculateWorkbookWithSettings(Ae),
           qe = Pe(ye, se),
           ht = Pe.getNamedFormulaDiagnostics().find(
             (Me) => Me.sheetId === ye && Me.address === se,
@@ -1440,7 +1763,7 @@ function rxe({
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Search functions" }),
+                    i.jsx(LocalizedText, { children: "Search functions" }),
                     i.jsx("input", {
                       autoFocus: true,
                       "aria-label": text("Search functions"),
@@ -1461,7 +1784,8 @@ function rxe({
                       value: p,
                       onChange: (se) => {
                         (m(se.target.value),
-                          UT[se.target.value] === "" && g(""));
+                          functionArgumentSignatures[se.target.value] === "" &&
+                            g(""));
                       },
                       lang: language("Available functions"),
                       "data-ui-label": "Available functions",
@@ -1478,7 +1802,7 @@ function rxe({
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Arguments" }),
+                            i.jsx(LocalizedText, { children: "Arguments" }),
                             i.jsx("input", {
                               "aria-label": text("Function arguments"),
                               value: v,
@@ -1490,14 +1814,14 @@ function rxe({
                           ],
                         }),
                         i.jsx("p", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Separate arguments with commas. Put text inside double quotes. Use cell ranges, defined names or table columns.",
                           }),
                         }),
                         p === "SUBTOTAL" &&
                           i.jsx("p", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children:
                                 "Function numbers 101–111 exclude hidden and collapsed outline rows. The quick text filter is view-only and does not change calculations. An external host can supply a separate filtered-row context.",
                             }),
@@ -1513,9 +1837,9 @@ function rxe({
                         }),
                         i.jsxs("small", {
                           children: [
-                            Fc.length,
+                            builtinFunctionNames.length,
                             " ",
-                            i.jsx(M, {
+                            i.jsx(LocalizedText, {
                               children:
                                 "available functions. Compatibility and calculation limits are documented with the package.",
                             }),
@@ -1524,20 +1848,20 @@ function rxe({
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Function support and limits",
                               }),
                             }),
                             i.jsx("p", { children: W.outputs }),
                             i.jsxs("p", {
                               children: [
-                                i.jsx(M, { children: "Errors: " }),
+                                i.jsx(LocalizedText, { children: "Errors: " }),
                                 W.errors.join(", "),
                               ],
                             }),
                             i.jsx("p", { children: W.limits }),
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Local known-answer tolerance: absolute 0.000001; relative 0.000001. Verified Excel version: not run.",
                               }),
@@ -1552,7 +1876,7 @@ function rxe({
                   children: [
                     i.jsx("button", {
                       onClick: onClose,
-                      children: i.jsx(M, { children: "Cancel" }),
+                      children: i.jsx(LocalizedText, { children: "Cancel" }),
                     }),
                     i.jsx("button", {
                       className: "formula-primary",
@@ -1560,7 +1884,9 @@ function rxe({
                       onClick: () => {
                         Q || (onInsertFormula(q), onClose());
                       },
-                      children: i.jsx(M, { children: "Insert formula" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Insert formula",
+                      }),
                     }),
                   ],
                 }),
@@ -1577,16 +1903,24 @@ function rxe({
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Name" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Name",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Refers to" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Refers to",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Scope" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Scope",
+                                }),
                               }),
                               i.jsx("th", {
-                                children: i.jsx(M, { children: "Actions" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Actions",
+                                }),
                               }),
                             ],
                           }),
@@ -1601,11 +1935,11 @@ function rxe({
                                     i.jsxs("td", {
                                       children: [
                                         se.name,
-                                        $p(se.refersTo) &&
+                                        parseFormulaTree(se.refersTo) &&
                                           i.jsxs("small", {
                                             children: [
                                               " ",
-                                              i.jsx(M, {
+                                              i.jsx(LocalizedText, {
                                                 children: "· Reusable formula",
                                               }),
                                             ],
@@ -1640,7 +1974,7 @@ function rxe({
                                               k(se.scopeSheetId ?? ""),
                                               I(se.comment ?? ""));
                                           },
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Edit",
                                           }),
                                         }),
@@ -1649,23 +1983,28 @@ function rxe({
                                           "aria-label": `Delete name ${se.name}`,
                                           onClick: () => {
                                             try {
-                                              const Ae = Ty(
+                                              const Ae =
+                                                  applyDefinedNameOperation(
+                                                    workbook,
+                                                    {
+                                                      kind: "delete",
+                                                      name: se.name,
+                                                      ...(se.scopeSheetId
+                                                        ? {
+                                                            scopeSheetId:
+                                                              se.scopeSheetId,
+                                                          }
+                                                        : {}),
+                                                    },
+                                                    { readOnly: Q },
+                                                  ),
+                                                ye = assertNamePreviewCurrent(
                                                   workbook,
+                                                  Ae,
                                                   {
-                                                    kind: "delete",
-                                                    name: se.name,
-                                                    ...(se.scopeSheetId
-                                                      ? {
-                                                          scopeSheetId:
-                                                            se.scopeSheetId,
-                                                        }
-                                                      : {}),
+                                                    readOnly: Q,
                                                   },
-                                                  { readOnly: Q },
-                                                ),
-                                                ye = q6(workbook, Ae, {
-                                                  readOnly: Q,
-                                                });
+                                                );
                                               (ye !== workbook &&
                                                 onWorkbookChange(
                                                   ye,
@@ -1676,7 +2015,7 @@ function rxe({
                                               X$1(Ae);
                                             }
                                           },
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Delete",
                                           }),
                                         }),
@@ -1693,7 +2032,7 @@ function rxe({
                     }),
                     !((he = workbook.definedNames) != null && he.length) &&
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "No names defined. Give a selected range a readable name below.",
                         }),
@@ -1705,7 +2044,7 @@ function rxe({
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Name" }),
+                        i.jsx(LocalizedText, { children: "Name" }),
                         i.jsx("input", {
                           autoFocus: true,
                           "aria-label": text("Defined name"),
@@ -1719,7 +2058,7 @@ function rxe({
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Scope" }),
+                        i.jsx(LocalizedText, { children: "Scope" }),
                         i.jsxs("select", {
                           "aria-label": text("Name scope"),
                           value: A,
@@ -1746,7 +2085,7 @@ function rxe({
                     i.jsxs("label", {
                       className: "formula-wide",
                       children: [
-                        i.jsx(M, { children: "Refers to" }),
+                        i.jsx(LocalizedText, { children: "Refers to" }),
                         i.jsx("input", {
                           "aria-label": text("Name refers to"),
                           value: w,
@@ -1760,7 +2099,7 @@ function rxe({
                     i.jsxs("label", {
                       className: "formula-wide",
                       children: [
-                        i.jsx(M, { children: "Comment" }),
+                        i.jsx(LocalizedText, { children: "Comment" }),
                         i.jsx("input", {
                           "aria-label": text("Name comment"),
                           value: F,
@@ -1788,12 +2127,14 @@ function rxe({
                         (H(E, "=LAMBDA(amount,rate,amount*(1-rate))"),
                           b || y("NetAmount"));
                       },
-                      children: i.jsx(M, { children: "Use LAMBDA template" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Use LAMBDA template",
+                      }),
                     }),
                     G &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Test arguments" }),
+                          i.jsx(LocalizedText, { children: "Test arguments" }),
                           i.jsx("input", {
                             "aria-label": text("Name test arguments"),
                             value: R,
@@ -1808,7 +2149,9 @@ function rxe({
                     i.jsx("button", {
                       disabled: !b.trim(),
                       onClick: oe,
-                      children: i.jsx(M, { children: "Test definition" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Test definition",
+                      }),
                     }),
                   ],
                 }),
@@ -1821,7 +2164,7 @@ function rxe({
                     children: [
                       $,
                       " ",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           "· Preview only; the workbook has not changed.",
                       }),
@@ -1835,10 +2178,10 @@ function rxe({
                     children: [
                       i.jsxs("h3", {
                         children: [
-                          i.jsx(M, { children: "Rename " }),
+                          i.jsx(LocalizedText, { children: "Rename " }),
                           T.before?.name,
                           " ",
-                          i.jsx(M, { children: "to " }),
+                          i.jsx(LocalizedText, { children: "to " }),
                           T.after?.name,
                         ],
                       }),
@@ -1846,13 +2189,13 @@ function rxe({
                         children: [
                           T.changes.length,
                           " ",
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "formulas or definitions will be rewritten. ",
                           }),
                           T.dependencies.length,
                           " ",
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children:
                               "dependent locations were found. Values, formatting and review annotations are retained. Apply commits the reviewed changes together.",
                           }),
@@ -1861,7 +2204,9 @@ function rxe({
                       i.jsxs("p", {
                         children: [
                           i.jsx("strong", {
-                            children: i.jsx(M, { children: "Definition:" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Definition:",
+                            }),
                           }),
                           " ",
                           i.jsx("code", {
@@ -1882,15 +2227,19 @@ function rxe({
                               children: i.jsxs("tr", {
                                 children: [
                                   i.jsx("th", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children: "Location",
                                     }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, { children: "Before" }),
+                                    children: i.jsx(LocalizedText, {
+                                      children: "Before",
+                                    }),
                                   }),
                                   i.jsx("th", {
-                                    children: i.jsx(M, { children: "After" }),
+                                    children: i.jsx(LocalizedText, {
+                                      children: "After",
+                                    }),
                                   }),
                                 ],
                               }),
@@ -1924,7 +2273,7 @@ function rxe({
                       i.jsxs("details", {
                         children: [
                           i.jsx("summary", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Dependent locations",
                             }),
                           }),
@@ -1937,13 +2286,17 @@ function rxe({
                       }),
                       i.jsx("button", {
                         onClick: () => N(null),
-                        children: i.jsx(M, { children: "Cancel rename" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Cancel rename",
+                        }),
                       }),
                       i.jsx("button", {
                         disabled: Q,
                         onClick: () => {
                           try {
-                            const Ee = q6(workbook, T, { readOnly: Q });
+                            const Ee = assertNamePreviewCurrent(workbook, T, {
+                              readOnly: Q,
+                            });
                             (Ee !== workbook &&
                               onWorkbookChange(
                                 Ee,
@@ -1954,7 +2307,9 @@ function rxe({
                             X$1(Ee);
                           }
                         },
-                        children: i.jsx(M, { children: "Apply rename" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Apply rename",
+                        }),
                       }),
                     ],
                   }),
@@ -1969,11 +2324,13 @@ function rxe({
                     O !== null &&
                       i.jsx("button", {
                         onClick: te,
-                        children: i.jsx(M, { children: "New name" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "New name",
+                        }),
                       }),
                     i.jsx("button", {
                       onClick: onClose,
-                      children: i.jsx(M, { children: "Close" }),
+                      children: i.jsx(LocalizedText, { children: "Close" }),
                     }),
                     i.jsx("button", {
                       className: "formula-primary",
@@ -1989,11 +2346,18 @@ function rxe({
     }),
   });
 }
-const dS = Object.freeze({
+const nameScanLimits = Object.freeze({
   maxLocations: 1e4,
   maxCharacters: 2e6,
   maxFindings: 2e3,
   maxNameDepth: 32,
 });
 
-export { dS, d_, fW, hW, rxe, txe };
+export {
+  nameScanLimits,
+  buildFunctionCatalogEntry,
+  functionBrowserCategories,
+  buildFunctionCatalog,
+  FunctionAndNameDialog,
+  buildFunctionBrowserGroups,
+};

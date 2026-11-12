@@ -22,151 +22,261 @@ import {
   Download,
   ShieldCheck,
 } from "lucide-react";
-import { es } from "./01-core-schemas-and-hashing.js";
-import { Ig, Mt, b1, cx, ux } from "./02-financial-functions.js";
+import { isDeepFrozenValue } from "./01-core-schemas-and-hashing.js";
 import {
-  Af,
-  CP,
-  DB,
-  Dg,
-  Dw,
-  Fw,
-  Gy,
-  JS,
-  KS,
-  NQ,
-  Np,
-  Og,
+  maxRowHeight,
+  workbookLimits,
+  minRowHeight,
+  maxColumnWidth,
+  minColumnWidth,
+} from "./02-financial-functions.js";
+import {
+  formatNumberWithPattern,
+  addWorksheet,
+  findDataValidationsInRange,
+  defaultRowHeightOf,
+  cellStyleToCss,
+  evaluateConditionalFormatRules,
+  setFreezePanes,
+  setSplitPanes,
+  describeNamedStyleFallback,
+  renameWorkbook,
+  enumerateSelectionCells,
+  defaultColumnWidthOf,
   Pv,
-  RC,
-  RN,
-  SE,
-  SR,
-  Ta,
-  Vn,
-  WR,
+  findOccupiedRangeBounds,
+  textWrapToCss,
+  getImportedNumberFormatWarning,
+  carryCalculatorRecordForward,
+  formatOccupiedRangeAddress,
+  calculateWorkbookWithSettings,
+  requireRetainedXlsxSource,
   _t,
-  aD,
-  bB,
+  anchorsMatchOnAxis,
+  collectStyleFallbackWarnings,
   cn,
-  ct,
-  f0,
-  ff,
-  gx,
-  jB,
-  jN,
-  jQ,
+  parseRangeAddress,
+  applyFilterConditions,
+  parseSelectionAreas,
+  touchWorkbookModifiedAt,
+  assertNoStopValidationIssues,
+  DataValidationError,
+  applyAutoSum,
   lD,
-  p0,
-  rh,
-  t5,
-  ul,
-  ut,
+  applyCellPatchTransaction,
+  buildCanonicalWorkbookSnapshot,
+  createBlankWorkbook,
+  createAxisVisibilityIndex,
+  columnIndexToLetters,
   vx,
-  y1,
-  ys,
+  countSelectionCells,
+  resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
 import {
-  $2,
+  buildFillPreview,
   $ae,
-  Aae,
-  Bae,
-  Dr,
-  Gm,
-  IC,
-  J5,
-  Lae,
-  M,
-  Mae,
-  Qy,
-  Uae,
-  aI,
-  ci,
-  i$,
-  lI,
-  zae,
+  buildClipboardSnapshot,
+  WorkbookMessagesProvider,
+  useWorkbookMessages,
+  parseDateCellEntry,
+  withExtensionHostScope,
+  findFormulaReferenceSpan,
+  createEmptyAssistantConversation,
+  LocalizedText,
+  parseLocalizedCellEntry,
+  applyFillPreview,
+  replaceFormulaReferenceSpan,
+  formatCellEntryForEdit,
+  LocalizedNumberField,
+  buildPastePreview,
+  formatLocalizedNumberDisplay,
+  autoCloseFormulaParens,
 } from "./04-cell-input-paste-and-fill.js";
-import { Hse, qse } from "./05-add-ins-and-custom-functions.js";
-import { H1, La, OC, _$, ow } from "./07-xlsx-archive-reader.js";
-import { Sk, V$, gI, x7 } from "./08-xlsx-export-and-preservation.js";
-import { FC, Nue, Sue, Tue, W$ } from "./09-workbook-links.js";
-import { Fue, X$ } from "./10-source-import-dialog.js";
-import { $ue, Oo, zue } from "./11-workbook-formats-dialog.js";
-import { ice, nce } from "./13-consolidation-dialog.js";
-import { bce, vce, wce } from "./15-data-model-dialog.js";
-import { Hce } from "./18-transformation-recipes-dialog.js";
-import { Gce, Xce } from "./19-filter-views-dialog.js";
-import { Kce, X2, Yce, Zce, s3 } from "./20-calculation-options-and-sources.js";
-import { Ede, Sz } from "./21-aging-and-materiality-screens.js";
-import { Ade, Cde, Sde, jI } from "./22-themes-and-cell-styles.js";
-import { Fz, Nde, Rde } from "./23-format-cells-dialog.js";
-import { Bde, Dde, FI, Pde, Ude, sw } from "./24-merge-and-audit-analysis.js";
-import { Hde } from "./26-workbook-ribbon.js";
-import { $z } from "./28-duplicate-review-and-structure.js";
-import { dfe, sfe } from "./29-conditional-formatting-dialog.js";
-import { pfe } from "./30-table-and-pivot-builder.js";
-import { vfe } from "./31-pivot-explore-and-slicers.js";
-import { Cfe, Wz } from "./32-drawing-and-chart-export.js";
-import { Bme } from "./33-page-setup-and-print.js";
-import { rxe } from "./34-function-browser-and-names.js";
-import { ixe, lxe, sxe } from "./35-formula-compatibility-report.js";
-import { fxe, mxe } from "./36-watch-window-and-goal-seek.js";
-import { Sxe, kxe } from "./38-data-analysis-dialog.js";
-import { Fxe } from "./39-report-outputs.js";
-import { $xe, zxe } from "./40-what-if-analysis.js";
-import { Jxe, Kxe, Yxe, Zxe } from "./41-automation-and-scripts.js";
-import { e4e, t4e } from "./42-combine-populations.js";
-import { s4e } from "./43-text-cleanup.js";
-import { l4e } from "./44-clean-and-reshape.js";
-import { m4e, p4e } from "./45-sorting-and-worksheets.js";
-import { v4e } from "./46-workbook-manager.js";
-import { WW, w4e, y4e } from "./47-fill-and-paste-special.js";
-import { I4e, M4e } from "./48-format-cells-and-move.js";
-import { B4e, j4e } from "./49-outlines-and-comments.js";
-import { P4e } from "./50-materiality-screen.js";
-import { Mj, Q4e, Z4e, fg } from "./51-pattern-checks-and-citations.js";
-import { u2e } from "./52-workbook-comparison.js";
 import {
-  C2e,
-  CS,
-  E2e,
-  R2e,
-  T2e,
+  CustomFunctionReviewBanner,
+  AddInsAndCustomFunctionsDialog,
+} from "./05-add-ins-and-custom-functions.js";
+import {
+  importWorkbookFile,
+  FileProcessingError,
+  toFileProcessingError,
+  importDelimitedFile,
+  importAutomationFile,
+} from "./07-xlsx-archive-reader.js";
+import {
+  encodeNativeWorkbook,
+  exportWorksheetToCsv,
+  exportWorkbookToXlsx,
+  x7,
+} from "./08-xlsx-export-and-preservation.js";
+import {
+  useOperationScope,
+  WorkbookLinksDialog,
+  buildSourceImportRecord,
+  WorkbookLinkStatusBadge,
+  operationScopeContext,
+} from "./09-workbook-links.js";
+import {
+  SourceImportDialog,
+  XlsxConversionReview,
+} from "./10-source-import-dialog.js";
+import {
+  FormatConversionDialog,
+  WorkbookRevisionConflictError,
+  createWorkbookSession,
+} from "./11-workbook-formats-dialog.js";
+import {
+  ConsolidationDialog,
+  ConsolidationStatusBanner,
+} from "./13-consolidation-dialog.js";
+import {
+  DataModelSnapshotNotice,
+  DataModelDialog,
+  useDialogFocusTrap,
+} from "./15-data-model-dialog.js";
+import { TransformationRecipesDialog } from "./18-transformation-recipes-dialog.js";
+import {
+  ValidationReviewDialog,
+  FilterViewsDialog,
+} from "./19-filter-views-dialog.js";
+import {
+  GridContextMenu,
+  validateProposedCalculation,
+  WorkbookCapacityLimits,
+  CalculationOptionsDialog,
+  buildAssistantSelectionContext,
+} from "./20-calculation-options-and-sources.js";
+import {
+  AgingScheduleScreen,
+  requestAssistantAnswer,
+} from "./21-aging-and-materiality-screens.js";
+import {
+  parseGoToReference,
+  ConnectionStatusNotice,
+  ThemesAndCellStylesDialog,
+  CellValuePreview,
+} from "./22-themes-and-cell-styles.js";
+import {
+  ConditionalFormatIndicator,
+  FormatCellsDialog,
+  ConditionalFormattingRulesManager,
+} from "./23-format-cells-dialog.js";
+import {
+  useCalculationRun,
+  MergeCellsPreviewDialog,
+  buildSampleLedgerWorkbook,
+  runAuditAnalysis,
+  recordCrossWorkbookImport,
+  applyWorkbookChange,
+} from "./24-merge-and-audit-analysis.js";
+import { WorkbookRibbon } from "./26-workbook-ribbon.js";
+import { DuplicateReviewDialog } from "./28-duplicate-review-and-structure.js";
+import {
+  PivotResultsStatusBar,
+  DataToolDialogRouter,
+} from "./29-conditional-formatting-dialog.js";
+import { TableToolsDialog } from "./30-table-and-pivot-builder.js";
+import { PivotExplorerDialog } from "./31-pivot-explore-and-slicers.js";
+import {
+  DrawingObjectOverlay,
+  PicturePropertiesDialog,
+} from "./32-drawing-and-chart-export.js";
+import { PageSetupDialog } from "./33-page-setup-and-print.js";
+import { FunctionAndNameDialog } from "./34-function-browser-and-names.js";
+import {
+  FormulaCompatibilityDialog,
+  CalculationInspectorDialog,
+  EvaluateFormulaDialog,
+} from "./35-formula-compatibility-report.js";
+import {
+  FormulaWatchWindow,
+  GoalSeekDialog,
+} from "./36-watch-window-and-goal-seek.js";
+import {
+  AnalysisSnapshotNotice,
+  DataAnalysisDialog,
+} from "./38-data-analysis-dialog.js";
+import { ReportOutputsDialog } from "./39-report-outputs.js";
+import {
+  WhatIfAnalysisDialog,
+  DelimitedImportExportDialog,
+} from "./40-what-if-analysis.js";
+import {
+  AutomationScriptsDialog,
+  removeAutomationArtifact,
+  runApprovedMigration,
+  preserveAutomationArtifact,
+} from "./41-automation-and-scripts.js";
+import {
+  CombinePopulationsDialog,
+  TextToColumnsDialog,
+} from "./42-combine-populations.js";
+import { TextCleanupDialog } from "./43-text-cleanup.js";
+import { CleanAndReshapeDialog } from "./44-clean-and-reshape.js";
+import {
+  WorksheetTabBar,
+  CustomSortDialog,
+} from "./45-sorting-and-worksheets.js";
+import { WorkbookManagerDialog } from "./46-workbook-manager.js";
+import {
+  createCutSourceSnapshot,
+  FillPreviewDialog,
+  PasteSpecialDialog,
+} from "./47-fill-and-paste-special.js";
+import { MoveCellsDialog, M4e } from "./48-format-cells-and-move.js";
+import {
+  ReviewToolsPanel,
+  OutlineToolsPanel,
+} from "./49-outlines-and-comments.js";
+import { MaterialityRiskScreen } from "./50-materiality-screen.js";
+import {
+  buildAnswerCitations,
+  AssistantAnswerEvidence,
+  PatternCheckDialog,
+  evaluateAnswerEvidence,
+} from "./51-pattern-checks-and-citations.js";
+import { WorkbookComparisonDialog } from "./52-workbook-comparison.js";
+import {
+  SplitPaneLayout,
+  buildVisibleAxisLayout,
+  useSplitPaneSizes,
+  autoFitColumnWidths,
+  createTextMeasurer,
   Tp,
-  Uj,
-  _2e,
-  dH,
-  fH,
-  up,
-  w2e,
-  y2e,
+  sliceVisibleAxis,
+  autoFitRowHeights,
+  isWithinFormulaSuggestions,
+  FormulaSuggestionList,
+  logicalToPhysicalPixels,
+  resolveCellNavigation,
+  FindReplaceDialog,
 } from "./53-find-replace-go-to.js";
 import {
-  $2e,
-  A2,
-  P2e,
-  V2e,
-  xH,
-  yH,
-  z2e,
+  instrumentWorkbookPersistence,
+  computeVirtualizedRange,
+  WorkbookSaveConflictDialog,
+  WorkbookHealthDialog,
+  createWorkbookDiagnosticsMonitor,
+  saveWorkbookWithLock,
+  findRecoverableCheckpoint,
 } from "./54-workbook-save-conflicts.js";
 import {
-  Gv,
+  isPromiseLike,
   Jd,
-  K2e,
+  ExternalSourceStatusPanel,
   NS,
-  Q2e,
-  RH,
-  TS,
+  createRandomUuid,
+  workbookInstanceKey,
+  chainMaybePromise,
   Vj,
-  Y2e,
-  eEe,
-  tEe,
+  ExternalDataRefreshDialog,
+  LazyAssistantChat,
+  LazyAssistantChatMarkdown,
   wy,
 } from "./55-external-source-refresh.js";
 
-function IH(e) {
-  const r = ne.useMemo(() => xH(), []),
+function WorkbookSyncBoundary(e) {
+  const r = ne.useMemo(() => createWorkbookDiagnosticsMonitor(), []),
     t = e.reliability ?? r,
     n = ne.useRef({
       propId: e.initialWorkbook?.id,
@@ -192,23 +302,23 @@ function IH(e) {
       },
       [e.onWorkbookLoaded],
     );
-  return i.jsx(Bae, {
+  return i.jsx(WorkbookMessagesProvider, {
     options: e.localization,
-    children: i.jsx(W$.Provider, {
+    children: i.jsx(operationScopeContext.Provider, {
       value: { ...e.fileProcessingOptions, reliability: t },
       children: i.jsx(
-        rEe,
+        MainWorksheetEditor,
         { ...e, reliability: t, onChange: o, onWorkbookLoaded: a },
         (e.persistenceKey ?? "session") +
           ":" +
           n.current.generation +
           ":" +
-          RH(e.workbookStore),
+          workbookInstanceKey(e.workbookStore),
       ),
     }),
   });
 }
-function rEe({
+function MainWorksheetEditor({
   extensions,
   linkedWorkbooks,
   onLinkedWorkbooksChange,
@@ -239,7 +349,7 @@ function rEe({
   onExternalProposalStaged,
 }) {
   var dc, Y, re, Et, Xr;
-  const V = ne.useMemo(() => xH(), []),
+  const V = ne.useMemo(() => createWorkbookDiagnosticsMonitor(), []),
     D = reliability ?? V,
     [B, _] = ne.useState(false),
     C =
@@ -248,15 +358,17 @@ function rEe({
       saveWarningMs <= 12e4
         ? saveWarningMs
         : 15e3,
-    { text, language } = Dr(),
-    R = Dr(),
-    L = (fe) => aI(fe, R.entryLocale),
+    { text, language } = useWorkbookMessages(),
+    R = useWorkbookMessages(),
+    L = (fe) => formatCellEntryForEdit(fe, R.entryLocale),
     $ = ne.useId(),
-    [U, G] = ne.useState(() => rh(initialWorkbook ?? t5())),
+    [U, G] = ne.useState(() =>
+      buildCanonicalWorkbookSnapshot(initialWorkbook ?? createBlankWorkbook()),
+    ),
     H = ne.useMemo(
       () =>
         U.extensions || (extensions != null && extensions.length)
-          ? IC(U, extensions)
+          ? withExtensionHostScope(U, extensions)
           : U,
       [U, extensions],
     ),
@@ -272,17 +384,17 @@ function rEe({
       H.sheets.find((fe) => !fe.hidden),
     Se = ne.useMemo(
       () =>
-        $2e(
+        instrumentWorkbookPersistence(
           workbookStore ??
             (persistenceKey
-              ? yH(
+              ? saveWorkbookWithLock(
                   {
                     getItem: (fe) => localStorage.getItem(fe),
                     setItem: (fe, Oe) => localStorage.setItem(fe, Oe),
                   },
                   persistenceKey,
                 )
-              : zue()),
+              : createWorkbookSession()),
           D,
         ),
       [workbookStore, persistenceKey, D],
@@ -305,7 +417,7 @@ function rEe({
     [ze, at] = ne.useState(),
     [_e, Ze] = ne.useState(null),
     lt = ne.useRef(null);
-  wce(lt);
+  useDialogFocusTrap(lt);
   const [be, ft] = ne.useState(null),
     pt = ne.useRef(null),
     Fe = ne.useRef(null),
@@ -320,11 +432,11 @@ function rEe({
     (bt(fe), cr([]));
   }
   function Ut(fe) {
-    const Oe = ff(fe);
+    const Oe = parseSelectionAreas(fe);
     (cr(Oe.slice(0, -1)), bt(Oe.at(-1)));
   }
   const Jt = ne.useMemo(() => [...St, Ye], [St, Ye]),
-    fr = ne.useMemo(() => Jt.map(ct), [Jt]),
+    fr = ne.useMemo(() => Jt.map(parseRangeAddress), [Jt]),
     br = Jt.join(", ");
   function rt() {
     if (Jt.length > 1)
@@ -420,7 +532,7 @@ function rEe({
       Or?.row,
       Or?.col,
     ].join(":"),
-    an = E2e(za),
+    an = useSplitPaneSizes(za),
     Ra = an.views[an.activeId],
     na = Ra.top,
     va = Ra.left;
@@ -436,7 +548,7 @@ function rEe({
     [Hs, vn] = ne.useState(""),
     [qs, hn] = ne.useState(""),
     [go, Cu] = ne.useState(false),
-    Yu = FC(),
+    Yu = useOperationScope(),
     au = ne.useRef(0),
     ba = ne.useRef(null);
   ne.useEffect(
@@ -457,7 +569,7 @@ function rEe({
     [$c, zc] = ne.useState(null),
     [Od, um] = ne.useState("2025-12-31"),
     [Ju, C0] = ne.useState(""),
-    [Md, A0] = ne.useState(Lae),
+    [Md, A0] = ne.useState(createEmptyAssistantConversation),
     [Xs, Bl] = ne.useState(null),
     [ml, Rf] = ne.useState(null),
     [gl, Ll] = ne.useState(null),
@@ -484,13 +596,16 @@ function rEe({
     (Gc(null), Zs(null), (ku.current = null));
   }
   const [, If] = ne.useState(0),
-    bl = Bde(H, calculationWorkerFactory, _f, D),
+    bl = useCalculationRun(H, calculationWorkerFactory, _f, D),
     _a = bl.calculation,
     Qr = _a.calculator,
     Kc = ne.useMemo(() => {
       if (!Ui || Ui.snapshot !== H) return { result: null, error: "" };
       try {
-        return { result: f0(H, he.id, Ui.definition, Qr), error: "" };
+        return {
+          result: applyFilterConditions(H, he.id, Ui.definition, Qr),
+          error: "",
+        };
       } catch (fe) {
         return {
           result: null,
@@ -503,13 +618,19 @@ function rEe({
     Yc = !!he.frozenRows,
     tc = ne.useMemo(() => Hr?.hiddenRows ?? cn(he, "row"), [he, Hr]),
     rc = ne.useMemo(() => cn(he, "column"), [he]),
-    ni = ne.useMemo(() => ul(he.rowCount, tc), [he.rowCount, tc]),
-    Sn = ne.useMemo(() => ul(he.colCount, rc), [he.colCount, rc]),
+    ni = ne.useMemo(
+      () => createAxisVisibilityIndex(he.rowCount, tc),
+      [he.rowCount, tc],
+    ),
+    Sn = ne.useMemo(
+      () => createAxisVisibilityIndex(he.colCount, rc),
+      [he.colCount, rc],
+    ),
     Su = Math.max(
       he.frozenRows ?? 0,
       zr || kn ? 1 : 0,
-      Hr && ct(Hr.context.range).firstRow === 0
-        ? ct(Hr.context.range).firstRow + 1
+      Hr && parseRangeAddress(Hr.context.range).firstRow === 0
+        ? parseRangeAddress(Hr.context.range).firstRow + 1
         : 0,
     ),
     Tu = he.frozenCols ?? 0;
@@ -520,17 +641,17 @@ function rEe({
       Be = Sn.next(fe.col, 1, true) ?? Sn.next(fe.col, -1, true);
     if (Oe === null || Be === null || Oe === undefined || Be === undefined)
       return;
-    const Ue = `${ut(Be)}${Oe + 1}`;
+    const Ue = `${columnIndexToLetters(Be)}${Oe + 1}`;
     (or(Ue), Rr(Ue), (qt.current = Ue), dr(Ue), Go(Ue));
   }, [xt, ni, Sn]);
-  const co = Dg(he),
-    Ks = Og(he),
+  const co = defaultRowHeightOf(he),
+    Ks = defaultColumnWidthOf(he),
     vi = Ao / 100,
     Es = vl ? 58 : 0,
     yl = ne.useRef(null),
     to = ne.useRef(null),
     Ld = ne.useRef(null),
-    Nu = ne.useMemo(() => T2e(), []),
+    Nu = ne.useMemo(() => createTextMeasurer(), []),
     ss = ne.useRef(null),
     Ys = ne.useRef(0),
     sr = ne.useRef({
@@ -568,9 +689,12 @@ function rEe({
         ),
       [H.reviewThreads, he.id],
     ),
-    ic = ne.useMemo(() => (he.merges ?? []).map(ct), [he.merges]),
-    ee = ne.useMemo(() => ct(Ye), [Ye]),
-    ie = ne.useMemo(() => y1(Jt), [Jt]),
+    ic = ne.useMemo(
+      () => (he.merges ?? []).map(parseRangeAddress),
+      [he.merges],
+    ),
+    ee = ne.useMemo(() => parseRangeAddress(Ye), [Ye]),
+    ie = ne.useMemo(() => countSelectionCells(Jt), [Jt]),
     ve = { sheetId: he.id, range: Ye },
     Ce = ne.useMemo(() => {
       try {
@@ -588,7 +712,10 @@ function rEe({
   ne.useEffect(() => {
     Ce.warning && hn(Ce.warning);
   }, [Ce.warning]);
-  const Ie = ne.useMemo(() => Fw(he, Qr, Ce.cells), [he, Qr, Ce]),
+  const Ie = ne.useMemo(
+      () => evaluateConditionalFormatRules(he, Qr, Ce.cells),
+      [he, Qr, Ce],
+    ),
     He = ne.useMemo(() => (fe) => Ie(fe).style, [Ie]),
     ot = Ie(xt).errors,
     $t = ne.useMemo(
@@ -622,7 +749,7 @@ function rEe({
     er = ne.useMemo(
       () =>
         (ie <= 500
-          ? Np(Jt).map((fe) => ({ address: fe }))
+          ? enumerateSelectionCells(Jt).map((fe) => ({ address: fe }))
           : Pt().filter(({ row, col }) => fr.some((Be) => Tp(Be, row, col)))
         )
           .map(({ address }) => Qr(he.id, address))
@@ -654,8 +781,8 @@ function rEe({
       return (
         kn &&
           Be.sort((Ue, Xe) => {
-            const gt = Qr(he.id, `${ut(kn.col)}${Ue + 1}`),
-              Nt = Qr(he.id, `${ut(kn.col)}${Xe + 1}`);
+            const gt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Ue + 1}`),
+              Nt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Xe + 1}`);
             return (
               (NS(gt) && NS(Nt)
                 ? gt - Nt
@@ -692,12 +819,12 @@ function rEe({
       [bn, he.rowHeights, ri],
     ),
     ln = ne.useMemo(
-      () => CS(he.rowCount, co, en, tc),
+      () => buildVisibleAxisLayout(he.rowCount, co, en, tc),
       [he.rowCount, co, en, tc],
     ),
     Xn = ne.useMemo(
       () =>
-        CS(
+        buildVisibleAxisLayout(
           he.colCount,
           Ks,
           {
@@ -713,15 +840,15 @@ function rEe({
     Dn = Array.from({ length: Ni }, (fe, Oe) => ni.logicalIndex(Oe)),
     Ln = Array.from({ length: yn }, (fe, Oe) => Sn.logicalIndex(Oe)),
     Gn = ne.useMemo(() => {
-      if (!_r) return Uj(ln, Ni);
+      if (!_r) return sliceVisibleAxis(ln, Ni);
       const fe = {};
       for (const [Oe, Be] of Object.entries(en)) {
         const Ue = sn?.get(Number(Oe));
         Ue !== undefined && Ue >= 0 && (fe[Ue] = Be);
       }
-      return CS(_r.length, co, fe);
+      return buildVisibleAxisLayout(_r.length, co, fe);
     }, [_r, sn, ln, Ni, en, co]),
-    mn = ne.useMemo(() => Uj(Xn, yn), [Xn, yn]),
+    mn = ne.useMemo(() => sliceVisibleAxis(Xn, yn), [Xn, yn]),
     ko = Gn.count,
     bi = (fe) => (_r ? _r[fe] : ni.logicalIndex(fe + Ni)),
     ro = (fe) => {
@@ -732,8 +859,8 @@ function rEe({
   function Lo(fe) {
     const Oe = Math.max(1, fe.height - ((vl ? 22 : 0) + zi) * vi),
       Be = Math.max(1, fe.width - (Es + Ri) * vi),
-      Ue = A2(Gn, fe.top, Oe, vi, 6),
-      Xe = A2(mn, fe.left, Be, vi, 3),
+      Ue = computeVirtualizedRange(Gn, fe.top, Oe, vi, 6),
+      Xe = computeVirtualizedRange(mn, fe.left, Be, vi, 3),
       gt = Array.from({ length: Ue.last - Ue.first }, (Mr, Br) =>
         bi(Ue.first + Br),
       ),
@@ -765,15 +892,23 @@ function rEe({
   } = Lo(Ra);
   function Ca(fe, Oe, Be) {
     const Ue = Lo(an.current.current[fe]),
-      Xe = A2(Gn, Oe, Ue.rowViewport, vi, 0).logicalOffset,
-      gt = A2(mn, Be, Ue.columnViewport, vi, 0).logicalOffset,
+      Xe = computeVirtualizedRange(Gn, Oe, Ue.rowViewport, vi, 0).logicalOffset,
+      gt = computeVirtualizedRange(
+        mn,
+        Be,
+        Ue.columnViewport,
+        vi,
+        0,
+      ).logicalOffset,
       Nt = {};
     for (const wt of Pv(Or)) {
       const jt = Lo(an.current.current[wt]),
         rr = an.current.current[wt],
-        Mr = aD(fe, wt, "row") ? up(Xe, Gn.total, jt.rowViewport, vi) : rr.top,
-        Br = aD(fe, wt, "column")
-          ? up(gt, mn.total, jt.columnViewport, vi)
+        Mr = anchorsMatchOnAxis(fe, wt, "row")
+          ? logicalToPhysicalPixels(Xe, Gn.total, jt.rowViewport, vi)
+          : rr.top,
+        Br = anchorsMatchOnAxis(fe, wt, "column")
+          ? logicalToPhysicalPixels(gt, mn.total, jt.columnViewport, vi)
           : rr.left;
       Nt[wt] = { top: Mr, left: Br };
       const xr = an.refs.current[wt];
@@ -794,7 +929,7 @@ function rEe({
           ? (Sn.next(Or.col, 1, true) ?? Sn.next(Or.col, -1, true) ?? 0)
           : 0,
         Nt = Be.startsWith("bottom")
-          ? up(
+          ? logicalToPhysicalPixels(
               Gn.offset(Math.max(0, ro(Xe) ?? 0)),
               Gn.total,
               Ue.rowViewport,
@@ -802,7 +937,7 @@ function rEe({
             )
           : 0,
         wt = Be.endsWith("right")
-          ? up(
+          ? logicalToPhysicalPixels(
               mn.offset(Math.max(0, (Sn.viewIndex(gt) ?? 0) - yn)),
               mn.total,
               Ue.columnViewport,
@@ -866,7 +1001,7 @@ function rEe({
         (Nt < jt
           ? (jt = Nt)
           : wt > jt + rowViewport / vi && (jt = wt - rowViewport / vi),
-          (Ue = up(jt, Gn.total, rowViewport, vi)));
+          (Ue = logicalToPhysicalPixels(jt, Gn.total, rowViewport, vi)));
       }
       const gt = (Sn.viewIndex(fe.col) ?? 0) - yn;
       if (gt >= 0) {
@@ -876,7 +1011,7 @@ function rEe({
         (Nt < jt
           ? (jt = Nt)
           : wt > jt + columnViewport / vi && (jt = wt - columnViewport / vi),
-          (Xe = up(jt, mn.total, columnViewport, vi)));
+          (Xe = logicalToPhysicalPixels(jt, mn.total, columnViewport, vi)));
       }
       ((Oe.scrollTop = Ue), (Oe.scrollLeft = Xe), Co(Ue), rs(Xe), Go(null));
     }, [
@@ -897,7 +1032,7 @@ function rEe({
       va,
     ]));
   function Ii() {
-    return Np(Jt);
+    return enumerateSelectionCells(Jt);
   }
   function Ho() {
     To(
@@ -930,7 +1065,7 @@ function rEe({
       try {
         const Oe = Se.load();
         if (((le.current = Oe), ge(Oe), Oe)) {
-          (G(rh(Oe.workbook)),
+          (G(buildCanonicalWorkbookSnapshot(Oe.workbook)),
             (sr.current.book = Oe.workbook),
             Zo(Oe.view),
             vn(Oe.warning ?? "Restored your locally saved workbook."),
@@ -978,7 +1113,7 @@ function rEe({
             )
               return;
             As(
-              new Oo(
+              new WorkbookRevisionConflictError(
                 "conflict",
                 "Another workbook window changed the saved version. Your local work has been retained.",
                 gt?.guard,
@@ -1023,7 +1158,7 @@ function rEe({
           )
             return;
           const Xe = _i(Oe.book, Be);
-          Gv(Xe) && Xe.catch(() => {});
+          isPromiseLike(Xe) && Xe.catch(() => {});
         } catch (Oe) {
           hn(
             `${Oe instanceof Error ? Oe.message : "The current selection could not be saved."} Changes remain in this editor; export JSON to keep a copy.`,
@@ -1056,17 +1191,30 @@ function rEe({
       try {
         if (
           JSON.stringify(externalProposal.context) !==
-          JSON.stringify(s3(H, { sheetId: he.id, range: Ye, ranges: Jt }))
+          JSON.stringify(
+            buildAssistantSelectionContext(H, {
+              sheetId: he.id,
+              range: Ye,
+              ranges: Jt,
+            }),
+          )
         )
           throw new Error(
             "The workbook or selected context changed. Request a new external proposal.",
           );
-        const Oe = X2(
+        const Oe = validateProposedCalculation(
           H,
           { sheetId: he.id, range: Ye },
           externalProposal.proposal,
         );
-        (Ll(Mj(H, { sheetId: he.id, range: Ye }, Oe, externalProposal.context)),
+        (Ll(
+          buildAnswerCitations(
+            H,
+            { sheetId: he.id, range: Ye },
+            Oe,
+            externalProposal.context,
+          ),
+        ),
           Bl(Oe),
           Pr("assistant"),
           hn(""),
@@ -1136,17 +1284,19 @@ function rEe({
   }
   function As(fe) {
     const Oe =
-        fe instanceof Oo
+        fe instanceof WorkbookRevisionConflictError
           ? fe
-          : new Oo(
+          : new WorkbookRevisionConflictError(
               "unavailable",
               "The storage adapter is unavailable. The workbook could not be saved.",
             ),
       Be =
-        Oe instanceof Oo && Oe.code === "conflict"
+        Oe instanceof WorkbookRevisionConflictError && Oe.code === "conflict"
           ? Oe
           : (Ee.current.conflict ?? Oe);
-    (Be instanceof Oo && Be.code === "conflict" && (Ee.current.conflict = Be),
+    (Be instanceof WorkbookRevisionConflictError &&
+      Be.code === "conflict" &&
+      (Ee.current.conflict = Be),
       Pe(Be),
       vn(""),
       (qe.current =
@@ -1154,7 +1304,9 @@ function rEe({
         " Changes remain in this editor. Export JSON to keep a copy."),
       hn(qe.current),
       la(
-        Be instanceof Oo && Be.code === "conflict" ? "conflict" : "error",
+        Be instanceof WorkbookRevisionConflictError && Be.code === "conflict"
+          ? "conflict"
+          : "error",
         sr.current.book,
         Be.message,
       ));
@@ -1162,7 +1314,7 @@ function rEe({
   function Jc(fe) {
     const Oe = Ee.current;
     if (Oe.controllers.size >= 20) {
-      const gt = new Oo(
+      const gt = new WorkbookRevisionConflictError(
         "limit",
         "Twenty saves are already waiting. Your latest changes remain in this editor; retry saving after the pending saves finish, or export your work.",
       );
@@ -1172,13 +1324,13 @@ function rEe({
     Oe.controllers.add(Be);
     const Ue = () => {
         if (!Oe.active || Oe !== Ee.current || Be.signal.aborted || !we.current)
-          throw new Oo(
+          throw new WorkbookRevisionConflictError(
             "unavailable",
             "The save was cancelled because this editor or its access changed.",
           );
         if (Oe.conflict) throw Oe.conflict;
         if (Oe.stalled)
-          throw new Oo(
+          throw new WorkbookRevisionConflictError(
             "unavailable",
             "A previous save is still unresolved. Wait for it to finish, then retry or export your local changes.",
           );
@@ -1197,14 +1349,14 @@ function rEe({
       };
     try {
       const gt = Oe.tail ? Oe.tail.then(Ue) : Ue();
-      if (!Gv(gt)) return (Oe.controllers.delete(Be), gt);
+      if (!isPromiseLike(gt)) return (Oe.controllers.delete(Be), gt);
       ke(Oe.controllers.size);
       const Nt = setTimeout(() => {
           if (!Oe.active || Oe !== Ee.current) return;
           ((Oe.stalled = true),
             D.start("persistence", "save").finish("failed", "timeout"),
             As(
-              new Oo(
+              new WorkbookRevisionConflictError(
                 "unavailable",
                 "The save has not been acknowledged. Keep this editor open or export your local changes. Retrying is disabled until pending work finishes.",
               ),
@@ -1269,7 +1421,7 @@ function rEe({
       try {
         const fe = sr.current.book,
           Oe = yi(fe),
-          Be = z2e(Se, fe);
+          Be = findRecoverableCheckpoint(Se, fe);
         if (Be) {
           ((se.current = true),
             Qc(Be, Ee.current),
@@ -1279,7 +1431,7 @@ function rEe({
         if (!se.current) {
           const Xe = Se.load();
           if (Xe)
-            throw new Oo(
+            throw new WorkbookRevisionConflictError(
               "conflict",
               "Saved data is available again. Compare it before replacing your local changes.",
               Xe.guard,
@@ -1287,14 +1439,14 @@ function rEe({
           se.current = true;
         }
         const Ue = _i(fe, Oe);
-        Gv(Ue) && Ue.catch(() => {});
+        isPromiseLike(Ue) && Ue.catch(() => {});
       } catch (fe) {
         As(fe);
       }
   }
   function _i(fe, Oe = yi(fe)) {
     if (!se.current) {
-      const gt = new Oo(
+      const gt = new WorkbookRevisionConflictError(
         "corrupt",
         "Saved data needs recovery before this session can overwrite it.",
       );
@@ -1306,7 +1458,7 @@ function rEe({
     return (
       la("saving", Be),
       Jc((gt) => {
-        return TS(
+        return chainMaybePromise(
           Se.save(Be, Ue, le.current?.guard ?? null, {
             allowIdentityChange: !!(
               le.current && le.current.workbook.id !== Be.id
@@ -1320,7 +1472,9 @@ function rEe({
   }
   function Tn() {
     Jd(
-      new Blob([Sk(sr.current.book)], { type: "application/json" }),
+      new Blob([encodeNativeWorkbook(sr.current.book)], {
+        type: "application/json",
+      }),
       sr.current.book.name.replace(/[^a-zA-Z0-9 _.-]/g, "_") +
         " - local changes.json",
     );
@@ -1340,7 +1494,7 @@ function rEe({
       (le.current = Oe),
       ge(Oe),
       (sr.current.book = Oe.workbook),
-      G(rh(Oe.workbook)),
+      G(buildCanonicalWorkbookSnapshot(Oe.workbook)),
       (kr.current = null),
       Ir(null),
       mo([]),
@@ -1388,7 +1542,9 @@ function rEe({
     )) {
       if (
         (Ue || (Nt = Ae.current) == null || Nt.abort(),
-        (fe = rh(Ue || Xe ? fe : gx(fe))),
+        (fe = buildCanonicalWorkbookSnapshot(
+          Ue || Xe ? fe : touchWorkbookModifiedAt(fe),
+        )),
         onBeforeChange == null || onBeforeChange(fe, sr.current.book),
         Oe)
       ) {
@@ -1396,7 +1552,7 @@ function rEe({
         (mo((jt) => [...jt.slice(-49), wt]), ia([]));
       }
       if (
-        (SR(sr.current.book, fe),
+        (carryCalculatorRecordForward(sr.current.book, fe),
         (sr.current.book = fe),
         G(fe),
         Bl(null),
@@ -1409,7 +1565,7 @@ function rEe({
       else
         try {
           const wt = _i(fe);
-          Gv(wt) && wt.catch(() => {});
+          isPromiseLike(wt) && wt.catch(() => {});
         } catch (wt) {
           As(wt);
         }
@@ -1427,7 +1583,7 @@ function rEe({
       On(() =>
         Ml({
           snapshot: H,
-          report: Sue(H),
+          report: buildSourceImportRecord(H),
           fileName: H.xlsxSource.fileName,
           inspectOnly: true,
         }),
@@ -1485,7 +1641,7 @@ function rEe({
   function So(fe, Oe) {
     var Nt;
     const Be = sr.current.book,
-      Ue = sw(Be, fe, actor, Oe),
+      Ue = applyWorkbookChange(Be, fe, actor, Oe),
       Xe = fe.sheets.find((wt) => !Be.sheets.some((jt) => jt.id === wt.id));
     (di(
       Ue,
@@ -1506,7 +1662,7 @@ function rEe({
     const Ue =
       JSON.stringify(Be.structureProtection) !==
       JSON.stringify(fe.structureProtection);
-    (di(sw(Be, fe, actor, Oe), true, true),
+    (di(applyWorkbookChange(Be, fe, actor, Oe), true, true),
       Ue && (mo([]), ia([])),
       fe.sheets.some((Xe) => Xe.id === he.id && !Xe.hidden) || Zo(yi(fe)),
       vn(Oe));
@@ -1532,10 +1688,17 @@ function rEe({
     try {
       if (Ue && fe.some((Xe) => Xe.sheetId !== Ue))
         throw Error("The formula destination changed.");
-      di(p0(sr.current.book, fe, actor, Oe), true, false, undefined, true, Ue);
+      di(
+        applyCellPatchTransaction(sr.current.book, fe, actor, Oe),
+        true,
+        false,
+        undefined,
+        true,
+        Ue,
+      );
     } catch (Xe) {
       throw (
-        Xe instanceof jN &&
+        Xe instanceof DataValidationError &&
           Rf({
             error: Xe,
             patches: structuredClone(fe),
@@ -1600,11 +1763,16 @@ function rEe({
     const Ue = kr.current,
       Xe = Ke.current;
     if (!(Ue != null && Ue.value.startsWith("=")) || Ss() || go) return false;
-    const gt = Xe.span ?? J5(Ue.value, Xe.start, Xe.end);
+    const gt = Xe.span ?? findFormulaReferenceSpan(Ue.value, Xe.start, Xe.end);
     if (!gt) return false;
     const Nt = Oe && Xe.sheetId === he.id && Xe.anchor ? Xe.anchor : fe,
       wt = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
-      jt = Uae(Ue.value, gt, wt, Ue.sheetId === he.id ? undefined : he.name);
+      jt = replaceFormulaReferenceSpan(
+        Ue.value,
+        gt,
+        wt,
+        Ue.sheetId === he.id ? undefined : he.name,
+      );
     return (
       us(
         jt.value,
@@ -1619,7 +1787,7 @@ function rEe({
       zt({
         sheetId: he.id,
         range: wt,
-        bounds: Be?.bounds ?? ct(wt),
+        bounds: Be?.bounds ?? parseRangeAddress(wt),
       }),
       ls(),
       true
@@ -1644,8 +1812,8 @@ function rEe({
     if (Be) gt = ai(Be.dataset.address, fe.shiftKey);
     else if (Ue) {
       const wt = Number(Ue.dataset.column);
-      gt = ai(`${ut(wt)}1`, false, {
-        range: `${ut(wt)}:${ut(wt)}`,
+      gt = ai(`${columnIndexToLetters(wt)}1`, false, {
+        range: `${columnIndexToLetters(wt)}:${columnIndexToLetters(wt)}`,
         bounds: {
           firstRow: 0,
           lastRow: he.rowCount - 1,
@@ -1710,7 +1878,7 @@ function rEe({
       !Be.mode ||
       !fe.key.startsWith("Arrow") ||
       !kr.current ||
-      !(Be.span ?? J5(Oe.value, Be.start, Be.end))
+      !(Be.span ?? findFormulaReferenceSpan(Oe.value, Be.start, Be.end))
     )
       return false;
     fe.preventDefault();
@@ -1724,7 +1892,7 @@ function rEe({
               row: Xe ? cs(Ue.row, gt) : Ue.row,
               col: Xe ? Ue.col : xl(Ue.col, gt),
             },
-      wt = `${ut(Nt.col)}${Nt.row + 1}`;
+      wt = `${columnIndexToLetters(Nt.col)}${Nt.row + 1}`;
     return (ai(wt, fe.shiftKey), fi(wt), true);
   }
   function wl(fe) {
@@ -1775,7 +1943,7 @@ function rEe({
     const Oe = kr.current;
     if (!Oe) return true;
     try {
-      const Xe = zae(Oe.value),
+      const Xe = autoCloseFormulaParens(Oe.value),
         gt = sr.current.book.sheets.find((Nt) => Nt.id === Oe.sheetId)?.cells[
           Oe.address
         ];
@@ -1786,7 +1954,7 @@ function rEe({
               {
                 sheetId: Oe.sheetId,
                 address: Oe.address,
-                cell: Mae(
+                cell: parseLocalizedCellEntry(
                   Xe,
                   gt,
                   sr.current.book.datePolicy?.dateSystem,
@@ -1828,8 +1996,18 @@ function rEe({
         gt = Lo(Xe),
         Nt = Math.max(1, Xe.height - ((vl ? 22 : 0) + zi) * Oe),
         wt = Math.max(1, Xe.width - (Es + Ri) * Oe),
-        jt = up(gt.rowWindow.logicalOffset, Gn.total, Nt, Oe),
-        rr = up(gt.columnWindow.logicalOffset, mn.total, wt, Oe);
+        jt = logicalToPhysicalPixels(
+          gt.rowWindow.logicalOffset,
+          Gn.total,
+          Nt,
+          Oe,
+        ),
+        rr = logicalToPhysicalPixels(
+          gt.columnWindow.logicalOffset,
+          mn.total,
+          wt,
+          Oe,
+        );
       Be[Ue] = { top: jt, left: rr };
       const Mr = an.refs.current[Ue];
       Mr && ((Mr.scrollTop = jt), (Mr.scrollLeft = rr));
@@ -1845,7 +2023,7 @@ function rEe({
     const Ue = Oe ? wy(Wr, fe) : fe;
     let Xe;
     try {
-      Xe = ff(Be ? [...Jt, Ue] : [Ue]);
+      Xe = parseSelectionAreas(Be ? [...Jt, Ue] : [Ue]);
     } catch (gt) {
       hn(gt.message);
       return;
@@ -1895,8 +2073,8 @@ function rEe({
       );
     const Ue = _t(Oe);
     if (
-      ul(Be.rowCount, cn(Be, "row")).isHidden(Ue.row) ||
-      ul(Be.colCount, cn(Be, "column")).isHidden(Ue.col)
+      createAxisVisibilityIndex(Be.rowCount, cn(Be, "row")).isHidden(Ue.row) ||
+      createAxisVisibilityIndex(Be.colCount, cn(Be, "column")).isHidden(Ue.col)
     )
       throw Error(
         "The target cell is hidden. Unhide its row/column or expand its outline before navigating.",
@@ -1916,7 +2094,7 @@ function rEe({
       Go(Oe));
   }
   function Pd(fe, Oe) {
-    const Be = ff(Oe);
+    const Be = parseSelectionAreas(Oe);
     (Ts(fe, Be.at(-1).split(":")[0]), Ut(Be), Je(null), pi());
   }
   function Vi(fe) {
@@ -1956,11 +2134,11 @@ function rEe({
   function Ud() {
     On(() => {
       if (!ui()) return;
-      const fe = Ade(H, he.id, Le),
+      const fe = parseGoToReference(H, he.id, Le),
         Oe = fe.ranges,
-        Be = ct(Oe.at(-1)),
-        Ue = `${ut(Be.firstCol)}${Be.firstRow + 1}`,
-        Xe = `${ut(Be.lastCol)}${Be.lastRow + 1}`;
+        Be = parseRangeAddress(Oe.at(-1)),
+        Ue = `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}`,
+        Xe = `${columnIndexToLetters(Be.lastCol)}${Be.lastRow + 1}`;
       if (
         fe.sheetId === he.id &&
         (ni.isHidden(Be.firstRow) || Sn.isHidden(Be.firstCol))
@@ -1992,11 +2170,11 @@ function rEe({
         );
       const Be =
         Oe.id !== H.id
-          ? Ude(H, Oe, actor, fe ? "redo" : "undo")
-          : sw(
+          ? recordCrossWorkbookImport(H, Oe, actor, fe ? "redo" : "undo")
+          : applyWorkbookChange(
               H,
               {
-                ...(es(Oe) ? Oe : structuredClone(Oe)),
+                ...(isDeepFrozenValue(Oe) ? Oe : structuredClone(Oe)),
                 ...(H.rowOrigins
                   ? { rowOrigins: structuredClone(H.rowOrigins) }
                   : {}),
@@ -2035,9 +2213,9 @@ function rEe({
         return;
       }
       if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(fe.name)) {
-        if (fe.size > Mt.maxFileBytes)
+        if (fe.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const wt = await ow(fe, Ue);
+        const wt = await importAutomationFile(fe, Ue);
         if (!Xe()) return;
         if (sr.current.book !== H || sr.current.readOnly)
           throw new Error(
@@ -2047,9 +2225,9 @@ function rEe({
         return;
       }
       if (/\.(csv|tsv)$/i.test(fe.name)) {
-        if (fe.size > Mt.maxFileBytes)
+        if (fe.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const wt = await _$(fe, {}, Ue);
+        const wt = await importDelimitedFile(fe, {}, Ue);
         if (!Xe()) return;
         if (sr.current.book !== H || sr.current.readOnly)
           throw new Error(
@@ -2064,7 +2242,7 @@ function rEe({
         });
         return;
       }
-      const Nt = await H1(fe, Ue);
+      const Nt = await importWorkbookFile(fe, Ue);
       if (!Xe()) return;
       if (sr.current.book !== H || sr.current.readOnly)
         throw new Error(
@@ -2086,14 +2264,14 @@ function rEe({
       if (!Xe()) return;
       if (
         !Oe.signal.aborted &&
-        (!(Nt instanceof La) ||
+        (!(Nt instanceof FileProcessingError) ||
           ["FILE_ACTIVE", "FILE_INVALID"].includes(Nt.code)) &&
         /\.xlsx$/i.test(fe.name) &&
-        fe.size <= Mt.maxFileBytes &&
+        fe.size <= workbookLimits.maxFileBytes &&
         sr.current.book === H
       )
         try {
-          const wt = await ow(fe, Ue);
+          const wt = await importAutomationFile(fe, Ue);
           if (
             Xe() &&
             !sr.current.readOnly &&
@@ -2104,7 +2282,7 @@ function rEe({
             return;
           }
         } catch {}
-      Xe() && hn(OC(Nt).message);
+      Xe() && hn(toFileProcessingError(Nt).message);
     } finally {
       Xe() &&
         ((ba.current = null), Cu(false), yl.current && (yl.current.value = ""));
@@ -2116,7 +2294,7 @@ function rEe({
       const Oe =
         H.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook";
       if (fe === "xlsx") {
-        const Be = await gI(H);
+        const Be = await exportWorkbookToXlsx(H);
         (Be.report.warnings.push(
           "Full workbook export includes all filtered and hidden rows. Session filter views are not saved in XLSX. Use CSV/TSV with Visible population for a filtered extract.",
         ),
@@ -2137,7 +2315,10 @@ function rEe({
           (vn(
             "Native JSON exports the full workbook, including all filtered and hidden rows and any named filter views. Active session masks are not saved; load named criteria, preview and apply after reopening.",
           ),
-          Jd(new Blob([Sk(H)], { type: "application/json" }), `${Oe}.json`)));
+          Jd(
+            new Blob([encodeNativeWorkbook(H)], { type: "application/json" }),
+            `${Oe}.json`,
+          )));
     } catch (Oe) {
       hn(Oe instanceof Error ? Oe.message : "Export failed.");
     } finally {
@@ -2150,8 +2331,11 @@ function rEe({
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",
         );
-      const fe = Pde(H, he.id, is, {
-        range: ei === "visible" && Hr ? Hr.context.range : Ju || Ta(he),
+      const fe = runAuditAnalysis(H, he.id, is, {
+        range:
+          ei === "visible" && Hr
+            ? Hr.context.range
+            : Ju || formatOccupiedRangeAddress(he),
         ...(ei === "visible"
           ? {
               population: {
@@ -2179,7 +2363,10 @@ function rEe({
           ...(Hr ? { filterContext: Hr.context } : {}),
           kind: is,
           parameters: {
-            range: ei === "visible" && Hr ? Hr.context.range : Ju || Ta(he),
+            range:
+              ei === "visible" && Hr
+                ? Hr.context.range
+                : Ju || formatOccupiedRangeAddress(he),
             threshold: oa,
             sampleSize: jl,
             seed: Fl,
@@ -2208,15 +2395,15 @@ function rEe({
     const Ue = new AbortController();
     ss.current = Ue;
     try {
-      const gt = s3(H, ve),
-        Nt = await Sz(adapter, fe, gt, {
+      const gt = buildAssistantSelectionContext(H, ve),
+        Nt = await requestAssistantAnswer(adapter, fe, gt, {
           conversation: Oe,
           signal: Ue.signal,
           reliability: D,
         });
       if (Ue.signal.aborted || Be !== Ys.current) return null;
-      const wt = X2(H, ve, Nt);
-      return (Ll(Mj(H, ve, wt, gt)), Bl(wt), wt);
+      const wt = validateProposedCalculation(H, ve, Nt);
+      return (Ll(buildAnswerCitations(H, ve, wt, gt)), Bl(wt), wt);
     } catch (gt) {
       if (
         (Be === Ys.current &&
@@ -2248,7 +2435,7 @@ function rEe({
   function ac() {
     On(() =>
       So(
-        Gy(H, he.id, Yc ? 0 : 1, he.frozenCols ?? 0),
+        setFreezePanes(H, he.id, Yc ? 0 : 1, he.frozenCols ?? 0),
         Yc ? "Unfreeze rows" : "Freeze top row",
       ),
     );
@@ -2261,7 +2448,7 @@ function rEe({
     for (let Nt = Oe.row; Nt <= Be.row; Nt++) {
       const wt = [];
       for (let jt = Oe.col; jt <= Be.col; jt++) {
-        const rr = `${ut(jt)}${Nt + 1}`,
+        const rr = `${columnIndexToLetters(jt)}${Nt + 1}`,
           Mr = Qr(he.id, rr);
         wt.push(
           typeof Mr == "string" && /^[=+@-]/.test(Mr)
@@ -2276,10 +2463,13 @@ function rEe({
         newline: `
 `,
       }),
-      gt = fe ? WW(H, he.id, Ye) : null;
+      gt = fe ? createCutSourceSnapshot(H, he.id, Ye) : null;
     return (
       Gc(gt ? { snapshot: gt, text: Xe } : null),
-      (ku.current = { text: Xe, snapshot: Aae(H, he.id, Ye) }),
+      (ku.current = {
+        text: Xe,
+        snapshot: buildClipboardSnapshot(H, he.id, Ye),
+      }),
       Xe
     );
   }
@@ -2312,7 +2502,7 @@ function rEe({
   }
   function zl(fe) {
     On(() => {
-      if ((rt(), fe.length > Mt.maxFileBytes))
+      if ((rt(), fe.length > workbookLimits.maxFileBytes))
         throw new Error("Clipboard text is too large.");
       const Oe = ku.current?.text === fe ? ku.current : null;
       if (Oe && Bo?.text === fe) {
@@ -2320,7 +2510,7 @@ function rEe({
         return;
       }
       if (Oe) {
-        const wt = i$(H, he.id, Ye, Oe.snapshot, {
+        const wt = buildPastePreview(H, he.id, Ye, Oe.snapshot, {
           mode: "all",
           deferValidationWarnings: true,
           readOnly: sr.current.readOnly,
@@ -2339,21 +2529,32 @@ function rEe({
         gt = [];
       if (!Ue.length || Ue.some((wt) => wt.length !== Ue[0].length))
         throw new Error("Paste requires a rectangular range.");
-      if (Ue.length * Ue[0].length > Mt.maxPatches)
-        throw new Error(`Paste at most ${Mt.maxPatches} cells at a time.`);
+      if (Ue.length * Ue[0].length > workbookLimits.maxPatches)
+        throw new Error(
+          `Paste at most ${workbookLimits.maxPatches} cells at a time.`,
+        );
       (Ue.forEach((wt, jt) =>
         wt.forEach((rr, Mr) => {
           if (Xe.row + jt >= he.rowCount || Xe.col + Mr >= he.colCount)
             throw new Error(
               "Paste exceeds the Excel worksheet boundary (XFD1048576).",
             );
-          const Br = `${ut(Xe.col + Mr)}${Xe.row + jt + 1}`,
-            xr = Gm(rr, he.cells[Br], sr.current.book.datePolicy?.dateSystem);
+          const Br = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
+            xr = parseDateCellEntry(
+              rr,
+              he.cells[Br],
+              sr.current.book.datePolicy?.dateSystem,
+            );
           gt.push({ sheetId: he.id, address: Br, cell: xr });
         }),
       ),
         To(gt, "Paste cells"),
-        dr(wy(xt, `${ut(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`)));
+        dr(
+          wy(
+            xt,
+            `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
+          ),
+        ));
     });
   }
   async function sc() {
@@ -2460,7 +2661,7 @@ function rEe({
         const Sr = wt(Be ? xr.row : xr.col);
         return Sr === null ? [] : [Sr];
       }),
-      Mr = w2e(jt, Xe?.length ?? gt.count, rr, Ue),
+      Mr = resolveCellNavigation(jt, Xe?.length ?? gt.count, rr, Ue),
       Br = Xe ? Xe[Mr] : gt.logicalIndex(Mr);
     return Be ? { row: Br, col: Oe } : { row: fe, col: Br };
   }
@@ -2471,23 +2672,24 @@ function rEe({
         wt = _t(Be.address),
         jt = fe === "Enter" ? "row" : "column",
         Mr =
-          ul(jt === "row" ? Nt.rowCount : Nt.colCount, cn(Nt, jt)).next(
-            jt === "row" ? wt.row : wt.col,
-            Oe ? -1 : 1,
-          ) ?? (jt === "row" ? wt.row : wt.col),
-        Br = `${ut(jt === "column" ? Mr : wt.col)}${(jt === "row" ? Mr : wt.row) + 1}`;
+          createAxisVisibilityIndex(
+            jt === "row" ? Nt.rowCount : Nt.colCount,
+            cn(Nt, jt),
+          ).next(jt === "row" ? wt.row : wt.col, Oe ? -1 : 1) ??
+          (jt === "row" ? wt.row : wt.col),
+        Br = `${columnIndexToLetters(jt === "column" ? Mr : wt.col)}${(jt === "row" ? Mr : wt.row) + 1}`;
       (de(Be.sheetId), or(Br), Rr(Br), dr(Br), Go(Br), pi());
       return;
     }
     const Ue = _t(xt),
       Xe = fe === "Enter" ? cs(Ue.row, Oe ? -1 : 1) : Ue.row,
       gt = fe === "Tab" ? xl(Ue.col, Oe ? -1 : 1) : Ue.col;
-    (da(`${ut(gt)}${Xe + 1}`), pi());
+    (da(`${columnIndexToLetters(gt)}${Xe + 1}`), pi());
   }
   function td() {
     if (!ui()) return;
-    dr(`A1:${ut(he.colCount - 1)}${he.rowCount}`);
-    const fe = `${ut(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`;
+    dr(`A1:${columnIndexToLetters(he.colCount - 1)}${he.rowCount}`);
+    const fe = `${columnIndexToLetters(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`;
     (or(fe), Rr(fe), (qt.current = fe), pi());
   }
   function El(fe, Oe, Be) {
@@ -2497,12 +2699,12 @@ function rEe({
       gt = Be ? Math.max(Ue, Oe) : Oe,
       Nt =
         fe === "column"
-          ? `${ut(Oe)}${ni.logicalIndex(0) + 1}`
-          : `${ut(Sn.logicalIndex(0))}${Oe + 1}`;
+          ? `${columnIndexToLetters(Oe)}${ni.logicalIndex(0) + 1}`
+          : `${columnIndexToLetters(Sn.logicalIndex(0))}${Oe + 1}`;
     (dr(
       fe === "column"
-        ? `${ut(Xe)}1:${ut(gt)}${he.rowCount}`
-        : `A${Xe + 1}:${ut(he.colCount - 1)}${gt + 1}`,
+        ? `${columnIndexToLetters(Xe)}1:${columnIndexToLetters(gt)}${he.rowCount}`
+        : `A${Xe + 1}:${columnIndexToLetters(he.colCount - 1)}${gt + 1}`,
     ),
       (qt.current = Nt),
       or(Be ? Wr : Nt),
@@ -2538,7 +2740,12 @@ function rEe({
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(([rr, Mr]) => {
-        return (Xe[gt]?.[rr] ?? (fe === "column" ? Og(Xe) : Dg(Xe))) !== Mr;
+        return (
+          (Xe[gt]?.[rr] ??
+            (fe === "column"
+              ? defaultColumnWidthOf(Xe)
+              : defaultRowHeightOf(Xe))) !== Mr
+        );
       })
     )
       return;
@@ -2555,7 +2762,7 @@ function rEe({
       events: [
         ...Ue.events,
         {
-          id: Q2e(),
+          id: createRandomUuid(),
           timestamp: new Date().toISOString(),
           actor,
           action: Be,
@@ -2570,11 +2777,25 @@ function rEe({
       if (je || sr.current.readOnly || !ui()) return;
       const Be = Cl(fe, Oe),
         Ue = sr.current.book.sheets.find((jt) => jt.id === he.id),
-        Xe = Vn(sr.current.book),
+        Xe = calculateWorkbookWithSettings(sr.current.book),
         gt =
           fe === "column"
-            ? R2e(Ue, Be, Xe, Nu, Gi, sr.current.book.datePolicy?.dateSystem)
-            : _2e(Ue, Be, Xe, Nu, Gi, sr.current.book.datePolicy?.dateSystem);
+            ? autoFitColumnWidths(
+                Ue,
+                Be,
+                Xe,
+                Nu,
+                Gi,
+                sr.current.book.datePolicy?.dateSystem,
+              )
+            : autoFitRowHeights(
+                Ue,
+                Be,
+                Xe,
+                Nu,
+                Gi,
+                sr.current.book.datePolicy?.dateSystem,
+              );
       (Oa(
         fe,
         gt,
@@ -2610,9 +2831,9 @@ function rEe({
               ...gt,
               size: Math.round(
                 Math.max(
-                  gt.axis === "column" ? ux : b1,
+                  gt.axis === "column" ? minColumnWidth : minRowHeight,
                   Math.min(
-                    gt.axis === "column" ? cx : Ig,
+                    gt.axis === "column" ? maxColumnWidth : maxRowHeight,
                     gt.initial +
                       ((gt.axis === "column" ? Xe.clientX : Xe.clientY) -
                         gt.start) /
@@ -2628,7 +2849,7 @@ function rEe({
             Oa(
               ri.axis,
               { [ri.index]: ri.size },
-              `Resize ${ri.axis} ${ri.axis === "column" ? ut(ri.index) : ri.index + 1}`,
+              `Resize ${ri.axis} ${ri.axis === "column" ? columnIndexToLetters(ri.index) : ri.index + 1}`,
             ),
           ),
           Au(null));
@@ -2673,7 +2894,7 @@ function rEe({
   function uc(fe) {
     const Oe = Gs.current;
     if (!Oe) return;
-    const Be = ct(Oe.sourceRange),
+    const Be = parseRangeAddress(Oe.sourceRange),
       Ue = _t(fe),
       Xe = Math.max(Be.firstRow - Ue.row, Ue.row - Be.lastRow, 0),
       gt = Math.max(Be.firstCol - Ue.col, Ue.col - Be.lastCol, 0),
@@ -2681,7 +2902,10 @@ function rEe({
       wt = Xe >= gt ? Math.max(Be.lastRow, Ue.row) : Be.lastRow,
       jt = gt > Xe ? Math.min(Be.firstCol, Ue.col) : Be.firstCol,
       rr = gt > Xe ? Math.max(Be.lastCol, Ue.col) : Be.lastCol,
-      Mr = wy(`${ut(jt)}${Nt + 1}`, `${ut(rr)}${wt + 1}`),
+      Mr = wy(
+        `${columnIndexToLetters(jt)}${Nt + 1}`,
+        `${columnIndexToLetters(rr)}${wt + 1}`,
+      ),
       Br = { ...Oe, targetRange: Mr };
     ((Gs.current = Br), qc(Br));
   }
@@ -2782,9 +3006,13 @@ function rEe({
         x: rr.left + Math.min(40, rr.width),
         y: rr.top + Math.min(24, rr.height),
         kind:
-          ct(Ye).lastRow - ct(Ye).firstRow + 1 === he.rowCount
+          parseRangeAddress(Ye).lastRow - parseRangeAddress(Ye).firstRow + 1 ===
+          he.rowCount
             ? "column"
-            : ct(Ye).lastCol - ct(Ye).firstCol + 1 === he.colCount
+            : parseRangeAddress(Ye).lastCol -
+                  parseRangeAddress(Ye).firstCol +
+                  1 ===
+                he.colCount
               ? "row"
               : "cell",
       });
@@ -2825,7 +3053,7 @@ function rEe({
     if (St.length && ["Tab", "Enter"].includes(fe.key)) {
       (fe.preventDefault(),
         On(() => {
-          const jt = Np(Jt).filter((xr) => {
+          const jt = enumerateSelectionCells(Jt).filter((xr) => {
             const Sr = _t(xr);
             return !ni.isHidden(Sr.row) && !Sn.isHidden(Sr.col);
           });
@@ -2874,7 +3102,7 @@ function rEe({
           jt === "arrowup" || jt === "arrowdown",
           jt === "arrowup" || jt === "arrowleft" ? -1 : 1,
         );
-        da(`${ut(rr.col)}${rr.row + 1}`, fe.shiftKey);
+        da(`${columnIndexToLetters(rr.col)}${rr.row + 1}`, fe.shiftKey);
         return;
       }
       if (jt === "a") {
@@ -2884,7 +3112,7 @@ function rEe({
       if (["b", "i", "u"].includes(jt)) {
         if ((fe.preventDefault(), !je)) {
           const rr = jt === "b" ? "bold" : jt === "i" ? "italic" : "underline";
-          Vi({ style: { [rr]: !ys(ur?.style)[rr] } });
+          Vi({ style: { [rr]: !resolveEffectiveCellStyle(ur?.style)[rr] } });
         }
         return;
       }
@@ -2892,7 +3120,11 @@ function rEe({
         (fe.preventDefault(),
           je ||
             On(() => {
-              (rt(), So(Qy(H, $2(H, he.id, Ye, "down")), "Fill down"));
+              (rt(),
+                So(
+                  applyFillPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+                  "Fill down",
+                ));
             }));
         return;
       }
@@ -2900,7 +3132,11 @@ function rEe({
         (fe.preventDefault(),
           je ||
             On(() => {
-              (rt(), So(Qy(H, $2(H, he.id, Ye, "right")), "Fill right"));
+              (rt(),
+                So(
+                  applyFillPreview(H, buildFillPreview(H, he.id, Ye, "right")),
+                  "Fill right",
+                ));
             }));
         return;
       }
@@ -2919,16 +3155,16 @@ function rEe({
       if (jt === "home") {
         (fe.preventDefault(),
           da(
-            `${ut(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`,
+            `${columnIndexToLetters(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`,
             fe.shiftKey,
           ));
         return;
       }
       if (jt === "end") {
         fe.preventDefault();
-        const rr = RC(he);
+        const rr = findOccupiedRangeBounds(he);
         da(
-          `${ut(Sn.next(rr?.lastCol ?? 0, -1, true) ?? Sn.logicalIndex(0))}${(ni.next(rr?.lastRow ?? 0, -1, true) ?? ni.logicalIndex(0)) + 1}`,
+          `${columnIndexToLetters(Sn.next(rr?.lastCol ?? 0, -1, true) ?? Sn.logicalIndex(0))}${(ni.next(rr?.lastRow ?? 0, -1, true) ?? ni.logicalIndex(0)) + 1}`,
           fe.shiftKey,
         );
         return;
@@ -2948,7 +3184,7 @@ function rEe({
               Math.max(1, Math.floor(rowViewport / vi / co) - 1) *
                 (fe.key === "PageUp" ? -1 : 1),
             )),
-        da(`${ut(gt)}${Xe + 1}`, fe.shiftKey));
+        da(`${columnIndexToLetters(gt)}${Xe + 1}`, fe.shiftKey));
       return;
     }
     if (
@@ -2978,7 +3214,7 @@ function rEe({
           Xe > Ue.row && (Xe = ni.next(rr.lastRow, 1) ?? Ue.row),
           Xe < Ue.row && (Xe = ni.next(rr.firstRow, -1) ?? Ue.row));
       }
-      const jt = `${ut(Math.max(0, Math.min(he.colCount - 1, gt)))}${Math.max(1, Math.min(he.rowCount, Xe + 1))}`;
+      const jt = `${columnIndexToLetters(Math.max(0, Math.min(he.colCount - 1, gt)))}${Math.max(1, Math.min(he.rowCount, Xe + 1))}`;
       da(jt, fe.shiftKey && !["Tab", "Enter"].includes(fe.key));
       return;
     }
@@ -3007,9 +3243,10 @@ function rEe({
     aa &&
       On(() => {
         if (aa.kind === "note") Vi({ note: aa.value });
-        else if (aa.kind === "rename") ua(NQ(H, aa.value), "Rename workbook");
+        else if (aa.kind === "rename")
+          ua(renameWorkbook(H, aa.value), "Rename workbook");
         else {
-          const fe = CP(H, aa.value),
+          const fe = addWorksheet(H, aa.value),
             Oe = fe.sheets.at(-1);
           (ua(fe, `Add sheet: ${Oe.name}`), wi(Oe.id));
         }
@@ -3030,8 +3267,8 @@ function rEe({
             ? { position: "sticky", left: _s[fe], zIndex: 7 }
             : undefined,
           onClick: (Be) => {
-            ai(`${ut(fe)}1`, false, {
-              range: `${ut(fe)}:${ut(fe)}`,
+            ai(`${columnIndexToLetters(fe)}1`, false, {
+              range: `${columnIndexToLetters(fe)}:${columnIndexToLetters(fe)}`,
               bounds: {
                 firstRow: 0,
                 lastRow: he.rowCount - 1,
@@ -3041,11 +3278,11 @@ function rEe({
             }) || El("column", fe, Be.shiftKey);
           },
           children: [
-            ut(fe),
+            columnIndexToLetters(fe),
             i.jsx("span", {
               className: "lg-column-resize",
               role: "separator",
-              "aria-label": `Resize column ${ut(fe)}`,
+              "aria-label": `Resize column ${columnIndexToLetters(fe)}`,
               "aria-orientation": "vertical",
               "aria-disabled": je,
               title: text(
@@ -3067,7 +3304,7 @@ function rEe({
     Ma = (fe, Oe, Be, Ue) => {
       var gt;
       return i.jsx(
-        nEe,
+        WorksheetGridRow,
         {
           idPrefix: `${$}-${Ue}`,
           row: fe,
@@ -3127,7 +3364,7 @@ function rEe({
             const wt = _t(Nt);
             return (jt = he.pivots) != null &&
               jt.some((rr) => {
-                const Mr = ct(rr.outputRange);
+                const Mr = parseRangeAddress(rr.outputRange);
                 return (
                   wt.row > Mr.firstRow &&
                   wt.row <= Mr.lastRow &&
@@ -3150,7 +3387,9 @@ function rEe({
           mergeBounds: ic,
           displayedRows: Oe ? Dn : Be.shownRows,
           filterHeader:
-            Hr && fe === ct(Hr.context.range).firstRow ? Hr.fields : undefined,
+            Hr && fe === parseRangeAddress(Hr.context.range).firstRow
+              ? Hr.fields
+              : undefined,
           filteredColumns:
             Hr?.context.definition.columns.map((Nt) => Nt.column) ?? [],
           onColumnFilter: (Nt) => {
@@ -3162,8 +3401,8 @@ function rEe({
           sheetId: he.id,
           cells: he.cells,
           active: xt,
-          selectedBounds: Fo ? ct(Fo.targetRange) : ee,
-          selectionBounds: Fo ? [ct(Fo.targetRange)] : fr,
+          selectedBounds: Fo ? parseRangeAddress(Fo.targetRange) : ee,
+          selectionBounds: Fo ? [parseRangeAddress(Fo.targetRange)] : fr,
           calc: Qr,
           showFormulas: Gi,
           editing:
@@ -3206,7 +3445,7 @@ function rEe({
   function Al(fe) {
     const Oe = _t(xt),
       Be = zr || kn ? undefined : ic.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
-      Ue = Be ? `${ut(Be.firstCol)}${Be.firstRow + 1}` : xt,
+      Ue = Be ? `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}` : xt,
       Xe = an.views[fe],
       gt = Lo(Xe),
       {
@@ -3385,7 +3624,9 @@ function rEe({
                         "data-ui-label": "Select all cells",
                         children: i.jsx("span", {
                           className: "lg-sr-only",
-                          children: i.jsx(M, { children: "Select all cells" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Select all cells",
+                          }),
                         }),
                       }),
                     Ln.map((Sr) => Iu(Sr, true)),
@@ -3414,7 +3655,7 @@ function rEe({
             ],
           }),
         }),
-        i.jsx(Cfe, {
+        i.jsx(DrawingObjectOverlay, {
           workbook: H,
           sheetId: he.id,
           selection: JSON.stringify(Jt),
@@ -3574,20 +3815,20 @@ function rEe({
             onClick: () => {
               return to.current?.focus();
             },
-            children: i.jsx(M, { children: "Skip to worksheet" }),
+            children: i.jsx(LocalizedText, { children: "Skip to worksheet" }),
           }),
           i.jsx("button", {
             onClick: () => {
               return pt.current?.focus();
             },
-            children: i.jsx(M, { children: "Skip to formula bar" }),
+            children: i.jsx(LocalizedText, { children: "Skip to formula bar" }),
           }),
         ],
       }),
       i.jsx("p", {
         id: `${$}-grid-help`,
         className: "lg-sr-only",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Arrow keys move between cells. F2 edits. Escape returns to the ribbon. Use the selected range field to jump to a cell. Formula names, references and decimal points inside formulas use invariant syntax; enter dates as YYYY-MM-DD.",
         }),
@@ -3607,7 +3848,7 @@ function rEe({
             column: _t(xt).col + 1,
             value: (Qr(he.id, xt) == null
               ? R.text("Blank")
-              : lI(
+              : formatLocalizedNumberDisplay(
                   Qr(he.id, xt),
                   he.cells[xt],
                   H.datePolicy?.dateSystem,
@@ -3628,7 +3869,7 @@ function rEe({
       }),
       _e &&
         i.jsx(
-          Kce,
+          GridContextMenu,
           {
             ..._e,
             label: `${_e.kind === "cell" ? "Cells" : _e.kind === "row" ? "Rows" : "Columns"} ${Ye}`,
@@ -3640,7 +3881,7 @@ function rEe({
           `${_e.x}:${_e.y}:${_e.kind}`,
         ),
       Xc &&
-        i.jsx(w4e, {
+        i.jsx(FillPreviewDialog, {
           workbook: H,
           sheetId: Xc.sheetId,
           sourceRange: Xc.sourceRange,
@@ -3653,7 +3894,7 @@ function rEe({
           },
         }),
       Zc &&
-        i.jsx(I4e, {
+        i.jsx(MoveCellsDialog, {
           workbook: H,
           source: Zc,
           sheetId: he.id,
@@ -3679,7 +3920,7 @@ function rEe({
           };
           if ($e === "automation")
             return i.jsx(
-              Jxe,
+              AutomationScriptsDialog,
               {
                 workbook: H,
                 sheetId: he.id,
@@ -3689,7 +3930,7 @@ function rEe({
                 onClose: fe.onClose,
                 onPreserve: (Ue) => {
                   const Xe = sr.current.book,
-                    gt = Zxe(Xe, Ue, {
+                    gt = preserveAutomationArtifact(Xe, Ue, {
                       actor,
                       readOnly: sr.current.readOnly,
                     });
@@ -3700,13 +3941,13 @@ function rEe({
                 },
                 onRemove: (Ue) =>
                   di(
-                    Kxe(sr.current.book, Ue, {
+                    removeAutomationArtifact(sr.current.book, Ue, {
                       actor,
                       readOnly: sr.current.readOnly,
                     }),
                   ),
                 onApply: (Ue, Xe, gt) => {
-                  const Nt = Yxe(sr.current.book, Ue, {
+                  const Nt = runApprovedMigration(sr.current.book, Ue, {
                     actor,
                     scope: Xe,
                     readOnly: sr.current.readOnly,
@@ -3729,7 +3970,7 @@ function rEe({
             );
           if ($e === "search" || $e === "goToSpecial")
             return i.jsx(
-              y2e,
+              FindReplaceDialog,
               {
                 ...fe,
                 ranges: Jt,
@@ -3743,15 +3984,17 @@ function rEe({
               $e,
             );
           if ($e === "cellStyle")
-            return i.jsx(Nde, { ...fe, ranges: Jt, active: xt });
-          if ($e === "themes") return i.jsx(Sde, { ...fe, ranges: Jt });
-          if ($e === "conditional") return i.jsx(Rde, { ...fe });
-          if ($e === "merge") return i.jsx(Dde, { ...fe });
+            return i.jsx(FormatCellsDialog, { ...fe, ranges: Jt, active: xt });
+          if ($e === "themes")
+            return i.jsx(ThemesAndCellStylesDialog, { ...fe, ranges: Jt });
+          if ($e === "conditional")
+            return i.jsx(ConditionalFormattingRulesManager, { ...fe });
+          if ($e === "merge") return i.jsx(MergeCellsPreviewDialog, { ...fe });
           if ($e === "numberFormat")
             return i.jsx(M4e, { ...fe, ranges: Jt, active: xt });
-          if ($e === "outlines") return i.jsx(j4e, { ...fe });
+          if ($e === "outlines") return i.jsx(OutlineToolsPanel, { ...fe });
           if ($e === "comments" || $e === "hyperlink")
-            return i.jsx(B4e, {
+            return i.jsx(ReviewToolsPanel, {
               ...fe,
               range: xt,
               mode: $e,
@@ -3761,7 +4004,7 @@ function rEe({
             });
           if (["pasteSpecial", "fillSeries", "viewSettings"].includes($e))
             return i.jsx(
-              y4e,
+              PasteSpecialDialog,
               {
                 ...fe,
                 mode: $e,
@@ -3771,7 +4014,7 @@ function rEe({
               $e,
             );
           if ($e === "sheets")
-            return i.jsx(m4e, {
+            return i.jsx(WorksheetTabBar, {
               workbook: H,
               sheetId: be ?? he.id,
               readOnly,
@@ -3782,7 +4025,7 @@ function rEe({
               onClose: fe.onClose,
             });
           if (["workbookProperties", "versions", "template"].includes($e))
-            return i.jsx(v4e, {
+            return i.jsx(WorkbookManagerDialog, {
               mode: $e === "workbookProperties" ? "properties" : $e,
               workbook: H,
               readOnly,
@@ -3798,7 +4041,9 @@ function rEe({
               onCreateWorkbook: (Ue) => {
                 if (readOnly) throw new Error("This workbook is read-only.");
                 (Jd(
-                  new Blob([Sk(Ue)], { type: "application/json" }),
+                  new Blob([encodeNativeWorkbook(Ue)], {
+                    type: "application/json",
+                  }),
                   `${Ue.name.replace(/[^a-zA-Z0-9 _.-]/g, "_")}.json`,
                 ),
                   vn(
@@ -3809,13 +4054,13 @@ function rEe({
                 if (readOnly) throw new Error("This workbook is read-only.");
                 const Xe = Ee.current,
                   gt = sr.current.book;
-                return TS(_i(gt), () =>
+                return chainMaybePromise(_i(gt), () =>
                   Jc((Nt) => {
                     if (sr.current.book !== gt)
                       throw new Error(
                         "The workbook changed. Save the checkpoint again for the current revision.",
                       );
-                    return TS(
+                    return chainMaybePromise(
                       Se.checkpoint(Ue, le.current.guard, { signal: Nt }),
                       (wt) => {
                         Qc(wt, Xe);
@@ -3873,7 +4118,7 @@ function rEe({
                           signal: Nt.signal,
                         },
                       );
-                    return Gv(Br)
+                    return isPromiseLike(Br)
                       ? Br.then(Mr).finally(() =>
                           jt.removeEventListener("abort", rr),
                         )
@@ -3883,10 +4128,11 @@ function rEe({
               },
             });
           if (["table", "pivot", "query"].includes($e))
-            return i.jsx(pfe, { ...fe, mode: $e }, $e);
-          if ($e === "pivotExplore") return i.jsx(vfe, { ...fe });
+            return i.jsx(TableToolsDialog, { ...fe, mode: $e }, $e);
+          if ($e === "pivotExplore")
+            return i.jsx(PivotExplorerDialog, { ...fe });
           if (["picture", "shape", "chart"].includes($e))
-            return i.jsx(Wz, { ...fe }, $e);
+            return i.jsx(PicturePropertiesDialog, { ...fe }, $e);
           if (
             [
               "margins",
@@ -3899,16 +4145,16 @@ function rEe({
               "pageLayout",
             ].includes($e)
           )
-            return i.jsx(Bme, { ...fe }, $e);
+            return i.jsx(PageSetupDialog, { ...fe }, $e);
           if ($e === "functionCompatibility")
-            return i.jsx(ixe, {
+            return i.jsx(FormulaCompatibilityDialog, {
               workbook: H,
               onClose: () => Je(null),
               onNavigate: Ts,
             });
           if (["function", "names"].includes($e))
             return i.jsx(
-              rxe,
+              FunctionAndNameDialog,
               {
                 ...fe,
                 mode: $e,
@@ -3928,7 +4174,7 @@ function rEe({
               $e,
             );
           if ($e === "populationFilter")
-            return i.jsx(Xce, {
+            return i.jsx(FilterViewsDialog, {
               workbook: H,
               sheetId: he.id,
               range: Ye,
@@ -3945,7 +4191,7 @@ function rEe({
               onClose: fe.onClose,
               onApply: (Ue) => {
                 try {
-                  (f0(H, he.id, Ue, Qr),
+                  (applyFilterConditions(H, he.id, Ue, Qr),
                     fn((Xe) => ({
                       ...Xe,
                       [Xo]: { snapshot: H, definition: Ue },
@@ -3968,7 +4214,7 @@ function rEe({
               },
             });
           if ($e === "externalSources")
-            return i.jsx(Y2e, {
+            return i.jsx(ExternalDataRefreshDialog, {
               workbook: H,
               sheetId: he.id,
               adapter: externalSourceAdapter,
@@ -3984,7 +4230,7 @@ function rEe({
               },
             });
           if ($e === "solver" || $e === "statistics")
-            return i.jsx(kxe, {
+            return i.jsx(DataAnalysisDialog, {
               workbook: H,
               sheetId: he.id,
               range: Ye,
@@ -4001,7 +4247,7 @@ function rEe({
               },
             });
           if ($e === "extensions")
-            return i.jsx(qse, {
+            return i.jsx(AddInsAndCustomFunctionsDialog, {
               workbook: H,
               extensions,
               readOnly,
@@ -4015,7 +4261,7 @@ function rEe({
               },
             });
           if ($e === "workbookLinks")
-            return i.jsx(Nue, {
+            return i.jsx(WorkbookLinksDialog, {
               workbook: H,
               readOnly,
               approvedSources: W,
@@ -4031,7 +4277,7 @@ function rEe({
               },
             });
           if ($e === "importSources")
-            return i.jsx(Fue, {
+            return i.jsx(SourceImportDialog, {
               workbook: H,
               readOnly,
               extractor: documentExtractor,
@@ -4045,7 +4291,7 @@ function rEe({
               },
             });
           if ($e === "workbookFormats")
-            return i.jsx($ue, {
+            return i.jsx(FormatConversionDialog, {
               workbook: H,
               readOnly: je,
               initialFile: pl,
@@ -4060,12 +4306,12 @@ function rEe({
                 (di(Ue), wi(Ue.sheets.find((Xe) => !Xe.hidden).id));
               },
               onAutomation: async (Ue) => {
-                const Xe = await ow(Ue, Yu);
+                const Xe = await importAutomationFile(Ue, Yu);
                 (at(Xe), su(undefined), Je("automation"));
               },
             });
           if ($e === "reportOutputs")
-            return i.jsx(Fxe, {
+            return i.jsx(ReportOutputsDialog, {
               workbook: H,
               sheetId: he.id,
               range: Ye,
@@ -4082,7 +4328,7 @@ function rEe({
               },
             });
           if ($e === "dataModel")
-            return i.jsx(vce, {
+            return i.jsx(DataModelDialog, {
               workbook: H,
               sheetId: he.id,
               range: Ye,
@@ -4096,7 +4342,7 @@ function rEe({
               },
             });
           if ($e === "sort")
-            return i.jsx(p4e, {
+            return i.jsx(CustomSortDialog, {
               workbook: H,
               sheetId: he.id,
               range: Ye,
@@ -4120,14 +4366,17 @@ function rEe({
             const Ue = {
               workbook: H,
               sheetId: he.id,
-              range: $e === "duplicates" && !Ye.includes(":") ? Ta(he) : Ye,
+              range:
+                $e === "duplicates" && !Ye.includes(":")
+                  ? formatOccupiedRangeAddress(he)
+                  : Ye,
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
               onWorkbookChange: ca,
             };
             return $e === "consolidation"
-              ? i.jsx(ice, {
+              ? i.jsx(ConsolidationDialog, {
                   ...Ue,
                   initialDefinition:
                     he.consolidation?.definition ?? consolidationDefinition,
@@ -4136,55 +4385,63 @@ function rEe({
                   allowFileSources: allowConsolidationFiles && !!ae,
                 })
               : $e === "transformationRecipes"
-                ? i.jsx(Hce, { ...Ue })
+                ? i.jsx(TransformationRecipesDialog, { ...Ue })
                 : $e === "combinePopulations"
-                  ? i.jsx(e4e, { ...Ue })
+                  ? i.jsx(CombinePopulationsDialog, { ...Ue })
                   : $e === "textToColumns"
-                    ? i.jsx(t4e, { ...Ue })
+                    ? i.jsx(TextToColumnsDialog, { ...Ue })
                     : $e === "textCleanup"
-                      ? i.jsx(s4e, { ...Ue })
+                      ? i.jsx(TextCleanupDialog, { ...Ue })
                       : $e === "fieldTransform"
-                        ? i.jsx(l4e, { ...Ue })
-                        : i.jsx($z, { ...Ue });
+                        ? i.jsx(CleanAndReshapeDialog, { ...Ue })
+                        : i.jsx(DuplicateReviewDialog, { ...Ue });
           }
           return $e === "patterns"
-            ? i.jsx(Z4e, {
+            ? i.jsx(PatternCheckDialog, {
                 workbook: H,
                 sheetId: he.id,
-                range: Ju || (Ye.includes(":") ? Ye : Ta(he)),
+                range:
+                  Ju ||
+                  (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
                 readOnly,
                 allowHidden: true,
                 onClose: fe.onClose,
               })
             : $e === "aging"
-              ? i.jsx(Ede, {
+              ? i.jsx(AgingScheduleScreen, {
                   workbook: H,
                   sheetId: he.id,
-                  range: Ju || (Ye.includes(":") ? Ye : Ta(he)),
+                  range:
+                    Ju ||
+                    (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
                   readOnly,
                   allowHidden: true,
                   onClose: fe.onClose,
                 })
               : $e === "materiality"
-                ? i.jsx(P4e, {
+                ? i.jsx(MaterialityRiskScreen, {
                     workbook: H,
                     sheetId: he.id,
-                    range: Ju || (Ye.includes(":") ? Ye : Ta(he)),
+                    range:
+                      Ju ||
+                      (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
                     readOnly,
                     allowHidden: true,
                     onClose: fe.onClose,
                   })
                 : $e === "workbookComparison"
-                  ? i.jsx(u2e, {
+                  ? i.jsx(WorkbookComparisonDialog, {
                       workbook: H,
                       sheetId: he.id,
-                      range: Ye.includes(":") ? Ye : Ta(he),
+                      range: Ye.includes(":")
+                        ? Ye
+                        : formatOccupiedRangeAddress(he),
                       readOnly,
                       allowHidden: true,
                       onClose: fe.onClose,
                     })
                   : $e === "scenarios" || $e === "dataTable"
-                    ? i.jsx($xe, {
+                    ? i.jsx(WhatIfAnalysisDialog, {
                         workbook: H,
                         sheetId: he.id,
                         address: xt,
@@ -4196,7 +4453,7 @@ function rEe({
                         onWorkbookChange: ca,
                       })
                     : $e === "goalSeek"
-                      ? i.jsx(mxe, {
+                      ? i.jsx(GoalSeekDialog, {
                           workbook: H,
                           sheetId: he.id,
                           address: xt,
@@ -4206,7 +4463,7 @@ function rEe({
                           onWorkbookChange: ua,
                         })
                       : $e === "calculation"
-                        ? i.jsx(Zce, {
+                        ? i.jsx(CalculationOptionsDialog, {
                             workbook: H,
                             readOnly,
                             onClose: fe.onClose,
@@ -4217,7 +4474,7 @@ function rEe({
                             onNavigate: Ts,
                           })
                         : $e === "formulaWatches"
-                          ? i.jsx(fxe, {
+                          ? i.jsx(FormulaWatchWindow, {
                               workbook: H,
                               sheetId: he.id,
                               range: Ye,
@@ -4229,7 +4486,7 @@ function rEe({
                               onNavigate: Ts,
                             })
                           : $e === "evaluateFormula"
-                            ? i.jsx(sxe, {
+                            ? i.jsx(EvaluateFormulaDialog, {
                                 workbook: H,
                                 sheetId: he.id,
                                 address: xt,
@@ -4239,7 +4496,7 @@ function rEe({
                               })
                             : $e === "tracePrecedents" ||
                                 $e === "traceDependents"
-                              ? i.jsx(lxe, {
+                              ? i.jsx(CalculationInspectorDialog, {
                                   workbook: H,
                                   sheetId: he.id,
                                   address: xt,
@@ -4251,10 +4508,14 @@ function rEe({
                                   onClose: fe.onClose,
                                   onNavigate: Ts,
                                 })
-                              : i.jsx(sfe, { ...fe, onNavigate: Ts }, $e);
+                              : i.jsx(
+                                  DataToolDialogRouter,
+                                  { ...fe, onNavigate: Ts },
+                                  $e,
+                                );
         })(),
       oi &&
-        i.jsx(zxe, {
+        i.jsx(DelimitedImportExportDialog, {
           source: oi,
           blocked:
             oi.snapshot !== H
@@ -4286,7 +4547,11 @@ function rEe({
             if (sr.current.book !== oi.snapshot)
               throw new Error("The workbook changed. Review the export again.");
             if (Oe.population && !("bytes" in oi)) {
-              const Be = V$(sr.current.book, oi.sheetId, Oe.options);
+              const Be = exportWorksheetToCsv(
+                sr.current.book,
+                oi.sheetId,
+                Oe.options,
+              );
               if (
                 JSON.stringify(Be.report.population) !==
                   JSON.stringify(Oe.population) ||
@@ -4310,12 +4575,12 @@ function rEe({
           },
         }),
       vo &&
-        i.jsx(X$, {
+        i.jsx(XlsxConversionReview, {
           report: vo.report,
           inspectOnly: vo.inspectOnly,
           onOriginal: () =>
             On(() => {
-              const fe = WR(vo.imported ?? vo.snapshot);
+              const fe = requireRetainedXlsxSource(vo.imported ?? vo.snapshot);
               Jd(
                 new Blob([new Uint8Array(fe.bytes)], {
                   type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -4374,7 +4639,7 @@ function rEe({
             lang: language("Import workbook file"),
             "data-ui-label": "Import workbook file",
           }),
-          i.jsx(Hde, {
+          i.jsx(WorkbookRibbon, {
             onTool: Pn,
             sheetProtected: !!((Y = he.protection) != null && Y.enabled),
             allowProtectionChange: !readOnly,
@@ -4398,8 +4663,8 @@ function rEe({
               return yl.current?.click();
             },
             onExport: (fe) => void hu(fe),
-            onNew: () => oc(t5()),
-            onDemo: () => oc(FI()),
+            onNew: () => oc(createBlankWorkbook()),
+            onDemo: () => oc(buildSampleLedgerWorkbook()),
             onRename: () => Ia({ kind: "rename", value: H.name }),
             onAddSheet: () =>
               Ia({ kind: "sheet", value: `Sheet${H.sheets.length + 1}` }),
@@ -4407,10 +4672,15 @@ function rEe({
             onAddColumn: () => Pn("insertColumn"),
             onAutoFitColumns: () => Ko("column"),
             onAutoFitRows: () => Ko("row"),
-            onAutosum: () => On(() => To([jQ(H, he.id, xt)], "AutoSum")),
+            onAutosum: () =>
+              On(() => To([applyAutoSum(H, he.id, xt)], "AutoSum")),
             onFillDown: () =>
               On(() => {
-                (rt(), So(Qy(H, $2(H, he.id, Ye, "down")), "Fill down"));
+                (rt(),
+                  So(
+                    applyFillPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+                    "Fill down",
+                  ));
               }),
             onClear: () => On(Ho),
             onCopy: () => void Ru(false),
@@ -4443,28 +4713,28 @@ function rEe({
             onReviewed: () =>
               Vi({ tickmark: ur != null && ur.tickmark ? "" : "✓" }),
           }),
-          i.jsx(nce, {
+          i.jsx(ConsolidationStatusBanner, {
             workbook: H,
             sheetId: he.id,
             options: { approvedWorkbooks: te },
             onReview: () => Pn("consolidation"),
           }),
-          i.jsx(Hse, {
+          i.jsx(CustomFunctionReviewBanner, {
             workbook: H,
             extensions,
             onReview: () => Pn("extensions"),
           }),
-          i.jsx(Tue, {
+          i.jsx(WorkbookLinkStatusBadge, {
             workbook: H,
             sources: W,
             onReview: () => Pn("workbookLinks"),
           }),
-          i.jsx(K2e, {
+          i.jsx(ExternalSourceStatusPanel, {
             workbook: H,
             sheetId: he.id,
             onReview: () => Pn("externalSources"),
           }),
-          i.jsx(Sxe, {
+          i.jsx(AnalysisSnapshotNotice, {
             workbook: H,
             sheetId: he.id,
             onReview: () => {
@@ -4475,7 +4745,7 @@ function rEe({
               );
             },
           }),
-          i.jsx(bce, {
+          i.jsx(DataModelSnapshotNotice, {
             workbook: H,
             sheetId: he.id,
             onReview: () => Pn("dataModel"),
@@ -4500,7 +4770,7 @@ function rEe({
                     "· ",
                     _a.report.pending,
                     " ",
-                    i.jsx(M, { children: "pending formulas" }),
+                    i.jsx(LocalizedText, { children: "pending formulas" }),
                     _a.report.execution?.state === "timeout" ||
                     _a.report.execution?.state === "failed"
                       ? ` · ${_a.report.execution.message}`
@@ -4509,17 +4779,21 @@ function rEe({
                 }),
                 i.jsx("button", {
                   onClick: () => Pn("calculateNow"),
-                  children: i.jsx(M, { children: "Calculate Now" }),
+                  children: i.jsx(LocalizedText, { children: "Calculate Now" }),
                 }),
                 _a.report.execution?.mode === "worker" &&
                   _a.report.execution.state === "pending" &&
                   i.jsx("button", {
                     onClick: bl.cancel,
-                    children: i.jsx(M, { children: "Cancel calculation" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Cancel calculation",
+                    }),
                   }),
                 i.jsx("button", {
                   onClick: () => Pn("calculation"),
-                  children: i.jsx(M, { children: "Calculation Options" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Calculation Options",
+                  }),
                 }),
               ],
             }),
@@ -4528,7 +4802,7 @@ function rEe({
               className: `lg-notice ${qs ? "error" : ""}`,
               role: qs ? "alert" : "status",
               children: [
-                i.jsx(M, { children: qs || Hs }),
+                i.jsx(LocalizedText, { children: qs || Hs }),
                 i.jsx("button", {
                   "aria-label": text("Dismiss notification"),
                   onClick: () => {
@@ -4545,7 +4819,7 @@ function rEe({
             i.jsx("p", {
               role: "status",
               className: "lg-notice",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "The current edit keeps its original numeric locale until you apply or cancel it.",
               }),
@@ -4559,41 +4833,48 @@ function rEe({
               "data-ui-label": "Unsaved workbook changes",
               children: [
                 i.jsx("span", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Your local changes are retained in this editor.",
                   }),
                 }),
-                Te instanceof Oo && Te.code === "conflict"
+                Te instanceof WorkbookRevisionConflictError &&
+                Te.code === "conflict"
                   ? i.jsx("button", {
                       onClick: () => Re(true),
-                      children: i.jsx(M, { children: "Review save conflict" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Review save conflict",
+                      }),
                     })
                   : i.jsx("button", {
                       disabled: readOnly || Me > 0,
                       onClick: Uo,
-                      children: i.jsx(M, { children: "Retry saving" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Retry saving",
+                      }),
                     }),
                 Me > 0 &&
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Waiting for save acknowledgement",
                     }),
                   }),
                 i.jsx("button", {
                   onClick: Tn,
-                  children: i.jsx(M, { children: "Export my changes" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Export my changes",
+                  }),
                 }),
               ],
             }),
           ht &&
-            i.jsx(P2e, {
+            i.jsx(WorkbookSaveConflictDialog, {
               workbook: H,
               loadSaved: () => Se.load(),
               onExport: Tn,
               onReload: Aa,
               onClose: () => Re(false),
             }),
-          i.jsx(Cde, {}),
+          i.jsx(ConnectionStatusNotice, {}),
           i.jsxs("div", {
             className: "lg-workarea",
             children: [
@@ -4644,7 +4925,7 @@ function rEe({
                       }),
                       i.jsx("span", {
                         className: "lg-fx",
-                        children: i.jsx(M, { children: "ƒx" }),
+                        children: i.jsx(LocalizedText, { children: "ƒx" }),
                       }),
                       i.jsx("input", {
                         ref: pt,
@@ -4673,8 +4954,10 @@ function rEe({
                             ));
                         },
                         onBlur: (fe) => {
-                          dH(fe.currentTarget, fe.relatedTarget) ||
-                            (Zt(false), ui());
+                          isWithinFormulaSuggestions(
+                            fe.currentTarget,
+                            fe.relatedTarget,
+                          ) || (Zt(false), ui());
                         },
                         onKeyDown: (fe) => {
                           var Oe, Be;
@@ -4701,7 +4984,7 @@ function rEe({
                         lang: language("Formula bar"),
                         "data-ui-label": "Formula bar",
                       }),
-                      i.jsx(fH, {
+                      i.jsx(FormulaSuggestionList, {
                         ref: Fe,
                         onExit: () => {
                           (Zt(false), ui());
@@ -4757,7 +5040,7 @@ function rEe({
                         }),
                       ],
                     }),
-                  DB(H, he.id, xt).map((fe) =>
+                  findDataValidationsInRange(H, he.id, xt).map((fe) =>
                     i.jsxs(
                       "div",
                       {
@@ -4780,7 +5063,9 @@ function rEe({
                             fe.showDropdown !== false &&
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Choose a value for " }),
+                                i.jsx(LocalizedText, {
+                                  children: "Choose a value for ",
+                                }),
                                 xt,
                                 " ",
                                 i.jsxs("select", {
@@ -4852,7 +5137,7 @@ function rEe({
                       lang: language("Dynamic array range"),
                       "data-ui-label": "Dynamic array range",
                       children: [
-                        i.jsx(M, { children: "Dynamic array" }),
+                        i.jsx(LocalizedText, { children: "Dynamic array" }),
                         " ",
                         Qr.getSpillRange(
                           he.id,
@@ -4905,31 +5190,37 @@ function rEe({
                         i.jsx("button", {
                           type: "button",
                           onClick: () => Pn("conditional"),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Review conditional rules",
                           }),
                         }),
                       ],
                     }),
-                  (KS(ur?.style) || H.styleCatalog?.missingTheme) &&
+                  (describeNamedStyleFallback(ur?.style) ||
+                    H.styleCatalog?.missingTheme) &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
                       children: [
-                        KS(ur?.style) || bB(H).join(" "),
+                        describeNamedStyleFallback(ur?.style) ||
+                          collectStyleFallbackWarnings(H).join(" "),
                         i.jsx("button", {
                           onClick: () => Pn("themes"),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Review themes and styles",
                           }),
                         }),
                       ],
                     }),
-                  SE(he.cells[xt]) &&
+                  getImportedNumberFormatWarning(he.cells[xt]) &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       role: "status",
-                      children: [xt, ": ", SE(he.cells[xt])],
+                      children: [
+                        xt,
+                        ": ",
+                        getImportedNumberFormatWarning(he.cells[xt]),
+                      ],
                     }),
                   Ui &&
                     i.jsxs("div", {
@@ -4955,11 +5246,13 @@ function rEe({
                               " ",
                               Hr.context.filteredRows,
                               " ",
-                              i.jsx(M, { children: "filtered out ·" }),
+                              i.jsx(LocalizedText, {
+                                children: "filtered out ·",
+                              }),
                               " ",
                               Hr.context.hiddenMatchingRows,
                               " ",
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children: "matching rows manually hidden",
                               }),
                             ],
@@ -4976,7 +5269,7 @@ function rEe({
                             }),
                               jo("full"));
                           },
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Clear population filters",
                           }),
                         }),
@@ -4990,19 +5283,19 @@ function rEe({
                                 ),
                                 "Population-filter-context.json",
                               ),
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Save filter context",
                             }),
                           }),
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Population scope",
                               }),
                             }),
                             i.jsx("p", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Column filters intersect; advanced groups use OR. These are session views; named criteria can be saved in the native workbook through Edit filters. Native JSON, XLSX, print, other analysis tools and AI selections include full source data in their chosen ranges. CSV/TSV and Audit Checks offer full or visible scope. View filtering does not change SUM or ordinary formulas; SUBTOTAL/AGGREGATE retain their existing worksheet visibility semantics.",
                               }),
@@ -5018,13 +5311,13 @@ function rEe({
                       className: "lg-population-empty",
                       role: "status",
                       children: [
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children: "No matching visible records. All",
                         }),
                         " ",
                         Hr.context.totalRows,
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "source data rows are retained. Clear population filters to show them again; manually hidden rows remain hidden.",
                         }),
@@ -5064,7 +5357,7 @@ function rEe({
                         }),
                       ],
                     }),
-                  i.jsx(dfe, {
+                  i.jsx(PivotResultsStatusBar, {
                     workbook: H,
                     sheetId: oe,
                     onOpen: () => Pn("pivot"),
@@ -5089,7 +5382,9 @@ function rEe({
                         }),
                         i.jsx("button", {
                           onClick: lc,
-                          children: i.jsx(M, { children: "Find Next" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Find Next",
+                          }),
                         }),
                         i.jsx("input", {
                           "aria-label": text("Replace text"),
@@ -5102,7 +5397,7 @@ function rEe({
                         i.jsx("button", {
                           disabled: je,
                           onClick: Ro,
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Replace in selection",
                           }),
                         }),
@@ -5122,10 +5417,10 @@ function rEe({
                       className: "lg-view-note",
                       role: "status",
                       children: [
-                        i.jsx(M, { children: "Fill preview · " }),
+                        i.jsx(LocalizedText, { children: "Fill preview · " }),
                         Fo.targetRange,
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "· Release to review, or press Escape to cancel",
                         }),
@@ -5136,7 +5431,7 @@ function rEe({
                     i.jsx("div", {
                       className: "lg-population-empty",
                       role: "status",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "No rows match this search. Source data is unchanged; clear the search to restore the view.",
                       }),
@@ -5147,7 +5442,7 @@ function rEe({
                       children: [
                         i.jsx(Filter, { size: 12 }),
                         " ",
-                        i.jsx(M, {
+                        i.jsx(LocalizedText, {
                           children:
                             "View only · source row numbers and formula references stay fixed",
                         }),
@@ -5159,23 +5454,27 @@ function rEe({
                       className: "lg-view-note",
                       role: "status",
                       children: [
-                        i.jsx(M, { children: "Cut ready:" }),
+                        i.jsx(LocalizedText, { children: "Cut ready:" }),
                         " ",
                         H.sheets.find((fe) => fe.id === Bo.snapshot.sheetId)
                           ?.name ?? "Deleted worksheet",
                         "!",
                         Bo.snapshot.range,
                         " ",
-                        i.jsx(M, { children: "· Paste to review the move." }),
+                        i.jsx(LocalizedText, {
+                          children: "· Paste to review the move.",
+                        }),
                         " ",
                         i.jsx("button", {
                           type: "button",
                           onClick: Ul,
-                          children: i.jsx(M, { children: "Cancel cut" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Cancel cut",
+                          }),
                         }),
                       ],
                     }),
-                  i.jsx(C2e, {
+                  i.jsx(SplitPaneLayout, {
                     split: Or,
                     snapshot: H,
                     readOnly: je,
@@ -5183,7 +5482,7 @@ function rEe({
                     onResize: (fe) =>
                       On(() =>
                         So(
-                          JS(sr.current.book, he.id, fe),
+                          setSplitPanes(sr.current.book, he.id, fe),
                           "Resize split panes",
                         ),
                       ),
@@ -5331,11 +5630,15 @@ function rEe({
                       i.jsxs("span", {
                         children: [
                           i.jsx("span", { className: "lg-ready-dot" }),
-                          i.jsx(M, { children: go ? "Working…" : "Ready" }),
+                          i.jsx(LocalizedText, {
+                            children: go ? "Working…" : "Ready",
+                          }),
                           i.jsx("button", {
                             type: "button",
                             onClick: () => _(true),
-                            children: i.jsx(M, { children: "Workbook health" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Workbook health",
+                            }),
                           }),
                           go &&
                             ba.current &&
@@ -5343,7 +5646,7 @@ function rEe({
                               onClick: () => {
                                 return ba.current?.abort();
                               },
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Cancel file processing",
                               }),
                             }),
@@ -5356,18 +5659,18 @@ function rEe({
                               "Selection count, numeric count, sum and average include hidden and filtered cells within the selected range.",
                             ),
                             children: [
-                              i.jsx(M, { children: "Count: " }),
+                              i.jsx(LocalizedText, { children: "Count: " }),
                               ie,
                               " ",
                               St.length > 0 ? `· ${Jt.length} areas ` : "",
                               " ",
-                              i.jsx(M, { children: "· Numbers: " }),
+                              i.jsx(LocalizedText, { children: "· Numbers: " }),
                               er.length,
                               i.jsxs("span", {
                                 className: "lg-selection-inclusion",
                                 children: [
                                   " ",
-                                  i.jsx(M, {
+                                  i.jsx(LocalizedText, {
                                     children:
                                       "· Includes hidden and filtered cells",
                                   }),
@@ -5382,19 +5685,24 @@ function rEe({
                         children: [
                           i.jsxs("span", {
                             children: [
-                              i.jsx(M, { children: "Average" }),
+                              i.jsx(LocalizedText, { children: "Average" }),
                               " ",
                               i.jsx("b", {
-                                children: Af(er.length ? Gt / er.length : 0),
+                                children: formatNumberWithPattern(
+                                  er.length ? Gt / er.length : 0,
+                                ),
                               }),
                             ],
                           }),
                           i.jsxs("span", {
                             children: [
-                              i.jsx(M, { children: "Sum" }),
+                              i.jsx(LocalizedText, { children: "Sum" }),
                               " ",
                               i.jsx("b", {
-                                children: Af(Gt, { raw: 0, format: "number" }),
+                                children: formatNumberWithPattern(Gt, {
+                                  raw: 0,
+                                  format: "number",
+                                }),
                               }),
                             ],
                           }),
@@ -5484,16 +5792,20 @@ function rEe({
                             children: [
                               i.jsx("span", {
                                 className: "lg-eyebrow",
-                                children: i.jsx(M, { children: "AUDIT" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "AUDIT",
+                                }),
                               }),
                               i.jsx("h3", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Audit checks",
                                 }),
                               }),
                               i.jsxs("label", {
                                 children: [
-                                  i.jsx(M, { children: "Analysis population" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Analysis population",
+                                  }),
                                   i.jsxs("select", {
                                     "aria-label": text("Analysis population"),
                                     value: ei,
@@ -5520,7 +5832,7 @@ function rEe({
                               i.jsxs("p", {
                                 className: "lg-muted",
                                 children: [
-                                  i.jsx(M, {
+                                  i.jsx(LocalizedText, {
                                     children:
                                       "Applies to the five checks below. Pattern checks and other tool dialogs use their own complete source ranges and explicit source filters.",
                                   }),
@@ -5532,7 +5844,7 @@ function rEe({
                               }),
                               i.jsx("p", {
                                 className: "lg-muted",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Run a reproducible check, then trace each finding directly to its source.",
                                 }),
@@ -5547,12 +5859,12 @@ function rEe({
                                       i.jsxs("span", {
                                         children: [
                                           i.jsx("strong", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children: "Pattern checks",
                                             }),
                                           }),
                                           i.jsx("small", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "Duplicates, sequence gaps and unusual postings",
                                             }),
@@ -5638,11 +5950,13 @@ function rEe({
                               i.jsxs("label", {
                                 className: "lg-field",
                                 children: [
-                                  i.jsx(M, { children: "Source range" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Source range",
+                                  }),
                                   " ",
                                   i.jsx("input", {
                                     "aria-label": text("Audit source range"),
-                                    placeholder: `A1:${ut(he.colCount - 1)}${he.rowCount} (entire sheet)`,
+                                    placeholder: `A1:${columnIndexToLetters(he.colCount - 1)}${he.rowCount} (entire sheet)`,
                                     value: Ju,
                                     onChange: (fe) => C0(fe.target.value),
                                     lang: language("Audit source range"),
@@ -5653,7 +5967,7 @@ function rEe({
                               i.jsxs("span", {
                                 className: "lg-field-hint",
                                 children: [
-                                  i.jsx(M, {
+                                  i.jsx(LocalizedText, {
                                     children: "First row contains field names.",
                                   }),
                                   " ",
@@ -5666,10 +5980,10 @@ function rEe({
                                 i.jsxs("label", {
                                   className: "lg-field",
                                   children: [
-                                    i.jsx(M, {
+                                    i.jsx(LocalizedText, {
                                       children: "Absolute amount threshold",
                                     }),
-                                    i.jsx(ci, {
+                                    i.jsx(LocalizedNumberField, {
                                       "aria-label": text(
                                         "Materiality threshold",
                                       ),
@@ -5688,8 +6002,10 @@ function rEe({
                                     i.jsxs("label", {
                                       className: "lg-field",
                                       children: [
-                                        i.jsx(M, { children: "Sample size" }),
-                                        i.jsx(ci, {
+                                        i.jsx(LocalizedText, {
+                                          children: "Sample size",
+                                        }),
+                                        i.jsx(LocalizedNumberField, {
                                           "aria-label": text("Sample size"),
                                           min: "1",
                                           value: jl,
@@ -5702,7 +6018,9 @@ function rEe({
                                     i.jsxs("label", {
                                       className: "lg-field",
                                       children: [
-                                        i.jsx(M, { children: "Seed" }),
+                                        i.jsx(LocalizedText, {
+                                          children: "Seed",
+                                        }),
                                         i.jsx("input", {
                                           "aria-label": text("Sampling seed"),
                                           value: Fl,
@@ -5718,7 +6036,9 @@ function rEe({
                                 i.jsxs("label", {
                                   className: "lg-field",
                                   children: [
-                                    i.jsx(M, { children: "As of date" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "As of date",
+                                    }),
                                     i.jsx("input", {
                                       "aria-label": text("Aging as of date"),
                                       type: "date",
@@ -5734,7 +6054,9 @@ function rEe({
                                 onClick: Rs,
                                 children: [
                                   i.jsx(ClipboardCheck, { size: 15 }),
-                                  i.jsx(M, { children: "Run check" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Run check",
+                                  }),
                                   i.jsx(ArrowUpRight, { size: 15 }),
                                 ],
                               }),
@@ -5764,7 +6086,7 @@ function rEe({
                                           ),
                                         children: [
                                           i.jsx(Download, { size: 13 }),
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "Export evidence report",
                                           }),
                                         ],
@@ -5837,13 +6159,13 @@ function rEe({
                                       i.jsxs("div", {
                                         children: [
                                           i.jsx("strong", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "Evidence stays connected",
                                             }),
                                           }),
                                           i.jsx("p", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "Every finding includes a worksheet and cell reference. Checks leave source data unchanged.",
                                             }),
@@ -5861,7 +6183,7 @@ function rEe({
                               className: "lg-muted",
                               children: "Loading chat…",
                             }),
-                            children: i.jsx(eEe, {
+                            children: i.jsx(LazyAssistantChat, {
                               session: Md,
                               setSession: A0,
                               adapter,
@@ -5872,7 +6194,7 @@ function rEe({
                                 H.revision,
                                 he.id,
                                 br,
-                                RH(adapter),
+                                workbookInstanceKey(adapter),
                               ]),
                               selectionLabel: Wa,
                               selectedCount: ie,
@@ -5898,17 +6220,19 @@ function rEe({
                                       children: [
                                         Xs &&
                                           gl &&
-                                          !fg(H, ve, gl).current &&
+                                          !evaluateAnswerEvidence(H, ve, gl)
+                                            .current &&
                                           i.jsx("p", {
                                             role: "status",
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "The answer evidence is stale or unavailable. Request a fresh answer before review.",
                                             }),
                                           }),
                                         Xs &&
                                           gl &&
-                                          fg(H, ve, gl).current &&
+                                          evaluateAnswerEvidence(H, ve, gl)
+                                            .current &&
                                           i.jsxs("div", {
                                             className: "lg-proposal",
                                             children: [
@@ -5919,15 +6243,18 @@ function rEe({
                                                   : "RESPONSE",
                                               }),
                                               i.jsx(
-                                                Q4e,
+                                                AssistantAnswerEvidence,
                                                 {
                                                   workbook: H,
                                                   selection: ve,
                                                   evidence: gl,
                                                   renderText: (fe) =>
-                                                    i.jsx(tEe, {
-                                                      children: fe,
-                                                    }),
+                                                    i.jsx(
+                                                      LazyAssistantChatMarkdown,
+                                                      {
+                                                        children: fe,
+                                                      },
+                                                    ),
                                                   onNavigate: (fe, Oe) => {
                                                     const Be = sr.current;
                                                     if (kr.current)
@@ -5936,7 +6263,7 @@ function rEe({
                                                       );
                                                     if (
                                                       fe !== Be.sheetId ||
-                                                      !fg(
+                                                      !evaluateAnswerEvidence(
                                                         Be.book,
                                                         {
                                                           sheetId: Be.sheetId,
@@ -6120,17 +6447,21 @@ function rEe({
                                                           if (
                                                             fe.readOnly ||
                                                             kr.current ||
-                                                            !fg(fe.book, Oe, gl)
-                                                              .current
+                                                            !evaluateAnswerEvidence(
+                                                              fe.book,
+                                                              Oe,
+                                                              gl,
+                                                            ).current
                                                           )
                                                             throw Error(
                                                               "The current approved source changed or editing is unavailable. Request a fresh answer before applying changes.",
                                                             );
-                                                          const Be = X2(
-                                                            fe.book,
-                                                            Oe,
-                                                            Xs,
-                                                          );
+                                                          const Be =
+                                                            validateProposedCalculation(
+                                                              fe.book,
+                                                              Oe,
+                                                              Xs,
+                                                            );
                                                           (To(
                                                             Be.patches,
                                                             `Accepted assistant proposal ${Be.id}`,
@@ -6144,12 +6475,12 @@ function rEe({
                                                         i.jsx(Check, {
                                                           size: 15,
                                                         }),
-                                                        i.jsx(M, {
+                                                        i.jsx(LocalizedText, {
                                                           children: "Apply ",
                                                         }),
                                                         Xs.patches.length,
                                                         " ",
-                                                        i.jsx(M, {
+                                                        i.jsx(LocalizedText, {
                                                           children: "changes",
                                                         }),
                                                       ],
@@ -6160,10 +6491,13 @@ function rEe({
                                                       onClick: () => {
                                                         (Bl(null), Ll(null));
                                                       },
-                                                      children: i.jsx(M, {
-                                                        children:
-                                                          "Discard proposal",
-                                                      }),
+                                                      children: i.jsx(
+                                                        LocalizedText,
+                                                        {
+                                                          children:
+                                                            "Discard proposal",
+                                                        },
+                                                      ),
                                                     }),
                                                   ],
                                                 }),
@@ -6179,18 +6513,18 @@ function rEe({
                             children: [
                               i.jsx("span", {
                                 className: "lg-eyebrow",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "WORKBOOK ACTIVITY",
                                 }),
                               }),
                               i.jsx("h3", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Change history",
                                 }),
                               }),
                               i.jsx("p", {
                                 className: "lg-muted",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Local activity is included in JSON exports. This log is editable with the file and is not an immutable audit record.",
                                 }),
@@ -6201,7 +6535,7 @@ function rEe({
                                     children: [
                                       i.jsx(History, { size: 26 }),
                                       i.jsx("p", {
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children:
                                             "Your first edit starts the activity trail.",
                                         }),
@@ -6268,7 +6602,7 @@ function rEe({
                                                     "+ ",
                                                     fe.changes.length - 5,
                                                     " ",
-                                                    i.jsx(M, {
+                                                    i.jsx(LocalizedText, {
                                                       children:
                                                         "more cell changes",
                                                     }),
@@ -6287,24 +6621,24 @@ function rEe({
                             children: [
                               i.jsx("span", {
                                 className: "lg-eyebrow",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "SPREADSHEET HELP",
                                 }),
                               }),
                               i.jsx("h3", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Workbook help",
                                 }),
                               }),
                               i.jsx("p", {
                                 className: "lg-muted",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "An embeddable React workbook for audit preparation and review.",
                                 }),
                               }),
                               i.jsx("h4", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Working with cells",
                                 }),
                               }),
@@ -6312,37 +6646,37 @@ function rEe({
                                 className: "lg-help-list",
                                 children: [
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Click a cell, then type or use the formula bar. Enter commits the value.",
                                     }),
                                   }),
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Enter dates as YYYY-MM-DD using the workbook's selected 1900 or 1904 date system. Other date formats stay text; prefix an ISO date with an apostrophe to keep it as text. The formula bar shows the stored serial and the grid shows the date.",
                                     }),
                                   }),
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Ctrl/Command-click to add areas; Shift-click extends a range. Enter A1:D10, F1:F10 in the name box.",
                                     }),
                                   }),
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Copy and paste rectangular tab-separated values with Ctrl/⌘ C and V.",
                                     }),
                                   }),
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Prefix text with an apostrophe to prevent formula evaluation.",
                                     }),
                                   }),
                                   i.jsx("li", {
-                                    children: i.jsx(M, {
+                                    children: i.jsx(LocalizedText, {
                                       children:
                                         "Sort and search change the view; source row numbers remain fixed.",
                                     }),
@@ -6350,24 +6684,26 @@ function rEe({
                                 ],
                               }),
                               i.jsx("h4", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Compatibility",
                                 }),
                               }),
                               i.jsx("p", {
                                 className: "lg-muted",
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "XLSX retains a documented subset of cells, formulas and formatting. JSON retains the complete native workpaper. Macros, Power Query, DAX, advanced PivotTables, and full Excel layout fidelity are target requirements, not features of this release.",
                                 }),
                               }),
-                              i.jsx(Yce, {}),
+                              i.jsx(WorkbookCapacityLimits, {}),
                               i.jsxs("button", {
                                 className: "lg-button full",
                                 onClick: () => window.print(),
                                 children: [
                                   i.jsx(FileSpreadsheet, { size: 15 }),
-                                  i.jsx(M, { children: "Print current view" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Print current view",
+                                  }),
                                 ],
                               }),
                             ],
@@ -6380,9 +6716,9 @@ function rEe({
           }),
         ],
       }),
-      B && i.jsx(V2e, { monitor: D, onClose: () => _(false) }),
+      B && i.jsx(WorkbookHealthDialog, { monitor: D, onClose: () => _(false) }),
       ml &&
-        i.jsx(Gce, {
+        i.jsx(ValidationReviewDialog, {
           error: ml.error,
           readOnly: je,
           onRetry: () => {
@@ -6408,9 +6744,15 @@ function rEe({
               if (ml.snapshot !== JSON.stringify(sr.current.book))
                 throw Error("Workbook changed. Review the batch again.");
               (di(
-                p0(sr.current.book, ml.patches, actor, ml.action, {
-                  validationApproval: jB(ml.error),
-                }),
+                applyCellPatchTransaction(
+                  sr.current.book,
+                  ml.patches,
+                  actor,
+                  ml.action,
+                  {
+                    validationApproval: assertNoStopValidationIssues(ml.error),
+                  },
+                ),
               ),
                 Rf(null),
                 (kr.current = null),
@@ -6479,12 +6821,12 @@ function rEe({
                   i.jsx("button", {
                     className: "lg-button",
                     onClick: () => Ia(null),
-                    children: i.jsx(M, { children: "Cancel" }),
+                    children: i.jsx(LocalizedText, { children: "Cancel" }),
                   }),
                   i.jsx("button", {
                     className: "lg-button dark",
                     onClick: el,
-                    children: i.jsx(M, { children: "Save" }),
+                    children: i.jsx(LocalizedText, { children: "Save" }),
                   }),
                 ],
               }),
@@ -6494,7 +6836,7 @@ function rEe({
     ],
   });
 }
-function nEe({
+function WorksheetGridRow({
   idPrefix,
   pinned,
   pinnedTop,
@@ -6549,9 +6891,9 @@ function nEe({
   saveCell,
   readOnly,
 }) {
-  const { text, language } = Dr(),
-    ge = Dr(),
-    se = (Te) => aI(Te, ge.entryLocale),
+  const { text, language } = useWorkbookMessages(),
+    ge = useWorkbookMessages(),
+    se = (Te) => formatCellEntryForEdit(Te, ge.entryLocale),
     we = ne.useRef(null),
     Ee = ne.useRef(null),
     [Ae, ye] = ne.useState(0);
@@ -6597,7 +6939,7 @@ function nEe({
           const qe = mergeBounds.find((lt) => Tp(lt, row, Te));
           let ht = 1,
             Re = 1,
-            Me = `${ut(Te)}${row + 1}`;
+            Me = `${columnIndexToLetters(Te)}${row + 1}`;
           if (qe && !sortedView) {
             const lt = (
                 frozenColumns.includes(Te) ? frozenColumns : columns
@@ -6608,7 +6950,7 @@ function nEe({
             if (Te !== lt[0] || row !== be[0]) return null;
             ((ht = lt.length),
               (Re = be.length),
-              (Me = `${ut(qe.firstCol)}${qe.firstRow + 1}`));
+              (Me = `${columnIndexToLetters(qe.firstCol)}${qe.firstRow + 1}`));
           }
           const ke = cells[Me],
             je = {
@@ -6623,7 +6965,7 @@ function nEe({
               !je.literal,
             ze = active === Me,
             at = {
-              ...Dw(je.style, $e),
+              ...cellStyleToCss(je.style, $e),
               ...(frozenColumns.includes(Te)
                 ? {
                     position: "sticky",
@@ -6651,7 +6993,7 @@ function nEe({
                     "aria-colspan": ht > 1 ? ht : undefined,
                     "aria-rowspan": Re > 1 ? Re : undefined,
                     role: "gridcell",
-                    "aria-label": `${Me} ${ge.entryLocale ? lI($e, je, workbook.datePolicy?.dateSystem, ge.entryLocale) : String($e ?? "")}`,
+                    "aria-label": `${Me} ${ge.entryLocale ? formatLocalizedNumberDisplay($e, je, workbook.datePolicy?.dateSystem, ge.entryLocale) : String($e ?? "")}`,
                     "aria-colindex": Te + 2,
                     "aria-selected": selectionBounds.some((lt) =>
                       Tp(lt, row, Te),
@@ -6717,8 +7059,10 @@ function nEe({
                                 },
                                 onClick: (lt) => lt.stopPropagation(),
                                 onBlur: (lt) => {
-                                  dH(lt.currentTarget, lt.relatedTarget) ||
-                                    saveCell(editing);
+                                  isWithinFormulaSuggestions(
+                                    lt.currentTarget,
+                                    lt.relatedTarget,
+                                  ) || saveCell(editing);
                                 },
                                 onKeyDown: (lt) => {
                                   var be, ft;
@@ -6750,7 +7094,7 @@ function nEe({
                                   }
                                 },
                               }),
-                              i.jsx(fH, {
+                              i.jsx(FormulaSuggestionList, {
                                 ref: Ee,
                                 onExit: () => {
                                   saveCell(editing);
@@ -6778,7 +7122,7 @@ function nEe({
                             children: [
                               i.jsx("span", {
                                 style: {
-                                  ...RN(je.style),
+                                  ...textWrapToCss(je.style),
                                   ...(fixedHeight && Re === 1
                                     ? {
                                         maxHeight: minimumHeight - 1,
@@ -6789,9 +7133,9 @@ function nEe({
                                 children:
                                   showFormulas && Je
                                     ? String(je.raw)
-                                    : i.jsx(Fz, {
+                                    : i.jsx(ConditionalFormatIndicator, {
                                         decoration: conditionalFormatter(Me),
-                                        children: i.jsx(jI, {
+                                        children: i.jsx(CellValuePreview, {
                                           value: $e,
                                           cell: je,
                                           dateSystem:
@@ -6903,4 +7247,4 @@ function nEe({
   });
 }
 
-export { IH };
+export { WorkbookSyncBoundary };

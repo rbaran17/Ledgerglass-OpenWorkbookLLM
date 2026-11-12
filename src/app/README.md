@@ -4,9 +4,14 @@ These files were produced by splitting the recovered application entry. They are
 loaded by `src/main.js` in numeric order, and each one imports only from files
 with a lower number, so the order is also the dependency order.
 
-The names and descriptions were assigned from the strings, CSS classes and UI
-text each file contains. The code inside still uses minified identifiers, so
-treat the descriptions as a guide to where things are, not as documentation.
+The file names and descriptions were assigned from the strings, CSS classes and
+UI text each file contains, so treat them as a guide to where things are, not
+as documentation. Several files hold more than their name says.
+
+Function, component and constant names inside the files were also assigned
+afterwards, from the same kind of evidence. They describe what the code
+appears to do; some will be imprecise, and a few short minified names remain
+where there was not enough evidence to choose one.
 
 | File                                                | Lines | Contents                                                                                                                                                                                                                  |
 | --------------------------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

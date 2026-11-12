@@ -1,32 +1,36 @@
 import i from "react/jsx-runtime";
 import ne from "react";
 import {
-  $P,
-  Eie,
-  FP,
-  QP,
-  ZP,
-  cR,
-  die,
-  fie,
-  mie,
-  pR,
-  vie,
-  yR,
-  yie,
+  suggestTableHeaderName,
+  applyTableOperationPreview,
+  pivotAggregateOperations,
+  applyTableOperation,
+  runQueryDefinition,
+  basicAggregateOperations,
+  findTableForRange,
+  createWorksheetTable,
+  refreshPivotTable,
+  getPivotSourceFields,
+  buildPivotChartModel,
+  buildPivotTableOutput,
+  refreshQueryDefinition,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import {
-  BI,
-  Xk,
-  Y7,
-  cfe,
-  ffe,
-  hfe,
-  ufe,
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  PivotStatusBadge,
+  formatAggregationLabel,
+  nextDefaultTableName,
+  PivotFieldOptionsPanel,
+  toggleListValue,
+  tryComputePivotRows,
+  TableColumnTypesPanel,
 } from "./29-conditional-formatting-dialog.js";
 
-function pfe({
+function TableToolsDialog({
   mode,
   workbook,
   sheetId,
@@ -36,7 +40,7 @@ function pfe({
   onWorkbookChange,
 }) {
   var br;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     l = ne.useRef(null);
   ne.useEffect(() => {
     const rt = document.activeElement,
@@ -53,18 +57,18 @@ function pfe({
   }, []);
   const c = ne.useMemo(() => {
       try {
-        return die(workbook, sheetId, range);
+        return findTableForRange(workbook, sheetId, range);
       } catch {
         return range;
       }
     }, []),
-    h = ne.useMemo(() => hfe(workbook, sheetId, c), []),
+    h = ne.useMemo(() => tryComputePivotRows(workbook, sheetId, c), []),
     [f, p] = ne.useState(sheetId),
     [m, v] = ne.useState(c),
     [g, b] = ne.useState(h),
     [y, w] = ne.useState(
       mode === "table"
-        ? Y7(workbook)
+        ? nextDefaultTableName(workbook)
         : mode === "pivot"
           ? "Pivot summary"
           : "Extracted data",
@@ -157,7 +161,7 @@ function pfe({
   function or() {
     be("");
     try {
-      const rt = pR(workbook, f, m);
+      const rt = getPivotSourceFields(workbook, f, m);
       (b(rt),
         K(rt),
         D(rt.slice(0, 1)),
@@ -177,7 +181,7 @@ function pfe({
     (nt(null), A(rt), Je(null));
     const Le = mt.find((kt) => kt.id === rt);
     if (!Le) {
-      (w(Y7(workbook)), v(c), F("blue"), O(false), z({}));
+      (w(nextDefaultTableName(workbook)), v(c), F("blue"), O(false), z({}));
       return;
     }
     (w(Le.name),
@@ -200,7 +204,10 @@ function pfe({
   function qt(rt) {
     (be(""), pt(""), Je(null), at(0));
     try {
-      Je({ plan: QP(workbook, sheetId, E, rt, { readOnly }), context: _e });
+      Je({
+        plan: applyTableOperation(workbook, sheetId, E, rt, { readOnly }),
+        context: _e,
+      });
     } catch (Le) {
       be(Le.message);
     }
@@ -213,7 +220,7 @@ function pfe({
           throw Error(
             "Table settings or the current selection changed. Preview again.",
           );
-        const rt = Eie(workbook, $e.plan, { readOnly });
+        const rt = applyTableOperationPreview(workbook, $e.plan, { readOnly });
         (rt !== workbook &&
           onWorkbookChange(rt, "Apply reviewed table operation"),
           v($e.plan.afterRange),
@@ -237,7 +244,7 @@ function pfe({
           })
         : xt(
             () =>
-              fie(workbook, sheetId, {
+              createWorksheetTable(workbook, sheetId, {
                 name: y,
                 range: m,
                 style: k,
@@ -263,7 +270,7 @@ function pfe({
       : mode === "pivot"
         ? xt(
             () =>
-              yR(workbook, {
+              buildPivotTableOutput(workbook, {
                 name: y,
                 source: { sheetId: f, range: m },
                 rowFields: V,
@@ -280,7 +287,7 @@ function pfe({
           )
         : xt(
             () =>
-              ZP(workbook, {
+              runQueryDefinition(workbook, {
                 name: y,
                 source: { sheetId: f, range: m },
                 fields: W,
@@ -314,7 +321,7 @@ function pfe({
                       i.jsx("input", {
                         type: "checkbox",
                         checked: Le.includes(st),
-                        onChange: () => et(ffe(Le, st)),
+                        onChange: () => et(toggleListValue(Le, st)),
                       }),
                       st,
                     ],
@@ -323,7 +330,7 @@ function pfe({
                 ),
               )
             : i.jsx("p", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children: "Read the source fields first.",
                 }),
               }),
@@ -401,7 +408,9 @@ function pfe({
       readOnly &&
         i.jsx("p", {
           className: "lg-table-readonly",
-          children: i.jsx(M, { children: "This workbook is read-only." }),
+          children: i.jsx(LocalizedText, {
+            children: "This workbook is read-only.",
+          }),
         }),
       i.jsxs("fieldset", {
         disabled: readOnly,
@@ -410,7 +419,7 @@ function pfe({
           mode === "table" &&
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Existing table" }),
+                i.jsx(LocalizedText, { children: "Existing table" }),
                 i.jsxs("select", {
                   "aria-label": text("Existing table"),
                   value: E,
@@ -446,7 +455,7 @@ function pfe({
           mode !== "table" &&
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source sheet" }),
+                i.jsx(LocalizedText, { children: "Source sheet" }),
                 i.jsx("select", {
                   value: f,
                   onChange: (rt) => p(rt.target.value),
@@ -473,7 +482,7 @@ function pfe({
               i.jsx("button", {
                 type: "button",
                 onClick: or,
-                children: i.jsx(M, { children: "Read fields" }),
+                children: i.jsx(LocalizedText, { children: "Read fields" }),
               }),
             ],
           }),
@@ -488,7 +497,11 @@ function pfe({
                           onClick: () => {
                             be("");
                             try {
-                              const rt = $P(workbook, sheetId, m);
+                              const rt = suggestTableHeaderName(
+                                workbook,
+                                sheetId,
+                                m,
+                              );
                               (nt({
                                 snapshot: JSON.stringify(workbook),
                                 range: m,
@@ -499,7 +512,9 @@ function pfe({
                               be(rt.message);
                             }
                           },
-                          children: i.jsx(M, { children: "Review headers" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Review headers",
+                          }),
                         }),
                         Fe &&
                           i.jsxs("section", {
@@ -509,12 +524,12 @@ function pfe({
                             "data-ui-label": "Table header resolution",
                             children: [
                               i.jsx("h3", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Resolve table headers",
                                 }),
                               }),
                               i.jsx("p", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children:
                                     "Review each source value and replacement. Create table applies these names and retains changed originals in native source evidence.",
                                 }),
@@ -526,7 +541,9 @@ function pfe({
                                     children: [
                                       rt.address,
                                       " ",
-                                      i.jsx(M, { children: "original: " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "original: ",
+                                      }),
                                       JSON.stringify(rt.original),
                                       i.jsx("input", {
                                         "aria-label": `Reviewed header ${Le + 1}`,
@@ -555,7 +572,7 @@ function pfe({
                     }),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Table style" }),
+                      i.jsx(LocalizedText, { children: "Table style" }),
                       i.jsxs("select", {
                         value: k,
                         onChange: (rt) => F(rt.target.value),
@@ -578,7 +595,7 @@ function pfe({
                         checked: I,
                         onChange: (rt) => O(rt.target.checked),
                       }),
-                      i.jsx(M, { children: "Show totals row" }),
+                      i.jsx(LocalizedText, { children: "Show totals row" }),
                     ],
                   }),
                   I &&
@@ -591,7 +608,7 @@ function pfe({
                             children: [
                               rt,
                               " ",
-                              i.jsx(M, { children: "total" }),
+                              i.jsx(LocalizedText, { children: "total" }),
                               i.jsxs("select", {
                                 "aria-label": `${rt} total`,
                                 value: Object.hasOwn(j, rt) ? j[rt] : "",
@@ -615,10 +632,13 @@ function pfe({
                                     value: "",
                                     children: "None",
                                   }),
-                                  cR.map((Le) =>
+                                  basicAggregateOperations.map((Le) =>
                                     i.jsx(
                                       "option",
-                                      { value: Le, children: Xk(Le) },
+                                      {
+                                        value: Le,
+                                        children: formatAggregationLabel(Le),
+                                      },
                                       Le,
                                     ),
                                   ),
@@ -632,7 +652,7 @@ function pfe({
                     }),
                   E &&
                     i.jsx(
-                      ufe,
+                      TableColumnTypesPanel,
                       {
                         workbook,
                         sheetId,
@@ -648,13 +668,15 @@ function pfe({
                       className: "lg-table-list",
                       children: [
                         i.jsx("legend", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Calculated columns and rows",
                           }),
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Calculated column" }),
+                            i.jsx(LocalizedText, {
+                              children: "Calculated column",
+                            }),
                             i.jsx("select", {
                               "aria-label": text("Calculated column"),
                               value: qe,
@@ -693,7 +715,9 @@ function pfe({
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "First data-row formula" }),
+                            i.jsx(LocalizedText, {
+                              children: "First data-row formula",
+                            }),
                             i.jsx("input", {
                               "aria-label": text("First data-row formula"),
                               value: Re,
@@ -706,7 +730,7 @@ function pfe({
                         }),
                         i.jsx("p", {
                           className: "lg-table-help",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "The formula is based on this column’s first data row. Preview lists each overwritten value. Other columns and existing evidence stay intact.",
                           }),
@@ -722,7 +746,7 @@ function pfe({
                                   columnId: qe,
                                   formula: Re,
                                 }),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Preview column formula",
                               }),
                             }),
@@ -739,7 +763,7 @@ function pfe({
                                   kind: "clearColumnFormula",
                                   columnId: qe,
                                 }),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Preview clear rule",
                               }),
                             }),
@@ -747,8 +771,10 @@ function pfe({
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Rows to append" }),
-                            i.jsx(ci, {
+                            i.jsx(LocalizedText, {
+                              children: "Rows to append",
+                            }),
+                            i.jsx(LocalizedNumberField, {
                               "aria-label": text("Rows to append"),
                               min: "1",
                               max: "100",
@@ -763,13 +789,13 @@ function pfe({
                           type: "button",
                           onClick: () =>
                             qt({ kind: "appendRows", count: Number(ke) }),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Preview append rows",
                           }),
                         }),
                         i.jsx("p", {
                           className: "lg-table-help",
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children:
                               "Append 1–100 rows within the 500-cell change limit. Saved rules fill added rows. Adjacent cells must be empty. Clearing a rule keeps its existing cell formulas. Ordinary typing does not create rules or expand tables.",
                           }),
@@ -784,14 +810,14 @@ function pfe({
                       "data-ui-label": "Table change preview",
                       children: [
                         i.jsx("h3", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Review table changes",
                           }),
                         }),
                         Ze
                           ? i.jsx("p", {
                               role: "alert",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "The workbook, selection or table settings changed. Preview again.",
                               }),
@@ -808,13 +834,15 @@ function pfe({
                                     " ",
                                     $e.plan.changes.length,
                                     " ",
-                                    i.jsx(M, { children: "cell changes." }),
+                                    i.jsx(LocalizedText, {
+                                      children: "cell changes.",
+                                    }),
                                   ],
                                 }),
                                 i.jsxs("details", {
                                   children: [
                                     i.jsx("summary", {
-                                      children: i.jsx(M, {
+                                      children: i.jsx(LocalizedText, {
                                         children:
                                           "Saved column rules before and after",
                                       }),
@@ -828,12 +856,16 @@ function pfe({
                                               children: rt.name,
                                             }),
                                             i.jsx("br", {}),
-                                            i.jsx(M, { children: "Before:" }),
+                                            i.jsx(LocalizedText, {
+                                              children: "Before:",
+                                            }),
                                             " ",
                                             $e.plan.beforeColumns[Le]
                                               ?.calculatedFormula ?? "No rule",
                                             i.jsx("br", {}),
-                                            i.jsx(M, { children: "After: " }),
+                                            i.jsx(LocalizedText, {
+                                              children: "After: ",
+                                            }),
                                             rt.calculatedFormula ?? "No rule",
                                           ],
                                         },
@@ -861,22 +893,29 @@ function pfe({
                                               ],
                                             }),
                                             i.jsx("br", {}),
-                                            i.jsx(M, { children: "Before: " }),
+                                            i.jsx(LocalizedText, {
+                                              children: "Before: ",
+                                            }),
                                             JSON.stringify(
                                               rt.before?.raw ?? null,
                                             ),
                                             i.jsx("br", {}),
-                                            i.jsx(M, { children: "After: " }),
+                                            i.jsx(LocalizedText, {
+                                              children: "After: ",
+                                            }),
                                             JSON.stringify(
                                               rt.after?.raw ?? null,
                                             ),
                                             i.jsxs("details", {
                                               children: [
                                                 i.jsx("summary", {
-                                                  children: i.jsx(M, {
-                                                    children:
-                                                      "Full cell metadata",
-                                                  }),
+                                                  children: i.jsx(
+                                                    LocalizedText,
+                                                    {
+                                                      children:
+                                                        "Full cell metadata",
+                                                    },
+                                                  ),
                                                 }),
                                                 i.jsx("pre", {
                                                   children: JSON.stringify(
@@ -904,16 +943,20 @@ function pfe({
                                         type: "button",
                                         disabled: ze === 0,
                                         onClick: () => at((rt) => rt - 1),
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Previous changes",
                                         }),
                                       }),
                                       i.jsxs("span", {
                                         children: [
-                                          i.jsx(M, { children: "Page " }),
+                                          i.jsx(LocalizedText, {
+                                            children: "Page ",
+                                          }),
                                           ze + 1,
                                           " ",
-                                          i.jsx(M, { children: "of" }),
+                                          i.jsx(LocalizedText, {
+                                            children: "of",
+                                          }),
                                           " ",
                                           Math.ceil(
                                             $e.plan.changes.length / 20,
@@ -926,7 +969,7 @@ function pfe({
                                           (ze + 1) * 20 >=
                                           $e.plan.changes.length,
                                         onClick: () => at((rt) => rt + 1),
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Next changes",
                                         }),
                                       }),
@@ -960,14 +1003,14 @@ function pfe({
                               className: "lg-table-primary",
                               disabled: Ze,
                               onClick: Ye,
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Apply table changes",
                               }),
                             }),
                             i.jsx("button", {
                               type: "button",
                               onClick: () => Je(null),
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children: "Cancel table preview",
                               }),
                             }),
@@ -977,7 +1020,7 @@ function pfe({
                     }),
                   i.jsx("p", {
                     className: "lg-table-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Creating a totals row requires an empty row below the source. When resizing an existing table, include its totals row in the range.",
                     }),
@@ -995,7 +1038,7 @@ function pfe({
                             className: "lg-table-list",
                             children: [
                               i.jsx("legend", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Value fields",
                                 }),
                               }),
@@ -1007,7 +1050,7 @@ function pfe({
                                     children: [
                                       i.jsxs("label", {
                                         children: [
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "Value field ",
                                           }),
                                           Le + 1,
@@ -1038,7 +1081,7 @@ function pfe({
                                       }),
                                       i.jsxs("label", {
                                         children: [
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "Summarize by",
                                           }),
                                           i.jsx("select", {
@@ -1056,13 +1099,21 @@ function pfe({
                                                     : kt,
                                                 ),
                                               ),
-                                            children: FP.map((et) =>
-                                              i.jsx(
-                                                "option",
-                                                { value: et, children: Xk(et) },
-                                                et,
+                                            children:
+                                              pivotAggregateOperations.map(
+                                                (et) =>
+                                                  i.jsx(
+                                                    "option",
+                                                    {
+                                                      value: et,
+                                                      children:
+                                                        formatAggregationLabel(
+                                                          et,
+                                                        ),
+                                                    },
+                                                    et,
+                                                  ),
                                               ),
-                                            ),
                                           }),
                                         ],
                                       }),
@@ -1073,7 +1124,7 @@ function pfe({
                                           T((et) =>
                                             et.filter((st, kt) => kt !== Le),
                                           ),
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Remove",
                                         }),
                                       }),
@@ -1090,7 +1141,7 @@ function pfe({
                                     ...rt,
                                     { field: g.at(-1), operation: "sum" },
                                   ]),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Add value field",
                                 }),
                               }),
@@ -1104,7 +1155,9 @@ function pfe({
                                 checked: N,
                                 onChange: (rt) => R(rt.target.checked),
                               }),
-                              i.jsx(M, { children: "Grand totals" }),
+                              i.jsx(LocalizedText, {
+                                children: "Grand totals",
+                              }),
                             ],
                           }),
                           i.jsxs("label", {
@@ -1115,12 +1168,12 @@ function pfe({
                                 checked: L,
                                 onChange: (rt) => $(rt.target.checked),
                               }),
-                              i.jsx(M, {
+                              i.jsx(LocalizedText, {
                                 children: "Row and column subtotals",
                               }),
                             ],
                           }),
-                          i.jsx(cfe, {
+                          i.jsx(PivotFieldOptionsPanel, {
                             fields: g,
                             groups: [...V, ...B],
                             dateGroups: U,
@@ -1150,7 +1203,7 @@ function pfe({
                           i.jsxs("details", {
                             children: [
                               i.jsx("summary", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Rename output fields",
                                 }),
                               }),
@@ -1194,7 +1247,7 @@ function pfe({
                             children: [
                               i.jsxs("label", {
                                 children: [
-                                  i.jsx(M, { children: "Sort by" }),
+                                  i.jsx(LocalizedText, { children: "Sort by" }),
                                   i.jsx("select", {
                                     value: oe,
                                     onChange: (rt) => de(rt.target.value),
@@ -1204,7 +1257,7 @@ function pfe({
                               }),
                               i.jsxs("label", {
                                 children: [
-                                  i.jsx(M, { children: "Order" }),
+                                  i.jsx(LocalizedText, { children: "Order" }),
                                   i.jsxs("select", {
                                     value: he,
                                     onChange: (rt) => Se(rt.target.value),
@@ -1227,7 +1280,7 @@ function pfe({
                             className: "lg-table-list",
                             children: [
                               i.jsx("legend", {
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Derived fields",
                                 }),
                               }),
@@ -1239,7 +1292,7 @@ function pfe({
                                     children: [
                                       i.jsxs("label", {
                                         children: [
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "New field name",
                                           }),
                                           i.jsx("input", {
@@ -1260,7 +1313,7 @@ function pfe({
                                       }),
                                       i.jsxs("label", {
                                         children: [
-                                          i.jsx(M, {
+                                          i.jsx(LocalizedText, {
                                             children: "Source field",
                                           }),
                                           i.jsx("select", {
@@ -1282,7 +1335,9 @@ function pfe({
                                       }),
                                       i.jsxs("label", {
                                         children: [
-                                          i.jsx(M, { children: "Operation" }),
+                                          i.jsx(LocalizedText, {
+                                            children: "Operation",
+                                          }),
                                           i.jsx("select", {
                                             value: rt.operation,
                                             onChange: (et) =>
@@ -1309,7 +1364,11 @@ function pfe({
                                             ].map((et) =>
                                               i.jsx(
                                                 "option",
-                                                { value: et, children: Xk(et) },
+                                                {
+                                                  value: et,
+                                                  children:
+                                                    formatAggregationLabel(et),
+                                                },
                                                 et,
                                               ),
                                             ),
@@ -1323,7 +1382,7 @@ function pfe({
                                           children: [
                                             i.jsxs("label", {
                                               children: [
-                                                i.jsx(M, {
+                                                i.jsx(LocalizedText, {
                                                   children: "Second field",
                                                 }),
                                                 i.jsx("select", {
@@ -1350,7 +1409,7 @@ function pfe({
                                             !rt.otherField &&
                                               i.jsxs("label", {
                                                 children: [
-                                                  i.jsx(M, {
+                                                  i.jsx(LocalizedText, {
                                                     children: "Constant",
                                                   }),
                                                   rt.operation === "concat"
@@ -1371,26 +1430,30 @@ function pfe({
                                                             ),
                                                           ),
                                                       })
-                                                    : i.jsx(ci, {
-                                                        "aria-label":
-                                                          text("Constant"),
-                                                        value:
-                                                          rt.constant ?? "",
-                                                        onValueChange: (et) =>
-                                                          ce((st) =>
-                                                            st.map((kt, gr) =>
-                                                              gr === Le
-                                                                ? {
-                                                                    ...kt,
-                                                                    constant:
-                                                                      Number(
-                                                                        et,
-                                                                      ),
-                                                                  }
-                                                                : kt,
+                                                    : i.jsx(
+                                                        LocalizedNumberField,
+                                                        {
+                                                          "aria-label":
+                                                            text("Constant"),
+                                                          value:
+                                                            rt.constant ?? "",
+                                                          onValueChange: (et) =>
+                                                            ce((st) =>
+                                                              st.map(
+                                                                (kt, gr) =>
+                                                                  gr === Le
+                                                                    ? {
+                                                                        ...kt,
+                                                                        constant:
+                                                                          Number(
+                                                                            et,
+                                                                          ),
+                                                                      }
+                                                                    : kt,
+                                                              ),
                                                             ),
-                                                          ),
-                                                      }),
+                                                        },
+                                                      ),
                                                 ],
                                               }),
                                           ],
@@ -1401,7 +1464,7 @@ function pfe({
                                           ce((et) =>
                                             et.filter((st, kt) => kt !== Le),
                                           ),
-                                        children: i.jsx(M, {
+                                        children: i.jsx(LocalizedText, {
                                           children: "Remove derived field",
                                         }),
                                       }),
@@ -1423,7 +1486,7 @@ function pfe({
                                       constant: 1,
                                     },
                                   ]),
-                                children: i.jsx(M, {
+                                children: i.jsx(LocalizedText, {
                                   children: "Add derived field",
                                 }),
                               }),
@@ -1435,7 +1498,9 @@ function pfe({
                     className: "lg-table-list",
                     children: [
                       i.jsx("legend", {
-                        children: i.jsx(M, { children: "Source filters" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Source filters",
+                        }),
                       }),
                       J.map((rt, Le) =>
                         i.jsxs(
@@ -1445,7 +1510,9 @@ function pfe({
                             children: [
                               i.jsxs("label", {
                                 children: [
-                                  i.jsx(M, { children: "Filter field " }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Filter field ",
+                                  }),
                                   Le + 1,
                                   i.jsx("select", {
                                     value: rt.field,
@@ -1463,7 +1530,9 @@ function pfe({
                               }),
                               i.jsxs("label", {
                                 children: [
-                                  i.jsx(M, { children: "Condition" }),
+                                  i.jsx(LocalizedText, {
+                                    children: "Condition",
+                                  }),
                                   i.jsx("select", {
                                     value: rt.operator,
                                     onChange: (et) =>
@@ -1500,7 +1569,9 @@ function pfe({
                               !["blank", "notBlank"].includes(rt.operator) &&
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Filter value" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Filter value",
+                                    }),
                                     i.jsx("input", {
                                       value: String(rt.value ?? ""),
                                       onChange: (et) =>
@@ -1522,7 +1593,9 @@ function pfe({
                                 "aria-label": `Remove filter ${Le + 1}`,
                                 onClick: () =>
                                   q((et) => et.filter((st, kt) => kt !== Le)),
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             ],
                           },
@@ -1537,7 +1610,9 @@ function pfe({
                             ...rt,
                             { field: g[0], operator: "equals", value: "" },
                           ]),
-                        children: i.jsx(M, { children: "Add source filter" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Add source filter",
+                        }),
                       }),
                     ],
                   }),
@@ -1549,7 +1624,7 @@ function pfe({
                         checked: ge,
                         onChange: (rt) => se(rt.target.checked),
                       }),
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children: "Use an empty area in an existing sheet",
                       }),
                     ],
@@ -1560,7 +1635,9 @@ function pfe({
                       children: [
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Destination sheet" }),
+                            i.jsx(LocalizedText, {
+                              children: "Destination sheet",
+                            }),
                             i.jsx("select", {
                               value: we,
                               onChange: (rt) => Ee(rt.target.value),
@@ -1576,7 +1653,9 @@ function pfe({
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Destination cell" }),
+                            i.jsx(LocalizedText, {
+                              children: "Destination cell",
+                            }),
                             i.jsx("input", {
                               value: Ae,
                               onChange: (rt) => ye(rt.target.value),
@@ -1587,7 +1666,7 @@ function pfe({
                     }),
                   i.jsx("p", {
                     className: "lg-table-help",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Results preserve the source. An existing destination must be empty. Refresh creates a new result so earlier work remains available.",
                     }),
@@ -1597,13 +1676,13 @@ function pfe({
                       className: "lg-table-list",
                       children: [
                         i.jsx("legend", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Refresh a saved result",
                           }),
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Saved result" }),
+                            i.jsx(LocalizedText, { children: "Saved result" }),
                             i.jsxs("select", {
                               value: Te,
                               onChange: (rt) => Pe(rt.target.value),
@@ -1637,19 +1716,19 @@ function pfe({
                             xt(
                               () =>
                                 mode === "pivot"
-                                  ? mie(workbook, Te, Zt())
-                                  : yie(workbook, Te, Zt()),
+                                  ? refreshPivotTable(workbook, Te, Zt())
+                                  : refreshQueryDefinition(workbook, Te, Zt()),
                               mode === "pivot"
                                 ? "Refresh pivot summary"
                                 : "Refresh extracted data",
                             ),
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Refresh into a new result",
                           }),
                         }),
                         mode === "pivot" &&
                           Te &&
-                          i.jsx(BI, { workbook, pivotId: Te }),
+                          i.jsx(PivotStatusBadge, { workbook, pivotId: Te }),
                       ],
                     }),
                 ],
@@ -1674,23 +1753,23 @@ function pfe({
     ],
   });
 }
-const Vz = {
+const pivotShowAsLabels = {
     value: "No calculation",
     percentGrand: "% of grand total",
     percentRow: "% of row total",
     percentColumn: "% of column total",
   },
-  mfe = (e) =>
+  formatPivotGroupLabel = (e) =>
     e === null
       ? "(blank)"
       : e === ""
         ? "(empty text)"
         : `${typeof e}: ${String(e)}`;
-function gfe({ book, id }) {
-  const { text, language } = Dr();
+function PivotChartFigure({ book, id }) {
+  const { text, language } = useWorkbookMessages();
   let o;
   try {
-    o = vie(book, id);
+    o = buildPivotChartModel(book, id);
   } catch (m) {
     return i.jsx("p", { role: "alert", children: m.message });
   }
@@ -1720,9 +1799,9 @@ function gfe({ book, id }) {
       i.jsxs("figcaption", {
         children: [
           o.measure,
-          p ? ` — ${Vz[o.showAs]}` : "",
+          p ? ` — ${pivotShowAsLabels[o.showAs]}` : "",
           " ",
-          i.jsx(M, { children: "· source revision" }),
+          i.jsx(LocalizedText, { children: "· source revision" }),
           " ",
           o.sourceRevision,
         ],
@@ -1813,20 +1892,28 @@ function gfe({ book, id }) {
             ],
           })
         : i.jsx("p", {
-            children: i.jsx(M, { children: "No records match these filters." }),
+            children: i.jsx(LocalizedText, {
+              children: "No records match these filters.",
+            }),
           }),
       i.jsxs("details", {
         children: [
           i.jsx("summary", {
-            children: i.jsx(M, { children: "Chart values and categories" }),
+            children: i.jsx(LocalizedText, {
+              children: "Chart values and categories",
+            }),
           }),
           i.jsxs("table", {
             children: [
               i.jsx("thead", {
                 children: i.jsxs("tr", {
                   children: [
-                    i.jsx("th", { children: i.jsx(M, { children: "Group" }) }),
-                    i.jsx("th", { children: i.jsx(M, { children: "Value" }) }),
+                    i.jsx("th", {
+                      children: i.jsx(LocalizedText, { children: "Group" }),
+                    }),
+                    i.jsx("th", {
+                      children: i.jsx(LocalizedText, { children: "Value" }),
+                    }),
                   ],
                 }),
               }),
@@ -1856,7 +1943,7 @@ function gfe({ book, id }) {
         ],
       }),
       i.jsx("p", {
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Leaf row groups only; subtotals and grand totals are excluded. Column groups are combined using the selected aggregate.",
         }),
@@ -1865,4 +1952,9 @@ function gfe({ book, id }) {
   });
 }
 
-export { Vz, gfe, mfe, pfe };
+export {
+  pivotShowAsLabels,
+  PivotChartFigure,
+  formatPivotGroupLabel,
+  TableToolsDialog,
+};

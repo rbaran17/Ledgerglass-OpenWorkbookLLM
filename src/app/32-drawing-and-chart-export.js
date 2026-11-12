@@ -5,46 +5,61 @@ import c_ from "react-dom/server";
 import { toCanvas } from "html-to-image";
 import { PDFDocument } from "pdf-lib";
 import {
-  BE,
-  Dw,
+  assertDrawingPreviewCurrent,
+  cellStyleToCss,
   F2,
-  Fw,
-  I5,
-  Ip,
-  KR,
-  Nr,
-  P1,
-  Qne,
-  RN,
-  Rx,
-  Vn,
-  Ww,
-  XE,
-  XR,
-  ZR,
-  aR,
+  evaluateConditionalFormatRules,
+  setSheetDrawingObjects,
+  columnWidthAt,
+  resolvePageDimensions,
+  findSheetOrThrow,
+  inspectPictureDataUrl,
+  createAnchoredDrawingObject,
+  textWrapToCss,
+  validatePageSetup,
+  calculateWorkbookWithSettings,
+  inspectChartSource,
+  defaultPrintHeaderFooter,
+  applyChartDrawingLayout,
+  createDefaultPageSetup,
+  formatDiagnosticsMessage,
   cn,
-  ct,
-  ek,
-  gg,
-  rae,
-  sR,
-  ul,
-  ut,
+  parseRangeAddress,
+  createPictureEvidence,
+  rowHeightAt,
+  expandHeaderFooterTemplate,
+  measureChartSelection,
+  createAxisVisibilityIndex,
+  columnIndexToLetters,
   vx,
-  wg,
-  yC,
+  printRenderLimits,
+  validateDrawingObjects,
   zU,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { lle } from "./07-xlsx-archive-reader.js";
-import { yh } from "./09-workbook-links.js";
-import { jI } from "./22-themes-and-cell-styles.js";
-import { Fz } from "./23-format-cells-dialog.js";
-import { LI, wfe, xfe, yfe } from "./31-pivot-explore-and-slicers.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { importPictureFile } from "./07-xlsx-archive-reader.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import { CellValuePreview } from "./22-themes-and-cell-styles.js";
+import { ConditionalFormatIndicator } from "./23-format-cells-dialog.js";
+import {
+  ChartReportSvg,
+  downloadTextFile,
+  ChartSettingsPanel,
+  ChartPreviewFrame,
+} from "./31-pivot-explore-and-slicers.js";
 
-function Efe({ report, error, revision, workbookId, onExport = wfe }) {
-  const { text, language } = Dr(),
+function ChartInspectionPanel({
+  report,
+  error,
+  revision,
+  workbookId,
+  onExport = downloadTextFile,
+}) {
+  const { text, language } = useWorkbookMessages(),
     [d, u] = ne.useState(0),
     [l, c] = ne.useState(""),
     h = ne.useRef(null),
@@ -83,7 +98,9 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
     "data-ui-label": "Chart inspection",
     children: [
       i.jsx("h3", {
-        children: i.jsx(M, { children: "Preview and source inspection" }),
+        children: i.jsx(LocalizedText, {
+          children: "Preview and source inspection",
+        }),
       }),
       error && i.jsx("p", { className: "dg-error", children: error }),
       report &&
@@ -95,7 +112,7 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                 report.kind === "sparkline"
                   ? "dg-spark-preview"
                   : "dg-chart-preview",
-              children: i.jsx(LI, { report }),
+              children: i.jsx(ChartReportSvg, { report }),
             }),
             i.jsx("p", { children: report.scope }),
             i.jsxs("p", {
@@ -103,12 +120,14 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
               children: [
                 report.population.policy,
                 " ",
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "Exports contain this complete draft configuration and source inspection at revision ",
                 }),
                 revision,
-                i.jsx(M, { children: ". Source cells are unchanged." }),
+                i.jsx(LocalizedText, {
+                  children: ". Source cells are unchanged.",
+                }),
               ],
             }),
             report.diagnostics.length > 0 &&
@@ -121,48 +140,56 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
             i.jsx("button", {
               type: "button",
               onClick: () => m(),
-              children: i.jsx(M, { children: "Export chart inspection" }),
+              children: i.jsx(LocalizedText, {
+                children: "Export chart inspection",
+              }),
             }),
             i.jsx("button", {
               type: "button",
               disabled: report.diagnostics.some((v) => v.severity === "error"),
               onClick: () => m(true),
-              children: i.jsx(M, { children: "Export chart SVG" }),
+              children: i.jsx(LocalizedText, { children: "Export chart SVG" }),
             }),
             i.jsxs("details", {
               children: [
                 i.jsx("summary", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Inspect source data and full series",
                   }),
                 }),
                 i.jsxs("dl", {
                   children: [
                     i.jsx("dt", {
-                      children: i.jsx(M, { children: "Title / alt text" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Title / alt text",
+                      }),
                     }),
                     i.jsxs("dd", {
                       children: [report.title, " / ", report.altText],
                     }),
                     i.jsx("dt", {
-                      children: i.jsx(M, { children: "Axes and units" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Axes and units",
+                      }),
                     }),
                     i.jsxs("dd", {
                       children: [
-                        i.jsx(M, { children: "X: " }),
+                        i.jsx(LocalizedText, { children: "X: " }),
                         report.axes.x.title || "(automatic)",
                         " (",
                         report.axes.x.scale,
-                        i.jsx(M, { children: "); Y: " }),
+                        i.jsx(LocalizedText, { children: "); Y: " }),
                         report.axes.y.title || "(automatic)",
                         " (",
                         report.axes.y.scale,
-                        i.jsx(M, { children: "); units:" }),
+                        i.jsx(LocalizedText, { children: "); units:" }),
                         " ",
                         report.axes.units || "not specified",
                       ],
                     }),
-                    i.jsx("dt", { children: i.jsx(M, { children: "Series" }) }),
+                    i.jsx("dt", {
+                      children: i.jsx(LocalizedText, { children: "Series" }),
+                    }),
                     i.jsx("dd", {
                       children: report.series
                         .map(
@@ -181,13 +208,19 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                         children: i.jsxs("tr", {
                           children: [
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Source row" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Source row",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Scope" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Scope",
+                              }),
                             }),
                             i.jsx("th", {
-                              children: i.jsx(M, { children: "Category / X" }),
+                              children: i.jsx(LocalizedText, {
+                                children: "Category / X",
+                              }),
                             }),
                             report.series.map((v) =>
                               i.jsx("th", { children: v.name }, v.column),
@@ -228,7 +261,9 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                                           i.jsxs("small", {
                                             children: [
                                               " ",
-                                              i.jsx(M, { children: "Raw: " }),
+                                              i.jsx(LocalizedText, {
+                                                children: "Raw: ",
+                                              }),
                                               String(g.raw),
                                             ],
                                           }),
@@ -236,7 +271,7 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                                           i.jsxs("small", {
                                             children: [
                                               " ",
-                                              i.jsx(M, {
+                                              i.jsx(LocalizedText, {
                                                 children: "Note: ",
                                               }),
                                               g.note,
@@ -260,7 +295,7 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                   type: "button",
                   disabled: !p,
                   onClick: () => u(p - 1),
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children: "Previous chart source rows",
                   }),
                 }),
@@ -268,12 +303,14 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                   type: "button",
                   disabled: (p + 1) * 20 >= f.length,
                   onClick: () => u(p + 1),
-                  children: i.jsx(M, { children: "Next chart source rows" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Next chart source rows",
+                  }),
                 }),
                 report.histogram &&
                   i.jsxs("p", {
                     children: [
-                      i.jsx(M, { children: "Bins:" }),
+                      i.jsx(LocalizedText, { children: "Bins:" }),
                       " ",
                       report.histogram
                         .map(
@@ -286,7 +323,7 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
                 report.waterfall &&
                   i.jsxs("p", {
                     children: [
-                      i.jsx(M, { children: "Waterfall:" }),
+                      i.jsx(LocalizedText, { children: "Waterfall:" }),
                       " ",
                       report.waterfall
                         .map((v) => `${v.label}: ${v.start} → ${v.end}`)
@@ -301,10 +338,10 @@ function Efe({ report, error, revision, workbookId, onExport = wfe }) {
     ],
   });
 }
-function Wz(e) {
+function PicturePropertiesDialog(e) {
   var N;
-  const { text, language } = Dr(),
-    n = yh(),
+  const { text, language } = useWorkbookMessages(),
+    n = useCancellableOperation(),
     o = e.workbook.sheets
       .find((L) => L.id === e.sheetId)
       ?.objects?.find((L) => L.id === e.objectId),
@@ -328,7 +365,7 @@ function Wz(e) {
       o
         ? structuredClone(o)
         : {
-            ...Qne(a, e.range),
+            ...createAnchoredDrawingObject(a, e.range),
             ...(a === "chart"
               ? { chart: "column", range: e.range, headers: true }
               : {}),
@@ -348,7 +385,7 @@ function Wz(e) {
       const L = c.current;
       if (u.current !== L.mode || l.current !== L.objectId)
         throw Error("The drawing selection changed. Reopen this dialog.");
-      BE(L.workbook, L.sheetId, {
+      assertDrawingPreviewCurrent(L.workbook, L.sheetId, {
         readOnly: L.readOnly,
         snapshot: d.current,
         selection: L.range,
@@ -387,13 +424,13 @@ function Wz(e) {
           !["image/png", "image/jpeg"].includes(L.type))
       )
         throw Error("Choose a PNG or JPEG picture no larger than 2 MB.");
-      const { dataURL } = await lle(L, n.begin());
+      const { dataURL } = await importPictureFile(L, n.begin());
       if (!f.current || $ !== p.current) return;
       I();
-      const G = P1(dataURL);
+      const G = inspectPictureDataUrl(dataURL);
       if (G.bytes.length !== L.size)
         throw Error("The file bytes changed while reading the picture.");
-      const H = ek(dataURL, {
+      const H = createPictureEvidence(dataURL, {
           origin: "local-file",
           filename: L.name,
           ...(g ? { sourceLocator: g } : {}),
@@ -434,7 +471,11 @@ function Wz(e) {
       const $ = c.current,
         U = $.workbook.sheets.find((X) => X.id === $.sheetId);
       if (
-        (a === "chart" && (sR(m.range, U), aR(Ww(U, m, Vn($.workbook)))),
+        (a === "chart" &&
+          (measureChartSelection(m.range, U),
+          formatDiagnosticsMessage(
+            inspectChartSource(U, m, calculateWorkbookWithSettings($.workbook)),
+          )),
         a === "picture" && !m.dataURL)
       )
         throw Error("Choose a picture first.");
@@ -442,7 +483,8 @@ function Wz(e) {
       if (
         (a === "picture" &&
           (G.evidence = {
-            ...(m.evidence ?? ek(m.dataURL, { origin: "legacy-native" })),
+            ...(m.evidence ??
+              createPictureEvidence(m.dataURL, { origin: "legacy-native" })),
             sourceLocator: g || undefined,
           }),
         e.objectId &&
@@ -452,7 +494,7 @@ function Wz(e) {
       const H = e.objectId
           ? (U.objects ?? []).map((X) => (X.id === e.objectId ? G : X))
           : [...(U.objects ?? []), G],
-        Q = I5($.workbook, $.sheetId, H, {
+        Q = setSheetDrawingObjects($.workbook, $.sheetId, H, {
           readOnly: $.readOnly,
           snapshot: d.current,
           selection: $.range,
@@ -469,11 +511,20 @@ function Wz(e) {
   }
   const V =
       m.evidence ??
-      (m.dataURL ? ek(m.dataURL, { origin: "legacy-native" }) : undefined),
+      (m.dataURL
+        ? createPictureEvidence(m.dataURL, { origin: "legacy-native" })
+        : undefined),
     D = ne.useMemo(() => {
       if (a !== "chart" || !s) return { report: null, error: "" };
       try {
-        return { report: Ww(s, m, Vn(e.workbook)), error: "" };
+        return {
+          report: inspectChartSource(
+            s,
+            m,
+            calculateWorkbookWithSettings(e.workbook),
+          ),
+          error: "",
+        };
       } catch (L) {
         return {
           report: null,
@@ -541,7 +592,7 @@ function Wz(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "The workbook or selection changed. Close and reopen this dialog.",
                 }),
@@ -550,7 +601,7 @@ function Wz(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "This workbook is read-only. Object properties remain available to view.",
                 }),
@@ -559,7 +610,7 @@ function Wz(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Unprotect this worksheet before changing drawings.",
                 }),
@@ -574,7 +625,9 @@ function Wz(e) {
                       i.jsxs("label", {
                         className: "dg-upload",
                         children: [
-                          i.jsx(M, { children: "Choose a local picture" }),
+                          i.jsx(LocalizedText, {
+                            children: "Choose a local picture",
+                          }),
                           i.jsx("input", {
                             type: "file",
                             accept: "image/png,image/jpeg",
@@ -590,14 +643,16 @@ function Wz(e) {
                       }),
                       i.jsx("p", {
                         className: "dg-muted",
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "PNG or JPEG · up to 2 MB · stored with the workbook",
                         }),
                       }),
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Source locator (plain text)" }),
+                          i.jsx(LocalizedText, {
+                            children: "Source locator (plain text)",
+                          }),
                           i.jsx("input", {
                             "aria-label": text("Picture source locator"),
                             value: g,
@@ -619,7 +674,7 @@ function Wz(e) {
                 a === "shape" &&
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Shape" }),
+                      i.jsx(LocalizedText, { children: "Shape" }),
                       i.jsxs("select", {
                         "aria-label": text("Shape type"),
                         value: m.shape,
@@ -648,7 +703,11 @@ function Wz(e) {
                     ],
                   }),
                 a === "chart" &&
-                  i.jsx(xfe, { object: m, report: D.report, update: O }),
+                  i.jsx(ChartSettingsPanel, {
+                    object: m,
+                    report: D.report,
+                    update: O,
+                  }),
                 i.jsxs("label", {
                   children: [
                     a === "chart" ? "Chart title" : "Label",
@@ -668,8 +727,8 @@ function Wz(e) {
                     children: [
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Width (px)" }),
-                          i.jsx(ci, {
+                          i.jsx(LocalizedText, { children: "Width (px)" }),
+                          i.jsx(LocalizedNumberField, {
                             min: 24,
                             max: 4e3,
                             "aria-label": text("Object width"),
@@ -682,8 +741,8 @@ function Wz(e) {
                       }),
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Height (px)" }),
-                          i.jsx(ci, {
+                          i.jsx(LocalizedText, { children: "Height (px)" }),
+                          i.jsx(LocalizedNumberField, {
                             min: 24,
                             max: 4e3,
                             "aria-label": text("Object height"),
@@ -702,7 +761,7 @@ function Wz(e) {
                     children: [
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Fill" }),
+                          i.jsx(LocalizedText, { children: "Fill" }),
                           i.jsx("input", {
                             type: "color",
                             "aria-label": text("Object fill"),
@@ -715,7 +774,7 @@ function Wz(e) {
                       }),
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Outline" }),
+                          i.jsx(LocalizedText, { children: "Outline" }),
                           i.jsx("input", {
                             type: "color",
                             "aria-label": text("Object outline"),
@@ -731,9 +790,9 @@ function Wz(e) {
                 i.jsxs("p", {
                   className: "dg-muted",
                   children: [
-                    i.jsx(M, { children: "Anchor: " }),
+                    i.jsx(LocalizedText, { children: "Anchor: " }),
                     m.anchor,
-                    i.jsx(M, {
+                    i.jsx(LocalizedText, {
                       children:
                         ". Select the object to move, resize, rename, or delete it.",
                     }),
@@ -742,7 +801,7 @@ function Wz(e) {
               ],
             }),
             a === "chart" &&
-              i.jsx(Efe, {
+              i.jsx(ChartInspectionPanel, {
                 ...D,
                 revision: e.workbook.revision,
                 workbookId: e.workbook.id,
@@ -756,7 +815,9 @@ function Wz(e) {
                 lang: language("Picture evidence properties"),
                 "data-ui-label": "Picture evidence properties",
                 children: [
-                  i.jsx("dt", { children: i.jsx(M, { children: "Origin" }) }),
+                  i.jsx("dt", {
+                    children: i.jsx(LocalizedText, { children: "Origin" }),
+                  }),
                   i.jsx("dd", {
                     children:
                       V.origin === "local-file"
@@ -773,20 +834,26 @@ function Wz(e) {
                   }),
                   i.jsx("dd", { children: V.filename ?? "Not available" }),
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Byte length" }),
+                    children: i.jsx(LocalizedText, { children: "Byte length" }),
                   }),
                   i.jsx("dd", { children: V.byteLength.toLocaleString() }),
-                  i.jsx("dt", { children: i.jsx(M, { children: "SHA-256" }) }),
+                  i.jsx("dt", {
+                    children: i.jsx(LocalizedText, { children: "SHA-256" }),
+                  }),
                   i.jsx("dd", { children: V.sha256 }),
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Source reference" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Source reference",
+                    }),
                   }),
                   i.jsx("dd", { children: V.sourceReference }),
                   V.containerFilename &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("dt", {
-                          children: i.jsx(M, { children: "Imported workbook" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Imported workbook",
+                          }),
                         }),
                         i.jsx("dd", { children: V.containerFilename }),
                       ],
@@ -795,7 +862,7 @@ function Wz(e) {
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("dt", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "Observed media reference",
                           }),
                         }),
@@ -803,7 +870,9 @@ function Wz(e) {
                       ],
                     }),
                   i.jsx("dt", {
-                    children: i.jsx(M, { children: "Source locator" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Source locator",
+                    }),
                   }),
                   i.jsx("dd", { children: g || "Not recorded" }),
                 ],
@@ -816,7 +885,7 @@ function Wz(e) {
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "dg-primary",
@@ -834,11 +903,11 @@ function Wz(e) {
     }),
   });
 }
-function Hz({ object, sheet, calc, textScale = 1 }) {
+function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
   const o = ne.useMemo(() => {
     if (object.kind !== "picture") return "";
     try {
-      return (P1(object.dataURL ?? ""), "");
+      return (inspectPictureDataUrl(object.dataURL ?? ""), "");
     } catch (a) {
       return a instanceof Error ? a.message : "Invalid picture.";
     }
@@ -849,7 +918,7 @@ function Hz({ object, sheet, calc, textScale = 1 }) {
           role: "img",
           "aria-label": "Invalid picture: " + o,
           children: [
-            i.jsx(M, { children: "Picture cannot be displayed: " }),
+            i.jsx(LocalizedText, { children: "Picture cannot be displayed: " }),
             o,
           ],
         })
@@ -934,11 +1003,11 @@ function Hz({ object, sheet, calc, textScale = 1 }) {
             }),
           ],
         })
-      : i.jsx(yfe, { object, sheet, calc });
+      : i.jsx(ChartPreviewFrame, { object, sheet, calc });
 }
-function Cfe(e) {
+function DrawingObjectOverlay(e) {
   var y;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = e.workbook.sheets.find((E) => E.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
@@ -956,7 +1025,7 @@ function Cfe(e) {
         O = I.workbook.sheets.find((z) => z.id === I.sheetId);
       if (!((F = O?.objects) != null && F.some((z) => z.id === E.id)))
         throw Error("The selected drawing no longer exists.");
-      const j = I5(
+      const j = setSheetDrawingObjects(
         I.workbook,
         I.sheetId,
         O.objects.map((z) => (z.id === E.id ? E : z)),
@@ -975,7 +1044,7 @@ function Cfe(e) {
     try {
       const A = o.current,
         k = A.workbook.sheets.find((I) => I.id === A.sheetId),
-        F = I5(
+        F = setSheetDrawingObjects(
           A.workbook,
           A.sheetId,
           (k?.objects ?? []).filter((I) => I.id !== E),
@@ -993,7 +1062,9 @@ function Cfe(e) {
   function b(E, A, k, F) {
     try {
       if (
-        (BE(e.workbook, e.sheetId, { readOnly: e.readOnly }),
+        (assertDrawingPreviewCurrent(e.workbook, e.sheetId, {
+          readOnly: e.readOnly,
+        }),
         !Number.isFinite(e.scale) || e.scale <= 0)
       )
         throw Error("Invalid drawing zoom.");
@@ -1020,7 +1091,7 @@ function Cfe(e) {
       if (f)
         try {
           if (
-            (BE(e.workbook, e.sheetId, {
+            (assertDrawingPreviewCurrent(e.workbook, e.sheetId, {
               readOnly: e.readOnly,
               snapshot: f.snapshot,
               selection: e.selection,
@@ -1106,7 +1177,7 @@ function Cfe(e) {
               const A = f?.id === E.id ? f.next : E,
                 k = e.positionForCell(A.anchor),
                 F = A.kind === "chart" && A.chart === "sparkline",
-                I = XR(n, A);
+                I = applyChartDrawingLayout(n, A);
               return k
                 ? i.jsxs(
                     "div",
@@ -1131,7 +1202,7 @@ function Cfe(e) {
                             (O.preventDefault(), g(A.id)));
                       },
                       children: [
-                        i.jsx(Hz, {
+                        i.jsx(DrawingObjectSvg, {
                           object: A,
                           sheet: n,
                           calc: e.calc,
@@ -1229,7 +1300,7 @@ function Cfe(e) {
         }),
         c &&
           n?.objects?.some((E) => E.id === c) &&
-          i.jsx(Wz, {
+          i.jsx(PicturePropertiesDialog, {
             mode: "drawing-properties",
             objectId: c,
             workbook: e.workbook,
@@ -1243,9 +1314,9 @@ function Cfe(e) {
     })
   );
 }
-const qz =
+const printPaperStyles =
   ".dg-print-paper{box-sizing:border-box;print-color-adjust:exact;-webkit-print-color-adjust:exact;color:#000;background:white;position:relative;overflow:hidden;break-after:page;page-break-after:always}.dg-print-paper:last-child{break-after:auto;page-break-after:auto}.dg-print-content{position:relative;overflow:hidden}.dg-print-table{border-collapse:collapse;table-layout:fixed;font-family:Calibri,Arial,sans-serif;font-size:14px}.dg-print-table td,.dg-print-table th{box-sizing:border-box;padding:0 3px;overflow:hidden;white-space:nowrap;font-weight:400}.dg-print-table th{font:11px Arial;background:#f3f3f3}.dg-print-table thead tr{height:22px}.dg-print-table td>div{overflow:hidden;line-height:1.35}.dg-print-header,.dg-print-footer{position:absolute;left:0;right:0;text-align:center;font:11px Arial;color:#444;white-space:pre-wrap;line-height:1.3;overflow-wrap:anywhere}.dg-print-object{position:absolute;overflow:hidden}.dg-print-object>img,.dg-print-object>svg{width:100%;height:100%;object-fit:contain}.dg-shape-label{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font:15px Arial;white-space:pre-wrap;text-align:center;overflow:hidden}@media print{.dg-print-paper{margin:0!important;box-shadow:none!important;zoom:1!important}}";
-function Xz({
+function PrintPagePreview({
   workbook,
   sheet,
   layout,
@@ -1256,10 +1327,10 @@ function Xz({
   calc,
   ruleStyles,
 }) {
-  const l = ul(sheet.rowCount, cn(sheet, "row")),
-    c = ul(sheet.colCount, cn(sheet, "column")),
-    h = KR(layout),
-    f = ct(layout.printArea),
+  const l = createAxisVisibilityIndex(sheet.rowCount, cn(sheet, "row")),
+    c = createAxisVisibilityIndex(sheet.colCount, cn(sheet, "column")),
+    h = resolvePageDimensions(layout),
+    f = parseRangeAddress(layout.printArea),
     p =
       page.rows ??
       Array.from(
@@ -1272,13 +1343,16 @@ function Xz({
         { length: page.lastCol - page.firstCol + 1 },
         (E, A) => page.firstCol + A,
       ).filter((E) => !c.isHidden(E)),
-    v = m.reduce((E, A) => E + Ip(sheet, A), layout.headings ? 32 : 0),
+    v = m.reduce(
+      (E, A) => E + columnWidthAt(sheet, A),
+      layout.headings ? 32 : 0,
+    ),
     g = new Map(p.map((E, A) => [E, A])),
     b = [0];
-  for (const E of p) b.push(b.at(-1) + gg(sheet, E));
+  for (const E of p) b.push(b.at(-1) + rowHeightAt(sheet, E));
   const y = new Map();
   for (const E of sheet.merges ?? []) {
-    const A = ct(E),
+    const A = parseRangeAddress(E),
       k = p.filter((O) => O >= A.firstRow && O <= A.lastRow),
       F = m.filter((O) => O >= A.firstCol && O <= A.lastCol);
     if (!k.length || !F.length) continue;
@@ -1290,12 +1364,13 @@ function Xz({
       rowSpan: k.length,
       colSpan: F.length,
       suppressContent: l.isHidden(A.firstRow) || c.isHidden(A.firstCol),
-      anchor: `${ut(A.firstCol)}${A.firstRow + 1}`,
+      anchor: `${columnIndexToLetters(A.firstCol)}${A.firstRow + 1}`,
     };
     if (!(I.firstRow > I.lastRow || I.firstCol > I.lastCol))
       for (const O of k) for (const j of F) y.set(O * 16384 + j, I);
   }
-  const w = (E) => rae(E, workbook, sheet, index + 1, total);
+  const w = (E) =>
+    expandHeaderFooterTemplate(E, workbook, sheet, index + 1, total);
   return i.jsxs("article", {
     className: "dg-print-paper",
     "aria-label": `Print page ${index + 1}`,
@@ -1339,7 +1414,11 @@ function Xz({
                   children: [
                     layout.headings && i.jsx("col", { style: { width: 32 } }),
                     m.map((E) =>
-                      i.jsx("col", { style: { width: Ip(sheet, E) } }, E),
+                      i.jsx(
+                        "col",
+                        { style: { width: columnWidthAt(sheet, E) } },
+                        E,
+                      ),
                     ),
                   ],
                 }),
@@ -1348,7 +1427,9 @@ function Xz({
                     children: i.jsxs("tr", {
                       children: [
                         i.jsx("th", {}),
-                        m.map((E) => i.jsx("th", { children: ut(E) }, E)),
+                        m.map((E) =>
+                          i.jsx("th", { children: columnIndexToLetters(E) }, E),
+                        ),
                       ],
                     }),
                   }),
@@ -1357,14 +1438,16 @@ function Xz({
                     i.jsxs(
                       "tr",
                       {
-                        style: { height: gg(sheet, E) },
+                        style: { height: rowHeightAt(sheet, E) },
                         children: [
                           layout.headings && i.jsx("th", { children: E + 1 }),
                           m.map((A) => {
                             const k = y.get(E * 16384 + A);
                             if (k && (E !== k.firstRow || A !== k.firstCol))
                               return null;
-                            const F = k?.anchor ?? `${ut(A)}${E + 1}`,
+                            const F =
+                                k?.anchor ??
+                                `${columnIndexToLetters(A)}${E + 1}`,
                               I =
                                 k != null && k.suppressContent
                                   ? undefined
@@ -1400,7 +1483,7 @@ function Xz({
                                   typeof j == "number" ? "true" : undefined,
                                 colSpan: k?.colSpan ?? 1,
                                 rowSpan: k?.rowSpan ?? 1,
-                                style: Dw(O.style, j, {
+                                style: cellStyleToCss(O.style, j, {
                                   defaultBorder: layout.gridlines
                                     ? "1px solid #d4d4d4"
                                     : "none",
@@ -1408,15 +1491,15 @@ function Xz({
                                 children: i.jsx("div", {
                                   style: {
                                     maxHeight: z - 1,
-                                    ...RN(O.style),
+                                    ...textWrapToCss(O.style),
                                     position: "relative",
                                   },
-                                  children: i.jsx(Fz, {
+                                  children: i.jsx(ConditionalFormatIndicator, {
                                     decoration:
                                       k != null && k.suppressContent
                                         ? undefined
                                         : ruleStyles(F),
-                                    children: i.jsx(jI, {
+                                    children: i.jsx(CellValuePreview, {
                                       value: j,
                                       cell: O,
                                       dateSystem:
@@ -1437,8 +1520,8 @@ function Xz({
               ],
             }),
             (sheet.objects ?? []).map((E) => {
-              const A = ct(E.anchor),
-                k = XR(sheet, E);
+              const A = parseRangeAddress(E.anchor),
+                k = applyChartDrawingLayout(sheet, E);
               if (
                 l.isHidden(A.firstRow) ||
                 c.isHidden(A.firstCol) ||
@@ -1449,9 +1532,9 @@ function Xz({
               let F = layout.headings ? 32 : 0,
                 I = layout.headings ? 22 : 0;
               for (const O of m.slice(0, m.indexOf(A.firstCol)))
-                F += Ip(sheet, O);
+                F += columnWidthAt(sheet, O);
               for (const O of p.slice(0, p.indexOf(A.firstRow)))
-                I += gg(sheet, O);
+                I += rowHeightAt(sheet, O);
               return i.jsx(
                 "div",
                 {
@@ -1471,7 +1554,7 @@ function Xz({
                     width: k.width,
                     height: k.height,
                   },
-                  children: i.jsx(Hz, { object: E, sheet, calc }),
+                  children: i.jsx(DrawingObjectSvg, { object: E, sheet, calc }),
                 },
                 E.id,
               );
@@ -1492,19 +1575,19 @@ function Xz({
   });
 }
 
-function uW(e, r, t) {
-  const n = { ...Nr(e, r) };
-  Rx(t, n);
+function buildPrintPages(e, r, t) {
+  const n = { ...findSheetOrThrow(e, r) };
+  validatePageSetup(t, n);
   try {
-    yC(n.objects, n);
+    validateDrawingObjects(n.objects, n);
   } catch (d) {
     throw Error(
       `Unsupported or invalid print object: ${d instanceof Error ? d.message : "check the worksheet drawings."}`,
     );
   }
   const o = zU(n, n.pageLayout),
-    a = Vn(e),
-    s = Fw(n, a, vx(n, a));
+    a = calculateWorkbookWithSettings(e),
+    s = evaluateConditionalFormatRules(n, a, vx(n, a));
   for (const d of o.pages) {
     const u =
         d.rows ??
@@ -1518,16 +1601,25 @@ function uW(e, r, t) {
           { length: d.lastCol - d.firstCol + 1 },
           (c, h) => d.firstCol + h,
         );
-    for (const c of u) for (const h of l) s(`${ut(h)}${c + 1}`);
+    for (const c of u)
+      for (const h of l) s(`${columnIndexToLetters(h)}${c + 1}`);
   }
   return { ...o, sheet: n, layout: n.pageLayout, calc: a, ruleStyles: s };
 }
-function cW(e, r, t) {
-  const n = Nr(e, r),
-    o = uW(e, r, t ?? n.pageLayout ?? { ...ZR(n), ...XE }),
+function renderPrintDocument(e, r, t) {
+  const n = findSheetOrThrow(e, r),
+    o = buildPrintPages(
+      e,
+      r,
+      t ??
+        n.pageLayout ?? {
+          ...createDefaultPageSetup(n),
+          ...defaultPrintHeaderFooter,
+        },
+    ),
     a = o.pages.map((l, c) =>
       i.jsx(
-        Xz,
+        PrintPagePreview,
         {
           workbook: e,
           sheet: o.sheet,
@@ -1561,7 +1653,7 @@ function cW(e, r, t) {
                   content: `Workbook ${e.name}; revision ${e.revision}; period ${e.metadata?.period || "not set"}; ${o.pages.length} page(s).`,
                 }),
                 i.jsx("style", {
-                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${qz}@page{size:${s} ${o.layout.orientation};margin:0}`,
+                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${printPaperStyles}@page{size:${s} ${o.layout.orientation};margin:0}`,
                 }),
               ],
             }),
@@ -1578,7 +1670,7 @@ function cW(e, r, t) {
     ],
   };
 }
-function zy(e, r, t = 0.8) {
+function boundsOverlap(e, r, t = 0.8) {
   return (
     e.left < r.left - t ||
     e.right > r.right + t ||
@@ -1586,7 +1678,7 @@ function zy(e, r, t = 0.8) {
     e.bottom > r.bottom + t
   );
 }
-function cS(e) {
+function measureRenderedTextBounds(e) {
   var s;
   if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
     return true;
@@ -1598,11 +1690,11 @@ function cS(e) {
   for (; (a = n.nextNode());)
     if ((s = a.textContent) != null && s.trim()) {
       o.selectNodeContents(a);
-      for (const d of o.getClientRects()) if (zy(d, t)) return true;
+      for (const d of o.getClientRects()) if (boundsOverlap(d, t)) return true;
     }
   return false;
 }
-function mw(e) {
+function measurePrintLayoutIssues(e) {
   const r = Array.from(e.querySelectorAll(".dg-print-paper")),
     t = [];
   r.length ||
@@ -1629,7 +1721,7 @@ function mw(e) {
         return;
       }
       const c = u.getBoundingClientRect();
-      zy(l.getBoundingClientRect(), c) &&
+      boundsOverlap(l.getBoundingClientRect(), c) &&
         t.push({
           severity: "error",
           code: "layout",
@@ -1640,8 +1732,8 @@ function mw(e) {
         const v = o.querySelector(`.dg-print-${m}`);
         if (!((f = v?.textContent) != null && f.trim())) continue;
         const g = v.getBoundingClientRect();
-        (zy(g, d) ||
-          cS(v) ||
+        (boundsOverlap(g, d) ||
+          measureRenderedTextBounds(v) ||
           (m === "header" ? g.bottom > c.top + 0.8 : g.top < c.bottom - 0.8)) &&
           t.push({
             severity: "error",
@@ -1658,7 +1750,7 @@ function mw(e) {
         const g = m.dataset.printCell,
           b = m.dataset.printNumber === "true";
         (b && h.push({ address: g, bounds: m.getBoundingClientRect() }),
-          cS(v) &&
+          measureRenderedTextBounds(v) &&
             t.push({
               severity: b ? "error" : "warning",
               code: b ? "number" : "text",
@@ -1671,7 +1763,7 @@ function mw(e) {
         m.dataset.printInArea !== "false" && (n = true);
         const v = m.dataset.printLabel || m.dataset.printObject || "Drawing",
           g = m.getBoundingClientRect();
-        zy(g, c) &&
+        boundsOverlap(g, c) &&
           t.push({
             severity: "error",
             code: "object",
@@ -1680,7 +1772,8 @@ function mw(e) {
           });
         const b = m.querySelector(".dg-shape-label"),
           y = [...m.querySelectorAll("svg text")];
-        ((b && cS(b)) || y.some((w) => zy(w.getBoundingClientRect(), g))) &&
+        ((b && measureRenderedTextBounds(b)) ||
+          y.some((w) => boundsOverlap(w.getBoundingClientRect(), g))) &&
           t.push({
             severity: "error",
             code: "object",
@@ -1722,7 +1815,7 @@ function mw(e) {
     { pages: r.length, issues: t }
   );
 }
-function k3(e) {
+function summarizePrintIssues(e) {
   const r = e.issues.filter((t) => t.severity === "error");
   if (r.length)
     throw Error(
@@ -1732,7 +1825,7 @@ function k3(e) {
         .join(" ")}`,
     );
 }
-async function gw(e, r = {}) {
+async function waitForPrintAssets(e, r = {}) {
   const t = e.ownerDocument ?? e,
     { signal, timeoutMs = 1e4 } = r;
   if (signal != null && signal.aborted)
@@ -1795,29 +1888,33 @@ async function gw(e, r = {}) {
     a.forEach((d) => d());
   }
 }
-async function Mme(e, r, t) {
+async function printDocumentInWindow(e, r, t) {
   if (
     (t.assertCurrent(),
     e.document.write(r),
     e.document.close(),
-    await gw(e.document, t),
+    await waitForPrintAssets(e.document, t),
     t.assertCurrent(),
     e.closed)
   )
     throw Error("The print window was closed. Reopen print preview to retry.");
-  const n = mw(e.document);
-  return (k3(n), e.focus(), e.print(), n);
+  const n = measurePrintLayoutIssues(e.document);
+  return (summarizePrintIssues(n), e.focus(), e.print(), n);
 }
-const m2 = { pixelRatio: 2, maxBytes: 50 * 1024 * 1024, pageTimeoutMs: 3e4 };
-function jme(e, r) {
+const pdfRenderLimits = {
+  pixelRatio: 2,
+  maxBytes: 50 * 1024 * 1024,
+  pageTimeoutMs: 3e4,
+};
+function buildScheduleFileName(e, r) {
   return `${
-    `${e.name}-${Nr(e, r).name}-rev-${e.revision}`
+    `${e.name}-${findSheetOrThrow(e, r).name}-rev-${e.revision}`
       .replace(/[\x00-\x1f\x7f<>:"/\\|?*]+/g, "-")
       .replace(/[. ]+$/g, "")
       .slice(0, 160) || "Schedule"
   }.pdf`;
 }
-async function Fme(e, r, t) {
+async function renderSchedulePdf(e, r, t) {
   var p, m, v, g;
   const n = () => {
       var b;
@@ -1840,7 +1937,7 @@ async function Fme(e, r, t) {
                     "A PDF page did not finish within 30 seconds. Reduce its complexity or use browser printing.",
                   ),
                 ),
-              m2.pageTimeoutMs,
+              pdfRenderLimits.pageTimeoutMs,
             )),
               (w = () => k(Error("PDF creation was cancelled."))),
               (F = t.signal) == null ||
@@ -1855,10 +1952,14 @@ async function Fme(e, r, t) {
     };
   if ((n(), typeof document > "u"))
     throw Error("PDF rendering requires a browser with canvas support.");
-  const a = Nr(e, r),
-    s = t.layout ?? a.pageLayout ?? { ...ZR(a), ...XE },
-    d = cW(e, r, s),
-    u = KR(s),
+  const a = findSheetOrThrow(e, r),
+    s = t.layout ??
+      a.pageLayout ?? {
+        ...createDefaultPageSetup(a),
+        ...defaultPrintHeaderFooter,
+      },
+    d = renderPrintDocument(e, r, s),
+    u = resolvePageDimensions(s),
     l = document.createElement("iframe");
   ((l.title = "Preparing schedule PDF"),
     l.setAttribute("aria-hidden", "true"),
@@ -1901,11 +2002,15 @@ async function Fme(e, r, t) {
       throw Error(
         "The host does not allow the isolated PDF rendering document.",
       );
-    (await gw(b, { signal: t.signal }), n());
-    const y = mw(b);
-    k3(y);
+    (await waitForPrintAssets(b, { signal: t.signal }), n());
+    const y = measurePrintLayoutIssues(b);
+    summarizePrintIssues(y);
     const w = [...b.querySelectorAll(".dg-print-paper")];
-    if (w.length !== d.pageCount || !w.length || w.length > wg.pages)
+    if (
+      w.length !== d.pageCount ||
+      !w.length ||
+      w.length > printRenderLimits.pages
+    )
       throw Error(
         "The PDF page plan changed. Reopen print preview and try again.",
       );
@@ -1925,7 +2030,7 @@ async function Fme(e, r, t) {
         toCanvas(w[F], {
           width: u.width,
           height: u.height,
-          pixelRatio: m2.pixelRatio,
+          pixelRatio: pdfRenderLimits.pixelRatio,
           backgroundColor: "#ffffff",
           skipFonts: true,
           fontEmbedCSS: "",
@@ -1951,7 +2056,7 @@ async function Fme(e, r, t) {
             ),
           ),
         );
-        if (((A += O.size), A > m2.maxBytes))
+        if (((A += O.size), A > pdfRenderLimits.maxBytes))
           throw Error(
             "PDF images exceed 50 MB. Reduce the print area or image sizes.",
           );
@@ -1970,13 +2075,13 @@ async function Fme(e, r, t) {
     }
     n();
     const k = await E.save();
-    if ((n(), k.length > m2.maxBytes))
+    if ((n(), k.length > pdfRenderLimits.maxBytes))
       throw Error(
         "The PDF exceeds 50 MB. Reduce the print area or image sizes.",
       );
     return {
       bytes: k,
-      filename: jme(e, r),
+      filename: buildScheduleFileName(e, r),
       pageCount: w.length,
       inspection: y,
       notices: [
@@ -1989,4 +2094,16 @@ async function Fme(e, r, t) {
   }
 }
 
-export { Cfe, Fme, Mme, Wz, Xz, cW, gw, k3, mw, qz, uW };
+export {
+  DrawingObjectOverlay,
+  renderSchedulePdf,
+  printDocumentInWindow,
+  PicturePropertiesDialog,
+  PrintPagePreview,
+  renderPrintDocument,
+  waitForPrintAssets,
+  summarizePrintIssues,
+  measurePrintLayoutIssues,
+  printPaperStyles,
+  buildPrintPages,
+};

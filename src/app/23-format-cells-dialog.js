@@ -1,50 +1,59 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { dx } from "./02-financial-functions.js";
+import { supportedFontFamilies } from "./02-financial-functions.js";
 import {
-  $Q,
-  Af,
-  BB,
-  Dw,
-  FN,
-  J3,
-  KJ,
-  LB,
-  Nr,
-  RN,
-  Vn,
-  W3,
-  ct,
-  ff,
-  jn,
-  kE,
-  oh,
-  pB,
-  rn,
-  s0,
-  uB,
-  ut,
-  y1,
-  ys,
+  assertConditionalFormatPreviewCurrent,
+  formatNumberWithPattern,
+  conditionalRuleKinds,
+  cellStyleToCss,
+  normalizeConditionalRules,
+  sortConditionalRulesByPriority,
+  applyBorderEditTransaction,
+  updateConditionalFormatRules,
+  findSheetOrThrow,
+  textWrapToCss,
+  calculateWorkbookWithSettings,
+  isCellAddressInRanges,
+  parseRangeAddress,
+  parseSelectionAreas,
+  assertSheetUnprotected,
+  mergeWorksheetCells,
+  validateCellStyle,
+  buildBorderPresetStyles,
+  normalizeWorkbookInput,
+  cellBorderEdges,
+  borderLineStyles,
+  columnIndexToLetters,
+  countSelectionCells,
+  resolveEffectiveCellStyle,
 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { $k, Tde, jI, oy } from "./22-themes-and-cell-styles.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  expandShortHexColor,
+  sampleGridAddresses,
+  CellValuePreview,
+  cellFormatTabs,
+} from "./22-themes-and-cell-styles.js";
 
-function Nde(e) {
+function FormatCellsDialog(e) {
   var $;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
   const s = e.workbook.sheets.find((H) => H.id === e.sheetId),
-    d = ff(e.ranges ?? [e.range]),
-    u = ct(e.range),
+    d = parseSelectionAreas(e.ranges ?? [e.range]),
+    u = parseRangeAddress(e.range),
     l =
-      e.active && W3(d, e.active)
+      e.active && isCellAddressInRanges(d, e.active)
         ? e.active
-        : `${ut(u.firstCol)}${u.firstRow + 1}`,
+        : `${columnIndexToLetters(u.firstCol)}${u.firstRow + 1}`,
     c = ne.useRef({
       book: e.workbook.id,
       revision: e.workbook.revision,
@@ -54,7 +63,7 @@ function Nde(e) {
       active: e.active,
     }),
     [h] = ne.useState(() => {
-      return oh(ys(s?.cells[l]?.style));
+      return validateCellStyle(resolveEffectiveCellStyle(s?.cells[l]?.style));
     }),
     [f, p] = ne.useState(
       e.mode === "alignment"
@@ -69,8 +78,11 @@ function Nde(e) {
     [E, A] = ne.useState({ style: "thin", color: "#000000" }),
     [k, F] = ne.useState(h.fontSize === undefined ? "" : String(h.fontSize)),
     [I, O] = ne.useState(String(h.indent ?? 0)),
-    j = y1(d),
-    z = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
+    j = countSelectionCells(d),
+    z = ne.useMemo(
+      () => calculateWorkbookWithSettings(e.workbook),
+      [e.workbook],
+    ),
     V = s ? z(s.id, l) : null,
     D =
       c.current.book !== e.workbook.id ||
@@ -88,7 +100,7 @@ function Nde(e) {
   let _ = h,
     C = "";
   try {
-    _ = oh({
+    _ = validateCellStyle({
       ...h,
       ...m,
       ...(m.borders ? { borders: { ...h.borders, ...m.borders } } : {}),
@@ -116,7 +128,11 @@ function Nde(e) {
   }
   const L = (H) => ({
     ..._,
-    borders: { ...h.borders, ...(y ? pB(H, Tde, y, E) : {}), ...m.borders },
+    borders: {
+      ...h.borders,
+      ...(y ? buildBorderPresetStyles(H, sampleGridAddresses, y, E) : {}),
+      ...m.borders,
+    },
   });
   return (
     ne.useEffect(() => {
@@ -164,7 +180,7 @@ function Nde(e) {
             children: [
               i.jsx("h2", {
                 id: `${n}-title`,
-                children: i.jsx(M, { children: "Format Cells" }),
+                children: i.jsx(LocalizedText, { children: "Format Cells" }),
               }),
               i.jsx("button", {
                 "aria-label": text("Close cell styles"),
@@ -181,7 +197,7 @@ function Nde(e) {
             "aria-label": text("Cell style settings"),
             lang: language("Cell style settings"),
             "data-ui-label": "Cell style settings",
-            children: oy.map((H, Q) =>
+            children: cellFormatTabs.map((H, Q) =>
               i.jsx(
                 "button",
                 {
@@ -201,11 +217,13 @@ function Nde(e) {
                         X.key === "Home"
                           ? 0
                           : X.key === "End"
-                            ? oy.length - 1
+                            ? cellFormatTabs.length - 1
                             : (Q +
-                                (X.key === "ArrowRight" ? 1 : oy.length - 1)) %
-                              oy.length;
-                      (p(oy[W]),
+                                (X.key === "ArrowRight"
+                                  ? 1
+                                  : cellFormatTabs.length - 1)) %
+                              cellFormatTabs.length;
+                      (p(cellFormatTabs[W]),
                         (q = X.currentTarget.parentElement?.children[W]) ==
                           null || q.focus());
                     }
@@ -226,10 +244,16 @@ function Nde(e) {
                     "The workbook or selection changed. Close and reopen Format Cells.",
                   );
                 if (C) throw Error(C);
-                const Q = KJ(e.workbook, e.sheetId, d, m, {
-                  readOnly: e.readOnly,
-                  ...(y ? { borders: { preset: y, line: E } } : {}),
-                });
+                const Q = applyBorderEditTransaction(
+                  e.workbook,
+                  e.sheetId,
+                  d,
+                  m,
+                  {
+                    readOnly: e.readOnly,
+                    ...(y ? { borders: { preset: y, line: E } } : {}),
+                  },
+                );
                 (Q !== e.workbook &&
                   e.onWorkbookChange(Q, "Format cell styles"),
                   e.onClose());
@@ -250,11 +274,11 @@ function Nde(e) {
                     children: [
                       j.toLocaleString(),
                       " ",
-                      i.jsx(M, { children: "selected cells · " }),
+                      i.jsx(LocalizedText, { children: "selected cells · " }),
                       d.length,
                       " ",
                       d.length === 1 ? "area" : "areas",
-                      i.jsx(M, {
+                      i.jsx(LocalizedText, {
                         children:
                           ". Only changed controls apply; existing differences are preserved.",
                       }),
@@ -263,7 +287,7 @@ function Nde(e) {
                   e.readOnly &&
                     i.jsx("p", {
                       className: "cs-notice",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "This workbook is read-only. You can inspect style previews.",
                       }),
@@ -271,7 +295,7 @@ function Nde(e) {
                   s?.protection?.enabled &&
                     i.jsx("p", {
                       className: "cs-notice",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "This worksheet is protected. Unprotect it before changing styles.",
                       }),
@@ -280,7 +304,7 @@ function Nde(e) {
                     i.jsx("p", {
                       className: "cs-error",
                       role: "alert",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "The workbook or selection changed. Close and reopen Format Cells.",
                       }),
@@ -289,7 +313,7 @@ function Nde(e) {
                     i.jsx("p", {
                       className: "cs-error",
                       role: "alert",
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Select at most 500 unique cells to apply styles.",
                       }),
@@ -308,7 +332,7 @@ function Nde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Font" }),
+                                    i.jsx(LocalizedText, { children: "Font" }),
                                     i.jsxs("select", {
                                       "aria-label": text("Font family"),
                                       value: _.fontFamily ?? "",
@@ -324,7 +348,7 @@ function Nde(e) {
                                           value: "",
                                           children: "Default (Calibri)",
                                         }),
-                                        dx.map((H) =>
+                                        supportedFontFamilies.map((H) =>
                                           i.jsx("option", { children: H }, H),
                                         ),
                                       ],
@@ -333,8 +357,8 @@ function Nde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Size" }),
-                                    i.jsx(ci, {
+                                    i.jsx(LocalizedText, { children: "Size" }),
+                                    i.jsx(LocalizedNumberField, {
                                       allowEmpty: true,
                                       "aria-label": text("Font size"),
                                       min: 8,
@@ -360,7 +384,9 @@ function Nde(e) {
                               className: "cs-effects",
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, { children: "Effects" }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Effects",
+                                  }),
                                 }),
                                 [
                                   ["bold", "Bold"],
@@ -392,14 +418,19 @@ function Nde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Font color" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Font color",
+                                    }),
                                     i.jsxs("span", {
                                       className: "cs-color",
                                       children: [
                                         i.jsx("input", {
                                           type: "color",
                                           "aria-label": text("Font color"),
-                                          value: $k(_.color, "#000000"),
+                                          value: expandShortHexColor(
+                                            _.color,
+                                            "#000000",
+                                          ),
                                           onChange: (H) =>
                                             T({ color: H.target.value }),
                                           lang: language("Font color"),
@@ -409,7 +440,7 @@ function Nde(e) {
                                           type: "button",
                                           onClick: () =>
                                             T({ color: undefined }),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Automatic",
                                           }),
                                         }),
@@ -419,14 +450,19 @@ function Nde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Fill color" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Fill color",
+                                    }),
                                     i.jsxs("span", {
                                       className: "cs-color",
                                       children: [
                                         i.jsx("input", {
                                           type: "color",
                                           "aria-label": text("Fill color"),
-                                          value: $k(_.fill, "#ffffff"),
+                                          value: expandShortHexColor(
+                                            _.fill,
+                                            "#ffffff",
+                                          ),
                                           onChange: (H) =>
                                             T({ fill: H.target.value }),
                                           lang: language("Fill color"),
@@ -435,7 +471,7 @@ function Nde(e) {
                                         i.jsx("button", {
                                           type: "button",
                                           onClick: () => T({ fill: undefined }),
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "No fill",
                                           }),
                                         }),
@@ -455,7 +491,9 @@ function Nde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Horizontal" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Horizontal",
+                                    }),
                                     i.jsxs("select", {
                                       "aria-label": text(
                                         "Horizontal alignment",
@@ -490,7 +528,9 @@ function Nde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Vertical" }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Vertical",
+                                    }),
                                     i.jsxs("select", {
                                       "aria-label": text("Vertical alignment"),
                                       value: _.verticalAlign ?? "",
@@ -524,8 +564,10 @@ function Nde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Indent" }),
-                                    i.jsx(ci, {
+                                    i.jsx(LocalizedText, {
+                                      children: "Indent",
+                                    }),
+                                    i.jsx(LocalizedNumberField, {
                                       "aria-label": text("Indent level"),
                                       min: 0,
                                       max: 15,
@@ -556,12 +598,12 @@ function Nde(e) {
                                   lang: language("Wrap text"),
                                   "data-ui-label": "Wrap text",
                                 }),
-                                i.jsx(M, { children: "Wrap text" }),
+                                i.jsx(LocalizedText, { children: "Wrap text" }),
                               ],
                             }),
                             i.jsx("p", {
                               className: "cs-help",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Indent applies to the left or right edge according to alignment. Centered text ignores indent. Explicit row heights still clip content; use AutoFit when more space is needed.",
                               }),
@@ -576,7 +618,7 @@ function Nde(e) {
                               children: [
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Line" }),
+                                    i.jsx(LocalizedText, { children: "Line" }),
                                     i.jsx("select", {
                                       "aria-label": text("Border line style"),
                                       value: E.style,
@@ -584,7 +626,7 @@ function Nde(e) {
                                         A({ ...E, style: H.target.value }),
                                       lang: language("Border line style"),
                                       "data-ui-label": "Border line style",
-                                      children: uB.map((H) =>
+                                      children: borderLineStyles.map((H) =>
                                         i.jsx(
                                           "option",
                                           {
@@ -601,11 +643,14 @@ function Nde(e) {
                                 }),
                                 i.jsxs("label", {
                                   children: [
-                                    i.jsx(M, { children: "Color" }),
+                                    i.jsx(LocalizedText, { children: "Color" }),
                                     i.jsx("input", {
                                       type: "color",
                                       "aria-label": text("Border color"),
-                                      value: $k(E.color, "#000000"),
+                                      value: expandShortHexColor(
+                                        E.color,
+                                        "#000000",
+                                      ),
                                       onChange: (H) =>
                                         A({ ...E, color: H.target.value }),
                                       lang: language("Border color"),
@@ -619,7 +664,7 @@ function Nde(e) {
                               className: "cs-presets",
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Presets for selected cells",
                                   }),
                                 }),
@@ -633,7 +678,7 @@ function Nde(e) {
                                       }),
                                       b(""));
                                   },
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Keep existing borders",
                                   }),
                                 }),
@@ -660,11 +705,11 @@ function Nde(e) {
                               className: "cs-presets",
                               children: [
                                 i.jsx("legend", {
-                                  children: i.jsx(M, {
+                                  children: i.jsx(LocalizedText, {
                                     children: "Individual edges",
                                   }),
                                 }),
-                                s0.map((H) =>
+                                cellBorderEdges.map((H) =>
                                   i.jsxs(
                                     "span",
                                     {
@@ -693,7 +738,7 @@ function Nde(e) {
                             }),
                             i.jsx("p", {
                               className: "cs-help",
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Choose a line and color, then a preset or edge. Presets follow the selected cells, including gaps. Outline and Inside retain other existing edges; Clear removes every selected edge. Borders on unselected neighboring cells remain intact.",
                               }),
@@ -710,7 +755,7 @@ function Nde(e) {
                     children: [
                       i.jsxs("h3", {
                         children: [
-                          i.jsx(M, { children: "Preview · " }),
+                          i.jsx(LocalizedText, { children: "Preview · " }),
                           s?.name,
                           "!",
                           l,
@@ -728,13 +773,13 @@ function Nde(e) {
                                   "tr",
                                   {
                                     children: [0, 1, 2].map((Q) => {
-                                      const X = `${ut(Q)}${H + 1}`,
+                                      const X = `${columnIndexToLetters(Q)}${H + 1}`,
                                         J = L(X);
                                       return i.jsx(
                                         "td",
                                         {
                                           "data-preview-cell": X,
-                                          style: Dw(J, "", {
+                                          style: cellStyleToCss(J, "", {
                                             defaultBorder: "1px dotted #d5d5d5",
                                           }),
                                           children:
@@ -754,17 +799,17 @@ function Nde(e) {
                             children: i.jsx("tbody", {
                               children: i.jsx("tr", {
                                 children: i.jsx("td", {
-                                  style: Dw(L("B2"), V, {
+                                  style: cellStyleToCss(L("B2"), V, {
                                     defaultBorder: "1px solid #d5d5d5",
                                   }),
                                   children: i.jsx("div", {
                                     style: {
-                                      ...RN(_),
+                                      ...textWrapToCss(_),
                                       maxHeight: 94,
                                       overflow: "hidden",
                                       lineHeight: 1.35,
                                     },
-                                    children: i.jsx(jI, {
+                                    children: i.jsx(CellValuePreview, {
                                       dateSystem:
                                         e.workbook.datePolicy?.dateSystem,
                                       value: V === null ? "Audit evidence" : V,
@@ -779,7 +824,7 @@ function Nde(e) {
                             }),
                           }),
                       i.jsx("p", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Values, formulas, number formats and review evidence remain unchanged.",
                         }),
@@ -800,12 +845,14 @@ function Nde(e) {
                   i.jsx("button", {
                     type: "button",
                     onClick: e.onClose,
-                    children: i.jsx(M, { children: "Cancel" }),
+                    children: i.jsx(LocalizedText, { children: "Cancel" }),
                   }),
                   i.jsx("button", {
                     className: "cs-primary",
                     disabled: B || !!C,
-                    children: i.jsx(M, { children: "Apply styles" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Apply styles",
+                    }),
                   }),
                 ],
               }),
@@ -816,7 +863,7 @@ function Nde(e) {
     })
   );
 }
-const zk = {
+const conditionalRuleTypeLabels = {
   greater: "Greater than",
   less: "Less than",
   equal: "Equal to",
@@ -833,7 +880,7 @@ const zk = {
   dataBar: "Data bars",
   iconSet: "Three-level icons",
 };
-function t2(e) {
+function createConditionalRuleDraft(e) {
   return {
     id: "",
     range: e,
@@ -845,7 +892,7 @@ function t2(e) {
     stopIfTrue: false,
   };
 }
-function W7(e) {
+function describeDataBarRule(e) {
   return [
     e.style.fill ? `Fill ${e.style.fill}` : "No fill",
     e.style.color ? `Text ${e.style.color}` : "",
@@ -858,9 +905,9 @@ function W7(e) {
     .filter(Boolean)
     .join("; ");
 }
-function Rde(e) {
+function ConditionalFormattingRulesManager(e) {
   var O;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef({
@@ -875,7 +922,7 @@ function Rde(e) {
           [],
       );
     }),
-    [u, l] = ne.useState(() => t2(e.range)),
+    [u, l] = ne.useState(() => createConditionalRuleDraft(e.range)),
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
     [m, v] = ne.useState(0),
@@ -885,7 +932,7 @@ function Rde(e) {
       a.current.sheetId !== e.sheetId ||
       a.current.range !== e.range,
     y = e.readOnly || b || !g || !!((O = g.protection) != null && O.enabled),
-    w = J3(s),
+    w = sortConditionalRulesByPriority(s),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
     var _;
@@ -912,8 +959,10 @@ function Rde(e) {
             ...(E ? { stopIfTrue: false } : {}),
           },
           B = u.id ? w.map((C) => (C.id === u.id ? D : C)) : [D, ...w],
-          _ = FN(B.map((C, T) => ({ ...C, priority: T + 1 })));
-        (A(_), l(t2(e.range)));
+          _ = normalizeConditionalRules(
+            B.map((C, T) => ({ ...C, priority: T + 1 })),
+          );
+        (A(_), l(createConditionalRuleDraft(e.range)));
       } catch (D) {
         h(D instanceof Error ? D.message : "Rule could not be staged.");
       }
@@ -921,7 +970,11 @@ function Rde(e) {
     I = () => {
       try {
         if (y) throw Error("Rules cannot be changed in this view.");
-        (p(LB(e.workbook, e.sheetId, s, { readOnly: e.readOnly })),
+        (p(
+          updateConditionalFormatRules(e.workbook, e.sheetId, s, {
+            readOnly: e.readOnly,
+          }),
+        ),
           v(0),
           h(""));
       } catch (D) {
@@ -961,7 +1014,7 @@ function Rde(e) {
           children: [
             i.jsx("h2", {
               id: `${n}-title`,
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Conditional Formatting Rules Manager",
               }),
             }),
@@ -978,7 +1031,7 @@ function Rde(e) {
           children: [
             g?.name ?? "Worksheet removed",
             " ",
-            i.jsx(M, {
+            i.jsx(LocalizedText, {
               children:
                 "· Highest priority first. Stage changes, inspect the preview, then Apply once.",
             }),
@@ -987,7 +1040,7 @@ function Rde(e) {
         b &&
           i.jsx("p", {
             role: "alert",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "The workbook or selection changed. Close and reopen this manager to refresh.",
             }),
@@ -995,18 +1048,20 @@ function Rde(e) {
         e.readOnly &&
           i.jsx("p", {
             role: "alert",
-            children: i.jsx(M, { children: "This workbook is read-only." }),
+            children: i.jsx(LocalizedText, {
+              children: "This workbook is read-only.",
+            }),
           }),
         g?.protection?.enabled &&
           i.jsx("p", {
             role: "alert",
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children: "Unprotect this worksheet before changing rules.",
             }),
           }),
         s.some((D) => D.priority === undefined) &&
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Legacy rules retain their last-wins behavior. Editing the list assigns explicit priorities that preserve the displayed order; the preview shows this migration.",
             }),
@@ -1021,14 +1076,16 @@ function Rde(e) {
               children: [
                 i.jsxs("h3", {
                   children: [
-                    i.jsx(M, { children: "Rules (" }),
+                    i.jsx(LocalizedText, { children: "Rules (" }),
                     s.length,
                     "/100)",
                   ],
                 }),
                 w.length === 0
                   ? i.jsx("p", {
-                      children: i.jsx(M, { children: "No conditional rules." }),
+                      children: i.jsx(LocalizedText, {
+                        children: "No conditional rules.",
+                      }),
                     })
                   : i.jsx("ol", {
                       className: "cf-rules",
@@ -1037,7 +1094,9 @@ function Rde(e) {
                           "li",
                           {
                             children: [
-                              i.jsx("strong", { children: zk[D.kind] }),
+                              i.jsx("strong", {
+                                children: conditionalRuleTypeLabels[D.kind],
+                              }),
                               " · ",
                               D.range,
                               i.jsxs("span", {
@@ -1055,7 +1114,9 @@ function Rde(e) {
                                       (l(structuredClone(D)), h(""));
                                     },
                                     children: [
-                                      i.jsx(M, { children: "Edit rule " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "Edit rule ",
+                                      }),
                                       B + 1,
                                     ],
                                   }),
@@ -1063,10 +1124,15 @@ function Rde(e) {
                                     disabled: y,
                                     onClick: () => {
                                       (A(w.filter((_) => _.id !== D.id)),
-                                        u.id === D.id && l(t2(e.range)));
+                                        u.id === D.id &&
+                                          l(
+                                            createConditionalRuleDraft(e.range),
+                                          ));
                                     },
                                     children: [
-                                      i.jsx(M, { children: "Delete rule " }),
+                                      i.jsx(LocalizedText, {
+                                        children: "Delete rule ",
+                                      }),
                                       B + 1,
                                     ],
                                   }),
@@ -1112,7 +1178,7 @@ function Rde(e) {
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Rule type" }),
+                        i.jsx(LocalizedText, { children: "Rule type" }),
                         i.jsx("select", {
                           value: u.kind,
                           onChange: (D) => {
@@ -1129,15 +1195,22 @@ function Rde(e) {
                                 : {}),
                             });
                           },
-                          children: BB.map((D) =>
-                            i.jsx("option", { value: D, children: zk[D] }, D),
+                          children: conditionalRuleKinds.map((D) =>
+                            i.jsx(
+                              "option",
+                              {
+                                value: D,
+                                children: conditionalRuleTypeLabels[D],
+                              },
+                              D,
+                            ),
                           ),
                         }),
                       ],
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Applies to" }),
+                        i.jsx(LocalizedText, { children: "Applies to" }),
                         i.jsx("input", {
                           value: u.range,
                           onChange: (D) => k({ range: D.target.value }),
@@ -1149,7 +1222,9 @@ function Rde(e) {
                           children: [
                             i.jsxs("label", {
                               children: [
-                                i.jsx(M, { children: "Condition formula" }),
+                                i.jsx(LocalizedText, {
+                                  children: "Condition formula",
+                                }),
                                 i.jsx("input", {
                                   value: u.formula ?? "",
                                   onChange: (D) =>
@@ -1158,7 +1233,7 @@ function Rde(e) {
                               ],
                             }),
                             i.jsx("small", {
-                              children: i.jsx(M, {
+                              children: i.jsx(LocalizedText, {
                                 children:
                                   "Write relative references for the top-left cell of Applies to. Use $ to anchor rows or columns.",
                               }),
@@ -1186,7 +1261,7 @@ function Rde(e) {
                     u.kind === "between" &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Second value" }),
+                          i.jsx(LocalizedText, { children: "Second value" }),
                           i.jsx("input", {
                             value: u.second,
                             onChange: (D) => k({ second: D.target.value }),
@@ -1210,7 +1285,7 @@ function Rde(e) {
                         }),
                         i.jsxs("label", {
                           children: [
-                            i.jsx(M, { children: "Text color" }),
+                            i.jsx(LocalizedText, { children: "Text color" }),
                             i.jsx("input", {
                               type: "color",
                               value: u.color,
@@ -1226,7 +1301,9 @@ function Rde(e) {
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Minimum color" }),
+                              i.jsx(LocalizedText, {
+                                children: "Minimum color",
+                              }),
                               i.jsx("input", {
                                 type: "color",
                                 value: u.minColor ?? "#f8e99b",
@@ -1237,7 +1314,9 @@ function Rde(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Maximum color" }),
+                              i.jsx(LocalizedText, {
+                                children: "Maximum color",
+                              }),
                               i.jsx("input", {
                                 type: "color",
                                 value: u.maxColor ?? "#63be7b",
@@ -1250,7 +1329,7 @@ function Rde(e) {
                       }),
                     u.kind === "dataBar" &&
                       i.jsx("small", {
-                        children: i.jsx(M, {
+                        children: i.jsx(LocalizedText, {
                           children:
                             "Automatic numeric minimum and maximum, a zero axis, red negative bars. Values stay visible.",
                         }),
@@ -1260,7 +1339,9 @@ function Rde(e) {
                         children: [
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Icon threshold units" }),
+                              i.jsx(LocalizedText, {
+                                children: "Icon threshold units",
+                              }),
                               i.jsxs("select", {
                                 value: u.thresholdType ?? "percent",
                                 onChange: (D) =>
@@ -1280,8 +1361,10 @@ function Rde(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "Middle icon starts at" }),
-                              i.jsx(ci, {
+                              i.jsx(LocalizedText, {
+                                children: "Middle icon starts at",
+                              }),
+                              i.jsx(LocalizedNumberField, {
                                 "aria-label": text("Middle icon starts at"),
                                 value: u.iconThresholds?.[0] ?? 33,
                                 onValueChange: (D) => {
@@ -1297,8 +1380,10 @@ function Rde(e) {
                           }),
                           i.jsxs("label", {
                             children: [
-                              i.jsx(M, { children: "High icon starts at" }),
-                              i.jsx(ci, {
+                              i.jsx(LocalizedText, {
+                                children: "High icon starts at",
+                              }),
+                              i.jsx(LocalizedNumberField, {
                                 "aria-label": text("High icon starts at"),
                                 value: u.iconThresholds?.[1] ?? 67,
                                 onValueChange: (D) => {
@@ -1323,7 +1408,7 @@ function Rde(e) {
                           disabled: E || y,
                           onChange: (D) => k({ stopIfTrue: D.target.checked }),
                         }),
-                        i.jsx(M, { children: "Stop if true" }),
+                        i.jsx(LocalizedText, { children: "Stop if true" }),
                       ],
                     }),
                     i.jsx("button", {
@@ -1332,8 +1417,10 @@ function Rde(e) {
                     }),
                     i.jsx("button", {
                       type: "button",
-                      onClick: () => l(t2(e.range)),
-                      children: i.jsx(M, { children: "Reset editor" }),
+                      onClick: () => l(createConditionalRuleDraft(e.range)),
+                      children: i.jsx(LocalizedText, {
+                        children: "Reset editor",
+                      }),
                     }),
                   ],
                 }),
@@ -1345,7 +1432,7 @@ function Rde(e) {
         i.jsx("button", {
           disabled: y,
           onClick: I,
-          children: i.jsx(M, { children: "Preview rule changes" }),
+          children: i.jsx(LocalizedText, { children: "Preview rule changes" }),
         }),
         f &&
           i.jsxs("section", {
@@ -1358,23 +1445,25 @@ function Rde(e) {
                 children: [
                   f.changes.length,
                   " ",
-                  i.jsx(M, { children: "rule changes" }),
+                  i.jsx(LocalizedText, { children: "rule changes" }),
                 ],
               }),
               f.changes.length === 0 &&
                 i.jsx("p", {
-                  children: i.jsx(M, { children: "No changes to apply." }),
+                  children: i.jsx(LocalizedText, {
+                    children: "No changes to apply.",
+                  }),
                 }),
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "Exact rule metadata is listed below. The visual sample shows up to",
                   }),
                   " ",
                   f.previewLimit,
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "anchors and populated cells; it is not an exhaustive scan of the range.",
                   }),
@@ -1393,7 +1482,7 @@ function Rde(e) {
                               ? "Add"
                               : "Delete",
                           " ",
-                          zk[(D.after ?? D.before).kind],
+                          conditionalRuleTypeLabels[(D.after ?? D.before).kind],
                           " ·",
                           " ",
                           (D.after ?? D.before).range,
@@ -1404,7 +1493,7 @@ function Rde(e) {
                         children: [
                           i.jsxs("pre", {
                             children: [
-                              i.jsx(M, { children: "Before" }),
+                              i.jsx(LocalizedText, { children: "Before" }),
                               `
 `,
                               D.before
@@ -1414,7 +1503,7 @@ function Rde(e) {
                           }),
                           i.jsxs("pre", {
                             children: [
-                              i.jsx(M, { children: "After" }),
+                              i.jsx(LocalizedText, { children: "After" }),
                               `
 `,
                               D.after
@@ -1434,7 +1523,9 @@ function Rde(e) {
                   role: "alert",
                   children: [
                     i.jsx("strong", {
-                      children: i.jsx(M, { children: "Rule errors" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Rule errors",
+                      }),
                     }),
                     i.jsx("ul", {
                       children: f.errors.map((D, B) =>
@@ -1454,7 +1545,7 @@ function Rde(e) {
                       ),
                     }),
                     i.jsx("p", {
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children:
                           "Cells with a rule error receive no formatting from that rule. Apply keeps the rule available for later repair.",
                       }),
@@ -1469,16 +1560,24 @@ function Rde(e) {
                       children: i.jsxs("tr", {
                         children: [
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Cell" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Cell",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Value" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Value",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Before" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Before",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "After" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "After",
+                            }),
                           }),
                         ],
                       }),
@@ -1493,8 +1592,12 @@ function Rde(e) {
                               i.jsx("td", {
                                 children: String(D.value ?? ""),
                               }),
-                              i.jsx("td", { children: W7(D.before) }),
-                              i.jsx("td", { children: W7(D.after) }),
+                              i.jsx("td", {
+                                children: describeDataBarRule(D.before),
+                              }),
+                              i.jsx("td", {
+                                children: describeDataBarRule(D.after),
+                              }),
                             ],
                           },
                           D.address,
@@ -1513,21 +1616,25 @@ function Rde(e) {
                     i.jsx("button", {
                       disabled: m === 0,
                       onClick: () => v(m - 1),
-                      children: i.jsx(M, { children: "Previous samples" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Previous samples",
+                      }),
                     }),
                     i.jsxs("span", {
                       children: [
-                        i.jsx(M, { children: "Page " }),
+                        i.jsx(LocalizedText, { children: "Page " }),
                         m + 1,
                         " ",
-                        i.jsx(M, { children: "of " }),
+                        i.jsx(LocalizedText, { children: "of " }),
                         Math.ceil(f.samples.length / 10),
                       ],
                     }),
                     i.jsx("button", {
                       disabled: (m + 1) * 10 >= f.samples.length,
                       onClick: () => v(m + 1),
-                      children: i.jsx(M, { children: "Next samples" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Next samples",
+                      }),
                     }),
                   ],
                 }),
@@ -1537,14 +1644,18 @@ function Rde(e) {
           children: [
             i.jsx("button", {
               onClick: e.onClose,
-              children: i.jsx(M, { children: "Cancel" }),
+              children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               disabled: y || !f || f.changes.length === 0,
               onClick: () => {
                 try {
                   if (!f || y) return;
-                  const D = $Q(e.workbook, f, { readOnly: e.readOnly });
+                  const D = assertConditionalFormatPreviewCurrent(
+                    e.workbook,
+                    f,
+                    { readOnly: e.readOnly },
+                  );
                   (D !== e.workbook &&
                     e.onWorkbookChange(
                       D,
@@ -1559,7 +1670,7 @@ function Rde(e) {
                   );
                 }
               },
-              children: i.jsx(M, { children: "Apply rules" }),
+              children: i.jsx(LocalizedText, { children: "Apply rules" }),
             }),
           ],
         }),
@@ -1567,8 +1678,8 @@ function Rde(e) {
     }),
   });
 }
-function Fz({ decoration, children }) {
-  const { text, language } = Dr();
+function ConditionalFormatIndicator({ decoration, children }) {
+  const { text, language } = useWorkbookMessages();
   if (
     !(decoration != null && decoration.dataBar) &&
     !(decoration != null && decoration.icon) &&
@@ -1638,9 +1749,9 @@ function Fz({ decoration, children }) {
     ],
   });
 }
-const r2 = (e, r) => {
-    const t = ct(e),
-      n = ct(r);
+const normalizeRangeBounds = (e, r) => {
+    const t = parseRangeAddress(e),
+      n = parseRangeAddress(r);
     return (
       t.firstRow <= n.lastRow &&
       t.lastRow >= n.firstRow &&
@@ -1648,45 +1759,46 @@ const r2 = (e, r) => {
       t.lastCol >= n.firstCol
     );
   },
-  Ide = (e) => {
-    const r = ct(e);
-    return `${ut(r.firstCol)}${r.firstRow + 1}:${ut(r.lastCol)}${r.lastRow + 1}`;
+  rangeToA1Address = (e) => {
+    const r = parseRangeAddress(e);
+    return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
   },
-  Vk = (e) => {
-    const r = ct(e);
+  rangeCellCount = (e) => {
+    const r = parseRangeAddress(e);
     return (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1);
   };
-function Bz(e, r, t, n = false, o = {}) {
+function previewMergeCells(e, r, t, n = false, o = {}) {
   if (o.readOnly) throw Error("This workbook is read-only.");
-  const a = Nr(e, r);
-  jn(a);
-  const s = Ide(t);
-  if (Vk(s) > 500)
+  const a = findSheetOrThrow(e, r);
+  assertSheetUnprotected(a);
+  const s = rangeToA1Address(t);
+  if (rangeCellCount(s) > 500)
     throw Error("Preview a merge or unmerge of at most 500 cells.");
-  if (!n && Vk(s) < 2) throw Error("Select at least two cells to merge.");
-  const d = (a.merges ?? []).filter((p) => r2(p, s));
+  if (!n && rangeCellCount(s) < 2)
+    throw Error("Select at least two cells to merge.");
+  const d = (a.merges ?? []).filter((p) => normalizeRangeBounds(p, s));
   if (!n && d.length) throw Error("Unmerge overlapping areas first.");
   if (n && !d.length)
     throw Error("The selected range does not intersect a merged area.");
   const u = n ? d : [s];
-  if (u.reduce((p, m) => p + Vk(m), 0) > 500)
+  if (u.reduce((p, m) => p + rangeCellCount(m), 0) > 500)
     throw Error(
       "Unmerge fewer areas; this preview supports at most 500 affected cells.",
     );
   if (!n) {
-    if ((a.tables ?? []).some((p) => r2(p.range, s)))
+    if ((a.tables ?? []).some((p) => normalizeRangeBounds(p.range, s)))
       throw Error(
         "Merging cells inside a table is unsupported. Convert the table first.",
       );
     if (
       [...(a.pivots ?? []), ...(a.queries ?? [])].some((p) =>
-        r2(p.outputRange, s),
+        normalizeRangeBounds(p.outputRange, s),
       )
     )
       throw Error("Merging generated analysis output is unsupported.");
   }
-  rn(kE(e, r, s, n));
-  const l = Vn(e);
+  normalizeWorkbookInput(mergeWorksheetCells(e, r, s, n));
+  const l = calculateWorkbookWithSettings(e);
   if (!n) {
     let p = 0;
     for (const [m, v] of Object.entries(a.cells))
@@ -1696,7 +1808,7 @@ function Bz(e, r, t, n = false, o = {}) {
             "Merge checking supports at most 10,000 active formulas per worksheet.",
           );
         const g = l.getSpillRange(r, m);
-        if (g && r2(g, s))
+        if (g && normalizeRangeBounds(g, s))
           throw Error(
             `Unmergeable array output at ${g}. Move or remove its formula first.`,
           );
@@ -1704,11 +1816,11 @@ function Bz(e, r, t, n = false, o = {}) {
   }
   const c = [];
   for (const p of u) {
-    const m = ct(p),
-      v = `${ut(m.firstCol)}${m.firstRow + 1}`;
+    const m = parseRangeAddress(p),
+      v = `${columnIndexToLetters(m.firstCol)}${m.firstRow + 1}`;
     for (let g = m.firstRow; g <= m.lastRow; g++)
       for (let b = m.firstCol; b <= m.lastCol; b++) {
-        const y = `${ut(b)}${g + 1}`,
+        const y = `${columnIndexToLetters(b)}${g + 1}`,
           w = a.cells[y],
           E = (e.reviewThreads ?? []).filter(
             (A) =>
@@ -1718,7 +1830,11 @@ function Bz(e, r, t, n = false, o = {}) {
           c.push({
             address: y,
             cell: structuredClone(w ?? { raw: null }),
-            display: Af(l(r, y), w, e.datePolicy?.dateSystem),
+            display: formatNumberWithPattern(
+              l(r, y),
+              w,
+              e.datePolicy?.dateSystem,
+            ),
             discussions: E,
             effect:
               y === v
@@ -1755,16 +1871,22 @@ function Bz(e, r, t, n = false, o = {}) {
     ),
   };
 }
-function _de(e, r, t = {}) {
+function assertMergePreviewCurrent(e, r, t = {}) {
   if (r.snapshot !== JSON.stringify(e))
     throw Error(
       "The workbook changed. Close this preview and review the current cells again.",
     );
-  const n = Bz(e, r.sheetId, r.range, r.unmerge, t),
+  const n = previewMergeCells(e, r.sheetId, r.range, r.unmerge, t),
     o = (a) => ({ ...a, cells: a.cells.map(({ display, ...d }) => d) });
   if (JSON.stringify(o(n)) !== JSON.stringify(o(r)))
     throw Error("The merge preview changed. Create a fresh preview.");
-  return kE(e, r.sheetId, r.range, r.unmerge);
+  return mergeWorksheetCells(e, r.sheetId, r.range, r.unmerge);
 }
 
-export { Bz, Fz, Nde, Rde, _de };
+export {
+  previewMergeCells,
+  ConditionalFormatIndicator,
+  FormatCellsDialog,
+  ConditionalFormattingRulesManager,
+  assertMergePreviewCurrent,
+};

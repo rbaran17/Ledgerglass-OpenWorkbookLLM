@@ -1,24 +1,36 @@
 import Ox from "saxes";
 import { Unzip, UnzipInflate, strToU8, strFromU8, zipSync } from "fflate";
-import { iu } from "./01-core-schemas-and-hashing.js";
-import { Ja, Mt } from "./02-financial-functions.js";
-import { HR, _t, ct } from "./03-workbook-model.js";
-import { T$, Yse } from "./05-add-ins-and-custom-functions.js";
-import { Jse, Qse, R$, sg } from "./06-analysis-tools.js";
+import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
+import { fileImportLimits, workbookLimits } from "./02-financial-functions.js";
+import {
+  alternateFormatExtensions,
+  _t,
+  parseRangeAddress,
+} from "./03-workbook-model.js";
+import {
+  recordSourceInspection,
+  validateIsolatedFormatInspection,
+} from "./05-add-ins-and-custom-functions.js";
+import {
+  unsupportedXlsxMarkers,
+  excelMessagePatterns,
+  fileParserWorkerSource,
+  fileProcessingErrorMessages,
+} from "./06-analysis-tools.js";
 
-class La extends Error {
-  constructor(r, t = sg[r]) {
+class FileProcessingError extends Error {
+  constructor(r, t = fileProcessingErrorMessages[r]) {
     (super(t), (this.code = r), (this.name = "FileProcessingError"));
   }
 }
-const ele = new Set([
-    ...Jse,
+const unsupportedArrayFormulaReasons = new Set([
+    ...unsupportedXlsxMarkers,
     "Legacy CSE array formula",
     "Metadata-qualified Excel array formula (dynamic/legacy classification requires Excel metadata)",
   ]),
-  pk =
+  excelRepairSuffix =
     " Open the original in Excel, repair it if needed, and save a clean, unencrypted XLSX copy.",
-  tle = Qse.map((e) => ({
+  sanitizedMessagePatterns = excelMessagePatterns.map((e) => ({
     parts: e,
     expression: new RegExp(
       "^" +
@@ -28,14 +40,17 @@ const ele = new Set([
         "$",
     ),
   }));
-function Yw(e, r = 0) {
+function sanitizeFileMessage(e, r = 0) {
   if (!(e.length > 4096 || r > 3)) {
-    if (ele.has(e)) return e;
-    if (e.endsWith(pk)) {
-      const t = Yw(e.slice(0, -pk.length), r + 1);
-      if (t) return t + pk;
+    if (unsupportedArrayFormulaReasons.has(e)) return e;
+    if (e.endsWith(excelRepairSuffix)) {
+      const t = sanitizeFileMessage(
+        e.slice(0, -excelRepairSuffix.length),
+        r + 1,
+      );
+      if (t) return t + excelRepairSuffix;
     }
-    for (const { parts, expression } of tle) {
+    for (const { parts, expression } of sanitizedMessagePatterns) {
       const o = expression.exec(e);
       if (o)
         return parts
@@ -43,15 +58,20 @@ function Yw(e, r = 0) {
             (a, s) =>
               a +
               (s < parts.length - 1
-                ? (Yw(o[s + 1], r + 1) ?? "[source detail omitted]")
+                ? (sanitizeFileMessage(o[s + 1], r + 1) ??
+                  "[source detail omitted]")
                 : ""),
           )
           .join("");
     }
   }
 }
-function OC(e) {
-  if (e instanceof La) return new La(e.code, Yw(e.message) ?? sg[e.code]);
+function toFileProcessingError(e) {
+  if (e instanceof FileProcessingError)
+    return new FileProcessingError(
+      e.code,
+      sanitizeFileMessage(e.message) ?? fileProcessingErrorMessages[e.code],
+    );
   const r = e instanceof Error ? e.message : "",
     t =
       /exceed|budget|limit|too (?:large|many)|at most|smaller|depth|nesting/i.test(
@@ -63,21 +83,29 @@ function OC(e) {
             )
           ? "FILE_ACTIVE"
           : "FILE_INVALID";
-  return new La(t, Yw(r) ?? sg[t]);
+  return new FileProcessingError(
+    t,
+    sanitizeFileMessage(r) ?? fileProcessingErrorMessages[t],
+  );
 }
-function rle(e) {
+function workerErrorToFileError(e) {
   const r = e,
-    t = r && Object.hasOwn(sg, r.code ?? "") ? r.code : "FILE_WORKER",
+    t =
+      r && Object.hasOwn(fileProcessingErrorMessages, r.code ?? "")
+        ? r.code
+        : "FILE_WORKER",
     n =
       typeof r?.message == "string"
-        ? (Yw(r.message) ??
-          (Object.values(sg).includes(r.message) ? r.message : sg[t]))
-        : sg[t];
-  return new La(t, n);
+        ? (sanitizeFileMessage(r.message) ??
+          (Object.values(fileProcessingErrorMessages).includes(r.message)
+            ? r.message
+            : fileProcessingErrorMessages[t]))
+        : fileProcessingErrorMessages[t];
+  return new FileProcessingError(t, n);
 }
 const u1 = Object.freeze({
-  maxFileBytes: Mt.maxFileBytes,
-  maxNativeBytes: Mt.maxNativeBytes,
+  maxFileBytes: workbookLimits.maxFileBytes,
+  maxNativeBytes: workbookLimits.maxNativeBytes,
   maxConfigurationBytes: 2e6,
   maxPictureBytes: 2 * 1024 * 1024,
   maxConcurrent: 2,
@@ -88,7 +116,7 @@ const u1 = Object.freeze({
   nodeHeapMiB: 256,
   maxResultBytes: 100 * 1024 * 1024,
 });
-function mk(e, r) {
+function fileByteLimitFor(e, r) {
   return e === "source"
     ? 4 * 1024 * 1024
     : e === "json"
@@ -96,10 +124,10 @@ function mk(e, r) {
       : e === "picture"
         ? u1.maxPictureBytes
         : e === "workbook" && /\.json$/i.test(r)
-          ? Mt.maxNativeBytes
-          : Mt.maxFileBytes;
+          ? workbookLimits.maxNativeBytes
+          : workbookLimits.maxFileBytes;
 }
-function c7(e, r, t) {
+function assertImportFileAllowed(e, r, t) {
   var o;
   if (
     typeof r != "string" ||
@@ -107,9 +135,9 @@ function c7(e, r, t) {
     r.length > 255 ||
     /[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(r)
   )
-    throw new La("FILE_TYPE");
+    throw new FileProcessingError("FILE_TYPE");
   if (e === "workbook" && /\.(xlsm|xlsb|xls|xltm|xlam)$/i.test(r))
-    throw new La(
+    throw new FileProcessingError(
       "FILE_TYPE",
       "Legacy or macro-enabled Excel formats are not supported. Save as XLSX, CSV or native JSON.",
     );
@@ -124,21 +152,24 @@ function c7(e, r, t) {
       picture: /\.(png|jpe?g)$/i,
     }[e]) != null && o.test(e === "picture" ? r.trim() : r)
   ))
-    throw new La("FILE_TYPE");
-  if (!Number.isSafeInteger(t) || t < 0 || t > mk(e, r))
-    throw new La(
+    throw new FileProcessingError("FILE_TYPE");
+  if (!Number.isSafeInteger(t) || t < 0 || t > fileByteLimitFor(e, r))
+    throw new FileProcessingError(
       "FILE_LIMIT",
-      mk(e, r) === Mt.maxNativeBytes
+      fileByteLimitFor(e, r) === workbookLimits.maxNativeBytes
         ? "Native workbook exceeds the 50 MB import limit."
-        : mk(e, r) === Mt.maxFileBytes
+        : fileByteLimitFor(e, r) === workbookLimits.maxFileBytes
           ? "Files must be 10 MB or smaller."
           : undefined,
     );
 }
-function nle(e = {}) {
+function createBrowserFileWorker(e = {}) {
   const r = e.url === undefined,
     t =
-      e.url ?? URL.createObjectURL(new Blob([R$], { type: "text/javascript" }));
+      e.url ??
+      URL.createObjectURL(
+        new Blob([fileParserWorkerSource], { type: "text/javascript" }),
+      );
   try {
     const n = new Worker(t, { name: "workbook-file-parser" }),
       o = {
@@ -165,12 +196,12 @@ function nle(e = {}) {
     throw (r && URL.revokeObjectURL(String(t)), n);
   }
 }
-async function ile() {
+async function createNodeFileWorker() {
   const e = "node:worker_threads",
     { Worker } = await import(e),
     t = new Worker(
       `const {parentPort}=require("node:worker_threads");globalThis.self=globalThis;globalThis.postMessage=v=>parentPort.postMessage(v);parentPort.on("message",data=>globalThis.onmessage({data}));
-` + R$,
+` + fileParserWorkerSource,
       {
         eval: true,
         name: "workbook-file-parser",
@@ -204,26 +235,26 @@ async function ile() {
     n
   );
 }
-function ole() {
+function createFileWorker() {
   var e;
-  if (typeof Worker < "u") return nle();
+  if (typeof Worker < "u") return createBrowserFileWorker();
   if (typeof process < "u" && (e = process.versions) != null && e.node)
-    return ile();
+    return createNodeFileWorker();
   throw Error("File worker unavailable.");
 }
-const I$ = new WeakMap();
-function ale(e, r, t) {
+const inspectionSignatureCache = new WeakMap();
+function registerIsolatedInspection(e, r, t) {
   if (
     e.schemaVersion !== 1 ||
     e.fileName !== t ||
     e.fileBytes !== r.length ||
-    e.sha256 !== iu(r)
+    e.sha256 !== sha256HexDigest(r)
   )
     throw Error("Invalid isolated inspection.");
-  I$.set(e, { signature: JSON.stringify(e), bytes: r });
+  inspectionSignatureCache.set(e, { signature: JSON.stringify(e), bytes: r });
 }
-let gk = 0;
-function sle(e, r) {
+let activeFileImportCount = 0;
+function readFileAsArrayBuffer(e, r) {
   return typeof e.arrayBuffer == "function"
     ? e.arrayBuffer()
     : new Promise((t, n) => {
@@ -234,27 +265,29 @@ function sle(e, r) {
           (s(), t(o.result));
         }),
           (o.onerror = () => {
-            (s(), n(new La("FILE_READ")));
+            (s(), n(new FileProcessingError("FILE_READ")));
           }),
           (o.onabort = o.onerror),
           r.addEventListener("abort", a, { once: true }),
           o.readAsArrayBuffer(e));
       });
 }
-async function im(e, r, t = {}, n) {
+async function runFileImport(e, r, t = {}, n) {
   var a;
   if (t.reliability) {
     const { reliability, ...d } = t;
-    return reliability.run("file", e, () => im(e, r, d, n));
+    return reliability.run("file", e, () => runFileImport(e, r, d, n));
   }
-  c7(e, r.name, r.size);
+  assertImportFileAllowed(e, r.name, r.size);
   const o = t.timeoutMs ?? u1.defaultTimeoutMs;
   if (!Number.isInteger(o) || o < 1 || o > u1.maxTimeoutMs)
-    throw new La("FILE_LIMIT");
-  if ((a = t.signal) != null && a.aborted) throw new La("FILE_CANCELLED");
-  if (gk >= u1.maxConcurrent) throw new La("FILE_BUSY");
+    throw new FileProcessingError("FILE_LIMIT");
+  if ((a = t.signal) != null && a.aborted)
+    throw new FileProcessingError("FILE_CANCELLED");
+  if (activeFileImportCount >= u1.maxConcurrent)
+    throw new FileProcessingError("FILE_BUSY");
   return (
-    gk++,
+    activeFileImportCount++,
     new Promise((s, d) => {
       var g, b;
       let u = false,
@@ -267,7 +300,7 @@ async function im(e, r, t = {}, n) {
           if (!u) {
             if (
               ((u = true),
-              gk--,
+              activeFileImportCount--,
               clearTimeout(v),
               (E = t.signal) == null || E.removeEventListener("abort", m),
               c.abort(),
@@ -281,8 +314,8 @@ async function im(e, r, t = {}, n) {
             y ? d(y) : s(w);
           }
         },
-        m = () => p(new La("FILE_CANCELLED")),
-        v = setTimeout(() => p(new La("FILE_TIMEOUT")), o);
+        m = () => p(new FileProcessingError("FILE_CANCELLED")),
+        v = setTimeout(() => p(new FileProcessingError("FILE_TIMEOUT")), o);
       if (
         ((g = t.signal) == null ||
           g.addEventListener("abort", m, { once: true }),
@@ -294,20 +327,20 @@ async function im(e, r, t = {}, n) {
       (async () => {
         let y;
         try {
-          y = new Uint8Array(await sle(r, c.signal));
+          y = new Uint8Array(await readFileAsArrayBuffer(r, c.signal));
         } catch {
-          p(new La("FILE_READ"));
+          p(new FileProcessingError("FILE_READ"));
           return;
         }
         if (u) return;
         try {
-          c7(e, r.name, y.byteLength);
+          assertImportFileAllowed(e, r.name, y.byteLength);
         } catch (E) {
           p(E);
           return;
         }
         if (y.byteLength !== r.size) {
-          p(new La("FILE_READ"));
+          p(new FileProcessingError("FILE_READ"));
           return;
         }
         y = y.slice();
@@ -316,7 +349,7 @@ async function im(e, r, t = {}, n) {
             ? y.slice()
             : undefined;
         try {
-          const E = await (t.workerFactory ?? ole)();
+          const E = await (t.workerFactory ?? createFileWorker)();
           if (u) {
             try {
               Promise.resolve(E.terminate()).catch(() => {});
@@ -324,30 +357,36 @@ async function im(e, r, t = {}, n) {
             return;
           }
           ((l = E),
-            (l.onerror = () => p(new La("FILE_WORKER"))),
+            (l.onerror = () => p(new FileProcessingError("FILE_WORKER"))),
             (l.onmessage = ({ data }) => {
               if (u) return;
               const k = data;
               if (!(!k || k.id !== h)) {
                 if (performance.now() - f > o) {
-                  p(new La("FILE_TIMEOUT"));
+                  p(new FileProcessingError("FILE_TIMEOUT"));
                   return;
                 }
                 if (k.ok !== true) {
-                  p(rle(k.error));
+                  p(workerErrorToFileError(k.error));
                   return;
                 }
                 if (!Object.hasOwn(k, "value")) {
-                  p(new La("FILE_WORKER"));
+                  p(new FileProcessingError("FILE_WORKER"));
                   return;
                 }
                 try {
-                  (w && e === "source" && T$(k.value, w, r.name),
-                    w && e === "formats" && Yse(k.value, w, r.name),
-                    w && e === "automation" && ale(k.value, w, r.name),
+                  (w &&
+                    e === "source" &&
+                    recordSourceInspection(k.value, w, r.name),
+                    w &&
+                      e === "formats" &&
+                      validateIsolatedFormatInspection(k.value, w, r.name),
+                    w &&
+                      e === "automation" &&
+                      registerIsolatedInspection(k.value, w, r.name),
                     p(undefined, k.value));
                 } catch {
-                  p(new La("FILE_WORKER"));
+                  p(new FileProcessingError("FILE_WORKER"));
                 }
               }
             }),
@@ -356,42 +395,42 @@ async function im(e, r, t = {}, n) {
               [y.buffer],
             ));
         } catch {
-          p(new La("FILE_WORKER"));
+          p(new FileProcessingError("FILE_WORKER"));
         }
       })();
     })
   );
 }
-function H1(e, r) {
-  return im("workbook", e, r);
+function importWorkbookFile(e, r) {
+  return runFileImport("workbook", e, r);
 }
-function ow(e, r) {
-  return im("automation", e, r);
+function importAutomationFile(e, r) {
+  return runFileImport("automation", e, r);
 }
-function _$(e, r = {}, t) {
-  return im("delimited", e, t, r);
+function importDelimitedFile(e, r = {}, t) {
+  return runFileImport("delimited", e, t, r);
 }
-function MC(e, r) {
-  return im("json", e, r);
+function importNativeJsonFile(e, r) {
+  return runFileImport("json", e, r);
 }
-function lle(e, r) {
-  return im("picture", e, r);
+function importPictureFile(e, r) {
+  return runFileImport("picture", e, r);
 }
-function ule(e, r) {
-  return im("formats", e, r);
+function detectSupportedFileFormats(e, r) {
+  return runFileImport("formats", e, r);
 }
 
-function ple(e, r, t) {
+function assertXlsxExpansionLimit(e, r, t) {
   if (
-    t > Ja.maxXlsxExpandedBytes ||
-    (r > Ja.xlsxRatioThresholdBytes &&
-      r / Math.max(e, 1) > Ja.maxXlsxExpansionRatio)
+    t > fileImportLimits.maxXlsxExpandedBytes ||
+    (r > fileImportLimits.xlsxRatioThresholdBytes &&
+      r / Math.max(e, 1) > fileImportLimits.maxXlsxExpansionRatio)
   )
     throw new Error(
       "The XLSX archive exceeds the safe expansion limit (50 MB or 200:1 ratio).",
     );
 }
-function mle(e, r, t = 0) {
+function parseWorksheetCells(e, r, t = 0) {
   const n = (c, h) => {
       return new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)?.[2];
     },
@@ -417,7 +456,7 @@ function mle(e, r, t = 0) {
       const m = n(p, "ref");
       m || l("The declared dimension has no valid cell range.");
       try {
-        ct(m);
+        parseRangeAddress(m);
       } catch {
         l(
           `Declared dimension ${m} exceeds or violates the supported worksheet bounds.`,
@@ -426,8 +465,10 @@ function mle(e, r, t = 0) {
     } else if (f === "row") {
       const m = n(p, "r"),
         v = Number(m);
-      ((!m || !/^[1-9]\d*$/.test(m) || v > Ja.maxRows) &&
-        l(`Row ${m ?? "(missing)"} must be between 1 and ${Ja.maxRows}.`),
+      ((!m || !/^[1-9]\d*$/.test(m) || v > fileImportLimits.maxRows) &&
+        l(
+          `Row ${m ?? "(missing)"} must be between 1 and ${fileImportLimits.maxRows}.`,
+        ),
         (a || v <= s) && l("Rows must have distinct, ascending row numbers."),
         (s = v),
         (a = /\/\s*$/.test(p) ? 0 : v),
@@ -445,47 +486,47 @@ function mle(e, r, t = 0) {
       ((v.row + 1 !== a || v.col <= d) &&
         l(`Cell ${m} has a duplicate, unordered or mismatched row address.`),
         (d = v.col),
-        ++u > Ja.maxXlsxCellRecords &&
+        ++u > fileImportLimits.maxXlsxCellRecords &&
           l(
-            `The XLSX exceeds ${Ja.maxXlsxCellRecords.toLocaleString("en-US")} source cell records, including explicit blank cells.`,
+            `The XLSX exceeds ${fileImportLimits.maxXlsxCellRecords.toLocaleString("en-US")} source cell records, including explicit blank cells.`,
           ));
     }
   }
   return u;
 }
-const gle =
+const excelRepairAdvice =
     "Open the original in Excel, repair it if needed, and save a clean, unencrypted XLSX copy.",
-  Zn = (e) => {
-    throw Error(`${e} ${gle}`);
+  throwInvalidXlsx = (e) => {
+    throw Error(`${e} ${excelRepairAdvice}`);
   },
-  vle = new Uint32Array(256).map((e, r) => {
+  crc32Table = new Uint32Array(256).map((e, r) => {
     for (let t = 0; t < 8; t++) r = r & 1 ? 3988292384 ^ (r >>> 1) : r >>> 1;
     return r >>> 0;
   });
-function D$(e, r) {
-  for (const t of r) e = vle[(e ^ t) & 255] ^ (e >>> 8);
+function computeCrc32(e, r) {
+  for (const t of r) e = crc32Table[(e ^ t) & 255] ^ (e >>> 8);
   return e;
 }
-function ble(e, r = {}) {
-  const t = O$(e);
+function inspectXlsxPackage(e, r = {}) {
+  const t = parseZipDirectory(e);
   return (
     (!t.has("[Content_Types].xml") ||
       (!t.has("xl/workbook.xml") &&
         !(r.allowBinaryWorkbookInventory && t.has("xl/workbook.bin")))) &&
-      Zn("This archive is not a supported Excel workbook."),
+      throwInvalidXlsx("This archive is not a supported Excel workbook."),
     t
   );
 }
-function O$(e) {
+function parseZipDirectory(e) {
   const r = new DataView(e.buffer, e.byteOffset, e.byteLength);
   (e.length >= 8 &&
     r.getUint32(0, true) === 3759263696 &&
     r.getUint32(4, true) === 3776623009 &&
-    Zn(
+    throwInvalidXlsx(
       "Encrypted Office or legacy binary workbooks are unsupported. Remove the open password in the source application.",
     ),
     (e.length < 22 || r.getUint32(0, true) !== 67324752) &&
-      Zn("This file is not a supported XLSX archive."));
+      throwInvalidXlsx("This file is not a supported XLSX archive."));
   let t = -1;
   for (let p = e.length - 22; p >= Math.max(0, e.length - 65557); p--)
     if (
@@ -495,7 +536,8 @@ function O$(e) {
       t = p;
       break;
     }
-  t < 0 && Zn("The XLSX archive is incomplete or has trailing data.");
+  t < 0 &&
+    throwInvalidXlsx("The XLSX archive is incomplete or has trailing data.");
   const n = r.getUint16(t + 10, true),
     o = r.getUint32(t + 12, true),
     a = r.getUint32(t + 16, true);
@@ -503,9 +545,11 @@ function O$(e) {
     r.getUint16(t + 6, true) ||
     n !== r.getUint16(t + 8, true) ||
     n === 65535 ||
-    n > Ja.maxXlsxEntries ||
+    n > fileImportLimits.maxXlsxEntries ||
     a + o !== t) &&
-    Zn("Multi-volume, ZIP64 or oversized XLSX archives are not supported.");
+    throwInvalidXlsx(
+      "Multi-volume, ZIP64 or oversized XLSX archives are not supported.",
+    );
   const s = new Map(),
     d = new Set(),
     u = [],
@@ -513,14 +557,14 @@ function O$(e) {
       try {
         return new TextDecoder("utf-8", { fatal: true }).decode(p);
       } catch {
-        return Zn("Unsupported XLSX path encoding.");
+        return throwInvalidXlsx("Unsupported XLSX path encoding.");
       }
     };
   let c = a,
     h = 0;
   for (let p = 0; p < n; p++) {
     (c + 46 > t || r.getUint32(c, true) !== 33639248) &&
-      Zn("Invalid XLSX archive directory.");
+      throwInvalidXlsx("Invalid XLSX archive directory.");
     const m = r.getUint16(c + 8, true),
       v = r.getUint16(c + 10, true),
       g = r.getUint32(c + 16, true),
@@ -530,16 +574,17 @@ function O$(e) {
       E = r.getUint16(c + 30, true),
       A = r.getUint16(c + 32, true),
       k = r.getUint32(c + 42, true);
-    (m & 8257 && Zn("Encrypted XLSX archive entries are unsupported."),
+    (m & 8257 &&
+      throwInvalidXlsx("Encrypted XLSX archive entries are unsupported."),
       (m & -2063 ||
         ![0, 8].includes(v) ||
         [b, y, k].includes(4294967295) ||
         r.getUint16(c + 34, true)) &&
-        Zn("Unsupported XLSX compression or ZIP64 metadata."),
+        throwInvalidXlsx("Unsupported XLSX compression or ZIP64 metadata."),
       (c + 46 + w + E + A > t ||
         k + 30 > a ||
         r.getUint32(k, true) !== 67324752) &&
-        Zn("Invalid XLSX archive offsets."));
+        throwInvalidXlsx("Invalid XLSX archive offsets."));
     const F = l(e.subarray(c + 46, c + 46 + w));
     ((!F ||
       d.has(F.toLowerCase()) ||
@@ -548,7 +593,7 @@ function O$(e) {
       F.split("/").some(
         (D, B, _) => D === ".." || D === "." || (!D && B < _.length - 1),
       )) &&
-      Zn("Unsafe or duplicate XLSX archive path."),
+      throwInvalidXlsx("Unsafe or duplicate XLSX archive path."),
       d.add(F.toLowerCase()));
     const I = r.getUint16(k + 26, true),
       O = r.getUint16(k + 28, true),
@@ -558,7 +603,9 @@ function O$(e) {
       r.getUint16(k + 6, true) !== m ||
       r.getUint16(k + 8, true) !== v ||
       l(e.subarray(k + 30, k + 30 + I)) !== F) &&
-      Zn("XLSX local headers do not match the archive directory.");
+      throwInvalidXlsx(
+        "XLSX local headers do not match the archive directory.",
+      );
     let V = z;
     if (m & 8) {
       const D = z + (z + 4 <= a && r.getUint32(z, true) === 134695760 ? 4 : 0);
@@ -566,17 +613,19 @@ function O$(e) {
         r.getUint32(D, true) !== g ||
         r.getUint32(D + 4, true) !== b ||
         r.getUint32(D + 8, true) !== y) &&
-        Zn("Invalid XLSX streaming data descriptor."),
+        throwInvalidXlsx("Invalid XLSX streaming data descriptor."),
         (V = D + 12));
     } else
       (r.getUint32(k + 14, true) !== g ||
         r.getUint32(k + 18, true) !== b ||
         r.getUint32(k + 22, true) !== y) &&
-        Zn("XLSX local sizes or checksum do not match the archive directory.");
-    (v === 0 && b !== y && Zn("Invalid stored XLSX entry size."),
+        throwInvalidXlsx(
+          "XLSX local sizes or checksum do not match the archive directory.",
+        );
+    (v === 0 && b !== y && throwInvalidXlsx("Invalid stored XLSX entry size."),
       u.push({ start: k, end: V }),
       (h += y),
-      ple(b, y, h),
+      assertXlsxExpansionLimit(b, y, h),
       s.set(F, { size: y, crc: g }),
       (c += 46 + w + E + A));
   }
@@ -585,16 +634,19 @@ function O$(e) {
     (c !== t ||
       u.some((p, m) => p.start !== (m ? u[m - 1].end : 0)) ||
       u.at(-1)?.end !== a) &&
-      Zn("Overlapping or unlisted XLSX archive entries."),
+      throwInvalidXlsx("Overlapping or unlisted XLSX archive entries."),
     s
   );
 }
-const yle =
+const xlsxMainContentType =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
-  wle = "http://schemas.openxmlformats.org/package/2006/relationships",
-  wk = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/",
-  xle = "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
-  Ele = () => ({
+  packageRelationshipsNamespace =
+    "http://schemas.openxmlformats.org/package/2006/relationships",
+  officeDocumentRelationshipPrefix =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/",
+  spreadsheetMainNamespace =
+    "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+  createWorkbookParseState = () => ({
     warnings: new Set(),
     hasMainType: false,
     hasOfficeDocument: false,
@@ -604,14 +656,15 @@ const yle =
     maxStyle: -1,
     emptyStringCaches: new Map(),
   });
-function r3(e, r) {
+function resolveRelationshipTarget(e, r) {
   let t;
   try {
     t = decodeURIComponent(r);
   } catch {
-    return Zn(`Invalid relationship target in ${e}.`);
+    return throwInvalidXlsx(`Invalid relationship target in ${e}.`);
   }
-  /[\\\x00-\x1f\x7f:?#]/.test(t) && Zn(`Unsafe internal relationship in ${e}.`);
+  /[\\\x00-\x1f\x7f:?#]/.test(t) &&
+    throwInvalidXlsx(`Unsafe internal relationship in ${e}.`);
   const n =
       e === "_rels/.rels"
         ? []
@@ -622,12 +675,13 @@ function r3(e, r) {
     o = t.startsWith("/") ? [] : n;
   for (const a of t.split("/"))
     a === ".."
-      ? (o.length || Zn(`Relationship escapes the XLSX package in ${e}.`),
+      ? (o.length ||
+          throwInvalidXlsx(`Relationship escapes the XLSX package in ${e}.`),
         o.pop())
       : a && a !== "." && o.push(a);
   return o.join("/");
 }
-function Cle(e, r, t, n) {
+function parseWorksheetXml(e, r, t, n) {
   const o = new Ox.SaxesParser({ xmlns: true });
   let a = 0,
     s = 0;
@@ -635,18 +689,20 @@ function Cle(e, r, t, n) {
     u = [];
   let l;
   const c = /^xl\/worksheets\/[^/]+\.xml$/.test(r);
-  (o.on("error", () => Zn(`Malformed XML in ${r}.`)),
+  (o.on("error", () => throwInvalidXlsx(`Malformed XML in ${r}.`)),
     o.on("doctype", () =>
-      Zn(`DTD/entity declarations are unsupported in ${r}.`),
+      throwInvalidXlsx(`DTD/entity declarations are unsupported in ${r}.`),
     ),
     o.on("cdata", () =>
-      Zn(
+      throwInvalidXlsx(
         `CDATA content is unsupported in ${r}. Resave as standard XLSX text encoding.`,
       ),
     ),
     o.on("opentag", (h) => {
       (++a > 128 || ++s > 1e6) &&
-        Zn(`XML complexity exceeds the supported budget in ${r}.`);
+        throwInvalidXlsx(
+          `XML complexity exceeds the supported budget in ${r}.`,
+        );
       const f = (m) => {
           return h.attributes[m]?.value;
         },
@@ -662,7 +718,7 @@ function Cle(e, r, t, n) {
       ) {
         const m = f("t") ?? "n";
         (["n", "s", "str", "inlineStr", "b", "e"].includes(m) ||
-          Zn(`Unsupported cell type ${m} in ${r}.`),
+          throwInvalidXlsx(`Unsupported cell type ${m} in ${r}.`),
           (l = {
             address: f("r") ?? "unknown cell",
             type: m,
@@ -673,7 +729,7 @@ function Cle(e, r, t, n) {
         const v = f("s");
         v !== undefined &&
           ((!/^\d+$/.test(v) || !Number.isSafeInteger(Number(v))) &&
-            Zn(`Invalid cell style index in ${r}.`),
+            throwInvalidXlsx(`Invalid cell style index in ${r}.`),
           (n.maxStyle = Math.max(n.maxStyle, Number(v))));
       }
       if (
@@ -687,7 +743,7 @@ function Cle(e, r, t, n) {
           ((l.formula = true),
           f("t") &&
             !["normal", "shared", "array"].includes(f("t")) &&
-            Zn(
+            throwInvalidXlsx(
               `Unsupported formula kind at ${l.address} in ${r}. Convert data-table formulas to reviewed ordinary formulas or values first.`,
             )),
         c &&
@@ -703,10 +759,12 @@ function Cle(e, r, t, n) {
               h.uri !==
                 "http://schemas.openxmlformats.org/package/2006/content-types")) ||
             (r.endsWith(".rels") &&
-              (h.local !== "Relationships" || h.uri !== wle)) ||
+              (h.local !== "Relationships" ||
+                h.uri !== packageRelationshipsNamespace)) ||
             (r === "xl/workbook.xml" &&
-              (h.local !== "workbook" || h.uri !== xle))) &&
-          Zn(
+              (h.local !== "workbook" ||
+                h.uri !== spreadsheetMainNamespace))) &&
+          throwInvalidXlsx(
             `Unsupported XLSX package type or Strict XML namespace in ${r}. Save as standard Excel Workbook (.xlsx).`,
           ),
         r === "[Content_Types].xml" && h.local === "Override")
@@ -714,23 +772,26 @@ function Cle(e, r, t, n) {
         const m = f("PartName"),
           v = f("ContentType");
         ((!m || !v || d.has(m)) &&
-          Zn("Invalid or duplicate XLSX content type declaration."),
+          throwInvalidXlsx(
+            "Invalid or duplicate XLSX content type declaration.",
+          ),
           d.add(m),
           /model\+data|dataModel/i.test(v) &&
             n.warnings.add(
               "Imported Excel Data Model and DAX content is not executed or translated; model caches are historical and require independent review. Exact bytes remain only in the retained original.",
             ),
           /macroEnabled|vbaProject|activeX|oleObject/i.test(v) &&
-            Zn(
+            throwInvalidXlsx(
               "Macro-enabled or executable workbook content is unsupported; renaming a file does not convert its format.",
             ),
           m === "/xl/workbook.xml" &&
-            (v !== yle &&
-              Zn(
+            (v !== xlsxMainContentType &&
+              throwInvalidXlsx(
                 "Unsupported workbook content type. Templates and alternate formats must be saved as XLSX.",
               ),
             (n.hasMainType = true)),
-          t.has(r3("_rels/.rels", m)) || Zn(`Missing XLSX part ${m}.`));
+          t.has(resolveRelationshipTarget("_rels/.rels", m)) ||
+            throwInvalidXlsx(`Missing XLSX part ${m}.`));
       }
       if (r.endsWith(".rels") && h.local === "Relationship") {
         const m = f("Id"),
@@ -743,25 +804,30 @@ function Cle(e, r, t, n) {
             !g ||
             d.has(m) ||
             (b && !["External", "Internal"].includes(b))) &&
-            Zn(`Invalid or duplicate relationship in ${r}.`),
+            throwInvalidXlsx(`Invalid or duplicate relationship in ${r}.`),
           d.add(m),
           /vbaProject|activeX|oleObject|attachedTemplate/i.test(g) &&
-            Zn("Executable or embedded-object relationships are unsupported."),
+            throwInvalidXlsx(
+              "Executable or embedded-object relationships are unsupported.",
+            ),
           b === "External")
         )
-          (g !== `${wk}hyperlink` &&
-            g !== `${wk}externalLinkPath` &&
-            Zn(`Unsupported external relationship in ${r}.`),
+          (g !== `${officeDocumentRelationshipPrefix}hyperlink` &&
+            g !== `${officeDocumentRelationshipPrefix}externalLinkPath` &&
+            throwInvalidXlsx(`Unsupported external relationship in ${r}.`),
             n.warnings.add(
               "External hyperlinks/workbook links were found. No external target is fetched; interactive links and refresh connections are omitted.",
             ));
         else {
-          const y = r3(r, v);
-          (t.has(y) || Zn(`Missing relationship target ${y} in ${r}.`),
+          const y = resolveRelationshipTarget(r, v);
+          (t.has(y) ||
+            throwInvalidXlsx(`Missing relationship target ${y} in ${r}.`),
             r === "_rels/.rels" &&
-              g === `${wk}officeDocument` &&
+              g === `${officeDocumentRelationshipPrefix}officeDocument` &&
               ((n.hasOfficeDocument || y !== "xl/workbook.xml") &&
-                Zn("Unsupported or duplicate workbook relationship."),
+                throwInvalidXlsx(
+                  "Unsupported or duplicate workbook relationship.",
+                ),
               (n.hasOfficeDocument = true)));
         }
       }
@@ -777,21 +843,25 @@ function Cle(e, r, t, n) {
             f !== "" &&
             (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(f) ||
               !Number.isFinite(Number(f))) &&
-            Zn(`Invalid numeric value at ${l.address} in ${r}.`),
+            throwInvalidXlsx(`Invalid numeric value at ${l.address} in ${r}.`),
           l.type === "b" &&
             !["0", "1"].includes(f) &&
-            Zn(
+            throwInvalidXlsx(
               `Unsupported boolean value at ${l.address} in ${r}; save numeric Boolean encoding in a standard XLSX copy.`,
             ),
           l.type === "s" &&
             ((!/^\d+$/.test(f) || !Number.isSafeInteger(Number(f))) &&
-              Zn(`Invalid shared-string index at ${l.address} in ${r}.`),
+              throwInvalidXlsx(
+                `Invalid shared-string index at ${l.address} in ${r}.`,
+              ),
             (n.maxString = Math.max(n.maxString, Number(f)))),
           l.type === "e" &&
             !/^#(?:NULL!|DIV\/0!|VALUE!|REF!|NAME\?|NUM!|N\/A|SPILL!|CALC!|GETTING_DATA|CONNECT!|BLOCKED!|FIELD!|UNKNOWN!|BUSY!)$/.test(
               f,
             ) &&
-            Zn(`Unsupported error value at ${l.address} in ${r}.`),
+            throwInvalidXlsx(
+              `Unsupported error value at ${l.address} in ${r}.`,
+            ),
           l.type === "e" &&
             !l.formula &&
             n.warnings.add(
@@ -808,13 +878,15 @@ function Cle(e, r, t, n) {
     }),
     o.write(e).close());
 }
-function Ale(e, r) {
+function validateWorkbookPackage(e, r) {
   ((!e.hasMainType || !e.hasOfficeDocument) &&
-    Zn("Missing standard XLSX workbook content type or relationship."),
+    throwInvalidXlsx(
+      "Missing standard XLSX workbook content type or relationship.",
+    ),
     e.maxString >= e.strings &&
-      Zn("A worksheet references a missing shared string."),
+      throwInvalidXlsx("A worksheet references a missing shared string."),
     e.maxStyle >= e.styles &&
-      Zn("A worksheet references a missing cell style."));
+      throwInvalidXlsx("A worksheet references a missing cell style."));
   const t = [
     [
       /^xl\/(?:model|dataModel)\//i,
@@ -841,8 +913,8 @@ function Ale(e, r) {
   for (const n of r) for (const [o, a] of t) o.test(n) && e.warnings.add(a);
   return [...e.warnings];
 }
-const kle = Object.freeze(
-    HR.map((e) =>
+const templateConversionRoutes = Object.freeze(
+    alternateFormatExtensions.map((e) =>
       Object.freeze({
         format: e,
         read:
@@ -866,17 +938,17 @@ const kle = Object.freeze(
       }),
     ),
   ),
-  aT = Object.freeze({
+  macroEnabledContentTypes = Object.freeze({
     xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
     xltx: "application/vnd.openxmlformats-officedocument.spreadsheetml.template.main+xml",
     xlsm: "application/vnd.ms-excel.sheet.macroEnabled.main+xml",
     xltm: "application/vnd.ms-excel.template.macroEnabled.main+xml",
     xlsb: "application/vnd.ms-excel.sheet.binary.macroEnabled.main",
   });
-function Sle(e) {
-  if (e.length > Mt.maxFileBytes)
+function inspectAlternateWorkbookArchive(e) {
+  if (e.length > workbookLimits.maxFileBytes)
     throw Error("Files must be 10 MB or smaller.");
-  const r = O$(e),
+  const r = parseZipDirectory(e),
     t = Object.create(null),
     n = new Set();
   let o = 0,
@@ -907,7 +979,7 @@ function Sle(e) {
             d.terminate());
           return;
         }
-        if (((l = D$(l, f)), c.push(f), p)) {
+        if (((l = computeCrc32(l, f)), c.push(f), p)) {
           if (
             u !== r.get(d.name).size ||
             (l ^ -1) >>> 0 !== r.get(d.name).crc
@@ -935,7 +1007,7 @@ function Sle(e) {
     throw Error("Alternate workbook archive is incomplete.");
   return t;
 }
-function Yb(e, r) {
+function parseAlternateWorkbookXml(e, r) {
   const t = new TextDecoder("utf-8", { fatal: true }).decode(e);
   if (
     t.includes("\0") ||
@@ -958,7 +1030,7 @@ function Yb(e, r) {
     }),
     n.write(t).close());
 }
-function m7(e) {
+function readOpenDocumentPackage(e) {
   const r = (u) =>
     Object.fromEntries(
       Object.values(u.attributes).map((l) => [l.local, l.value]),
@@ -975,7 +1047,7 @@ function m7(e) {
     let u = false,
       l = false;
     if (
-      (Yb(e["META-INF/manifest.xml"], (c) => {
+      (parseAlternateWorkbookXml(e["META-INF/manifest.xml"], (c) => {
         const h = r(c);
         if (c.uri === "urn:oasis:names:tc:opendocument:xmlns:manifest:1.0") {
           if (c.local === "encryption-data")
@@ -989,7 +1061,7 @@ function m7(e) {
             (u = true);
         }
       }),
-      Yb(e["content.xml"], (c) => {
+      parseAlternateWorkbookXml(e["content.xml"], (c) => {
         c.local === "spreadsheet" &&
           c.uri === "urn:oasis:names:tc:opendocument:xmlns:office:1.0" &&
           (l = true);
@@ -1005,7 +1077,7 @@ function m7(e) {
     n = "",
     o = 0;
   const a = new Set();
-  Yb(e["[Content_Types].xml"], (u) => {
+  parseAlternateWorkbookXml(e["[Content_Types].xml"], (u) => {
     if (
       u.uri !== "http://schemas.openxmlformats.org/package/2006/content-types"
     )
@@ -1023,7 +1095,9 @@ function m7(e) {
       }
     }
   });
-  const s = Object.entries(aT).find(([, u]) => u === t)?.[0];
+  const s = Object.entries(macroEnabledContentTypes).find(
+    ([, u]) => u === t,
+  )?.[0];
   if (
     !s ||
     !e[n] ||
@@ -1031,7 +1105,7 @@ function m7(e) {
   )
     throw Error("Unsupported alternate workbook content type.");
   if (
-    (Yb(e["_rels/.rels"], (u) => {
+    (parseAlternateWorkbookXml(e["_rels/.rels"], (u) => {
       const l = r(u);
       if (
         u.uri ===
@@ -1040,7 +1114,10 @@ function m7(e) {
         l.Type ===
           "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
       ) {
-        if (l.TargetMode || r3("_rels/.rels", l.Target) !== n)
+        if (
+          l.TargetMode ||
+          resolveRelationshipTarget("_rels/.rels", l.Target) !== n
+        )
           throw Error("Invalid alternate workbook main relationship.");
         o++;
       }
@@ -1054,7 +1131,7 @@ function m7(e) {
       );
   } else {
     let u = true;
-    Yb(e[n], (l) => {
+    parseAlternateWorkbookXml(e[n], (l) => {
       if (
         u &&
         ((u = false),
@@ -1070,22 +1147,25 @@ function m7(e) {
   if (o !== 1) throw Error("Invalid alternate workbook main relationship.");
   return s;
 }
-function Tle(e, r, t) {
-  const n = Sle(e);
-  if (m7(n) !== r)
+function convertTemplateToXlsx(e, r, t) {
+  const n = inspectAlternateWorkbookArchive(e);
+  if (readOpenDocumentPackage(n) !== r)
     throw Error(
       "The workbook content does not match the template conversion route.",
     );
   if (
     ((n["[Content_Types].xml"] = strToU8(
-      strFromU8(n["[Content_Types].xml"]).replace(aT[r], aT[t]),
+      strFromU8(n["[Content_Types].xml"]).replace(
+        macroEnabledContentTypes[r],
+        macroEnabledContentTypes[t],
+      ),
     )),
-    m7(n) !== t)
+    readOpenDocumentPackage(n) !== t)
   )
     throw Error("The template content type could not be converted safely.");
   return zipSync(n);
 }
-function Nle(e) {
+function readGeneratedTemplateBuffer(e) {
   return typeof e.arrayBuffer == "function"
     ? e.arrayBuffer()
     : new Promise((r, t) => {
@@ -1096,7 +1176,7 @@ function Nle(e) {
           n.readAsArrayBuffer(e));
       });
 }
-function M$(e, r) {
+function describeImportSource(e, r) {
   const t = e.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook",
     n = [e.xlsxSource?.fileName, e.alternateSource?.fileName].map((d) =>
       d?.toLowerCase(),
@@ -1107,25 +1187,25 @@ function M$(e, r) {
 }
 
 export {
-  Ale,
-  Cle,
-  D$,
-  Ele,
-  H1,
-  I$,
-  La,
-  M$,
-  MC,
-  Nle,
-  OC,
-  Tle,
-  _$,
-  ble,
-  im,
-  kle,
-  lle,
-  mle,
-  ow,
-  r3,
-  ule,
+  validateWorkbookPackage,
+  parseWorksheetXml,
+  computeCrc32,
+  createWorkbookParseState,
+  importWorkbookFile,
+  inspectionSignatureCache,
+  FileProcessingError,
+  describeImportSource,
+  importNativeJsonFile,
+  readGeneratedTemplateBuffer,
+  toFileProcessingError,
+  convertTemplateToXlsx,
+  importDelimitedFile,
+  inspectXlsxPackage,
+  runFileImport,
+  templateConversionRoutes,
+  importPictureFile,
+  parseWorksheetCells,
+  importAutomationFile,
+  resolveRelationshipTarget,
+  detectSupportedFileFormats,
 };

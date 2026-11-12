@@ -1,51 +1,51 @@
 import ne from "react";
 import i from "react/jsx-runtime";
 import {
-  $3,
-  Lg,
-  Nc,
-  Pg,
-  Rw,
-  YF,
-  bf,
-  es,
-  g1,
-  hr,
-  m1,
-  v1,
-  wd,
-  z3,
+  fingerprintExtensionCall,
+  deepFreezeValue,
+  extensionRuntimeLimits,
+  tokenizeFormulaText,
+  validateExtensionManifest,
+  setExtensionCacheEntries,
+  hashExtensionManifest,
+  isDeepFrozenValue,
+  getExtensionCacheEntries,
+  fingerprintCanonicalValue,
+  validateExtensionValue,
+  dateSystemSerialOffset,
+  dateSystemMaxSerial,
+  listInstalledExtensionFunctions,
 } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
-  Af,
-  Cf,
-  Fc,
-  Nr,
-  Vn,
-  _N,
+  formatNumberWithPattern,
+  evaluateWorkbookFormulas,
+  builtinFunctionNames,
+  findSheetOrThrow,
+  calculateWorkbookWithSettings,
+  assertNamedStyleBindingCurrent,
   _t,
-  ct,
-  hi,
-  jB,
-  jN,
-  jn,
-  p0,
-  rn,
-  ut,
-  xd,
+  parseRangeAddress,
+  normalizeCellRecordInput,
+  assertNoStopValidationIssues,
+  DataValidationError,
+  assertSheetUnprotected,
+  applyCellPatchTransaction,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+  shiftFormulaReferences,
 } from "./03-workbook-model.js";
 
-function gs(e) {
+function throwCellEditError(e) {
   throw new Error(e);
 }
-const JE = (e, r) => `${ut(r)}${e + 1}`,
-  QR = (e, r, t, n) => {
-    const o = JE(e, r),
-      a = JE(e + t - 1, r + n - 1);
+const formatCellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
+  formatRangeAddress = (e, r, t, n) => {
+    const o = formatCellAddress(e, r),
+      a = formatCellAddress(e + t - 1, r + n - 1);
     return o === a ? o : `${o}:${a}`;
   },
-  ZO = (e) =>
+  isPlainObjectValue = (e) =>
     !!e &&
     typeof e == "object" &&
     !Array.isArray(e) &&
@@ -58,18 +58,18 @@ function eI(e) {
     e
   );
 }
-function _x(e) {
-  const r = hi(e ?? { raw: null });
+function stripCellDecorations(e) {
+  const r = normalizeCellRecordInput(e ?? { raw: null });
   return (delete r.note, delete r.tickmark, delete r.hyperlink, r);
 }
-function r$(e, r) {
+function withRawCellValue(e, r) {
   return {
     ...r,
     raw: e,
     literal: typeof e == "string" && e.startsWith("=") ? true : undefined,
   };
 }
-function xae(e, r) {
+function mergeCellDecorations(e, r) {
   return {
     ...e,
     ...(r?.note !== undefined ? { note: r.note } : {}),
@@ -79,15 +79,20 @@ function xae(e, r) {
     ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
   };
 }
-function Eae(e, r) {
-  return JSON.stringify(hi(e ?? { raw: null })) === JSON.stringify(hi(r));
+function cellContentsMatch(e, r) {
+  return (
+    JSON.stringify(normalizeCellRecordInput(e ?? { raw: null })) ===
+    JSON.stringify(normalizeCellRecordInput(r))
+  );
 }
-function n$(e) {
-  (e !== undefined && typeof e != "boolean" && gs("Read-only must be boolean."),
-    e && gs("This workbook is read-only."));
+function assertWorkbookWritable(e) {
+  (e !== undefined &&
+    typeof e != "boolean" &&
+    throwCellEditError("Read-only must be boolean."),
+    e && throwCellEditError("This workbook is read-only."));
 }
-function Cae(e) {
-  (!ZO(e) ||
+function validateClipboardSnapshot(e) {
+  (!isPlainObjectValue(e) ||
     e.version !== 1 ||
     typeof e.sourceWorkbookId != "string" ||
     !e.sourceWorkbookId ||
@@ -101,22 +106,24 @@ function Cae(e) {
     !Number.isSafeInteger(e.colCount) ||
     e.rowCount < 1 ||
     e.colCount < 1 ||
-    e.rowCount * e.colCount > Mt.maxPatches ||
+    e.rowCount * e.colCount > workbookLimits.maxPatches ||
     typeof e.sourceRange != "string" ||
     !Array.isArray(e.cells) ||
     e.cells.length !== e.rowCount * e.colCount) &&
-    gs("Invalid or oversized internal clipboard snapshot.");
-  const r = ct(e.sourceRange);
+    throwCellEditError("Invalid or oversized internal clipboard snapshot.");
+  const r = parseRangeAddress(e.sourceRange);
   (r.lastRow - r.firstRow + 1 !== e.rowCount ||
     r.lastCol - r.firstCol + 1 !== e.colCount) &&
-    gs("Clipboard dimensions do not match its source range.");
+    throwCellEditError("Clipboard dimensions do not match its source range.");
   const t = e.cells.map((n, o) => {
-    (!ZO(n) ||
+    (!isPlainObjectValue(n) ||
       n.rowOffset !== Math.floor(o / e.colCount) ||
       n.colOffset !== o % e.colCount) &&
-      gs("Clipboard cells must form a complete row-major rectangle.");
-    const a = _x(hi(n.cell)),
-      s = hi({ raw: n.value }).raw;
+      throwCellEditError(
+        "Clipboard cells must form a complete row-major rectangle.",
+      );
+    const a = stripCellDecorations(normalizeCellRecordInput(n.cell)),
+      s = normalizeCellRecordInput({ raw: n.value }).raw;
     return {
       rowOffset: n.rowOffset,
       colOffset: n.colOffset,
@@ -129,28 +136,33 @@ function Cae(e) {
     sourceWorkbookId: e.sourceWorkbookId,
     sourceSheetId: e.sourceSheetId,
     sourceRevision: e.sourceRevision,
-    sourceRange: QR(r.firstRow, r.firstCol, e.rowCount, e.colCount),
+    sourceRange: formatRangeAddress(
+      r.firstRow,
+      r.firstCol,
+      e.rowCount,
+      e.colCount,
+    ),
     rowCount: e.rowCount,
     colCount: e.colCount,
     cells: t,
   };
 }
-function Aae(e, r, t) {
-  const n = Nr(e, r),
-    o = ct(t),
+function buildClipboardSnapshot(e, r, t) {
+  const n = findSheetOrThrow(e, r),
+    o = parseRangeAddress(t),
     a = o.lastRow - o.firstRow + 1,
     s = o.lastCol - o.firstCol + 1;
-  (a * s > Mt.maxPatches &&
-    gs("Copy at most 500 cells into the internal clipboard."),
+  (a * s > workbookLimits.maxPatches &&
+    throwCellEditError("Copy at most 500 cells into the internal clipboard."),
     (o.lastRow >= n.rowCount || o.lastCol >= n.colCount) &&
-      gs("The copied range exceeds the worksheet."));
-  const d = Vn(e),
+      throwCellEditError("The copied range exceeds the worksheet."));
+  const d = calculateWorkbookWithSettings(e),
     u = [];
   for (let l = 0; l < a; l++)
     for (let c = 0; c < s; c++) {
-      const h = JE(o.firstRow + l, o.firstCol + c),
-        f = hi({ raw: d(r, h) }).raw;
-      let p = _x(n.cells[h]);
+      const h = formatCellAddress(o.firstRow + l, o.firstCol + c),
+        f = normalizeCellRecordInput({ raw: d(r, h) }).raw;
+      let p = stripCellDecorations(n.cells[h]);
       if (p.raw === null && f !== null) {
         const m = d.getSpillAnchor(r, h);
         if (m && m !== h) {
@@ -159,7 +171,7 @@ function Aae(e, r, t) {
             v.row > o.lastRow ||
             v.col < o.firstCol ||
             v.col > o.lastCol) &&
-            (p = r$(f, p));
+            (p = withRawCellValue(f, p));
         }
       }
       u.push({ rowOffset: l, colOffset: c, cell: p, value: f });
@@ -169,30 +181,36 @@ function Aae(e, r, t) {
     sourceWorkbookId: e.id,
     sourceSheetId: r,
     sourceRevision: e.revision,
-    sourceRange: QR(o.firstRow, o.firstCol, a, s),
+    sourceRange: formatRangeAddress(o.firstRow, o.firstCol, a, s),
     rowCount: a,
     colCount: s,
     cells: u,
   });
 }
-function Dx(e, r, t, n, o = false) {
-  (n$(n),
-    jn(Nr(e, t.targetSheetId)),
-    r.length > Mt.maxPatches &&
-      gs("A fill or paste operation may change at most 500 cells."));
+function buildCellChangePreview(e, r, t, n, o = false) {
+  (assertWorkbookWritable(n),
+    assertSheetUnprotected(findSheetOrThrow(e, t.targetSheetId)),
+    r.length > workbookLimits.maxPatches &&
+      throwCellEditError(
+        "A fill or paste operation may change at most 500 cells.",
+      ));
   const a = r.map((c) => ({
     sheetId: c.sheetId,
     address: c.address,
-    cell: hi(c.cell),
+    cell: normalizeCellRecordInput(c.cell),
   }));
   let s;
   try {
-    s = p0(e, a, "Preview", t.summary.slice(0, 200));
+    s = applyCellPatchTransaction(e, a, "Preview", t.summary.slice(0, 200));
   } catch (c) {
-    if (!o || !(c instanceof jN) || c.issues.some((h) => h.style === "stop"))
+    if (
+      !o ||
+      !(c instanceof DataValidationError) ||
+      c.issues.some((h) => h.style === "stop")
+    )
       throw c;
-    s = p0(e, a, "Preview", t.summary.slice(0, 200), {
-      validationApproval: jB(c),
+    s = applyCellPatchTransaction(e, a, "Preview", t.summary.slice(0, 200), {
+      validationApproval: assertNoStopValidationIssues(c),
     });
   }
   const d =
@@ -201,7 +219,7 @@ function Dx(e, r, t, n, o = false) {
         : s.events.at(-1).changes.map((c) => ({
             sheetId: c.sheetId,
             address: c.address,
-            cell: hi(c.after ?? { raw: null }),
+            cell: normalizeCellRecordInput(c.after ?? { raw: null }),
           })),
     u = d.length,
     l = Math.max(0, u - a.length);
@@ -217,35 +235,42 @@ function Dx(e, r, t, n, o = false) {
     snapshotGuard: JSON.stringify(e),
   });
 }
-function tI(e, r, t = {}) {
-  (n$(t.readOnly),
+function applyCellChangePreview(e, r, t = {}) {
+  (assertWorkbookWritable(t.readOnly),
     (!r ||
       r.workbookId !== e.id ||
       r.revision !== e.revision ||
       r.snapshotGuard !== JSON.stringify(e)) &&
-      gs(
+      throwCellEditError(
         "The workbook changed after this preview. Create a new preview before applying it.",
       ),
-    jn(Nr(e, r.targetSheetId)));
-  const n = p0(e, r.patches, t.actor ?? "Preparer", r.summary.slice(0, 200));
+    assertSheetUnprotected(findSheetOrThrow(e, r.targetSheetId)));
+  const n = applyCellPatchTransaction(
+    e,
+    r.patches,
+    t.actor ?? "Preparer",
+    r.summary.slice(0, 200),
+  );
   return n === e ? e : { ...n, revision: e.revision, events: e.events };
 }
-function i$(e, r, t, n, o = {}) {
-  const a = Cae(n),
-    s = Nr(e, r),
-    d = ct(t),
-    u = ct(a.sourceRange),
+function buildPastePreview(e, r, t, n, o = {}) {
+  const a = validateClipboardSnapshot(n),
+    s = findSheetOrThrow(e, r),
+    d = parseRangeAddress(t),
+    u = parseRangeAddress(a.sourceRange),
     l = o.mode ?? "all",
     c = o.operation ?? "none";
   ((!["all", "values", "formulas", "formats"].includes(l) ||
     !["none", "add", "subtract", "multiply", "divide"].includes(c)) &&
-    gs("Choose a supported paste mode and arithmetic operation."),
+    throwCellEditError(
+      "Choose a supported paste mode and arithmetic operation.",
+    ),
     [o.transpose, o.skipBlanks].some(
       (k) => k !== undefined && typeof k != "boolean",
-    ) && gs("Transpose and skip blanks must be boolean."),
+    ) && throwCellEditError("Transpose and skip blanks must be boolean."),
     c !== "none" &&
       (l === "formats" || l === "formulas") &&
-      gs(
+      throwCellEditError(
         "Arithmetic paste requires All or Values mode; its results are numeric values.",
       ),
     a.sourceWorkbookId !== e.id &&
@@ -256,24 +281,29 @@ function i$(e, r, t, n, o = {}) {
           k.cell.raw.startsWith("=") &&
           !k.cell.literal,
       ) &&
-      gs("Use Values paste for formulas copied from a different workbook."));
+      throwCellEditError(
+        "Use Values paste for formulas copied from a different workbook.",
+      ));
   const h = o.transpose ? a.colCount : a.rowCount,
     f = o.transpose ? a.rowCount : a.colCount,
     p = d.firstRow === d.lastRow && d.firstCol === d.lastCol,
     m = p ? h : d.lastRow - d.firstRow + 1,
     v = p ? f : d.lastCol - d.firstCol + 1;
   ((m % h || v % f) &&
-    gs(
+    throwCellEditError(
       "The target rectangle must be a whole multiple of the copied rows and columns.",
     ),
-    m * v > Mt.maxPatches && gs("Paste into at most 500 target cells."),
+    m * v > workbookLimits.maxPatches &&
+      throwCellEditError("Paste into at most 500 target cells."),
     (d.firstRow + m > s.rowCount || d.firstCol + v > s.colCount) &&
-      gs("The pasted cells would exceed the worksheet boundary."));
-  const g = QR(d.firstRow, d.firstCol, m, v),
+      throwCellEditError(
+        "The pasted cells would exceed the worksheet boundary.",
+      ));
+  const g = formatRangeAddress(d.firstRow, d.firstCol, m, v),
     b = d.firstRow + m - 1,
     y = d.firstCol + v - 1;
   for (const k of s.merges ?? []) {
-    const F = ct(k);
+    const F = parseRangeAddress(k);
     d.firstRow <= F.lastRow &&
       b >= F.firstRow &&
       d.firstCol <= F.lastCol &&
@@ -283,12 +313,12 @@ function i$(e, r, t, n, o = {}) {
         d.firstRow === F.firstRow &&
         d.firstCol === F.firstCol
       ) &&
-      gs(
+      throwCellEditError(
         "Unmerge the target area before pasting a block of cells or editing a covered cell.",
       );
   }
   const w = [],
-    E = Vn(e);
+    E = calculateWorkbookWithSettings(e);
   let A = 0;
   for (let k = 0; k < m; k++)
     for (let F = 0; F < v; F++) {
@@ -300,22 +330,23 @@ function i$(e, r, t, n, o = {}) {
         A++;
         continue;
       }
-      const V = JE(d.firstRow + k, d.firstCol + F),
+      const V = formatCellAddress(d.firstRow + k, d.firstCol + F),
         D = s.cells[V];
-      let B = _x(j.cell);
+      let B = stripCellDecorations(j.cell);
       typeof B.raw == "string" &&
         B.raw.startsWith("=") &&
         !B.literal &&
-        (B.raw = xd(
+        (B.raw = shiftFormulaReferences(
           B.raw,
           d.firstRow + k - u.firstRow - I,
           d.firstCol + F - u.firstCol - O,
         ));
       let _;
-      if (l === "all") _ = xae(B, D);
+      if (l === "all") _ = mergeCellDecorations(B, D);
       else if (l === "formulas")
         _ = { ...(D ?? { raw: null }), raw: B.raw, literal: B.literal };
-      else if (l === "values") _ = r$(j.value, { ...(D ?? { raw: null }) });
+      else if (l === "values")
+        _ = withRawCellValue(j.value, { ...(D ?? { raw: null }) });
       else {
         _ = { ...(D ?? { raw: null }) };
         for (const C of ["style", "format", "numFmt", "numberFormat"])
@@ -326,7 +357,7 @@ function i$(e, r, t, n, o = {}) {
           B.numberFormat !== undefined &&
             (_.numberFormat = structuredClone(B.numberFormat)));
       }
-      if ((_N(e, _.style), c !== "none")) {
+      if ((assertNamedStyleBindingCurrent(e, _.style), c !== "none")) {
         const C = j.value === null || j.value === "" ? 0 : j.value,
           T = E(r, V),
           N = T === null || T === "" ? 0 : T;
@@ -334,10 +365,14 @@ function i$(e, r, t, n, o = {}) {
           !Number.isFinite(C) ||
           typeof N != "number" ||
           !Number.isFinite(N)) &&
-          gs(`Arithmetic paste requires numbers or blanks at ${V}.`),
+          throwCellEditError(
+            `Arithmetic paste requires numbers or blanks at ${V}.`,
+          ),
           c === "divide" &&
             C === 0 &&
-            gs(`Arithmetic paste would divide by zero at ${V}.`));
+            throwCellEditError(
+              `Arithmetic paste would divide by zero at ${V}.`,
+            ));
         const R =
           c === "add"
             ? N + C
@@ -346,13 +381,15 @@ function i$(e, r, t, n, o = {}) {
               : c === "multiply"
                 ? N * C
                 : N / C;
-        (Number.isFinite(R) || gs(`Arithmetic paste would overflow at ${V}.`),
+        (Number.isFinite(R) ||
+          throwCellEditError(`Arithmetic paste would overflow at ${V}.`),
           (_ = { ..._, raw: R }),
           delete _.literal);
       }
-      ((_ = hi(_)), Eae(D, _) || w.push({ sheetId: r, address: V, cell: _ }));
+      ((_ = normalizeCellRecordInput(_)),
+        cellContentsMatch(D, _) || w.push({ sheetId: r, address: V, cell: _ }));
     }
-  return Dx(
+  return buildCellChangePreview(
     e,
     w,
     {
@@ -367,27 +404,27 @@ function i$(e, r, t, n, o = {}) {
     o.deferValidationWarnings,
   );
 }
-function kae(e, r, t = {}) {
-  return tI(e, r, t);
+function applyPastePreview(e, r, t = {}) {
+  return applyCellChangePreview(e, r, t);
 }
-function Mo(e) {
+function throwFillError(e) {
   throw new Error(e);
 }
-const nh = (e, r) => `${ut(r)}${e + 1}`;
-function o$(e) {
+const formatCellReference = (e, r) => `${columnIndexToLetters(r)}${e + 1}`;
+function validateFillDirection(e) {
   return (
     ["down", "right", "up", "left"].includes(e) ||
-      Mo("Choose a supported fill direction."),
+      throwFillError("Choose a supported fill direction."),
     e
   );
 }
-function xg(e) {
-  const r = ct(e),
-    t = nh(r.firstRow, r.firstCol),
-    n = nh(r.lastRow, r.lastCol);
+function formatRangeBoundsAddress(e) {
+  const r = parseRangeAddress(e),
+    t = formatCellReference(r.firstRow, r.firstCol),
+    n = formatCellReference(r.lastRow, r.lastCol);
   return t === n ? t : `${t}:${n}`;
 }
-function rI(e, r) {
+function withCellDecorations(e, r) {
   return {
     ...e,
     ...(r?.note !== undefined ? { note: r.note } : {}),
@@ -397,11 +434,14 @@ function rI(e, r) {
     ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
   };
 }
-function nI(e, r) {
-  return JSON.stringify(hi(e ?? { raw: null })) !== JSON.stringify(hi(r));
+function cellContentsDiffer(e, r) {
+  return (
+    JSON.stringify(normalizeCellRecordInput(e ?? { raw: null })) !==
+    JSON.stringify(normalizeCellRecordInput(r))
+  );
 }
-function a$(e, r, t, n) {
-  const o = _x(e.cells[r]);
+function buildFillCellPatches(e, r, t, n) {
+  const o = stripCellDecorations(e.cells[r]);
   if (o.raw !== null) return o;
   const a = t(e.id, r);
   if (a === null) return o;
@@ -417,10 +457,10 @@ function a$(e, r, t, n) {
   }
   return o;
 }
-function iI(e, r, t) {
-  const n = Nr(e, r);
+function assertFillTargetUnmerged(e, r, t) {
+  const n = findSheetOrThrow(e, r);
   for (const o of n.merges ?? []) {
-    const a = ct(o);
+    const a = parseRangeAddress(o);
     t.some((s) => {
       const d = _t(s);
       return (
@@ -430,25 +470,26 @@ function iI(e, r, t) {
         d.col <= a.lastCol &&
         (d.row !== a.firstRow || d.col !== a.firstCol)
       );
-    }) && Mo("Unmerge covered target cells before filling them.");
+    }) && throwFillError("Unmerge covered target cells before filling them.");
   }
 }
-function $2(e, r, t, n, o = {}) {
-  const a = o$(n),
-    s = Nr(e, r),
-    d = ct(t);
+function buildFillPreview(e, r, t, n, o = {}) {
+  const a = validateFillDirection(n),
+    s = findSheetOrThrow(e, r),
+    d = parseRangeAddress(t);
   (d.lastRow >= s.rowCount || d.lastCol >= s.colCount) &&
-    Mo("The fill range exceeds the worksheet.");
+    throwFillError("The fill range exceeds the worksheet.");
   const u = a === "down" || a === "up",
     l = d.lastRow - d.firstRow + 1,
     c = d.lastCol - d.firstCol + 1,
     h = u ? (l - 1) * c : (c - 1) * l;
-  h > Mt.maxPatches && Mo("Fill at most 500 destination cells.");
+  h > workbookLimits.maxPatches &&
+    throwFillError("Fill at most 500 destination cells.");
   const f = a === "up" ? d.lastRow : d.firstRow,
     p = a === "left" ? d.lastCol : d.firstCol,
     m = [],
     v = [],
-    g = Vn(e),
+    g = calculateWorkbookWithSettings(e),
     b = u
       ? { ...d, firstRow: f, lastRow: f }
       : { ...d, firstCol: p, lastCol: p };
@@ -458,93 +499,105 @@ function $2(e, r, t, n, o = {}) {
         if (u ? y === f : w === p) continue;
         const E = u ? f : y,
           A = u ? w : p,
-          k = nh(y, w);
+          k = formatCellReference(y, w);
         v.push(k);
-        const F = a$(s, nh(E, A), g, b);
+        const F = buildFillCellPatches(s, formatCellReference(E, A), g, b);
         typeof F.raw == "string" &&
           F.raw.startsWith("=") &&
           !F.literal &&
-          (F.raw = xd(F.raw, y - E, w - A));
-        const I = hi(rI(F, s.cells[k]));
-        nI(s.cells[k], I) && m.push({ sheetId: r, address: k, cell: I });
+          (F.raw = shiftFormulaReferences(F.raw, y - E, w - A));
+        const I = normalizeCellRecordInput(withCellDecorations(F, s.cells[k]));
+        cellContentsDiffer(s.cells[k], I) &&
+          m.push({ sheetId: r, address: k, cell: I });
       }
   return (
-    iI(e, r, v),
-    Dx(
+    assertFillTargetUnmerged(e, r, v),
+    buildCellChangePreview(
       e,
       m,
       {
         targetSheetId: r,
-        targetRange: xg(t),
+        targetRange: formatRangeBoundsAddress(t),
         targetCount: h,
         generatedCount: h,
         direction: a,
-        summary: `Fill ${a} within ${xg(t)}.`,
+        summary: `Fill ${a} within ${formatRangeBoundsAddress(t)}.`,
       },
       o.readOnly,
     )
   );
 }
 const s$ = 864e5,
-  l$ = Date.UTC(1899, 11, 31),
-  u$ = 2958465;
-class c$ extends Error {}
-function QE() {
-  throw new c$("Date series must stay between 1899-12-31 and 9999-12-31.");
+  excelEpochUtc = Date.UTC(1899, 11, 31),
+  maxExcelDateSerial = 2958465;
+class DateSeriesRangeError extends Error {}
+function throwDateSeriesRangeError() {
+  throw new DateSeriesRangeError(
+    "Date series must stay between 1899-12-31 and 9999-12-31.",
+  );
 }
-function K5(e, r, t) {
+function utcDateFromParts(e, r, t) {
   const n = new Date(0);
   return (n.setUTCHours(0, 0, 0, 0), n.setUTCFullYear(e, r, t), n);
 }
-function Sae(e) {
-  return new Date(l$ + (e > 60 ? e - 1 : e) * s$);
+function excelSerialToDate(e) {
+  return new Date(excelEpochUtc + (e > 60 ? e - 1 : e) * s$);
 }
-function Y5(e) {
-  const r = (e.getTime() - l$) / s$,
+function dateToExcelSerial(e) {
+  const r = (e.getTime() - excelEpochUtc) / s$,
     t = r >= 60 ? r + 1 : r;
-  return ((!Number.isSafeInteger(t) || t < 0 || t > u$) && QE(), t);
+  return (
+    (!Number.isSafeInteger(t) || t < 0 || t > maxExcelDateSerial) &&
+      throwDateSeriesRangeError(),
+    t
+  );
 }
-function T1(e, r = "1900") {
+function parseSeriesSeedDate(e, r = "1900") {
   if (typeof e == "number")
     return (
-      (!Number.isSafeInteger(e) || e < 0 || e > wd(r)) &&
-        Mo(
-          `Date values must be whole Excel ${r} serials between 0 and ${wd(r)}.`,
+      (!Number.isSafeInteger(e) || e < 0 || e > dateSystemMaxSerial(r)) &&
+        throwFillError(
+          `Date values must be whole Excel ${r} serials between 0 and ${dateSystemMaxSerial(r)}.`,
         ),
       e
     );
   if (
     ((typeof e != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e)) &&
-      Mo("Enter a date as YYYY-MM-DD or a whole Excel date serial."),
+      throwFillError(
+        "Enter a date as YYYY-MM-DD or a whole Excel date serial.",
+      ),
     e === "1900-02-29" && r === "1900")
   )
     return 60;
   const [t, n, o] = e.split("-").map(Number),
-    a = K5(t, n - 1, o);
+    a = utcDateFromParts(t, n - 1, o);
   return (
     (a.getUTCFullYear() !== t ||
       a.getUTCMonth() !== n - 1 ||
       a.getUTCDate() !== o) &&
-      Mo("The series date is not a valid calendar date."),
-    T1(Y5(a) - v1(r), r)
+      throwFillError("The series date is not a valid calendar date."),
+    parseSeriesSeedDate(dateToExcelSerial(a) - dateSystemSerialOffset(r), r)
   );
 }
-function Tae(e, r, t, n) {
+function stepSeriesDateSerial(e, r, t, n) {
   if (
     (Number.isSafeInteger(r) ||
-      Mo("The date step exceeds safe integer limits."),
+      throwFillError("The date step exceeds safe integer limits."),
     !r)
   )
     return e;
   if (t === "day") {
     const c = e + r;
-    return ((c < 0 || c > u$) && QE(), T1(c));
+    return (
+      (c < 0 || c > maxExcelDateSerial) && throwDateSeriesRangeError(),
+      parseSeriesSeedDate(c)
+    );
   }
   e === 60 &&
-    Mo(
+    throwFillError(
       "Calendar and weekday series require a real calendar seed; use Days for the fictitious 1900-02-29 serial.",
     );
-  const o = Sae(e);
+  const o = excelSerialToDate(e);
   if (t === "weekday") {
     const c = Math.sign(r);
     let h = Math.abs(r);
@@ -555,75 +608,86 @@ function Tae(e, r, t, n) {
     }
     for (o.setUTCDate(o.getUTCDate() + c * Math.floor(h / 5) * 7), h %= 5; h;)
       (o.setUTCDate(o.getUTCDate() + c), [0, 6].includes(o.getUTCDay()) || h--);
-    return Y5(o);
+    return dateToExcelSerial(o);
   }
   const a = o.getUTCMonth() + r * (t === "year" ? 12 : 1),
     s = o.getUTCFullYear() + Math.floor(a / 12),
     d = ((a % 12) + 12) % 12;
-  (!Number.isSafeInteger(a) || s < 1899 || s > 9999) && QE();
-  const u = K5(s, d + 1, 0).getUTCDate(),
+  (!Number.isSafeInteger(a) || s < 1899 || s > 9999) &&
+    throwDateSeriesRangeError();
+  const u = utcDateFromParts(s, d + 1, 0).getUTCDate(),
     l = n === "endOfMonth" ? u : Math.min(o.getUTCDate(), u);
-  return Y5(K5(s, d, l));
+  return dateToExcelSerial(utcDateFromParts(s, d, l));
 }
 function Nae(e, r, t, n, o) {
-  const a = Tae(e + v1(o), r, t, n) - v1(o);
-  return ((a < 0 || a > wd(o)) && QE(), a);
+  const a =
+    stepSeriesDateSerial(e + dateSystemSerialOffset(o), r, t, n) -
+    dateSystemSerialOffset(o);
+  return (
+    (a < 0 || a > dateSystemMaxSerial(o)) && throwDateSeriesRangeError(),
+    a
+  );
 }
-function Rae(e, r, t, n) {
-  const o = o$(n.direction),
-    a = Nr(e, r),
-    s = ct(t),
+function buildSeriesPreview(e, r, t, n) {
+  const o = validateFillDirection(n.direction),
+    a = findSheetOrThrow(e, r),
+    s = parseRangeAddress(t),
     d = o === "down" || o === "up";
   (["number", "date"].includes(n.kind) ||
-    Mo("Choose a numeric or date series."),
+    throwFillError("Choose a numeric or date series."),
     ((d && s.firstCol !== s.lastCol) || (!d && s.firstRow !== s.lastRow)) &&
-      Mo(
+      throwFillError(
         "Select one column for vertical series or one row for horizontal series.",
       ),
     (s.lastRow >= a.rowCount || s.lastCol >= a.colCount) &&
-      Mo("The series range exceeds the worksheet."));
+      throwFillError("The series range exceeds the worksheet."));
   const u = d ? s.lastRow - s.firstRow + 1 : s.lastCol - s.firstCol + 1;
-  u > Mt.maxPatches && Mo("A series may contain at most 500 target cells.");
+  u > workbookLimits.maxPatches &&
+    throwFillError("A series may contain at most 500 target cells.");
   const l = o === "up" ? s.lastRow : s.firstRow,
     c = o === "left" ? s.lastCol : s.firstCol,
-    h = nh(l, c),
-    f = _x(a.cells[h]),
+    h = formatCellReference(l, c),
+    f = stripCellDecorations(a.cells[h]),
     p = n.step ?? 1;
   (typeof p != "number" ||
     !Number.isFinite(p) ||
     p === 0 ||
     (n.kind === "date" && !Number.isSafeInteger(p))) &&
-    Mo(
+    throwFillError(
       "Series step must be a nonzero finite number; date steps must be whole numbers.",
     );
   const m = n.dateUnit ?? "day",
     v = n.monthPolicy ?? "preserveDay";
   (!["day", "weekday", "month", "year"].includes(m) ||
     !["preserveDay", "endOfMonth"].includes(v)) &&
-    Mo("Choose a supported date unit and month policy.");
-  const g = n.start ?? Vn(e)(r, h);
+    throwFillError("Choose a supported date unit and month policy.");
+  const g = n.start ?? calculateWorkbookWithSettings(e)(r, h);
   typeof g != "number" &&
     typeof g != "string" &&
-    Mo(
+    throwFillError(
       "The directional seed must contain a number or date, or supply a start value.",
     );
   const b =
       n.kind === "date"
-        ? T1(g, e.datePolicy?.dateSystem)
+        ? parseSeriesSeedDate(g, e.datePolicy?.dateSystem)
         : typeof g == "number" && Number.isFinite(g)
           ? g
-          : Mo("Numeric series require a finite numeric start value."),
+          : throwFillError(
+              "Numeric series require a finite numeric start value.",
+            ),
     y =
       n.stop === undefined
         ? undefined
         : n.kind === "date"
-          ? T1(n.stop, e.datePolicy?.dateSystem)
+          ? parseSeriesSeedDate(n.stop, e.datePolicy?.dateSystem)
           : typeof n.stop == "number" && Number.isFinite(n.stop)
             ? n.stop
-            : Mo("Numeric series require a finite numeric stop value.");
+            : throwFillError(
+                "Numeric series require a finite numeric stop value.",
+              );
   y !== undefined &&
     ((p > 0 && y < b) || (p < 0 && y > b)) &&
-    Mo("The stop value is opposite the series step direction.");
+    throwFillError("The stop value is opposite the series step direction.");
   const w = [],
     E = [];
   let A = 0;
@@ -635,18 +699,18 @@ function Rae(e, r, t, n) {
           ? Nae(b, O * p, m, v, e.datePolicy?.dateSystem ?? "1900")
           : b + O * p;
     } catch (D) {
-      if (y !== undefined && O > 0 && D instanceof c$) break;
+      if (y !== undefined && O > 0 && D instanceof DateSeriesRangeError) break;
       throw D;
     }
     if (y !== undefined && (p > 0 ? j > y : j < y)) break;
-    Number.isFinite(j) || Mo("The numeric series would overflow.");
-    const z = nh(
+    Number.isFinite(j) || throwFillError("The numeric series would overflow.");
+    const z = formatCellReference(
       l + (d ? O * (o === "up" ? -1 : 1) : 0),
       c + (d ? 0 : O * (o === "left" ? -1 : 1)),
     );
     (E.push(z), A++);
-    const V = hi(
-      rI(
+    const V = normalizeCellRecordInput(
+      withCellDecorations(
         {
           ...f,
           raw: j,
@@ -658,53 +722,57 @@ function Rae(e, r, t, n) {
         a.cells[z],
       ),
     );
-    nI(a.cells[z], V) && w.push({ sheetId: r, address: z, cell: V });
+    cellContentsDiffer(a.cells[z], V) &&
+      w.push({ sheetId: r, address: z, cell: V });
   }
   return (
-    iI(e, r, E),
-    Dx(
+    assertFillTargetUnmerged(e, r, E),
+    buildCellChangePreview(
       e,
       w,
       {
         targetSheetId: r,
-        targetRange: xg(t),
+        targetRange: formatRangeBoundsAddress(t),
         targetCount: u,
         generatedCount: A,
         direction: o,
-        summary: `Fill ${n.kind === "date" ? `${m} date` : "numeric"} series ${o} in ${xg(t)} (${A} values).`,
+        summary: `Fill ${n.kind === "date" ? `${m} date` : "numeric"} series ${o} in ${formatRangeBoundsAddress(t)} (${A} values).`,
       },
       n.readOnly,
     )
   );
 }
-function Qy(e, r, t = {}) {
-  return tI(e, r, t);
+function applyFillPreview(e, r, t = {}) {
+  return applyCellChangePreview(e, r, t);
 }
-function Iae(e, r, t, n, o = {}) {
-  const a = Nr(e, r),
-    s = ct(t),
-    d = ct(n),
+function buildFillHandlePreview(e, r, t, n, o = {}) {
+  const a = findSheetOrThrow(e, r),
+    s = parseRangeAddress(t),
+    d = parseRangeAddress(n),
     u = o.mode ?? "copy";
   (["copy", "series"].includes(u) ||
-    Mo("Choose Copy or Series for the fill handle."),
+    throwFillError("Choose Copy or Series for the fill handle."),
     (s.firstRow < d.firstRow ||
       s.lastRow > d.lastRow ||
       s.firstCol < d.firstCol ||
       s.lastCol > d.lastCol) &&
-      Mo("The fill-handle target must contain the complete source range."),
+      throwFillError(
+        "The fill-handle target must contain the complete source range.",
+      ),
     (d.lastRow >= a.rowCount || d.lastCol >= a.colCount) &&
-      Mo("The fill-handle target exceeds the worksheet."));
+      throwFillError("The fill-handle target exceeds the worksheet."));
   const l = s.lastRow - s.firstRow + 1,
     c = s.lastCol - s.firstCol + 1,
     h = s.firstCol === d.firstCol && s.lastCol === d.lastCol,
     f = s.firstRow === d.firstRow && s.lastRow === d.lastRow;
   !h &&
     !f &&
-    Mo(
+    throwFillError(
       "Extend the fill handle along one axis while keeping the other source dimension unchanged.",
     );
   const p = (d.lastRow - d.firstRow + 1) * (d.lastCol - d.firstCol + 1) - l * c;
-  p > Mt.maxPatches && Mo("The fill handle may extend into at most 500 cells.");
+  p > workbookLimits.maxPatches &&
+    throwFillError("The fill handle may extend into at most 500 cells.");
   const m = h
       ? d.firstRow < s.firstRow
         ? "up"
@@ -714,23 +782,23 @@ function Iae(e, r, t, n, o = {}) {
         : "right",
     v = [],
     g = [],
-    b = Vn(e);
+    b = calculateWorkbookWithSettings(e);
   let y = 0,
     w = 0;
   if (u === "series") {
     (h && l === 2 && c === 1) ||
       (f && l === 1 && c === 2) ||
-      Mo(
+      throwFillError(
         "Series handle fill requires exactly two seed cells in the extension's row or column.",
       );
-    const k = b(r, nh(s.firstRow, s.firstCol)),
-      F = b(r, nh(s.lastRow, s.lastCol));
+    const k = b(r, formatCellReference(s.firstRow, s.firstCol)),
+      F = b(r, formatCellReference(s.lastRow, s.lastCol));
     ((typeof k != "number" ||
       !Number.isFinite(k) ||
       typeof F != "number" ||
       !Number.isFinite(F) ||
       !Number.isFinite(F - k)) &&
-      Mo("Series handle seeds must evaluate to finite numbers."),
+      throwFillError("Series handle seeds must evaluate to finite numbers."),
       (y = k),
       (w = F - k));
   }
@@ -757,46 +825,48 @@ function Iae(e, r, t, n, o = {}) {
       const I =
           u === "series" ? s.firstRow : s.firstRow + E(row - s.firstRow, l),
         O = u === "series" ? s.firstCol : s.firstCol + E(col - s.firstCol, c),
-        j = a$(a, nh(I, O), b, s),
-        z = nh(row, col);
+        j = buildFillCellPatches(a, formatCellReference(I, O), b, s),
+        z = formatCellReference(row, col);
       if (u === "series") {
         const D = y + (h ? row - s.firstRow : col - s.firstCol) * w;
-        (Number.isFinite(D) || Mo("The handle series would overflow."),
+        (Number.isFinite(D) ||
+          throwFillError("The handle series would overflow."),
           (j.raw = D),
           delete j.literal);
       } else
         typeof j.raw == "string" &&
           j.raw.startsWith("=") &&
           !j.literal &&
-          (j.raw = xd(j.raw, row - I, col - O));
-      const V = hi(rI(j, a.cells[z]));
+          (j.raw = shiftFormulaReferences(j.raw, row - I, col - O));
+      const V = normalizeCellRecordInput(withCellDecorations(j, a.cells[z]));
       (g.push(z),
-        nI(a.cells[z], V) && v.push({ sheetId: r, address: z, cell: V }));
+        cellContentsDiffer(a.cells[z], V) &&
+          v.push({ sheetId: r, address: z, cell: V }));
     }
   return (
-    iI(e, r, g),
-    Dx(
+    assertFillTargetUnmerged(e, r, g),
+    buildCellChangePreview(
       e,
       v,
       {
         targetSheetId: r,
-        targetRange: xg(n),
+        targetRange: formatRangeBoundsAddress(n),
         targetCount: p,
         generatedCount: p,
         direction: m,
-        summary: `Fill handle ${u} from ${xg(t)} into ${xg(n)} (${p} extension cells).`,
+        summary: `Fill handle ${u} from ${formatRangeBoundsAddress(t)} into ${formatRangeBoundsAddress(n)} (${p} extension cells).`,
       },
       o.readOnly,
     )
   );
 }
-function Gm(e, r, t = "1900") {
+function parseDateCellEntry(e, r, t = "1900") {
   if (typeof e != "string") throw new Error("Cell entry must be text.");
   const n = r ? structuredClone(r) : { raw: null };
   if (((n.literal = e.startsWith("'")), n.literal)) n.raw = e.slice(1);
   else if (/^\d{4}-\d{2}-\d{2}$/.test(e)) {
     try {
-      n.raw = T1(e, t);
+      n.raw = parseSeriesSeedDate(e, t);
     } catch {
       throw new Error(
         `Enter a valid YYYY-MM-DD date between ${t === "1904" ? "1904-01-01" : "1899-12-31"} and 9999-12-31, or begin with an apostrophe to keep the entry as text.${t === "1900" ? " Excel's compatibility date 1900-02-29 represents serial 60." : ""}`,
@@ -809,10 +879,10 @@ function Gm(e, r, t = "1900") {
         locale: "en-US",
         pattern: "yyyy-mm-dd",
       }));
-  } else n.raw = _ae(e);
-  return hi(n);
+  } else n.raw = parseRawCellEntry(e);
+  return normalizeCellRecordInput(n);
 }
-function _ae(e) {
+function parseRawCellEntry(e) {
   return e === ""
     ? null
     : /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(e) &&
@@ -822,24 +892,27 @@ function _ae(e) {
         ? e.toUpperCase() === "TRUE"
         : e;
 }
-const Dae = ["en-US", "en-GB", "de-DE", "fr-FR"];
-function oI(e) {
+const supportedWorkbookLocales = ["en-US", "en-GB", "de-DE", "fr-FR"];
+function resolveWorkbookLocale(e) {
   if (e === undefined) return "en-US";
-  if (!Dae.includes(e))
+  if (!supportedWorkbookLocales.includes(e))
     throw new Error("Choose a supported workbook interface locale.");
   return e;
 }
-function Oae(e, r, t = true) {
+function formatNumberForLocale(e, r, t = true) {
   return new Intl.NumberFormat(r, {
     useGrouping: t,
     maximumSignificantDigits: 15,
   }).format(e);
 }
-function Mae(e, r, t = "1900", n) {
-  if ((oI(n), typeof r?.raw == "number" && e === Xh(r.raw, n)))
-    return hi(structuredClone(r));
+function parseLocalizedCellEntry(e, r, t = "1900", n) {
+  if (
+    (resolveWorkbookLocale(n),
+    typeof r?.raw == "number" && e === localizeDecimalPoint(r.raw, n))
+  )
+    return normalizeCellRecordInput(structuredClone(r));
   if (!n || /^[=']/.test(e) || /^\d{4}-\d{2}-\d{2}$/.test(e))
-    return Gm(e, r, t);
+    return parseDateCellEntry(e, r, t);
   const o = n === "de-DE" || n === "fr-FR" ? "," : ".",
     a = n === "de-DE" ? "." : n === "fr-FR" ? "[ \\u00a0\\u202f]" : ",",
     s = (l) => l.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
@@ -848,32 +921,32 @@ function Mae(e, r, t = "1900", n) {
     const l = e
       .replace(n === "fr-FR" ? /[ \u00a0\u202f]/g : new RegExp(s(a), "g"), "")
       .replace(o, ".");
-    return Gm(l, r, t);
+    return parseDateCellEntry(l, r, t);
   }
   return n === "de-DE" && /^(WAHR|FALSCH)$/i.test(e)
-    ? Gm(e.toUpperCase() === "WAHR" ? "TRUE" : "FALSE", r, t)
+    ? parseDateCellEntry(e.toUpperCase() === "WAHR" ? "TRUE" : "FALSE", r, t)
     : n === "fr-FR" && /^(VRAI|FAUX)$/i.test(e)
-      ? Gm(e.toUpperCase() === "VRAI" ? "TRUE" : "FALSE", r, t)
+      ? parseDateCellEntry(e.toUpperCase() === "VRAI" ? "TRUE" : "FALSE", r, t)
       : /^-?[\d., \u00a0\u202f]+$/.test(e) && /[.,]/.test(e)
-        ? Gm("'" + e, r, t)
-        : Gm(e, r, t);
+        ? parseDateCellEntry("'" + e, r, t)
+        : parseDateCellEntry(e, r, t);
 }
-function aI(e, r) {
+function formatCellEntryForEdit(e, r) {
   return typeof e?.raw == "number" && r
-    ? Xh(e.raw, r)
+    ? localizeDecimalPoint(e.raw, r)
     : `${e != null && e.literal && typeof e.raw == "string" ? "'" : ""}${String(e?.raw ?? "")}`;
 }
-function Xh(e, r) {
+function localizeDecimalPoint(e, r) {
   return Number.isFinite(e)
     ? r === "de-DE" || r === "fr-FR"
       ? String(e).replace(".", ",")
       : String(e)
     : "";
 }
-function sI(e, r, t) {
+function validateLocalizedNumberEntry(e, r, t) {
   let n = e.trim();
   {
-    oI(t);
+    resolveWorkbookLocale(t);
     const o = t === "de-DE" || t === "fr-FR" ? "," : ".",
       a = t === "de-DE" ? "\\." : t === "fr-FR" ? "[ \\u00a0\\u202f]" : ",";
     if (
@@ -890,13 +963,13 @@ function sI(e, r, t) {
     throw new Error(`${r} must be a finite number.`);
   return Number(n);
 }
-function lI(e, r, t = "1900", n) {
+function formatLocalizedNumberDisplay(e, r, t = "1900", n) {
   return !n ||
     typeof e != "number" ||
     (r != null && r.numberFormat) ||
     (r != null && r.numFmt) ||
     r?.format === "date"
-    ? Af(e, r, t)
+    ? formatNumberWithPattern(e, r, t)
     : Number.isFinite(e)
       ? r?.format === "currency"
         ? new Intl.NumberFormat(n, {
@@ -916,10 +989,10 @@ function lI(e, r, t = "1900", n) {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               }).format(e)
-            : Oae(e, n, false)
+            : formatNumberForLocale(e, n, false)
       : "#NUM!";
 }
-const jae = {
+const germanWorkbookMessages = {
     "Enter a valid number using the selected locale.":
       "Geben Sie eine gültige Zahl im gewählten Zahlenformat ein.",
     "Enter a number from {min} to {max}.":
@@ -1053,7 +1126,7 @@ const jae = {
     "This provider does not support attachments.":
       "Dieser Anbieter unterstützt keine Anhänge.",
   },
-  Fae = {
+  germanWorkbookStatusMessages = {
     "Workbook health": "Arbeitsmappenstatus",
     "Close workbook health": "Arbeitsmappenstatus schließen",
     "Saving and recovery": "Speichern und Wiederherstellen",
@@ -1252,11 +1325,14 @@ const jae = {
       "Es werden nur Links mit https://, http:// und mailto: unterstützt.",
     "The file contains invalid or unsupported records. Repair it in the source application and retry; the open workbook is unchanged.":
       "Die Datei enthält ungültige oder nicht unterstützte Datensätze. Korrigieren Sie die Quelldatei und versuchen Sie es erneut. Die geöffnete Arbeitsmappe bleibt unverändert.",
-    ...jae,
+    ...germanWorkbookMessages,
   };
-function d$(e = {}) {
-  const r = oI(e.locale),
-    t = { ...(r === "de-DE" ? Fae : {}), ...e.messages },
+function resolveWorkbookMessages(e = {}) {
+  const r = resolveWorkbookLocale(e.locale),
+    t = {
+      ...(r === "de-DE" ? germanWorkbookStatusMessages : {}),
+      ...e.messages,
+    },
     n = (d) => (Object.hasOwn(t, d) ? d : d.trim()),
     o = (d) => [...new Set(d.match(/\{\w+\}/g) ?? [])].sort().join("|"),
     a = (d) =>
@@ -1282,14 +1358,17 @@ function d$(e = {}) {
       ),
   };
 }
-const f$ = ne.createContext(d$());
-function Bae({ options, children }) {
-  const t = ne.useMemo(() => d$(options), [options?.locale, options?.messages]);
-  return i.jsx(f$.Provider, { value: t, children });
+const WorkbookMessagesContext = ne.createContext(resolveWorkbookMessages());
+function WorkbookMessagesProvider({ options, children }) {
+  const t = ne.useMemo(
+    () => resolveWorkbookMessages(options),
+    [options?.locale, options?.messages],
+  );
+  return i.jsx(WorkbookMessagesContext.Provider, { value: t, children });
 }
-const Dr = () => ne.useContext(f$);
-function M({ children }) {
-  const r = Dr(),
+const useWorkbookMessages = () => ne.useContext(WorkbookMessagesContext);
+function LocalizedText({ children }) {
+  const r = useWorkbookMessages(),
     t = ne.Children.toArray(children);
   if (!t.every((o) => typeof o == "string"))
     return i.jsx(i.Fragment, { children });
@@ -1298,7 +1377,7 @@ function M({ children }) {
     ? i.jsx(i.Fragment, { children })
     : i.jsx("span", { lang: r.language(n), children: r.text(n) });
 }
-function ci({
+function LocalizedNumberField({
   value,
   onValueChange,
   allowEmpty = false,
@@ -1311,12 +1390,12 @@ function ci({
   className,
   ...c
 }) {
-  const h = Dr(),
+  const h = useWorkbookMessages(),
     f = ne.useId(),
     [p, m] = ne.useState(() =>
       value === "" || value === undefined
         ? ""
-        : Xh(Number(value), h.entryLocale),
+        : localizeDecimalPoint(Number(value), h.entryLocale),
     ),
     [v, g] = ne.useState(false),
     [b, y] = ne.useState(false),
@@ -1326,7 +1405,7 @@ function ci({
     k = max === undefined ? undefined : Number(max),
     F = (V) => {
       if (!V.trim() && allowEmpty) return;
-      const D = sI(V, "Value", w.current);
+      const D = validateLocalizedNumberEntry(V, "Value", w.current);
       if ((A !== undefined && D < A) || (k !== undefined && D > k))
         throw Error("bounds");
       return D;
@@ -1339,8 +1418,9 @@ function ci({
     O =
       V instanceof Error && V.message === "bounds"
         ? h.message("Enter a number from {min} to {max}.", {
-            min: A === undefined ? "−∞" : Xh(A, h.entryLocale),
-            max: k === undefined ? "∞" : Xh(k, h.entryLocale),
+            min:
+              A === undefined ? "−∞" : localizeDecimalPoint(A, h.entryLocale),
+            max: k === undefined ? "∞" : localizeDecimalPoint(k, h.entryLocale),
           })
         : h.text("Enter a valid number using the selected locale.");
   }
@@ -1352,7 +1432,7 @@ function ci({
       m(
         value === "" || value === undefined
           ? ""
-          : Xh(Number(value), h.entryLocale),
+          : localizeDecimalPoint(Number(value), h.entryLocale),
       ),
       y(false));
   }, [value]),
@@ -1360,7 +1440,7 @@ function ci({
       v ||
         O ||
         ((w.current = h.entryLocale),
-        m(I === undefined ? "" : Xh(I, h.entryLocale)));
+        m(I === undefined ? "" : localizeDecimalPoint(I, h.entryLocale)));
     }, [h.entryLocale, v]));
   const j = (V) => {
       m(V);
@@ -1430,7 +1510,8 @@ function ci({
                 (I ?? A ?? 0) + (V.key === "ArrowUp" ? D : -D),
               ),
             );
-            Number.isFinite(B) && j(Xh(Number(B.toPrecision(15)), w.current));
+            Number.isFinite(B) &&
+              j(localizeDecimalPoint(Number(B.toPrecision(15)), w.current));
           }
         },
       }),
@@ -1453,13 +1534,13 @@ function ci({
     ],
   });
 }
-const Lae = () => ({
+const createEmptyAssistantConversation = () => ({
   id: crypto.randomUUID(),
   draft: "",
   messages: [],
   attachments: [],
 });
-function KO(e, r) {
+function findOpenFormulaQuote(e, r) {
   let t = "";
   for (let n = 1; n < r; n++) {
     const o = e[n];
@@ -1471,16 +1552,16 @@ function KO(e, r) {
   }
   return t;
 }
-const Pae =
+const formulaReferencePattern =
   /(?:'(?:[^']|'')+'!|[A-Za-z_][A-Za-z0-9_.]*!)?(?:\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}|\$?[1-9]\d*:\$?[1-9]\d*)/g;
-function J5(e, r, t = r) {
+function findFormulaReferenceSpan(e, r, t = r) {
   if (!(!e.startsWith("=") || r < 1 || t < r || t > e.length)) {
-    for (const n of e.matchAll(Pae)) {
+    for (const n of e.matchAll(formulaReferencePattern)) {
       const o = n.index,
         a = o + n[0].length;
       if (
         !(
-          KO(e, o) ||
+          findOpenFormulaQuote(e, o) ||
           /[\w.\[!]/.test(e[o - 1] ?? "") ||
           /[\w.\](]/.test(e[a] ?? "")
         ) &&
@@ -1489,14 +1570,14 @@ function J5(e, r, t = r) {
       )
         return { start: o, end: a };
     }
-    if (!KO(e, r)) {
+    if (!findOpenFormulaQuote(e, r)) {
       if (t > r) return { start: r, end: t };
       if (/[=(:,;+\-*/^&<>]$/.test(e.slice(0, r).trimEnd()))
         return { start: r, end: t };
     }
   }
 }
-function Uae(e, r, t, n) {
+function replaceFormulaReferenceSpan(e, r, t, n) {
   const o = n === undefined ? t : `'${n.replaceAll("'", "''")}'!${t}`;
   return {
     value: e.slice(0, r.start) + o + e.slice(r.end),
@@ -1504,7 +1585,7 @@ function Uae(e, r, t, n) {
   };
 }
 function $ae(e, r, t = r) {
-  const n = J5(e, r, t);
+  const n = findFormulaReferenceSpan(e, r, t);
   if (!n || n.start === n.end) return;
   const o = e.slice(n.start, n.end),
     a = o.lastIndexOf("!"),
@@ -1538,7 +1619,7 @@ function $ae(e, r, t = r) {
     span: { start: n.start, end: n.start + h.length },
   };
 }
-function zae(e) {
+function autoCloseFormulaParens(e) {
   if (!e.startsWith("=")) return e;
   let r = "",
     t = 0,
@@ -1567,10 +1648,10 @@ function zae(e) {
     ? e + ")".repeat(t)
     : e;
 }
-const l7 = new WeakMap();
-function y$(e, r) {
-  const t = es(e);
-  let n = t ? l7.get(e) : undefined;
+const formulaScanCache = new WeakMap();
+function getFormulaScanList(e, r) {
+  const t = isDeepFrozenValue(e);
+  let n = t ? formulaScanCache.get(e) : undefined;
   if (!n) {
     n = { calls: [], external: [] };
     for (const o in e) {
@@ -1580,31 +1661,31 @@ function y$(e, r) {
         (a.raw.includes("(") && n.calls.push([o, a]),
         /[\[|\\]|https?:|file:/i.test(a.raw) && n.external.push([o, a]));
     }
-    t && l7.set(e, n);
+    t && formulaScanCache.set(e, n);
   }
   return n[r];
 }
-const u7 = new WeakMap();
-let Bse = 0;
-function Lse(e) {
-  let r = u7.get(e);
-  return (r || ((r = ++Bse), u7.set(e, r)), r);
+const objectIdRegistry = new WeakMap();
+let objectIdCounter = 0;
+function getStableObjectId(e) {
+  let r = objectIdRegistry.get(e);
+  return (r || ((r = ++objectIdCounter), objectIdRegistry.set(e, r)), r);
 }
-function mf(e, r) {
+function validateExtensionHostPolicy(e, r) {
   const t = r.extensions ?? [],
     n = r.allowedSheetIds ?? e.sheets.map((a) => a.id);
   if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
   if (
     !Array.isArray(t) ||
-    t.length > Nc.extensions ||
+    t.length > extensionRuntimeLimits.extensions ||
     !Array.isArray(n) ||
     n.some((a) => !e.sheets.some((s) => s.id === a))
   )
     throw Error("Invalid extension host scope.");
   const o = new Set();
   for (const a of t) {
-    const s = Rw(a.manifest);
+    const s = validateExtensionManifest(a.manifest);
     if (
       o.has(s.id) ||
       typeof a.invoke != "function" ||
@@ -1621,21 +1702,21 @@ function mf(e, r) {
     extensions: t,
     allowed: n,
     hash: () =>
-      hr([
+      fingerprintCanonicalValue([
         !!r.readOnly,
         n,
         t.map((a) => [
-          bf(a.manifest),
+          hashExtensionManifest(a.manifest),
           a.grantedPermissions,
           a.allowedSheetIds,
           !!a.includeHidden,
-          Lse(a.invoke),
+          getStableObjectId(a.invoke),
         ]),
       ]),
   };
 }
-const hI = (e, r) =>
-  hr([
+const resolveExtensionSheetScope = (e, r) =>
+  fingerprintCanonicalValue([
     r.grantedPermissions,
     [...r.allowedSheetIds].sort().map((t) => {
       const n = e.sheets.find((o) => o.id === t);
@@ -1643,43 +1724,46 @@ const hI = (e, r) =>
     }),
     !!r.includeHidden,
   ]);
-function w$(e, r) {
-  return mf(e, r)
+function buildExtensionHostScope(e, r) {
+  return validateExtensionHostPolicy(e, r)
     .extensions.filter((t) =>
       t.manifest.permissions.every((n) => t.grantedPermissions.includes(n)),
     )
     .map((t) => ({
       id: t.manifest.id,
-      manifestHash: bf(t.manifest),
-      scopeHash: hI(e, t),
+      manifestHash: hashExtensionManifest(t.manifest),
+      scopeHash: resolveExtensionSheetScope(e, t),
       sheetIds: t.allowedSheetIds.filter((n) => {
         const o = e.sheets.find((a) => a.id === n);
         return !(o.hidden || o.veryHidden) || !!t.includeHidden;
       }),
     }));
 }
-function IC(e, r = []) {
+function withExtensionHostScope(e, r = []) {
   const t = { ...e };
-  return (YF(t, w$(e, { extensions: r })), es(e) ? Lg(t) : t);
+  return (
+    setExtensionCacheEntries(t, buildExtensionHostScope(e, { extensions: r })),
+    isDeepFrozenValue(e) ? deepFreezeValue(t) : t
+  );
 }
-function x$(e, r, t) {
+function assertExtensionWriteScope(e, r, t) {
   var o;
   if (t.readOnly) throw Error("The workbook is read-only.");
   if ((o = e.structureProtection) != null && o.enabled)
     throw Error("Workbook structure is protected.");
-  const n = mf(e, t);
+  const n = validateExtensionHostPolicy(e, t);
   for (const a of r) {
     if (!n.allowed.includes(a))
       throw Error("An extension destination is outside the host write scope.");
-    jn(e.sheets.find((s) => s.id === a));
+    assertSheetUnprotected(e.sheets.find((s) => s.id === a));
   }
 }
-function pI(e) {
-  const r = new Set(Fc),
+function reviewExtensionFormulas(e) {
+  const r = new Set(builtinFunctionNames),
     t = new Set((e.definedNames ?? []).map((o) => o.name.toUpperCase())),
     n = [];
   for (const o of e.sheets)
-    for (const [a, s] of y$(o.cells, "calls")) {
+    for (const [a, s] of getFormulaScanList(o.cells, "calls")) {
       if (typeof s.raw != "string" || !s.raw.startsWith("=")) continue;
       const d = [],
         u = (l, c = false) => {
@@ -1708,7 +1792,7 @@ function pI(e) {
           }
         };
       try {
-        u(Pg(s.raw));
+        u(tokenizeFormulaText(s.raw));
       } catch {
         continue;
       }
@@ -1722,17 +1806,22 @@ function pI(e) {
             literal: !!s.literal,
             calls: d,
           }),
-        n.length > Nc.calls)
+        n.length > extensionRuntimeLimits.calls)
       )
         throw Error("Extension review exceeds 100 formula cells.");
     }
   return n;
 }
-function E$(e, r, t) {
+function requireApprovedExtension(e, r, t) {
   const n = e.extensions?.installed.find((s) => s.manifest.id === r);
   if (!n || !n.enabled) throw Error("The extension is missing or disabled.");
-  const o = mf(e, t).extensions.find((s) => s.manifest.id === r);
-  if (!o || bf(o.manifest) !== bf(n.manifest))
+  const o = validateExtensionHostPolicy(e, t).extensions.find(
+    (s) => s.manifest.id === r,
+  );
+  if (
+    !o ||
+    hashExtensionManifest(o.manifest) !== hashExtensionManifest(n.manifest)
+  )
     throw Error(
       "An approved adapter with the exact extension version and manifest is unavailable.",
     );
@@ -1740,7 +1829,7 @@ function E$(e, r, t) {
     throw Error("The host has not granted all declared extension permissions.");
   return o;
 }
-function C$(e, r, t, n) {
+function evaluateExtensionFunctionCall(e, r, t, n) {
   const o = n.manifest.functions.find(
     (s) => `${n.manifest.namespace}.${s.id}` === t.name,
   );
@@ -1780,14 +1869,17 @@ function C$(e, r, t, n) {
         throw Error(
           "An extension input worksheet is unavailable or unauthorized.",
         );
-      const y = ct(l[3] + (l[4] ? ":" + l[4] : "")),
+      const y = parseRangeAddress(l[3] + (l[4] ? ":" + l[4] : "")),
         w = y.lastRow - y.firstRow + 1,
         E = y.lastCol - y.firstCol + 1;
-      if (w * E > Nc.inputCells || (u.type !== "matrix" && w * E !== 1))
+      if (
+        w * E > extensionRuntimeLimits.inputCells ||
+        (u.type !== "matrix" && w * E !== 1)
+      )
         throw Error(
           "The extension input range exceeds its declared scalar/cell budget.",
         );
-      const A = Cf(
+      const A = evaluateWorkbookFormulas(
           e,
           {},
           { allowRead: a, allowName: () => true, step: () => {} },
@@ -1796,7 +1888,7 @@ function C$(e, r, t, n) {
           Array.from({ length: E }, (O, j) => {
             const z = A.getTypedValue(
               b.id,
-              `${ut(y.firstCol + j)}${y.firstRow + I + 1}`,
+              `${columnIndexToLetters(y.firstCol + j)}${y.firstRow + I + 1}`,
             );
             if (z.type === "error")
               throw Error(
@@ -1807,7 +1899,7 @@ function C$(e, r, t, n) {
         );
       if (A.getOperationalErrors().length)
         throw Error("An extension input attempted an unauthorized dependency.");
-      return m1(u.type === "matrix" ? k : k[0][0], u);
+      return validateExtensionValue(u.type === "matrix" ? k : k[0][0], u);
     }
     if (u.type === "matrix")
       throw Error("Matrix parameters require a static worksheet range.");
@@ -1819,8 +1911,8 @@ function C$(e, r, t, n) {
           : g,
       ),
     };
-    YF(c, g1(e));
-    const h = Cf(
+    setExtensionCacheEntries(c, getExtensionCacheEntries(e));
+    const h = evaluateWorkbookFormulas(
         c,
         {},
         { allowRead: a, allowName: () => true, step: () => {} },
@@ -1833,29 +1925,32 @@ function C$(e, r, t, n) {
     let p = f.value;
     if (h.getSpillRange(r.sheetId, r.address))
       throw Error("Scalar extension arguments cannot contain arrays.");
-    return m1(p, u);
+    return validateExtensionValue(p, u);
   });
 }
-function A$(e, r = {}) {
-  const t = mf(e, r),
-    n = pI(e),
-    o = n.length ? IC(e, t.extensions) : e,
-    a = n.length ? Cf(o) : undefined,
+function resolveExtensionCachedResult(e, r = {}) {
+  const t = validateExtensionHostPolicy(e, r),
+    n = reviewExtensionFormulas(e),
+    o = n.length ? withExtensionHostScope(e, t.extensions) : e,
+    a = n.length ? evaluateWorkbookFormulas(o) : undefined,
     s = n.map((u) => {
       const l = a.getTypedValue(u.sheetId, u.address),
         c = (e.extensions?.caches ?? []).filter(
           (v) => v.sheetId === u.sheetId && v.address === u.address,
         ),
         h = u.calls.map((v) => {
-          const g = z3(e).find((y) => y.name === v.name);
+          const g = listInstalledExtensionFunctions(e).find(
+            (y) => y.name === v.name,
+          );
           let b = "unavailable";
           if (
             g &&
             ((b = g.entry.enabled
-              ? w$(e, r).some(
+              ? buildExtensionHostScope(e, r).some(
                   (y) =>
                     y.id === g.entry.manifest.id &&
-                    y.manifestHash === bf(g.entry.manifest) &&
+                    y.manifestHash ===
+                      hashExtensionManifest(g.entry.manifest) &&
                     y.sheetIds.includes(u.sheetId),
                 )
                 ? "needs-refresh"
@@ -1864,18 +1959,21 @@ function A$(e, r = {}) {
             b === "needs-refresh")
           )
             try {
-              const y = E$(e, g.entry.manifest.id, r),
-                w = C$(o, u, v, y),
-                E = $3(
+              const y = requireApprovedExtension(e, g.entry.manifest.id, r),
+                w = evaluateExtensionFunctionCall(o, u, v, y),
+                E = fingerprintExtensionCall(
                   u.sheetId,
                   u.address,
                   u.formula,
                   v.name,
                   w,
-                  bf(g.entry.manifest),
+                  hashExtensionManifest(g.entry.manifest),
                 );
-              c.some((A) => A.key === E && A.scopeHash === hI(e, y)) &&
-                (b = "reviewed-cache");
+              c.some(
+                (A) =>
+                  A.key === E &&
+                  A.scopeHash === resolveExtensionSheetScope(e, y),
+              ) && (b = "reviewed-cache");
             } catch {}
           return { name: v.name, state: b };
         });
@@ -1911,8 +2009,8 @@ function A$(e, r = {}) {
   };
 }
 const tT = new WeakMap();
-function Pse(e, r, t, n = {}) {
-  const o = mf(e, n),
+function runExtensionOperation(e, r, t, n = {}) {
+  const o = validateExtensionHostPolicy(e, n),
     a = e.extensions?.installed.find((m) => m.manifest.id === r),
     s = o.extensions.find((m) => m.manifest.id === r);
   if (!["install", "enable", "disable", "remove"].includes(t))
@@ -1920,10 +2018,10 @@ function Pse(e, r, t, n = {}) {
   const d = t === "install" ? s?.manifest : a?.manifest;
   if (!d) throw Error("The requested extension is unavailable.");
   if (
-    (Rw(d),
+    (validateExtensionManifest(d),
     ["install", "enable"].includes(t) &&
       (!s ||
-        bf(s.manifest) !== bf(d) ||
+        hashExtensionManifest(s.manifest) !== hashExtensionManifest(d) ||
         !d.permissions.every((m) => s.grantedPermissions.includes(m))))
   )
     throw Error(
@@ -1932,7 +2030,7 @@ function Pse(e, r, t, n = {}) {
   if (
     d.functions.some(
       (m) =>
-        Fc.includes(`${d.namespace}.${m.id}`) ||
+        builtinFunctionNames.includes(`${d.namespace}.${m.id}`) ||
         (e.definedNames ?? []).some(
           (v) => v.name.toUpperCase() === `${d.namespace}.${m.id}`,
         ),
@@ -1941,27 +2039,30 @@ function Pse(e, r, t, n = {}) {
     throw Error(
       "Extension functions cannot shadow built-ins or defined names.",
     );
-  const u = pI(e).filter((m) =>
+  const u = reviewExtensionFormulas(e).filter((m) =>
     m.calls.some((v) => v.name.startsWith(d.namespace + ".")),
   );
-  x$(
+  assertExtensionWriteScope(
     e,
     u.map((m) => m.sheetId),
     n,
   );
-  const l = rn(e),
+  const l = normalizeWorkbookInput(e),
     c = structuredClone(
       l.extensions ?? { schemaVersion: 1, installed: [], caches: [] },
     );
   ((c.installed = c.installed.filter((m) => m.manifest.id !== r)),
     t !== "remove" &&
-      c.installed.push({ manifest: Rw(d), enabled: t !== "disable" }),
+      c.installed.push({
+        manifest: validateExtensionManifest(d),
+        enabled: t !== "disable",
+      }),
     (t === "remove" || t === "install") &&
       (c.caches = c.caches.filter(
         (m) => !m.functionName.startsWith(d.namespace + "."),
       )),
     (l.extensions = c));
-  const h = rn(l),
+  const h = normalizeWorkbookInput(l),
     f = {
       extensionId: r,
       action: t,
@@ -1971,64 +2072,64 @@ function Pse(e, r, t, n = {}) {
     };
   return (
     tT.set(f, {
-      bookHash: hr(e),
+      bookHash: fingerprintCanonicalValue(e),
       policyHash: o.hash(),
-      planHash: hr(f),
+      planHash: fingerprintCanonicalValue(f),
       candidate: h,
     }),
     f
   );
 }
-function Use(e, r, t = {}) {
+function applyExtensionPreview(e, r, t = {}) {
   const n = tT.get(r);
   if (!n) throw Error("Unknown or already applied extension preview.");
   if (
     t.readOnly ||
-    n.bookHash !== hr(e) ||
-    n.policyHash !== mf(e, t).hash() ||
-    n.planHash !== hr(r)
+    n.bookHash !== fingerprintCanonicalValue(e) ||
+    n.policyHash !== validateExtensionHostPolicy(e, t).hash() ||
+    n.planHash !== fingerprintCanonicalValue(r)
   )
     throw Error("Workbook, extension or permissions changed. Preview again.");
-  return (tT.delete(r), rn(n.candidate));
+  return (tT.delete(r), normalizeWorkbookInput(n.candidate));
 }
 const k$ = new WeakMap();
 
 export {
-  $2,
+  buildFillPreview,
   $ae,
-  A$,
-  Aae,
-  Bae,
-  C$,
-  Dr,
-  Dx,
-  E$,
-  Gm,
-  IC,
-  Iae,
-  J5,
-  Lae,
-  M,
-  Mae,
-  Pse,
-  Qy,
-  Rae,
-  T1,
-  Uae,
-  Use,
-  Xh,
-  aI,
-  ci,
-  hI,
-  i$,
+  resolveExtensionCachedResult,
+  buildClipboardSnapshot,
+  WorkbookMessagesProvider,
+  evaluateExtensionFunctionCall,
+  useWorkbookMessages,
+  buildCellChangePreview,
+  requireApprovedExtension,
+  parseDateCellEntry,
+  withExtensionHostScope,
+  buildFillHandlePreview,
+  findFormulaReferenceSpan,
+  createEmptyAssistantConversation,
+  LocalizedText,
+  parseLocalizedCellEntry,
+  runExtensionOperation,
+  applyFillPreview,
+  buildSeriesPreview,
+  parseSeriesSeedDate,
+  replaceFormulaReferenceSpan,
+  applyExtensionPreview,
+  localizeDecimalPoint,
+  formatCellEntryForEdit,
+  LocalizedNumberField,
+  resolveExtensionSheetScope,
+  buildPastePreview,
   k$,
-  kae,
-  lI,
-  mf,
-  pI,
-  sI,
-  tI,
-  x$,
-  y$,
-  zae,
+  applyPastePreview,
+  formatLocalizedNumberDisplay,
+  validateExtensionHostPolicy,
+  reviewExtensionFormulas,
+  validateLocalizedNumberEntry,
+  applyCellChangePreview,
+  assertExtensionWriteScope,
+  getFormulaScanList,
+  autoCloseFormulaParens,
 };

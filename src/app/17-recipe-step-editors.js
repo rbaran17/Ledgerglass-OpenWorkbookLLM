@@ -1,29 +1,55 @@
 import i from "react/jsx-runtime";
-import { CN, GF, hr, mE, pg, ts } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
-import { $a, Ku, Ta, rn, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { q1 } from "./12-formula-dependency-inspector.js";
-import { Bce, Fce, bz, wT, xT } from "./16-text-split-tools.js";
+import {
+  parseTransformationRecipe,
+  validateSavedRecipeMetadata,
+  fingerprintCanonicalValue,
+  canonicalJsonStringify,
+  recipeStoreFormatId,
+  normalizeDatePolicy,
+} from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
+import {
+  assertWorkbookStructureEditable,
+  createWorksheetRecord,
+  formatOccupiedRangeAddress,
+  normalizeWorkbookInput,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { inspectOutputNameSafety } from "./12-formula-dependency-inspector.js";
+import {
+  executeRecipeStep,
+  resolveRecipeSourceTable,
+  validateRecipeOutputTable,
+  profileFieldTypes,
+  buildFieldControlTotals,
+} from "./16-text-split-tools.js";
 
-function ET(e, r, t = {}) {
-  const n = CN(r),
+function runTransformationRecipe(e, r, t = {}) {
+  const n = parseTransformationRecipe(r),
     o = [],
     a = [],
     s = new Map(),
     d = (c) => {
-      const h = mE(c);
+      const h = canonicalJsonStringify(c);
       let f = s.get(h);
       if (!f) {
-        const p = Fce(e, c, t);
+        const p = resolveRecipeSourceTable(e, c, t);
         ((f = p.data), o.push(p.evidence), s.set(h, f));
       }
       return structuredClone(f);
     },
     u = () => ({
-      engine: pg,
-      definitionHash: hr(n),
-      sourceHash: hr({ datePolicy: ts(e.datePolicy), sources: o }),
+      engine: recipeStoreFormatId,
+      definitionHash: fingerprintCanonicalValue(n),
+      sourceHash: fingerprintCanonicalValue({
+        datePolicy: normalizeDatePolicy(e.datePolicy),
+        sources: o,
+      }),
       sources: o,
       steps: a,
     });
@@ -49,19 +75,19 @@ function ET(e, r, t = {}) {
       id: h.id,
       kind: h.kind,
       status: "failed",
-      inputSchema: wT(l),
+      inputSchema: profileFieldTypes(l),
       inputRows: l.rows.length,
-      inputHash: hr(l),
+      inputHash: fingerprintCanonicalValue(l),
     };
     try {
-      const p = Bce(e, l, h, d);
-      l = bz(p.data);
-      const m = xT(l);
+      const p = executeRecipeStep(e, l, h, d);
+      l = validateRecipeOutputTable(p.data);
+      const m = buildFieldControlTotals(l);
       (Object.assign(f, {
         status: "complete",
-        outputSchema: wT(l),
+        outputSchema: profileFieldTypes(l),
         outputRows: l.rows.length,
-        outputHash: hr(l),
+        outputHash: fingerprintCanonicalValue(l),
         controls: m,
         ...(p.details ? { details: p.details } : {}),
       }),
@@ -98,17 +124,17 @@ function ET(e, r, t = {}) {
     ...u(),
     status: "complete",
     output: l,
-    outputHash: hr(l),
-    controls: xT(l),
+    outputHash: fingerprintCanonicalValue(l),
+    controls: buildFieldControlTotals(l),
   };
 }
 function kI(e, r = false) {
   if (r) throw Error("This workbook is read-only.");
-  $a(e);
+  assertWorkbookStructureEditable(e);
 }
-function Lce(e, r, t, n, o = {}) {
+function saveTransformationRecipe(e, r, t, n, o = {}) {
   kI(e, !!o.readOnly);
-  const a = CN(t);
+  const a = parseTransformationRecipe(t);
   if (((r = r.trim()), !r || r.length > 128))
     throw Error("Use a recipe name of 1–128 characters.");
   const s = structuredClone(e.transformationRecipes ?? []),
@@ -119,7 +145,7 @@ function Lce(e, r, t, n, o = {}) {
   const u = {
     version: (d?.versions.length ?? 0) + 1,
     definition: a,
-    definitionHash: hr(a),
+    definitionHash: fingerprintCanonicalValue(a),
     createdAt: new Date().toISOString(),
   };
   d
@@ -130,9 +156,9 @@ function Lce(e, r, t, n, o = {}) {
     sheets: e.sheets.map((c) => ({ ...c })),
     transformationRecipes: s,
   };
-  return (GF(l, l), l);
+  return (validateSavedRecipeMetadata(l, l), l);
 }
-function Pce(e, r, t = {}) {
+function deleteTransformationRecipe(e, r, t = {}) {
   var n;
   if (
     (kI(e, !!t.readOnly),
@@ -144,8 +170,8 @@ function Pce(e, r, t = {}) {
     transformationRecipes: e.transformationRecipes.filter((o) => o.id !== r),
   };
 }
-function yz(e, r, t = {}) {
-  const n = CN(r.definition);
+function normalizeRecipeRunRequest(e, r, t = {}) {
+  const n = parseTransformationRecipe(r.definition);
   if (
     Object.keys(r).some(
       (d) => !["definition", "recipeId", "version", "outputName"].includes(d),
@@ -158,7 +184,7 @@ function yz(e, r, t = {}) {
     const d = e.transformationRecipes
       ?.find((u) => u.id === r.recipeId)
       ?.versions.find((u) => u.version === r.version);
-    if (!d || d.definitionHash !== hr(n))
+    if (!d || d.definitionHash !== fingerprintCanonicalValue(n))
       throw Error(
         "The recipe differs from the saved version. Save a new version or reload the selected version.",
       );
@@ -182,16 +208,16 @@ function yz(e, r, t = {}) {
     snapshot: JSON.stringify(e),
     request: { ...r, definition: n },
     context: o,
-    run: ET(e, n, t),
+    run: runTransformationRecipe(e, n, t),
   };
 }
-function Uce(e, r, t = {}) {
+function publishRecipeOutput(e, r, t = {}) {
   if ((kI(e, !!t.readOnly), r.snapshot !== JSON.stringify(e)))
     throw Error("Workbook changed after preview. Preview the recipe again.");
   if (!r.request.recipeId || !r.request.version)
     throw Error("Save a recipe version before publishing its output.");
-  const n = yz(e, r.request, t);
-  if (mE(n) !== mE(r))
+  const n = normalizeRecipeRunRequest(e, r.request, t);
+  if (canonicalJsonStringify(n) !== canonicalJsonStringify(r))
     throw Error("Recipe preview or authorization changed. Preview again.");
   if (n.run.status !== "complete")
     throw Error(
@@ -202,19 +228,19 @@ function Uce(e, r, t = {}) {
     throw Error(
       "Output worksheet already exists. Choose a new name; previous successful output is preserved.",
     );
-  q1(e, o);
+  inspectOutputNameSafety(e, o);
   const a = n.run.output;
   if (
     e.sheets.reduce((c, h) => c + Object.keys(h.cells).length, 0) +
       (a.rows.length + 1) * a.fields.length >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
     throw Error("Recipe output exceeds workbook cell capacity.");
-  const d = Ku(o);
-  ((d.id = `recipe-${hr([e.id, e.revision, o, n.run.sourceHash, n.run.definitionHash]).slice(0, 24)}`),
+  const d = createWorksheetRecord(o);
+  ((d.id = `recipe-${fingerprintCanonicalValue([e.id, e.revision, o, n.run.sourceHash, n.run.definitionHash]).slice(0, 24)}`),
     a.fields.forEach(
       (c, h) =>
-        (d.cells[`${ut(h)}1`] = {
+        (d.cells[`${columnIndexToLetters(h)}1`] = {
           raw: c,
           ...(c.startsWith("=") ? { literal: true } : {}),
           style: { bold: true, fill: "#eee9fa" },
@@ -226,7 +252,7 @@ Original source rows: ${h.sources.join("; ")}`;
     if (f.length > 32767)
       throw Error("Recipe source notes exceed the cell note budget.");
     for (const [p, m] of h.values.entries())
-      d.cells[`${ut(p)}${c + 2}`] = {
+      d.cells[`${columnIndexToLetters(p)}${c + 2}`] = {
         raw: m,
         ...(typeof m == "string" && m.startsWith("=") ? { literal: true } : {}),
         note: f,
@@ -235,7 +261,7 @@ Original source rows: ${h.sources.join("; ")}`;
   }
   const u = e.transformationRecipes.find((c) => c.id === n.request.recipeId);
   d.transformationRun = {
-    engine: pg,
+    engine: recipeStoreFormatId,
     recipeId: u.id,
     recipeName: u.name,
     version: n.request.version,
@@ -246,16 +272,16 @@ Original source rows: ${h.sources.join("; ")}`;
     sourceHash: n.run.sourceHash,
     outputHash: n.run.outputHash,
     outputRows: a.rows.length,
-    outputRange: `A1:${ut(a.fields.length - 1)}${a.rows.length + 1}`,
+    outputRange: `A1:${columnIndexToLetters(a.fields.length - 1)}${a.rows.length + 1}`,
     at: new Date().toISOString(),
     steps: n.run.steps,
     controls: n.run.controls,
     lineage: Object.fromEntries(a.rows.map((c, h) => [h + 2, c.sources])),
   };
   const l = { ...e, sheets: [...e.sheets, d] };
-  return rn(l);
+  return normalizeWorkbookInput(l);
 }
-const Q4 = {
+const recipeStepKindLabels = {
   select: "Select columns",
   rename: "Rename columns",
   filter: "Filter rows",
@@ -269,7 +295,7 @@ const Q4 = {
   append: "Append rows",
   merge: "Merge populations",
 };
-function $ce({ label, fields, selected, onChange }) {
+function RecipeFieldChecklist({ label, fields, selected, onChange }) {
   return i.jsxs("fieldset", {
     className: "recipe-fields",
     children: [
@@ -298,14 +324,14 @@ function $ce({ label, fields, selected, onChange }) {
             ),
           )
         : i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children: "Preview or repair the source to obtain fields.",
             }),
           }),
     ],
   });
 }
-function CT({ label, source, sheets, onChange }) {
+function RecipeSourceSelector({ label, source, sheets, onChange }) {
   const o = sheets.find((s) => s.id === source.sheetId);
   return i.jsxs("fieldset", {
     className: "recipe-source",
@@ -313,7 +339,7 @@ function CT({ label, source, sheets, onChange }) {
       i.jsx("legend", { children: label }),
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: "Worksheet" }),
+          i.jsx(LocalizedText, { children: "Worksheet" }),
           i.jsxs("select", {
             "aria-label": `${label} worksheet`,
             value: source.sheetId,
@@ -321,7 +347,7 @@ function CT({ label, source, sheets, onChange }) {
               const d = sheets.find((u) => u.id === s.target.value);
               onChange({
                 sheetId: s.target.value,
-                range: d ? Ta(d) : "A1:B10",
+                range: d ? formatOccupiedRangeAddress(d) : "A1:B10",
               });
             },
             children: [
@@ -335,7 +361,7 @@ function CT({ label, source, sheets, onChange }) {
       }),
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: "Source type" }),
+          i.jsx(LocalizedText, { children: "Source type" }),
           i.jsxs("select", {
             "aria-label": `${label} table`,
             value: source.tableId ?? "",
@@ -359,7 +385,7 @@ function CT({ label, source, sheets, onChange }) {
       }),
       i.jsxs("label", {
         children: [
-          i.jsx(M, { children: "Headed range" }),
+          i.jsx(LocalizedText, { children: "Headed range" }),
           i.jsx("input", {
             "aria-label": `${label} range`,
             value: source.range,
@@ -371,7 +397,7 @@ function CT({ label, source, sheets, onChange }) {
     ],
   });
 }
-function Fk({ label, value, onChange }) {
+function RecipeValueInput({ label, value, onChange }) {
   const n =
     value === null
       ? "blank"
@@ -387,7 +413,7 @@ function Fk({ label, value, onChange }) {
         children: [
           label,
           " ",
-          i.jsx(M, { children: "type" }),
+          i.jsx(LocalizedText, { children: "type" }),
           i.jsxs("select", {
             "aria-label": `${label} type`,
             value: n,
@@ -450,9 +476,16 @@ function Fk({ label, value, onChange }) {
     ],
   });
 }
-const B7 = ["sum", "count", "average", "min", "max", "distinctCount"];
-function zce({ step, fields, rightFields, sheets, onChange }) {
-  const { text, language } = Dr(),
+const recipeAggregateOperations = [
+  "sum",
+  "count",
+  "average",
+  "min",
+  "max",
+  "distinctCount",
+];
+function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
+  const { text, language } = useWorkbookMessages(),
     d = (f) => onChange({ ...step, ...f }),
     u = (f, p, m, v) =>
       i.jsxs("label", {
@@ -480,7 +513,13 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           }),
         ],
       }),
-    c = (f, p, m) => i.jsx($ce, { label: f, fields, selected: p, onChange: m });
+    c = (f, p, m) =>
+      i.jsx(RecipeFieldChecklist, {
+        label: f,
+        fields,
+        selected: p,
+        onChange: m,
+      });
   switch (step.kind) {
     case "select":
       return c("Keep columns", step.fields, (f) => d({ fields: f }));
@@ -510,7 +549,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   i.jsxs("button", {
                     onClick: () =>
                       d({ mappings: step.mappings.filter((m, v) => p !== v) }),
-                    children: [i.jsx(M, { children: "Remove rename " }), p + 1],
+                    children: [
+                      i.jsx(LocalizedText, { children: "Remove rename " }),
+                      p + 1,
+                    ],
                   }),
                 ],
               },
@@ -525,7 +567,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   { from: fields[0] ?? "", to: "Renamed" },
                 ],
               }),
-            children: i.jsx(M, { children: "Add rename" }),
+            children: i.jsx(LocalizedText, { children: "Add rename" }),
           }),
         ],
       });
@@ -534,7 +576,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
         children: [
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Combine conditions" }),
+              i.jsx(LocalizedText, { children: "Combine conditions" }),
               i.jsxs("select", {
                 "aria-label": text("Filter condition logic"),
                 value: step.join,
@@ -560,7 +602,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               {
                 children: [
                   i.jsxs("legend", {
-                    children: [i.jsx(M, { children: "Condition " }), p + 1],
+                    children: [
+                      i.jsx(LocalizedText, { children: "Condition " }),
+                      p + 1,
+                    ],
                   }),
                   u(`Filter field ${p + 1}`, f.field, fields, (m) =>
                     d({
@@ -571,7 +616,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   ),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Comparison" }),
+                      i.jsx(LocalizedText, { children: "Comparison" }),
                       i.jsx("select", {
                         "aria-label": `Filter operator ${p + 1}`,
                         value: f.operator,
@@ -598,7 +643,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                     ],
                   }),
                   !["blank", "notBlank"].includes(f.operator) &&
-                    i.jsx(Fk, {
+                    i.jsx(RecipeValueInput, {
                       label: `Filter value ${p + 1}`,
                       value: f.value,
                       onChange: (m) =>
@@ -614,7 +659,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                         conditions: step.conditions.filter((m, v) => v !== p),
                       }),
                     children: [
-                      i.jsx(M, { children: "Remove condition " }),
+                      i.jsx(LocalizedText, { children: "Remove condition " }),
                       p + 1,
                     ],
                   }),
@@ -631,10 +676,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   { field: fields[0] ?? "", operator: "equals", value: "" },
                 ],
               }),
-            children: i.jsx(M, { children: "Add condition" }),
+            children: i.jsx(LocalizedText, { children: "Add condition" }),
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Comparisons preserve types. Text is case-sensitive; numeric comparisons require numbers.",
             }),
@@ -647,7 +692,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           c("Convert columns", step.fields, (f) => d({ fields: f })),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Output type" }),
+              i.jsx(LocalizedText, { children: "Output type" }),
               i.jsx("select", {
                 "aria-label": text("Conversion type"),
                 value: step.to,
@@ -665,7 +710,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
             children: [
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Decimal separator" }),
+                  i.jsx(LocalizedText, { children: "Decimal separator" }),
                   i.jsxs("select", {
                     "aria-label": text("Recipe decimal separator"),
                     value: step.decimal,
@@ -681,7 +726,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               }),
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Grouping separator" }),
+                  i.jsx(LocalizedText, { children: "Grouping separator" }),
                   i.jsxs("select", {
                     "aria-label": text("Recipe grouping separator"),
                     value: step.group,
@@ -703,7 +748,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               }),
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Date order" }),
+                  i.jsx(LocalizedText, { children: "Date order" }),
                   i.jsxs("select", {
                     "aria-label": text("Recipe date order"),
                     value: step.dateOrder,
@@ -720,7 +765,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
             ],
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Invalid values stop the recipe. Date conversion uses the workbook date system.",
             }),
@@ -733,7 +778,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           c("Replace in columns", step.fields, (f) => d({ fields: f })),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Replacement mode" }),
+              i.jsx(LocalizedText, { children: "Replacement mode" }),
               i.jsxs("select", {
                 "aria-label": text("Replacement mode"),
                 value: step.mode,
@@ -753,12 +798,12 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               }),
             ],
           }),
-          i.jsx(Fk, {
+          i.jsx(RecipeValueInput, {
             label: text("Find value"),
             value: step.find,
             onChange: (f) => d({ find: f }),
           }),
-          i.jsx(Fk, {
+          i.jsx(RecipeValueInput, {
             label: text("Replacement value"),
             value: step.replacement,
             onChange: (f) => d({ replacement: f }),
@@ -771,7 +816,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           l("Derived column name", step.name, (f) => d({ name: f })),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Row expression" }),
+              i.jsx(LocalizedText, { children: "Row expression" }),
               i.jsx("textarea", {
                 "aria-label": text("Row expression"),
                 rows: 4,
@@ -783,7 +828,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
             ],
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Use [Amount] * 2 or IF([Quantity] = 0, 0, [Amount] / [Quantity]). Functions: ABS, ROUND, UPPER, LOWER, TRIM, LEN, CONCAT, COALESCE, IF, AND, OR, NOT. Text literals use double quotes.",
             }),
@@ -808,7 +853,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   ),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Direction" }),
+                      i.jsx(LocalizedText, { children: "Direction" }),
                       i.jsxs("select", {
                         "aria-label": `Sort direction ${p + 1}`,
                         value: f.direction,
@@ -834,7 +879,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   i.jsxs("button", {
                     onClick: () =>
                       d({ fields: step.fields.filter((m, v) => v !== p) }),
-                    children: [i.jsx(M, { children: "Remove sort " }), p + 1],
+                    children: [
+                      i.jsx(LocalizedText, { children: "Remove sort " }),
+                      p + 1,
+                    ],
                   }),
                 ],
               },
@@ -849,7 +897,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   { field: fields[0] ?? "", direction: "ascending" },
                 ],
               }),
-            children: i.jsx(M, { children: "Add sort field" }),
+            children: i.jsx(LocalizedText, { children: "Add sort field" }),
           }),
         ],
       });
@@ -869,7 +917,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                 checked: step.keepNulls,
                 onChange: (f) => d({ keepNulls: f.target.checked }),
               }),
-              i.jsx(M, { children: "Retain blank values" }),
+              i.jsx(LocalizedText, { children: "Retain blank values" }),
             ],
           }),
         ],
@@ -884,7 +932,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               {
                 children: [
                   i.jsxs("legend", {
-                    children: [i.jsx(M, { children: "Aggregate " }), p + 1],
+                    children: [
+                      i.jsx(LocalizedText, { children: "Aggregate " }),
+                      p + 1,
+                    ],
                   }),
                   u(`Aggregate field ${p + 1}`, f.field, fields, (m) =>
                     d({
@@ -895,7 +946,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   ),
                   i.jsxs("label", {
                     children: [
-                      i.jsx(M, { children: "Operation" }),
+                      i.jsx(LocalizedText, { children: "Operation" }),
                       i.jsx("select", {
                         "aria-label": `Aggregate operation ${p + 1}`,
                         value: f.operation,
@@ -905,7 +956,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                               g === p ? { ...v, operation: m.target.value } : v,
                             ),
                           }),
-                        children: B7.map((m) =>
+                        children: recipeAggregateOperations.map((m) =>
                           i.jsx("option", { children: m }, m),
                         ),
                       }),
@@ -922,7 +973,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                     onClick: () =>
                       d({ values: step.values.filter((m, v) => v !== p) }),
                     children: [
-                      i.jsx(M, { children: "Remove aggregate " }),
+                      i.jsx(LocalizedText, { children: "Remove aggregate " }),
                       p + 1,
                     ],
                   }),
@@ -943,10 +994,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   },
                 ],
               }),
-            children: i.jsx(M, { children: "Add aggregate" }),
+            children: i.jsx(LocalizedText, { children: "Add aggregate" }),
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Count counts nonblank values; numeric aggregates require numeric fields. No keys groups all records.",
             }),
@@ -963,19 +1014,21 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           u("Pivot value field", step.value, fields, (f) => d({ value: f })),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Aggregation" }),
+              i.jsx(LocalizedText, { children: "Aggregation" }),
               i.jsx("select", {
                 "aria-label": text("Pivot aggregation"),
                 value: step.operation,
                 onChange: (f) => d({ operation: f.target.value }),
                 lang: language("Pivot aggregation"),
                 "data-ui-label": "Pivot aggregation",
-                children: B7.map((f) => i.jsx("option", { children: f }, f)),
+                children: recipeAggregateOperations.map((f) =>
+                  i.jsx("option", { children: f }, f),
+                ),
               }),
             ],
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "New headers include each attribute's type and value, in first-appearance order.",
             }),
@@ -985,14 +1038,14 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
     case "append":
       return i.jsxs(i.Fragment, {
         children: [
-          i.jsx(CT, {
+          i.jsx(RecipeSourceSelector, {
             label: text("Append source"),
             source: step.source,
             sheets,
             onChange: (f) => d({ source: f }),
           }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Headers must match exactly. Column order is aligned; no duplicate rows are removed.",
             }),
@@ -1002,7 +1055,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
     case "merge":
       return i.jsxs(i.Fragment, {
         children: [
-          i.jsx(CT, {
+          i.jsx(RecipeSourceSelector, {
             label: text("Merge source"),
             source: step.source,
             sheets,
@@ -1010,7 +1063,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           }),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Join mode" }),
+              i.jsx(LocalizedText, { children: "Join mode" }),
               i.jsx("select", {
                 "aria-label": text("Recipe join mode"),
                 value: step.mode,
@@ -1052,7 +1105,10 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   i.jsxs("button", {
                     onClick: () =>
                       d({ keys: step.keys.filter((m, v) => v !== p) }),
-                    children: [i.jsx(M, { children: "Remove key " }), p + 1],
+                    children: [
+                      i.jsx(LocalizedText, { children: "Remove key " }),
+                      p + 1,
+                    ],
                   }),
                 ],
               },
@@ -1067,7 +1123,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                   { left: fields[0] ?? "", right: rightFields[0] ?? "" },
                 ],
               }),
-            children: i.jsx(M, { children: "Add merge key" }),
+            children: i.jsx(LocalizedText, { children: "Add merge key" }),
           }),
           [
             ["trim", "Trim keys"],
@@ -1099,7 +1155,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
           }),
           i.jsxs("label", {
             children: [
-              i.jsx(M, { children: "Unicode normalization" }),
+              i.jsx(LocalizedText, { children: "Unicode normalization" }),
               i.jsxs("select", {
                 "aria-label": text("Recipe Unicode normalization"),
                 value: step.normalization?.unicode ?? "",
@@ -1133,7 +1189,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                       : undefined,
                   }),
               }),
-              i.jsx(M, { children: "Fuzzy text key" }),
+              i.jsx(LocalizedText, { children: "Fuzzy text key" }),
             ],
           }),
           step.fuzzy &&
@@ -1142,7 +1198,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               children: [
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Key pair" }),
+                    i.jsx(LocalizedText, { children: "Key pair" }),
                     i.jsx("select", {
                       "aria-label": text("Recipe fuzzy key"),
                       value: step.fuzzy.key,
@@ -1160,8 +1216,8 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
                 }),
                 i.jsxs("label", {
                   children: [
-                    i.jsx(M, { children: "Minimum similarity" }),
-                    i.jsx(ci, {
+                    i.jsx(LocalizedText, { children: "Minimum similarity" }),
+                    i.jsx(LocalizedNumberField, {
                       "aria-label": text("Recipe fuzzy threshold"),
                       min: "0",
                       max: "1",
@@ -1182,7 +1238,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
               ],
             }),
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Every qualifying match is retained. Review unmatched records and many-to-many expansion in the step report.",
             }),
@@ -1191,7 +1247,7 @@ function zce({ step, fields, rightFields, sheets, onChange }) {
       });
   }
 }
-function Vce(e, r, t) {
+function createRecipeStep(e, r, t) {
   const n = crypto.randomUUID(),
     o = r[0] ?? "",
     a = r.at(-1) ?? "";
@@ -1273,11 +1329,22 @@ function Vce(e, r, t) {
       };
   }
 }
-const Wce = (e) =>
+const formatRecipeCellValue = (e) =>
   e === null
     ? "(blank)"
     : typeof e == "boolean"
       ? String(e).toUpperCase()
       : String(e);
 
-export { CT, ET, Lce, Pce, Q4, Uce, Vce, Wce, yz, zce };
+export {
+  RecipeSourceSelector,
+  runTransformationRecipe,
+  saveTransformationRecipe,
+  deleteTransformationRecipe,
+  recipeStepKindLabels,
+  publishRecipeOutput,
+  createRecipeStep,
+  formatRecipeCellValue,
+  normalizeRecipeRunRequest,
+  RecipeStepEditor,
+};

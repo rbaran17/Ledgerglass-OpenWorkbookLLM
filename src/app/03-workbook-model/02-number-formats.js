@@ -1,19 +1,19 @@
 import qre from "fast-formula-parser";
-import { ax } from "../01-core-schemas-and-hashing.js";
+import { unwrapDefaultExport } from "../01-core-schemas-and-hashing.js";
 import {
-  Ay,
-  Bw,
-  GQ,
-  PB,
-  Si,
-  UB,
+  builtInDateTimeFormats,
+  validateNumberFormatCode,
+  dateTimeFormatKinds,
+  supportedNumberLocales,
+  throwFormatError,
+  supportedCurrencyCodes,
   Uv,
-  XQ,
+  numericFormatKinds,
   ZQ,
-  zB,
+  numberFormatToIntlOptions,
 } from "./01-cell-styles-and-themes.js";
 
-function l0(e) {
+function validateNumberFormatSettings(e) {
   (!ZQ(e) ||
     Object.keys(e).some(
       (a) =>
@@ -28,88 +28,104 @@ function l0(e) {
           "pattern",
         ].includes(a),
     )) &&
-    Si("Number format must be a supported plain settings object.");
+    throwFormatError(
+      "Number format must be a supported plain settings object.",
+    );
   const r = e;
-  Uv.includes(r.category) || Si("Choose a supported number format category.");
+  Uv.includes(r.category) ||
+    throwFormatError("Choose a supported number format category.");
   const t = r.category,
     n = r.locale ?? "en-US";
-  PB.includes(n) || Si("Choose one of the supported display locales.");
+  supportedNumberLocales.includes(n) ||
+    throwFormatError("Choose one of the supported display locales.");
   const o = { category: t, locale: n };
-  if (XQ.has(t)) {
+  if (numericFormatKinds.has(t)) {
     if (t === "currency" || t === "accounting") {
       const u = r.currency ?? "USD";
-      (UB.includes(u) || Si("Choose a supported currency."), (o.currency = u));
+      (supportedCurrencyCodes.includes(u) ||
+        throwFormatError("Choose a supported currency."),
+        (o.currency = u));
     } else
       r.currency !== undefined &&
-        Si("Currency applies only to Currency or Accounting formats.");
+        throwFormatError(
+          "Currency applies only to Currency or Accounting formats.",
+        );
     const s = r.decimals ?? (o.currency === "JPY" ? 0 : 2);
     ((typeof s != "number" || !Number.isInteger(s) || s < 0 || s > 12) &&
-      Si("Choose 0–12 decimal places."),
+      throwFormatError("Choose 0–12 decimal places."),
       (o.decimals = s),
       r.useGrouping !== undefined &&
         typeof r.useGrouping != "boolean" &&
-        Si("The grouping option must be true or false."),
+        throwFormatError("The grouping option must be true or false."),
       (o.useGrouping = r.useGrouping ?? t !== "percent"));
     const d = r.scale ?? 1;
     ((![1, 1e3, 1e6].includes(d) || (t === "percent" && d !== 1)) &&
-      Si("Choose units, thousands or millions; percentages use units."),
+      throwFormatError(
+        "Choose units, thousands or millions; percentages use units.",
+      ),
       (o.scale = d),
       r.negative !== undefined &&
         (typeof r.negative != "string" ||
           !["minus", "parentheses"].includes(r.negative)) &&
-        Si("Choose minus signs or parentheses for negatives."),
+        throwFormatError("Choose minus signs or parentheses for negatives."),
       t === "accounting" &&
         r.negative !== undefined &&
         r.negative !== "parentheses" &&
-        Si("Accounting negatives use parentheses."),
+        throwFormatError("Accounting negatives use parentheses."),
       (o.negative =
         t === "accounting" ? "parentheses" : (r.negative ?? "minus")),
       r.pattern !== undefined &&
-        Si("Use the Custom category to enter a format pattern."));
+        throwFormatError("Use the Custom category to enter a format pattern."));
   } else if (
     ([r.currency, r.decimals, r.useGrouping, r.scale, r.negative].some(
       (a) => a !== undefined,
-    ) && Si("These numeric settings do not apply to the chosen category."),
-    GQ.has(t) || t === "custom")
+    ) &&
+      throwFormatError(
+        "These numeric settings do not apply to the chosen category.",
+      ),
+    dateTimeFormatKinds.has(t) || t === "custom")
   ) {
-    const a = t === "custom" ? "0.00" : Ay[t][0],
+    const a = t === "custom" ? "0.00" : builtInDateTimeFormats[t][0],
       s = r.pattern ?? a;
     ((typeof s != "string" ||
       !s ||
       s.length > 200 ||
       /[\u0000-\u001f\u007f]/.test(s)) &&
-      Si(
+      throwFormatError(
         "Enter a format pattern of 1–200 characters without control characters.",
       ),
       (o.pattern = s));
-    const d = Bw(o.pattern);
+    const d = validateNumberFormatCode(o.pattern);
     if (t !== "custom") {
       d.kind !== "temporal" &&
-        Si("Choose a date, time or elapsed-time pattern for this category.");
+        throwFormatError(
+          "Choose a date, time or elapsed-time pattern for this category.",
+        );
       const u = d.category;
       u !== t &&
-        Si(
+        throwFormatError(
           `This pattern is a ${u} format. Choose the matching category or Custom.`,
         );
     }
   } else
-    r.pattern !== undefined && Si("General does not accept a custom pattern.");
+    r.pattern !== undefined &&
+      throwFormatError("General does not accept a custom pattern.");
   return o;
 }
-function QQ(e, r) {
+function renderTextSectionPattern(e, r) {
   return e.replace(
     /"([^"]*)"|\\(.)|@/g,
     (t, n, o) => n ?? o ?? (t === "@" ? r : t),
   );
 }
-const VB = (e) => {
+const getLocaleDecimalSeparator = (e) => {
   return (
     new Intl.NumberFormat(e)
       .formatToParts(1.1)
       .find((t) => t.type === "decimal")?.value ?? "."
   );
 };
-function eee(e, r, t) {
+function formatNumericSection(e, r, t) {
   const n = e < 0 && r.sections.length > 1,
     { parsed, divisor } =
       r.sections[e === 0 && r.sections.length > 2 ? 2 : n ? 1 : 0];
@@ -126,11 +142,11 @@ function eee(e, r, t) {
     parsed.minIntegerDigits ||
       (d === "0" && !parsed.minDecimals
         ? (d = "")
-        : d.startsWith(`0${VB(t)}`) && (d = d.slice(1))),
+        : d.startsWith(`0${getLocaleDecimalSeparator(t)}`) && (d = d.slice(1))),
     (e < 0 && !n ? "-" : "") + parsed.prefix + d + parsed.suffix
   );
 }
-function tee(e, r, t, n) {
+function formatTemporalSerialValue(e, r, t, n) {
   const o = r.category === "duration",
     a = 2958465 - (n === "1904" && !o ? 1462 : 0);
   if (Math.abs(e) >= a + 1 || (!o && e < 0)) return "#NUM!";
@@ -187,7 +203,7 @@ function tee(e, r, t, n) {
           case "second":
             return I(v, j.text.length);
           case "fraction":
-            return VB(t) + I(g, r.fraction);
+            return getLocaleDecimalSeparator(t) + I(g, r.fraction);
           case "ampm": {
             const z = p < 12 ? "AM" : "PM",
               V = j.text.length === 3 ? z[0] : z;
@@ -205,15 +221,15 @@ function tee(e, r, t, n) {
       .join("");
   return (o && e < 0 ? "-" : "") + O;
 }
-function vg(e, r, t = "1900") {
-  const n = l0(r);
+function formatCellValueWithNumberFormat(e, r, t = "1900") {
+  const n = validateNumberFormatSettings(r);
   if (e === null) return { text: "" };
   if (typeof e == "boolean") return { text: e ? "TRUE" : "FALSE" };
   if (typeof e == "string") {
     if (n.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(e)) {
-      const c = Bw(n.pattern);
+      const c = validateNumberFormatCode(n.pattern);
       if (c.kind === "numeric" && c.textSection !== undefined)
-        return { text: QQ(c.textSection, e) };
+        return { text: renderTextSectionPattern(c.textSection, e) };
     }
     return { text: e };
   }
@@ -226,10 +242,12 @@ function vg(e, r, t = "1900") {
       }).format(e === 0 ? 0 : e),
     };
   if (n.pattern) {
-    const c = Bw(n.pattern);
+    const c = validateNumberFormatCode(n.pattern);
     return {
       text:
-        c.kind === "temporal" ? tee(e, c, n.locale, t) : eee(e, c, n.locale),
+        c.kind === "temporal"
+          ? formatTemporalSerialValue(e, c, n.locale, t)
+          : formatNumericSection(e, c, n.locale),
     };
   }
   const o = e / (n.scale ?? 1),
@@ -271,11 +289,11 @@ function vg(e, r, t = "1900") {
     }).format(d ? Math.abs(o) : o);
   return { text: (d ? `(${u})` : u) + a };
 }
-function SE(e) {
+function getImportedNumberFormatWarning(e) {
   if (e) {
     if (e.numberFormat)
       try {
-        l0(e.numberFormat);
+        validateNumberFormatSettings(e.numberFormat);
         return;
       } catch (t) {
         return t instanceof Error
@@ -296,13 +314,13 @@ function SE(e) {
       if (
         e.numFmt &&
         e.numFmt.toLowerCase() !== "general" &&
-        zB(1.25, e.numFmt) === undefined
+        numberFormatToIntlOptions(1.25, e.numFmt) === undefined
       )
         return `The imported pattern “${e.numFmt}” is outside the legacy display subset. The basic ${e.format ?? "general"} display is used; the original pattern and raw values are retained. Choose a supported format to change its display explicitly.`;
     }
   }
 }
-const ree = {
+const lcidByLocale = {
   "en-US": "409",
   "en-GB": "809",
   "de-DE": "407",
@@ -310,9 +328,9 @@ const ree = {
   "ja-JP": "411",
   "en-IN": "4009",
 };
-function Q3(e) {
-  const r = l0(e),
-    t = r.locale === "en-US" ? "" : `[$-${ree[r.locale]}]`;
+function buildNumberFormatCode(e) {
+  const r = validateNumberFormatSettings(e),
+    t = r.locale === "en-US" ? "" : `[$-${lcidByLocale[r.locale]}]`;
   if (r.category === "general") return "General";
   if (r.pattern) return t + r.pattern;
   const n = r.decimals ? "." + "0".repeat(r.decimals) : "",
@@ -321,7 +339,7 @@ function Q3(e) {
     s = (r.useGrouping ? "#,##0" : "0") + n + o;
   if (r.category === "percent") return t + s + "%";
   if (r.category === "currency" || r.category === "accounting") {
-    const d = vg(1, {
+    const d = formatCellValueWithNumberFormat(1, {
         ...r,
         category: "accounting",
         negative: "parentheses",
@@ -338,8 +356,8 @@ function Q3(e) {
   }
   return t + s + a + (r.negative === "parentheses" ? `;(${s}${a})` : "");
 }
-const JN = ax(qre);
-function zL(e) {
+const FormulaParser = unwrapDefaultExport(qre);
+function toSignedDecimalParts(e) {
   const [r, t = "0"] = Math.abs(e).toString().split("e"),
     [n, o = ""] = r.split(".");
   return {
@@ -347,11 +365,11 @@ function zL(e) {
     exponent: Number(t) - o.length,
   };
 }
-function VL(e) {
+function sumDecimalParts(e) {
   const r = new Map();
   for (const a of e) {
     if (!Number.isFinite(a)) return;
-    const { coefficient, exponent } = zL(a);
+    const { coefficient, exponent } = toSignedDecimalParts(a);
     r.set(exponent, (r.get(exponent) ?? 0n) + coefficient);
   }
   const t = [...r].filter(([, a]) => a !== 0n);
@@ -362,13 +380,13 @@ function VL(e) {
     exponent: n,
   };
 }
-function Rc(e) {
-  const r = VL(e);
+function sumDecimalPartsToNumber(e) {
+  const r = sumDecimalParts(e);
   return r ? +`${r.coefficient}e${r.exponent}` : NaN;
 }
-function Us(e) {
+function exactAverageOfNumbers(e) {
   if (!e.length) return NaN;
-  const r = VL(e);
+  const r = sumDecimalParts(e);
   if (!r) return NaN;
   const t = r.coefficient < 0n ? "-" : "",
     n = r.coefficient < 0n ? -r.coefficient : r.coefficient,
@@ -377,13 +395,13 @@ function Us(e) {
     s = (((n % o) * 10n ** 40n) / o).toString().padStart(40, "0");
   return +`${t}${a}.${s}e${r.exponent}`;
 }
-function WL(e) {
+function exactProductOfNumbers(e) {
   if (e.some((n) => !Number.isFinite(n))) return NaN;
   if (e.some((n) => n === 0)) return 0;
   let r = 1n,
     t = 0;
   for (const n of e) {
-    const o = zL(n);
+    const o = toSignedDecimalParts(n);
     if (((r *= o.coefficient), (t += o.exponent), e.length > 255)) {
       const a = r < 0n,
         s = (a ? -r : r).toString();
@@ -393,8 +411,8 @@ function WL(e) {
   }
   return +`${r}e${t}`;
 }
-const HL = Symbol("not-arithmetic"),
-  Xre = new Set([
+const notArithmeticSentinel = Symbol("not-arithmetic"),
+  arithmeticFunctionNames = new Set([
     "ROUND",
     "ROUNDUP",
     "ROUNDDOWN",
@@ -404,12 +422,12 @@ const HL = Symbol("not-arithmetic"),
     "FLOOR",
     "SUMPRODUCT",
   ]);
-function h5(e) {
+function toUnsignedDecimalParts(e) {
   const [r, t = "0"] = Math.abs(e).toString().split("e"),
     [n, o = ""] = r.split(".");
   return { coefficient: BigInt(n + o), exponent: Number(t) - o.length };
 }
-function qL(e, r, t) {
+function roundQuotientWithMode(e, r, t) {
   const n = e / r,
     o = e % r;
   return (
@@ -417,26 +435,26 @@ function qL(e, r, t) {
     (o !== 0n && (t === "away" || (t === "nearest" && o * 2n >= r)) ? 1n : 0n)
   );
 }
-function Gre(e, r, t) {
+function roundDecimalToDigits(e, r, t) {
   if (((r = Math.trunc(r)), e === 0 || r >= 324)) return e;
   if (r <= -309) return t === "away" ? 1 / 0 : 0;
-  const n = h5(e),
+  const n = toUnsignedDecimalParts(e),
     o = n.exponent + r;
   if (o >= 0) return e;
-  const a = qL(n.coefficient, 10n ** BigInt(-o), t);
+  const a = roundQuotientWithMode(n.coefficient, 10n ** BigInt(-o), t);
   return Math.sign(e) * +`${a}e${-r}`;
 }
-function Zre(e, r, t) {
-  const n = h5(e),
-    o = h5(r),
+function roundToNearestMultiple(e, r, t) {
+  const n = toUnsignedDecimalParts(e),
+    o = toUnsignedDecimalParts(r),
     a = Math.min(n.exponent, o.exponent),
     s = n.coefficient * 10n ** BigInt(n.exponent - a),
     d = o.coefficient * 10n ** BigInt(o.exponent - a),
-    u = qL(s, d, t);
+    u = roundQuotientWithMode(s, d, t);
   return Math.sign(e) * +`${u * o.coefficient}e${o.exponent}`;
 }
-function Kre(e, r, t) {
-  if (!Xre.has(e)) return HL;
+function evaluateArithmeticFunction(e, r, t) {
+  if (!arithmeticFunctionNames.has(e)) return notArithmeticSentinel;
   const { retrieve, issue, isIssue } = t,
     s = r.map(retrieve),
     d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : issue("#NUM!"));
@@ -463,11 +481,11 @@ function Kre(e, r, t) {
           if (isIssue(k)) return k;
           w.push(typeof k == "number" ? k : 0);
         }
-        const E = WL(w);
+        const E = exactProductOfNumbers(w);
         if (!Number.isFinite(E)) return issue("#NUM!");
         g.push(E);
       }
-    return d(Rc(g));
+    return d(sumDecimalPartsToNumber(g));
   }
   if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2)
     return issue("#VALUE!");
@@ -487,7 +505,7 @@ function Kre(e, r, t) {
   const [l, c = 0] = u;
   if (["ROUND", "ROUNDUP", "ROUNDDOWN", "TRUNC"].includes(e))
     return d(
-      Gre(
+      roundDecimalToDigits(
         l,
         c,
         e === "ROUND" ? "nearest" : e === "ROUNDUP" ? "away" : "toward",
@@ -509,18 +527,18 @@ function Kre(e, r, t) {
         : l < 0 && c > 0
           ? "away"
           : "toward";
-  return d(Zre(l, c, h));
+  return d(roundToNearestMultiple(l, c, h));
 }
 const XL = ["LINEST", "LOGEST", "TREND", "GROWTH"],
-  GL = Symbol("not-regression"),
-  Wb = {
+  notRegressionSentinel = Symbol("not-regression"),
+  regressionSizeLimits = {
     values: 4e4,
     observations: 1e4,
     predictors: 32,
     work: 4e6,
     output: 1e4,
   },
-  ad = (e, r) => {
+  dotProductWithCompensation = (e, r) => {
     let t = 0,
       n = 0;
     for (let o = 0; o < e.length; o++) {
@@ -530,8 +548,8 @@ const XL = ["LINEST", "LOGEST", "TREND", "GROWTH"],
     }
     return t + n;
   };
-function jE(e, r, t) {
-  if (!XL.includes(e)) return GL;
+function evaluateRegressionFunction(e, r, t) {
+  if (!XL.includes(e)) return notRegressionSentinel;
   const n = (se = "#VALUE!") => {
       throw t.issue(se);
     },
@@ -549,7 +567,7 @@ function jE(e, r, t) {
       return (
         (!we.length || !Ee || we.some((ye) => ye.length !== Ee)) && n(),
         (a += we.length * Ee),
-        a > Wb.values && n("#LIMIT!"),
+        a > regressionSizeLimits.values && n("#LIMIT!"),
         we.map((ye) =>
           ye.map((Te) => {
             if (t.isIssue(Te)) throw Te;
@@ -578,7 +596,7 @@ function jE(e, r, t) {
     h = !u && d(r[3], false),
     f = s(t.retrieve(r[0])),
     p = f.length * f[0].length;
-  p > Wb.observations && n("#LIMIT!");
+  p > regressionSizeLimits.observations && n("#LIMIT!");
   const m = f.flat();
   l && m.some((se) => se <= 0) && n("#NUM!");
   const v = l ? m.map(Math.log) : m,
@@ -595,11 +613,13 @@ function jE(e, r, t) {
     w = Array.from({ length: p }, (se, we) => g.map((Ee) => Ee[we]));
   else return n("#REF!");
   const E = w[0].length;
-  (E > Wb.predictors || p * E * E > Wb.work) && n("#LIMIT!");
+  (E > regressionSizeLimits.predictors ||
+    p * E * E > regressionSizeLimits.work) &&
+    n("#LIMIT!");
   const A = Array.from({ length: E }, (se, we) =>
-      c ? Us(w.map((Ee) => Ee[we])) : 0,
+      c ? exactAverageOfNumbers(w.map((Ee) => Ee[we])) : 0,
     ),
-    k = c ? Us(v) : 0,
+    k = c ? exactAverageOfNumbers(v) : 0,
     F = v.map((se) => o(se - k)),
     I = Math.max(...F.map(Math.abs)) || 1,
     O = F.map((se) => se / I),
@@ -614,24 +634,30 @@ function jE(e, r, t) {
     B = Array.from({ length: E }, () => Array(E).fill(0)),
     _ = [],
     C = [],
-    T = 1e-12 * Math.max(1, ...z.map((se) => Math.sqrt(ad(se, se))));
+    T =
+      1e-12 *
+      Math.max(
+        1,
+        ...z.map((se) => Math.sqrt(dotProductWithCompensation(se, se))),
+      );
   let N = 0;
   for (let se = 0; se < E; se++) {
     let we = se;
     for (let Ae = se + 1; Ae < E; Ae++)
-      ad(z[Ae], z[Ae]) > ad(z[we], z[we]) && (we = Ae);
+      dotProductWithCompensation(z[Ae], z[Ae]) >
+        dotProductWithCompensation(z[we], z[we]) && (we = Ae);
     (([z[se], z[we]] = [z[we], z[se]]), ([D[se], D[we]] = [D[we], D[se]]));
     for (let Ae = 0; Ae < se; Ae++)
       [B[Ae][se], B[Ae][we]] = [B[Ae][we], B[Ae][se]];
-    const Ee = Math.sqrt(ad(z[se], z[se]));
+    const Ee = Math.sqrt(dotProductWithCompensation(z[se], z[se]));
     if (Ee <= T) break;
     ((B[se][se] = Ee),
       _.push(z[se].map((Ae) => Ae / Ee)),
-      C.push(ad(_[se], O)),
+      C.push(dotProductWithCompensation(_[se], O)),
       N++);
     for (let Ae = se + 1; Ae < E; Ae++)
       for (let ye = 0; ye < 2; ye++) {
-        const Te = ad(_[se], z[Ae]);
+        const Te = dotProductWithCompensation(_[se], z[Ae]);
         ((B[se][Ae] += Te),
           (z[Ae] = z[Ae].map((Pe, qe) => Pe - Te * _[se][qe])));
       }
@@ -648,7 +674,7 @@ function jE(e, r, t) {
     L = Array(E).fill(0);
   R(C).forEach((se, we) => (L[D[we]] = se));
   const $ = L.map((se, we) => o(se * (I / j[we]))),
-    U = c ? o(k - ad($, A)) : 0,
+    U = c ? o(k - dotProductWithCompensation($, A)) : 0,
     G = (se) => {
       const we = o(Math.exp(se));
       return we > 0 ? we : n("#NUM!");
@@ -668,11 +694,11 @@ function jE(e, r, t) {
         (Ee = 1),
         (Ae = we.length));
     else return n("#REF!");
-    Ee * Ae > Wb.output && n("#LIMIT!");
+    Ee * Ae > regressionSizeLimits.output && n("#LIMIT!");
     const ye = we.map((Te) => {
       const Pe = o(
         k +
-          ad(
+          dotProductWithCompensation(
             L,
             Te.map((qe, ht) => o(qe - A[ht]) / j[ht]),
           ) *
@@ -692,13 +718,13 @@ function jE(e, r, t) {
   const Q = O.map(
     (se, we) =>
       se -
-      ad(
+      dotProductWithCompensation(
         L,
         V.map((Ee) => Ee[we]),
       ),
   );
-  let X = ad(Q, Q);
-  const J = ad(O, O);
+  let X = dotProductWithCompensation(Q, Q);
+  const J = dotProductWithCompensation(O, O);
   X <= 1e-26 * Math.max(J, Number.MIN_VALUE) && (X = 0);
   const q = p - N - Number(c),
     W = q > 0 ? Math.sqrt(X / q) : null,
@@ -714,7 +740,9 @@ function jE(e, r, t) {
         ? te()
         : o(Math.hypot(...ae.map((we) => we[se])) * W * (I / j[D[se]]));
   const de = D.slice(0, N).map((se) => A[se] / j[se]),
-    he = 1 / p + ae.reduce((se, we) => se + ad(de, we) ** 2, 0),
+    he =
+      1 / p +
+      ae.reduce((se, we) => se + dotProductWithCompensation(de, we) ** 2, 0),
     Se = [...oe]
       .reverse()
       .concat(c ? (W === null ? te() : o(Math.sqrt(he) * W * I)) : K()),
@@ -732,10 +760,10 @@ function jE(e, r, t) {
     ge(ce(le), ce(X)),
   ];
 }
-const ZL = ["T.TEST", "Z.TEST"],
-  KL = Symbol("not-inference");
-function Yre(e, r, t) {
-  if (!ZL.includes(e)) return KL;
+const significanceTestFunctionNames = ["T.TEST", "Z.TEST"],
+  notInferenceSentinel = Symbol("not-inference");
+function evaluateSignificanceTestFunction(e, r, t) {
+  if (!significanceTestFunctionNames.includes(e)) return notInferenceSentinel;
   const n = (I = "#VALUE!") => {
       throw t.issue(I);
     },
@@ -760,10 +788,12 @@ function Yre(e, r, t) {
     l = (I) => I.filter((O) => typeof O == "number"),
     c = (I) => {
       if (I.length < 2) return n("#DIV/0!");
-      const O = Us(I);
+      const O = exactAverageOfNumbers(I);
       return {
         mean: O,
-        variance: o(Rc(I.map((j) => (j - O) ** 2)) / (I.length - 1)),
+        variance: o(
+          sumDecimalPartsToNumber(I.map((j) => (j - O) ** 2)) / (I.length - 1),
+        ),
       };
     },
     h = (I) => {
@@ -786,7 +816,7 @@ function Yre(e, r, t) {
       D = r[2] == null ? Math.sqrt(c(V).variance) : u(a[2]) / z;
     if (D < 0) return n("#NUM!");
     if (!D) return n("#DIV/0!");
-    const B = o(((Us(V) - j / z) / D) * Math.sqrt(O)),
+    const B = o(((exactAverageOfNumbers(V) - j / z) / D) * Math.sqrt(O)),
       _ = t.distribution("ERFC", [B / Math.SQRT2]);
     if (t.isIssue(_)) throw _;
     return typeof _ == "number" ? h(_ / 2) : n("#NUM!");
@@ -831,12 +861,12 @@ function Yre(e, r, t) {
   const F = t.distribution("BETA.DIST", [A / (A + k * k), A / 2, 0.5, true]);
   return (h(F) * m) / 2;
 }
-const YL = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
-  JL = Symbol("not-specialist"),
-  Ky = [],
-  Fr = (e, r, t, n = false, o = 0, a = 1) => {
+const specialistFunctionNames = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
+  notSpecialistSentinel = Symbol("not-specialist"),
+  conversionUnits = [],
+  addConversionUnitSymbols = (e, r, t, n = false, o = 0, a = 1) => {
     for (const s of e.split("|"))
-      Ky.push({
+      conversionUnits.push({
         symbol: s,
         dimension: r,
         factor: t,
@@ -845,64 +875,70 @@ const YL = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
         power: a,
       });
   };
-Fr("g", "mass", 0.001, true);
-Fr("lbm", "mass", 0.45359237);
-Fr("ozm", "mass", 0.45359237 / 16);
-Fr("grain", "mass", 0.45359237 / 7e3);
-Fr("stone", "mass", 0.45359237 * 14);
-Fr("ton", "mass", 0.45359237 * 2e3);
-Fr("uk_ton|LTON|brton", "mass", 0.45359237 * 2240);
-Fr("cwt|shweight", "mass", 0.45359237 * 100);
-Fr("uk_cwt|lcwt|hweight", "mass", 0.45359237 * 112);
-Fr("m", "length", 1, true);
-Fr("in", "length", 0.0254);
-Fr("ft", "length", 0.3048);
-Fr("yd", "length", 0.9144);
-Fr("mi", "length", 1609.344);
-Fr("Nmi", "length", 1852);
-Fr("ang", "length", 1e-10, true);
-Fr("Picapt|Pica", "length", 0.0254 / 72);
-Fr("pica", "length", 0.0254 / 6);
-Fr("sec|s", "time", 1, true);
-Fr("mn|min", "time", 60);
-Fr("hr", "time", 3600);
-Fr("day|d", "time", 86400);
-Fr("yr", "time", 365.25 * 86400);
-Fr("Pa|p", "pressure", 1, true);
-Fr("atm|at", "pressure", 101325);
-Fr("psi", "pressure", 6894.757293168361);
-Fr("N", "force", 1, true);
-Fr("dyn|dy", "force", 1e-5, true);
-Fr("lbf", "force", 4.4482216152605);
-Fr("J", "energy", 1, true);
-Fr("e", "energy", 1e-7, true);
-Fr("c", "energy", 4.184, true);
-Fr("cal", "energy", 4.1868, true);
-Fr("Wh|wh", "energy", 3600, true);
-Fr("BTU|btu", "energy", 1055.05585262);
-Fr("W|w", "power", 1, true);
-Fr("HP|h", "power", 745.6998715822702);
-Fr("PS", "power", 735.49875);
-Fr("T", "magnetism", 1, true);
-Fr("ga", "magnetism", 1e-4, true);
-Fr("K|kel", "temperature", 1, true);
-Fr("C|cel", "temperature", 1, false, 273.15);
-Fr("F|fah", "temperature", 5 / 9, false, 273.15 - 160 / 9);
-Fr("Rank", "temperature", 5 / 9);
-Fr("Reau", "temperature", 1.25, false, 273.15);
-Fr("l|L|lt", "volume", 0.001, true);
-Fr("gal", "volume", 0.003785411784);
-Fr("qt", "volume", 0.003785411784 / 4);
-Fr("pt|us_pt", "volume", 0.003785411784 / 8);
-Fr("cup", "volume", 0.003785411784 / 16);
-Fr("oz", "volume", 0.003785411784 / 128);
-Fr("tbs", "volume", 0.003785411784 / 256);
-Fr("tsp", "volume", 0.003785411784 / 768);
-Fr("tspm", "volume", 5e-6);
-Fr("uk_gal", "volume", 0.00454609);
-Fr("uk_qt", "volume", 0.00454609 / 4);
-Fr("uk_pt", "volume", 0.00454609 / 8);
-Fr("barrel", "volume", 0.003785411784 * 42);
+addConversionUnitSymbols("g", "mass", 0.001, true);
+addConversionUnitSymbols("lbm", "mass", 0.45359237);
+addConversionUnitSymbols("ozm", "mass", 0.45359237 / 16);
+addConversionUnitSymbols("grain", "mass", 0.45359237 / 7e3);
+addConversionUnitSymbols("stone", "mass", 0.45359237 * 14);
+addConversionUnitSymbols("ton", "mass", 0.45359237 * 2e3);
+addConversionUnitSymbols("uk_ton|LTON|brton", "mass", 0.45359237 * 2240);
+addConversionUnitSymbols("cwt|shweight", "mass", 0.45359237 * 100);
+addConversionUnitSymbols("uk_cwt|lcwt|hweight", "mass", 0.45359237 * 112);
+addConversionUnitSymbols("m", "length", 1, true);
+addConversionUnitSymbols("in", "length", 0.0254);
+addConversionUnitSymbols("ft", "length", 0.3048);
+addConversionUnitSymbols("yd", "length", 0.9144);
+addConversionUnitSymbols("mi", "length", 1609.344);
+addConversionUnitSymbols("Nmi", "length", 1852);
+addConversionUnitSymbols("ang", "length", 1e-10, true);
+addConversionUnitSymbols("Picapt|Pica", "length", 0.0254 / 72);
+addConversionUnitSymbols("pica", "length", 0.0254 / 6);
+addConversionUnitSymbols("sec|s", "time", 1, true);
+addConversionUnitSymbols("mn|min", "time", 60);
+addConversionUnitSymbols("hr", "time", 3600);
+addConversionUnitSymbols("day|d", "time", 86400);
+addConversionUnitSymbols("yr", "time", 365.25 * 86400);
+addConversionUnitSymbols("Pa|p", "pressure", 1, true);
+addConversionUnitSymbols("atm|at", "pressure", 101325);
+addConversionUnitSymbols("psi", "pressure", 6894.757293168361);
+addConversionUnitSymbols("N", "force", 1, true);
+addConversionUnitSymbols("dyn|dy", "force", 1e-5, true);
+addConversionUnitSymbols("lbf", "force", 4.4482216152605);
+addConversionUnitSymbols("J", "energy", 1, true);
+addConversionUnitSymbols("e", "energy", 1e-7, true);
+addConversionUnitSymbols("c", "energy", 4.184, true);
+addConversionUnitSymbols("cal", "energy", 4.1868, true);
+addConversionUnitSymbols("Wh|wh", "energy", 3600, true);
+addConversionUnitSymbols("BTU|btu", "energy", 1055.05585262);
+addConversionUnitSymbols("W|w", "power", 1, true);
+addConversionUnitSymbols("HP|h", "power", 745.6998715822702);
+addConversionUnitSymbols("PS", "power", 735.49875);
+addConversionUnitSymbols("T", "magnetism", 1, true);
+addConversionUnitSymbols("ga", "magnetism", 1e-4, true);
+addConversionUnitSymbols("K|kel", "temperature", 1, true);
+addConversionUnitSymbols("C|cel", "temperature", 1, false, 273.15);
+addConversionUnitSymbols(
+  "F|fah",
+  "temperature",
+  5 / 9,
+  false,
+  273.15 - 160 / 9,
+);
+addConversionUnitSymbols("Rank", "temperature", 5 / 9);
+addConversionUnitSymbols("Reau", "temperature", 1.25, false, 273.15);
+addConversionUnitSymbols("l|L|lt", "volume", 0.001, true);
+addConversionUnitSymbols("gal", "volume", 0.003785411784);
+addConversionUnitSymbols("qt", "volume", 0.003785411784 / 4);
+addConversionUnitSymbols("pt|us_pt", "volume", 0.003785411784 / 8);
+addConversionUnitSymbols("cup", "volume", 0.003785411784 / 16);
+addConversionUnitSymbols("oz", "volume", 0.003785411784 / 128);
+addConversionUnitSymbols("tbs", "volume", 0.003785411784 / 256);
+addConversionUnitSymbols("tsp", "volume", 0.003785411784 / 768);
+addConversionUnitSymbols("tspm", "volume", 5e-6);
+addConversionUnitSymbols("uk_gal", "volume", 0.00454609);
+addConversionUnitSymbols("uk_qt", "volume", 0.00454609 / 4);
+addConversionUnitSymbols("uk_pt", "volume", 0.00454609 / 8);
+addConversionUnitSymbols("barrel", "volume", 0.003785411784 * 42);
 for (const [e, r] of [
   ["m", 1],
   ["in", 0.0254],
@@ -912,20 +948,36 @@ for (const [e, r] of [
   ["Nmi", 1852],
   ["ang", 1e-10],
 ])
-  (Fr(`${e}2|${e}^2`, "area", r ** 2, e === "m" || e === "ang", 0, 2),
-    Fr(`${e}3|${e}^3`, "volume", r ** 3, e === "m" || e === "ang", 0, 3));
-Fr("ar", "area", 100, true);
-Fr("ha", "area", 1e4);
-Fr("uk_acre", "area", 4046.8564224);
-Fr("us_acre", "area", (1200 / 3937) ** 2 * 43560);
-Fr("bit", "information", 1, true);
-Fr("byte", "information", 8, true);
-Fr("m/s|m/sec", "speed", 1, true);
-Fr("m/h|m/hr", "speed", 1 / 3600, true);
-Fr("mph", "speed", 1609.344 / 3600);
-Fr("kn", "speed", 1852 / 3600);
-const Jre = Object.freeze(Ky.map((e) => Object.freeze(e))),
-  cO = {
+  (addConversionUnitSymbols(
+    `${e}2|${e}^2`,
+    "area",
+    r ** 2,
+    e === "m" || e === "ang",
+    0,
+    2,
+  ),
+    addConversionUnitSymbols(
+      `${e}3|${e}^3`,
+      "volume",
+      r ** 3,
+      e === "m" || e === "ang",
+      0,
+      3,
+    ));
+addConversionUnitSymbols("ar", "area", 100, true);
+addConversionUnitSymbols("ha", "area", 1e4);
+addConversionUnitSymbols("uk_acre", "area", 4046.8564224);
+addConversionUnitSymbols("us_acre", "area", (1200 / 3937) ** 2 * 43560);
+addConversionUnitSymbols("bit", "information", 1, true);
+addConversionUnitSymbols("byte", "information", 8, true);
+addConversionUnitSymbols("m/s|m/sec", "speed", 1, true);
+addConversionUnitSymbols("m/h|m/hr", "speed", 1 / 3600, true);
+addConversionUnitSymbols("mph", "speed", 1609.344 / 3600);
+addConversionUnitSymbols("kn", "speed", 1852 / 3600);
+const frozenConversionUnits = Object.freeze(
+    conversionUnits.map((e) => Object.freeze(e)),
+  ),
+  siPrefixPowersOfTen = {
     Y: 24,
     Z: 21,
     E: 18,
@@ -948,26 +1000,43 @@ const Jre = Object.freeze(Ky.map((e) => Object.freeze(e))),
     z: -21,
     y: -24,
   },
-  Qre = { ki: 10, Mi: 20, Gi: 30, Ti: 40, Pi: 50, Ei: 60, Zi: 70, Yi: 80 };
-function dO(e) {
-  const r = Ky.find((t) => t.symbol === e);
+  binaryPrefixExponents = {
+    ki: 10,
+    Mi: 20,
+    Gi: 30,
+    Ti: 40,
+    Pi: 50,
+    Ei: 60,
+    Zi: 70,
+    Yi: 80,
+  };
+function findConversionUnit(e) {
+  const r = conversionUnits.find((t) => t.symbol === e);
   if (r) return { ...r };
-  for (const [t, n] of Object.entries(Qre)) {
+  for (const [t, n] of Object.entries(binaryPrefixExponents)) {
     if (!e.startsWith(t)) continue;
-    const o = Ky.find(
+    const o = conversionUnits.find(
       (a) => a.symbol === e.slice(t.length) && a.dimension === "information",
     );
     if (o) return { ...o, symbol: e, factor: o.factor * 2 ** n };
   }
-  for (const t of Object.keys(cO).sort((n, o) => o.length - n.length)) {
+  for (const t of Object.keys(siPrefixPowersOfTen).sort(
+    (n, o) => o.length - n.length,
+  )) {
     if (!e.startsWith(t)) continue;
-    const n = Ky.find((o) => o.symbol === e.slice(t.length) && o.metric);
+    const n = conversionUnits.find(
+      (o) => o.symbol === e.slice(t.length) && o.metric,
+    );
     if (n)
-      return { ...n, symbol: e, factor: n.factor * 10 ** (cO[t] * n.power) };
+      return {
+        ...n,
+        symbol: e,
+        factor: n.factor * 10 ** (siPrefixPowersOfTen[t] * n.power),
+      };
   }
 }
-function ene(e, r, t) {
-  if (!YL.includes(e)) return JL;
+function evaluateSpecialistFunction(e, r, t) {
+  if (!specialistFunctionNames.includes(e)) return notSpecialistSentinel;
   const n = (j = "#VALUE!") => {
     throw t.issue(j);
   };
@@ -994,8 +1063,8 @@ function ene(e, r, t) {
       n();
     const D = Number(j);
     Number.isFinite(D) || n();
-    const B = dO(z),
-      _ = dO(V);
+    const B = findConversionUnit(z),
+      _ = findConversionUnit(V);
     return (
       (!B || !_ || B.dimension !== _.dimension) && n("#N/A"),
       B.offset === _.offset
@@ -1015,8 +1084,8 @@ function ene(e, r, t) {
     f < (e === "STEYX" ? 3 : 2) && n("#DIV/0!"));
   const p = h.map((j) => j[0]),
     m = h.map((j) => j[1]),
-    v = Us(p),
-    g = Us(m),
+    v = exactAverageOfNumbers(p),
+    g = exactAverageOfNumbers(m),
     b = m.map((j) => d(j - g)),
     y = p.map((j) => d(j - v)),
     w = Math.max(...b.map(Math.abs)),
@@ -1025,9 +1094,9 @@ function ene(e, r, t) {
     return 0;
   const A = b.map((j) => j / w),
     k = y.map((j) => j / E),
-    F = Rc(A.map((j) => j * j)),
-    I = Rc(k.map((j) => j * j)),
-    O = Rc(A.map((j, z) => j * k[z]));
+    F = sumDecimalPartsToNumber(A.map((j) => j * j)),
+    I = sumDecimalPartsToNumber(k.map((j) => j * j)),
+    O = sumDecimalPartsToNumber(A.map((j, z) => j * k[z]));
   return e === "SLOPE"
     ? d((O / F) * (E / w))
     : e === "PEARSON"
@@ -1036,11 +1105,14 @@ function ene(e, r, t) {
         ? Math.min(1, Math.max(0, (O / F) * (O / I)))
         : d(
             Math.sqrt(
-              Rc(k.map((j, z) => (j - (O / F) * A[z]) ** 2)) / (f - 2),
+              sumDecimalPartsToNumber(
+                k.map((j, z) => (j - (O / F) * A[z]) ** 2),
+              ) /
+                (f - 2),
             ) * E,
           );
 }
-const QN = [
+const statisticalFunctionNames = [
     "COUNT",
     "COUNTA",
     "COUNTBLANK",
@@ -1077,10 +1149,11 @@ const QN = [
     "PERMUT",
     "PERMUTATIONA",
   ],
-  QL = Symbol("not-statistical-function"),
-  M2 = (e) => (Array.isArray(e) ? e.flatMap(M2) : [e]),
-  tne = (e) => !!e && typeof e == "object" && "ref" in e;
-function H6(e) {
+  notStatisticalSentinel = Symbol("not-statistical-function"),
+  flattenArgumentValues = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenArgumentValues) : [e],
+  isReferenceArgument = (e) => !!e && typeof e == "object" && "ref" in e;
+function sumWithKahanCompensation(e) {
   let r = 0,
     t = 0;
   for (const n of e) {
@@ -1089,8 +1162,8 @@ function H6(e) {
   }
   return r + t;
 }
-function rne(e, r, t) {
-  if (!QN.includes(e)) return QL;
+function evaluateStatisticalFunction(e, r, t) {
+  if (!statisticalFunctionNames.includes(e)) return notStatisticalSentinel;
   const n = (O = "#VALUE!") => {
       throw t.issue(O);
     },
@@ -1142,9 +1215,11 @@ function rne(e, r, t) {
       const z = Number(O);
       return Number.isFinite(z) ? z : n();
     };
-  if (e === "COUNTA") return c.flatMap(M2).filter((O) => O != null).length;
+  if (e === "COUNTA")
+    return c.flatMap(flattenArgumentValues).filter((O) => O != null).length;
   if (e === "COUNTBLANK")
-    return c.flatMap(M2).filter((O) => O == null || O === "").length;
+    return c.flatMap(flattenArgumentValues).filter((O) => O == null || O === "")
+      .length;
   const v = o ? 1 : 0;
   if (u) {
     const O = Math.trunc(m(c[0])),
@@ -1161,8 +1236,9 @@ function rne(e, r, t) {
   const g = o || a || s || d ? [c[v]] : c,
     b = [];
   for (const [O, j] of g.entries()) {
-    const z = Array.isArray(j) || tne(r[o || a || s || d ? v : O]);
-    for (const V of M2(j)) {
+    const z =
+      Array.isArray(j) || isReferenceArgument(r[o || a || s || d ? v : O]);
+    for (const V of flattenArgumentValues(j)) {
       if (t.isIssue(V)) {
         if (e === "COUNT") continue;
         throw V;
@@ -1182,7 +1258,7 @@ function rne(e, r, t) {
   }
   if (e === "COUNT") return b.length;
   if (e === "AVERAGE" || e === "AVERAGEA")
-    return b.length ? p(Us(b)) : n("#DIV/0!");
+    return b.length ? p(exactAverageOfNumbers(b)) : n("#DIV/0!");
   if (e === "MIN" || e === "MINA")
     return b.length ? b.reduce((O, j) => Math.min(O, j)) : 0;
   if (e === "MAX" || e === "MAXA")
@@ -1190,7 +1266,7 @@ function rne(e, r, t) {
   if (e.startsWith("STDEV") || e.startsWith("VAR")) {
     const O = e.endsWith(".S") || e === "STDEVA" || e === "VARA";
     if (b.length < (O ? 2 : 1)) return n("#DIV/0!");
-    const j = Us(b);
+    const j = exactAverageOfNumbers(b);
     let z = b.map((_) => _ - j),
       V = z.reduce((_, C) => Math.max(_, Math.abs(C)), 0);
     if (
@@ -1201,20 +1277,22 @@ function rne(e, r, t) {
       !V)
     )
       return 0;
-    const D = H6(z.map((_) => _ * _)) / (b.length - (O ? 1 : 0)),
+    const D =
+        sumWithKahanCompensation(z.map((_) => _ * _)) /
+        (b.length - (O ? 1 : 0)),
       B = Math.sqrt(D) * V;
     return p(e.startsWith("STDEV") ? B : B * B);
   }
   if (e === "SKEW" || e === "SKEW.P") {
     const O = b.length;
     if (O < 3) return n("#DIV/0!");
-    const j = Us(b),
+    const j = exactAverageOfNumbers(b),
       z = b.reduce((C, T) => Math.max(C, Math.abs(T)), 0);
     if (!z) return n("#DIV/0!");
     const V = b.map((C) => C / z - j / z),
-      D = H6(V.map((C) => C * C));
+      D = sumWithKahanCompensation(V.map((C) => C * C));
     if (!D) return n("#DIV/0!");
-    const _ = H6(V.map((C) => C ** 3)) / D ** 1.5;
+    const _ = sumWithKahanCompensation(V.map((C) => C ** 3)) / D ** 1.5;
     return p(
       e === "SKEW.P" ? _ * Math.sqrt(O) : (_ * O * Math.sqrt(O - 1)) / (O - 2),
     );
@@ -1223,7 +1301,7 @@ function rne(e, r, t) {
     const O = m(c[1]);
     if (O < 0 || O >= 1 || !b.length) return n("#NUM!");
     const j = Math.floor((b.length * O) / 2);
-    return p(Us(b.slice(j, b.length - j)));
+    return p(exactAverageOfNumbers(b.slice(j, b.length - j)));
   }
   if (o) {
     const O = m(c[0]),
@@ -1272,10 +1350,11 @@ function rne(e, r, t) {
     I = A - k;
   return b[k] === b[F] ? b[k] : p(b[k] * (1 - I) + b[F] * I);
 }
-const nne = ["LOOKUP", "CHOOSE"],
-  eP = Symbol("not an owned lookup function");
-function ine(e, r, t) {
-  if (!["VLOOKUP", "HLOOKUP", "LOOKUP", "CHOOSE"].includes(e)) return eP;
+const ownedLookupFunctionNames = ["LOOKUP", "CHOOSE"],
+  notOwnedLookupSentinel = Symbol("not an owned lookup function");
+function evaluateLookupFunction(e, r, t) {
+  if (!["VLOOKUP", "HLOOKUP", "LOOKUP", "CHOOSE"].includes(e))
+    return notOwnedLookupSentinel;
   const n = (v = "#VALUE!") => {
       throw t.issue(v);
     },
@@ -1360,9 +1439,9 @@ function ine(e, r, t) {
   }
   return m < 0 ? n("#N/A") : (c[m] ?? 0);
 }
-const tP = Symbol("not an owned logical function");
-function one(e, r, t) {
-  if (!["AND", "OR", "XOR", "NOT"].includes(e)) return tP;
+const notOwnedLogicalSentinel = Symbol("not an owned logical function");
+function evaluateLogicalFunction(e, r, t) {
+  if (!["AND", "OR", "XOR", "NOT"].includes(e)) return notOwnedLogicalSentinel;
   const n = () => {
     throw t.issue("#VALUE!");
   };
@@ -1397,7 +1476,7 @@ function one(e, r, t) {
           : o.filter(Boolean).length % 2 === 1
   );
 }
-const rP = [
+const modernFunctionNames = [
     "XLOOKUP",
     "XMATCH",
     "IFS",
@@ -1436,7 +1515,7 @@ const rP = [
     "MDETERM",
     "MINVERSE",
   ],
-  y0 = [
+  matrixResultFunctionNames = [
     "CHOOSE",
     "FILTER",
     "SORT",
@@ -1465,61 +1544,63 @@ const rP = [
     "MODE.MULT",
     "XLOOKUP",
   ],
-  p5 = Symbol("not a modern function"),
-  Ec = (e) => (Array.isArray(e) ? e.flatMap(Ec) : [e]),
-  Ya = (e) => (Array.isArray(e) ? (e.every(Array.isArray) ? e : [e]) : [[e]]),
+  notModernFunctionSentinel = Symbol("not a modern function"),
+  flattenNestedArguments = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenNestedArguments) : [e],
+  toMatrixArgument = (e) =>
+    Array.isArray(e) ? (e.every(Array.isArray) ? e : [e]) : [[e]],
   zh = (e) =>
     e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e),
-  j2 = (e, r) =>
+  compareSortValues = (e, r) =>
     typeof e == "number" && typeof r == "number"
       ? e - r
       : zh(e).toLowerCase().localeCompare(zh(r).toLowerCase()),
-  fO = (e, r) =>
+  valuesEqualIgnoringCase = (e, r) =>
     typeof e == "string" && typeof r == "string"
       ? e.toLowerCase() === r.toLowerCase()
       : e === r,
-  hO = (e, r, t) => {
+  compareSortKeyWithDirection = (e, r, t) => {
     if (e == null || r == null) return e == null ? (r == null ? 0 : 1) : -1;
     const n = (o) => (typeof o == "number" ? 0 : typeof o == "string" ? 1 : 2);
-    return (n(e) - n(r) || j2(e, r)) * t;
+    return (n(e) - n(r) || compareSortValues(e, r)) * t;
   };
 
 export {
-  Ec,
-  GL,
-  HL,
-  JL,
-  JN,
-  Jre,
-  KL,
-  Kre,
-  Q3,
-  QL,
-  QN,
-  Rc,
-  SE,
-  Us,
-  WL,
+  flattenNestedArguments,
+  notRegressionSentinel,
+  notArithmeticSentinel,
+  notSpecialistSentinel,
+  FormulaParser,
+  frozenConversionUnits,
+  notInferenceSentinel,
+  evaluateArithmeticFunction,
+  buildNumberFormatCode,
+  notStatisticalSentinel,
+  statisticalFunctionNames,
+  sumDecimalPartsToNumber,
+  getImportedNumberFormatWarning,
+  exactAverageOfNumbers,
+  exactProductOfNumbers,
   XL,
-  YL,
-  Ya,
-  Yre,
-  ZL,
-  eP,
-  ene,
-  fO,
-  hO,
-  ine,
-  j2,
-  jE,
-  l0,
-  nne,
-  one,
-  p5,
-  rP,
-  rne,
-  tP,
-  vg,
-  y0,
+  specialistFunctionNames,
+  toMatrixArgument,
+  evaluateSignificanceTestFunction,
+  significanceTestFunctionNames,
+  notOwnedLookupSentinel,
+  evaluateSpecialistFunction,
+  valuesEqualIgnoringCase,
+  compareSortKeyWithDirection,
+  evaluateLookupFunction,
+  compareSortValues,
+  evaluateRegressionFunction,
+  validateNumberFormatSettings,
+  ownedLookupFunctionNames,
+  evaluateLogicalFunction,
+  notModernFunctionSentinel,
+  modernFunctionNames,
+  evaluateStatisticalFunction,
+  notOwnedLogicalSentinel,
+  formatCellValueWithNumberFormat,
+  matrixResultFunctionNames,
   zh,
 };

@@ -15,18 +15,19 @@ import {
   unknown,
 } from "zod";
 
-var Oq = Object.defineProperty;
-var Mq = (e, r, t) =>
+var objectDefineProperty = Object.defineProperty;
+var defineDataProperty = (e, r, t) =>
   r in e
-    ? Oq(e, r, {
+    ? objectDefineProperty(e, r, {
         enumerable: true,
         configurable: true,
         writable: true,
         value: t,
       })
     : (e[r] = t);
-var yc = (e, r, t) => Mq(e, typeof r != "symbol" ? r + "" : r, t);
-function jq(e, r) {
+var defineDataPropertyByKey = (e, r, t) =>
+  defineDataProperty(e, typeof r != "symbol" ? r + "" : r, t);
+function copyModuleProperties(e, r) {
   for (var t = 0; t < r.length; t++) {
     const n = r[t];
     if (typeof n != "string" && !Array.isArray(n)) {
@@ -46,28 +47,28 @@ function jq(e, r) {
     Object.defineProperty(e, Symbol.toStringTag, { value: "Module" }),
   );
 }
-function ax(e) {
+function unwrapDefaultExport(e) {
   return e && e.__esModule && Object.prototype.hasOwnProperty.call(e, "default")
     ? e.default
     : e;
 }
 
-const Gq = ax(ne),
-  uEe = jq({ __proto__: null, default: Gq }, [ne]),
-  IS = new WeakSet();
-function es(e) {
-  return !!e && typeof e == "object" && IS.has(e);
+const Gq = unwrapDefaultExport(ne),
+  uEe = copyModuleProperties({ __proto__: null, default: Gq }, [ne]),
+  deepFrozenValueSet = new WeakSet();
+function isDeepFrozenValue(e) {
+  return !!e && typeof e == "object" && deepFrozenValueSet.has(e);
 }
-function Lg(e) {
-  if (!e || typeof e != "object" || IS.has(e)) return e;
-  for (const r of Object.values(e)) Lg(r);
-  return (Object.freeze(e), IS.add(e), e);
+function deepFreezeValue(e) {
+  if (!e || typeof e != "object" || deepFrozenValueSet.has(e)) return e;
+  for (const r of Object.values(e)) deepFreezeValue(r);
+  return (Object.freeze(e), deepFrozenValueSet.add(e), e);
 }
-const m8 = new WeakMap();
-function qj(e) {
+const linkedOrBoundCellCache = new WeakMap();
+function hasLinkedOrBoundCells(e) {
   var t;
-  if (!es(e)) return true;
-  let r = m8.get(e);
+  if (!isDeepFrozenValue(e)) return true;
+  let r = linkedOrBoundCellCache.get(e);
   if (r === undefined) {
     r = false;
     for (const n in e)
@@ -75,36 +76,42 @@ function qj(e) {
         r = true;
         break;
       }
-    m8.set(e, r);
+    linkedOrBoundCellCache.set(e, r);
   }
   return r;
 }
-const g8 = new WeakMap(),
-  Zq = new TextEncoder();
-function v8(e) {
+const serializedByteCache = new WeakMap(),
+  utf8Encoder = new TextEncoder();
+function measureJsonStringBytes(e) {
   return /^[\x20-\x21\x23-\x5b\x5d-\x7e]*$/.test(e)
     ? e.length + 2
-    : Zq.encode(JSON.stringify(e)).byteLength;
+    : utf8Encoder.encode(JSON.stringify(e)).byteLength;
 }
-function lE(e) {
-  if (typeof e == "string") return v8(e);
+function measureSerializedBytes(e) {
+  if (typeof e == "string") return measureJsonStringBytes(e);
   if (!e || typeof e != "object") return JSON.stringify(e)?.length ?? 0;
-  const r = es(e) ? g8.get(e) : undefined;
+  const r = isDeepFrozenValue(e) ? serializedByteCache.get(e) : undefined;
   if (r !== undefined) return r;
   let t = 2,
     n = 0;
   if (Array.isArray(e))
-    for (const a of e) t += (n++ ? 1 : 0) + lE(a === undefined ? null : a);
+    for (const a of e)
+      t += (n++ ? 1 : 0) + measureSerializedBytes(a === undefined ? null : a);
   else
     for (const a in e) {
       if (!Object.prototype.hasOwnProperty.call(e, a)) continue;
       const s = e[a];
-      s !== undefined && (t += (n++ ? 1 : 0) + v8(a) + 1 + lE(s));
+      s !== undefined &&
+        (t +=
+          (n++ ? 1 : 0) +
+          measureJsonStringBytes(a) +
+          1 +
+          measureSerializedBytes(s));
     }
-  return (es(e) && g8.set(e, t), t);
+  return (isDeepFrozenValue(e) && serializedByteCache.set(e, t), t);
 }
-const L3 = iso.datetime;
-function iu(e) {
+const isoDateTimeSchemaFactory = iso.datetime;
+function sha256HexDigest(e) {
   if (
     !ArrayBuffer.isView(e) ||
     Object.prototype.toString.call(e) !== "[object Uint8Array]" ||
@@ -171,7 +178,7 @@ function iu(e) {
   }
   return t.map((d) => d.toString(16).padStart(8, "0")).join("");
 }
-const Yl = Object.freeze({
+const transformationRecipeLimits = Object.freeze({
     sources: 8,
     steps: 20,
     rows: 1e3,
@@ -184,24 +191,29 @@ const Yl = Object.freeze({
     metadataCharacters: 2e6,
     runMetadataCharacters: 8e6,
   }),
-  pg = "ledgerglass-recipes-v1",
-  Bs = string()
+  recipeStoreFormatId = "ledgerglass-recipes-v1",
+  singleLineTextSchema = string()
     .trim()
     .min(1)
     .max(128)
     .refine((e) => !/[\u0000-\u001f\u007f]/.test(e)),
-  Ng = string().min(1).max(100),
-  US = union([string().max(32767), number().finite(), boolean(), _null()]),
-  bv = array(Bs)
+  opaqueIdSchema = string().min(1).max(100),
+  cellScalarSchema = union([
+    string().max(32767),
+    number().finite(),
+    boolean(),
+    _null(),
+  ]),
+  distinctFieldListSchema = array(singleLineTextSchema)
     .max(50)
     .refine((e) => new Set(e).size === e.length, "Fields must be distinct."),
-  $S = strictObject({
-    sheetId: Ng,
+  sheetRangeSourceSchema = strictObject({
+    sheetId: opaqueIdSchema,
     range: string().min(1).max(50),
-    tableId: Ng.optional(),
+    tableId: opaqueIdSchema.optional(),
   }),
-  Q8 = strictObject({
-    field: Bs,
+  aggregateMeasureSchema = strictObject({
+    field: singleLineTextSchema,
     operation: _enum([
       "sum",
       "count",
@@ -210,10 +222,10 @@ const Yl = Object.freeze({
       "max",
       "distinctCount",
     ]),
-    name: Bs,
+    name: singleLineTextSchema,
   }),
-  CJ = strictObject({
-    field: Bs,
+  filterConditionSchema = strictObject({
+    field: singleLineTextSchema,
     operator: _enum([
       "equals",
       "notEquals",
@@ -227,28 +239,34 @@ const Yl = Object.freeze({
       "blank",
       "notBlank",
     ]),
-    value: US.optional(),
+    value: cellScalarSchema.optional(),
   }),
-  od = { id: Ng },
-  AJ = discriminatedUnion("kind", [
-    strictObject({ ...od, kind: literal("select"), fields: bv.min(1) }),
+  od = { id: opaqueIdSchema },
+  transformationStepSchema = discriminatedUnion("kind", [
+    strictObject({
+      ...od,
+      kind: literal("select"),
+      fields: distinctFieldListSchema.min(1),
+    }),
     strictObject({
       ...od,
       kind: literal("rename"),
-      mappings: array(strictObject({ from: Bs, to: Bs }))
+      mappings: array(
+        strictObject({ from: singleLineTextSchema, to: singleLineTextSchema }),
+      )
         .min(1)
         .max(50),
     }),
     strictObject({
       ...od,
       kind: literal("filter"),
-      conditions: array(CJ).min(1).max(20),
+      conditions: array(filterConditionSchema).min(1).max(20),
       join: _enum(["and", "or"]),
     }),
     strictObject({
       ...od,
       kind: literal("types"),
-      fields: bv.min(1),
+      fields: distinctFieldListSchema.min(1),
       to: _enum(["text", "number", "integer", "boolean", "date"]),
       decimal: _enum([".", ","]),
       group: _enum(["", ".", ",", " ", "'"]),
@@ -257,15 +275,15 @@ const Yl = Object.freeze({
     strictObject({
       ...od,
       kind: literal("replace"),
-      fields: bv.min(1),
+      fields: distinctFieldListSchema.min(1),
       mode: _enum(["value", "text"]),
-      find: US,
-      replacement: US,
+      find: cellScalarSchema,
+      replacement: cellScalarSchema,
     }),
     strictObject({
       ...od,
       kind: literal("derive"),
-      name: Bs,
+      name: singleLineTextSchema,
       expression: string().min(1).max(1e3),
     }),
     strictObject({
@@ -273,7 +291,7 @@ const Yl = Object.freeze({
       kind: literal("sort"),
       fields: array(
         strictObject({
-          field: Bs,
+          field: singleLineTextSchema,
           direction: _enum(["ascending", "descending"]),
         }),
       )
@@ -283,35 +301,44 @@ const Yl = Object.freeze({
     strictObject({
       ...od,
       kind: literal("unpivot"),
-      fields: bv.min(1),
-      attribute: Bs,
-      value: Bs,
+      fields: distinctFieldListSchema.min(1),
+      attribute: singleLineTextSchema,
+      value: singleLineTextSchema,
       keepNulls: boolean(),
     }),
     strictObject({
       ...od,
       kind: literal("group"),
-      keys: bv,
-      values: array(Q8).min(1).max(20),
+      keys: distinctFieldListSchema,
+      values: array(aggregateMeasureSchema).min(1).max(20),
     }),
     strictObject({
       ...od,
       kind: literal("pivot"),
-      keys: bv,
-      column: Bs,
-      value: Bs,
-      operation: Q8.shape.operation,
+      keys: distinctFieldListSchema,
+      column: singleLineTextSchema,
+      value: singleLineTextSchema,
+      operation: aggregateMeasureSchema.shape.operation,
     }),
-    strictObject({ ...od, kind: literal("append"), source: $S }),
+    strictObject({
+      ...od,
+      kind: literal("append"),
+      source: sheetRangeSourceSchema,
+    }),
     strictObject({
       ...od,
       kind: literal("merge"),
-      source: $S,
+      source: sheetRangeSourceSchema,
       mode: _enum(["inner", "left", "right", "full", "leftAnti", "rightAnti"]),
-      keys: array(strictObject({ left: Bs, right: Bs }))
+      keys: array(
+        strictObject({
+          left: singleLineTextSchema,
+          right: singleLineTextSchema,
+        }),
+      )
         .min(1)
         .max(8),
-      prefix: Bs,
+      prefix: singleLineTextSchema,
       normalization: strictObject({
         trim: boolean().optional(),
         collapseWhitespace: boolean().optional(),
@@ -324,10 +351,12 @@ const Yl = Object.freeze({
       }).optional(),
     }),
   ]),
-  EN = strictObject({
-    engine: literal(pg),
-    source: $S,
-    steps: array(AJ).max(Yl.steps),
+  transformationRecipeSchema = strictObject({
+    engine: literal(recipeStoreFormatId),
+    source: sheetRangeSourceSchema,
+    steps: array(transformationStepSchema).max(
+      transformationRecipeLimits.steps,
+    ),
   }).superRefine((e, r) => {
     (new Set(e.steps.map((t) => t.id)).size !== e.steps.length &&
       r.addIssue({ code: "custom", message: "Step IDs must be unique." }),
@@ -338,13 +367,13 @@ const Yl = Object.freeze({
             t.kind === "append" || t.kind === "merge" ? [t.source] : [],
           ),
         ].map((t) => JSON.stringify(t)),
-      ).size > Yl.sources &&
+      ).size > transformationRecipeLimits.sources &&
         r.addIssue({
           code: "custom",
           message: "Use no more than eight recipe sources.",
         }));
   });
-function mE(e) {
+function canonicalJsonStringify(e) {
   return JSON.stringify(e, (r, t) =>
     t && typeof t == "object" && !Array.isArray(t)
       ? Object.fromEntries(
@@ -355,91 +384,96 @@ function mE(e) {
       : t,
   );
 }
-function hr(e) {
-  const r = mE(e);
+function fingerprintCanonicalValue(e) {
+  const r = canonicalJsonStringify(e);
   if (r.length > 16e6)
     throw Error(
       "Recipe fingerprint exceeds the 16-million-character evidence budget.",
     );
-  return iu(new Uint8Array(new TextEncoder().encode(r)));
+  return sha256HexDigest(new Uint8Array(new TextEncoder().encode(r)));
 }
-function CN(e) {
-  const r = EN.safeParse(e);
+function parseTransformationRecipe(e) {
+  const r = transformationRecipeSchema.safeParse(e);
   if (!r.success) throw Error(`Invalid recipe: ${r.error.issues[0]?.message}`);
   return r.data;
 }
-const o1 = string().regex(/^[0-9a-f]{64}$/),
-  Sw = number()
+const sha256HexSchema = string().regex(/^[0-9a-f]{64}$/),
+  nonnegativeSafeIntegerSchema = number()
     .int()
     .nonnegative()
     .max(Number.MAX_SAFE_INTEGER - 1),
-  qF = string().refine(
+  isoTimestampSchema = string().refine(
     (e) => Number.isFinite(Date.parse(e)) && new Date(e).toISOString() === e,
   ),
-  kJ = strictObject({
-    version: number().int().min(1).max(Yl.versions),
-    definition: EN,
-    definitionHash: o1,
-    createdAt: qF,
+  transformationRecipeVersionSchema = strictObject({
+    version: number().int().min(1).max(transformationRecipeLimits.versions),
+    definition: transformationRecipeSchema,
+    definitionHash: sha256HexSchema,
+    createdAt: isoTimestampSchema,
   }),
   SJ = array(
     strictObject({
-      id: Ng,
-      name: Bs,
-      versions: array(kJ).min(1).max(Yl.versions),
+      id: opaqueIdSchema,
+      name: singleLineTextSchema,
+      versions: array(transformationRecipeVersionSchema)
+        .min(1)
+        .max(transformationRecipeLimits.versions),
     }),
-  ).max(Yl.recipes),
-  eD = strictObject({
-    name: Bs,
+  ).max(transformationRecipeLimits.recipes),
+  columnTypeProfileSchema = strictObject({
+    name: singleLineTextSchema,
     types: array(_enum(["blank", "number", "string", "boolean"])).max(4),
     declaredType: string().max(32).optional(),
   }),
-  XF = strictObject({
-    field: Bs,
-    numericCount: Sw,
-    blankCount: Sw,
+  numericColumnSummarySchema = strictObject({
+    field: singleLineTextSchema,
+    numericCount: nonnegativeSafeIntegerSchema,
+    blankCount: nonnegativeSafeIntegerSchema,
     sum: number().finite(),
   }),
-  TJ = strictObject({
+  transformationStepRunSchema = strictObject({
     index: number().int().min(1).max(20),
-    id: Ng,
+    id: opaqueIdSchema,
     kind: string().max(32),
     status: _enum(["complete", "failed", "skipped"]),
-    inputSchema: array(eD).max(50),
-    inputRows: Sw,
-    outputSchema: array(eD).max(50).optional(),
-    outputRows: Sw.optional(),
-    inputHash: o1.optional(),
-    outputHash: o1.optional(),
-    controls: array(XF).max(50).optional(),
+    inputSchema: array(columnTypeProfileSchema).max(50),
+    inputRows: nonnegativeSafeIntegerSchema,
+    outputSchema: array(columnTypeProfileSchema).max(50).optional(),
+    outputRows: nonnegativeSafeIntegerSchema.optional(),
+    inputHash: sha256HexSchema.optional(),
+    outputHash: sha256HexSchema.optional(),
+    controls: array(numericColumnSummarySchema).max(50).optional(),
     error: string().max(4e3).optional(),
     details: record(string(), unknown()).optional(),
   }),
-  NJ = strictObject({
-    engine: literal(pg),
-    recipeId: Ng,
-    recipeName: Bs,
+  transformationRunEvidenceSchema = strictObject({
+    engine: literal(recipeStoreFormatId),
+    recipeId: opaqueIdSchema,
+    recipeName: singleLineTextSchema,
     version: number().int().min(1).max(20),
-    definition: EN,
-    definitionHash: o1,
-    sourceWorkbookId: Ng,
-    sourceRevision: Sw,
-    sourceHash: o1,
-    outputHash: o1,
+    definition: transformationRecipeSchema,
+    definitionHash: sha256HexSchema,
+    sourceWorkbookId: opaqueIdSchema,
+    sourceRevision: nonnegativeSafeIntegerSchema,
+    sourceHash: sha256HexSchema,
+    outputHash: sha256HexSchema,
     outputRows: number().int().min(0).max(1e3),
     outputRange: string().min(1).max(50),
-    at: qF,
-    steps: array(TJ).max(20),
-    controls: array(XF).max(50),
+    at: isoTimestampSchema,
+    steps: array(transformationStepRunSchema).max(20),
+    controls: array(numericColumnSummarySchema).max(50),
     lineage: record(
       string().regex(/^[1-9]\d*$/),
       array(string().min(1).max(200)).max(4e3),
     ),
   });
-function GF(e, r) {
+function validateSavedRecipeMetadata(e, r) {
   const t = e;
   if (t.transformationRecipes !== undefined) {
-    if (JSON.stringify(t.transformationRecipes).length > Yl.metadataCharacters)
+    if (
+      JSON.stringify(t.transformationRecipes).length >
+      transformationRecipeLimits.metadataCharacters
+    )
       throw Error("Saved recipe metadata exceeds 2,000,000 characters.");
     const d = SJ.safeParse(t.transformationRecipes);
     if (!d.success)
@@ -451,7 +485,10 @@ function GF(e, r) {
       throw Error("Saved recipe names and IDs must be unique.");
     for (const u of d.data)
       for (const [l, c] of u.versions.entries())
-        if (c.version !== l + 1 || c.definitionHash !== hr(c.definition))
+        if (
+          c.version !== l + 1 ||
+          c.definitionHash !== fingerprintCanonicalValue(c.definition)
+        )
           throw Error(
             "Saved recipe versions or definition hashes are inconsistent.",
           );
@@ -463,19 +500,19 @@ function GF(e, r) {
     if (u?.transformationRun === undefined) continue;
     if (
       ((n += JSON.stringify(u.transformationRun).length),
-      n > Yl.runMetadataCharacters)
+      n > transformationRecipeLimits.runMetadataCharacters)
     )
       throw Error(
         "Recipe execution evidence exceeds 8,000,000 characters. Retain a native backup and remove obsolete output sheets.",
       );
-    const l = NJ.safeParse(u.transformationRun);
+    const l = transformationRunEvidenceSchema.safeParse(u.transformationRun);
     if (!l.success)
       throw Error(
         `Invalid recipe execution evidence: ${l.error.issues[0]?.message}`,
       );
     const c = l.data;
     if (
-      c.definitionHash !== hr(c.definition) ||
+      c.definitionHash !== fingerprintCanonicalValue(c.definition) ||
       c.steps.length !== c.definition.steps.length ||
       c.steps.some(
         (h, f) =>
@@ -485,7 +522,7 @@ function GF(e, r) {
           h.kind !== c.definition.steps[f].kind,
       ) ||
       Object.values(c.lineage).reduce((h, f) => h + f.length, 0) >
-        Yl.lineageLinks ||
+        transformationRecipeLimits.lineageLinks ||
       Object.keys(c.lineage).some(
         (h) => Number(h) < 2 || Number(h) > c.outputRows + 1,
       ) ||
@@ -495,9 +532,10 @@ function GF(e, r) {
     d.transformationRun = c;
   }
 }
-const P3 = (e) => e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
-  lf = (e) => e.replace(/^_xlpm\./i, "").toLowerCase();
-function RJ(e, r = false) {
+const normalizeFunctionName = (e) =>
+    e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
+  normalizeBindingName = (e) => e.replace(/^_xlpm\./i, "").toLowerCase();
+function isValidFormulaName(e, r = false) {
   return (
     (e = e.replace(/^_xlpm\./i, "")),
     /^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(e) &&
@@ -506,7 +544,7 @@ function RJ(e, r = false) {
       (!r || !e.includes("."))
   );
 }
-function Pg(e) {
+function tokenizeFormulaText(e) {
   let r = e.startsWith("=") ? 1 : 0;
   const t = () => {
       throw Error("Unbalanced or malformed formula syntax.");
@@ -593,19 +631,25 @@ function Pg(e) {
     s = a(0);
   return (r !== e.length && t(), s);
 }
-const Tw = (e) => e.filter((r) => r.kind !== "text" || r.text.trim());
-function Nw(e, r = false) {
-  const t = Tw(e),
+const dropBlankTextTokens = (e) =>
+  e.filter((r) => r.kind !== "text" || r.text.trim());
+function validateBindingName(e, r = false) {
+  const t = dropBlankTextTokens(e),
     n = t[0];
-  if (t.length !== 1 || n?.kind !== "symbol" || n.qualifier || !RJ(n.name, r))
+  if (
+    t.length !== 1 ||
+    n?.kind !== "symbol" ||
+    n.qualifier ||
+    !isValidFormulaName(n.name, r)
+  )
     throw Error(
       `Invalid ${r ? "LAMBDA parameter" : "LET variable"}: use a name, not a cell address${r ? ", without a period" : ""}.`,
     );
   return n;
 }
-function AN(e) {
+function validateLetLambdaCall(e) {
   if (e.callee.kind !== "symbol" || e.callee.qualifier) return;
-  const r = P3(e.callee.name);
+  const r = normalizeFunctionName(e.callee.name);
   if (r !== "LET" && r !== "LAMBDA") return;
   if (
     r === "LET" &&
@@ -614,58 +658,64 @@ function AN(e) {
     throw Error("LET requires 1–126 name/value pairs and a final calculation.");
   if (r === "LAMBDA" && (e.args.length < 1 || e.args.length > 254))
     throw Error("LAMBDA requires a calculation and at most 253 parameters.");
-  if (e.args.some((n) => !Tw(n).length))
+  if (e.args.some((n) => !dropBlankTextTokens(n).length))
     throw Error(`${r} arguments cannot be empty.`);
   const t = new Set();
   for (let n = 0; n < e.args.length - 1; n += r === "LET" ? 2 : 1) {
-    const o = lf(Nw(e.args[n], r === "LAMBDA").name);
+    const o = normalizeBindingName(
+      validateBindingName(e.args[n], r === "LAMBDA").name,
+    );
     if (t.has(o)) throw Error(`Duplicate ${r} binding: ${o}.`);
     t.add(o);
   }
   return r;
 }
-function Gf(e, r, t = new Set()) {
+function walkFormulaNodes(e, r, t = new Set()) {
   for (const n of e) {
     if (
       (n.kind === "symbol" && r(n, t, false, false),
-      n.kind === "group" && Gf(n.body, r, t),
+      n.kind === "group" && walkFormulaNodes(n.body, r, t),
       n.kind !== "call")
     )
       continue;
-    const o = AN(n);
+    const o = validateLetLambdaCall(n);
     if (
       (n.callee.kind === "symbol"
         ? r(n.callee, t, true, false)
-        : Gf([n.callee], r, t),
+        : walkFormulaNodes([n.callee], r, t),
       !o)
     ) {
-      n.args.forEach((s) => Gf(s, r, t));
+      n.args.forEach((s) => walkFormulaNodes(s, r, t));
       continue;
     }
     const a = new Set(t);
     for (let s = 0; s < n.args.length - 1; s += o === "LET" ? 2 : 1) {
-      const d = Nw(n.args[s], o === "LAMBDA");
+      const d = validateBindingName(n.args[s], o === "LAMBDA");
       (r(d, a, false, true),
-        o === "LET" && Gf(n.args[s + 1], r, a),
-        a.add(lf(d.name)));
+        o === "LET" && walkFormulaNodes(n.args[s + 1], r, a),
+        a.add(normalizeBindingName(d.name)));
     }
-    Gf(n.args.at(-1), r, a);
+    walkFormulaNodes(n.args.at(-1), r, a);
   }
 }
-function $p(e) {
+function parseFormulaTree(e) {
   try {
-    const r = Tw(Pg(e)),
+    const r = dropBlankTextTokens(tokenizeFormulaText(e)),
       t = r[0];
-    return r.length !== 1 || t.kind !== "call" || AN(t) !== "LAMBDA"
+    return r.length !== 1 ||
+      t.kind !== "call" ||
+      validateLetLambdaCall(t) !== "LAMBDA"
       ? undefined
       : t.args
           .slice(0, -1)
-          .map((n) => Nw(n, true).name.replace(/^_xlpm\./i, ""));
+          .map((n) =>
+            validateBindingName(n, true).name.replace(/^_xlpm\./i, ""),
+          );
   } catch {
     return;
   }
 }
-const ZF = [
+const supportedFunctionNames = [
     "ABS",
     "ACOS",
     "ACOSH",
@@ -946,7 +996,7 @@ const ZF = [
     "YEAR",
     "YEARFRAC",
   ],
-  Nc = Object.freeze({
+  extensionRuntimeLimits = Object.freeze({
     extensions: 8,
     functions: 40,
     calls: 100,
@@ -956,39 +1006,46 @@ const ZF = [
     timeoutMs: 15e3,
     maxTimeoutMs: 6e4,
   }),
-  Qh = (e) =>
+  boundedTextSchema = (e) =>
     string()
       .min(1)
       .max(e)
       .refine((r) => !/[\u0000-\u001f\u007f]/.test(r)),
-  gE = string()
+  safeIdentifierSchema = string()
     .regex(/^[A-Za-z][A-Za-z0-9_-]{0,63}$/)
     .refine((e) => !["constructor", "prototype", "__proto__"].includes(e)),
-  IJ = _enum(["number", "string", "boolean", "scalar"]),
-  U3 = strictObject({ type: IJ, nullable: boolean().optional() }),
-  KF = strictObject({
+  extensionScalarKindSchema = _enum(["number", "string", "boolean", "scalar"]),
+  extensionScalarTypeSchema = strictObject({
+    type: extensionScalarKindSchema,
+    nullable: boolean().optional(),
+  }),
+  extensionMatrixTypeSchema = strictObject({
     type: literal("matrix"),
-    items: U3,
+    items: extensionScalarTypeSchema,
     maxRows: number().int().min(1).max(100),
     maxColumns: number().int().min(1).max(100),
   }),
-  _J = strictObject({
+  extensionEntityTypeSchema = strictObject({
     type: literal("entity"),
-    fields: record(gE, U3).refine(
+    fields: record(safeIdentifierSchema, extensionScalarTypeSchema).refine(
       (e) => Object.keys(e).length > 0 && Object.keys(e).length <= 20,
     ),
   }),
-  DJ = union([U3, KF, _J]),
-  OJ = _enum([
+  extensionValueTypeSchema = union([
+    extensionScalarTypeSchema,
+    extensionMatrixTypeSchema,
+    extensionEntityTypeSchema,
+  ]),
+  extensionPermissionSchema = _enum([
     "read-arguments",
     "return-results",
     "linked-data",
     "remote-compute",
   ]),
-  MJ = strictObject({
+  extensionManifestSchema = strictObject({
     schemaVersion: literal(1),
-    id: gE,
-    label: Qh(120),
+    id: safeIdentifierSchema,
+    label: boundedTextSchema(120),
     version: string()
       .regex(/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/)
       .max(64),
@@ -998,7 +1055,7 @@ const ZF = [
         (e) => !["SQL", "REGISTER", "__LG", "_XLFN", "_XLUDF"].includes(e),
       ),
     runtime: _enum(["host", "office-addin", "python", "r", "linked-data"]),
-    permissions: array(OJ).min(2).max(4),
+    permissions: array(extensionPermissionSchema).min(2).max(4),
     recalculation: strictObject({
       mode: literal("manual"),
       invalidateOn: literal("argument-values"),
@@ -1007,18 +1064,24 @@ const ZF = [
     functions: array(
       strictObject({
         id: string().regex(/^[A-Z][A-Z0-9_]{0,39}$/),
-        description: Qh(300),
+        description: boundedTextSchema(300),
         parameters: array(
-          strictObject({ name: gE, schema: union([U3, KF]) }),
+          strictObject({
+            name: safeIdentifierSchema,
+            schema: union([
+              extensionScalarTypeSchema,
+              extensionMatrixTypeSchema,
+            ]),
+          }),
         ).max(16),
-        result: DJ,
+        result: extensionValueTypeSchema,
       }),
     )
       .min(1)
       .max(20),
   });
-function Rw(e) {
-  const r = MJ.parse(e);
+function validateExtensionManifest(e) {
+  const r = extensionManifestSchema.parse(e);
   if (
     new Set(r.permissions).size !== r.permissions.length ||
     !r.permissions.includes("read-arguments") ||
@@ -1032,7 +1095,7 @@ function Rw(e) {
   if (new Set(r.functions.map((t) => t.id)).size !== r.functions.length)
     throw Error("Duplicate custom function names.");
   for (const t of r.functions) {
-    if (ZF.includes(`${r.namespace}.${t.id}`))
+    if (supportedFunctionNames.includes(`${r.namespace}.${t.id}`))
       throw Error("An extension cannot shadow a built-in function.");
     if (new Set(t.parameters.map((n) => n.name)).size !== t.parameters.length)
       throw Error("Duplicate extension parameter names.");
@@ -1041,7 +1104,7 @@ function Rw(e) {
   }
   return r;
 }
-function m1(e, r) {
+function validateExtensionValue(e, r) {
   const t = (n, o) => {
     if (n === null && o.nullable) return null;
     if (
@@ -1064,7 +1127,7 @@ function m1(e, r) {
       !Array.isArray(e[0]) ||
       !e[0].length ||
       e[0].length > r.maxColumns ||
-      e.length * e[0].length > Nc.outputCells
+      e.length * e[0].length > extensionRuntimeLimits.outputCells
     )
       throw Error("Extension matrix exceeds its declared shape or cell limit.");
     const n = e[0].length;
@@ -1077,11 +1140,11 @@ function m1(e, r) {
   if (r.type === "entity") {
     const n = strictObject({
       kind: literal("entity"),
-      id: Qh(200),
-      label: Qh(300),
-      fields: record(gE, unknown()),
-      source: Qh(1e3),
-      asOf: L3(),
+      id: boundedTextSchema(200),
+      label: boundedTextSchema(300),
+      fields: record(safeIdentifierSchema, unknown()),
+      source: boundedTextSchema(1e3),
+      asOf: isoDateTimeSchemaFactory(),
     }).parse(e);
     if (
       Object.keys(n.fields).sort().join("|") !==
@@ -1100,7 +1163,7 @@ function m1(e, r) {
   return t(e, r);
 }
 const tD = new WeakSet();
-function jJ(e, r) {
+function validateExtensionState(e, r) {
   if (e.extensions === undefined) return;
   const t = new Set((r.definedNames ?? []).map((u) => u.name.toUpperCase())),
     n = e.extensions;
@@ -1117,17 +1180,20 @@ function jJ(e, r) {
     r.extensions = e.extensions;
     return;
   }
-  if (JSON.stringify(e.extensions).length > Nc.metadataCharacters)
+  if (
+    JSON.stringify(e.extensions).length >
+    extensionRuntimeLimits.metadataCharacters
+  )
     throw Error("Extension metadata exceeds its limit.");
   const o = strictObject({
       schemaVersion: literal(1),
       installed: array(
         strictObject({ manifest: unknown(), enabled: boolean() }),
-      ).max(Nc.extensions),
+      ).max(extensionRuntimeLimits.extensions),
       caches: array(
         strictObject({
           key: string().regex(/^[a-f0-9]{64}$/),
-          sheetId: Qh(100),
+          sheetId: boundedTextSchema(100),
           address: string()
             .regex(/^[A-Z]{1,3}[1-9]\d*$/)
             .refine((u) => {
@@ -1138,22 +1204,26 @@ function jJ(e, r) {
                   16384
               );
             }),
-          formula: Qh(8192),
-          functionName: Qh(80),
+          formula: boundedTextSchema(8192),
+          functionName: boundedTextSchema(80),
           arguments: array(unknown()).max(16),
           manifestHash: string().regex(/^[a-f0-9]{64}$/),
           scopeHash: string().regex(/^[a-f0-9]{64}$/),
           result: unknown(),
-          calculatedAt: L3(),
-          providerRevision: Qh(200),
+          calculatedAt: isoDateTimeSchemaFactory(),
+          providerRevision: boundedTextSchema(200),
         }),
-      ).max(Nc.calls),
+      ).max(extensionRuntimeLimits.calls),
     }).parse(e.extensions),
-    a = o.installed.map((u) => ({ ...u, manifest: Rw(u.manifest) }));
+    a = o.installed.map((u) => ({
+      ...u,
+      manifest: validateExtensionManifest(u.manifest),
+    }));
   if (
     new Set(a.map((u) => u.manifest.id)).size !== a.length ||
     new Set(a.map((u) => u.manifest.namespace)).size !== a.length ||
-    a.reduce((u, l) => u + l.manifest.functions.length, 0) > Nc.functions
+    a.reduce((u, l) => u + l.manifest.functions.length, 0) >
+      extensionRuntimeLimits.functions
   )
     throw Error(
       "Extension identities/namespaces must be unique within the function limit.",
@@ -1169,7 +1239,7 @@ function jJ(e, r) {
       throw Error("Extension cache does not match an installed function.");
     if (
       u.key !==
-      $3(
+      fingerprintExtensionCall(
         u.sheetId,
         u.address,
         u.formula,
@@ -1181,18 +1251,22 @@ function jJ(e, r) {
       throw Error("Extension cache identity does not match its arguments.");
     return {
       ...u,
-      arguments: u.arguments.map((h, f) => m1(h, c.parameters[f].schema)),
-      result: m1(u.result, c.result),
+      arguments: u.arguments.map((h, f) =>
+        validateExtensionValue(h, c.parameters[f].schema),
+      ),
+      result: validateExtensionValue(u.result, c.result),
     };
   });
   if (new Set(s.map((u) => u.key)).size !== s.length)
     throw Error("Duplicate extension cache entries.");
   const d = { schemaVersion: 1, installed: a, caches: s };
-  (Lg(d), tD.add(d), (r.extensions = d));
+  (deepFreezeValue(d), tD.add(d), (r.extensions = d));
 }
-const bf = (e) => hr(Rw(e)),
-  $3 = (e, r, t, n, o, a) => hr([e, r, t, n, o, a]);
-function z3(e) {
+const hashExtensionManifest = (e) =>
+    fingerprintCanonicalValue(validateExtensionManifest(e)),
+  fingerprintExtensionCall = (e, r, t, n, o, a) =>
+    fingerprintCanonicalValue([e, r, t, n, o, a]);
+function listInstalledExtensionFunctions(e) {
   return (e.extensions?.installed ?? []).flatMap((t) =>
     t.manifest.functions.map((n) => ({
       entry: t,
@@ -1201,43 +1275,49 @@ function z3(e) {
     })),
   );
 }
-const vE = new WeakMap();
-function YF(e, r) {
-  vE.set(e, structuredClone(r));
+const extensionCacheEntriesByWorkbook = new WeakMap();
+function setExtensionCacheEntries(e, r) {
+  extensionCacheEntriesByWorkbook.set(e, structuredClone(r));
 }
-function g1(e) {
-  return vE.get(e) ?? [];
+function getExtensionCacheEntries(e) {
+  return extensionCacheEntriesByWorkbook.get(e) ?? [];
 }
-function FJ(e, r) {
-  const t = vE.get(e);
-  t && vE.set(r, t);
+function copyExtensionCacheEntries(e, r) {
+  const t = extensionCacheEntriesByWorkbook.get(e);
+  t && extensionCacheEntriesByWorkbook.set(r, t);
 }
-function BJ(e, r, t, n) {
-  return g1(e).some(
+function hasExtensionCacheForSheet(e, r, t, n) {
+  return getExtensionCacheEntries(e).some(
     (o) => o.id === r && o.manifestHash === t && o.sheetIds.includes(n),
   );
 }
-function LJ(e, r, t, n, o) {
-  const a = z3(e).find((m) => m.name === r);
+function resolveExtensionFunctionCall(e, r, t, n, o) {
+  const a = listInstalledExtensionFunctions(e).find((m) => m.name === r);
   if (!a) return { error: "#NAME?" };
-  const s = bf(a.entry.manifest);
-  if (!a.entry.enabled || !BJ(e, a.entry.manifest.id, s, n))
+  const s = hashExtensionManifest(a.entry.manifest);
+  if (
+    !a.entry.enabled ||
+    !hasExtensionCacheForSheet(e, a.entry.manifest.id, s, n)
+  )
     return { error: "#NAME?" };
   if (t.length !== a.fn.parameters.length) return { error: "#VALUE!" };
   let d;
   try {
     d = t.map((m, v) => {
       const g = a.fn.parameters[v].schema;
-      return m1(g.type === "matrix" && !Array.isArray(m) ? [[m]] : m, g);
+      return validateExtensionValue(
+        g.type === "matrix" && !Array.isArray(m) ? [[m]] : m,
+        g,
+      );
     });
   } catch {
     return { error: "#VALUE!" };
   }
   const u = String(e.sheets.find((m) => m.id === n)?.cells[o]?.raw ?? ""),
-    l = $3(n, o, u, r, d, s),
+    l = fingerprintExtensionCall(n, o, u, r, d, s),
     c = e.extensions?.caches.find((m) => m.key === l);
   return c &&
-    !g1(e).some(
+    !getExtensionCacheEntries(e).some(
       (m) => m.id === a.entry.manifest.id && m.scopeHash === c.scopeHash,
     )
     ? { error: "#NAME?" }
@@ -1245,7 +1325,7 @@ function LJ(e, r, t, n, o) {
       ? { value: c.result }
       : { error: "#PENDING!" };
 }
-const Iw = Object.freeze({
+const calculationBudgetDefaults = Object.freeze({
   defaultMemoryBudgetMiB: 32,
   maxMemoryBudgetMiB: 128,
   defaultWorkBudget: 1e6,
@@ -1258,17 +1338,19 @@ const Iw = Object.freeze({
   scope:
     "Calculation inputs, intermediate values and results. The existing committed workbook, UI, parser code and runtime overhead are outside the working-data budget.",
 });
-function pd() {
+function readMonotonicClockMs() {
   return typeof performance < "u" ? performance.now() : Date.now();
 }
-function JF(e) {
+function resolveCalculationBudget(e) {
   return {
     memoryBudgetBytes:
-      (e?.memoryBudgetMiB ?? Iw.defaultMemoryBudgetMiB) * 1024 * 1024,
-    workBudget: e?.workBudget ?? Iw.defaultWorkBudget,
+      (e?.memoryBudgetMiB ?? calculationBudgetDefaults.defaultMemoryBudgetMiB) *
+      1024 *
+      1024,
+    workBudget: e?.workBudget ?? calculationBudgetDefaults.defaultWorkBudget,
   };
 }
-function kN(e, r) {
+function estimateValueFootprintBytes(e, r) {
   let t = 0;
   const n = (o, a) => {
     if (!(t > r)) {
@@ -1299,10 +1381,10 @@ function kN(e, r) {
   return (n(e, 0), t);
 }
 const rD = new WeakMap();
-function QF(e, r) {
+function estimateWorkbookMemoryBytes(e, r) {
   let t = 1024;
   const n = (o) => {
-    t += kN(o, Math.max(0, r - t));
+    t += estimateValueFootprintBytes(o, Math.max(0, r - t));
   };
   (n(e.definedNames),
     n(e.workbookLinks),
@@ -1319,7 +1401,7 @@ function QF(e, r) {
       o.hiddenCols,
       o.outlineGroups,
     ]);
-    const a = es(o.cells),
+    const a = isDeepFrozenValue(o.cells),
       s = a ? rD.get(o.cells) : undefined;
     if (s !== undefined) t += s;
     else {
@@ -1332,9 +1414,9 @@ function QF(e, r) {
   }
   return t;
 }
-function SN(e) {
-  const r = JF(e.calculation);
-  let t = QF(e, r.memoryBudgetBytes),
+function createCalculationBudgetTracker(e) {
+  const r = resolveCalculationBudget(e.calculation);
+  let t = estimateWorkbookMemoryBytes(e, r.memoryBudgetBytes),
     n = 0,
     o,
     a,
@@ -1350,7 +1432,8 @@ function SN(e) {
         n > r.workBudget &&
         ((o = "#LIMIT!"), (a = "Calculation work budget exceeded")),
       !o &&
-        d + (u ? pd() - s : 0) > (e.calculation?.timeBudgetMs ?? 2500) &&
+        d + (u ? readMonotonicClockMs() - s : 0) >
+          (e.calculation?.timeBudgetMs ?? 2500) &&
         ((o = "#TIMEOUT!"),
         (a = "Cooperative calculation time budget exceeded")),
       o
@@ -1358,10 +1441,10 @@ function SN(e) {
   };
   return {
     begin() {
-      u++ === 0 && (s = pd());
+      u++ === 0 && (s = readMonotonicClockMs());
     },
     end() {
-      u > 0 && --u === 0 && (d += pd() - s);
+      u > 0 && --u === 0 && (d += readMonotonicClockMs() - s);
     },
     check: l,
     work(c = 1) {
@@ -1376,7 +1459,14 @@ function SN(e) {
       return o || ((t += Math.max(0, c)), l());
     },
     value(c) {
-      return o || ((t += kN(c, Math.max(0, r.memoryBudgetBytes - t))), l());
+      return (
+        o ||
+        ((t += estimateValueFootprintBytes(
+          c,
+          Math.max(0, r.memoryBudgetBytes - t),
+        )),
+        l())
+      );
     },
     report: () => ({
       ...r,
@@ -1386,29 +1476,33 @@ function SN(e) {
     }),
   };
 }
-function O4(e) {
+function isWithinNestingLimit(e) {
   const r = e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'/g, "");
   let t = 0;
   for (const n of r) {
-    if (((n === "(" || n === "{") && t++, t > Iw.maxNesting)) return false;
+    if (
+      ((n === "(" || n === "{") && t++,
+      t > calculationBudgetDefaults.maxNesting)
+    )
+      return false;
     (n === ")" || n === "}") && t--;
   }
   return true;
 }
-const v1 = (e = "1900") => (e === "1904" ? 1462 : 0),
-  wd = (e = "1900") => 2958465 - v1(e),
-  TN = Object.freeze({
+const dateSystemSerialOffset = (e = "1900") => (e === "1904" ? 1462 : 0),
+  dateSystemMaxSerial = (e = "1900") => 2958465 - dateSystemSerialOffset(e),
+  defaultDatePolicy = Object.freeze({
     calendar: "gregorian",
     dateSystem: "1900",
     textDateOrder: "MDY",
     timeZone: "UTC",
   }),
-  Cy = Object.freeze({
+  dateCalculationLimits = Object.freeze({
     maxSerial: 2958465,
     holidays: 1e3,
     businessDays: 366e3,
   });
-function PJ(e) {
+function buildCalculationClock(e) {
   const r = e.datePolicy,
     t = e.calculationClock;
   return {
@@ -1439,7 +1533,7 @@ function PJ(e) {
       : {}),
   };
 }
-function eB(e) {
+function workbookUsesNowOrToday(e) {
   var t;
   const r = (n) =>
     /\b(?:NOW|TODAY)\s*\(/i.test(n.replace(/"(?:[^"]|"")*"/g, '""'));
@@ -1455,9 +1549,9 @@ function eB(e) {
     ) || !!((t = e.definedNames) != null && t.some((n) => r(n.refersTo)))
   );
 }
-const bE = 864e5,
-  tB = Date.UTC(1899, 11, 31);
-function ts(e = TN) {
+const millisecondsPerDay = 864e5,
+  serialZeroUtcMs = Date.UTC(1899, 11, 31);
+function normalizeDatePolicy(e = defaultDatePolicy) {
   const r = e;
   if (
     !r ||
@@ -1493,24 +1587,34 @@ function ts(e = TN) {
     );
   }
 }
-const zS = (e) =>
+const isExcelLeapYear = (e) =>
     e === 1900 || (e % 4 === 0 && (e % 100 !== 0 || e % 400 === 0)),
-  nf = (e, r) =>
-    r === 2 ? (zS(e) ? 29 : 28) : [4, 6, 9, 11].includes(r) ? 30 : 31;
-function V3(e, r, t, n = "1900") {
-  if (n === "1904") return (Date.UTC(e, r - 1, t) - Date.UTC(1904, 0, 1)) / bE;
+  daysInExcelMonth = (e, r) =>
+    r === 2
+      ? isExcelLeapYear(e)
+        ? 29
+        : 28
+      : [4, 6, 9, 11].includes(r)
+        ? 30
+        : 31;
+function dateToSerial(e, r, t, n = "1900") {
+  if (n === "1904")
+    return (Date.UTC(e, r - 1, t) - Date.UTC(1904, 0, 1)) / millisecondsPerDay;
   if (e === 1900 && r === 2 && t === 29) return 60;
   const o = Date.UTC(e, r - 1, t);
-  return (o - tB) / bE + (o >= Date.UTC(1900, 2, 1) ? 1 : 0);
+  return (
+    (o - serialZeroUtcMs) / millisecondsPerDay +
+    (o >= Date.UTC(1900, 2, 1) ? 1 : 0)
+  );
 }
-function rB(e, r = "1900") {
+function serialToDateParts(e, r = "1900") {
   const t = Math.floor(e);
   if (r === "1900" && t === 0) return { year: 1900, month: 1, day: 0 };
   if (r === "1900" && t === 60) return { year: 1900, month: 2, day: 29 };
   const n = new Date(
     r === "1904"
-      ? Date.UTC(1904, 0, 1) + t * bE
-      : tB + (t - (t > 60 ? 1 : 0)) * bE,
+      ? Date.UTC(1904, 0, 1) + t * millisecondsPerDay
+      : serialZeroUtcMs + (t - (t > 60 ? 1 : 0)) * millisecondsPerDay,
   );
   return {
     year: n.getUTCFullYear(),
@@ -1533,7 +1637,7 @@ function nD(e) {
       (t * 3600 + n * 60 + o) / 86400
     );
 }
-function zp(e, r = TN) {
+function parseDateText(e, r = defaultDatePolicy) {
   const t = e.trim(),
     n =
       /^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))(?:[ T](.+))?$/.exec(
@@ -1549,14 +1653,14 @@ function zp(e, r = TN) {
     a < 1 ||
     a > 12 ||
     s < 1 ||
-    s > nf(o, a)
+    s > daysInExcelMonth(o, a)
   )
     return;
   const d = n[7] ? nD(n[7]) : 0;
-  return d === undefined ? undefined : V3(o, a, s, r.dateSystem) + d;
+  return d === undefined ? undefined : dateToSerial(o, a, s, r.dateSystem) + d;
 }
-function lx(e, r = new Date()) {
-  const t = ts(e),
+function resolveLocalDateTime(e, r = new Date()) {
+  const t = normalizeDatePolicy(e),
     n = r.toISOString(),
     o = new Intl.DateTimeFormat("en-US-u-ca-gregory-nu-latn", {
       timeZone: t.timeZone,
@@ -1578,8 +1682,8 @@ function lx(e, r = new Date()) {
     c = a("minute"),
     h = a("second"),
     f = r.getUTCMilliseconds(),
-    p = V3(s, d, u, t.dateSystem);
-  if (p < 0 || p > wd(t.dateSystem))
+    p = dateToSerial(s, d, u, t.dateSystem);
+  if (p < 0 || p > dateSystemMaxSerial(t.dateSystem))
     throw Error(
       "Calculation clock is outside the supported 1900–9999 date range.",
     );
@@ -1593,7 +1697,7 @@ function lx(e, r = new Date()) {
     nowSerial: p + (l * 3600 + c * 60 + h + f / 1e3) / 86400,
   });
 }
-const yE = Object.freeze({
+const calculationFeatureSupport = Object.freeze({
   supported: ["RAND", "RANDBETWEEN", "NOW", "TODAY"],
   unsupported: ["RANDARRAY", "OFFSET", "INDIRECT", "CELL", "INFO"],
   refresh:
@@ -1605,7 +1709,7 @@ const yE = Object.freeze({
   inspection:
     "Diagnostic formula evaluation uses a separate snapshot; replay does not redraw random values. Native reopening starts a new calculation; XLSX formula caches are historical only.",
 });
-function Rg(e) {
+function findVolatileFunctionNames(e) {
   const r = e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
   return [
     ...new Set(
@@ -1615,22 +1719,25 @@ function Rg(e) {
     ),
   ];
 }
-function nB(e) {
+function workbookHasVolatileFunctions(e) {
   var r;
   return (
-    !!((r = e.definedNames) != null && r.some((t) => Rg(t.refersTo).length)) ||
+    !!(
+      (r = e.definedNames) != null &&
+      r.some((t) => findVolatileFunctionNames(t.refersTo).length)
+    ) ||
     e.sheets.some((t) =>
       Object.values(t.cells).some(
         (n) =>
           !n.literal &&
           typeof n.raw == "string" &&
           n.raw.startsWith("=") &&
-          Rg(n.raw).length,
+          findVolatileFunctionNames(n.raw).length,
       ),
     )
   );
 }
-const VS = [
+const dateFunctionNames = [
     "DATE",
     "DATEVALUE",
     "DAY",
@@ -1657,7 +1764,7 @@ const VS = [
     "MINUTE",
     "SECOND",
   ],
-  iB = Symbol("not-date-function"),
+  notDateFunctionSentinel = Symbol("not-date-function"),
   UJ = {
     DATE: [3, 3],
     DATEVALUE: [1, 1],
@@ -1685,13 +1792,13 @@ const VS = [
     MINUTE: [1, 1],
     SECOND: [1, 1],
   };
-function WS(e, r, t) {
-  if (!VS.includes(e)) return iB;
+function evaluateDateFunction(e, r, t) {
+  if (!dateFunctionNames.includes(e)) return notDateFunctionSentinel;
   const n = t.clock.dateSystem,
-    o = wd(n),
-    a = (w, E, A) => V3(w, E, A, n),
-    s = (w) => rB(w, n),
-    d = (w) => (((w + v1(n) + 5) % 7) + 7) % 7,
+    o = dateSystemMaxSerial(n),
+    a = (w, E, A) => dateToSerial(w, E, A, n),
+    s = (w) => serialToDateParts(w, n),
+    d = (w) => (((w + dateSystemSerialOffset(n) + 5) % 7) + 7) % 7,
     u = (w = "#VALUE!") => {
       throw t.issue(w);
     },
@@ -1718,7 +1825,7 @@ function WS(e, r, t) {
       const E =
         typeof w == "string" &&
         !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(w)
-          ? zp(w, t.clock)
+          ? parseDateText(w, t.clock)
           : p(w);
       return E === undefined ? u() : m(E);
     },
@@ -1730,7 +1837,15 @@ function WS(e, r, t) {
         O = (((F % 12) + 12) % 12) + 1;
       return (
         (I < (n === "1904" ? 1904 : 1900) || I > 9999) && u("#NUM!"),
-        m(a(I, O, A ? nf(I, O) : Math.min(k.day, nf(I, O))))
+        m(
+          a(
+            I,
+            O,
+            A
+              ? daysInExcelMonth(I, O)
+              : Math.min(k.day, daysInExcelMonth(I, O)),
+          ),
+        )
       );
     };
   if (e === "TODAY") return t.clock.todaySerial;
@@ -1744,14 +1859,15 @@ function WS(e, r, t) {
     w = Math.floor(k / 12);
     const F = (((k % 12) + 12) % 12) + 1;
     return (
-      (w < 1899 || w > 1e4 || Math.abs(A) > Cy.maxSerial) && u("#NUM!"),
+      (w < 1899 || w > 1e4 || Math.abs(A) > dateCalculationLimits.maxSerial) &&
+        u("#NUM!"),
       m(a(w, F, 1) + A - 1)
     );
   }
   if (e === "DATEVALUE" || e === "TIMEVALUE") {
     const w = f(h[0]);
     typeof w != "string" && u();
-    const E = zp(w, t.clock);
+    const E = parseDateText(w, t.clock);
     return (
       E === undefined && u(),
       e === "DATEVALUE" &&
@@ -1834,7 +1950,7 @@ function WS(e, r, t) {
       const O =
         F.year -
         (F.month < k.month || (F.month === k.month && F.day < k.day) ? 1 : 0);
-      return E - a(O, k.month, Math.min(k.day, nf(O, k.month)));
+      return E - a(O, k.month, Math.min(k.day, daysInExcelMonth(O, k.month)));
     }
     u("#NUM!");
   }
@@ -1846,12 +1962,12 @@ function WS(e, r, t) {
     return (
       A
         ? ((I = Math.min(I, 30)), (O = Math.min(O, 30)))
-        : (I === nf(k.year, k.month) && (I = 30),
+        : (I === daysInExcelMonth(k.year, k.month) && (I = 30),
           O === 31 && I >= 30 && (O = 30),
           k.month === 2 &&
-            k.day === nf(k.year, 2) &&
+            k.day === daysInExcelMonth(k.year, 2) &&
             F.month === 2 &&
-            O === nf(F.year, 2) &&
+            O === daysInExcelMonth(F.year, 2) &&
             (O = 30)),
       (F.year - k.year) * 360 + (F.month - k.month) * 30 + O - I
     );
@@ -1874,11 +1990,15 @@ function WS(e, r, t) {
     const k = s(w),
       F = s(E);
     let I = 365;
-    const O = a(k.year + 1, k.month, Math.min(k.day, nf(k.year + 1, k.month)));
-    if (k.year === F.year) I = zS(k.year) ? 366 : 365;
+    const O = a(
+      k.year + 1,
+      k.month,
+      Math.min(k.day, daysInExcelMonth(k.year + 1, k.month)),
+    );
+    if (k.year === F.year) I = isExcelLeapYear(k.year) ? 366 : 365;
     else if (E <= O)
       for (let j = k.year; j <= F.year; j++)
-        zS(j) && a(j, 2, 29) >= w && a(j, 2, 29) <= E && (I = 366);
+        isExcelLeapYear(j) && a(j, 2, 29) >= w && a(j, 2, 29) <= E && (I = 366);
     else I = (a(F.year + 1, 1, 1) - a(k.year, 1, 1)) / (F.year - k.year + 1);
     return (E - w) / I;
   }
@@ -1902,7 +2022,7 @@ function WS(e, r, t) {
     }
     const I = ($) => (Array.isArray($) ? $.flatMap(I) : [$]),
       O = h[E ? 3 : 2] === undefined ? [] : I(h[E ? 3 : 2]);
-    O.length > Cy.holidays && u("#LIMIT!");
+    O.length > dateCalculationLimits.holidays && u("#LIMIT!");
     const j = new Set();
     for (const $ of O)
       $ == null || $ === "" || (typeof $ == "boolean" && u(), j.add(g($)));
@@ -1919,12 +2039,16 @@ function WS(e, r, t) {
     if (w) {
       let $ = g(h[1]);
       return (
-        Math.abs($ - A) > Cy.businessDays && u("#LIMIT!"),
+        Math.abs($ - A) > dateCalculationLimits.businessDays && u("#LIMIT!"),
         $ < A ? -D($, A) : D(A, $)
       );
     }
     const B = Math.trunc(p(h[1]));
-    if ((z || u(), Math.abs(B) > Cy.businessDays && u("#LIMIT!"), B === 0))
+    if (
+      (z || u(),
+      Math.abs(B) > dateCalculationLimits.businessDays && u("#LIMIT!"),
+      B === 0)
+    )
       return A;
     const _ = B > 0,
       C = Math.abs(B),
@@ -1941,7 +2065,7 @@ function WS(e, r, t) {
   }
   return u();
 }
-const of = Object.freeze({
+const financialSolverLimits = Object.freeze({
   cashFlows: 1e4,
   periods: 1e4,
   couponPeriods: 1e3,
@@ -1952,66 +2076,66 @@ const of = Object.freeze({
 });
 
 export {
-  $3,
-  $p,
-  AN,
-  CN,
-  Cy,
-  FJ,
-  GF,
-  Gf,
+  fingerprintExtensionCall,
+  parseFormulaTree,
+  validateLetLambdaCall,
+  parseTransformationRecipe,
+  dateCalculationLimits,
+  copyExtensionCacheEntries,
+  validateSavedRecipeMetadata,
+  walkFormulaNodes,
   Gq,
-  Iw,
-  JF,
-  L3,
-  LJ,
-  Lg,
-  Nc,
-  Nw,
-  O4,
-  P3,
-  PJ,
-  Pg,
-  QF,
-  Rg,
-  Rw,
-  SN,
-  TN,
-  Tw,
-  V3,
-  VS,
-  WS,
-  YF,
-  Yl,
-  ZF,
-  ax,
-  bf,
-  eB,
-  es,
-  g1,
-  hr,
-  iB,
-  iu,
-  jJ,
-  kN,
-  lE,
-  lf,
-  lx,
-  m1,
-  mE,
-  nB,
-  nf,
-  of,
-  pd,
-  pg,
-  qj,
-  rB,
-  ts,
+  calculationBudgetDefaults,
+  resolveCalculationBudget,
+  isoDateTimeSchemaFactory,
+  resolveExtensionFunctionCall,
+  deepFreezeValue,
+  extensionRuntimeLimits,
+  validateBindingName,
+  isWithinNestingLimit,
+  normalizeFunctionName,
+  buildCalculationClock,
+  tokenizeFormulaText,
+  estimateWorkbookMemoryBytes,
+  findVolatileFunctionNames,
+  validateExtensionManifest,
+  createCalculationBudgetTracker,
+  defaultDatePolicy,
+  dropBlankTextTokens,
+  dateToSerial,
+  dateFunctionNames,
+  evaluateDateFunction,
+  setExtensionCacheEntries,
+  transformationRecipeLimits,
+  supportedFunctionNames,
+  unwrapDefaultExport,
+  hashExtensionManifest,
+  workbookUsesNowOrToday,
+  isDeepFrozenValue,
+  getExtensionCacheEntries,
+  fingerprintCanonicalValue,
+  notDateFunctionSentinel,
+  sha256HexDigest,
+  validateExtensionState,
+  estimateValueFootprintBytes,
+  measureSerializedBytes,
+  normalizeBindingName,
+  resolveLocalDateTime,
+  validateExtensionValue,
+  canonicalJsonStringify,
+  workbookHasVolatileFunctions,
+  daysInExcelMonth,
+  financialSolverLimits,
+  readMonotonicClockMs,
+  recipeStoreFormatId,
+  hasLinkedOrBoundCells,
+  serialToDateParts,
+  normalizeDatePolicy,
   uEe,
-  v1,
-  wd,
-  yE,
-  yc,
-  z3,
-  zp,
+  dateSystemSerialOffset,
+  dateSystemMaxSerial,
+  calculationFeatureSupport,
+  defineDataPropertyByKey,
+  listInstalledExtensionFunctions,
+  parseDateText,
 };

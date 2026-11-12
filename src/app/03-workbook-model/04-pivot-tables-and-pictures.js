@@ -1,4 +1,7 @@
-import { Mt, oB } from "../02-financial-functions.js";
+import {
+  workbookLimits,
+  supportedFinancialFunctionNames,
+} from "../02-financial-functions.js";
 import { strToU8 } from "fflate";
 import {
   string,
@@ -11,26 +14,44 @@ import {
   literal,
   record,
 } from "zod";
-import { L3, Lg, iu, ZF, P3, $p } from "../01-core-schemas-and-hashing.js";
-import { jn } from "./01-cell-styles-and-themes.js";
-import { JN, QN, XL, YL, ZL, nne, rP } from "./02-number-formats.js";
 import {
-  Ba,
-  FE,
-  Hw,
-  R5,
-  Vg,
-  g5,
-  hne,
+  isoDateTimeSchemaFactory,
+  deepFreezeValue,
+  sha256HexDigest,
+  supportedFunctionNames,
+  normalizeFunctionName,
+  parseFormulaTree,
+} from "../01-core-schemas-and-hashing.js";
+import { assertSheetUnprotected } from "./01-cell-styles-and-themes.js";
+import {
+  FormulaParser,
+  statisticalFunctionNames,
+  XL,
+  specialistFunctionNames,
+  significanceTestFunctionNames,
+  ownedLookupFunctionNames,
+  modernFunctionNames,
+} from "./02-number-formats.js";
+import {
+  definedNameScopeKey,
+  hashPictureBytes,
+  maxPictureHashBytes,
+  isRecordObject,
+  stripFormulaStringLiterals,
+  replaceTextSpans,
+  localBindingFunctionNames,
   m5,
-  pC,
-  sne,
-  zv,
+  validateNameFormulaText,
+  formatQuotedSheetPrefix,
+  validateDrawingText,
 } from "./03-defined-names.js";
 
-function P1(e) {
+function inspectPictureDataUrl(e) {
   var s;
-  if (typeof e != "string" || e.length > Math.ceil(Hw / 3) * 4 + 30)
+  if (
+    typeof e != "string" ||
+    e.length > Math.ceil(maxPictureHashBytes / 3) * 4 + 30
+  )
     throw Error("Pictures must be local PNG/JPEG data of at most 2 MB.");
   const r = /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/.exec(e);
   if (!r || r[2].length % 4 !== 0)
@@ -43,7 +64,8 @@ function P1(e) {
   } catch {
     throw Error("The picture data is invalid.");
   }
-  if (t.length > Hw) throw Error("Pictures must be at most 2 MB.");
+  if (t.length > maxPictureHashBytes)
+    throw Error("Pictures must be at most 2 MB.");
   let n = 0,
     o = 0;
   const a = () => {
@@ -150,17 +172,17 @@ function P1(e) {
   }
   return { bytes: t, extension: r[1], width: n, height: o };
 }
-function Jne(e, r, t) {
-  const n = zv(e, r, t);
+function assertPlainTextLabel(e, r, t) {
+  const n = validateDrawingText(e, r, t);
   if (!n.trim() || /[\u0000-\u001f\u007f]/.test(n))
     throw Error(
       `Invalid picture ${t}: use nonblank plain text without control characters.`,
     );
   return n;
 }
-function _P(e, r) {
+function validatePictureEvidence(e, r) {
   if (
-    !R5(e) ||
+    !isRecordObject(e) ||
     ![Object.prototype, null].includes(Object.getPrototypeOf(e)) ||
     Reflect.ownKeys(e).some(
       (o) =>
@@ -185,7 +207,7 @@ function _P(e, r) {
     !["local-file", "xlsx-media", "legacy-native"].includes(e.origin)
   )
     throw Error("Invalid picture evidence origin.");
-  const t = FE(r);
+  const t = hashPictureBytes(r);
   if (
     typeof e.sha256 != "string" ||
     !/^[a-f0-9]{64}$/.test(e.sha256) ||
@@ -210,7 +232,7 @@ function _P(e, r) {
     "mediaReference",
   ])
     e[o] !== undefined &&
-      (n[o] = Jne(e[o], o === "sourceLocator" ? 2e3 : 512, o));
+      (n[o] = assertPlainTextLabel(e[o], o === "sourceLocator" ? 2e3 : 512, o));
   if (n.origin === "local-file" && !n.filename)
     throw Error("A local evidence picture requires its original filename.");
   if (n.origin !== "xlsx-media" && (n.containerFilename || n.mediaReference))
@@ -221,10 +243,10 @@ function _P(e, r) {
     );
   return n;
 }
-function ek(e, r) {
-  const { bytes } = P1(e),
-    n = FE(bytes);
-  return _P(
+function createPictureEvidence(e, r) {
+  const { bytes } = inspectPictureDataUrl(e),
+    n = hashPictureBytes(bytes);
+  return validatePictureEvidence(
     {
       ...r,
       version: 1,
@@ -246,11 +268,11 @@ function F2(e, r, t) {
     guard: JSON.stringify(e),
   };
 }
-function BE(e, r, t = {}) {
+function assertDrawingPreviewCurrent(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   const n = e.sheets.find((a) => a.id === r);
   if (!n) throw Error("The worksheet no longer exists.");
-  jn(n);
+  assertSheetUnprotected(n);
   const o = t.snapshot;
   if (
     o &&
@@ -267,11 +289,11 @@ function BE(e, r, t = {}) {
 const Pa = (e) => {
     throw Error(e);
   },
-  lR = (e) => typeof e == "number" && Number.isFinite(e),
+  isFiniteNumber = (e) => typeof e == "number" && Number.isFinite(e),
   LE = (e) => e === null || e === "",
-  kO = (e) => !!e && typeof e == "object" && !Array.isArray(e);
-function tie(e) {
-  kO(e) || Pa("Invalid pivot refresh evidence.");
+  isObjectRecord = (e) => !!e && typeof e == "object" && !Array.isArray(e);
+function validatePivotRefreshEvidence(e) {
+  isObjectRecord(e) || Pa("Invalid pivot refresh evidence.");
   const r = e;
   (typeof r.at != "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ||
@@ -295,7 +317,7 @@ function tie(e) {
     r.measures.length > 100) &&
     Pa("Pivot population evidence does not reconcile.");
   const t = r.measures.map((n) => {
-    (!kO(n) ||
+    (!isObjectRecord(n) ||
       typeof n.name != "string" ||
       !n.name ||
       n.name.length > 512 ||
@@ -308,7 +330,7 @@ function tie(e) {
       !(
         n.result === null ||
         typeof n.result == "boolean" ||
-        lR(n.result) ||
+        isFiniteNumber(n.result) ||
         (typeof n.result == "string" && n.result.length <= 32767)
       )) &&
       Pa("Invalid pivot measure evidence.");
@@ -343,7 +365,7 @@ function tie(e) {
     measures: t,
   };
 }
-function DP(e, r, t) {
+function bucketPivotDateValue(e, r, t) {
   if (LE(e)) return null;
   let n;
   if (r.dateSystem === "iso") {
@@ -359,7 +381,11 @@ function DP(e, r, t) {
     )
       return Pa(`Invalid date in “${r.field}” on source row ${t + 1}.`);
   } else {
-    if (!lR(e) || e < (r.dateSystem === "1900" ? 1 : 0) || e > 2958465)
+    if (
+      !isFiniteNumber(e) ||
+      e < (r.dateSystem === "1900" ? 1 : 0) ||
+      e > 2958465
+    )
       return Pa(
         `Date grouping for “${r.field}” requires a valid ${r.dateSystem} numeric date serial on source row ${t + 1}.`,
       );
@@ -382,7 +408,7 @@ function DP(e, r, t) {
       ? `${o} Q${Math.ceil(a / 3)}`
       : `${o}-${String(a).padStart(2, "0")}`;
 }
-const tk = (e = false) => ({
+const createAggregateAccumulator = (e = false) => ({
   count: 0,
   numeric: 0,
   sum: 0,
@@ -401,7 +427,7 @@ function SO(e, r) {
           typeof r == "string" ? r.toLocaleLowerCase("en-US") : r,
         ]),
       )),
-    lR(r) &&
+    isFiniteNumber(r) &&
       (e.numeric++,
       (e.sum += r),
       (e.min = Math.min(e.min, r)),
@@ -409,7 +435,7 @@ function SO(e, r) {
       Number.isFinite(e.sum) ||
         Pa("Aggregation exceeds finite numeric bounds.")));
 }
-function rie(e, r) {
+function finalizeAggregateState(e, r) {
   return r === "count"
     ? e.count
     : r === "distinctCount"
@@ -424,7 +450,7 @@ function rie(e, r) {
               : e.max
           : null;
 }
-function OP(e, r, t) {
+function computePivotTable(e, r, t) {
   const n = (C) => {
       const T = r.indexOf(C);
       return T < 0
@@ -459,8 +485,10 @@ function OP(e, r, t) {
     }),
     d = () =>
       s.map((C) => ({
-        ...tk(C.operation === "distinctCount"),
-        ...(C.other !== undefined ? { right: tk() } : {}),
+        ...createAggregateAccumulator(C.operation === "distinctCount"),
+        ...(C.other !== undefined
+          ? { right: createAggregateAccumulator() }
+          : {}),
       }));
   t.length *
     s.length *
@@ -486,7 +514,10 @@ function OP(e, r, t) {
       const N = s[T],
         R = C?.[T];
       if (!N.calculated)
-        return rie(R ?? tk(N.operation === "distinctCount"), N.operation);
+        return finalizeAggregateState(
+          R ?? createAggregateAccumulator(N.operation === "distinctCount"),
+          N.operation,
+        );
       if (!R) return null;
       const L = R.sum,
         $ = N.other !== undefined ? R.right.sum : N.calculated.constant;
@@ -511,7 +542,7 @@ function OP(e, r, t) {
       C.map((N) => {
         const R = e.dateGroups?.find((U) => U.field === r[N]),
           L = T.values[N];
-        return R ? DP(L, R, T.index) : LE(L) ? null : L;
+        return R ? bucketPivotDateValue(L, R, T.index) : LE(L) ? null : L;
       }),
     f = (C) =>
       [
@@ -695,64 +726,72 @@ function OP(e, r, t) {
     })),
   };
 }
-const nie = ["value", "percentGrand", "percentRow", "percentColumn"],
-  Lu = (e) => {
+const pivotShowValuesAsModes = [
+    "value",
+    "percentGrand",
+    "percentRow",
+    "percentColumn",
+  ],
+  throwPivotValidationError = (e) => {
     throw Error(e);
   },
-  P4 = (e) => !!e && typeof e == "object" && !Array.isArray(e),
-  rk = (e) =>
+  isPivotSlicerRecord = (e) => !!e && typeof e == "object" && !Array.isArray(e),
+  requirePivotFieldName = (e) =>
     typeof e == "string" && e.trim() && e.length <= 255
       ? e
-      : Lu("Choose a valid pivot field."),
-  _5 = (e) =>
+      : throwPivotValidationError("Choose a valid pivot field."),
+  isIsoDateString = (e) =>
     typeof e == "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(e) &&
     !e.startsWith("0000") &&
     Number.isFinite(Date.parse(e)) &&
     new Date(e).toISOString().slice(0, 10) === e,
-  U4 = (e, r) =>
+  requireBoundedList = (e, r) =>
     Array.isArray(e) && e.length <= r
       ? e
-      : Lu(`Pivot controls require a list of at most ${r} entries.`),
-  Cp = (e) =>
+      : throwPivotValidationError(
+          `Pivot controls require a list of at most ${r} entries.`,
+        ),
+  buildSlicerItemKey = (e) =>
     JSON.stringify([
       typeof e,
       typeof e == "string" ? e.toLocaleLowerCase("en-US") : e,
     ]);
-function iie(e) {
+function normalizePivotControls(e) {
   const r = {};
   (e.slicers !== undefined &&
-    (r.slicers = U4(e.slicers, 20).map((n) => {
-      if (!P4(n)) return Lu("Invalid pivot slicer.");
-      const o = U4(n.selected, 500).map(
+    (r.slicers = requireBoundedList(e.slicers, 20).map((n) => {
+      if (!isPivotSlicerRecord(n))
+        return throwPivotValidationError("Invalid pivot slicer.");
+      const o = requireBoundedList(n.selected, 500).map(
         (a) => (
           a !== null &&
             typeof a != "boolean" &&
             !(typeof a == "number" && Number.isFinite(a)) &&
             !(typeof a == "string" && a.length <= 32767) &&
-            Lu("Invalid slicer item."),
+            throwPivotValidationError("Invalid slicer item."),
           a
         ),
       );
       return (
-        new Set(o.map(Cp)).size !== o.length &&
-          Lu("Slicer selections must be unique."),
-        { field: rk(n.field), selected: o }
+        new Set(o.map(buildSlicerItemKey)).size !== o.length &&
+          throwPivotValidationError("Slicer selections must be unique."),
+        { field: requirePivotFieldName(n.field), selected: o }
       );
     })),
     e.timelines !== undefined &&
-      (r.timelines = U4(e.timelines, 10).map((n) =>
-        !P4(n) ||
-        !_5(n.from) ||
-        !_5(n.to) ||
+      (r.timelines = requireBoundedList(e.timelines, 10).map((n) =>
+        !isPivotSlicerRecord(n) ||
+        !isIsoDateString(n.from) ||
+        !isIsoDateString(n.to) ||
         n.from > n.to ||
         !["year", "quarter", "month"].includes(String(n.unit)) ||
         !["iso", "1900", "1904"].includes(String(n.dateSystem))
-          ? Lu(
+          ? throwPivotValidationError(
               "Timeline requires ordered YYYY-MM-DD bounds, a period and an explicit date system.",
             )
           : {
-              field: rk(n.field),
+              field: requirePivotFieldName(n.field),
               from: n.from,
               to: n.to,
               unit: n.unit,
@@ -760,32 +799,37 @@ function iie(e) {
             },
       )),
     e.sorts !== undefined &&
-      (r.sorts = U4(e.sorts, 100).map((n) =>
-        !P4(n) || !["ascending", "descending"].includes(String(n.direction))
-          ? Lu("Pivot field sorting requires ascending or descending order.")
-          : { field: rk(n.field), direction: n.direction },
+      (r.sorts = requireBoundedList(e.sorts, 100).map((n) =>
+        !isPivotSlicerRecord(n) ||
+        !["ascending", "descending"].includes(String(n.direction))
+          ? throwPivotValidationError(
+              "Pivot field sorting requires ascending or descending order.",
+            )
+          : { field: requirePivotFieldName(n.field), direction: n.direction },
       )));
   for (const n of [r.slicers, r.timelines, r.sorts])
     n &&
       new Set(n.map((o) => o.field)).size !== n.length &&
-      Lu("Choose only one control of each kind per field.");
+      throwPivotValidationError(
+        "Choose only one control of each kind per field.",
+      );
   if (e.chart !== undefined) {
     const n = e.chart;
     if (
-      !P4(n) ||
+      !isPivotSlicerRecord(n) ||
       !["column", "bar", "line"].includes(String(n.kind)) ||
       !Number.isInteger(n.valueIndex) ||
       Number(n.valueIndex) < 0 ||
       Number(n.valueIndex) >= Number(e.values?.length)
     )
-      return Lu(
+      return throwPivotValidationError(
         "PivotChart requires a supported chart and an existing value field.",
       );
     r.chart = { kind: n.kind, valueIndex: n.valueIndex };
   }
   return r;
 }
-function uR(e, r) {
+function validatePivotFieldReferences(e, r) {
   const t = new Set(e.calculatedFields?.map((a) => a.name)),
     n = [
       ...e.rowFields,
@@ -803,19 +847,21 @@ function uR(e, r) {
     ];
   for (const a of n)
     r.includes(a) ||
-      Lu(
+      throwPivotValidationError(
         `Broken pivot field “${a}”: source field was not found. Restore the header or remove/reselect this field before refreshing. Historical totals are not current.`,
       );
   for (const a of e.sorts ?? [])
     [...e.rowFields, ...e.columnFields].includes(a.field) ||
-      Lu(`Sort field “${a.field}” must be a row or column group.`);
+      throwPivotValidationError(
+        `Sort field “${a.field}” must be a row or column group.`,
+      );
 }
-function MP(e, r, t, n) {
+function normalizeTimelineDate(e, r, t, n) {
   if (e === null || e === "") return null;
   if (r === "iso")
-    return _5(e)
+    return isIsoDateString(e)
       ? e
-      : Lu(
+      : throwPivotValidationError(
           `Timeline field “${t}” has an invalid ISO date on source row ${n + 1}.`,
         );
   if (
@@ -824,7 +870,7 @@ function MP(e, r, t, n) {
     e < (r === "1900" ? 1 : 0) ||
     e > 2958465
   )
-    return Lu(
+    return throwPivotValidationError(
       `Timeline field “${t}” requires ${r} date serials on source row ${n + 1}.`,
     );
   const o = Math.floor(e);
@@ -834,30 +880,30 @@ function MP(e, r, t, n) {
       (o - (r === "1900" && o >= 60 ? 1 : 0)) * 864e5,
   );
   return a.getUTCFullYear() > 9999
-    ? Lu("Timeline date exceeds year 9999.")
+    ? throwPivotValidationError("Timeline date exceeds year 9999.")
     : a.toISOString().slice(0, 10);
 }
-function jP(e, r, t) {
-  uR(e, r);
+function filterPivotSourceRows(e, r, t) {
+  validatePivotFieldReferences(e, r);
   const n = (e.slicers ?? []).map((a) => ({
       index: r.indexOf(a.field),
-      keys: new Set(a.selected.map(Cp)),
+      keys: new Set(a.selected.map(buildSlicerItemKey)),
     })),
     o = (e.timelines ?? []).map((a) => ({ ...a, index: r.indexOf(a.field) }));
   return t.filter((a) => {
     const s = o.map((d) =>
-      MP(a.values[d.index], d.dateSystem, d.field, a.index),
+      normalizeTimelineDate(a.values[d.index], d.dateSystem, d.field, a.index),
     );
     return (
-      n.every((d) => d.keys.has(Cp(a.values[d.index]))) &&
+      n.every((d) => d.keys.has(buildSlicerItemKey(a.values[d.index]))) &&
       o.every((d, u) => s[u] !== null && s[u] >= d.from && s[u] <= d.to)
     );
   });
 }
-function oie(e, r) {
+function buildTimelinePeriods(e, r) {
   const t = new Map();
   for (const n of e) {
-    const o = MP(n, r.dateSystem, r.field, 0);
+    const o = normalizeTimelineDate(n, r.dateSystem, r.field, 0);
     if (!o) continue;
     const a = Number(o.slice(0, 4)),
       s = Number(o.slice(5, 7)),
@@ -892,15 +938,19 @@ const TO = (e) =>
     !Array.isArray(e) &&
     (Object.getPrototypeOf(e) === Object.prototype ||
       Object.getPrototypeOf(e) === null),
-  $4 = (e, r) => typeof e == "string" && e.length > 0 && e.length <= r;
-function aie(e, r) {
+  isBoundedString = (e, r) =>
+    typeof e == "string" && e.length > 0 && e.length <= r;
+function normalizeRowProvenance(e, r) {
   const t = e.sheets;
   if (
     e.rowOrigins === undefined &&
     !t.some((a) => a.rowOriginIds !== undefined)
   )
     return;
-  if (!Array.isArray(e.rowOrigins) || e.rowOrigins.length > Mt.maxCells)
+  if (
+    !Array.isArray(e.rowOrigins) ||
+    e.rowOrigins.length > workbookLimits.maxCells
+  )
     throw Error(
       "Row provenance requires a registry of at most 100,000 source rows.",
     );
@@ -908,15 +958,15 @@ function aie(e, r) {
   r.rowOrigins = e.rowOrigins.map((a) => {
     if (
       !TO(a) ||
-      !$4(a.id, 100) ||
+      !isBoundedString(a.id, 100) ||
       n.has(a.id) ||
-      !$4(a.sourceId, 100) ||
-      !$4(a.sourceName, 255) ||
-      !$4(a.sourceSheet, 31) ||
+      !isBoundedString(a.sourceId, 100) ||
+      !isBoundedString(a.sourceName, 255) ||
+      !isBoundedString(a.sourceSheet, 31) ||
       !["file", "snapshot"].includes(String(a.kind)) ||
       !Number.isInteger(a.originalRow) ||
       Number(a.originalRow) < 1 ||
-      Number(a.originalRow) > Mt.maxRows
+      Number(a.originalRow) > workbookLimits.maxRows
     )
       throw Error("Invalid, duplicated or out-of-bounds original source row.");
     return (
@@ -944,7 +994,7 @@ function aie(e, r) {
         Number(u) >= Number(t[a].rowCount) ||
         typeof l != "string" ||
         !n.has(l) ||
-        ++o > Mt.maxCells
+        ++o > workbookLimits.maxCells
       )
         throw Error("Invalid or over-capacity source row association.");
       d[u] = l;
@@ -952,12 +1002,12 @@ function aie(e, r) {
     r.sheets[a].rowOriginIds = d;
   }
 }
-function U1(e, r, t) {
+function findRowOrigin(e, r, t) {
   const n = e.sheets.find((u) => u.id === r)?.rowOriginIds?.[t],
     o = n && e.rowOrigins?.find((u) => u.id === n);
   return o ? { ...o } : null;
 }
-function sie(e, r) {
+function validateRowOrigins(e, r) {
   var n;
   if (!((n = e.rowOrigins) != null && n.length)) return;
   const t = new Map((r.rowOrigins ?? []).map((o) => [o.id, o]));
@@ -977,37 +1027,43 @@ function sie(e, r) {
         "Original source row identities cannot be changed or removed. Keep the source registry and change only current row associations.",
       );
 }
-const cR = ["sum", "count", "average", "min", "max"],
-  FP = [...cR, "distinctCount"],
-  qw = () => crypto.randomUUID();
-function Xt(e) {
+const basicAggregateOperations = ["sum", "count", "average", "min", "max"],
+  pivotAggregateOperations = [...basicAggregateOperations, "distinctCount"],
+  createUuid = () => crypto.randomUUID();
+function throwWorkbookError(e) {
   throw new Error(e);
 }
-function UP(e) {
+function assertUniqueTableNames(e) {
   const r = new Set(),
     t = new Set();
   for (const n of e.sheets)
     for (const o of n.tables ?? [])
       ((r.has(o.name.toLowerCase()) || t.has(o.id)) &&
-        Xt("Table names and IDs must be unique across the workbook."),
+        throwWorkbookError(
+          "Table names and IDs must be unique across the workbook.",
+        ),
         r.add(o.name.toLowerCase()),
         t.add(o.id));
 }
-function xC(e) {
+function assertWithinCellBudget(e) {
   return (
     e.sheets.reduce((r, t) => r + Object.keys(t.cells).length, 0) >
-      Mt.maxCells &&
-      Xt("The result would exceed the 100,000 populated-cell workbook budget."),
+      workbookLimits.maxCells &&
+      throwWorkbookError(
+        "The result would exceed the 100,000 populated-cell workbook budget.",
+      ),
     e
   );
 }
-function Yv(e, r) {
+function findSourceFieldIndex(e, r) {
   const t = e.indexOf(r);
   return t >= 0
     ? t
-    : Xt(`Source field “${r}” was not found. Refresh the field selection.`);
+    : throwWorkbookError(
+        `Source field “${r}” was not found. Refresh the field selection.`,
+      );
 }
-function pie(e, r) {
+function buildUniqueSheetName(e, r) {
   const t =
     r
       .replace(/[\\/\[\]*?:]/g, " ")
@@ -1019,28 +1075,30 @@ function pie(e, r) {
     n = `${t.slice(0, 25)} (${o++})`;
   return n;
 }
-const WP = (e) => {
+const computePivotRefreshFingerprint = (e) => {
   const r = JSON.stringify(e);
   r.length > 16e6 &&
-    Xt(
+    throwWorkbookError(
       "Pivot refresh evidence exceeds the 16-million-character fingerprint budget. Use a smaller source.",
     );
   const t = [];
   for (let n = 0; n < r.length; n += 5e5)
-    t.push(FE(new Uint8Array(strToU8(r.slice(n, n + 5e5)))));
-  return FE(new Uint8Array(strToU8(JSON.stringify([r.length, ...t]))));
+    t.push(hashPictureBytes(new Uint8Array(strToU8(r.slice(n, n + 5e5)))));
+  return hashPictureBytes(
+    new Uint8Array(strToU8(JSON.stringify([r.length, ...t]))),
+  );
 };
-function Sx(e, r) {
+function findPivotDefinition(e, r) {
   const t = e.sheets.find((a) => {
       return a.pivots?.some((d) => d.id === r);
     }),
     n = t?.pivots?.find((a) => a.id === r);
   return (
-    (!t || !n) && Xt("Pivot definition not found."),
+    (!t || !n) && throwWorkbookError("Pivot definition not found."),
     { owner: t, definition: n }
   );
 }
-function qP(e, r, t) {
+function buildPivotStatusRecord(e, r, t) {
   return {
     workbookId: e.id,
     revision: e.revision,
@@ -1075,34 +1133,42 @@ function qP(e, r, t) {
       "Controls intersect. Slicer items use type-sensitive, case-insensitive equality; an empty selection includes no records. Hidden source rows are included. Percentages use filtered aggregate totals. Drill-through returns numerator records, including blank/nonnumeric measure inputs; it does not expand denominator populations.",
   };
 }
-const Jv = { changedCells: 500, appendedRows: 100, formulaLength: 4096 };
-function wR(e, r = false) {
+const tableMutationLimits = {
+  changedCells: 500,
+  appendedRows: 100,
+  formulaLength: 4096,
+};
+function validateCalculatedColumnFormula(e, r = false) {
   (typeof e != "string" ||
-    e.length > Jv.formulaLength ||
+    e.length > tableMutationLimits.formulaLength ||
     e !== e.trim() ||
     !e.startsWith("=")) &&
-    Xt(
+    throwWorkbookError(
       "Calculated column formulas must begin with = and contain at most 4,096 characters, without outer whitespace.",
     );
   try {
-    pC(e);
+    validateNameFormulaText(e);
   } catch (t) {
-    Xt(
+    throwWorkbookError(
       `Calculated column formula: ${t.message.replace(/^XLSX defined names: /, "").replace(/ Import\/export stopped.*$/, "")}`,
     );
   }
   return (
     !r &&
-      /#REF!/.test(Vg(e.replace(/"(?:[^"]|"")*"/g, '""'))) &&
-      Xt(
+      /#REF!/.test(
+        stripFormulaStringLiterals(e.replace(/"(?:[^"]|"")*"/g, '""')),
+      ) &&
+      throwWorkbookError(
         "Repair broken #REF! references before saving a calculated column rule.",
       ),
     e
   );
 }
-const RO = "\\$?[A-Za-z]{1,3}\\$?[1-9]\\d{0,6}",
-  Cie = new RegExp(`^(${RO}(?::${RO})?)(?![A-Za-z0-9_.$:#\\[])`);
-function Tx(e, r = 5e3) {
+const a1CellPattern = "\\$?[A-Za-z]{1,3}\\$?[1-9]\\d{0,6}",
+  a1ReferenceAnchorPattern = new RegExp(
+    `^(${a1CellPattern}(?::${a1CellPattern})?)(?![A-Za-z0-9_.$:#\\[])`,
+  );
+function parseExternalLinkRange(e, r = 5e3) {
   const t = (p) => {
       const m = /^\$?([A-Za-z]{1,3})\$?([1-9]\d{0,6})$/.exec(p);
       if (!m)
@@ -1138,7 +1204,7 @@ function Tx(e, r = 5e3) {
     }
   return u;
 }
-function eU(e) {
+function tokenizeExternalReferences(e) {
   const r = [];
   for (let t = 0; t < e.length;) {
     if (e[t] === '"') {
@@ -1160,10 +1226,10 @@ function eU(e) {
       s)
     ) {
       const u = /^(.*\[[^\[\]\r\n]+\])([^\[\]:\r\n]+)$/.exec(s),
-        l = Cie.exec(e.slice(t + d));
+        l = a1ReferenceAnchorPattern.exec(e.slice(t + d));
       if (u && l && (!t || !/[A-Za-z0-9_.\]]/.test(e[t - 1])))
         try {
-          (Tx(l[1]),
+          (parseExternalLinkRange(l[1]),
             (t += d + l[0].length),
             r.push({
               start: n,
@@ -1191,33 +1257,34 @@ function eU(e) {
   }
   return r;
 }
-function xR(e, r) {
-  const t = eU(e);
+function rewriteExternalReferences(e, r) {
+  const t = tokenizeExternalReferences(e);
   for (const n of t.reverse()) {
     const o = r(n);
     o !== undefined && (e = e.slice(0, n.start) + o + e.slice(n.end));
   }
   return e;
 }
-const Aie = (e, r, t) => `'${(e + r).replace(/'/g, "''")}'!${t}`,
-  uh = Object.freeze({
+const formatExternalSheetReference = (e, r, t) =>
+    `'${(e + r).replace(/'/g, "''")}'!${t}`,
+  workbookLinkLimits = Object.freeze({
     sources: 8,
     sheets: 32,
     cells: 5e3,
     formulas: 500,
     metadataCharacters: 2e6,
   }),
-  rg = (e) =>
+  boundedPlainText = (e) =>
     string()
       .min(1)
       .max(e)
       .refine((r) => !/[\u0000-\u001f\u007f]/.test(r)),
-  Xw = rg(2048).refine(
+  workbookQualifierSchema = boundedPlainText(2048).refine(
     (e) => /^[^\[\]]*\[[^\[\]]+\]$/.test(e),
     "Use an exact workbook qualifier such as [Source.xlsx].",
   ),
   tU = string().regex(/^[a-f0-9]{64}$/),
-  kie = discriminatedUnion("type", [
+  linkedCellValueSchema = discriminatedUnion("type", [
     strictObject({ type: literal("number"), value: number().finite() }),
     strictObject({ type: literal("text"), value: string().max(32767) }),
     strictObject({ type: literal("boolean"), value: boolean() }),
@@ -1229,51 +1296,57 @@ const Aie = (e, r, t) => `'${(e + r).replace(/'/g, "''")}'!${t}`,
         .max(30),
     }),
   ]),
-  Sie = strictObject({
-    target: Xw,
-    sourceId: rg(100),
-    sourceName: rg(200),
+  workbookLinkSourceSchema = strictObject({
+    target: workbookQualifierSchema,
+    sourceId: boundedPlainText(100),
+    sourceName: boundedPlainText(200),
     sourceRevision: number().int().nonnegative(),
     sourceFingerprint: tU,
-    resolvedAt: L3(),
+    resolvedAt: isoDateTimeSchemaFactory(),
     sheets: array(
       strictObject({
-        id: rg(100),
-        name: rg(31),
-        cells: record(string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/), kie),
+        id: boundedPlainText(100),
+        name: boundedPlainText(31),
+        cells: record(
+          string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
+          linkedCellValueSchema,
+        ),
       }),
     )
       .min(1)
       .max(32),
   }),
-  Tie = strictObject({
+  workbookLinkPackageSchema = strictObject({
     schemaVersion: literal(1),
-    sources: array(Sie).max(8),
+    sources: array(workbookLinkSourceSchema).max(8),
     packageTargets: array(
       strictObject({
-        key: Xw,
-        target: rg(4096),
-        part: rg(1024),
+        key: workbookQualifierSchema,
+        target: boundedPlainText(4096),
+        part: boundedPlainText(1024),
         sourceSha256: tU,
       }),
     )
       .max(100)
       .optional(),
   }),
-  IO = new WeakSet();
-function Nie(e, r) {
+  validatedWorkbookLinkRegistry = new WeakSet();
+function attachWorkbookLinkMetadata(e, r) {
   if (e.workbookLinks === undefined) return;
   if (
     e.workbookLinks &&
     typeof e.workbookLinks == "object" &&
-    IO.has(e.workbookLinks)
+    validatedWorkbookLinkRegistry.has(e.workbookLinks)
   ) {
     r.workbookLinks = e.workbookLinks;
     return;
   }
-  if (JSON.stringify(e.workbookLinks).length > uh.metadataCharacters)
+  if (
+    JSON.stringify(e.workbookLinks).length >
+    workbookLinkLimits.metadataCharacters
+  )
     throw Error("Workbook link metadata exceeds 2 million characters.");
-  const t = Tie.parse(e.workbookLinks);
+  const t = workbookLinkPackageSchema.parse(e.workbookLinks);
   if (new Set(t.sources.map((d) => d.target)).size !== t.sources.length)
     throw Error("Workbook link targets must be unique.");
   if (
@@ -1291,14 +1364,15 @@ function Nie(e, r) {
       throw Error("Linked worksheet names must be unique.");
     for (const u of d.sheets) {
       o++;
-      for (const l of Object.keys(u.cells)) (Tx(l), n++);
+      for (const l of Object.keys(u.cells)) (parseExternalLinkRange(l), n++);
     }
   }
-  if (n > uh.cells || o > uh.sheets)
+  if (n > workbookLinkLimits.cells || o > workbookLinkLimits.sheets)
     throw Error("Workbook link cache exceeds its cell or sheet limit.");
-  ((r.workbookLinks = Lg(t)), IO.add(r.workbookLinks));
+  ((r.workbookLinks = deepFreezeValue(t)),
+    validatedWorkbookLinkRegistry.add(r.workbookLinks));
 }
-function ER(e) {
+function encodeWorkbookFingerprint(e) {
   const r = new TextEncoder().encode(
     JSON.stringify([
       e.id,
@@ -1324,9 +1398,9 @@ function ER(e) {
       ]),
     ]),
   );
-  return iu(r);
+  return sha256HexDigest(r);
 }
-function rU(e) {
+function buildExternalLinkAliases(e) {
   const r = [],
     t = new Map(),
     n = new Map(),
@@ -1348,17 +1422,22 @@ function rU(e) {
     sheets: r,
     values: t,
     rewrite: (d) =>
-      xR(d, (u) => {
+      rewriteExternalReferences(d, (u) => {
         const l = e.workbookLinks?.sources.find((f) => f.target === u.target),
           c = l?.sheets.find(
             (f) => f.name.toLowerCase() === u.sheet.toLowerCase(),
           );
-        if (!(!c || !Tx(u.range).every((f) => Object.hasOwn(c.cells, f))))
+        if (!(
+          !c ||
+          !parseExternalLinkRange(u.range).every((f) =>
+            Object.hasOwn(c.cells, f),
+          )
+        ))
           return `'${n.get(JSON.stringify([u.target, u.sheet.toLowerCase()]))}'!${u.range}`;
       }),
   };
 }
-const AR = [
+const databaseFunctionNames = [
     "DSUM",
     "DAVERAGE",
     "DCOUNT",
@@ -1372,8 +1451,8 @@ const AR = [
     "DVARP",
     "DGET",
   ],
-  nU = Symbol("not a database function"),
-  np = {
+  notDatabaseFunctionMarker = Symbol("not a database function"),
+  databaseFunctionLimits = {
     databaseCells: 2e4,
     criteriaCells: 1e3,
     predicateComparisons: 1e5,
@@ -1382,8 +1461,8 @@ const AR = [
     headerCharacters: 255,
     formulaEvaluations: 1e4,
   };
-function Rie(e, r, t) {
-  if (!AR.includes(e)) return nU;
+function evaluateDatabaseFunction(e, r, t) {
+  if (!databaseFunctionNames.includes(e)) return notDatabaseFunctionMarker;
   const n = (T = "#VALUE!") => {
     throw t.issue(T);
   };
@@ -1424,13 +1503,18 @@ function Rie(e, r, t) {
           }
       return L;
     },
-    a = o(r[0], np.databaseCells),
-    s = o(r[2], np.criteriaCells);
-  if ((a.length - 1) * (s.length - 1) * s[0].length > np.predicateComparisons)
+    a = o(r[0], databaseFunctionLimits.databaseCells),
+    s = o(r[2], databaseFunctionLimits.criteriaCells);
+  if (
+    (a.length - 1) * (s.length - 1) * s[0].length >
+    databaseFunctionLimits.predicateComparisons
+  )
     return n("#LIMIT!");
   const d = (T) => {
       if (t.isIssue(T)) throw T;
-      return typeof T != "string" || !T.trim() || T.length > np.headerCharacters
+      return typeof T != "string" ||
+        !T.trim() ||
+        T.length > databaseFunctionLimits.headerCharacters
         ? n()
         : T.toLowerCase();
     },
@@ -1456,7 +1540,8 @@ function Rie(e, r, t) {
   }
   let f = 0;
   const p = (T) => {
-      ((f += T), f > np.textComparisonSteps && n("#LIMIT!"));
+      ((f += T),
+        f > databaseFunctionLimits.textComparisonSteps && n("#LIMIT!"));
     },
     m = (T, N, R) =>
       R === "<>"
@@ -1475,7 +1560,8 @@ function Rie(e, r, t) {
       if (T == null || T === "") return null;
       if (typeof T == "number" || typeof T == "boolean") return (Q) => Q === T;
       if (typeof T != "string") return n();
-      if (T.length > np.criterionCharacters) return n("#LIMIT!");
+      if (T.length > databaseFunctionLimits.criterionCharacters)
+        return n("#LIMIT!");
       const N = /^(<=|>=|<>|=|<|>)?(.*)$/s.exec(T),
         R = N[1] ?? "=",
         L = N[2];
@@ -1559,8 +1645,8 @@ function Rie(e, r, t) {
       if (!b[N][L] && !(R == null || R === "")) return n();
     }),
   );
-  b.flat().filter(Boolean).length * (a.length - 1) > np.formulaEvaluations &&
-    n("#LIMIT!");
+  b.flat().filter(Boolean).length * (a.length - 1) >
+    databaseFunctionLimits.formulaEvaluations && n("#LIMIT!");
   let E = 0,
     A = 0,
     k = 0,
@@ -1578,7 +1664,7 @@ function Rie(e, r, t) {
       for (let Q = 0; Q < G.length; Q++) {
         const X = b[U][Q];
         if (X) {
-          ++g > np.formulaEvaluations && n("#LIMIT!");
+          ++g > databaseFunctionLimits.formulaEvaluations && n("#LIMIT!");
           const W = X(T);
           if (t.isIssue(W)) throw W;
           (typeof W != "boolean" && n(), W || (H = false));
@@ -1621,25 +1707,30 @@ function Rie(e, r, t) {
   const C = Math.max(0, V / (A - (_ ? 1 : 0)));
   return B(e === "DSTDEV" || e === "DSTDEVP" ? Math.sqrt(C) : C);
 }
-const iU = ["SUBTOTAL", "AGGREGATE", "ISFORMULA", "FORMULATEXT"],
-  oU = Symbol("not-reference-function"),
-  ip = (e) =>
+const referenceSensitiveFunctionNames = [
+    "SUBTOTAL",
+    "AGGREGATE",
+    "ISFORMULA",
+    "FORMULATEXT",
+  ],
+  notReferenceFunctionMarker = Symbol("not-reference-function"),
+  isPlainObjectLiteral = (e) =>
     !!e &&
     typeof e == "object" &&
     !Array.isArray(e) &&
     [Object.prototype, null].includes(Object.getPrototypeOf(e)),
   z4 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal;
-function Iie(e) {
+function containsSubtotalCall(e) {
   return /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.(?:_xlws\.)?)?SUBTOTAL\s*\(/i.test(
     e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, ""),
   );
 }
-function _ie(e) {
+function containsSubtotalOrAggregateCall(e) {
   return /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.(?:_xlws\.)?)?(?:SUBTOTAL|AGGREGATE)\s*\(/i.test(
     e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, ""),
   );
 }
-const Oie = [
+const aggregateFunctionNames = [
     "SUM",
     "AVERAGE",
     "MIN",
@@ -1716,31 +1807,39 @@ const Oie = [
     "STDEV.S",
     "VAR.S",
   ],
-  Fc = [
+  builtinFunctionNames = [
     ...new Set([
-      ...Oie,
-      ...ZF,
-      ...rP,
-      ...oB,
-      ...iU,
-      ...AR,
-      ...QN,
-      ...nne,
-      ...hne,
-      ...YL,
+      ...aggregateFunctionNames,
+      ...supportedFunctionNames,
+      ...modernFunctionNames,
+      ...supportedFinancialFunctionNames,
+      ...referenceSensitiveFunctionNames,
+      ...databaseFunctionNames,
+      ...statisticalFunctionNames,
+      ...ownedLookupFunctionNames,
+      ...localBindingFunctionNames,
+      ...specialistFunctionNames,
       ...XL,
-      ...ZL,
+      ...significanceTestFunctionNames,
     ]),
   ].sort(),
-  Mie = new Set(Fc),
-  aU = JN.FormulaError,
-  kR = (e) => new aU(e),
-  jie = kR,
-  wn = (e) => e instanceof aU,
-  Gl = (e) => (Array.isArray(e) ? e.flatMap(Gl) : [e]),
-  M5 = (e) => e.flatMap(Gl).find(wn);
-function dp(e, r, t) {
-  if (e.cell || (e.call && !e.qualifier && Fc.includes(P3(e.name)))) return;
+  builtinFunctionNameSet = new Set(builtinFunctionNames),
+  FormulaErrorClass = FormulaParser.FormulaError,
+  createFormulaError = (e) => new FormulaErrorClass(e),
+  formulaErrorFactory = createFormulaError,
+  isFormulaError = (e) => e instanceof FormulaErrorClass,
+  flattenNestedValues = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenNestedValues) : [e],
+  findFormulaErrorArg = (e) =>
+    e.flatMap(flattenNestedValues).find(isFormulaError);
+function findScopedDefinedName(e, r, t) {
+  if (
+    e.cell ||
+    (e.call &&
+      !e.qualifier &&
+      builtinFunctionNames.includes(normalizeFunctionName(e.name)))
+  )
+    return;
   const n = e.qualifier
     ? r.sheets.find((d) => d.name.toLowerCase() === e.qualifier.toLowerCase())
         ?.id
@@ -1756,13 +1855,13 @@ function dp(e, r, t) {
       )
     );
 }
-function pf(e, r, t, n = [], o) {
+function resolveDefinedNameValue(e, r, t, n = [], o) {
   if (n.length > 32) throw new Error("#LIMIT!");
-  const a = g5(e, m5(e), (s) => {
+  const a = replaceTextSpans(e, m5(e), (s) => {
     if (s.call) return s.text;
-    const d = dp(s, r, t);
-    if (!d || $p(d.refersTo)) return s.text;
-    const u = Ba(d);
+    const d = findScopedDefinedName(s, r, t);
+    if (!d || parseFormulaTree(d.refersTo)) return s.text;
+    const u = definedNameScopeKey(d);
     if (n.includes(u)) throw new Error("#CYCLE!");
     const l =
       d.scopeSheetId ??
@@ -1772,15 +1871,17 @@ function pf(e, r, t, n = [], o) {
           ).id
         : t);
     if (o && !o(l)) throw new Error("#BLOCKED!");
-    let c = pf(d.refersTo.slice(1), r, l, [...n, u], o);
+    let c = resolveDefinedNameValue(d.refersTo.slice(1), r, l, [...n, u], o);
     if (l !== t) {
       const h = r.sheets.find((p) => p.id === l),
         f = m5(c);
-      c = g5(c, f, (p) => {
+      c = replaceTextSpans(c, f, (p) => {
         const m = f.indexOf(p),
           v = f[m - 1],
           g = v?.cell && c.slice(v.end, p.start).trim() === ":";
-        return p.cell && !p.qualifier && !g ? sne(h.name) + p.text : p.text;
+        return p.cell && !p.qualifier && !g
+          ? formatQuotedSheetPrefix(h.name) + p.text
+          : p.text;
       });
     }
     return `(${c})`;
@@ -1790,61 +1891,61 @@ function pf(e, r, t, n = [], o) {
 }
 
 export {
-  AR,
-  Aie,
-  BE,
-  Cp,
-  DP,
-  ER,
+  databaseFunctionNames,
+  formatExternalSheetReference,
+  assertDrawingPreviewCurrent,
+  buildSlicerItemKey,
+  bucketPivotDateValue,
+  encodeWorkbookFingerprint,
   F2,
-  FP,
-  Fc,
-  Gl,
-  Iie,
-  Jv,
-  M5,
-  Mie,
-  Nie,
-  OP,
-  P1,
-  Rie,
-  Sx,
-  Tx,
-  U1,
-  UP,
-  WP,
-  Xt,
-  Xw,
-  Yv,
-  _P,
-  _ie,
-  aie,
-  cR,
-  dp,
-  eU,
-  ek,
-  iU,
-  iie,
-  ip,
-  jP,
-  jie,
-  kR,
-  nU,
-  nie,
-  oU,
-  oie,
-  pf,
-  pie,
-  qP,
-  qw,
-  rU,
-  sie,
-  tie,
-  uR,
-  uh,
-  wR,
-  wn,
-  xC,
-  xR,
+  pivotAggregateOperations,
+  builtinFunctionNames,
+  flattenNestedValues,
+  containsSubtotalCall,
+  tableMutationLimits,
+  findFormulaErrorArg,
+  builtinFunctionNameSet,
+  attachWorkbookLinkMetadata,
+  computePivotTable,
+  inspectPictureDataUrl,
+  evaluateDatabaseFunction,
+  findPivotDefinition,
+  parseExternalLinkRange,
+  findRowOrigin,
+  assertUniqueTableNames,
+  computePivotRefreshFingerprint,
+  throwWorkbookError,
+  workbookQualifierSchema,
+  findSourceFieldIndex,
+  validatePictureEvidence,
+  containsSubtotalOrAggregateCall,
+  normalizeRowProvenance,
+  basicAggregateOperations,
+  findScopedDefinedName,
+  tokenizeExternalReferences,
+  createPictureEvidence,
+  referenceSensitiveFunctionNames,
+  normalizePivotControls,
+  isPlainObjectLiteral,
+  filterPivotSourceRows,
+  formulaErrorFactory,
+  createFormulaError,
+  notDatabaseFunctionMarker,
+  pivotShowValuesAsModes,
+  notReferenceFunctionMarker,
+  buildTimelinePeriods,
+  resolveDefinedNameValue,
+  buildUniqueSheetName,
+  buildPivotStatusRecord,
+  createUuid,
+  buildExternalLinkAliases,
+  validateRowOrigins,
+  validatePivotRefreshEvidence,
+  validatePivotFieldReferences,
+  workbookLinkLimits,
+  validateCalculatedColumnFormula,
+  isFormulaError,
+  assertWithinCellBudget,
+  rewriteExternalReferences,
   z4,
 };

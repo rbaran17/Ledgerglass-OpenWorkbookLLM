@@ -3,34 +3,54 @@ import i from "react/jsx-runtime";
 import ne from "react";
 import { string, array, discriminatedUnion, literal, object } from "zod";
 import {
-  Gf,
-  Iw,
-  Pg,
-  eB,
-  lf,
-  lx,
-  ts,
-  yE,
-  yc,
+  walkFormulaNodes,
+  calculationBudgetDefaults,
+  tokenizeFormulaText,
+  workbookUsesNowOrToday,
+  normalizeBindingName,
+  resolveLocalDateTime,
+  normalizeDatePolicy,
+  calculationFeatureSupport,
+  defineDataPropertyByKey,
 } from "./01-core-schemas-and-hashing.js";
-import { HJ, Mt, dx } from "./02-financial-functions.js";
-import { Cf, Fc, Gw, Vie, Vn, Wie, ct, sU, ut } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { Ek } from "./08-xlsx-export-and-preservation.js";
+import {
+  workbookLimitTable,
+  workbookLimits,
+  supportedFontFamilies,
+} from "./02-financial-functions.js";
+import {
+  evaluateWorkbookFormulas,
+  builtinFunctionNames,
+  getWorkbookCalculation,
+  withCalculationSettings,
+  calculateWorkbookWithSettings,
+  buildCalculationEvidence,
+  parseRangeAddress,
+  refreshCalculationReport,
+  columnIndexToLetters,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import { numericPrecisionPolicy } from "./08-xlsx-export-and-preservation.js";
 
-function Zce(e) {
-  const { text, language } = Dr(),
+function CalculationOptionsDialog(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     [, a] = ne.useState(0),
-    { report } = Gw(e.workbook),
+    { report } = getWorkbookCalculation(e.workbook),
     [d, u] = ne.useState(report.settings),
     [l, c] = ne.useState(""),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState(0),
-    [v, g] = ne.useState(() => ts(e.workbook.datePolicy));
+    [v, g] = ne.useState(() => normalizeDatePolicy(e.workbook.datePolicy));
   (ne.useEffect(() => {
-    (u(Gw(e.workbook).report.settings), g(ts(e.workbook.datePolicy)), m(0));
+    (u(getWorkbookCalculation(e.workbook).report.settings),
+      g(normalizeDatePolicy(e.workbook.datePolicy)),
+      m(0));
   }, [e.workbook]),
     ne.useEffect(() => {
       var V;
@@ -58,7 +78,7 @@ function Zce(e) {
           e.onCalculate();
           return;
         }
-        (sU(e.workbook),
+        (refreshCalculationReport(e.workbook),
           a((z) => z + 1),
           (j = e.onCalculated) == null || j.call(e));
       }),
@@ -69,13 +89,16 @@ function Zce(e) {
             "This host is read-only. Calculation settings cannot be changed.",
           );
         e.onWorkbookChange(
-          { ...Vie(e.workbook, d), datePolicy: ts(v) },
+          {
+            ...withCalculationSettings(e.workbook, d),
+            datePolicy: normalizeDatePolicy(v),
+          },
           `Set calculation to ${d.mode}; iteration ${d.iterative ? "enabled" : "disabled"}; dates ${v.dateSystem} ${v.textDateOrder}, time zone ${v.timeZone}`,
         );
       }),
     E = () =>
       b(() => {
-        const j = Wie(e.workbook, report);
+        const j = buildCalculationEvidence(e.workbook, report);
         if (e.onExport) {
           e.onExport(j);
           return;
@@ -129,10 +152,12 @@ function Zce(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Calculation Options" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Calculation Options",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Review current results, dependency changes and separately retained imported caches.",
                   }),
@@ -153,11 +178,11 @@ function Zce(e) {
           className: "rc-settings",
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, { children: "Workbook settings" }),
+              children: i.jsx(LocalizedText, { children: "Workbook settings" }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Calculation mode" }),
+                i.jsx(LocalizedText, { children: "Calculation mode" }),
                 i.jsxs("select", {
                   "aria-label": text("Calculation mode"),
                   value: d.mode,
@@ -181,13 +206,15 @@ function Zce(e) {
                   checked: d.iterative,
                   onChange: (j) => u({ ...d, iterative: j.target.checked }),
                 }),
-                i.jsx(M, { children: "Enable iterative calculation" }),
+                i.jsx(LocalizedText, {
+                  children: "Enable iterative calculation",
+                }),
               ],
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Maximum iterations" }),
-                i.jsx(ci, {
+                i.jsx(LocalizedText, { children: "Maximum iterations" }),
+                i.jsx(LocalizedNumberField, {
                   "aria-label": text("Maximum iterations"),
                   min: 1,
                   max: 1e3,
@@ -198,8 +225,8 @@ function Zce(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Maximum change" }),
-                i.jsx(ci, {
+                i.jsx(LocalizedText, { children: "Maximum change" }),
+                i.jsx(LocalizedNumberField, {
                   "aria-label": text("Maximum change"),
                   min: 0,
                   max: 1,
@@ -211,8 +238,8 @@ function Zce(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Time budget (ms)" }),
-                i.jsx(ci, {
+                i.jsx(LocalizedText, { children: "Time budget (ms)" }),
+                i.jsx(LocalizedNumberField, {
                   "aria-label": text("Time budget (ms)"),
                   min: 1,
                   max: 1e4,
@@ -223,32 +250,35 @@ function Zce(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Working-data budget (MiB)" }),
-                i.jsx(ci, {
+                i.jsx(LocalizedText, { children: "Working-data budget (MiB)" }),
+                i.jsx(LocalizedNumberField, {
                   "aria-label": text("Working-data budget (MiB)"),
                   min: 1,
                   max: 128,
-                  value: d.memoryBudgetMiB ?? Iw.defaultMemoryBudgetMiB,
+                  value:
+                    d.memoryBudgetMiB ??
+                    calculationBudgetDefaults.defaultMemoryBudgetMiB,
                   onValueChange: (j) => u({ ...d, memoryBudgetMiB: Number(j) }),
                 }),
               ],
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Calculation work budget" }),
-                i.jsx(ci, {
+                i.jsx(LocalizedText, { children: "Calculation work budget" }),
+                i.jsx(LocalizedNumberField, {
                   "aria-label": text("Calculation work budget"),
                   min: 1e3,
                   max: 1e7,
                   step: 1e3,
-                  value: d.workBudget ?? Iw.defaultWorkBudget,
+                  value:
+                    d.workBudget ?? calculationBudgetDefaults.defaultWorkBudget,
                   onValueChange: (j) => u({ ...d, workBudget: Number(j) }),
                 }),
               ],
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Workbook date system" }),
+                i.jsx(LocalizedText, { children: "Workbook date system" }),
                 i.jsxs("select", {
                   "aria-label": text("Workbook date system"),
                   value: v.dateSystem,
@@ -271,14 +301,14 @@ function Zce(e) {
             v.dateSystem !== report.dateContext.dateSystem &&
               i.jsx("p", {
                 role: "status",
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "Changing the date system keeps stored numbers and formulas. Existing date serials will be interpreted using the new system; ordinary corresponding dates differ by 1,462 days. The 1900 system includes the fictitious serial 60 as a special boundary. Review this change before applying. Undo restores the previous setting.",
                 }),
               }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Text date order" }),
+                i.jsx(LocalizedText, { children: "Text date order" }),
                 i.jsxs("select", {
                   "aria-label": text("Text date order"),
                   value: v.textDateOrder,
@@ -300,7 +330,7 @@ function Zce(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Calculation time zone" }),
+                i.jsx(LocalizedText, { children: "Calculation time zone" }),
                 i.jsx("input", {
                   "aria-label": text("Calculation time zone"),
                   value: v.timeZone,
@@ -313,13 +343,15 @@ function Zce(e) {
             }),
             i.jsx("button", {
               onClick: w,
-              children: i.jsx(M, { children: "Apply calculation settings" }),
+              children: i.jsx(LocalizedText, {
+                children: "Apply calculation settings",
+              }),
             }),
           ],
         }),
         e.readOnly &&
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Read-only host: settings are locked. Calculate Now refreshes local results without editing source cells or history.",
             }),
@@ -329,22 +361,26 @@ function Zce(e) {
           children: [
             i.jsx("button", {
               onClick: y,
-              children: i.jsx(M, { children: "Calculate Now" }),
+              children: i.jsx(LocalizedText, { children: "Calculate Now" }),
             }),
             report.execution?.mode === "worker" &&
               report.execution.state === "pending" &&
               e.onCancelCalculation &&
               i.jsx("button", {
                 onClick: e.onCancelCalculation,
-                children: i.jsx(M, { children: "Cancel calculation" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Cancel calculation",
+                }),
               }),
             i.jsx("button", {
               onClick: E,
-              children: i.jsx(M, { children: "Download calculation evidence" }),
+              children: i.jsx(LocalizedText, {
+                children: "Download calculation evidence",
+              }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Find formula" }),
+                i.jsx(LocalizedText, { children: "Find formula" }),
                 i.jsx("input", {
                   "aria-label": text("Find formula results"),
                   value: h,
@@ -362,28 +398,28 @@ function Zce(e) {
         i.jsxs("p", {
           role: "status",
           children: [
-            i.jsx(M, { children: "Revision " }),
+            i.jsx(LocalizedText, { children: "Revision " }),
             report.revision,
             " · ",
             report.settings.mode,
             " · ",
             report.formulaCount,
             " ",
-            i.jsx(M, { children: "formulas · " }),
+            i.jsx(LocalizedText, { children: "formulas · " }),
             report.evaluated,
             " ",
-            i.jsx(M, { children: "evaluated ·" }),
+            i.jsx(LocalizedText, { children: "evaluated ·" }),
             " ",
             report.reused,
             " ",
-            i.jsx(M, { children: "reused · " }),
+            i.jsx(LocalizedText, { children: "reused · " }),
             report.pending,
             " ",
-            i.jsx(M, { children: "pending ·" }),
+            i.jsx(LocalizedText, { children: "pending ·" }),
             " ",
             report.dependencyEdges,
             " ",
-            i.jsx(M, { children: "dependency edges" }),
+            i.jsx(LocalizedText, { children: "dependency edges" }),
           ],
         }),
         i.jsxs("p", {
@@ -394,7 +430,7 @@ function Zce(e) {
           open: true,
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Calculation limits and volatile formulas",
               }),
             }),
@@ -410,24 +446,24 @@ function Zce(e) {
             }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Working data:" }),
+                i.jsx(LocalizedText, { children: "Working data:" }),
                 " ",
                 (report.resources.accountedBytes / 1048576).toFixed(2),
                 " /",
                 " ",
                 (report.resources.memoryBudgetBytes / 1048576).toFixed(0),
                 " ",
-                i.jsx(M, { children: "MiB accounted. Work: " }),
+                i.jsx(LocalizedText, { children: "MiB accounted. Work: " }),
                 report.resources.workUnits.toLocaleString(),
                 " /",
                 " ",
                 report.resources.workBudget.toLocaleString(),
                 " ",
-                i.jsx(M, { children: "units. Time budget:" }),
+                i.jsx(LocalizedText, { children: "units. Time budget:" }),
                 " ",
                 report.settings.timeBudgetMs,
                 " ",
-                i.jsx(M, { children: "ms." }),
+                i.jsx(LocalizedText, { children: "ms." }),
               ],
             }),
             report.resources.reason &&
@@ -435,26 +471,28 @@ function Zce(e) {
                 role: "alert",
                 children: [
                   report.resources.reason,
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       ". Committed inputs remain intact. Adjust the data or budget and choose Calculate Now to retry.",
                   }),
                 ],
               }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "The memory setting bounds accounted input, intermediate and result data. It does not measure the browser's total memory; parser and runtime overhead are separate. Worker deadlines depend on the browser delivering timer events.",
               }),
             }),
-            i.jsx("p", { children: yE.refresh }),
-            i.jsx("p", { children: yE.random }),
+            i.jsx("p", { children: calculationFeatureSupport.refresh }),
+            i.jsx("p", { children: calculationFeatureSupport.random }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Volatile functions in this workbook:" }),
+                i.jsx(LocalizedText, {
+                  children: "Volatile functions in this workbook:",
+                }),
                 " ",
                 report.volatile.functions.join(", ") || "None",
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     ". Unsupported volatile functions require a compatibility review.",
                 }),
@@ -467,22 +505,22 @@ function Zce(e) {
           open: true,
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Precision and monetary rounding",
               }),
             }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Numbers use " }),
-                Ek.storage,
+                i.jsx(LocalizedText, { children: "Numbers use " }),
+                numericPrecisionPolicy.storage,
                 ". ",
-                Ek.display,
+                numericPrecisionPolicy.display,
                 " ",
-                Ek.rounding,
+                numericPrecisionPolicy.rounding,
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Binary arithmetic can produce 0.30000000000000004 for 0.1 + 0.2. General displays 0.3; ROUND(0.1+0.2,2) explicitly produces 0.3. Store identifiers longer than 15 digits as Text. Native JSON retains stored numbers; XLSX may expose Excel precision limits. SUM uses decimal accumulation of stored numbers, so it can differ from a chain of binary additions.",
               }),
@@ -494,21 +532,21 @@ function Zce(e) {
           open: true,
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children: "Date and business-calendar policy",
               }),
             }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Gregorian calendar · " }),
+                i.jsx(LocalizedText, { children: "Gregorian calendar · " }),
                 report.dateContext.dateSystem,
                 " ",
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     "serial system · ISO YYYY-MM-DD within the supported date range accepted · slash dates use ",
                 }),
                 report.dateContext.textDateOrder,
-                i.jsx(M, {
+                i.jsx(LocalizedText, {
                   children:
                     ". Other calendars are unsupported. XLSX retains the selected serial system; native JSON also retains text order and time zone. Holiday ranges and weekend masks are supplied in WORKDAY / NETWORKDAYS formulas.",
                 }),
@@ -516,28 +554,28 @@ function Zce(e) {
             }),
             i.jsxs("p", {
               children: [
-                i.jsx(M, { children: "Calculation snapshot:" }),
+                i.jsx(LocalizedText, { children: "Calculation snapshot:" }),
                 " ",
                 i.jsx("time", {
                   dateTime: report.dateContext.calculatedAt,
                   children: report.dateContext.calculatedAt,
                 }),
                 " ",
-                i.jsx(M, { children: "· time zone " }),
+                i.jsx(LocalizedText, { children: "· time zone " }),
                 report.dateContext.timeZone,
                 " ",
-                i.jsx(M, { children: "· UTC offset" }),
+                i.jsx(LocalizedText, { children: "· UTC offset" }),
                 " ",
                 report.dateContext.utcOffsetMinutes,
                 " ",
-                i.jsx(M, { children: "minutes · local clock" }),
+                i.jsx(LocalizedText, { children: "minutes · local clock" }),
                 " ",
                 report.dateContext.localDateTime,
                 ".",
               ],
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "TODAY and NOW share this captured instant. Calculate Now refreshes it; there is no background clock. Pending formulas have no current time result. Calendar policy persists in native JSON; XLSX does not retain this time zone or text-date policy.",
               }),
@@ -548,7 +586,7 @@ function Zce(e) {
           i.jsxs("p", {
             role: "alert",
             children: [
-              i.jsx(M, { children: "Circular references:" }),
+              i.jsx(LocalizedText, { children: "Circular references:" }),
               " ",
               report.cycles
                 .slice(0, 10)
@@ -566,7 +604,7 @@ function Zce(e) {
           }),
         !!report.pending &&
           i.jsx("p", {
-            children: i.jsx(M, {
+            children: i.jsx(LocalizedText, {
               children:
                 "Pending formulas display #PENDING!. Historical and imported values are never substituted as current results. Use Calculate Now before relying on or sharing them.",
             }),
@@ -578,18 +616,26 @@ function Zce(e) {
               i.jsx("thead", {
                 children: i.jsxs("tr", {
                   children: [
-                    i.jsx("th", { children: i.jsx(M, { children: "Source" }) }),
                     i.jsx("th", {
-                      children: i.jsx(M, { children: "Formula" }),
+                      children: i.jsx(LocalizedText, { children: "Source" }),
                     }),
                     i.jsx("th", {
-                      children: i.jsx(M, { children: "Current result" }),
+                      children: i.jsx(LocalizedText, { children: "Formula" }),
                     }),
                     i.jsx("th", {
-                      children: i.jsx(M, { children: "Status / evaluations" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Current result",
+                      }),
                     }),
                     i.jsx("th", {
-                      children: i.jsx(M, { children: "Historical result" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Status / evaluations",
+                      }),
+                    }),
+                    i.jsx("th", {
+                      children: i.jsx(LocalizedText, {
+                        children: "Historical result",
+                      }),
                     }),
                   ],
                 }),
@@ -639,7 +685,7 @@ function Zce(e) {
                                       children: [
                                         D.functionName,
                                         " ",
-                                        i.jsx(M, {
+                                        i.jsx(LocalizedText, {
                                           children: "financial details — ",
                                         }),
                                         D.status,
@@ -652,19 +698,19 @@ function Zce(e) {
                                         children: [
                                           i.jsxs("p", {
                                             children: [
-                                              i.jsx(M, {
+                                              i.jsx(LocalizedText, {
                                                 children: "Guess ",
                                               }),
                                               D.guess,
                                               "; ",
                                               D.solver.evaluations,
                                               " ",
-                                              i.jsx(M, {
+                                              i.jsx(LocalizedText, {
                                                 children:
                                                   "equation evaluations. Bounded search: ",
                                               }),
                                               D.solver.status,
-                                              i.jsx(M, {
+                                              i.jsx(LocalizedText, {
                                                 children: ". Candidate roots:",
                                               }),
                                               " ",
@@ -679,14 +725,14 @@ function Zce(e) {
                                           D.solver.selected &&
                                             i.jsxs("p", {
                                               children: [
-                                                i.jsx(M, {
+                                                i.jsx(LocalizedText, {
                                                   children: "Selected rate",
                                                 }),
                                                 " ",
                                                 D.solver.selected.rate.toPrecision(
                                                   12,
                                                 ),
-                                                i.jsx(M, {
+                                                i.jsx(LocalizedText, {
                                                   children:
                                                     "; equation residual",
                                                 }),
@@ -694,7 +740,7 @@ function Zce(e) {
                                                 D.solver.selected.residual.toPrecision(
                                                   6,
                                                 ),
-                                                i.jsx(M, {
+                                                i.jsx(LocalizedText, {
                                                   children:
                                                     "; relative residual",
                                                 }),
@@ -706,7 +752,7 @@ function Zce(e) {
                                               ],
                                             }),
                                           i.jsx("p", {
-                                            children: i.jsx(M, {
+                                            children: i.jsx(LocalizedText, {
                                               children:
                                                 "Root discovery is not exhaustive. Repeated calls of the same function in this cell retain the last diagnostic; use Evaluate Formula for the expression trace.",
                                             }),
@@ -740,7 +786,7 @@ function Zce(e) {
             i.jsx("button", {
               disabled: p === 0,
               onClick: () => m((j) => j - 1),
-              children: i.jsx(M, { children: "Previous results" }),
+              children: i.jsx(LocalizedText, { children: "Previous results" }),
             }),
             i.jsxs("span", {
               children: [
@@ -748,14 +794,14 @@ function Zce(e) {
                 "–",
                 Math.min((p + 1) * 100, A.length),
                 " ",
-                i.jsx(M, { children: "of " }),
+                i.jsx(LocalizedText, { children: "of " }),
                 A.length,
               ],
             }),
             i.jsx("button", {
               disabled: (p + 1) * 100 >= A.length,
               onClick: () => m((j) => j + 1),
-              children: i.jsx(M, { children: "Next results" }),
+              children: i.jsx(LocalizedText, { children: "Next results" }),
             }),
           ],
         }),
@@ -764,29 +810,31 @@ function Zce(e) {
             children: [
               i.jsxs("summary", {
                 children: [
-                  i.jsx(M, { children: "Imported cache evidence —" }),
+                  i.jsx(LocalizedText, {
+                    children: "Imported cache evidence —",
+                  }),
                   " ",
                   e.workbook.importedCalculationCaches.entries.length,
                   " ",
-                  i.jsx(M, { children: "source formulas" }),
+                  i.jsx(LocalizedText, { children: "source formulas" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
                   e.workbook.importedCalculationCaches.fileName,
                   " ",
-                  i.jsx(M, { children: "· SHA-256" }),
+                  i.jsx(LocalizedText, { children: "· SHA-256" }),
                   " ",
                   e.workbook.importedCalculationCaches.sourceSha256,
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "Imported " }),
+                  i.jsx(LocalizedText, { children: "Imported " }),
                   e.workbook.importedCalculationCaches.importedAt,
-                  i.jsx(M, { children: "; source mode " }),
+                  i.jsx(LocalizedText, { children: "; source mode " }),
                   e.workbook.importedCalculationCaches.sourceSettings.mode,
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       ". Source caches and settings remain historical, unverified evidence. Download calculation evidence for every typed cache comparison, including missing caches and changed formulas. Original XLSX bytes are not retained by this field.",
                   }),
@@ -795,7 +843,7 @@ function Zce(e) {
             ],
           }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Scalar dependency changes reuse unaffected results. Names, structure and arrays trigger a conservative recalculation. Iteration starts from zero and requires numeric convergence; it does not promise Excel-identical iteration order. Worker execution can be terminated; synchronous SDK and diagnostic calculations use cooperative checks. Formula inspection is a separate diagnostic calculation.",
           }),
@@ -804,7 +852,15 @@ function Zce(e) {
     }),
   });
 }
-function Kce({ x, y, label, actions, workbook, selection, onClose }) {
+function GridContextMenu({
+  x,
+  y,
+  label,
+  actions,
+  workbook,
+  selection,
+  onClose,
+}) {
   const d = ne.useRef(null),
     u = ne.useRef({ workbook, snapshot: JSON.stringify(workbook), selection }),
     [l, c] = ne.useState({ left: x, top: y }),
@@ -897,24 +953,24 @@ function Kce({ x, y, label, actions, workbook, selection, onClose }) {
     })
   );
 }
-function Yce() {
-  const { text, language } = Dr();
+function WorkbookCapacityLimits() {
+  const { text, language } = useWorkbookMessages();
   return i.jsxs("section", {
     "aria-label": text("Workbook capacity limits"),
     lang: language("Workbook capacity limits"),
     "data-ui-label": "Workbook capacity limits",
     children: [
-      i.jsx("h4", { children: i.jsx(M, { children: "Capacity" }) }),
+      i.jsx("h4", { children: i.jsx(LocalizedText, { children: "Capacity" }) }),
       i.jsx("p", {
         className: "lg-muted",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "The worksheet address space matches Excel. Processing and file limits below are this application's limits.",
         }),
       }),
       i.jsx("dl", {
         className: "lg-capacity-list",
-        children: HJ.map(([t, n]) =>
+        children: workbookLimitTable.map(([t, n]) =>
           i.jsxs(
             "div",
             {
@@ -929,21 +985,21 @@ function Yce() {
       }),
       i.jsx("p", {
         className: "lg-muted",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Text units use UTF-16: some symbols, including many emoji, count as two. File limits count bytes. Excel allows 8,192 formula characters; this editor allows 4,096 text units.",
         }),
       }),
       i.jsx("p", {
         className: "lg-muted",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Imports that exceed a limit are refused before replacing your workbook. Empty rows between distant cells are not filled in. Available memory and browser storage quota can impose lower limits.",
         }),
       }),
       i.jsx("p", {
         className: "lg-muted",
-        children: i.jsx(M, {
+        children: i.jsx(LocalizedText, {
           children:
             "Uploaded files are parsed in isolated workers with a 30-second default deadline and at most two simultaneous requests. Cancel file processing stops a pending import. A blocked worker never falls back to parsing in the editor. Error messages omit source details; keep the original file for repairs. Hosts can provide a trusted worker and a deadline up to 60 seconds.",
         }),
@@ -951,7 +1007,7 @@ function Yce() {
     ],
   });
 }
-const Zm = Object.freeze({
+const assistantRequestLimits = Object.freeze({
     filesPerMessage: 4,
     fileBytes: 5 * 1024 * 1024,
     totalFileBytes: 10 * 1024 * 1024,
@@ -959,7 +1015,7 @@ const Zm = Object.freeze({
     historyCharacters: 5e4,
     promptCharacters: 1e4,
   }),
-  Qw = {
+  attachmentMediaTypes = {
     txt: "text/plain",
     md: "text/markdown",
     csv: "text/csv",
@@ -973,17 +1029,17 @@ const Zm = Object.freeze({
     jpeg: "image/jpeg",
     webp: "image/webp",
   },
-  cEe = Object.keys(Qw)
+  attachmentAcceptAttribute = Object.keys(attachmentMediaTypes)
     .map((e) => `.${e}`)
     .join(","),
-  SI = new Set(["txt", "md", "csv", "tsv", "json"]),
-  jy = (e) => {
+  textAttachmentExtensions = new Set(["txt", "md", "csv", "tsv", "json"]),
+  getFileExtension = (e) => {
     return e.split(".").pop()?.toLowerCase() ?? "";
   };
-function js(e, r) {
+function assertCondition(e, r) {
   if (!e) throw new Error(r);
 }
-function wz(e) {
+function isSafeAttachmentFilename(e) {
   return (
     typeof e == "string" &&
     e.length > 0 &&
@@ -991,7 +1047,7 @@ function wz(e) {
     !/[\x00-\x1f\x7f/\\]/.test(e)
   );
 }
-function xz(e, r) {
+function matchesFileSignature(e, r) {
   const t = (...n) => n.every((o, a) => e[a] === o);
   return r === "pdf"
     ? t(37, 80, 68, 70, 45)
@@ -1004,9 +1060,9 @@ function xz(e, r) {
             String.fromCharCode(...e.slice(8, 12)) === "WEBP"
           : r === "xlsx" || r === "docx"
             ? t(80, 75, 3, 4)
-            : SI.has(r);
+            : textAttachmentExtensions.has(r);
 }
-function Jce(e, r) {
+function readAttachmentBytes(e, r) {
   return new Promise((t, n) => {
     const o = new FileReader();
     let a = false;
@@ -1046,27 +1102,27 @@ function Jce(e, r) {
       r != null && r.aborted ? d() : o.readAsArrayBuffer(e));
   });
 }
-async function dEe(e, r) {
-  js(
-    wz(e.name),
+async function prepareChatAttachment(e, r) {
+  assertCondition(
+    isSafeAttachmentFilename(e.name),
     "Use a filename of 1–180 characters without path or control characters.",
   );
-  const t = jy(e.name);
-  (js(
-    Object.hasOwn(Qw, t),
+  const t = getFileExtension(e.name);
+  (assertCondition(
+    Object.hasOwn(attachmentMediaTypes, t),
     "Supported attachments: TXT, Markdown, CSV, TSV, JSON, PDF, DOCX, XLSX, PNG, JPEG and WebP.",
   ),
-    js(
-      e.size > 0 && e.size <= Zm.fileBytes,
+    assertCondition(
+      e.size > 0 && e.size <= assistantRequestLimits.fileBytes,
       "Each attachment must be nonempty and no larger than 5 MB.",
     ));
-  const n = await Jce(e, r);
-  js(
-    n.length === e.size && xz(n, t),
+  const n = await readAttachmentBytes(e, r);
+  assertCondition(
+    n.length === e.size && matchesFileSignature(n, t),
     "The file content does not match its extension. Choose the original supported file.",
   );
   let o;
-  const a = SI.has(t) ? "utf8" : "base64";
+  const a = textAttachmentExtensions.has(t) ? "utf8" : "base64";
   if (a === "utf8") {
     try {
       o = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(n);
@@ -1075,7 +1131,7 @@ async function dEe(e, r) {
         "Text attachments must use UTF-8 encoding. Save the file as UTF-8 and try again.",
       );
     }
-    js(
+    assertCondition(
       !o.includes("\0"),
       "This appears to be a binary file. Choose a supported document or UTF-8 text file.",
     );
@@ -1088,7 +1144,7 @@ async function dEe(e, r) {
   return {
     id: crypto.randomUUID(),
     name: e.name,
-    mediaType: Qw[t],
+    mediaType: attachmentMediaTypes[t],
     size: n.length,
     encoding: a,
     data: o,
@@ -1099,28 +1155,28 @@ const Lk = (e, r) =>
   typeof e == "object" &&
   !Array.isArray(e) &&
   Object.keys(e).every((t) => r.includes(t));
-function Ez(e) {
-  (js(
+function parseAssistantChatRequest(e) {
+  (assertCondition(
     Lk(e, ["version", "messages", "attachments"]) &&
       e.version === 1 &&
       Array.isArray(e.messages) &&
       Array.isArray(e.attachments),
     "Invalid chat request.",
   ),
-    js(
-      e.messages.length <= Zm.historyMessages,
+    assertCondition(
+      e.messages.length <= assistantRequestLimits.historyMessages,
       "This conversation has reached 20 prior messages. Start a new chat to continue.",
     ));
   let r = 0,
     t = 0;
   const n = (a) => {
-    js(
-      Array.isArray(a) && a.length <= Zm.filesPerMessage,
+    assertCondition(
+      Array.isArray(a) && a.length <= assistantRequestLimits.filesPerMessage,
       "Attach up to 4 files per message.",
     );
     const s = new Set();
     return a.map((d) => {
-      (js(
+      (assertCondition(
         Lk(d, ["id", "name", "mediaType", "size", "encoding", "data"]) &&
           typeof d.id == "string" &&
           d.id.length > 0 &&
@@ -1129,42 +1185,47 @@ function Ez(e) {
         "Invalid or duplicate attachment.",
       ),
         s.add(d.id),
-        js(
-          wz(d.name) &&
-            Object.hasOwn(Qw, jy(d.name)) &&
-            d.mediaType === Qw[jy(d.name)],
+        assertCondition(
+          isSafeAttachmentFilename(d.name) &&
+            Object.hasOwn(attachmentMediaTypes, getFileExtension(d.name)) &&
+            d.mediaType === attachmentMediaTypes[getFileExtension(d.name)],
           "Unsupported attachment type.",
         ),
-        js(
+        assertCondition(
           Number.isSafeInteger(d.size) &&
             Number(d.size) > 0 &&
-            Number(d.size) <= Zm.fileBytes &&
+            Number(d.size) <= assistantRequestLimits.fileBytes &&
             typeof d.data == "string" &&
-            d.data.length <= Math.ceil(Zm.fileBytes / 3) * 4,
+            d.data.length <=
+              Math.ceil(assistantRequestLimits.fileBytes / 3) * 4,
           "Attachment exceeds the 5 MB limit.",
         ));
-      const u = SI.has(jy(d.name));
-      js(
+      const u = textAttachmentExtensions.has(getFileExtension(d.name));
+      assertCondition(
         d.encoding === (u ? "utf8" : "base64"),
         "Invalid attachment encoding.",
       );
       let l;
       return (
         u
-          ? (js(!d.data.includes("\0"), "Invalid text attachment."),
+          ? (assertCondition(
+              !d.data.includes("\0"),
+              "Invalid text attachment.",
+            ),
             (l = new TextEncoder().encode(d.data)))
-          : (js(
+          : (assertCondition(
               d.data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(d.data),
               "Invalid attachment encoding.",
             ),
             (l = Uint8Array.from(atob(d.data), (c) => c.charCodeAt(0)))),
-        js(
-          l.length === d.size && xz(l, jy(d.name)),
+        assertCondition(
+          l.length === d.size &&
+            matchesFileSignature(l, getFileExtension(d.name)),
           "Attachment content or size is invalid.",
         ),
         (r += Number(d.size)),
-        js(
-          r <= Zm.totalFileBytes,
+        assertCondition(
+          r <= assistantRequestLimits.totalFileBytes,
           "The conversation contains more than 10 MB of attachments. Remove files or start a new chat.",
         ),
         {
@@ -1182,20 +1243,20 @@ function Ez(e) {
     version: 1,
     messages: e.messages.map(
       (a) => (
-        js(
+        assertCondition(
           Lk(a, ["role", "text", "attachments"]) &&
             (a.role === "user" || a.role === "assistant") &&
             typeof a.text == "string" &&
             a.text.length <= 1e4,
           "Invalid chat history message.",
         ),
-        js(
+        assertCondition(
           a.role === "user" || a.attachments === undefined,
           "Assistant messages cannot attach files.",
         ),
         (t += a.text.length),
-        js(
-          t <= Zm.historyCharacters,
+        assertCondition(
+          t <= assistantRequestLimits.historyCharacters,
           "This conversation has reached its context limit. Start a new chat to continue.",
         ),
         {
@@ -1208,7 +1269,7 @@ function Ez(e) {
     attachments: n(e.attachments),
   };
 }
-const L7 = {
+const assistantErrorMessages = {
   timeout:
     "The assistant request timed out. Retry or check the host provider connection. No workbook changes were made.",
   refused:
@@ -1221,33 +1282,37 @@ const L7 = {
   invalid_request:
     "The assistant request is invalid. Use a prompt of 1 to 10000 characters and select at most 500 cells. The host must supply a complete bounded context from buildContext; then retry.",
 };
-class cf extends Error {
+class LLMRequestError extends Error {
   constructor(t) {
-    const n = typeof t == "string" && Object.hasOwn(L7, t) ? t : "unavailable";
-    super(L7[n]);
-    yc(this, "code");
+    const n =
+      typeof t == "string" && Object.hasOwn(assistantErrorMessages, t)
+        ? t
+        : "unavailable";
+    super(assistantErrorMessages[n]);
+    defineDataPropertyByKey(this, "code");
     ((this.name = "LLMRequestError"), (this.code = n));
   }
 }
-function Qce(e) {
-  return e instanceof cf
-    ? new cf(e.code)
+function isAbortOrTimeoutError(e) {
+  return e instanceof LLMRequestError
+    ? new LLMRequestError(e.code)
     : e instanceof Error && e.name === "TimeoutError"
-      ? new cf("timeout")
+      ? new LLMRequestError("timeout")
       : e instanceof Error && e.name === "AbortError"
-        ? new cf("cancelled")
-        : new cf("unavailable");
+        ? new LLMRequestError("cancelled")
+        : new LLMRequestError("unavailable");
 }
-async function ede(e, r, t = 3e4) {
-  if (!Number.isFinite(t) || t < 1 || t > 12e4) throw new cf("invalid_request");
-  if (r != null && r.aborted) throw new cf("cancelled");
+async function raceWithAbortSignal(e, r, t = 3e4) {
+  if (!Number.isFinite(t) || t < 1 || t > 12e4)
+    throw new LLMRequestError("invalid_request");
+  if (r != null && r.aborted) throw new LLMRequestError("cancelled");
   const n = new AbortController();
   let o;
   const a = new Promise((l, c) => {
       o = c;
     }),
     s = (l) => {
-      const c = new cf(l);
+      const c = new LLMRequestError(l);
       (o(c), n.abort(c));
     },
     d = () => s("cancelled");
@@ -1256,66 +1321,75 @@ async function ede(e, r, t = 3e4) {
   try {
     return await Promise.race([a, e(n.signal)]);
   } catch (l) {
-    throw Qce(l);
+    throw isAbortOrTimeoutError(l);
   } finally {
     (clearTimeout(u), r == null || r.removeEventListener("abort", d));
   }
 }
-const r1 = Object.freeze({
+const answerGroundingLimits = Object.freeze({
     claims: 20,
     sources: 20,
     rangesPerClaim: 20,
     referencedCells: 1e3,
     receiptBytes: 2e6,
   }),
-  iy = string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,59}$/),
+  identifierSchema = string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,59}$/),
   Pk = string().trim().min(1).max(1e4),
-  tde = string()
+  rangeAddressSchema = string()
     .regex(/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/)
     .max(32),
-  rde = object({
+  answerGroundingSchema = object({
     claims: array(
       discriminatedUnion("kind", [
         object({
-          id: iy,
+          id: identifierSchema,
           kind: literal("workbook"),
           text: Pk,
-          ranges: array(tde).min(1).max(r1.rangesPerClaim),
+          ranges: array(rangeAddressSchema)
+            .min(1)
+            .max(answerGroundingLimits.rangesPerClaim),
         }).strict(),
         object({
-          id: iy,
+          id: identifierSchema,
           kind: literal("external"),
           text: Pk,
-          sourceIds: array(iy).min(1).max(r1.sources),
+          sourceIds: array(identifierSchema)
+            .min(1)
+            .max(answerGroundingLimits.sources),
         }).strict(),
-        object({ id: iy, kind: literal("commentary"), text: Pk }).strict(),
+        object({
+          id: identifierSchema,
+          kind: literal("commentary"),
+          text: Pk,
+        }).strict(),
       ]),
     )
       .min(1)
-      .max(r1.claims),
+      .max(answerGroundingLimits.claims),
     externalSources: array(
       object({
-        id: iy,
+        id: identifierSchema,
         title: string().trim().min(1).max(300),
         url: string().max(2048),
       }).strict(),
-    ).max(r1.sources),
+    ).max(answerGroundingLimits.sources),
   }).strict();
-function TI(e) {
+function validateCitationRange(e) {
   if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(e))
     throw Error("Citation requires an explicit A1 cell or rectangle.");
-  const r = ct(e),
+  const r = parseRangeAddress(e),
     t = e.split(":");
-  if (t[1] && `${ut(r.firstCol)}${r.firstRow + 1}` !== t[0])
+  if (t[1] && `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}` !== t[0])
     throw Error("Citation range must run top left to bottom right.");
   if ((r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1) > 500)
     throw Error("Citations support at most 500 cells per range.");
   const n = [];
   for (let o = r.firstRow; o <= r.lastRow; o++)
-    for (let a = r.firstCol; a <= r.lastCol; a++) n.push(`${ut(a)}${o + 1}`);
+    for (let a = r.firstCol; a <= r.lastCol; a++)
+      n.push(`${columnIndexToLetters(a)}${o + 1}`);
   return n;
 }
-function nde(e) {
+function validateExternalSourceUrl(e) {
   if (
     typeof e != "string" ||
     e.length > 2048 ||
@@ -1339,8 +1413,8 @@ function nde(e) {
     );
   return r.href;
 }
-function ide(e, r) {
-  const t = rde.safeParse(e);
+function validateAnswerGrounding(e, r) {
+  const t = answerGroundingSchema.safeParse(e);
   if (!t.success)
     throw Error(
       "Invalid answer grounding: provide typed claims and separate external sources.",
@@ -1353,7 +1427,7 @@ function ide(e, r) {
   let u = 0;
   for (const l of n.externalSources) {
     if (s.has(l.id)) throw Error("External source IDs must be unique.");
-    (s.add(l.id), (l.url = nde(l.url)));
+    (s.add(l.id), (l.url = validateExternalSourceUrl(l.url)));
   }
   if (n.claims.reduce((l, c) => l + c.text.length, 0) > 2e4)
     throw Error("Answer claims exceed the 20,000 character evidence limit.");
@@ -1363,8 +1437,8 @@ function ide(e, r) {
       if (new Set(l.ranges).size !== l.ranges.length)
         throw Error("Duplicate citation ranges in a claim.");
       for (const c of l.ranges) {
-        const h = TI(c);
-        if (((u += h.length), u > r1.referencedCells))
+        const h = validateCitationRange(c);
+        if (((u += h.length), u > answerGroundingLimits.referencedCells))
           throw Error(
             "Answer citations exceed the 1,000 cell-reference budget.",
           );
@@ -1388,7 +1462,7 @@ function ide(e, r) {
     throw Error("Unused external sources are not accepted as grounding.");
   return n;
 }
-const ode = Fc.filter(
+const nonVolatileFunctionNames = builtinFunctionNames.filter(
     (e) =>
       ![
         "RAND",
@@ -1403,78 +1477,82 @@ const ode = Fc.filter(
         "CALL",
       ].includes(e),
   ),
-  ade = new Set(ode),
+  nonVolatileFunctionNameSet = new Set(nonVolatileFunctionNames),
   kg = (e) =>
     !!e &&
     typeof e == "object" &&
     !Array.isArray(e) &&
     Object.getPrototypeOf(e) === Object.prototype;
-function Zr(e, r) {
+function assertAssistantCondition(e, r) {
   if (!e) throw new Error(r);
 }
-const Sg = (e, r) =>
-  Zr(
+const assertNoUnexpectedFields = (e, r) =>
+  assertAssistantCondition(
     Object.keys(e).every((t) => r.includes(t)),
     "Unexpected field in LLM proposal.",
   );
-function Zf(e) {
+function parseCellAddress(e) {
   const r = /^([A-Z]{1,3})([1-9]\d*)$/.exec(e);
-  Zr(r, `Invalid cell address: ${e}`);
+  assertAssistantCondition(r, `Invalid cell address: ${e}`);
   const t = [...r[1]].reduce((o, a) => o * 26 + a.charCodeAt(0) - 64, 0),
     n = Number(r[2]);
   return (
-    Zr(
-      n <= Mt.maxRows && t <= Mt.maxCols,
+    assertAssistantCondition(
+      n <= workbookLimits.maxRows && t <= workbookLimits.maxCols,
       "Cell address exceeds supported dimensions.",
     ),
     { row: n, col: t }
   );
 }
-function Cz(e) {
+function columnNumberToLetters(e) {
   let r = "";
   for (; e > 0; e = Math.floor((e - 1) / 26))
     r = String.fromCharCode(65 + ((e - 1) % 26)) + r;
   return r;
 }
-function Az(e, r) {
-  Zr(
+function resolveAssistantSelection(e, r) {
+  assertAssistantCondition(
     !r.ranges || (r.ranges.length === 1 && r.ranges[0] === r.range),
     "Select one rectangular range before using an assistant.",
   );
   const t = e.sheets.find((d) => d.id === r.sheetId);
-  Zr(t && !t.hidden, "Select a visible worksheet before using an assistant.");
+  assertAssistantCondition(
+    t && !t.hidden,
+    "Select a visible worksheet before using an assistant.",
+  );
   const n = r.range.toUpperCase().split(":");
-  Zr(n.length <= 2, "Select one rectangular range.");
-  const o = Zf(n[0]),
-    a = Zf(n[1] || n[0]);
-  (Zr(
+  assertAssistantCondition(n.length <= 2, "Select one rectangular range.");
+  const o = parseCellAddress(n[0]),
+    a = parseCellAddress(n[1] || n[0]);
+  (assertAssistantCondition(
     o.row <= a.row && o.col <= a.col,
     "Selection range must run from top left to bottom right.",
   ),
-    Zr(
+    assertAssistantCondition(
       a.row <= t.rowCount && a.col <= t.colCount,
       "Selection exceeds worksheet dimensions.",
     ),
-    Zr(
-      (a.row - o.row + 1) * (a.col - o.col + 1) <= Mt.maxLLMCells,
-      `Select at most ${Mt.maxLLMCells} cells for the assistant.`,
+    assertAssistantCondition(
+      (a.row - o.row + 1) * (a.col - o.col + 1) <= workbookLimits.maxLLMCells,
+      `Select at most ${workbookLimits.maxLLMCells} cells for the assistant.`,
     ));
   const s = [];
   for (let d = o.row; d <= a.row; d++)
-    for (let u = o.col; u <= a.col; u++) s.push(`${Cz(u)}${d}`);
+    for (let u = o.col; u <= a.col; u++)
+      s.push(`${columnNumberToLetters(u)}${d}`);
   return s;
 }
-function s3(e, r) {
-  const t = Az(e, r),
+function buildAssistantSelectionContext(e, r) {
+  const t = resolveAssistantSelection(e, r),
     n = e.sheets.find((a) => a.id === r.sheetId),
-    o = Vn(e);
+    o = calculateWorkbookWithSettings(e);
   for (const a of t) {
     const s = o.getTypedValue(n.id, a);
-    (Zr(
+    (assertAssistantCondition(
       !(s.type === "error" && s.value === "#PENDING!"),
       "Calculation is pending in the approved selection. Choose Calculate Now before sharing current values with an assistant.",
     ),
-      Zr(
+      assertAssistantCondition(
         !(
           s.type === "error" &&
           ["#TIMEOUT!", "#LIMIT!", "#BLOCKED!"].includes(String(s.value))
@@ -1484,8 +1562,10 @@ function s3(e, r) {
   }
   return {
     workbookId: e.id,
-    ...(e.datePolicy ? { datePolicy: ts(e.datePolicy) } : {}),
-    ...(eB(e) ? { calculationClock: o.getDateContext() } : {}),
+    ...(e.datePolicy ? { datePolicy: normalizeDatePolicy(e.datePolicy) } : {}),
+    ...(workbookUsesNowOrToday(e)
+      ? { calculationClock: o.getDateContext() }
+      : {}),
     revision: e.revision,
     sheetId: n.id,
     sheetName: n.name,
@@ -1499,22 +1579,22 @@ function s3(e, r) {
     }),
   };
 }
-function NI(e, r) {
+function validateAssistantFormula(e, r) {
   let t = e.replace(/"(?:[^"]|"")*"/g, '""');
   if (
-    (Zr(
+    (assertAssistantCondition(
       !/[!\[\]|\\#]/.test(t),
       "Assistant formulas cannot reference other worksheets, external workbooks, table names, existing spills or executable content.",
     ),
-    Zr(
+    assertAssistantCondition(
       !/(?:https?:|javascript:|data:|file:)/i.test(e),
       "Assistant formulas cannot contain network or executable URLs.",
     ),
     /\b(?:LET|LAMBDA)\s*\(/i.test(t))
   ) {
     const a = [];
-    Gf(Pg(t), (s, d, u, l) => {
-      (l || (!s.qualifier && d.has(lf(s.name)))) &&
+    walkFormulaNodes(tokenizeFormulaText(t), (s, d, u, l) => {
+      (l || (!s.qualifier && d.has(normalizeBindingName(s.name)))) &&
         a.push({ start: s.start, end: s.end, value: u ? "SUM" : "0" });
     });
     for (const s of a.sort((d, u) => u.start - d.start))
@@ -1522,8 +1602,8 @@ function NI(e, r) {
   }
   const n = [...t.matchAll(/([A-Z_][A-Z0-9_.]*)\s*\(/gi)];
   for (const a of n)
-    Zr(
-      ade.has(a[1].toUpperCase()),
+    assertAssistantCondition(
+      nonVolatileFunctionNameSet.has(a[1].toUpperCase()),
       `Assistant formula function ${a[1]} is not allowed.`,
     );
   for (const a of t.matchAll(
@@ -1532,7 +1612,7 @@ function NI(e, r) {
       "gi",
     ),
   ))
-    Zr(
+    assertAssistantCondition(
       r.has(`${a[1].toUpperCase()}${a[2]}`),
       "Assistant formulas may only reference cells in the approved selection.",
     );
@@ -1542,15 +1622,23 @@ function NI(e, r) {
     .replace(/""/g, "0")
     .replace(/\b(?:TRUE|FALSE)\b/gi, "0")
     .replace(/\d+(?:\.\d+)?(?:E[+-]?\d+)?/gi, "0");
-  Zr(
+  assertAssistantCondition(
     !/[A-Z_]/i.test(o),
     "Named ranges and unsupported formula tokens are not allowed in assistant changes.",
   );
 }
-function sde(e, r) {
-  (Zr(kg(e), "Each proposed cell must be an object."),
-    Sg(e, ["raw", "literal", "numFmt", "format", "style", "note", "tickmark"]),
-    Zr(
+function validateProposedCell(e, r) {
+  (assertAssistantCondition(kg(e), "Each proposed cell must be an object."),
+    assertNoUnexpectedFields(e, [
+      "raw",
+      "literal",
+      "numFmt",
+      "format",
+      "style",
+      "note",
+      "tickmark",
+    ]),
+    assertAssistantCondition(
       Object.hasOwn(e, "raw") &&
         (e.raw === null ||
           typeof e.raw == "string" ||
@@ -1559,19 +1647,22 @@ function sde(e, r) {
       "Unsupported proposed cell value.",
     ),
     typeof e.raw == "string" &&
-      Zr(
+      assertAssistantCondition(
         e.raw.length <= (e.raw.startsWith("=") ? 4096 : 32767),
         "Proposed cell text is too long.",
       ),
     e.literal !== undefined &&
-      Zr(typeof e.literal == "boolean", "Cell literal must be boolean."),
+      assertAssistantCondition(
+        typeof e.literal == "boolean",
+        "Cell literal must be boolean.",
+      ),
     e.numFmt !== undefined &&
-      Zr(
+      assertAssistantCondition(
         typeof e.numFmt == "string" && e.numFmt.length <= 200,
         "Invalid number format.",
       ),
     e.format !== undefined &&
-      Zr(
+      assertAssistantCondition(
         ["general", "number", "currency", "percent", "date"].includes(
           String(e.format),
         ),
@@ -1579,14 +1670,14 @@ function sde(e, r) {
       ));
   for (const t of ["note", "tickmark"])
     e[t] !== undefined &&
-      Zr(
+      assertAssistantCondition(
         typeof e[t] == "string" &&
           String(e[t]).length <= (t === "note" ? 1e4 : 40),
         `Invalid cell ${t}.`,
       );
   if (e.style !== undefined) {
-    (Zr(kg(e.style), "Cell style must be an object."),
-      Sg(e.style, [
+    (assertAssistantCondition(kg(e.style), "Cell style must be an object."),
+      assertNoUnexpectedFields(e.style, [
         "bold",
         "italic",
         "underline",
@@ -1600,11 +1691,17 @@ function sde(e, r) {
       ]));
     for (const t of ["bold", "italic", "underline", "wrap"])
       e.style[t] !== undefined &&
-        Zr(typeof e.style[t] == "boolean", "Invalid font style.");
+        assertAssistantCondition(
+          typeof e.style[t] == "boolean",
+          "Invalid font style.",
+        );
     (e.style.fontFamily !== undefined &&
-      Zr(dx.includes(e.style.fontFamily), "Unsupported font family."),
+      assertAssistantCondition(
+        supportedFontFamilies.includes(e.style.fontFamily),
+        "Unsupported font family.",
+      ),
       e.style.fontSize !== undefined &&
-        Zr(
+        assertAssistantCondition(
           typeof e.style.fontSize == "number" &&
             Number.isInteger(e.style.fontSize) &&
             e.style.fontSize >= 8 &&
@@ -1612,19 +1709,19 @@ function sde(e, r) {
           "Font size must be an integer between 8 and 72.",
         ),
       e.style.border !== undefined &&
-        Zr(
+        assertAssistantCondition(
           ["all", "bottom", "none"].includes(String(e.style.border)),
           "Unsupported cell border.",
         ));
     for (const t of ["fill", "color"])
       e.style[t] !== undefined &&
-        Zr(
+        assertAssistantCondition(
           typeof e.style[t] == "string" &&
             /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(e.style[t])),
           "Use hexadecimal colors.",
         );
     e.style.align !== undefined &&
-      Zr(
+      assertAssistantCondition(
         ["left", "center", "right"].includes(String(e.style.align)),
         "Invalid alignment.",
       );
@@ -1633,13 +1730,16 @@ function sde(e, r) {
     typeof e.raw == "string" &&
       e.raw.startsWith("=") &&
       !e.literal &&
-      NI(e.raw, r),
+      validateAssistantFormula(e.raw, r),
     structuredClone(e)
   );
 }
-function RI(e, r) {
-  (Zr(kg(e), "The assistant response must be a proposal object."),
-    Sg(e, [
+function validateAssistantProposal(e, r) {
+  (assertAssistantCondition(
+    kg(e),
+    "The assistant response must be a proposal object.",
+  ),
+    assertNoUnexpectedFields(e, [
       "id",
       "workbookId",
       "revision",
@@ -1648,47 +1748,55 @@ function RI(e, r) {
       "patches",
       "grounding",
     ]),
-    Zr(
+    assertAssistantCondition(
       typeof e.id == "string" && e.id.length > 0 && e.id.length <= 100,
       "Invalid proposal identifier.",
     ),
-    Zr(
+    assertAssistantCondition(
       e.workbookId === r.workbookId && e.revision === r.revision,
       "This proposal is stale or belongs to another workbook. Generate a new proposal.",
     ),
-    Zr(
+    assertAssistantCondition(
       typeof e.explanation == "string" &&
         e.explanation.length > 0 &&
         e.explanation.length <= 1e4,
       "Invalid proposal explanation.",
     ));
   const t = new Set(r.cells.map((a) => a.address));
-  (Zr(
-    Array.isArray(e.citations) && e.citations.length <= Mt.maxLLMCells,
+  (assertAssistantCondition(
+    Array.isArray(e.citations) &&
+      e.citations.length <= workbookLimits.maxLLMCells,
     "Invalid proposal citations.",
   ),
-    Zr(
+    assertAssistantCondition(
       e.citations.every((a) => typeof a == "string" && t.has(a)),
       "Citations must reference the approved selection.",
     ),
-    Zr(
-      Array.isArray(e.patches) && e.patches.length <= Mt.maxPatches,
+    assertAssistantCondition(
+      Array.isArray(e.patches) && e.patches.length <= workbookLimits.maxPatches,
       "Too many proposed edits.",
     ));
   const n = new Set(),
     o = e.patches.map(
       (a) => (
-        Zr(kg(a), "Each patch must be an object."),
-        Sg(a, ["sheetId", "address", "cell"]),
-        Zr(
+        assertAssistantCondition(kg(a), "Each patch must be an object."),
+        assertNoUnexpectedFields(a, ["sheetId", "address", "cell"]),
+        assertAssistantCondition(
           a.sheetId === r.sheetId &&
             typeof a.address == "string" &&
             t.has(a.address),
           "Assistant changes must stay inside the approved selection.",
         ),
-        Zr(!n.has(a.address), "The proposal contains duplicate cell edits."),
+        assertAssistantCondition(
+          !n.has(a.address),
+          "The proposal contains duplicate cell edits.",
+        ),
         n.add(a.address),
-        { sheetId: r.sheetId, address: a.address, cell: sde(a.cell, t) }
+        {
+          sheetId: r.sheetId,
+          address: a.address,
+          cell: validateProposedCell(a.cell, t),
+        }
       ),
     );
   return {
@@ -1698,12 +1806,18 @@ function RI(e, r) {
     explanation: e.explanation,
     citations: [...e.citations],
     patches: o,
-    ...(e.grounding !== undefined ? { grounding: ide(e.grounding, r) } : {}),
+    ...(e.grounding !== undefined
+      ? { grounding: validateAnswerGrounding(e.grounding, r) }
+      : {}),
   };
 }
-function X2(e, r, t) {
-  const n = Az(e, r).map((c) => ({ address: c, raw: null, value: null })),
-    o = RI(t, {
+function validateProposedCalculation(e, r, t) {
+  const n = resolveAssistantSelection(e, r).map((c) => ({
+      address: c,
+      raw: null,
+      value: null,
+    })),
+    o = validateAssistantProposal(t, {
       workbookId: e.id,
       revision: e.revision,
       sheetId: r.sheetId,
@@ -1730,15 +1844,15 @@ function X2(e, r, t) {
             c.cell.format !== h?.format &&
             c.cell.numFmt === undefined &&
             delete f.numFmt);
-        const p = Zf(c.address),
+        const p = parseCellAddress(c.address),
           m = (a.tables ?? []).some((v) => {
             const [g, b] = v.range.split(":"),
-              y = Zf(g),
-              w = Zf(b ?? g);
+              y = parseCellAddress(g),
+              w = parseCellAddress(b ?? g);
             return p.row === y.row && p.col >= y.col && p.col <= w.col;
           });
         return (
-          Zr(
+          assertAssistantCondition(
             !m ||
               (h?.raw === f.raw && !!(h != null && h.literal) == !!f.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
@@ -1764,7 +1878,7 @@ function X2(e, r, t) {
           : c,
       ),
     },
-    l = Cf(
+    l = evaluateWorkbookFormulas(
       u,
       {},
       {
@@ -1772,7 +1886,7 @@ function X2(e, r, t) {
         allowDatabaseCriterion: (c, h) => {
           if (c !== a.id) return false;
           try {
-            return (NI(h, d), true);
+            return (validateAssistantFormula(h, d), true);
           } catch {
             return false;
           }
@@ -1788,43 +1902,46 @@ function X2(e, r, t) {
     )
       continue;
     const h = l(a.id, c.address);
-    (Zr(h !== "#LIMIT!", "The proposed formula exceeds calculation limits."),
-      Zr(
+    (assertAssistantCondition(
+      h !== "#LIMIT!",
+      "The proposed formula exceeds calculation limits.",
+    ),
+      assertAssistantCondition(
         l.getOperationalErrors().length === 0,
         "The proposed formula has invalid syntax, a circular reference or an operational calculation failure. Correct the formula before review; error handlers cannot suppress this rejection.",
       ));
     const f = l.getSpillRange(a.id, c.address);
     if (
-      (Zr(
+      (assertAssistantCondition(
         !l.getSpillDiagnostic(a.id, c.address),
         "The proposed array is blocked. Review the spill obstruction before requesting approval.",
       ),
       f)
     ) {
       const [p, m] = f.split(":"),
-        v = Zf(p),
-        g = Zf(m ?? p);
-      Zr(
-        (g.row - v.row + 1) * (g.col - v.col + 1) <= Mt.maxLLMCells,
+        v = parseCellAddress(p),
+        g = parseCellAddress(m ?? p);
+      assertAssistantCondition(
+        (g.row - v.row + 1) * (g.col - v.col + 1) <= workbookLimits.maxLLMCells,
         "Assistant spill outputs must stay inside the approved selection.",
       );
       for (let b = v.row; b <= g.row; b++)
         for (let y = v.col; y <= g.col; y++)
-          Zr(
-            d.has(`${Cz(y)}${b}`),
+          assertAssistantCondition(
+            d.has(`${columnNumberToLetters(y)}${b}`),
             "Assistant spill outputs must stay inside the approved selection.",
           );
     }
   }
   return (
-    Zr(
+    assertAssistantCondition(
       l.getOperationalErrors().length === 0,
       "The proposed formula cannot be validated because calculation encountered an operational failure.",
     ),
     s
   );
 }
-function kz() {
+function buildLocalDemoProposal() {
   return {
     name: "Local demo · no model or network",
     localOnly: true,
@@ -1907,7 +2024,7 @@ function kz() {
         }),
         n != null && n.attachments.length)
       ) {
-        const d = Ez(n).attachments,
+        const d = parseAssistantChatRequest(n).attachments,
           u = `Received ${d.length} attachment${d.length === 1 ? "" : "s"}: ${d.map((l) => `${l.name} (${l.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;
         ((o.explanation += `
 
@@ -1918,14 +2035,14 @@ ${u}`),
             text: u,
           }));
       }
-      return RI(o, r);
+      return validateAssistantProposal(o, r);
     },
   };
 }
-function lde(e) {
+function validateCalculationClock(e) {
   try {
-    (Zr(kg(e), "context"),
-      Sg(e, [
+    (assertAssistantCondition(kg(e), "context"),
+      assertNoUnexpectedFields(e, [
         "workbookId",
         "revision",
         "sheetId",
@@ -1935,49 +2052,64 @@ function lde(e) {
         "datePolicy",
         "calculationClock",
       ]));
-    const r = ts(e.datePolicy);
+    const r = normalizeDatePolicy(e.datePolicy);
     if (e.calculationClock !== undefined) {
       const d = e.calculationClock;
-      (Zr(kg(d), "clock"),
-        Zr(
+      (assertAssistantCondition(kg(d), "clock"),
+        assertAssistantCondition(
           typeof d.calculatedAt == "string" &&
             /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(d.calculatedAt),
           "clock timestamp",
         ));
-      const u = lx(r, new Date(d.calculatedAt));
-      (Sg(d, Object.keys(u)),
-        Zr(
+      const u = resolveLocalDateTime(r, new Date(d.calculatedAt));
+      (assertNoUnexpectedFields(d, Object.keys(u)),
+        assertAssistantCondition(
           Object.entries(u).every(([l, c]) => d[l] === c),
           "clock policy/value mismatch",
         ));
     }
     for (const d of ["workbookId", "sheetId", "sheetName"])
-      Zr(
+      assertAssistantCondition(
         typeof e[d] == "string" && e[d].length > 0 && e[d].length <= 200,
         "identity",
       );
-    (Zr(Number.isSafeInteger(e.revision) && e.revision >= 0, "revision"),
-      Zr(typeof e.range == "string" && e.range.length <= 64, "range"));
+    (assertAssistantCondition(
+      Number.isSafeInteger(e.revision) && e.revision >= 0,
+      "revision",
+    ),
+      assertAssistantCondition(
+        typeof e.range == "string" && e.range.length <= 64,
+        "range",
+      ));
     const t = e.range.split(":");
-    Zr(t.length <= 2, "range");
-    const n = Zf(t[0]),
-      o = Zf(t[1] ?? t[0]),
+    assertAssistantCondition(t.length <= 2, "range");
+    const n = parseCellAddress(t[0]),
+      o = parseCellAddress(t[1] ?? t[0]),
       a = (o.row - n.row + 1) * (o.col - n.col + 1);
-    (Zr(o.row >= n.row && o.col >= n.col && a <= Mt.maxLLMCells, "bounds"),
-      Zr(Array.isArray(e.cells) && e.cells.length === a, "population"));
+    (assertAssistantCondition(
+      o.row >= n.row && o.col >= n.col && a <= workbookLimits.maxLLMCells,
+      "bounds",
+    ),
+      assertAssistantCondition(
+        Array.isArray(e.cells) && e.cells.length === a,
+        "population",
+      ));
     const s = new Set();
     for (const d of e.cells) {
-      (Zr(kg(d), "cell"),
-        Sg(d, ["address", "raw", "value"]),
-        Zr(typeof d.address == "string" && !s.has(d.address), "address"));
-      const u = Zf(d.address);
-      (Zr(
+      (assertAssistantCondition(kg(d), "cell"),
+        assertNoUnexpectedFields(d, ["address", "raw", "value"]),
+        assertAssistantCondition(
+          typeof d.address == "string" && !s.has(d.address),
+          "address",
+        ));
+      const u = parseCellAddress(d.address);
+      (assertAssistantCondition(
         u.row >= n.row && u.row <= o.row && u.col >= n.col && u.col <= o.col,
         "scope",
       ),
         s.add(d.address));
       for (const l of [d.raw, d.value])
-        Zr(
+        assertAssistantCondition(
           l === null ||
             typeof l == "boolean" ||
             (typeof l == "number" && Number.isFinite(l)) ||
@@ -1986,26 +2118,26 @@ function lde(e) {
         );
     }
   } catch {
-    throw new cf("invalid_request");
+    throw new LLMRequestError("invalid_request");
   }
 }
 
 export {
-  Ez,
-  Kce,
-  NI,
-  RI,
-  TI,
-  X2,
-  Yce,
-  Zce,
-  Zm,
-  cEe,
-  cf,
-  dEe,
-  ede,
-  kz,
-  lde,
-  r1,
-  s3,
+  parseAssistantChatRequest,
+  GridContextMenu,
+  validateAssistantFormula,
+  validateAssistantProposal,
+  validateCitationRange,
+  validateProposedCalculation,
+  WorkbookCapacityLimits,
+  CalculationOptionsDialog,
+  assistantRequestLimits,
+  attachmentAcceptAttribute,
+  LLMRequestError,
+  prepareChatAttachment,
+  raceWithAbortSignal,
+  buildLocalDemoProposal,
+  validateCalculationClock,
+  answerGroundingLimits,
+  buildAssistantSelectionContext,
 };

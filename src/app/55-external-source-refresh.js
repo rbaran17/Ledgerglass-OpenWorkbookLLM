@@ -1,24 +1,33 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { hr } from "./01-core-schemas-and-hashing.js";
-import { Mp, Rn, _t, ut, yU } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { kz } from "./20-calculation-options-and-sources.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
 import {
-  A_,
+  isExternalSourceError,
+  ExternalSourceError,
+  _t,
+  columnIndexToLetters,
+  computeSourceControlTotals,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import { buildLocalDemoProposal } from "./20-calculation-options-and-sources.js";
+import {
+  snapshotSheetContent,
   EH,
   G2e,
-  H2e,
-  S_,
-  TH,
-  W2e,
-  X2e,
-  lN,
-  q2e,
+  applySourceGrantPlans,
+  authorizeSourceAccess,
+  refreshSourceSnapshot,
+  grantSheetSnapshotSource,
+  runSourceRefreshBatch,
+  normalizeExternalSourceState,
+  fetchSourceCatalog,
 } from "./54-workbook-save-conflicts.js";
 
-function Z2e(e) {
-  const r = Dr(),
+function ExternalSourceBatchRefreshPanel(e) {
+  const r = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = ne.useRef(e);
@@ -53,7 +62,10 @@ function Z2e(e) {
   const F = ne.useRef(true),
     I = ne.useRef(null),
     O = JSON.stringify([e.readOnly, e.allowedSheetIds]),
-    j = ne.useMemo(() => hr([e.workbook.id, e.workbook.sheets]), [e.workbook]),
+    j = ne.useMemo(
+      () => fingerprintCanonicalValue([e.workbook.id, e.workbook.sheets]),
+      [e.workbook],
+    ),
     z =
       u &&
       (u.book === e.workbook || (!u.result.plan && u.contentHash === j)) &&
@@ -138,8 +150,8 @@ function Z2e(e) {
       if (T) {
         const Q = await G2e(R, z.plan, U);
         if (!$()) return;
-        if (L.signal.aborted) throw new Rn("cancelled");
-        const X = H2e(N.workbook, z.plan, Q, U);
+        if (L.signal.aborted) throw new ExternalSourceError("cancelled");
+        const X = applySourceGrantPlans(N.workbook, z.plan, Q, U);
         (N.onWorkbookChange(X, "Refresh all external sources"),
           l(null),
           p(
@@ -148,7 +160,7 @@ function Z2e(e) {
             ),
           ));
       } else {
-        const Q = await X2e(N.workbook, R, s, {
+        const Q = await runSourceRefreshBatch(N.workbook, R, s, {
           ...U,
           onProgress: (J, q) => {
             $() &&
@@ -164,7 +176,8 @@ function Z2e(e) {
         let X = N.workbook;
         for (const J of Q.entries) {
           const q = J.error ?? Q.error;
-          q && (X = lN(X, J.sheetId, J.sourceId, q, U));
+          q &&
+            (X = normalizeExternalSourceState(X, J.sheetId, J.sourceId, q, U));
         }
         (X !== N.workbook &&
           N.onWorkbookChange(
@@ -174,7 +187,7 @@ function Z2e(e) {
           l({
             result: Q,
             book: X,
-            contentHash: hr([X.id, X.sheets]),
+            contentHash: fingerprintCanonicalValue([X.id, X.sheets]),
             adapter: R,
             scope: O,
           }),
@@ -187,13 +200,13 @@ function Z2e(e) {
       }
     } catch (Q) {
       if (!$()) return;
-      const X = Mp(Q);
+      const X = isExternalSourceError(Q);
       (v(X.message), l(null));
       let J = N.workbook;
       for (const q of s) {
         const W = N.workbook.sheets.find((K) => K.id === q)?.externalConnection
           ?.source.id;
-        W && (J = lN(J, q, W, X.code, U));
+        W && (J = normalizeExternalSourceState(J, q, W, X.code, U));
       }
       if (J !== N.workbook)
         try {
@@ -239,14 +252,16 @@ function Z2e(e) {
               children: [
                 i.jsx("p", {
                   className: "lg-source-eyebrow",
-                  children: i.jsx(M, { children: "Connections & Refresh" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Connections & Refresh",
+                  }),
                 }),
                 i.jsx("h2", {
                   id: t,
-                  children: i.jsx(M, { children: "Refresh All" }),
+                  children: i.jsx(LocalizedText, { children: "Refresh All" }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Compare connected worksheets, then apply all selected refreshes together.",
                   }),
@@ -256,7 +271,9 @@ function Z2e(e) {
             i.jsx("button", {
               type: "button",
               onClick: V,
-              children: i.jsx(M, { children: "Back to connections" }),
+              children: i.jsx(LocalizedText, {
+                children: "Back to connections",
+              }),
             }),
           ],
         }),
@@ -265,7 +282,7 @@ function Z2e(e) {
           children: [
             i.jsx("p", {
               className: "lg-source-help",
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Only visible connections permitted by your application are listed. Protected worksheets cannot be refreshed. Each source is read once per batch; source snapshots may have different timestamps.",
               }),
@@ -275,7 +292,9 @@ function Z2e(e) {
               disabled: c || !!e.readOnly,
               children: [
                 i.jsx("legend", {
-                  children: i.jsx(M, { children: "Connections to refresh" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Connections to refresh",
+                  }),
                 }),
                 a.map((T) => {
                   var N, R;
@@ -334,7 +353,7 @@ function Z2e(e) {
                 }),
                 !a.length &&
                   i.jsx("p", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "No connected worksheets are available.",
                     }),
                   }),
@@ -358,7 +377,9 @@ function Z2e(e) {
                     onClick: () => {
                       return I.current?.abort();
                     },
-                    children: i.jsx(M, { children: "Cancel refresh" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Cancel refresh",
+                    }),
                   }),
                 ],
               }),
@@ -390,7 +411,12 @@ function Z2e(e) {
                             N.externalConnection.source.kind,
                           ],
                         }),
-                        L && i.jsx("p", { children: Mp(new Rn(L)).message }),
+                        L &&
+                          i.jsx("p", {
+                            children: isExternalSourceError(
+                              new ExternalSourceError(L),
+                            ).message,
+                          }),
                         T.snapshot &&
                           !L &&
                           i.jsxs(i.Fragment, {
@@ -450,7 +476,9 @@ function Z2e(e) {
                                       }),
                                     }),
                                     i.jsx("tbody", {
-                                      children: yU(T.snapshot).map(($) => {
+                                      children: computeSourceControlTotals(
+                                        T.snapshot,
+                                      ).map(($) => {
                                         const U =
                                           R.controls.find(
                                             (H) => H.field === $.field,
@@ -564,7 +592,9 @@ function Z2e(e) {
                         type: "button",
                         disabled: E === 0,
                         onClick: () => A((T) => T - 1),
-                        children: i.jsx(M, { children: "Previous records" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Previous records",
+                        }),
                       }),
                       i.jsx("span", {
                         children: r.message("Page {page} of {pages}", {
@@ -576,7 +606,9 @@ function Z2e(e) {
                         type: "button",
                         disabled: (E + 1) * 25 >= B.rows.length,
                         onClick: () => A((T) => T + 1),
-                        children: i.jsx(M, { children: "Next records" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Next records",
+                        }),
                       }),
                     ],
                   }),
@@ -587,7 +619,7 @@ function Z2e(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Apply checks every source permission again. One failed connection prevents the entire batch from replacing data.",
               }),
@@ -596,14 +628,18 @@ function Z2e(e) {
               type: "button",
               disabled: c || !!e.readOnly || !e.adapter || !s.length,
               onClick: () => void D(),
-              children: i.jsx(M, { children: "Preview selected connections" }),
+              children: i.jsx(LocalizedText, {
+                children: "Preview selected connections",
+              }),
             }),
             i.jsx("button", {
               type: "button",
               className: "primary",
               disabled: c || !!e.readOnly || !(z != null && z.plan),
               onClick: () => void D(true),
-              children: i.jsx(M, { children: "Apply all reviewed refreshes" }),
+              children: i.jsx(LocalizedText, {
+                children: "Apply all reviewed refreshes",
+              }),
             }),
           ],
         }),
@@ -611,13 +647,13 @@ function Z2e(e) {
     }),
   });
 }
-function K2e({ workbook, sheetId, onReview }) {
+function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
   const n = workbook.sheets.find((s) => s.id === sheetId),
     o = n?.externalConnection;
   if (!n || !o) return null;
   let a = true;
   try {
-    a = A_(n) !== o.outputHash;
+    a = snapshotSheetContent(n) !== o.outputHash;
   } catch {}
   return i.jsxs("div", {
     className: "lg-source-status",
@@ -643,24 +679,24 @@ function K2e({ workbook, sheetId, onReview }) {
         children: a
           ? "Local values changed; refresh cannot overwrite them."
           : o.lastAttempt.code
-            ? NH(o.lastAttempt.code)
+            ? errorMessageOf(o.lastAttempt.code)
             : "Refresh to check for newer source data.",
       }),
       i.jsx("button", {
         type: "button",
         onClick: onReview,
-        children: i.jsx(M, { children: "Connections & Refresh" }),
+        children: i.jsx(LocalizedText, { children: "Connections & Refresh" }),
       }),
     ],
   });
 }
-function NH(e) {
-  return new Rn(e).message;
+function errorMessageOf(e) {
+  return new ExternalSourceError(e).message;
 }
-function Y2e(e) {
+function ExternalDataRefreshDialog(e) {
   var X;
   const [r, t] = ne.useState(false),
-    n = Dr(),
+    n = useWorkbookMessages(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(e);
@@ -738,7 +774,7 @@ function Y2e(e) {
     const K = new AbortController();
     u.current = K;
     try {
-      const te = await q2e(W, {
+      const te = await fetchSourceCatalog(W, {
         signal: K.signal,
         reliability: s.current.reliability,
       });
@@ -748,7 +784,7 @@ function Y2e(e) {
           return ae || te[0]?.source.id || "";
         }));
     } catch (te) {
-      d.current && F(Mp(te).message);
+      d.current && F(isExternalSourceError(te).message);
     } finally {
       u.current === K &&
         ((u.current = null), (l.current = false), d.current && A(""));
@@ -768,7 +804,7 @@ function Y2e(e) {
     u.current = de;
     try {
       if (W) {
-        const he = await S_(te, ae, {
+        const he = await authorizeSourceAccess(te, ae, {
           signal: de.signal,
           reliability: e.reliability,
         });
@@ -778,8 +814,8 @@ function Y2e(e) {
           s.current.adapter !== te ||
           s.current.readOnly
         )
-          throw new Rn("stale");
-        const Se = W2e(s.current.workbook, C, he, {
+          throw new ExternalSourceError("stale");
+        const Se = grantSheetSnapshotSource(s.current.workbook, C, he, {
           readOnly: s.current.readOnly,
           allowedSheetIds: s.current.allowedSheetIds,
         });
@@ -789,7 +825,7 @@ function Y2e(e) {
             "Source data refreshed. The reviewed population and control totals were applied together.",
           ));
       } else {
-        const he = await TH(te, ae, {
+        const he = await refreshSourceSnapshot(te, ae, {
           signal: de.signal,
           reliability: e.reliability,
         });
@@ -799,7 +835,7 @@ function Y2e(e) {
           s.current.adapter !== te ||
           s.current.readOnly
         )
-          throw new Rn("stale");
+          throw new ExternalSourceError("stale");
         const Se = EH(
           K.workbook,
           he.snapshot,
@@ -811,14 +847,14 @@ function Y2e(e) {
       }
     } catch (he) {
       if (!d.current) return;
-      const Se = Mp(he);
+      const Se = isExternalSourceError(he);
       if (
         (F(Se.message),
         z(null),
         oe && s.current.adapter === te && s.current.workbook === K.workbook)
       ) {
         const le = s.current,
-          ce = lN(le.workbook, oe, ae, Se.code, {
+          ce = normalizeExternalSourceState(le.workbook, oe, ae, Se.code, {
             readOnly: le.readOnly,
             allowedSheetIds: le.allowedSheetIds,
           });
@@ -847,7 +883,7 @@ function Y2e(e) {
       (!e.allowedSheetIds || e.allowedSheetIds.includes(W.id)),
   );
   return r
-    ? i.jsx(Z2e, { ...e, onClose: () => t(false) })
+    ? i.jsx(ExternalSourceBatchRefreshPanel, { ...e, onClose: () => t(false) })
     : i.jsx("div", {
         className: "lg-modal-backdrop",
         children: i.jsxs("section", {
@@ -881,11 +917,15 @@ function Y2e(e) {
                   children: [
                     i.jsx("p", {
                       className: "lg-source-eyebrow",
-                      children: i.jsx(M, { children: "Get & Transform Data" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Get & Transform Data",
+                      }),
                     }),
                     i.jsx("h2", {
                       id: o,
-                      children: i.jsx(M, { children: "Connections & Refresh" }),
+                      children: i.jsx(LocalizedText, {
+                        children: "Connections & Refresh",
+                      }),
                     }),
                     i.jsx("p", {
                       children:
@@ -897,7 +937,7 @@ function Y2e(e) {
                   type: "button",
                   "aria-label": n.text("Close source connections"),
                   onClick: L,
-                  children: i.jsx(M, { children: "Close" }),
+                  children: i.jsx(LocalizedText, { children: "Close" }),
                 }),
               ],
             }),
@@ -921,7 +961,7 @@ function Y2e(e) {
                   children: [
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Connection" }),
+                        i.jsx(LocalizedText, { children: "Connection" }),
                         i.jsxs("select", {
                           "aria-label": "Connection",
                           value: f,
@@ -958,7 +998,7 @@ function Y2e(e) {
                     }),
                     i.jsxs("label", {
                       children: [
-                        i.jsx(M, { children: "Approved source" }),
+                        i.jsx(LocalizedText, { children: "Approved source" }),
                         i.jsxs("select", {
                           "aria-label": "Approved source",
                           disabled: !!E || !!f || !e.adapter,
@@ -1001,7 +1041,9 @@ function Y2e(e) {
                     !f &&
                       i.jsxs("label", {
                         children: [
-                          i.jsx(M, { children: "Output worksheet" }),
+                          i.jsx(LocalizedText, {
+                            children: "Output worksheet",
+                          }),
                           i.jsx("input", {
                             "aria-label": "Output worksheet",
                             value: g,
@@ -1016,7 +1058,7 @@ function Y2e(e) {
                       type: "button",
                       onClick: () => void U(),
                       disabled: !e.adapter || !!E,
-                      children: i.jsx(M, {
+                      children: i.jsx(LocalizedText, {
                         children: "Reload approved sources",
                       }),
                     }),
@@ -1033,7 +1075,7 @@ function Y2e(e) {
                   onClick: () => {
                     ($(), t(true));
                   },
-                  children: i.jsx(M, { children: "Refresh All" }),
+                  children: i.jsx(LocalizedText, { children: "Refresh All" }),
                 }),
                 _ &&
                   i.jsxs("section", {
@@ -1085,7 +1127,7 @@ function Y2e(e) {
                       _.lastAttempt.code &&
                         i.jsxs("p", {
                           children: [
-                            NH(_.lastAttempt.code),
+                            errorMessageOf(_.lastAttempt.code),
                             " · attempted",
                             " ",
                             _.lastAttempt.at,
@@ -1111,7 +1153,9 @@ function Y2e(e) {
                         onClick: () => {
                           return u.current?.abort();
                         },
-                        children: i.jsx(M, { children: "Cancel refresh" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Cancel refresh",
+                        }),
                       }),
                     ],
                   }),
@@ -1339,14 +1383,18 @@ function Y2e(e) {
                   type: "button",
                   disabled: R || !m,
                   onClick: () => void G(),
-                  children: i.jsx(M, { children: "Preview refresh" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Preview refresh",
+                  }),
                 }),
                 i.jsx("button", {
                   type: "button",
                   className: "primary",
                   disabled: R || !C,
                   onClick: () => void G(true),
-                  children: i.jsx(M, { children: "Apply reviewed refresh" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Apply reviewed refresh",
+                  }),
                 }),
               ],
             }),
@@ -1354,17 +1402,21 @@ function Y2e(e) {
         }),
       });
 }
-const SS = new WeakMap();
-let J2e = 0;
-function RH(e) {
-  return e ? (SS.has(e) || SS.set(e, ++J2e), SS.get(e)) : "default";
+const workbookInstanceIds = new WeakMap();
+let workbookInstanceCounter = 0;
+function workbookInstanceKey(e) {
+  return e
+    ? (workbookInstanceIds.has(e) ||
+        workbookInstanceIds.set(e, ++workbookInstanceCounter),
+      workbookInstanceIds.get(e))
+    : "default";
 }
-const Gv = (e) => !!e && typeof e.then == "function";
-function TS(e, r) {
-  return Gv(e) ? e.then(r) : r(e);
+const isPromiseLike = (e) => !!e && typeof e.then == "function";
+function chainMaybePromise(e, r) {
+  return isPromiseLike(e) ? e.then(r) : r(e);
 }
-const Vj = kz(),
-  Q2e = () => crypto.randomUUID(),
+const Vj = buildLocalDemoProposal(),
+  createRandomUuid = () => crypto.randomUUID(),
   NS = (e) => typeof e == "number" && Number.isFinite(e);
 function Jd(e, r) {
   const t = URL.createObjectURL(e),
@@ -1377,17 +1429,30 @@ function Jd(e, r) {
 function wy(e, r) {
   const t = _t(e),
     n = _t(r);
-  return `${ut(Math.min(t.col, n.col))}${Math.min(t.row, n.row) + 1}:${ut(Math.max(t.col, n.col))}${Math.max(t.row, n.row) + 1}`;
+  return `${columnIndexToLetters(Math.min(t.col, n.col))}${Math.min(t.row, n.row) + 1}:${columnIndexToLetters(Math.max(t.col, n.col))}${Math.max(t.row, n.row) + 1}`;
 }
-const eEe = ne.lazy(() =>
+const LazyAssistantChat = ne.lazy(() =>
     import("../assistant/AssistantChat.js").then((e) => ({
       default: e.AssistantChat,
     })),
   ),
-  tEe = ne.lazy(() =>
+  LazyAssistantChatMarkdown = ne.lazy(() =>
     import("../assistant/AssistantChatMarkdown.js").then((e) => ({
       default: e.AssistantChatMarkdown,
     })),
   );
 
-export { Gv, Jd, K2e, NS, Q2e, RH, TS, Vj, Y2e, eEe, tEe, wy };
+export {
+  isPromiseLike,
+  Jd,
+  ExternalSourceStatusPanel,
+  NS,
+  createRandomUuid,
+  workbookInstanceKey,
+  chainMaybePromise,
+  Vj,
+  ExternalDataRefreshDialog,
+  LazyAssistantChat,
+  LazyAssistantChatMarkdown,
+  wy,
+};

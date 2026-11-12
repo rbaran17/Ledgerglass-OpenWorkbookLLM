@@ -55,14 +55,29 @@ import {
 } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { $B, Q3, l0, ys } from "./03-workbook-model.js";
-import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { G7, Mn, Uh, Vde, Xl, lr } from "./24-merge-and-audit-analysis.js";
-import { Hk } from "./25-color-picker.js";
+import {
+  summarizeNumberFormat,
+  buildNumberFormatCode,
+  validateNumberFormatSettings,
+  resolveEffectiveCellStyle,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  collectRibbonCommands,
+  RibbonGroup,
+  Uh,
+  CommandReferenceDialog,
+  RibbonIconButton,
+  RibbonCommandButton,
+} from "./24-merge-and-audit-analysis.js";
+import { ColorPickerButton } from "./25-color-picker.js";
 
-function Hde(e) {
+function WorkbookRibbon(e) {
   var H;
-  const { text, language } = Dr(),
+  const { text, language } = useWorkbookMessages(),
     [n, o] = ne.useState("Home"),
     [a, s] = ne.useState(false),
     d = ne.useRef(null),
@@ -131,7 +146,7 @@ function Hde(e) {
       );
     }, []));
   const k = e.readOnly || e.busy,
-    F = ys(e.cell?.style),
+    F = resolveEffectiveCellStyle(e.cell?.style),
     I = (J) => e.onFormat({ style: J }),
     O = (J) =>
       e.onFormat({ format: J, numFmt: undefined, numberFormat: undefined }),
@@ -143,18 +158,18 @@ function Hde(e) {
     z = (J) => {
       var K;
       if ((K = e.cell) != null && K.numberFormat && !j) {
-        const le = l0({
+        const le = validateNumberFormatSettings({
           ...e.cell.numberFormat,
           decimals: Math.max(
             0,
             Math.min(12, (e.cell.numberFormat.decimals ?? 2) + J),
           ),
         });
-        e.onFormat({ numberFormat: le, numFmt: Q3(le) });
+        e.onFormat({ numberFormat: le, numFmt: buildNumberFormatCode(le) });
         return;
       }
       const q =
-          $B(e.cell?.numFmt) ??
+          summarizeNumberFormat(e.cell?.numFmt) ??
           (e.cell?.format === "currency" ||
           e.cell?.format === "number" ||
           e.cell?.format === "percent"
@@ -243,21 +258,26 @@ function Hde(e) {
                   : /New Sheet/.test(J) && e.workbookStructureProtected
                     ? "Unprotect workbook structure in Manage worksheets before adding a sheet."
                     : "This command is unavailable for the current workbook state.",
-    C = { group: Mn, command: lr, icon: Xl, color: Hk },
+    C = {
+      group: RibbonGroup,
+      command: RibbonCommandButton,
+      icon: RibbonIconButton,
+      color: ColorPickerButton,
+    },
     T = (J) =>
       i.jsxs(i.Fragment, {
         children: [
           J === "Home" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Clipboard"),
                   className: "xl-clipboard-group",
                   children: [
                     i.jsxs("div", {
                       className: "xl-paste-commands",
                       children: [
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Clipboard, {}),
                           label: text("Paste"),
                           large: true,
@@ -277,7 +297,7 @@ function Hde(e) {
                           lang: language("Paste Special"),
                           "data-ui-label": "Paste Special",
                           children: [
-                            i.jsx(M, { children: "Paste Special" }),
+                            i.jsx(LocalizedText, { children: "Paste Special" }),
                             i.jsx(ChevronDown, { size: 10 }),
                           ],
                         }),
@@ -286,18 +306,18 @@ function Hde(e) {
                     i.jsxs("div", {
                       className: "xl-command-stack",
                       children: [
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Scissors, {}),
                           label: text("Cut"),
                           onClick: e.onCut,
                           disabled: k,
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Copy, {}),
                           label: text("Copy"),
                           onClick: e.onCopy,
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Paintbrush, {}),
                           label: text("Format Painter"),
                           onClick: () => e.onTool("paint"),
@@ -307,7 +327,7 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Font"),
                   className: "xl-font-group",
                   onDialog: () => e.onTool("cellStyle"),
@@ -363,11 +383,11 @@ function Hde(e) {
                             .sort((q, W) => q - W)
                             .map((q) => i.jsx("option", { children: q }, q)),
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
                             className: "xl-grow-font",
                             children: [
-                              i.jsx(M, { children: "A" }),
+                              i.jsx(LocalizedText, { children: "A" }),
                               i.jsx("sup", { children: "⌃" }),
                             ],
                           }),
@@ -383,21 +403,21 @@ function Hde(e) {
                     i.jsxs("div", {
                       className: "xl-font-buttons",
                       children: [
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(Bold, { size: 15 }),
                           label: text("Bold (Ctrl+B)"),
                           active: !!F.bold,
                           onClick: () => I({ bold: !F.bold }),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(Italic, { size: 15 }),
                           label: text("Italic (Ctrl+I)"),
                           active: !!F.italic,
                           onClick: () => I({ italic: !F.italic }),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(Underline, { size: 15 }),
                           label: text("Underline (Ctrl+U)"),
                           active: !!F.underline,
@@ -427,13 +447,13 @@ function Hde(e) {
                             }),
                           ],
                         }),
-                        i.jsx(Hk, {
+                        i.jsx(ColorPickerButton, {
                           kind: "fill",
                           value: F.fill ?? "#FFFF00",
                           onChange: (q) => I({ fill: q }),
                           disabled: k,
                         }),
-                        i.jsx(Hk, {
+                        i.jsx(ColorPickerButton, {
                           kind: "color",
                           value: F.color ?? "#C00000",
                           onChange: (q) => I({ color: q }),
@@ -443,35 +463,35 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Alignment"),
                   className: "xl-alignment-group",
                   children: [
                     i.jsxs("div", {
                       className: "xl-alignment-top",
                       children: [
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignLeft, { size: 16 }),
                           label: text("Align Left"),
                           active: F.align === "left",
                           onClick: () => I({ align: "left" }),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignCenter, { size: 16 }),
                           label: text("Center"),
                           active: F.align === "center",
                           onClick: () => I({ align: "center" }),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignRight, { size: 16 }),
                           label: text("Align Right"),
                           active: F.align === "right",
                           onClick: () => I({ align: "right" }),
                           disabled: k,
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(WrapText, {}),
                           label: text("Wrap Text"),
                           active: !!F.wrap,
@@ -480,7 +500,7 @@ function Hde(e) {
                         }),
                       ],
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Merge & Center"),
                       onClick: () => e.onTool("merge"),
@@ -488,12 +508,12 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Number"),
                   className: "xl-number-group",
                   children: [
                     D,
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(DollarSign, { size: 15 }),
                       label: text("Format Cells"),
                       onClick: () => e.onTool("numberFormat"),
@@ -502,19 +522,19 @@ function Hde(e) {
                     i.jsxs("div", {
                       className: "xl-number-buttons",
                       children: [
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(DollarSign, { size: 16 }),
                           label: text("Currency"),
                           onClick: () => O("currency"),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx(Percent, { size: 15 }),
                           label: text("Percent Style"),
                           onClick: () => O("percent"),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsx("span", {
                             className: "xl-comma-icon",
                             children: ",",
@@ -528,7 +548,7 @@ function Hde(e) {
                             }),
                           disabled: k,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
                             className: "xl-decimal-icon",
                             children: [
@@ -540,7 +560,7 @@ function Hde(e) {
                           onClick: () => z(1),
                           disabled: k || !!j,
                         }),
-                        i.jsx(Xl, {
+                        i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
                             className: "xl-decimal-icon",
                             children: ["→", i.jsx("small", { children: ".0" })],
@@ -553,25 +573,25 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Styles"),
                   className: "xl-styles-group",
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid3x3, {}),
                       label: text("Conditional Formatting"),
                       large: true,
                       onClick: () => e.onTool("conditional"),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Format as Table"),
                       large: true,
                       onClick: () => e.onTool("table"),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(LayoutGrid, {}),
                       label: text("Heading Style"),
                       large: true,
@@ -585,27 +605,27 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Cells"),
                   className: "xl-cells-group",
                   children: i.jsxs("div", {
                     className: "xl-command-stack",
                     children: [
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("Insert Row"),
                         onClick: e.onAddRow,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Table2, {}),
                         label: text("Insert Column"),
                         onClick: e.onAddColumn,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Sheet, {}),
                         label: text("New Sheet"),
                         onClick: e.onAddSheet,
@@ -617,12 +637,12 @@ function Hde(e) {
                     ],
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Cell Size"),
                   children: i.jsxs("div", {
                     className: "xl-command-stack",
                     children: [
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Maximize, {}),
                         label: text("AutoFit Column Width"),
                         onClick: e.onAutoFitColumns,
@@ -631,7 +651,7 @@ function Hde(e) {
                           "Fit the selected columns to their contents",
                         ),
                       }),
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("AutoFit Row Height"),
                         onClick: e.onAutoFitRows,
@@ -640,7 +660,7 @@ function Hde(e) {
                           "Fit the selected rows to their contents and wrapping",
                         ),
                       }),
-                      i.jsx(lr, {
+                      i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("Hide & Unhide"),
                         onClick: () => e.onTool("viewSettings"),
@@ -651,27 +671,27 @@ function Hde(e) {
                     ],
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Editing"),
                   className: "xl-editing-group",
                   children: [
                     i.jsxs("div", {
                       className: "xl-command-stack",
                       children: [
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Sigma, {}),
                           label: text("AutoSum"),
                           onClick: e.onAutosum,
                           disabled: k,
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowDownToLine, {}),
                           label: text("Fill Down"),
                           onClick: e.onFillDown,
                           disabled: k,
                           className: "xl-blue-icon",
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Eraser, {}),
                           label: text("Clear"),
                           onClick: e.onClear,
@@ -679,7 +699,7 @@ function Hde(e) {
                         }),
                       ],
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Fill Series"),
                       large: true,
@@ -690,20 +710,20 @@ function Hde(e) {
                       ),
                       className: "xl-blue-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Sort & Filter"),
                       large: true,
                       onClick: e.onToggleFilter,
                       className: "xl-blue-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Find & Select"),
                       large: true,
                       onClick: e.onFind,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Advanced Find"),
                       onClick: () => e.onTool("search"),
@@ -711,7 +731,7 @@ function Hde(e) {
                         "Find all matches, preview replacements, or inspect special cells (Ctrl/⌘+Shift+F)",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Go To Special"),
                       onClick: () => e.onTool("goToSpecial"),
@@ -726,17 +746,17 @@ function Hde(e) {
           J === "Insert" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Tables"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("PivotTable"),
                       large: true,
                       onClick: () => e.onTool("pivot"),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Table"),
                       large: true,
@@ -745,17 +765,17 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Illustrations"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Image$1, {}),
                       label: text("Pictures"),
                       large: true,
                       onClick: () => e.onTool("picture"),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Square, {}),
                       label: text("Shapes"),
                       large: true,
@@ -764,9 +784,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Charts"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(ChartColumn, {}),
                     label: text("Recommended Charts"),
                     large: true,
@@ -774,9 +794,9 @@ function Hde(e) {
                     disabled: k,
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Comments"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(MessageSquare, {}),
                     label: text("New Note"),
                     large: true,
@@ -785,10 +805,10 @@ function Hde(e) {
                     className: "xl-gold-icon",
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Worksheet"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sheet, {}),
                       label: text("New Sheet"),
                       large: true,
@@ -799,14 +819,14 @@ function Hde(e) {
                         e.workbookStructureProtected,
                       className: "xl-green-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Insert Row"),
                       large: true,
                       onClick: e.onAddRow,
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Insert Column"),
                       large: true,
@@ -815,9 +835,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Files"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(FolderOpen, {}),
                     label: text("Open Workbook"),
                     large: true,
@@ -831,9 +851,9 @@ function Hde(e) {
           J === "Page Layout" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Themes"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(LayoutGrid, {}),
                     label: text("Themes"),
                     large: true,
@@ -841,31 +861,31 @@ function Hde(e) {
                     disabled: k,
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Page Setup"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sheet, {}),
                       label: text("Margins"),
                       large: true,
                       onClick: () => e.onTool("margins"),
                       disabled: false,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Orientation"),
                       large: true,
                       onClick: () => e.onTool("orientation"),
                       disabled: false,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Square, {}),
                       label: text("Size"),
                       large: true,
                       onClick: () => e.onTool("size"),
                       disabled: false,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Print Area"),
                       large: true,
@@ -874,17 +894,17 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Print titles and breaks"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Print Titles"),
                       onClick: () => e.onTool("printTitles"),
                       disabled: false,
                       large: true,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Page Breaks"),
                       onClick: () => e.onTool("pageBreaks"),
@@ -893,9 +913,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Scale to Fit"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(Maximize, {}),
                     label: text("Fit to Page"),
                     large: true,
@@ -903,7 +923,7 @@ function Hde(e) {
                     disabled: false,
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Sheet Options"),
                   className: "xl-options-group",
                   children: [
@@ -914,7 +934,7 @@ function Hde(e) {
                           checked: e.gridlines,
                           onChange: e.onGridlines,
                         }),
-                        i.jsx(M, { children: "Gridlines" }),
+                        i.jsx(LocalizedText, { children: "Gridlines" }),
                       ],
                     }),
                     i.jsxs("label", {
@@ -924,7 +944,7 @@ function Hde(e) {
                           checked: e.headings,
                           onChange: e.onHeadings,
                         }),
-                        i.jsx(M, { children: "Headings" }),
+                        i.jsx(LocalizedText, { children: "Headings" }),
                       ],
                     }),
                   ],
@@ -934,10 +954,10 @@ function Hde(e) {
           J === "Formulas" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Function Library"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sigma, {}),
                       label: text("AutoSum"),
                       large: true,
@@ -945,13 +965,13 @@ function Hde(e) {
                       disabled: k,
                       className: "xl-blue-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(BookOpen, {}),
                       label: text("Function Reference"),
                       large: true,
                       onClick: () => e.onPanel("help"),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Insert Function"),
                       large: true,
@@ -960,9 +980,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Extensions"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(Calculator, {}),
                     label: text("Add-ins & Functions"),
                     large: true,
@@ -970,9 +990,9 @@ function Hde(e) {
                     disabled: e.busy,
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Defined Names"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(Table2, {}),
                     label: text("Name Manager"),
                     large: true,
@@ -980,13 +1000,13 @@ function Hde(e) {
                     disabled: false,
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Formula Auditing"),
                   children: [
                     i.jsxs("div", {
                       className: "xl-command-stack",
                       children: [
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowLeftRight, {}),
                           label: text("Trace Precedents"),
                           onClick: () => e.onTool("tracePrecedents"),
@@ -994,7 +1014,7 @@ function Hde(e) {
                             "Inspect the cells referenced by the active formula",
                           ),
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowLeftRight, {}),
                           label: text("Trace Dependents"),
                           onClick: () => e.onTool("traceDependents"),
@@ -1002,7 +1022,7 @@ function Hde(e) {
                             "Inspect formulas that reference the active cell",
                           ),
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Sheet, {}),
                           label: text("Watch Window"),
                           onClick: () => e.onTool("formulaWatches"),
@@ -1012,7 +1032,7 @@ function Hde(e) {
                         }),
                       ],
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Evaluate Formula"),
                       large: true,
@@ -1021,7 +1041,7 @@ function Hde(e) {
                         "Replay actual calculation steps and inspect errors",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ShieldCheck, {}),
                       label: text("Compatibility"),
                       large: true,
@@ -1030,14 +1050,14 @@ function Hde(e) {
                         "Review function contracts and unsupported formulas",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sheet, {}),
                       label: text("Show Formulas"),
                       large: true,
                       active: e.showFormulas,
                       onClick: e.onShowFormulas,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ShieldCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
@@ -1046,10 +1066,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Calculation"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Calculation Options"),
                       large: true,
@@ -1058,7 +1078,7 @@ function Hde(e) {
                         "Automatic or manual mode, iteration and calculation evidence",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Calculate Now"),
                       large: true,
@@ -1069,9 +1089,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Formula Assistance"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(Sparkles, {}),
                     label: text("Ask AI Assistant"),
                     large: true,
@@ -1084,10 +1104,10 @@ function Hde(e) {
           J === "Data" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Get & Transform Data"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(FolderOpen, {}),
                       label: text("Get Data"),
                       large: true,
@@ -1096,14 +1116,14 @@ function Hde(e) {
                       className: "xl-gold-icon",
                       title: text("Import Excel, CSV, TSV, or workbook JSON"),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("From Table / Range"),
                       large: true,
                       onClick: () => e.onTool("query"),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ArrowLeftRight, {}),
                       label: text("Append / Join"),
                       large: true,
@@ -1113,7 +1133,7 @@ function Hde(e) {
                         "Review combined populations, unmatched records and match counts",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Transformation Recipes"),
                       large: true,
@@ -1123,7 +1143,7 @@ function Hde(e) {
                         "Build versioned steps with source fingerprints, failure details and reviewed outputs",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(FolderOpen, {}),
                       label: text("Connections & Refresh"),
                       large: true,
@@ -1133,7 +1153,7 @@ function Hde(e) {
                         "Review approved external sources, control changes and last successful data",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Model"),
                       large: true,
@@ -1145,10 +1165,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Sort & Filter"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Filter, {}),
                       label: text("Column Filters"),
                       large: true,
@@ -1158,7 +1178,7 @@ function Hde(e) {
                         "Filter values, text, numbers, dates and advanced criteria while retaining source rows",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ArrowDownAZ, {}),
                       label: text("Custom Sort"),
                       large: true,
@@ -1171,7 +1191,7 @@ function Hde(e) {
                     i.jsxs("div", {
                       className: "xl-command-stack",
                       children: [
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowDownAZ, {}),
                           label: text("Sort A to Z"),
                           onClick: () => e.onSort("asc"),
@@ -1180,7 +1200,7 @@ function Hde(e) {
                             "Sort worksheet view ascending by the selected column",
                           ),
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowUpAZ, {}),
                           label: text("Sort Z to A"),
                           onClick: () => e.onSort("desc"),
@@ -1189,14 +1209,14 @@ function Hde(e) {
                             "Sort worksheet view descending by the selected column",
                           ),
                         }),
-                        i.jsx(lr, {
+                        i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Eraser, {}),
                           label: text("Clear Sort"),
                           onClick: () => e.onSort(null),
                         }),
                       ],
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Filter, {}),
                       label: text("Filter"),
                       large: true,
@@ -1204,17 +1224,17 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Data Tools"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ClipboardCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(CheckCheck, {}),
                       label: text("Data Validation"),
                       large: true,
@@ -1224,7 +1244,7 @@ function Hde(e) {
                         "Review validation rules and inspect existing values; editing requires write access",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Copy, {}),
                       label: text("Remove Duplicates"),
                       large: true,
@@ -1234,7 +1254,7 @@ function Hde(e) {
                         "Review duplicate groups and create a separate deduplicated population",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Columns3, {}),
                       label: text("Text to Columns"),
                       large: true,
@@ -1244,7 +1264,7 @@ function Hde(e) {
                         "Preview split fields and types before creating a separate output",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Columns3, {}),
                       label: text("Clean up text"),
                       large: true,
@@ -1254,7 +1274,7 @@ function Hde(e) {
                         "Review cleanup and extraction steps while retaining original evidence",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Columns3, {}),
                       label: text("Clean & Reshape"),
                       large: true,
@@ -1266,9 +1286,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Workbook Links"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(FileSpreadsheet, {}),
                     label: text("Workbook Links"),
                     large: true,
@@ -1279,10 +1299,10 @@ function Hde(e) {
                     ),
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("What-If Analysis"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Scenario Manager"),
                       large: true,
@@ -1292,7 +1312,7 @@ function Hde(e) {
                         "Compare named assumptions and review a scenario before applying it",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Table"),
                       large: true,
@@ -1302,7 +1322,7 @@ function Hde(e) {
                         "Build a one- or two-variable sensitivity table with retained baseline assumptions",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Goal Seek"),
                       large: true,
@@ -1314,10 +1334,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Analysis"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Solver"),
                       large: true,
@@ -1327,7 +1347,7 @@ function Hde(e) {
                         "Review bounded linear optimization with explicit constraints",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Analysis"),
                       large: true,
@@ -1339,10 +1359,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Outline"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Consolidate / Subtotals"),
                       large: true,
@@ -1352,7 +1372,7 @@ function Hde(e) {
                         "Review cross-sheet or approved-workbook rollups, source context and grouped subtotals",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Group & Outline"),
                       large: true,
@@ -1360,10 +1380,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Export"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Copy, {}),
                       label: text("Report Outputs"),
                       large: true,
@@ -1373,7 +1393,7 @@ function Hde(e) {
                         "Publish fixed snapshots, review linked refreshes and inspect embedded objects",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(FileSpreadsheet, {}),
                       label: text("Save as Excel"),
                       large: true,
@@ -1381,7 +1401,7 @@ function Hde(e) {
                       disabled: e.busy,
                       className: "xl-green-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Download, {}),
                       label: text("Export CSV"),
                       large: true,
@@ -1395,9 +1415,9 @@ function Hde(e) {
           J === "Review" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Proofing"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(BookOpen, {}),
                     label: text("Spelling"),
                     large: true,
@@ -1405,9 +1425,9 @@ function Hde(e) {
                     disabled: false,
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Notes"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(MessageSquare, {}),
                     label: text("New / Edit Note"),
                     large: true,
@@ -1416,26 +1436,26 @@ function Hde(e) {
                     className: "xl-gold-icon",
                   }),
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Comments"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(MessageSquare, {}),
                       label: text("Review Comments"),
                       large: true,
                       onClick: () => e.onTool("comments"),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(MessageSquare, {}),
                       label: text("Hyperlink"),
                       onClick: () => e.onTool("hyperlink"),
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Audit Review"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Pattern Checks"),
                       large: true,
@@ -1445,7 +1465,7 @@ function Hde(e) {
                         "Test explicit duplicate keys, sequence gaps, round amounts, weekends, holidays and combined rules",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Aging Schedule"),
                       large: true,
@@ -1455,7 +1475,7 @@ function Hde(e) {
                         "Reconcile configurable aging buckets using a fixed as-of date",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Risk Screening"),
                       large: true,
@@ -1465,7 +1485,7 @@ function Hde(e) {
                         "Review explicit thresholds, currency and effective period",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(CheckCheck, {}),
                       label: text("Mark Reviewed"),
                       large: true,
@@ -1473,7 +1493,7 @@ function Hde(e) {
                       disabled: k,
                       className: "xl-green-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ClipboardCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
@@ -1482,10 +1502,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Changes"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ArrowLeftRight, {}),
                       label: text("Compare Workbooks"),
                       large: true,
@@ -1495,7 +1515,7 @@ function Hde(e) {
                         "Compare keyed rows, formulas, links and hidden content",
                       ),
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(History, {}),
                       label: text("Show Changes"),
                       large: true,
@@ -1504,9 +1524,9 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Protection"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(ShieldCheck, {}),
                     label: e.sheetProtected
                       ? "Unprotect Sheet"
@@ -1516,9 +1536,9 @@ function Hde(e) {
                     disabled: !e.allowProtectionChange,
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("AI Review"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(Sparkles, {}),
                     label: text("AI Assistant"),
                     large: true,
@@ -1526,9 +1546,9 @@ function Hde(e) {
                     className: "xl-purple-icon",
                   }),
                 }),
-                i.jsx(Mn, {
+                i.jsx(RibbonGroup, {
                   label: text("Automation"),
-                  children: i.jsx(lr, {
+                  children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(FileCode, {}),
                     label: text("Automation & Scripts"),
                     large: true,
@@ -1544,10 +1564,10 @@ function Hde(e) {
           J === "View" &&
             i.jsxs(i.Fragment, {
               children: [
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Workbook Views"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid3x3, {}),
                       label: text("Normal"),
                       large: true,
@@ -1557,7 +1577,7 @@ function Hde(e) {
                           e.headings || e.onHeadings());
                       },
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sheet, {}),
                       label: text("Page Layout"),
                       large: true,
@@ -1566,7 +1586,7 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Show"),
                   className: "xl-options-group",
                   children: [
@@ -1577,7 +1597,7 @@ function Hde(e) {
                           checked: e.gridlines,
                           onChange: e.onGridlines,
                         }),
-                        i.jsx(M, { children: "Gridlines" }),
+                        i.jsx(LocalizedText, { children: "Gridlines" }),
                       ],
                     }),
                     i.jsxs("label", {
@@ -1587,7 +1607,7 @@ function Hde(e) {
                           checked: e.headings,
                           onChange: e.onHeadings,
                         }),
-                        i.jsx(M, { children: "Headings" }),
+                        i.jsx(LocalizedText, { children: "Headings" }),
                       ],
                     }),
                     i.jsxs("label", {
@@ -1597,12 +1617,12 @@ function Hde(e) {
                           checked: e.showFormulas,
                           onChange: e.onShowFormulas,
                         }),
-                        i.jsx(M, { children: "Formulas" }),
+                        i.jsx(LocalizedText, { children: "Formulas" }),
                       ],
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Zoom"),
                   className: "xl-zoom-group",
                   children: [
@@ -1610,7 +1630,7 @@ function Hde(e) {
                       className: "xl-zoom-selector",
                       children: [i.jsx(Search, { size: 22 }), B],
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Maximize, {}),
                       label: "100%",
                       large: true,
@@ -1618,10 +1638,10 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Window"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Split"),
                       onClick: () => e.onTool("viewSettings"),
@@ -1630,7 +1650,7 @@ function Hde(e) {
                       ),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Default Sizes"),
                       onClick: () => e.onTool("viewSettings"),
@@ -1639,7 +1659,7 @@ function Hde(e) {
                       ),
                       disabled: k,
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Freeze Panes"),
                       large: true,
@@ -1649,7 +1669,7 @@ function Hde(e) {
                       ),
                       className: "xl-blue-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(PanelTop, {}),
                       label: text("Freeze Top Row"),
                       large: true,
@@ -1657,7 +1677,7 @@ function Hde(e) {
                       onClick: e.onFreeze,
                       className: "xl-blue-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Hide & Unhide"),
                       large: true,
@@ -1666,17 +1686,17 @@ function Hde(e) {
                     }),
                   ],
                 }),
-                i.jsxs(Mn, {
+                i.jsxs(RibbonGroup, {
                   label: text("Task Panes"),
                   children: [
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sparkles, {}),
                       label: text("AI Assistant"),
                       large: true,
                       onClick: () => e.onPanel("assistant"),
                       className: "xl-purple-icon",
                     }),
-                    i.jsx(lr, {
+                    i.jsx(RibbonCommandButton, {
                       icon: i.jsx(History, {}),
                       label: text("Show Changes"),
                       large: true,
@@ -1688,8 +1708,10 @@ function Hde(e) {
             }),
         ],
       }),
-    N = Object.fromEntries(Uh.map((J) => [J, G7(T(J), J, C, _)])),
-    R = G7(
+    N = Object.fromEntries(
+      Uh.map((J) => [J, collectRibbonCommands(T(J), J, C, _)]),
+    ),
+    R = collectRibbonCommands(
       i.jsxs("div", {
         className: "xl-file-menu",
         role: "menu",
@@ -1706,9 +1728,11 @@ function Hde(e) {
               i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "New" }),
+                  i.jsx(LocalizedText, { children: "New" }),
                   i.jsx("span", {
-                    children: i.jsx(M, { children: "Blank workbook" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Blank workbook",
+                    }),
                   }),
                 ],
               }),
@@ -1723,9 +1747,9 @@ function Hde(e) {
               i.jsx(FolderOpen, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Open" }),
+                  i.jsx(LocalizedText, { children: "Open" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Excel, CSV, TSV, or JSON",
                     }),
                   }),
@@ -1742,9 +1766,9 @@ function Hde(e) {
               i.jsx(Sheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Manage worksheets" }),
+                  i.jsx(LocalizedText, { children: "Manage worksheets" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "Names, order, visibility and structure protection",
                     }),
@@ -1761,9 +1785,9 @@ function Hde(e) {
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Workbook properties" }),
+                  i.jsx(LocalizedText, { children: "Workbook properties" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Engagement, period and document details",
                     }),
                   }),
@@ -1779,9 +1803,9 @@ function Hde(e) {
               i.jsx(History, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Version history" }),
+                  i.jsx(LocalizedText, { children: "Version history" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Save, compare and restore checkpoints",
                     }),
                   }),
@@ -1798,9 +1822,11 @@ function Hde(e) {
               i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "New from current template" }),
+                  i.jsx(LocalizedText, {
+                    children: "New from current template",
+                  }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Create an independent workbook download",
                     }),
                   }),
@@ -1818,9 +1844,11 @@ function Hde(e) {
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Save as Excel" }),
+                  i.jsx(LocalizedText, { children: "Save as Excel" }),
                   i.jsx("span", {
-                    children: i.jsx(M, { children: "Excel Workbook (.xlsx)" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Excel Workbook (.xlsx)",
+                    }),
                   }),
                 ],
               }),
@@ -1835,9 +1863,9 @@ function Hde(e) {
               i.jsx(Download, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Save as CSV" }),
+                  i.jsx(LocalizedText, { children: "Save as CSV" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Current worksheet (.csv)",
                     }),
                   }),
@@ -1854,9 +1882,9 @@ function Hde(e) {
               i.jsx(FileJson, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Save workbook data" }),
+                  i.jsx(LocalizedText, { children: "Save workbook data" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Workbook, notes, and history (.json)",
                     }),
                   }),
@@ -1873,9 +1901,11 @@ function Hde(e) {
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Original XLSX and compatibility" }),
+                  i.jsx(LocalizedText, {
+                    children: "Original XLSX and compatibility",
+                  }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Source file and part inventory",
                     }),
                   }),
@@ -1892,9 +1922,9 @@ function Hde(e) {
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Import sources" }),
+                  i.jsx(LocalizedText, { children: "Import sources" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "JSON, XML and document extraction",
                     }),
                   }),
@@ -1911,9 +1941,9 @@ function Hde(e) {
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
-                  i.jsx(M, { children: "Workbook formats" }),
+                  i.jsx(LocalizedText, { children: "Workbook formats" }),
                   i.jsx("span", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Templates and legacy conversion",
                     }),
                   }),
@@ -1930,7 +1960,7 @@ function Hde(e) {
             children: [
               i.jsx(Type, { size: 18 }),
               i.jsx("span", {
-                children: i.jsx(M, { children: "Rename workbook" }),
+                children: i.jsx(LocalizedText, { children: "Rename workbook" }),
               }),
             ],
           }),
@@ -1942,7 +1972,9 @@ function Hde(e) {
             children: [
               i.jsx(ClipboardCheck, { size: 18 }),
               i.jsx("span", {
-                children: i.jsx(M, { children: "Open audit example" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Open audit example",
+                }),
               }),
             ],
           }),
@@ -1954,7 +1986,9 @@ function Hde(e) {
             children: [
               i.jsx(FileCode, { size: 18 }),
               i.jsx("span", {
-                children: i.jsx(M, { children: "Automation & Scripts" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Automation & Scripts",
+                }),
               }),
             ],
           }),
@@ -1965,7 +1999,7 @@ function Hde(e) {
             children: [
               i.jsx(BookOpen, { size: 18 }),
               i.jsx("span", {
-                children: i.jsx(M, { children: "Workbook help" }),
+                children: i.jsx(LocalizedText, { children: "Workbook help" }),
               }),
             ],
           }),
@@ -2036,7 +2070,7 @@ function Hde(e) {
     i.jsxs(i.Fragment, {
       children: [
         a &&
-          i.jsx(Vde, {
+          i.jsx(CommandReferenceDialog, {
             commands: [
               ...L,
               ...R.commands,
@@ -2116,7 +2150,7 @@ function Hde(e) {
                       onClick: () => {
                         (l(!u), p(false));
                       },
-                      children: i.jsx(M, { children: "File" }),
+                      children: i.jsx(LocalizedText, { children: "File" }),
                     }),
                     u && R.content,
                   ],
@@ -2182,7 +2216,7 @@ function Hde(e) {
                         lang: language(
                           "Double-click to collapse or expand the ribbon",
                         ),
-                        children: i.jsx(M, { children: J }),
+                        children: i.jsx(LocalizedText, { children: J }),
                       },
                       J,
                     ),
@@ -2207,7 +2241,7 @@ function Hde(e) {
                         ? i.jsx(ChevronDown, { size: 16 })
                         : i.jsx(ChevronUp, { size: 16 }),
                     }),
-                    i.jsx(Xl, {
+                    i.jsx(RibbonIconButton, {
                       icon: i.jsx(Undo2, { size: 16 }),
                       label: text("Undo (Ctrl+Z)"),
                       commandId: "quick-undo",
@@ -2215,7 +2249,7 @@ function Hde(e) {
                       onClick: e.onUndo,
                       disabled: k || !e.canUndo,
                     }),
-                    i.jsx(Xl, {
+                    i.jsx(RibbonIconButton, {
                       icon: i.jsx(Redo2, { size: 16 }),
                       label: text("Redo (Ctrl+Y)"),
                       commandId: "quick-redo",
@@ -2223,7 +2257,7 @@ function Hde(e) {
                       onClick: e.onRedo,
                       disabled: k || !e.canRedo,
                     }),
-                    i.jsx(Xl, {
+                    i.jsx(RibbonIconButton, {
                       icon: i.jsx(BookOpen, { size: 16 }),
                       label: text("Commands & shortcuts"),
                       onClick: () => s(true),
@@ -2239,7 +2273,9 @@ function Hde(e) {
                       children: [
                         i.jsx(Sparkles, { size: 15 }),
                         i.jsx("span", {
-                          children: i.jsx(M, { children: "AI Assistant" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "AI Assistant",
+                          }),
                         }),
                       ],
                     }),
@@ -2263,4 +2299,4 @@ function Hde(e) {
   );
 }
 
-export { Hde };
+export { WorkbookRibbon };

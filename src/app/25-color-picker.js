@@ -1,10 +1,17 @@
 import { ChevronDown, PaintBucket } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { M } from "./04-cell-input-paste-and-fill.js";
+import { LocalizedText } from "./04-cell-input-paste-and-fill.js";
 import { Wde } from "./24-merge-and-audit-analysis.js";
 
-function Hk({ commandId, reason, kind, value, onChange, disabled }) {
+function ColorPickerButton({
+  commandId,
+  reason,
+  kind,
+  value,
+  onChange,
+  disabled,
+}) {
   const [s, d] = ne.useState(false),
     u = ne.useRef(null),
     l = kind === "fill" ? "Fill Color" : "Font Color";
@@ -43,7 +50,7 @@ function Hk({ commandId, reason, kind, value, onChange, disabled }) {
                   ? i.jsx(PaintBucket, { size: 15 })
                   : i.jsx("span", {
                       className: "xl-font-color-glyph",
-                      children: i.jsx(M, { children: "A" }),
+                      children: i.jsx(LocalizedText, { children: "A" }),
                     }),
             }),
             i.jsx(ChevronDown, { size: 9 }),
@@ -65,7 +72,7 @@ function Hk({ commandId, reason, kind, value, onChange, disabled }) {
             },
             children: [
               i.jsx("strong", {
-                children: i.jsx(M, { children: "Theme Colors" }),
+                children: i.jsx(LocalizedText, { children: "Theme Colors" }),
               }),
               i.jsx("div", {
                 className: "xl-color-grid",
@@ -88,7 +95,7 @@ function Hk({ commandId, reason, kind, value, onChange, disabled }) {
               i.jsxs("label", {
                 className: "xl-custom-color",
                 children: [
-                  i.jsx(M, { children: "More Colors…" }),
+                  i.jsx(LocalizedText, { children: "More Colors…" }),
                   i.jsx("input", {
                     type: "color",
                     "aria-label": `Custom ${l}`,
@@ -104,4 +111,4 @@ function Hk({ commandId, reason, kind, value, onChange, disabled }) {
   );
 }
 
-export { Hk };
+export { ColorPickerButton };

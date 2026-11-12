@@ -1,32 +1,40 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { hr } from "./01-core-schemas-and-hashing.js";
-import { Mt } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { workbookLimits } from "./02-financial-functions.js";
 import {
   B2,
-  Np,
-  TC,
-  Vn,
+  enumerateSelectionCells,
+  validateFormulaWatches,
+  calculateWorkbookWithSettings,
   _t,
   cn,
-  ct,
-  jw,
-  pf,
-  ut,
-  y0,
+  parseRangeAddress,
+  validateDataValidationRule,
+  resolveDefinedNameValue,
+  columnIndexToLetters,
+  matrixResultFunctionNames,
 } from "./03-workbook-model.js";
-import { Dr, M, aI, sI } from "./04-cell-input-paste-and-fill.js";
-import { m0 } from "./12-formula-dependency-inspector.js";
-import { f_, h_ } from "./35-formula-compatibility-report.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  formatCellEntryForEdit,
+  validateLocalizedNumberEntry,
+} from "./04-cell-input-paste-and-fill.js";
+import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import {
+  normalizeFormulaWatchContext,
+  classifyWatchedCell,
+} from "./35-formula-compatibility-report.js";
 
-function pW(e, r, t = {}) {
+function applyFormulaWatchAction(e, r, t = {}) {
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Watch inspection remains available.",
     );
-  const n = f_(e, t),
-    o = TC(e.formulaWatches, e);
+  const n = normalizeFormulaWatchContext(e, t),
+    o = validateFormulaWatches(e.formulaWatches, e);
   let a = o,
     s = [],
     d = [];
@@ -36,7 +44,7 @@ function pW(e, r, t = {}) {
       throw Error("The worksheet selected for watching no longer exists.");
     if (!Array.isArray(r.ranges))
       throw Error("Provide a list of selected ranges to watch.");
-    const c = Np(r.ranges, B2),
+    const c = enumerateSelectionCells(r.ranges, B2),
       h = new Set(o.map((f) => f.id));
     for (const f of c) {
       if (
@@ -52,7 +60,7 @@ function pW(e, r, t = {}) {
         id: `watch-${p}`,
         anchor: { sheetId: l.id, sheetName: l.name, address: f },
       };
-      if (h_(e, m, n) !== "ready")
+      if (classifyWatchedCell(e, m, n) !== "ready")
         throw Error(
           "A selected watch source is outside the visible, authorized context. Review visibility or host access before adding it.",
         );
@@ -87,25 +95,25 @@ function pW(e, r, t = {}) {
     next: u,
   };
 }
-function uxe(e, r, t = {}) {
+function assertWatchPreviewCurrent(e, r, t = {}) {
   if (JSON.stringify(e) !== r.snapshot)
     throw Error(
       "The workbook changed after the watch preview. Review the action again.",
     );
-  const n = pW(e, r.request, t);
+  const n = applyFormulaWatchAction(e, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error(
       "The watch preview or host context changed. Review the action again.",
     );
   return n.next;
 }
-function cxe(e, r = {}) {
+function inspectFormulaWatches(e, r = {}) {
   var y;
-  const t = f_(e, r),
-    n = TC(e.formulaWatches, e),
+  const t = normalizeFormulaWatchContext(e, r),
+    n = validateFormulaWatches(e.formulaWatches, e),
     o = [],
     a = n.map((w) => {
-      const E = h_(e, w, t);
+      const E = classifyWatchedCell(e, w, t);
       return E === "ready"
         ? (o.push(w), { id: w.id, status: "unavailable", anchor: w.anchor })
         : E === "orphaned"
@@ -172,8 +180,8 @@ function cxe(e, r = {}) {
   const l = {
     id: u,
     name: d,
-    rowCount: Mt.maxRows,
-    colCount: Mt.maxCols,
+    rowCount: workbookLimits.maxRows,
+    colCount: workbookLimits.maxCols,
     cells: Object.fromEntries(
       o.map((w, E) => [
         `A${E + 1}`,
@@ -184,7 +192,7 @@ function cxe(e, r = {}) {
     ),
   };
   l.cells.B1 = { raw: `=SUM(A1:A${o.length})` };
-  const c = m0(
+  const c = inspectFormulaDependencies(
     {
       ...e,
       sheets: [
@@ -298,9 +306,12 @@ function cxe(e, r = {}) {
     s
   );
 }
-function dxe(e, r, t = {}) {
-  const n = TC(e.formulaWatches, e).find((o) => o.id === r);
-  if (!n || h_(e, n, f_(e, t)) !== "ready")
+function navigateToFormulaWatch(e, r, t = {}) {
+  const n = validateFormulaWatches(e.formulaWatches, e).find((o) => o.id === r);
+  if (
+    !n ||
+    classifyWatchedCell(e, n, normalizeFormulaWatchContext(e, t)) !== "ready"
+  )
     throw Error(
       "This watch cannot be navigated in the current visible, authorized context.",
     );
@@ -314,8 +325,8 @@ const rj = (e) =>
       : typeof e == "boolean"
         ? String(e).toUpperCase()
         : String(e);
-function fxe(e) {
-  const { text, language } = Dr(),
+function FormulaWatchWindow(e) {
+  const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -333,7 +344,7 @@ function fxe(e) {
     y = ne.useMemo(() => {
       try {
         return {
-          result: cxe(e.workbook, {
+          result: inspectFormulaWatches(e.workbook, {
             includeHidden: !!e.allowHidden && s,
             allowedSheetIds: e.allowedSheetIds,
           }),
@@ -366,7 +377,10 @@ function fxe(e) {
       ),
     E = (z) => {
       try {
-        const V = pW(e.workbook, z, { ...g, readOnly: e.readOnly });
+        const V = applyFormulaWatchAction(e.workbook, z, {
+          ...g,
+          readOnly: e.readOnly,
+        });
         (h(V), v(b), p(""));
       } catch (V) {
         (h(null), w(V));
@@ -379,7 +393,10 @@ function fxe(e) {
             throw Error(
               "The worksheet selection changed after the watch preview. Review the selection again.",
             );
-          const z = uxe(e.workbook, c, { ...g, readOnly: e.readOnly });
+          const z = assertWatchPreviewCurrent(e.workbook, c, {
+            ...g,
+            readOnly: e.readOnly,
+          });
           (z !== e.workbook &&
             e.onWorkbookChange(
               z,
@@ -398,7 +415,7 @@ function fxe(e) {
     },
     k = (z) => {
       try {
-        const V = dxe(e.workbook, z, g);
+        const V = navigateToFormulaWatch(e.workbook, z, g);
         (e.onNavigate(V.sheetId, V.address), p(""));
       } catch (V) {
         w(V);
@@ -453,10 +470,10 @@ function fxe(e) {
               children: [
                 i.jsx("h2", {
                   id: `${n}-title`,
-                  children: i.jsx(M, { children: "Watch Window" }),
+                  children: i.jsx(LocalizedText, { children: "Watch Window" }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Keep key cells and calculations in view across worksheets.",
                   }),
@@ -485,17 +502,17 @@ function fxe(e) {
                   sheetId: e.sheetId,
                   ranges: e.ranges ?? [e.range],
                 }),
-              children: i.jsx(M, { children: "Add selection" }),
+              children: i.jsx(LocalizedText, { children: "Add selection" }),
             }),
             i.jsx("button", {
               disabled: e.readOnly || !u.length,
               onClick: () => E({ kind: "remove", ids: u }),
-              children: i.jsx(M, { children: "Remove selected" }),
+              children: i.jsx(LocalizedText, { children: "Remove selected" }),
             }),
             i.jsx("button", {
               disabled: e.readOnly || !F.length,
               onClick: () => E({ kind: "clear" }),
-              children: i.jsx(M, { children: "Clear watches" }),
+              children: i.jsx(LocalizedText, { children: "Clear watches" }),
             }),
             e.allowHidden &&
               i.jsxs("label", {
@@ -507,7 +524,7 @@ function fxe(e) {
                       (d(z.target.checked), h(null), p(""));
                     },
                   }),
-                  i.jsx(M, { children: "Include hidden" }),
+                  i.jsx(LocalizedText, { children: "Include hidden" }),
                 ],
               }),
           ],
@@ -517,11 +534,11 @@ function fxe(e) {
           children: [
             e.workbook.name,
             " ",
-            i.jsx(M, { children: "· Revision " }),
+            i.jsx(LocalizedText, { children: "· Revision " }),
             e.workbook.revision,
             " · ",
             F.length,
-            i.jsx(M, { children: "/100 watches" }),
+            i.jsx(LocalizedText, { children: "/100 watches" }),
             e.readOnly ? " · Read-only inspection" : "",
           ],
         }),
@@ -540,19 +557,25 @@ function fxe(e) {
                   children: i.jsxs("tr", {
                     children: [
                       i.jsx("th", {
-                        children: i.jsx(M, { children: "Select" }),
+                        children: i.jsx(LocalizedText, { children: "Select" }),
                       }),
                       i.jsx("th", {
-                        children: i.jsx(M, { children: "Worksheet / Cell" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Worksheet / Cell",
+                        }),
                       }),
                       i.jsx("th", {
-                        children: i.jsx(M, { children: "Formula / Raw value" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Formula / Raw value",
+                        }),
                       }),
                       i.jsx("th", {
-                        children: i.jsx(M, { children: "Current result" }),
+                        children: i.jsx(LocalizedText, {
+                          children: "Current result",
+                        }),
                       }),
                       i.jsx("th", {
-                        children: i.jsx(M, { children: "Status" }),
+                        children: i.jsx(LocalizedText, { children: "Status" }),
                       }),
                     ],
                   }),
@@ -592,7 +615,9 @@ function fxe(e) {
                                 })
                               : i.jsxs("span", {
                                   children: [
-                                    i.jsx(M, { children: "Watch " }),
+                                    i.jsx(LocalizedText, {
+                                      children: "Watch ",
+                                    }),
                                     V + 1,
                                   ],
                                 }),
@@ -633,7 +658,7 @@ function fxe(e) {
             !F.length &&
               !y.error &&
               i.jsx("p", {
-                children: i.jsx(M, {
+                children: i.jsx(LocalizedText, {
                   children:
                     "No watched cells. Select cells in the worksheet and choose Add selection.",
                 }),
@@ -659,10 +684,10 @@ function fxe(e) {
                 children: [
                   c.added.length,
                   " ",
-                  i.jsx(M, { children: "added · " }),
+                  i.jsx(LocalizedText, { children: "added · " }),
                   c.removed.length,
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "removed. Cell content and calculation formulas remain unchanged.",
                   }),
@@ -671,7 +696,7 @@ function fxe(e) {
               !I &&
                 i.jsx("p", {
                   role: "status",
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "This preview is stale. Locations are withheld until you review the current selection and access context again.",
                   }),
@@ -703,31 +728,37 @@ function fxe(e) {
               !c.added.length &&
                 !c.removed.length &&
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "The selected cells are already watched. No change is needed.",
                   }),
                 }),
               i.jsx("button", {
                 onClick: () => h(null),
-                children: i.jsx(M, { children: "Cancel watch action" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Cancel watch action",
+                }),
               }),
               i.jsx("button", {
                 className: "fw-primary",
                 disabled: e.readOnly,
                 onClick: A,
-                children: i.jsx(M, { children: "Apply watch action" }),
+                children: i.jsx(LocalizedText, {
+                  children: "Apply watch action",
+                }),
               }),
             ],
           }),
         i.jsxs("details", {
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, { children: "Calculation scope and limits" }),
+              children: i.jsx(LocalizedText, {
+                children: "Calculation scope and limits",
+              }),
             }),
             y.result?.notes.map((z) => i.jsx("p", { children: z }, z)),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Results share one bounded inspection pass across the watch list. Unsupported references or sources beyond the safe dependency budget display Result withheld. Orphaned entries retain their former source and never reconnect automatically.",
               }),
@@ -737,14 +768,14 @@ function fxe(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close" }),
+            children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
       ],
     }),
   });
 }
-const Km = {
+const goalSeekLimits = {
     maxIterations: 100,
     maxEvaluations: 103,
     maxDependencyCells: 500,
@@ -752,10 +783,10 @@ const Km = {
     maxDepth: 8,
     maxFormulaCells: 5e3,
   },
-  dg = (e) => typeof e == "number" && Number.isFinite(e),
+  isFiniteNumberValue = (e) => typeof e == "number" && Number.isFinite(e),
   nj = (e, r) => JSON.stringify([e, r]),
-  v2 = (e, r) => {
-    const t = ct(e),
+  isCellInRange = (e, r) => {
+    const t = parseRangeAddress(e),
       n = _t(r);
     return (
       n.row >= t.firstRow &&
@@ -764,17 +795,17 @@ const Km = {
       n.col <= t.lastCol
     );
   };
-function ij(e) {
+function parseGoalSeekAddress(e) {
   if (typeof e != "string" || !/^\$?[A-Za-z]{1,3}\$?[1-9]\d{0,6}$/.test(e))
     throw Error(
       "Goal Seek needs one valid Excel cell address for each source.",
     );
   const r = _t(e.replace(/\$/g, "").toUpperCase());
-  if (r.row >= Mt.maxRows || r.col >= Mt.maxCols)
+  if (r.row >= workbookLimits.maxRows || r.col >= workbookLimits.maxCols)
     throw Error("A Goal Seek cell is outside Excel's address bounds.");
-  return `${ut(r.col)}${r.row + 1}`;
+  return `${columnIndexToLetters(r.col)}${r.row + 1}`;
 }
-function hxe(e) {
+function normalizeGoalSeekRequest(e) {
   if (
     !e ||
     typeof e != "object" ||
@@ -801,37 +832,37 @@ function hxe(e) {
     throw Error("Choose a formula worksheet and variable worksheet.");
   const r = {
     ...e,
-    formulaAddress: ij(e.formulaAddress),
-    variableAddress: ij(e.variableAddress),
+    formulaAddress: parseGoalSeekAddress(e.formulaAddress),
+    variableAddress: parseGoalSeekAddress(e.variableAddress),
     tolerance: e.tolerance ?? 1e-6,
     maxIterations: e.maxIterations ?? 64,
   };
   if (
-    !dg(r.target) ||
-    !dg(r.lowerBound) ||
-    !dg(r.upperBound) ||
+    !isFiniteNumberValue(r.target) ||
+    !isFiniteNumberValue(r.lowerBound) ||
+    !isFiniteNumberValue(r.upperBound) ||
     r.lowerBound >= r.upperBound
   )
     throw Error(
       "Target and bounds must be finite numbers, with lower bound smaller than upper bound.",
     );
-  if (!dg(r.tolerance) || r.tolerance <= 0)
+  if (!isFiniteNumberValue(r.tolerance) || r.tolerance <= 0)
     throw Error("Tolerance must be a finite positive absolute error.");
   if (
     !Number.isInteger(r.maxIterations) ||
     r.maxIterations < 1 ||
-    r.maxIterations > Km.maxIterations
+    r.maxIterations > goalSeekLimits.maxIterations
   )
     throw Error("Goal Seek supports from 1 to 100 iterations.");
   return r;
 }
-function mW(e, r, t = {}) {
+function solveGoalSeek(e, r, t = {}) {
   var O, j;
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Goal Seek cannot propose a writable input.",
     );
-  const n = hxe(r),
+  const n = normalizeGoalSeekRequest(r),
     o = e.sheets.find((z) => z.id === n.formulaSheetId),
     a = e.sheets.find((z) => z.id === n.variableSheetId);
   if (!o || !a) throw Error("A selected Goal Seek worksheet no longer exists.");
@@ -872,7 +903,7 @@ function mW(e, r, t = {}) {
     u = a.cells[n.variableAddress];
   if (!d || d.literal || typeof d.raw != "string" || !d.raw.startsWith("="))
     throw Error("Set cell must contain an actual calculation formula.");
-  if (!u || !dg(u.raw))
+  if (!u || !isFiniteNumberValue(u.raw))
     throw Error(
       "Changing cell must contain a finite numeric input, not a formula, text, blank or spill output.",
     );
@@ -880,11 +911,14 @@ function mW(e, r, t = {}) {
     throw Error(
       "The changing worksheet is protected. Unprotect it before Goal Seek.",
     );
-  if ((j = a.merges) != null && j.some((z) => v2(z, n.variableAddress)))
+  if (
+    (j = a.merges) != null &&
+    j.some((z) => isCellInRange(z, n.variableAddress))
+  )
     throw Error("A merged cell cannot be the Goal Seek variable.");
   for (const z of a.tables ?? []) {
-    if (!v2(z.range, n.variableAddress)) continue;
-    const V = ct(z.range),
+    if (!isCellInRange(z.range, n.variableAddress)) continue;
+    const V = parseRangeAddress(z.range),
       D = _t(n.variableAddress),
       B = z.columns[D.col - V.firstCol],
       _ = B?.calculatedFormula;
@@ -910,7 +944,7 @@ function mW(e, r, t = {}) {
   }
   if (
     [...(a.pivots ?? []), ...(a.queries ?? [])].some((z) =>
-      v2(z.outputRange, n.variableAddress),
+      isCellInRange(z.outputRange, n.variableAddress),
     )
   )
     throw Error(
@@ -918,18 +952,25 @@ function mW(e, r, t = {}) {
     );
   if (u.raw < n.lowerBound || u.raw > n.upperBound)
     throw Error("The starting input must be inside the supplied bounds.");
-  const l = (a.validations ?? []).filter((z) => v2(z.range, n.variableAddress));
+  const l = (a.validations ?? []).filter((z) =>
+    isCellInRange(z.range, n.variableAddress),
+  );
   if (l.some((z) => !["number", "date"].includes(z.kind)))
     throw Error(
       "Goal Seek supports continuous numeric/date validation only; discrete list, integer or text-length constraints need a different input.",
     );
   if (
-    l.some((z) => ![u.raw, n.lowerBound, n.upperBound].every((V) => jw(z, V)))
+    l.some(
+      (z) =>
+        ![u.raw, n.lowerBound, n.upperBound].every((V) =>
+          validateDataValidationRule(z, V),
+        ),
+    )
   )
     throw Error(
       "The starting input and both bounds must satisfy the variable's data validation rules.",
     );
-  const c = m0(
+  const c = inspectFormulaDependencies(
       {
         ...e,
         sheets: e.sheets.map((z) =>
@@ -940,12 +981,12 @@ function mW(e, r, t = {}) {
         sheetId: o.id,
         address: n.formulaAddress,
         direction: "precedents",
-        depth: Km.maxDepth,
+        depth: goalSeekLimits.maxDepth,
         includeHidden: s.includeHidden,
         allowedSheetIds: s.allowedSheetIds,
         limits: {
-          maxFormulaCells: Km.maxFormulaCells,
-          maxNodes: Km.maxDependencyCells,
+          maxFormulaCells: goalSeekLimits.maxFormulaCells,
+          maxNodes: goalSeekLimits.maxDependencyCells,
           maxReferences: 1e4,
         },
       },
@@ -953,7 +994,7 @@ function mW(e, r, t = {}) {
     h = [c.target, ...c.nodes],
     f = new Set(h.map((z) => z.key));
   if (
-    h.length > Km.maxDependencyCells ||
+    h.length > goalSeekLimits.maxDependencyCells ||
     c.coverage.truncated ||
     c.coverage.depthLimited
   )
@@ -970,7 +1011,7 @@ function mW(e, r, t = {}) {
       "The Set cell formula does not depend on the selected changing cell.",
     );
   const m = new Set([
-    ...y0,
+    ...matrixResultFunctionNames,
     "ISFORMULA",
     "INDEX",
     "CHOOSE",
@@ -999,7 +1040,7 @@ function mW(e, r, t = {}) {
         "Goal Seek requires populated static dependency cells; blank or possible spill-child dependencies are not supported.",
       );
     if (!D.literal && typeof D.raw == "string" && D.raw.startsWith("=")) {
-      const B = pf(D.raw, e, V.id).replace(
+      const B = resolveDefinedNameValue(D.raw, e, V.id).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
         "",
       );
@@ -1044,7 +1085,10 @@ function mW(e, r, t = {}) {
   const F = (z) => {
       const V = A.get(z);
       if (V) return V;
-      if (g >= Km.maxEvaluations || y + h.length > Km.maxWorkUnits)
+      if (
+        g >= goalSeekLimits.maxEvaluations ||
+        y + h.length > goalSeekLimits.maxWorkUnits
+      )
         throw new k(
           "work-limit",
           "The Goal Seek evaluation/work budget was reached.",
@@ -1061,14 +1105,14 @@ function mW(e, r, t = {}) {
               : N,
           ),
         },
-        B = Vn(D),
+        B = calculateWorkbookWithSettings(D),
         _ = B(o.id, n.formulaAddress);
       if (B.getOperationalErrors().length)
         throw new k(
           "calculation-error",
           `A trial encountered an operational calculation error (${B.getOperationalErrors().join(", ")}), even if a formula error handler concealed it. The baseline is unchanged.`,
         );
-      if (!dg(_))
+      if (!isFiniteNumberValue(_))
         throw new k(
           "calculation-error",
           `The formula returned ${String(_)} at input ${z}; a finite numeric result is required.`,
@@ -1085,7 +1129,7 @@ function mW(e, r, t = {}) {
           "Dependency inspection encountered an operational calculation error; the baseline is unchanged.",
         );
       const C = _ - n.target;
-      if (!dg(C))
+      if (!isFiniteNumberValue(C))
         throw new k(
           "calculation-error",
           "The residual exceeded finite numeric precision.",
@@ -1099,7 +1143,7 @@ function mW(e, r, t = {}) {
     },
     I = (z, V) => {
       const D = z === "converged" || z === "already-satisfied";
-      if (D && l.some((C) => !jw(C, E.input)))
+      if (D && l.some((C) => !validateDataValidationRule(C, E.input)))
         return I(
           "validation-error",
           "The candidate violates the variable's data validation rule.",
@@ -1199,7 +1243,7 @@ function mW(e, r, t = {}) {
     );
   }
 }
-function pxe(e, r, t = {}) {
+function applyGoalSeekResult(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (JSON.stringify(e) !== r.snapshot)
     throw Error(
@@ -1209,18 +1253,18 @@ function pxe(e, r, t = {}) {
     throw Error(
       "Only a candidate that meets the residual tolerance can be applied.",
     );
-  const n = mW(e, r.request, t);
+  const n = solveGoalSeek(e, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error(
       "The Goal Seek preview or host context changed. Solve and review again.",
     );
   return n.next;
 }
-function mxe(e) {
-  const r = Dr(),
+function GoalSeekDialog(e) {
+  const r = useWorkbookMessages(),
     [t] = ne.useState(r.entryLocale),
-    n = (W, K) => sI(W, K, t),
-    { text, language } = Dr(),
+    n = (W, K) => validateLocalizedNumberEntry(W, K, t),
+    { text, language } = useWorkbookMessages(),
     s = ne.useId(),
     d = ne.useRef(null),
     u = ne.useRef(e.onClose);
@@ -1232,7 +1276,7 @@ function mxe(e) {
     [b, y] = ne.useState(""),
     [w, E] = ne.useState("0"),
     [A, k] = ne.useState("100"),
-    [F, I] = ne.useState(() => aI({ raw: 1e-6 }, t)),
+    [F, I] = ne.useState(() => formatCellEntryForEdit({ raw: 1e-6 }, t)),
     [O, j] = ne.useState("64"),
     [z, V] = ne.useState(false),
     [D, B] = ne.useState(null),
@@ -1288,7 +1332,8 @@ function mxe(e) {
           tolerance: n(F, "Tolerance"),
           maxIterations: n(O, "Maximum iterations"),
         };
-        (B(mW(e.workbook, W, { ...T, readOnly: e.readOnly })), C(""));
+        (B(solveGoalSeek(e.workbook, W, { ...T, readOnly: e.readOnly })),
+          C(""));
       } catch (W) {
         (B(null), H(W));
       }
@@ -1296,7 +1341,10 @@ function mxe(e) {
     X$1 = () => {
       if (D)
         try {
-          const W = pxe(e.workbook, D, { ...T, readOnly: e.readOnly });
+          const W = applyGoalSeekResult(e.workbook, D, {
+            ...T,
+            readOnly: e.readOnly,
+          });
           (W !== e.workbook &&
             e.onWorkbookChange(
               W,
@@ -1345,10 +1393,10 @@ function mxe(e) {
               children: [
                 i.jsx("h2", {
                   id: `${s}-title`,
-                  children: i.jsx(M, { children: "Goal Seek" }),
+                  children: i.jsx(LocalizedText, { children: "Goal Seek" }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Find one numeric input that brings a formula to a target value.",
                   }),
@@ -1365,7 +1413,7 @@ function mxe(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Enter a lower and upper bound around the starting input. Solve previews a candidate; Apply changes the workbook only after review.",
           }),
@@ -1375,7 +1423,7 @@ function mxe(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Formula worksheet" }),
+                i.jsx(LocalizedText, { children: "Formula worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Formula worksheet"),
                   value: L ? l : "",
@@ -1398,7 +1446,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Set cell" }),
+                i.jsx(LocalizedText, { children: "Set cell" }),
                 i.jsx("input", {
                   "aria-label": text("Set cell"),
                   value: L ? h : "",
@@ -1412,7 +1460,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Changing worksheet" }),
+                i.jsx(LocalizedText, { children: "Changing worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Changing worksheet"),
                   value: $ ? p : "",
@@ -1435,7 +1483,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "By changing cell" }),
+                i.jsx(LocalizedText, { children: "By changing cell" }),
                 i.jsx("input", {
                   "aria-label": text("By changing cell"),
                   value: $ ? v : "",
@@ -1449,7 +1497,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "To value" }),
+                i.jsx(LocalizedText, { children: "To value" }),
                 i.jsx("input", {
                   "aria-label": text("Target value"),
                   value: b,
@@ -1463,7 +1511,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Absolute tolerance" }),
+                i.jsx(LocalizedText, { children: "Absolute tolerance" }),
                 i.jsx("input", {
                   "aria-label": text("Absolute tolerance"),
                   value: F,
@@ -1477,7 +1525,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Lower bound" }),
+                i.jsx(LocalizedText, { children: "Lower bound" }),
                 i.jsx("input", {
                   "aria-label": text("Lower bound"),
                   value: w,
@@ -1491,7 +1539,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Upper bound" }),
+                i.jsx(LocalizedText, { children: "Upper bound" }),
                 i.jsx("input", {
                   "aria-label": text("Upper bound"),
                   value: A,
@@ -1505,7 +1553,7 @@ function mxe(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Maximum iterations" }),
+                i.jsx(LocalizedText, { children: "Maximum iterations" }),
                 i.jsx("input", {
                   "aria-label": text("Maximum iterations"),
                   value: O,
@@ -1528,7 +1576,7 @@ function mxe(e) {
                       (V(W.target.checked), B(null), C(""));
                     },
                   }),
-                  i.jsx(M, { children: "Include hidden sources" }),
+                  i.jsx(LocalizedText, { children: "Include hidden sources" }),
                 ],
               }),
           ],
@@ -1538,7 +1586,7 @@ function mxe(e) {
           className: "gs-primary",
           disabled: e.readOnly || !L || !$,
           onClick: Q,
-          children: i.jsx(M, { children: "Solve" }),
+          children: i.jsx(LocalizedText, { children: "Solve" }),
         }),
         D &&
           i.jsxs("section", {
@@ -1564,7 +1612,9 @@ function mxe(e) {
                       i.jsxs("dl", {
                         children: [
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Formula" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Formula",
+                            }),
                           }),
                           i.jsxs("dd", {
                             children: [
@@ -1576,7 +1626,9 @@ function mxe(e) {
                             ],
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Changing input" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Changing input",
+                            }),
                           }),
                           i.jsxs("dd", {
                             children: [
@@ -1588,31 +1640,41 @@ function mxe(e) {
                             ],
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Baseline input" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Baseline input",
+                            }),
                           }),
                           i.jsx("dd", { children: D.baseline.input }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Baseline result" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Baseline result",
+                            }),
                           }),
                           i.jsx("dd", {
                             children: D.baseline.output ?? "Unavailable",
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Target" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Target",
+                            }),
                           }),
                           i.jsx("dd", { children: D.request.target }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Candidate input" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Candidate input",
+                            }),
                           }),
                           i.jsx("dd", { children: D.result.input }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Achieved value" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Achieved value",
+                            }),
                           }),
                           i.jsx("dd", {
                             children: D.result.achievedValue ?? "Unavailable",
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Residual (result − target)",
                             }),
                           }),
@@ -1620,13 +1682,13 @@ function mxe(e) {
                             children: D.result.residual ?? "Unavailable",
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Absolute tolerance",
                             }),
                           }),
                           i.jsx("dd", { children: D.request.tolerance }),
                           i.jsx("dt", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Iterations / Evaluations",
                             }),
                           }),
@@ -1638,22 +1700,26 @@ function mxe(e) {
                             ],
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Method" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Method",
+                            }),
                           }),
                           i.jsx("dd", { children: D.result.algorithm }),
                           i.jsx("dt", {
-                            children: i.jsx(M, { children: "Search bounds" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Search bounds",
+                            }),
                           }),
                           i.jsxs("dd", {
                             children: [
                               D.request.lowerBound,
                               " ",
-                              i.jsx(M, { children: "to " }),
+                              i.jsx(LocalizedText, { children: "to " }),
                               D.request.upperBound,
                             ],
                           }),
                           i.jsx("dt", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Dependency cells / Work units",
                             }),
                           }),
@@ -1668,7 +1734,7 @@ function mxe(e) {
                       }),
                       i.jsxs("p", {
                         children: [
-                          i.jsx(M, {
+                          i.jsx(LocalizedText, {
                             children: "The baseline workbook has not changed.",
                           }),
                           !D.result.converged &&
@@ -1679,42 +1745,44 @@ function mxe(e) {
                   })
                 : i.jsx("p", {
                     role: "status",
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children:
                         "This preview is stale. Its source values and locations are withheld. Solve again using the current workbook and access context.",
                     }),
                   }),
               i.jsx("button", {
                 onClick: () => B(null),
-                children: i.jsx(M, { children: "Discard result" }),
+                children: i.jsx(LocalizedText, { children: "Discard result" }),
               }),
               i.jsx("button", {
                 className: "gs-primary",
                 disabled: e.readOnly || !D.result.converged,
                 onClick: X$1,
-                children: i.jsx(M, { children: "Apply result" }),
+                children: i.jsx(LocalizedText, { children: "Apply result" }),
               }),
             ],
           }),
         i.jsxs("details", {
           children: [
             i.jsx("summary", {
-              children: i.jsx(M, { children: "Supported scope and limits" }),
+              children: i.jsx(LocalizedText, {
+                children: "Supported scope and limits",
+              }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "One continuous numeric input and one scalar formula, using deterministic supported dependencies. Volatile/dynamic references, array/spill outputs, blank dependency cells, discrete validation constraints and calculated table inputs are excluded. A valid bracket is required; this search does not find every possible root or prove a unique solution.",
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "At most 100 iterations, 103 trial evaluations, 500 dependency cells through depth 8, and 50,000 dependency-cell work units. Absolute residual tolerance determines success; a narrow bracket alone does not.",
               }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Include hidden is a local visibility choice within the host-authorized workbook. The embedding host owns approval, permissions, Undo and persistence.",
               }),
@@ -1724,14 +1792,14 @@ function mxe(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close" }),
+            children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
       ],
     }),
   });
 }
-function lm(e, r = {}) {
+function normalizeAnalysisPermissions(e, r = {}) {
   if (
     (r.readOnly !== undefined && typeof r.readOnly != "boolean") ||
     (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
@@ -1753,9 +1821,9 @@ function lm(e, r = {}) {
     ].sort(),
   };
 }
-function vw(e, r, t) {
+function validateAnalysisSource(e, r, t) {
   var s;
-  const n = lm(e, t),
+  const n = normalizeAnalysisPermissions(e, t),
     o = e.sheets.find((d) => d.id === r.sheetId);
   if (!o || !n.allowedSheetIds.includes(o.id))
     throw Error("A source is outside the authorized host context.");
@@ -1778,12 +1846,12 @@ function vw(e, r, t) {
     throw Error(
       "Analysis and model report snapshots cannot be analysis inputs. Use the original source cells.",
     );
-  if ((s = o.merges) != null && s.some((d) => bw(d, r.address)))
+  if ((s = o.merges) != null && s.some((d) => parseRangeBounds(d, r.address)))
     throw Error("Merged analysis sources are ambiguous.");
   return o;
 }
-function bw(e, r) {
-  const t = ct(e),
+function parseRangeBounds(e, r) {
+  const t = parseRangeAddress(e),
     n = _t(r);
   return (
     n.row >= t.firstRow &&
@@ -1793,14 +1861,14 @@ function bw(e, r) {
   );
 }
 function p_(e) {
-  return hr({
+  return fingerprintCanonicalValue({
     sheets: e.sheets.filter((r) => !r.analysisReport).map((r) => ({ ...r })),
     calculation: e.calculation ?? null,
     datePolicy: e.datePolicy ?? null,
     definedNames: e.definedNames ?? null,
   });
 }
-function gW(e) {
+function assertAutomaticCalculation(e) {
   var t;
   if (
     e.calculation?.mode === "manual" ||
@@ -1810,16 +1878,27 @@ function gW(e) {
       "Analysis formulas require automatic, non-iterative calculation.",
     );
 }
-const lp = (e) => {
+const rejectRangeAsScalar = (e) => {
     if (Array.isArray(e))
       throw Error("Use SUM, AVERAGE or SUMPRODUCT to reduce a range.");
     return e;
   },
-  Xv = (e) => {
+  assertSolverMagnitude = (e) => {
     if (!Number.isFinite(e) || Math.abs(e) > 1e100)
       throw Error("Solver arithmetic exceeds the supported finite magnitude.");
     return e;
   },
   gxe = (e, r) => JSON.stringify([e, r]);
 
-export { Xv, bw, fxe, gW, gxe, lm, lp, mxe, p_, vw };
+export {
+  assertSolverMagnitude,
+  parseRangeBounds,
+  FormulaWatchWindow,
+  assertAutomaticCalculation,
+  gxe,
+  normalizeAnalysisPermissions,
+  rejectRangeAsScalar,
+  GoalSeekDialog,
+  p_,
+  validateAnalysisSource,
+};

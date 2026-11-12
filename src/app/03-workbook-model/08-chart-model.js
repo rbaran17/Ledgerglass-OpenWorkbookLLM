@@ -1,67 +1,68 @@
-import { Mt } from "../02-financial-functions.js";
+import { workbookLimits } from "../02-financial-functions.js";
 import { cn } from "./01-cell-styles-and-themes.js";
 import {
-  AO,
-  Hw,
-  IP,
+  validateDrawingColor,
+  maxPictureHashBytes,
+  validateChartSettings,
   Kne,
-  L4,
-  Pi,
-  R5,
+  validateDrawingNumber,
+  throwXlsxDefinedNameError,
+  isRecordObject,
   Rl,
   Yne,
-  Yy,
-  cne,
-  eg,
-  fne,
-  iR,
-  oR,
-  pC,
-  zv,
+  validateXmlSafeName,
+  validateNameSheetReferences,
+  validateDefinedName,
+  insertDefinedNamesIntoWorkbookXml,
+  validateTableColumnType,
+  supportedChartKinds,
+  validateNameFormulaText,
+  validateDrawingText,
 } from "./03-defined-names.js";
 import {
-  BE,
-  FP,
-  P1,
-  WP,
-  Xt,
-  Yv,
-  _P,
-  cR,
-  iie,
-  nie,
-  tie,
-  wR,
+  assertDrawingPreviewCurrent,
+  pivotAggregateOperations,
+  inspectPictureDataUrl,
+  computePivotRefreshFingerprint,
+  throwWorkbookError,
+  findSourceFieldIndex,
+  validatePictureEvidence,
+  basicAggregateOperations,
+  normalizePivotControls,
+  pivotShowValuesAsModes,
+  validatePivotRefreshEvidence,
+  validateCalculatedColumnFormula,
 } from "./04-pivot-tables-and-pictures.js";
-import { ut } from "./06-data-model-and-analysis.js";
-import { _t, aP, ct, oP } from "./07-conditional-formatting.js";
+import { columnIndexToLetters } from "./06-data-model-and-analysis.js";
+import { _t, aP, parseRangeAddress, oP } from "./07-conditional-formatting.js";
 
-function dne(e, r) {
-  const t = eg(r.definedNames, r);
+function serializeDefinedNames(e, r) {
+  const t = validateDefinedName(r.definedNames, r);
   oP(t);
   const { builtinXml } = aP(e);
   let o = builtinXml;
   for (const a of t) {
     if (a.name.toLowerCase().startsWith("_xlnm."))
-      return Pi(
+      return throwXlsxDefinedNameError(
         `Reserved built-in name "${a.name}" cannot be supplied as a user name.`,
       );
-    (pC(a.refersTo), cne(a.refersTo, r));
+    (validateNameFormulaText(a.refersTo),
+      validateNameSheetReferences(a.refersTo, r));
     const s = a.scopeSheetId
       ? r.sheets.findIndex((d) => d.id === a.scopeSheetId)
       : undefined;
-    o += `<definedName name="${Yy(a.name, true)}"${s !== undefined ? ` localSheetId="${s}"` : ""}${a.comment !== undefined ? ` comment="${Yy(a.comment, true)}"` : ""}>${Yy(a.refersTo.slice(1))}</definedName>`;
+    o += `<definedName name="${validateXmlSafeName(a.name, true)}"${s !== undefined ? ` localSheetId="${s}"` : ""}${a.comment !== undefined ? ` comment="${validateXmlSafeName(a.comment, true)}"` : ""}>${validateXmlSafeName(a.refersTo.slice(1))}</definedName>`;
   }
-  return fne(e, o);
+  return insertDefinedNamesIntoWorkbookXml(e, o);
 }
-function Ww(e, r, t) {
+function inspectChartSource(e, r, t) {
   var I, O;
-  (r.kind !== "chart" || !oR.includes(r.chart)) &&
+  (r.kind !== "chart" || !supportedChartKinds.includes(r.chart)) &&
     Rl("Choose a supported chart type.");
   const n = r.chart,
     o = r.range ?? "",
-    a = ct(o),
-    s = IP(r.chartOptions);
+    a = parseRangeAddress(o),
+    s = validateChartSettings(r.chartOptions);
   (a.lastRow >= e.rowCount ||
     a.lastCol >= e.colCount ||
     (a.lastRow - a.firstRow + 1) * (a.lastCol - a.firstCol + 1) > 500) &&
@@ -73,7 +74,7 @@ function Ww(e, r, t) {
       "Chart inspection supports at most 20 value columns; narrow the source range.",
     );
   const l = (z, V) => {
-      const D = `${ut(V)}${z + 1}`,
+      const D = `${columnIndexToLetters(V)}${z + 1}`,
         B = e.cells[D] ?? { raw: null };
       return {
         address: D,
@@ -86,10 +87,10 @@ function Ww(e, r, t) {
     c = Array.from({ length: a.lastCol - u + 1 }, (z, V) => {
       const D = u + V,
         B = s.series?.find((T) => T.column === D + 1),
-        _ = r.headers ? l(a.firstRow, D).value : ut(D);
+        _ = r.headers ? l(a.firstRow, D).value : columnIndexToLetters(D);
       return {
         column: D + 1,
-        name: B?.name ?? String(_ ?? ut(D)),
+        name: B?.name ?? String(_ ?? columnIndexToLetters(D)),
         kind: B?.kind ?? (n === "combo" && V > 0 ? "line" : "column"),
         included: s.series === undefined || !!B,
       };
@@ -302,8 +303,8 @@ function Ww(e, r, t) {
     A
   );
 }
-function sR(e, r) {
-  const t = ct(e);
+function measureChartSelection(e, r) {
+  const t = parseRangeAddress(e);
   if (
     t.lastRow >= r.rowCount ||
     t.lastCol >= r.colCount ||
@@ -314,7 +315,7 @@ function sR(e, r) {
     );
   return t;
 }
-function yC(e, r) {
+function validateDrawingObjects(e, r) {
   if (e === undefined) return;
   if (!Array.isArray(e) || e.length > Kne)
     throw new Error("A worksheet supports at most 100 drawing objects.");
@@ -322,8 +323,12 @@ function yC(e, r) {
   let n = 0,
     o = 0;
   for (const s of e)
-    if (R5(s) && s.kind === "picture" && typeof s.dataURL == "string") {
-      if (s.dataURL.length > Math.ceil(Hw / 3) * 4 + 100)
+    if (
+      isRecordObject(s) &&
+      s.kind === "picture" &&
+      typeof s.dataURL == "string"
+    ) {
+      if (s.dataURL.length > Math.ceil(maxPictureHashBytes / 3) * 4 + 100)
         throw Error("Pictures must be at most 2 MB.");
       const d = s.dataURL.slice(s.dataURL.indexOf(",") + 1);
       if (
@@ -337,10 +342,13 @@ function yC(e, r) {
         throw Error("Pictures in one worksheet may use at most 10 MB.");
     }
   const a = e.map((s) => {
-    if (!R5(s) || !["picture", "shape", "chart"].includes(String(s.kind)))
+    if (
+      !isRecordObject(s) ||
+      !["picture", "shape", "chart"].includes(String(s.kind))
+    )
       throw new Error("Invalid worksheet drawing object.");
-    const d = zv(s.id, 100, "id"),
-      u = zv(s.anchor, 20, "anchor");
+    const d = validateDrawingText(s.id, 100, "id"),
+      u = validateDrawingText(s.anchor, 20, "anchor");
     if (!d || t.has(d)) throw new Error("Drawing IDs must be unique.");
     t.add(d);
     const l = _t(u);
@@ -349,20 +357,25 @@ function yC(e, r) {
     const c = {
       id: d,
       kind: s.kind,
-      anchor: `${ut(l.col)}${l.row + 1}`,
-      offsetX: L4(s.offsetX, -4e3, 4e3, "horizontal offset"),
-      offsetY: L4(s.offsetY, -4e3, 4e3, "vertical offset"),
-      width: L4(s.width, 24, 4e3, "width"),
-      height: L4(s.height, 24, 4e3, "height"),
-      label: zv(s.label, 500, "label"),
-      fill: AO(s.fill),
-      stroke: AO(s.stroke),
+      anchor: `${columnIndexToLetters(l.col)}${l.row + 1}`,
+      offsetX: validateDrawingNumber(s.offsetX, -4e3, 4e3, "horizontal offset"),
+      offsetY: validateDrawingNumber(s.offsetY, -4e3, 4e3, "vertical offset"),
+      width: validateDrawingNumber(s.width, 24, 4e3, "width"),
+      height: validateDrawingNumber(s.height, 24, 4e3, "height"),
+      label: validateDrawingText(s.label, 500, "label"),
+      fill: validateDrawingColor(s.fill),
+      stroke: validateDrawingColor(s.stroke),
     };
     if (c.kind === "picture") {
-      c.dataURL = zv(s.dataURL, Math.ceil(Hw / 3) * 4 + 100, "picture");
-      const h = P1(c.dataURL);
+      c.dataURL = validateDrawingText(
+        s.dataURL,
+        Math.ceil(maxPictureHashBytes / 3) * 4 + 100,
+        "picture",
+      );
+      const h = inspectPictureDataUrl(c.dataURL);
       ((n += h.bytes.length),
-        s.evidence !== undefined && (c.evidence = _P(s.evidence, h.bytes)));
+        s.evidence !== undefined &&
+          (c.evidence = validatePictureEvidence(s.evidence, h.bytes)));
     } else if (s.evidence !== undefined)
       throw Error("Evidence metadata belongs only to pictures.");
     if (c.kind === "shape") {
@@ -371,16 +384,18 @@ function yC(e, r) {
       c.shape = s.shape;
     }
     if (c.kind === "chart") {
-      if (!oR.includes(s.chart)) throw new Error("Unsupported chart type.");
+      if (!supportedChartKinds.includes(s.chart))
+        throw new Error("Unsupported chart type.");
       if (
         ((c.chart = s.chart),
-        (c.range = zv(s.range, 50, "chart range")),
-        sR(c.range, r),
+        (c.range = validateDrawingText(s.range, 50, "chart range")),
+        measureChartSelection(c.range, r),
         typeof s.headers != "boolean")
       )
         throw new Error("Invalid chart header setting.");
       ((c.headers = s.headers),
-        s.chartOptions !== undefined && (c.chartOptions = IP(s.chartOptions)));
+        s.chartOptions !== undefined &&
+          (c.chartOptions = validateChartSettings(s.chartOptions)));
     }
     return c;
   });
@@ -388,12 +403,12 @@ function yC(e, r) {
     throw new Error("Pictures in one worksheet may use at most 10 MB.");
   r.objects = a;
 }
-function I5(e, r, t, n = {}) {
-  BE(e, r, n);
+function setSheetDrawingObjects(e, r, t, n = {}) {
+  assertDrawingPreviewCurrent(e, r, n);
   const o = e.sheets.find((s) => s.id === r),
     a = { ...o };
   return (
-    yC(t, a),
+    validateDrawingObjects(t, a),
     JSON.stringify(o.objects ?? []) === JSON.stringify(a.objects ?? [])
       ? e
       : { ...e, sheets: e.sheets.map((s) => (s.id !== r ? s : a)) }
@@ -408,13 +423,13 @@ const dl = (e) =>
   xf = (e, r, t = 255) =>
     typeof e == "string" && e.trim() && e.length <= t
       ? e
-      : Xt(`${r} must contain 1–${t} characters.`),
-  s1 = (e) => xf(e, "Metadata ID", 100),
-  Xp = (e) => {
-    const r = ct(e);
-    return `${ut(r.firstCol)}${r.firstRow + 1}:${ut(r.lastCol)}${r.lastRow + 1}`;
+      : throwWorkbookError(`${r} must contain 1–${t} characters.`),
+  requireMetadataId = (e) => xf(e, "Metadata ID", 100),
+  toA1RangeAddress = (e) => {
+    const r = parseRangeAddress(e);
+    return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
   },
-  Cn = (e, r) => `${ut(r)}${e + 1}`,
+  Cn = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   Dp = (e, r, t) =>
     r >= e.firstRow && r <= e.lastRow && t >= e.firstCol && t <= e.lastCol,
   Qf = (e, r) =>
@@ -422,77 +437,82 @@ const dl = (e) =>
     e.lastRow >= r.firstRow &&
     e.firstCol <= r.lastCol &&
     e.lastCol >= r.firstCol,
-  $1 = (e) => (e.lastRow - e.firstRow + 1) * (e.lastCol - e.firstCol + 1),
+  measureRangeArea = (e) =>
+    (e.lastRow - e.firstRow + 1) * (e.lastCol - e.firstCol + 1),
   Mg = (e) => e === null || e === "",
   tg = (e) => typeof e == "number" && Number.isFinite(e),
-  lie = {
+  tablePaletteColors = {
     blue: ["#174a7e", "#e8f1fa"],
     green: ["#176344", "#e9f3ed"],
     gray: ["#4b5563", "#f0f1f3"],
   },
-  uie = {
+  tablePaletteStyleNames = {
     blue: "TableStyleMedium2",
     green: "TableStyleMedium4",
     gray: "TableStyleMedium9",
   };
-function Ef(e, r) {
-  const t = ct(xf(e, "Source range", 50));
+function resolveSourceRange(e, r) {
+  const t = parseRangeAddress(xf(e, "Source range", 50));
   return (
-    $1(t) > Mt.maxCells &&
-      Xt(
+    measureRangeArea(t) > workbookLimits.maxCells &&
+      throwWorkbookError(
         "Table, query and pivot ranges are limited to 100,000 cells including blank gaps. Select the used data range.",
       ),
     r &&
       (t.lastRow >= r.rowCount || t.lastCol >= r.colCount) &&
-      Xt("Range exceeds worksheet bounds."),
+      throwWorkbookError("Range exceeds worksheet bounds."),
     t
   );
 }
-function sl(e) {
+function validateColumnName(e) {
   const r = xf(e, "Column name");
   return (
     /[\[\]\r\n]/.test(r) &&
-      Xt("Column names cannot contain brackets or line breaks."),
+      throwWorkbookError(
+        "Column names cannot contain brackets or line breaks.",
+      ),
     r
   );
 }
-function dR(e) {
+function validateTableName(e) {
   const r = xf(e, "Table name");
   return (
     (!/^[A-Za-z_][A-Za-z0-9_.]*$/.test(r) ||
       /^[RC]$/i.test(r) ||
       /^[A-Z]{1,3}[1-9]\d*$/i.test(r) ||
       /^R\d+C\d+$/i.test(r)) &&
-      Xt(
+      throwWorkbookError(
         "Use a table name beginning with a letter or underscore, without spaces or a cell-address name.",
       ),
     r
   );
 }
-function D5(e, r) {
-  (!Array.isArray(e) || e.length > Mt.maxCols) &&
-    Xt(`${r} must be a bounded list of column names.`);
-  const t = e.map(sl);
+function validateFieldList(e, r) {
+  (!Array.isArray(e) || e.length > workbookLimits.maxCols) &&
+    throwWorkbookError(`${r} must be a bounded list of column names.`);
+  const t = e.map(validateColumnName);
   return (
     new Set(t.map((n) => n.toLowerCase())).size !== t.length &&
-      Xt(`${r} contains duplicate fields.`),
+      throwWorkbookError(`${r} contains duplicate fields.`),
     t
   );
 }
-function fR(e) {
-  dl(e) || Xt("A source worksheet and range are required.");
+function normalizeSourceReference(e) {
+  dl(e) || throwWorkbookError("A source worksheet and range are required.");
   const r = {
-    sheetId: s1(e.sheetId),
-    range: Xp(xf(e.range, "Source range", 50)),
-    ...(e.tableId !== undefined ? { tableId: s1(e.tableId) } : {}),
+    sheetId: requireMetadataId(e.sheetId),
+    range: toA1RangeAddress(xf(e.range, "Source range", 50)),
+    ...(e.tableId !== undefined
+      ? { tableId: requireMetadataId(e.tableId) }
+      : {}),
   };
-  return (Ef(r.range), r);
+  return (resolveSourceRange(r.range), r);
 }
-function BP(e) {
+function normalizeSourceFilters(e) {
   return e === undefined
     ? []
     : ((!Array.isArray(e) || e.length > 100) &&
-        Xt("Use at most 100 source filters."),
+        throwWorkbookError("Use at most 100 source filters."),
       e.map((r) => {
         (!dl(r) ||
           ![
@@ -506,84 +526,90 @@ function BP(e) {
             "blank",
             "notBlank",
           ].includes(String(r.operator))) &&
-          Xt("Invalid source filter.");
+          throwWorkbookError("Invalid source filter.");
         const t = r.value;
         return (
           t != null &&
             !(typeof t == "string" && t.length <= 32767) &&
             typeof t != "boolean" &&
             !(typeof t == "number" && Number.isFinite(t)) &&
-            Xt(
+            throwWorkbookError(
               "Filter values must be finite numbers, text, booleans or blank.",
             ),
           {
-            field: sl(r.field),
+            field: validateColumnName(r.field),
             operator: r.operator,
             ...(t !== undefined ? { value: t } : {}),
           }
         );
       }));
 }
-function LP(e) {
+function normalizeOutputDestination(e) {
   if (e === undefined) return;
-  dl(e) || Xt("Invalid output destination.");
+  dl(e) || throwWorkbookError("Invalid output destination.");
   const r =
       e.address === undefined ? "A1" : xf(e.address, "Output address", 20),
     t = _t(r);
   return {
     address: Cn(t.row, t.col),
-    ...(e.sheetId !== undefined ? { sheetId: s1(e.sheetId) } : {}),
+    ...(e.sheetId !== undefined
+      ? { sheetId: requireMetadataId(e.sheetId) }
+      : {}),
     ...(e.sheetName !== undefined
       ? { sheetName: xf(e.sheetName, "Output sheet name", 31) }
       : {}),
   };
 }
-function wC(e) {
-  (dl(e) || Xt("Invalid pivot definition."),
+function normalizePivotDefinition(e) {
+  (dl(e) || throwWorkbookError("Invalid pivot definition."),
     (!Array.isArray(e.values) || !e.values.length || e.values.length > 100) &&
-      Xt("Choose between 1 and 100 pivot value fields."));
+      throwWorkbookError("Choose between 1 and 100 pivot value fields."));
   const r = e.values.map(
     (o) => (
-      (!dl(o) || !FP.includes(o.operation)) &&
-        Xt(
+      (!dl(o) || !pivotAggregateOperations.includes(o.operation)) &&
+        throwWorkbookError(
           "Invalid pivot aggregation. Choose sum, count, average, min, max or distinctCount.",
         ),
       o.showAs !== undefined &&
-        !nie.includes(o.showAs) &&
-        Xt("Choose a supported Show values as setting."),
+        !pivotShowValuesAsModes.includes(o.showAs) &&
+        throwWorkbookError("Choose a supported Show values as setting."),
       {
-        field: sl(o.field),
+        field: validateColumnName(o.field),
         operation: o.operation,
-        ...(o.name !== undefined ? { name: sl(o.name) } : {}),
+        ...(o.name !== undefined ? { name: validateColumnName(o.name) } : {}),
         ...(o.showAs !== undefined ? { showAs: o.showAs } : {}),
       }
     ),
   );
   (e.grandTotals !== undefined &&
     typeof e.grandTotals != "boolean" &&
-    Xt("Grand totals must be boolean."),
+    throwWorkbookError("Grand totals must be boolean."),
     e.subtotals !== undefined &&
       typeof e.subtotals != "boolean" &&
-      Xt("Subtotals must be boolean."),
+      throwWorkbookError("Subtotals must be boolean."),
     e.dateGroups !== undefined &&
       (!Array.isArray(e.dateGroups) || e.dateGroups.length > 100) &&
-      Xt("Use at most 100 date groups."));
+      throwWorkbookError("Use at most 100 date groups."));
   const t = (e.dateGroups ?? []).map(
     (o) => (
       (!dl(o) ||
         !["year", "quarter", "month"].includes(String(o.unit)) ||
         !["iso", "1900", "1904"].includes(String(o.dateSystem))) &&
-        Xt(
+        throwWorkbookError(
           "Date grouping requires a year, quarter or month and an explicit ISO/1900/1904 date system.",
         ),
-      { field: sl(o.field), unit: o.unit, dateSystem: o.dateSystem }
+      {
+        field: validateColumnName(o.field),
+        unit: o.unit,
+        dateSystem: o.dateSystem,
+      }
     ),
   );
   (new Set(t.map((o) => o.field)).size !== t.length &&
-    Xt("Choose one date grouping per source field."),
+    throwWorkbookError("Choose one date grouping per source field."),
     e.calculatedFields !== undefined &&
       (!Array.isArray(e.calculatedFields) || e.calculatedFields.length > 100) &&
-      Xt("Use at most 100 calculated fields."));
+      throwWorkbookError("Use at most 100 calculated fields."));
   const n = (e.calculatedFields ?? []).map(
     (o) => (
       (!dl(o) ||
@@ -593,49 +619,50 @@ function wC(e) {
         (o.otherField === undefined) == (o.constant === undefined) ||
         (o.constant !== undefined &&
           (typeof o.constant != "number" || !Number.isFinite(o.constant)))) &&
-        Xt(
+        throwWorkbookError(
           "A calculated field needs add/subtract/multiply/divide and exactly one numeric constant or other source field.",
         ),
       {
-        name: sl(o.name),
-        field: sl(o.field),
+        name: validateColumnName(o.name),
+        field: validateColumnName(o.field),
         operation: o.operation,
         ...(o.otherField !== undefined
-          ? { otherField: sl(o.otherField) }
+          ? { otherField: validateColumnName(o.otherField) }
           : { constant: o.constant }),
       }
     ),
   );
   return (
     new Set(n.map((o) => o.name.toLowerCase())).size !== n.length &&
-      Xt("Calculated field names must be unique."),
+      throwWorkbookError("Calculated field names must be unique."),
     {
       name: xf(e.name, "Pivot name", 100),
-      source: fR(e.source),
-      rowFields: D5(e.rowFields, "Row fields"),
-      columnFields: D5(e.columnFields, "Column fields"),
+      source: normalizeSourceReference(e.source),
+      rowFields: validateFieldList(e.rowFields, "Row fields"),
+      columnFields: validateFieldList(e.columnFields, "Column fields"),
       values: r,
-      filters: BP(e.filters),
+      filters: normalizeSourceFilters(e.filters),
       grandTotals: e.grandTotals !== false,
       ...(e.subtotals !== undefined ? { subtotals: e.subtotals } : {}),
       ...(e.dateGroups !== undefined ? { dateGroups: t } : {}),
       ...(e.calculatedFields !== undefined ? { calculatedFields: n } : {}),
-      ...iie(e),
-      destination: LP(e.destination),
+      ...normalizePivotControls(e),
+      destination: normalizeOutputDestination(e.destination),
     }
   );
 }
-function PP(e) {
-  dl(e) || Xt("Invalid query definition.");
-  const r = D5(e.fields, "Selected fields");
-  r.length || Xt("Choose at least one output field.");
+function normalizeQueryDefinition(e) {
+  dl(e) || throwWorkbookError("Invalid query definition.");
+  const r = validateFieldList(e.fields, "Selected fields");
+  r.length || throwWorkbookError("Choose at least one output field.");
   const t = {};
   if (e.rename !== undefined) {
-    dl(e.rename) || Xt("Rename fields must be a name map.");
+    dl(e.rename) || throwWorkbookError("Rename fields must be a name map.");
     for (const [s, d] of Object.entries(e.rename))
-      (r.includes(s) || Xt("Only selected fields can be renamed."),
+      (r.includes(s) ||
+        throwWorkbookError("Only selected fields can be renamed."),
         Object.defineProperty(t, s, {
-          value: sl(d),
+          value: validateColumnName(d),
           enumerable: true,
           writable: true,
           configurable: true,
@@ -645,11 +672,14 @@ function PP(e) {
   (e.sort !== undefined &&
     ((!dl(e.sort) ||
       !["ascending", "descending"].includes(String(e.sort.direction))) &&
-      Xt("Invalid query sort."),
-    (n = { field: sl(e.sort.field), direction: e.sort.direction })),
+      throwWorkbookError("Invalid query sort."),
+    (n = {
+      field: validateColumnName(e.sort.field),
+      direction: e.sort.direction,
+    })),
     e.derived !== undefined &&
       (!Array.isArray(e.derived) || e.derived.length > 100) &&
-      Xt("Use at most 100 derived fields."));
+      throwWorkbookError("Use at most 100 derived fields."));
   const o = (e.derived ?? []).map(
       (s) => (
         (!dl(s) ||
@@ -663,17 +693,19 @@ function PP(e) {
             "lower",
             "trim",
           ].includes(String(s.operation))) &&
-          Xt("Invalid derived operation."),
+          throwWorkbookError("Invalid derived operation."),
         s.constant !== undefined &&
           !(typeof s.constant == "string" && s.constant.length <= 32767) &&
           !(typeof s.constant == "number" && Number.isFinite(s.constant)) &&
-          Xt("A derived constant must be bounded text or a finite number."),
+          throwWorkbookError(
+            "A derived constant must be bounded text or a finite number.",
+          ),
         {
-          name: sl(s.name),
-          field: sl(s.field),
+          name: validateColumnName(s.name),
+          field: validateColumnName(s.field),
           operation: s.operation,
           ...(s.otherField !== undefined
-            ? { otherField: sl(s.otherField) }
+            ? { otherField: validateColumnName(s.otherField) }
             : {}),
           ...(s.constant !== undefined ? { constant: s.constant } : {}),
         }
@@ -685,24 +717,24 @@ function PP(e) {
     ];
   return (
     new Set(a.map((s) => s.toLowerCase())).size !== a.length &&
-      Xt("Output column names must be unique."),
+      throwWorkbookError("Output column names must be unique."),
     {
       name: xf(e.name, "Query name", 100),
-      source: fR(e.source),
+      source: normalizeSourceReference(e.source),
       fields: r,
       rename: t,
-      filters: BP(e.filters),
+      filters: normalizeSourceFilters(e.filters),
       ...(n ? { sort: n } : {}),
       derived: o,
-      destination: LP(e.destination),
+      destination: normalizeOutputDestination(e.destination),
     }
   );
 }
-function Ax(e, r) {
+function normalizeTableDefinitions(e, r) {
   if (dl(e)) {
     if (e.tables !== undefined) {
-      (!Array.isArray(e.tables) || e.tables.length > Mt.maxCells) &&
-        Xt("Tables must be a bounded list.");
+      (!Array.isArray(e.tables) || e.tables.length > workbookLimits.maxCells) &&
+        throwWorkbookError("Tables must be a bounded list.");
       const t = new Set(),
         n = new Set();
       r.tables = e.tables.map((s) => {
@@ -712,41 +744,53 @@ function Ax(e, r) {
           typeof s.showTotals != "boolean" ||
           !["blue", "green", "gray"].includes(String(s.style)) ||
           !dl(s.totals)) &&
-          Xt("Invalid table metadata.");
-        const d = s1(s.id),
-          u = dR(s.name),
-          l = Xp(xf(s.range, "Table range", 50)),
-          c = Ef(l, r);
+          throwWorkbookError("Invalid table metadata.");
+        const d = requireMetadataId(s.id),
+          u = validateTableName(s.name),
+          l = toA1RangeAddress(xf(s.range, "Table range", 50)),
+          c = resolveSourceRange(l, r);
         ((p = r.merges) != null &&
-          p.some((m) => Qf(c, ct(m))) &&
-          Xt("A table cannot overlap merged cells. Unmerge the source first."),
+          p.some((m) => Qf(c, parseRangeAddress(m))) &&
+          throwWorkbookError(
+            "A table cannot overlap merged cells. Unmerge the source first.",
+          ),
           (t.has(d) || n.has(u.toLowerCase())) &&
-            Xt("Table IDs and names must be unique."),
+            throwWorkbookError("Table IDs and names must be unique."),
           t.add(d),
           n.add(u.toLowerCase()),
           (s.columns.length !== c.lastCol - c.firstCol + 1 ||
             (s.showTotals && c.lastRow <= c.firstRow)) &&
-            Xt("Table columns or totals do not fit the table range."));
+            throwWorkbookError(
+              "Table columns or totals do not fit the table range.",
+            ));
         const h = s.columns.map(
           (m) => (
-            dl(m) || Xt("Invalid table column."),
+            dl(m) || throwWorkbookError("Invalid table column."),
             {
-              id: s1(m.id),
-              name: sl(m.name),
-              ...(m.dataType !== undefined ? { dataType: iR(m.dataType) } : {}),
+              id: requireMetadataId(m.id),
+              name: validateColumnName(m.name),
+              ...(m.dataType !== undefined
+                ? { dataType: validateTableColumnType(m.dataType) }
+                : {}),
               ...(m.calculatedFormula !== undefined
-                ? { calculatedFormula: wR(m.calculatedFormula, true) }
+                ? {
+                    calculatedFormula: validateCalculatedColumnFormula(
+                      m.calculatedFormula,
+                      true,
+                    ),
+                  }
                 : {}),
             }
           ),
         );
         (new Set(h.map((m) => m.id)).size !== h.length ||
           new Set(h.map((m) => m.name.toLowerCase())).size !== h.length) &&
-          Xt("Table column IDs and names must be unique.");
+          throwWorkbookError("Table column IDs and names must be unique.");
         const f = {};
         for (const [m, v] of Object.entries(s.totals))
-          ((!h.some((g) => g.name === m) || !cR.includes(v)) &&
-            Xt("Invalid table total field or operation."),
+          ((!h.some((g) => g.name === m) ||
+            !basicAggregateOperations.includes(v)) &&
+            throwWorkbookError("Invalid table total field or operation."),
             Object.defineProperty(f, m, {
               value: v,
               enumerable: true,
@@ -766,31 +810,39 @@ function Ax(e, r) {
       const o = new Set();
       let a = 0;
       for (const s of r.tables) {
-        const d = ct(s.range);
-        (a += $1(d)) > Mt.maxCells &&
-          Xt("The total table footprint exceeds 100,000 cells.");
+        const d = parseRangeAddress(s.range);
+        (a += measureRangeArea(d)) > workbookLimits.maxCells &&
+          throwWorkbookError(
+            "The total table footprint exceeds 100,000 cells.",
+          );
         for (let u = d.firstRow; u <= d.lastRow; u++)
           for (let l = d.firstCol; l <= d.lastCol; l++) {
             const c = Cn(u, l);
-            (o.has(c) && Xt("Tables cannot overlap."), o.add(c));
+            (o.has(c) && throwWorkbookError("Tables cannot overlap."),
+              o.add(c));
           }
       }
     }
     for (const t of ["pivots", "queries"]) {
       if (e[t] === undefined) continue;
-      (!Array.isArray(e[t]) || e[t].length > Mt.maxCells) &&
-        Xt("Analysis definitions must be a bounded list.");
+      (!Array.isArray(e[t]) || e[t].length > workbookLimits.maxCells) &&
+        throwWorkbookError("Analysis definitions must be a bounded list.");
       const n = new Set(),
         o = e[t].map((a) => {
-          dl(a) || Xt("Invalid analysis metadata.");
-          const s = t === "pivots" ? wC(a) : PP(a),
-            d = s1(a.id),
-            u = Xp(xf(a.outputRange, "Output range", 50));
-          (Ef(u, r),
+          dl(a) || throwWorkbookError("Invalid analysis metadata.");
+          const s =
+              t === "pivots"
+                ? normalizePivotDefinition(a)
+                : normalizeQueryDefinition(a),
+            d = requireMetadataId(a.id),
+            u = toA1RangeAddress(xf(a.outputRange, "Output range", 50));
+          (resolveSourceRange(u, r),
             (n.has(d) ||
               !Number.isSafeInteger(a.sourceRevision) ||
               Number(a.sourceRevision) < 0) &&
-              Xt("Invalid analysis identity or source revision."),
+              throwWorkbookError(
+                "Invalid analysis identity or source revision.",
+              ),
             n.add(d));
           const { destination, ...c } = s;
           return {
@@ -799,7 +851,7 @@ function Ax(e, r) {
             outputRange: u,
             sourceRevision: Number(a.sourceRevision),
             ...(t === "pivots" && a.refresh !== undefined
-              ? { refresh: tie(a.refresh) }
+              ? { refresh: validatePivotRefreshEvidence(a.refresh) }
               : {}),
           };
         });
@@ -807,24 +859,24 @@ function Ax(e, r) {
     }
   }
 }
-function cie(e, r, t, n, o, a) {
-  const s = t === "row" ? Mt.maxRows : Mt.maxCols;
+function checkStructuralEditImpact(e, r, t, n, o, a) {
+  const s = t === "row" ? workbookLimits.maxRows : workbookLimits.maxCols;
   ((!Number.isInteger(n) ||
     n < 0 ||
     n >= s ||
     !Number.isInteger(o) ||
     o < 1 ||
     n + o > s) &&
-    Xt("Invalid structural edit bounds."),
+    throwWorkbookError("Invalid structural edit bounds."),
     e.sheets.some((l) => {
       return l.tables?.some((h) => h.columns.some((f) => f.calculatedFormula));
     }) &&
-      Xt(
+      throwWorkbookError(
         "Calculated table formulas require explicit table append/resize. Clear their saved rules (keeping cell formulas) before inserting or deleting worksheet rows/columns, then reapply the rules.",
       ));
   const d = structuredClone(e);
   function u(l, c, h = false) {
-    const f = Ef(l),
+    const f = resolveSourceRange(l),
       p = t === "row" ? f.firstRow : f.firstCol,
       m = t === "row" ? f.lastRow : f.lastCol;
     let v = p,
@@ -833,19 +885,19 @@ function cie(e, r, t, n, o, a) {
       const b = n + o - 1;
       (n <= p &&
         b >= p &&
-        Xt(
+        throwWorkbookError(
           `This edit would remove a ${c} header. Move or recreate that structure first.`,
         ),
         b < p
           ? ((v -= o), (g -= o))
           : n <= m &&
             (t === "column" &&
-              Xt(
+              throwWorkbookError(
                 `Deleting columns inside a ${c} would invalidate its fields. Resize or recreate it first.`,
               ),
             h &&
               b >= m &&
-              Xt(
+              throwWorkbookError(
                 "This edit would remove a table totals row. Turn off table totals first.",
               ),
             (g -= Math.min(m, b) - n + 1)));
@@ -854,20 +906,20 @@ function cie(e, r, t, n, o, a) {
         ? ((v += o), (g += o))
         : n <= m &&
           (t === "column" &&
-            Xt(
+            throwWorkbookError(
               `Inserting columns inside a ${c} requires explicit field reconciliation. Resize or recreate it first.`,
             ),
           (g += o));
     return (
       g >= s &&
-        Xt(
+        throwWorkbookError(
           `The structural edit would push a ${c} beyond the worksheet boundary.`,
         ),
       t === "row"
         ? ((f.firstRow = v), (f.lastRow = g))
         : ((f.firstCol = v), (f.lastCol = g)),
-      $1(f) > Mt.maxCells &&
-        Xt(
+      measureRangeArea(f) > workbookLimits.maxCells &&
+        throwWorkbookError(
           "The shifted table or analysis exceeds the 100,000-cell range budget.",
         ),
       `${Cn(f.firstRow, f.firstCol)}:${Cn(f.lastRow, f.lastCol)}`
@@ -886,15 +938,15 @@ function cie(e, r, t, n, o, a) {
   }
   return d;
 }
-function Gp(e) {
-  const r = ct(e.range);
+function tableDataBodyRange(e) {
+  const r = parseRangeAddress(e.range);
   return {
     ...r,
     firstRow: r.firstRow + 1,
     lastRow: r.lastRow - (e.showTotals ? 1 : 0),
   };
 }
-function z1(e, r, t, n) {
+function rewriteStructuredReferences(e, r, t, n) {
   const o = /^([A-Za-z_][A-Za-z0-9_.]*)?(\[.+\])$/.exec(t);
   if (!o) return null;
   let a;
@@ -911,13 +963,13 @@ function z1(e, r, t, n) {
   else if (n) {
     const b = e.sheets.find((E) => E.id === r),
       y = _t(n),
-      w = b?.tables?.find((E) => Dp(ct(E.range), y.row, y.col));
+      w = b?.tables?.find((E) => Dp(parseRangeAddress(E.range), y.row, y.col));
     b && w && (a = { sheet: b, table: w });
   }
   if (!a) return null;
   const { sheet, table } = a,
-    u = ct(table.range),
-    l = Gp(table),
+    u = parseRangeAddress(table.range),
+    l = tableDataBodyRange(table),
     c = o[2]
       .replace(/^\[|\]$/g, "")
       .replace(/[\[\]]/g, "")
@@ -966,8 +1018,8 @@ function z1(e, r, t, n) {
         range: `${Cn(l.firstRow, l.firstCol)}:${Cn(l.lastRow, l.lastCol)}`,
       };
 }
-function kx(e, r) {
-  const t = Gp(e),
+function buildTableTotalCell(e, r) {
+  const t = tableDataBodyRange(e),
     n = e.columns[r].name,
     o = Object.hasOwn(e.totals, n) ? e.totals[n] : undefined;
   return o
@@ -978,9 +1030,9 @@ function kx(e, r) {
         }
     : { raw: r === 0 ? "Total" : null };
 }
-function VP(e, r) {
-  const t = Ef(r.range, e),
-    [n, o] = lie[r.style];
+function applyTableStyleToCells(e, r) {
+  const t = resolveSourceRange(r.range, e),
+    [n, o] = tablePaletteColors[r.style];
   for (let a = t.firstRow; a <= t.lastRow; a++)
     for (let s = t.firstCol; s <= t.lastCol; s++) {
       const d = Cn(a, s),
@@ -996,7 +1048,11 @@ function VP(e, r) {
                 : undefined,
             }
           : c
-            ? { ...u, ...kx(r, s - t.firstCol), literal: undefined }
+            ? {
+                ...u,
+                ...buildTableTotalCell(r, s - t.firstCol),
+                literal: undefined,
+              }
             : u;
       e.cells[d] = {
         ...h,
@@ -1010,8 +1066,11 @@ function VP(e, r) {
       };
     }
 }
-function mR(e, r) {
-  const t = r.map((n) => ({ ...n, index: Yv(e.fields, n.field) }));
+function filterSourceRows(e, r) {
+  const t = r.map((n) => ({
+    ...n,
+    index: findSourceFieldIndex(e.fields, n.field),
+  }));
   return e.rows.filter((n) =>
     t.every((o) => {
       const a = n.values[o.index],
@@ -1037,7 +1096,10 @@ function mR(e, r) {
           );
         default:
           return (
-            tg(s) || Xt("Numeric comparisons require a numeric filter value."),
+            tg(s) ||
+              throwWorkbookError(
+                "Numeric comparisons require a numeric filter value.",
+              ),
             tg(a)
               ? o.operator === "gt"
                 ? a > s
@@ -1052,9 +1114,9 @@ function mR(e, r) {
     }),
   );
 }
-function bR(e, r) {
-  const t = ct(r);
-  return WP(
+function collectRangeValues(e, r) {
+  const t = parseRangeAddress(r);
+  return computePivotRefreshFingerprint(
     Object.entries(e.cells)
       .filter(([n]) => {
         const o = _t(n);
@@ -1064,10 +1126,10 @@ function bR(e, r) {
       .map(([n, o]) => [n, o.raw, !!o.literal]),
   );
 }
-function wie(e, r) {
+function buildTableCellEntries(e, r) {
   for (const t of r.tables ?? []) {
-    const n = Ef(t.range, r),
-      o = Gp(t),
+    const n = resolveSourceRange(t.range, r),
+      o = tableDataBodyRange(t),
       a = [];
     for (let d = o.firstRow; d <= o.lastRow; d++) {
       const u = [];
@@ -1083,7 +1145,7 @@ function wie(e, r) {
       ref: Cn(n.firstRow, n.firstCol),
       headerRow: true,
       totalsRow: t.showTotals,
-      style: { theme: uie[t.style], showRowStripes: true },
+      style: { theme: tablePaletteStyleNames[t.style], showRowStripes: true },
       columns: t.columns.map((d, u) => ({
         name: d.name,
         filterButton: true,
@@ -1093,7 +1155,9 @@ function wie(e, r) {
                 ? t.totals[d.name]
                 : "none",
               ...(u === 0 && !Object.hasOwn(t.totals, d.name)
-                ? { totalsRowLabel: String(kx(t, 0).raw ?? "") }
+                ? {
+                    totalsRowLabel: String(buildTableTotalCell(t, 0).raw ?? ""),
+                  }
                 : {}),
             }
           : {}),
@@ -1105,7 +1169,7 @@ function wie(e, r) {
       }));
   }
 }
-function CR(e, r, t, n, o = true) {
+function rewriteFormulaReferences(e, r, t, n, o = true) {
   let a = "";
   for (let c = 0; c < e.length;) {
     const h = c,
@@ -1125,7 +1189,7 @@ function CR(e, r, t, n, o = true) {
       for (; c < e.length && m;)
         (e[c] === "[" && m++, e[c] === "]" && m--, c++);
       const v = e.slice(h, c);
-      a += !m && z1(r, t, v, n) ? "TABLETOKEN" : v;
+      a += !m && rewriteStructuredReferences(r, t, v, n) ? "TABLETOKEN" : v;
       continue;
     }
     a += e[c++];
@@ -1185,33 +1249,33 @@ function CR(e, r, t, n, o = true) {
 }
 
 export {
-  $1,
-  Ax,
-  CR,
+  measureRangeArea,
+  normalizeTableDefinitions,
+  rewriteFormulaReferences,
   Cn,
   Dp,
-  Ef,
-  Gp,
-  I5,
+  resolveSourceRange,
+  tableDataBodyRange,
+  setSheetDrawingObjects,
   Mg,
-  PP,
+  normalizeQueryDefinition,
   Qf,
-  VP,
-  Ww,
-  Xp,
-  bR,
-  cie,
-  dR,
+  applyTableStyleToCells,
+  inspectChartSource,
+  toA1RangeAddress,
+  collectRangeValues,
+  checkStructuralEditImpact,
+  validateTableName,
   dl,
-  dne,
-  fR,
-  kx,
-  mR,
-  sR,
-  sl,
+  serializeDefinedNames,
+  normalizeSourceReference,
+  buildTableTotalCell,
+  filterSourceRows,
+  measureChartSelection,
+  validateColumnName,
   tg,
-  wC,
-  wie,
-  yC,
-  z1,
+  normalizePivotDefinition,
+  buildTableCellEntries,
+  validateDrawingObjects,
+  rewriteStructuredReferences,
 };

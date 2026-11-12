@@ -1,31 +1,53 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { Mt } from "./02-financial-functions.js";
-import { Vn, cn, ct, pf, ut, y0 } from "./03-workbook-model.js";
-import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { MC, OC } from "./07-xlsx-archive-reader.js";
-import { yh } from "./09-workbook-links.js";
-import { m0 } from "./12-formula-dependency-inspector.js";
-import { Ez, RI, cf, ede, lde } from "./20-calculation-options-and-sources.js";
+import { workbookLimits } from "./02-financial-functions.js";
+import {
+  calculateWorkbookWithSettings,
+  cn,
+  parseRangeAddress,
+  resolveDefinedNameValue,
+  columnIndexToLetters,
+  matrixResultFunctionNames,
+} from "./03-workbook-model.js";
+import {
+  useWorkbookMessages,
+  LocalizedText,
+  LocalizedNumberField,
+} from "./04-cell-input-paste-and-fill.js";
+import {
+  importNativeJsonFile,
+  toFileProcessingError,
+} from "./07-xlsx-archive-reader.js";
+import { useCancellableOperation } from "./09-workbook-links.js";
+import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import {
+  parseAssistantChatRequest,
+  validateAssistantProposal,
+  LLMRequestError,
+  raceWithAbortSignal,
+  validateCalculationClock,
+} from "./20-calculation-options-and-sources.js";
 
-async function Sz(e, r, t, n = {}) {
+async function requestAssistantAnswer(e, r, t, n = {}) {
   var d, u;
   if (n.reliability) {
     const { reliability, ...c } = n;
-    return reliability.run("provider", "request", () => Sz(e, r, t, c));
+    return reliability.run("provider", "request", () =>
+      requestAssistantAnswer(e, r, t, c),
+    );
   }
   if (
     typeof r != "string" ||
     !r.trim() ||
     r.length > 1e4 ||
     !Array.isArray(t?.cells) ||
-    t.cells.length > Mt.maxLLMCells
+    t.cells.length > workbookLimits.maxLLMCells
   )
-    throw new cf("invalid_request");
-  lde(t);
+    throw new LLMRequestError("invalid_request");
+  validateCalculationClock(t);
   const o = structuredClone(t),
-    a = n.conversation ? Ez(n.conversation) : undefined;
+    a = n.conversation ? parseAssistantChatRequest(n.conversation) : undefined;
   if (
     ((a != null && a.attachments.length) ||
       (a != null &&
@@ -41,7 +63,7 @@ async function Sz(e, r, t, n = {}) {
     throw new Error(
       "This provider does not support conversation history. Start a new chat or use a chat-enabled host adapter.",
     );
-  const s = await ede(
+  const s = await raceWithAbortSignal(
     (l) =>
       a
         ? e.propose(r, structuredClone(o), l, structuredClone(a))
@@ -50,31 +72,31 @@ async function Sz(e, r, t, n = {}) {
     n.timeoutMs,
   );
   try {
-    return RI(s, o);
+    return validateAssistantProposal(s, o);
   } catch {
-    throw new cf("malformed_response");
+    throw new LLMRequestError("malformed_response");
   }
 }
-const II = { sourceCells: 500, pageSize: 20 },
+const materialityScreenLimits = { sourceCells: 500, pageSize: 20 },
   Tz = new WeakMap();
-function Fi(e) {
+function throwMaterialityError(e) {
   throw Error(e);
 }
-const tf = (e, r) => `${ut(r)}${e + 1}`,
-  ude = (e, r) => JSON.stringify([e, r]),
-  Uk = (e) =>
+const formatCellAddressLabel = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
+  buildPairCacheKey = (e, r) => JSON.stringify([e, r]),
+  isFormulaCellEntry = (e) =>
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
   cde = 864e5;
-function AT(e) {
+function parseStrictIsoDate(e) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return null;
   const r = Date.parse(`${e}T00:00:00.000Z`);
   return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
     ? r
     : null;
 }
-function dde(e) {
+function normalizeDateToIso(e) {
   return typeof e == "string"
-    ? AT(e) === null
+    ? parseStrictIsoDate(e) === null
       ? null
       : e
     : typeof e != "number" ||
@@ -87,20 +109,20 @@ function dde(e) {
           .toISOString()
           .slice(0, 10);
 }
-function _I(e, r) {
+function normalizeScreenHostScope(e, r) {
   return (
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      Fi("Include hidden must be boolean."),
+      throwMaterialityError("Include hidden must be boolean."),
     r.readOnly !== undefined &&
       typeof r.readOnly != "boolean" &&
-      Fi("Read-only must be boolean."),
+      throwMaterialityError("Read-only must be boolean."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      Fi("The materiality screen host context is invalid."),
+      throwMaterialityError("The materiality screen host context is invalid."),
     {
       includeHidden: !!r.includeHidden,
       allowedSheetIds: [
@@ -109,7 +131,7 @@ function _I(e, r) {
     }
   );
 }
-function DI(e, r) {
+function normalizeMaterialityConfig(e, r) {
   const t = [
     "sheetId",
     "range",
@@ -128,53 +150,59 @@ function DI(e, r) {
     typeof r != "object" ||
     Object.keys(r).some((a) => !t.includes(a)) ||
     t.some((a) => !(a in r))) &&
-    Fi("Provide a complete, supported materiality screen configuration."),
+    throwMaterialityError(
+      "Provide a complete, supported materiality screen configuration.",
+    ),
     (typeof r.sheetId != "string" ||
       !e.sheets.some((a) => a.id === r.sheetId)) &&
-      Fi("The source worksheet no longer exists."),
+      throwMaterialityError("The source worksheet no longer exists."),
     (typeof r.range != "string" ||
       !/^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
         r.range,
       )) &&
-      Fi("Choose one rectangular A1 source range."));
-  const n = ct(r.range);
+      throwMaterialityError("Choose one rectangular A1 source range."));
+  const n = parseRangeAddress(r.range);
   ((n.lastRow - n.firstRow + 1) * (n.lastCol - n.firstCol + 1) >
-    II.sourceCells &&
-    Fi("The materiality screen supports at most 500 selected source cells."),
+    materialityScreenLimits.sourceCells &&
+    throwMaterialityError(
+      "The materiality screen supports at most 500 selected source cells.",
+    ),
     (typeof r.headers != "boolean" ||
       n.lastRow - n.firstRow + 1 <= Number(r.headers)) &&
-      Fi(
+      throwMaterialityError(
         "Choose a source range with at least one data row and valid header handling.",
       ));
   const o = [r.amountColumn, r.currencyColumn, r.dateColumn];
   return (
     (o.some((a) => !Number.isInteger(a) || a < n.firstCol || a > n.lastCol) ||
       new Set(o).size !== 3) &&
-      Fi(
+      throwMaterialityError(
         "Choose three distinct amount, currency and date columns inside the source range.",
       ),
     (typeof r.threshold != "number" ||
       !Number.isFinite(r.threshold) ||
       r.threshold < 0) &&
-      Fi("Threshold must be a finite, nonnegative number."),
+      throwMaterialityError("Threshold must be a finite, nonnegative number."),
     (!["absolute", "signed"].includes(r.amountMode) ||
       !["gt", "gte", "lt", "lte", "eq"].includes(r.comparator)) &&
-      Fi(
+      throwMaterialityError(
         "Choose an absolute or signed amount and a supported comparison rule.",
       ),
     (typeof r.currency != "string" || !/^[A-Za-z]{3}$/.test(r.currency)) &&
-      Fi(
+      throwMaterialityError(
         "Declare a three-letter currency identifier; no currency conversion is performed.",
       ),
     (typeof r.effectiveFrom != "string" ||
       typeof r.effectiveTo != "string" ||
-      AT(r.effectiveFrom) === null ||
-      AT(r.effectiveTo) === null ||
+      parseStrictIsoDate(r.effectiveFrom) === null ||
+      parseStrictIsoDate(r.effectiveTo) === null ||
       r.effectiveFrom > r.effectiveTo) &&
-      Fi("Choose valid ISO start and end dates in chronological order."),
+      throwMaterialityError(
+        "Choose valid ISO start and end dates in chronological order.",
+      ),
     {
       sheetId: r.sheetId,
-      range: `${tf(n.firstRow, n.firstCol)}:${tf(n.lastRow, n.lastCol)}`,
+      range: `${formatCellAddressLabel(n.firstRow, n.firstCol)}:${formatCellAddressLabel(n.lastRow, n.lastCol)}`,
       headers: r.headers,
       amountColumn: r.amountColumn,
       currencyColumn: r.currencyColumn,
@@ -188,11 +216,11 @@ function DI(e, r) {
     }
   );
 }
-function OI(e, r, t) {
+function resolveMaterialitySourceRange(e, r, t) {
   const n = e.sheets.find((a) => a.id === r.sheetId);
   (!n || !t.allowedSheetIds.includes(n.id)) &&
-    Fi("The source is outside the authorized host context.");
-  const o = ct(r.range);
+    throwMaterialityError("The source is outside the authorized host context.");
+  const o = parseRangeAddress(r.range);
   return (
     !t.includeHidden &&
       (n.hidden ||
@@ -201,11 +229,11 @@ function OI(e, r, t) {
         cn(n, "column").some(
           (a) => a.start <= o.lastCol && a.end >= o.firstCol,
         )) &&
-      Fi(
+      throwMaterialityError(
         "The source range includes hidden content. Explicitly include hidden content only within authorized host scope.",
       ),
     (n.merges ?? []).some((a) => {
-      const s = ct(a);
+      const s = parseRangeAddress(a);
       return (
         s.firstRow <= o.lastRow &&
         s.lastRow >= o.firstRow &&
@@ -213,14 +241,14 @@ function OI(e, r, t) {
         s.lastCol >= o.firstCol
       );
     }) &&
-      Fi(
+      throwMaterialityError(
         "Unmerge the source range before screening so every record has unambiguous fields.",
       ),
     n
   );
 }
-function fde(e, r, t, n) {
-  const o = t.filter((g) => Uk(r.cells[g])),
+function inspectScreenFormulaCells(e, r, t, n) {
+  const o = t.filter((g) => isFormulaCellEntry(r.cells[g])),
     a = new Map(
       t.map((g) => {
         return [g, r.cells[g]?.raw ?? null];
@@ -237,12 +265,15 @@ function fde(e, r, t, n) {
     g++
   )
     d = "";
-  d || Fi("A private calculation context could not be isolated.");
+  d ||
+    throwMaterialityError(
+      "A private calculation context could not be isolated.",
+    );
   const u = {
     id: d,
     name: d,
-    rowCount: Mt.maxRows,
-    colCount: Mt.maxCols,
+    rowCount: workbookLimits.maxRows,
+    colCount: workbookLimits.maxCols,
     cells: {
       A1: {
         raw: `=SUM(${o.map((g) => `'${r.name.replace(/'/g, "''")}'!${g}`).join(",")})`,
@@ -250,10 +281,10 @@ function fde(e, r, t, n) {
     },
   };
   String(u.cells.A1.raw).length > 8192 &&
-    Fi(
+    throwMaterialityError(
       "The selected formulas exceed the bounded calculation inspection length.",
     );
-  const l = m0(
+  const l = inspectFormulaDependencies(
       {
         ...e,
         sheets: [
@@ -276,11 +307,11 @@ function fde(e, r, t, n) {
     l.coverage.depthLimited ||
     l.cycles.length ||
     l.issues.some((g) => g.from === l.target.key || c.has(g.from))) &&
-    Fi(
+    throwMaterialityError(
       "Formula fields require a complete supported static dependency closure within the visible authorized context (1,000 cells, depth 8, 5,000 scanned formulas).",
     );
   const h = new Set([
-    ...y0,
+    ...matrixResultFunctionNames,
     "ISFORMULA",
     "INDEX",
     "CHOOSE",
@@ -304,12 +335,12 @@ function fde(e, r, t, n) {
     const b = e.sheets.find((y) => y.id === g.sheetId)?.cells[g.address];
     if (
       ((!b || b.raw === null) &&
-        Fi(
+        throwMaterialityError(
           "Formula dependencies must be populated scalar cells; ambiguous blank or spill-child dependencies cannot be screened.",
         ),
-      Uk(b))
+      isFormulaCellEntry(b))
     ) {
-      const y = pf(String(b.raw), e, g.sheetId).replace(
+      const y = resolveDefinedNameValue(String(b.raw), e, g.sheetId).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
         "",
       );
@@ -322,7 +353,7 @@ function fde(e, r, t, n) {
               .replace(/^_XLWS\./, ""),
           ),
         )) &&
-        Fi(
+        throwMaterialityError(
           "The screen excludes volatile, dynamic-reference and array/spill formulas. Use supported scalar values or formulas.",
         );
     }
@@ -334,32 +365,36 @@ function fde(e, r, t, n) {
         .map((g) => ({
           ...g,
           cells: Object.fromEntries(
-            Object.entries(g.cells).filter(([b]) => c.has(ude(g.id, b))),
+            Object.entries(g.cells).filter(([b]) =>
+              c.has(buildPairCacheKey(g.id, b)),
+            ),
           ),
         })),
     },
-    p = Vn(f);
+    p = calculateWorkbookWithSettings(f);
   for (const g of l.nodes) {
     const b = p(g.sheetId, g.address);
     (p.getOperationalErrors().length &&
-      Fi(
+      throwMaterialityError(
         "An operational calculation limit or cycle prevents screening, even when a formula handles the visible error.",
       ),
       p.getSpillRange(g.sheetId, g.address) &&
-        Fi(
+        throwMaterialityError(
           "The screen requires scalar fields; a formula produced an array/spill result.",
         ),
-      Uk(e.sheets.find((y) => y.id === g.sheetId)?.cells[g.address]) &&
+      isFormulaCellEntry(
+        e.sheets.find((y) => y.id === g.sheetId)?.cells[g.address],
+      ) &&
         typeof b == "string" &&
         /^#(?:[A-Z0-9_/.]+[!?]?)/.test(b) &&
-        Fi(
+        throwMaterialityError(
           "A selected formula or dependency has a calculation error. Correct it before screening.",
         ),
       g.sheetId === r.id && o.includes(g.address) && a.set(g.address, b));
   }
   return a;
 }
-const hde = (e, r, t) =>
+const compareAmountToThreshold = (e, r, t) =>
   t === "gt"
     ? e > r
     : t === "gte"
@@ -369,10 +404,10 @@ const hde = (e, r, t) =>
         : t === "lte"
           ? e <= r
           : e === r;
-function Nz(e, r, t = {}) {
-  const n = DI(e, r);
+function normalizeMaterialityRequest(e, r, t = {}) {
+  const n = normalizeMaterialityConfig(e, r);
   return {
-    ...l3(
+    ...buildMaterialitySourceEvidence(
       e,
       {
         sheetId: n.sheetId,
@@ -385,57 +420,61 @@ function Nz(e, r, t = {}) {
     request: n,
   };
 }
-function l3(e, r, t = {}) {
+function buildMaterialitySourceEvidence(e, r, t = {}) {
   (!r ||
     typeof r.sheetId != "string" ||
     typeof r.range != "string" ||
     typeof r.headers != "boolean" ||
     !Array.isArray(r.columns) ||
     r.columns.length > 500) &&
-    Fi("Provide a bounded source range and scalar field selection.");
-  const n = ct(r.range),
+    throwMaterialityError(
+      "Provide a bounded source range and scalar field selection.",
+    );
+  const n = parseRangeAddress(r.range),
     o = e.sheets.find((m) => m.id === r.sheetId);
   (!o ||
     n.lastRow >= o.rowCount ||
     n.lastCol >= o.colCount ||
     (n.lastRow - n.firstRow + 1) * (n.lastCol - n.firstCol + 1) >
-      II.sourceCells ||
+      materialityScreenLimits.sourceCells ||
     r.columns.some(
       (m) => !Number.isInteger(m) || m < n.firstCol || m > n.lastCol,
     )) &&
-    Fi(
+    throwMaterialityError(
       "Choose scalar fields inside one source rectangle of at most 500 cells and within worksheet dimensions.",
     );
   const a = {
       ...r,
-      range: `${tf(n.firstRow, n.firstCol)}:${tf(n.lastRow, n.lastCol)}`,
+      range: `${formatCellAddressLabel(n.firstRow, n.firstCol)}:${formatCellAddressLabel(n.lastRow, n.lastCol)}`,
     },
-    s = _I(e, t),
-    d = OI(e, a, s),
-    u = ct(a.range);
+    s = normalizeScreenHostScope(e, t),
+    d = resolveMaterialitySourceRange(e, a, s),
+    u = parseRangeAddress(a.range);
   for (let m = u.firstRow; m <= u.lastRow; m++)
     for (let v = u.firstCol; v <= u.lastCol; v++) {
-      const g = d.cells[tf(m, v)]?.raw;
+      const g = d.cells[formatCellAddressLabel(m, v)]?.raw;
       typeof g == "number" &&
         !Number.isFinite(g) &&
-        Fi(
+        throwMaterialityError(
           "Selected raw evidence contains a nonfinite number and cannot be preserved in JSON. Correct it before screening.",
         );
     }
   const l = [];
   for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
-    for (const v of new Set(a.columns)) l.push(tf(m, v));
-  const c = fde(e, d, l, s),
+    for (const v of new Set(a.columns)) l.push(formatCellAddressLabel(m, v));
+  const c = inspectScreenFormulaCells(e, d, l, s),
     h = [];
   for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
     h.push({
       sourceRow: m + 1,
-      sourceRange: `${tf(m, u.firstCol)}:${tf(m, u.lastCol)}`,
+      sourceRange: `${formatCellAddressLabel(m, u.firstCol)}:${formatCellAddressLabel(m, u.lastCol)}`,
       cells: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) =>
-        structuredClone(d.cells[tf(m, u.firstCol + g)] ?? { raw: null }),
+        structuredClone(
+          d.cells[formatCellAddressLabel(m, u.firstCol + g)] ?? { raw: null },
+        ),
       ),
       values: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) => {
-        const b = tf(m, u.firstCol + g);
+        const b = formatCellAddressLabel(m, u.firstCol + g);
         return c.has(b) ? c.get(b) : (d.cells[b]?.raw ?? null);
       }),
     });
@@ -447,24 +486,24 @@ function l3(e, r, t = {}) {
     headers: Array.from({ length: u.lastCol - u.firstCol + 1 }, (m, v) => {
       return a.headers
         ? String(
-            d.cells[tf(u.firstRow, u.firstCol + v)]?.raw ??
-              `Column ${ut(u.firstCol + v)}`,
+            d.cells[formatCellAddressLabel(u.firstRow, u.firstCol + v)]?.raw ??
+              `Column ${columnIndexToLetters(u.firstCol + v)}`,
           )
-        : `Column ${ut(u.firstCol + v)}`;
+        : `Column ${columnIndexToLetters(u.firstCol + v)}`;
     }),
   };
   return (
     new TextEncoder().encode(JSON.stringify(f, null, 2)).length > 2e6 &&
-      Fi(
+      throwMaterialityError(
         "The complete source evidence exceeds 2,000,000 bytes. Select a smaller population.",
       ),
     f
   );
 }
-function pde(e, r, t = {}) {
-  const n = Nz(e, r, t),
+function runMaterialityScreen(e, r, t = {}) {
+  const n = normalizeMaterialityRequest(e, r, t),
     { request, context } = n,
-    s = ct(request.range),
+    s = parseRangeAddress(request.range),
     d = [],
     u = {
       population: 0,
@@ -492,7 +531,7 @@ function pde(e, r, t = {}) {
         typeof b == "string" && /^[A-Za-z]{3}$/.test(b)
           ? b.toUpperCase()
           : null,
-      A = dde(y),
+      A = normalizeDateToIso(y),
       k = [];
     (w === null &&
       (k.push(
@@ -526,7 +565,7 @@ function pde(e, r, t = {}) {
         comparedAmount: F,
         disposition: k.length
           ? "excluded"
-          : hde(F, request.threshold, request.comparator)
+          : compareAmountToThreshold(F, request.threshold, request.comparator)
             ? "flagged"
             : "not-flagged",
         reasons: k,
@@ -555,7 +594,7 @@ function pde(e, r, t = {}) {
         .filter((m) => m.disposition === "flagged")
         .reduce((m, v) => m + v.amount, 0);
   [l, c, l - c, f].some((m) => m !== null && !Number.isFinite(m)) &&
-    Fi(
+    throwMaterialityError(
       "The control total exceeds finite numeric capacity. Reduce the population or magnitude.",
     );
   const p = {
@@ -596,7 +635,7 @@ function pde(e, r, t = {}) {
   };
   return (
     new TextEncoder().encode(JSON.stringify(p, null, 2)).length > 2e6 &&
-      Fi(
+      throwMaterialityError(
         "The complete evidence report exceeds 2,000,000 bytes. Select a smaller source population.",
       ),
     Tz.set(p, {
@@ -608,7 +647,7 @@ function pde(e, r, t = {}) {
     p
   );
 }
-function Rz(e, r, t, n = {}) {
+function checkMaterialityReportFreshness(e, r, t, n = {}) {
   const o = Tz.get(r);
   if (!o)
     return {
@@ -623,8 +662,11 @@ function Rz(e, r, t, n = {}) {
         disclose: false,
         reason: "This report is untrusted or changed. Run the screen again.",
       };
-    const a = _I(e, n);
-    if ((OI(e, r.request, a), JSON.stringify(a) !== o.context))
+    const a = normalizeScreenHostScope(e, n);
+    if (
+      (resolveMaterialitySourceRange(e, r.request, a),
+      JSON.stringify(a) !== o.context)
+    )
       return {
         current: false,
         disclose: false,
@@ -637,7 +679,7 @@ function Rz(e, r, t, n = {}) {
         disclose: false,
         reason: "The source workbook changed. Run the screen again.",
       };
-    const s = DI(e, t);
+    const s = normalizeMaterialityConfig(e, t);
     return JSON.stringify(s) !== o.request
       ? {
           current: false,
@@ -659,39 +701,54 @@ function Rz(e, r, t, n = {}) {
     };
   }
 }
-function mde(e, r, t, n = {}) {
-  const o = Rz(e, r, t, n);
-  return (o.current || Fi(o.reason), JSON.stringify(r, null, 2));
+function exportMaterialityReportJson(e, r, t, n = {}) {
+  const o = checkMaterialityReportFreshness(e, r, t, n);
+  return (
+    o.current || throwMaterialityError(o.reason),
+    JSON.stringify(r, null, 2)
+  );
 }
-function gde(e, r, t = {}) {
+function parseMaterialityReportText(e, r, t = {}) {
   (typeof r != "string" ||
     r.length > 2e6 ||
     new TextEncoder().encode(r).length > 2e6) &&
-    Fi("The screen configuration/report must be at most 2,000,000 bytes.");
+    throwMaterialityError(
+      "The screen configuration/report must be at most 2,000,000 bytes.",
+    );
   let n;
   try {
     n = JSON.parse(r);
   } catch {
-    Fi("The screen configuration/report is not valid JSON.");
+    throwMaterialityError("The screen configuration/report is not valid JSON.");
   }
-  return Iz(e, n, t);
+  return loadMaterialityConfiguration(e, n, t);
 }
-function Iz(e, r, t = {}) {
+function loadMaterialityConfiguration(e, r, t = {}) {
   (!r || typeof r != "object" || Array.isArray(r)) &&
-    Fi("Choose a supported screen configuration or report.");
+    throwMaterialityError("Choose a supported screen configuration or report.");
   const n = r;
   (n.schemaVersion !== 1 || n.kind !== "materiality-screen") &&
-    Fi("The materiality screen configuration version is unsupported.");
-  const o = DI(e, n.request);
-  return (OI(e, o, _I(e, t)), o);
+    throwMaterialityError(
+      "The materiality screen configuration version is unsupported.",
+    );
+  const o = normalizeMaterialityConfig(e, n.request);
+  return (
+    resolveMaterialitySourceRange(e, o, normalizeScreenHostScope(e, t)),
+    o
+  );
 }
-const aw = { sourceCells: 500, buckets: 24, pageSize: 20, reportBytes: 2e6 },
+const agingScheduleLimits = {
+    sourceCells: 500,
+    buckets: 24,
+    pageSize: 20,
+    reportBytes: 2e6,
+  },
   _z = new WeakMap(),
-  af = (e) => {
+  throwAgingError = (e) => {
     throw Error(e);
   },
-  Dz = 864e5;
-function u3(e) {
+  dayInMilliseconds = 864e5;
+function parseAgingIsoDate(e) {
   if (
     typeof e != "string" ||
     !/^\d{4}-\d{2}-\d{2}$/.test(e) ||
@@ -700,11 +757,11 @@ function u3(e) {
     return null;
   const r = Date.parse(`${e}T00:00:00.000Z`);
   return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
-    ? r / Dz
+    ? r / dayInMilliseconds
     : null;
 }
-function vde(e, r) {
-  if (typeof e == "string") return u3(e) === null ? null : e;
+function normalizeAgingDateInput(e, r) {
+  if (typeof e == "string") return parseAgingIsoDate(e) === null ? null : e;
   if (
     typeof e != "number" ||
     !Number.isInteger(e) ||
@@ -713,11 +770,11 @@ function vde(e, r) {
   )
     return null;
   const t = r === "1900" ? Date.UTC(1899, 11, 31) : Date.UTC(1904, 0, 1);
-  return new Date(t + (r === "1900" && e > 60 ? e - 1 : e) * Dz)
+  return new Date(t + (r === "1900" && e > 60 ? e - 1 : e) * dayInMilliseconds)
     .toISOString()
     .slice(0, 10);
 }
-function Oz(e) {
+function defaultMaterialityConfig(e) {
   return {
     sheetId: e.sheetId,
     range: e.range,
@@ -733,7 +790,7 @@ function Oz(e) {
     effectiveTo: "9999-12-31",
   };
 }
-function MI(e, r, t) {
+function normalizeAgingConfiguration(e, r, t) {
   const n = [
     "sheetId",
     "range",
@@ -752,18 +809,20 @@ function MI(e, r, t) {
     Array.isArray(r) ||
     Object.keys(r).length !== n.length ||
     n.some((d) => !Object.hasOwn(r, d))) &&
-    af("Provide a complete, supported aging configuration."),
+    throwAgingError("Provide a complete, supported aging configuration."),
     (!["due", "document"].includes(r.dateBasis) ||
       !["1900", "1904"].includes(r.dateSystem)) &&
-      af(
+      throwAgingError(
         "Choose due or document date and an explicit 1900 or 1904 serial date system.",
       ),
-    u3(r.asOf) === null &&
-      af("Choose a valid fixed as-of date in ISO YYYY-MM-DD format."),
+    parseAgingIsoDate(r.asOf) === null &&
+      throwAgingError(
+        "Choose a valid fixed as-of date in ISO YYYY-MM-DD format.",
+      ),
     (!Array.isArray(r.buckets) ||
       r.buckets.length < 1 ||
-      r.buckets.length > aw.buckets) &&
-      af("Configure between 1 and 24 aging buckets."));
+      r.buckets.length > agingScheduleLimits.buckets) &&
+      throwAgingError("Configure between 1 and 24 aging buckets."));
   let o = 0;
   const a = new Set();
   for (const [d, u] of r.buckets.entries())
@@ -777,7 +836,7 @@ function MI(e, r, t) {
       u.label.trim().length > 80 ||
       /[\u0000-\u001f\u007f]/.test(u.label) ||
       a.has(u.label.trim().toLowerCase())) &&
-      af(
+      throwAgingError(
         "Each bucket needs a unique label of 1–80 characters and inclusive from/to bounds.",
       ),
       a.add(u.label.trim().toLowerCase()),
@@ -786,16 +845,16 @@ function MI(e, r, t) {
         (d === r.buckets.length - 1
           ? u.to !== null
           : !Number.isSafeInteger(u.to) || u.to < u.from || u.to > 3652424)) &&
-        af(
+        throwAgingError(
           "Buckets must cover every nonnegative day exactly once: start at 0, use contiguous inclusive integer bounds, and leave only the final upper bound open.",
         ),
       (o = u.to === null ? 0 : u.to + 1));
-  const s = gde(
+  const s = parseMaterialityReportText(
     e,
     JSON.stringify({
       schemaVersion: 1,
       kind: "materiality-screen",
-      request: Oz(r),
+      request: defaultMaterialityConfig(r),
     }),
     t,
   );
@@ -813,7 +872,7 @@ function MI(e, r, t) {
     buckets: r.buckets.map((d) => ({ ...d, label: d.label.trim() })),
   };
 }
-function bde(e) {
+function addDecimalAmounts(e) {
   const r = e.map((s) => {
       const [d, u = "0"] = String(s).toLowerCase().split("e"),
         [l, c = ""] = d.split(".");
@@ -827,19 +886,19 @@ function bde(e) {
   const a = n.toString().padStart(t + 1, "0");
   return o + (t ? `${a.slice(0, -t)}.${a.slice(-t)}`.replace(/\.?0+$/, "") : a);
 }
-function e2(e) {
+function assertAgingControlTotal(e) {
   const r = Number(e);
   return Number.isFinite(r)
     ? r
-    : af(
+    : throwAgingError(
         "The aging control total exceeds finite numeric capacity. Reduce the selected population or magnitude.",
       );
 }
-function yde(e, r, t = {}) {
-  const n = MI(e, r, t),
-    o = Nz(e, Oz(n), t),
-    a = ct(n.range).firstCol,
-    s = u3(n.asOf),
+function buildAgingSchedule(e, r, t = {}) {
+  const n = normalizeAgingConfiguration(e, r, t),
+    o = normalizeMaterialityRequest(e, defaultMaterialityConfig(n), t),
+    a = parseRangeAddress(n.range).firstCol,
+    s = parseAgingIsoDate(n.asOf),
     d = o.rows.map((y) => {
       const w = y.values[n.amountColumn - a],
         E = y.values[n.currencyColumn - a],
@@ -849,8 +908,8 @@ function yde(e, r, t = {}) {
             ? E.toUpperCase()
             : null,
         F = y.values[n.dateColumn - a],
-        I = vde(F, n.dateSystem),
-        O = I === null ? null : s - u3(I),
+        I = normalizeAgingDateInput(F, n.dateSystem),
+        O = I === null ? null : s - parseAgingIsoDate(I),
         j = [],
         z = [];
       (F === null || F === ""
@@ -883,7 +942,9 @@ function yde(e, r, t = {}) {
           );
       return (
         V === -1 &&
-          af("The configured aging buckets do not cover a valid source row."),
+          throwAgingError(
+            "The configured aging buckets do not cover a valid source row.",
+          ),
         {
           sourceRow: y.sourceRow,
           sourceRange: y.sourceRange,
@@ -903,14 +964,19 @@ function yde(e, r, t = {}) {
     u = d.filter((y) => y.amount !== null && y.currency === n.currency),
     l = d.filter((y) => y.disposition === "aged"),
     c = u.filter((y) => y.disposition === "excluded"),
-    h = (y) => bde(y.map((w) => w.amount)),
+    h = (y) => addDecimalAmounts(y.map((w) => w.amount)),
     f = h(u),
     p = h(l),
     m = h(c),
     v = n.buckets.map((y, w) => {
       const E = l.filter((k) => k.bucket === w),
         A = h(E);
-      return { ...y, count: E.length, amount: e2(A), exactAmount: A };
+      return {
+        ...y,
+        count: E.length,
+        amount: assertAgingControlTotal(A),
+        exactAmount: A,
+      };
     }),
     g = (y) => d.filter((w) => w.exceptions.includes(y)).length,
     b = {
@@ -944,9 +1010,9 @@ function yde(e, r, t = {}) {
       },
       totals: {
         currency: n.currency,
-        knownSourceAmount: e2(f),
-        agedAmount: e2(p),
-        excludedKnownAmount: e2(m),
+        knownSourceAmount: assertAgingControlTotal(f),
+        agedAmount: assertAgingControlTotal(p),
+        excludedKnownAmount: assertAgingControlTotal(m),
         unknownOrOtherCurrencyRows: d.length - u.length,
         exactKnownSourceAmount: f,
         exactAgedAmount: p,
@@ -965,8 +1031,8 @@ function yde(e, r, t = {}) {
     };
   return (
     new TextEncoder().encode(JSON.stringify(b, null, 2)).length >
-      aw.reportBytes &&
-      af(
+      agingScheduleLimits.reportBytes &&
+      throwAgingError(
         "The aging report exceeds 2,000,000 bytes. Select a smaller population.",
       ),
     _z.set(b, {
@@ -978,7 +1044,7 @@ function yde(e, r, t = {}) {
     b
   );
 }
-function Mz(e, r, t, n = {}) {
+function checkAgingReportFreshness(e, r, t, n = {}) {
   const o = _z.get(r);
   if (!o || o.content !== JSON.stringify(r))
     return {
@@ -988,7 +1054,7 @@ function Mz(e, r, t, n = {}) {
         "This aging report is untrusted or changed. Run the schedule again.",
     };
   try {
-    const a = MI(e, t, n),
+    const a = normalizeAgingConfiguration(e, t, n),
       s = {
         includeHidden: !!n.includeHidden,
         allowedSheetIds: [
@@ -1023,24 +1089,24 @@ function Mz(e, r, t, n = {}) {
     };
   }
 }
-function wde(e, r, t, n = {}) {
-  const o = Mz(e, r, t, n);
-  return (o.current || af(o.reason), JSON.stringify(r, null, 2));
+function exportAgingReportJson(e, r, t, n = {}) {
+  const o = checkAgingReportFreshness(e, r, t, n);
+  return (o.current || throwAgingError(o.reason), JSON.stringify(r, null, 2));
 }
-function xde(e, r, t = {}) {
+function loadAgingConfiguration(e, r, t = {}) {
   return (
     (!r ||
       typeof r != "object" ||
       Array.isArray(r) ||
       r.schemaVersion !== 1 ||
       r.kind !== "aging-schedule") &&
-      af("Choose a supported aging configuration or report."),
-    MI(e, r.request, t)
+      throwAgingError("Choose a supported aging configuration or report."),
+    normalizeAgingConfiguration(e, r.request, t)
   );
 }
-const P7 = (e) => {
+const listRangeColumnIndexes = (e) => {
     try {
-      const r = ct(e);
+      const r = parseRangeAddress(e);
       return r.lastCol - r.firstCol < 500
         ? Array.from(
             { length: r.lastCol - r.firstCol + 1 },
@@ -1051,21 +1117,21 @@ const P7 = (e) => {
       return [];
     }
   },
-  U7 = [
+  defaultAgingBuckets = [
     { label: "0–30 days", from: 0, to: 30 },
     { label: "31–60 days", from: 31, to: 60 },
     { label: "61–90 days", from: 61, to: 90 },
     { label: "91+ days", from: 91, to: null },
   ];
-function Ede(e) {
-  const { text, language } = Dr(),
-    n = yh(),
+function AgingScheduleScreen(e) {
+  const { text, language } = useWorkbookMessages(),
+    n = useCancellableOperation(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(true),
     d = ne.useRef(0),
     u = ne.useRef(""),
-    l = P7(e.range),
+    l = listRangeColumnIndexes(e.range),
     [c, h] = ne.useState(e.range),
     [f, p] = ne.useState(true),
     [m, v] = ne.useState(l[0] ?? 0),
@@ -1075,7 +1141,7 @@ function Ede(e) {
     [k, F] = ne.useState("due"),
     [I, O] = ne.useState(e.workbook.datePolicy?.dateSystem ?? "1900"),
     [j, z] = ne.useState(new Date().toISOString().slice(0, 10)),
-    [V, D] = ne.useState(structuredClone(U7)),
+    [V, D] = ne.useState(structuredClone(defaultAgingBuckets)),
     [B, _] = ne.useState(false),
     [C, T] = ne.useState(null),
     [N, R] = ne.useState(""),
@@ -1122,7 +1188,7 @@ function Ede(e) {
             reason:
               "The source selection changed. Run the aging schedule again.",
           }
-        : Mz(e.workbook, C, K, te)
+        : checkAgingReportFreshness(e.workbook, C, K, te)
       : null,
     ge = ce != null && ce.disclose ? C : null,
     se =
@@ -1130,9 +1196,9 @@ function Ede(e) {
         (Me) =>
           q === "all" || q === Me.disposition || Me.exceptions.includes(q),
       ) ?? [],
-    we = Math.max(1, Math.ceil(se.length / aw.pageSize)),
+    we = Math.max(1, Math.ceil(se.length / agingScheduleLimits.pageSize)),
     Ee = Math.min(X$1, we - 1),
-    Ae = P7(c),
+    Ae = listRangeColumnIndexes(c),
     ye = (Me) => {
       ($(
         Me instanceof Error
@@ -1159,7 +1225,12 @@ function Ede(e) {
   const Te = () => {
       d.current++;
       try {
-        (T(yde(e.workbook, K, te)), R(he), $(""), Q(""), W("all"), J(0));
+        (T(buildAgingSchedule(e.workbook, K, te)),
+          R(he),
+          $(""),
+          Q(""),
+          W("all"),
+          J(0));
       } catch (Me) {
         (T(null), ye(Me));
       }
@@ -1168,7 +1239,7 @@ function Ede(e) {
       try {
         if (!C || !(ce != null && ce.current))
           throw Error("Run a current aging schedule before downloading.");
-        const Me = wde(e.workbook, C, K, te),
+        const Me = exportAgingReportJson(e.workbook, C, K, te),
           ke = URL.createObjectURL(
             new Blob([Me], { type: "application/json" }),
           ),
@@ -1191,13 +1262,13 @@ function Ede(e) {
         je = ++d.current,
         $e = () => s.current && je === d.current && u.current === ke;
       try {
-        if (Me.size > aw.reportBytes)
+        if (Me.size > agingScheduleLimits.reportBytes)
           throw Error(
             "Choose an aging configuration/report no larger than 2,000,000 bytes.",
           );
-        const Je = await MC(Me, n.begin());
+        const Je = await importNativeJsonFile(Me, n.begin());
         if (!$e()) return;
-        const ze = xde(e.workbook, Je, te);
+        const ze = loadAgingConfiguration(e.workbook, Je, te);
         if (ze.sheetId !== e.sheetId)
           throw Error(
             "Open the saved configuration's source worksheet before loading it.",
@@ -1218,7 +1289,7 @@ function Ede(e) {
             "Aging configuration loaded. Run it against the current source; saved conclusions are not reused.",
           ));
       } catch (Je) {
-        $e() && ye(OC(Je));
+        $e() && ye(toFileProcessingError(Je));
       }
     },
     ht = (Me, ke) =>
@@ -1263,10 +1334,12 @@ function Ede(e) {
               children: [
                 i.jsx("h2", {
                   id: `${o}-title`,
-                  children: i.jsx(M, { children: "Aging schedule" }),
+                  children: i.jsx(LocalizedText, {
+                    children: "Aging schedule",
+                  }),
                 }),
                 i.jsx("p", {
-                  children: i.jsx(M, {
+                  children: i.jsx(LocalizedText, {
                     children:
                       "Age receivables or payables from a due or document date using your fixed as-of date and inclusive buckets.",
                   }),
@@ -1283,7 +1356,7 @@ function Ede(e) {
           ],
         }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "This schedule reads the source without editing cells or history. Protected and read-only workbooks support inspection.",
           }),
@@ -1293,7 +1366,7 @@ function Ede(e) {
           children: [
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source worksheet" }),
+                i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
                   children: de ? ae.name : "Outside current context",
                 }),
@@ -1301,7 +1374,7 @@ function Ede(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Source range" }),
+                i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Aging source range"),
                   value: de ? c : "",
@@ -1319,7 +1392,9 @@ function Ede(e) {
                   checked: f,
                   onChange: (Me) => p(Me.target.checked),
                 }),
-                i.jsx(M, { children: "First row contains headers" }),
+                i.jsx(LocalizedText, {
+                  children: "First row contains headers",
+                }),
               ],
             }),
             [
@@ -1337,7 +1412,11 @@ function Ede(e) {
                       value: ke,
                       onChange: ($e) => je(Number($e.target.value)),
                       children: Ae.map(($e) =>
-                        i.jsx("option", { value: $e, children: ut($e) }, $e),
+                        i.jsx(
+                          "option",
+                          { value: $e, children: columnIndexToLetters($e) },
+                          $e,
+                        ),
                       ),
                     }),
                   ],
@@ -1347,7 +1426,7 @@ function Ede(e) {
             ),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Declared currency" }),
+                i.jsx(LocalizedText, { children: "Declared currency" }),
                 i.jsx("input", {
                   "aria-label": text("Declared currency"),
                   maxLength: 3,
@@ -1360,7 +1439,7 @@ function Ede(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Date basis" }),
+                i.jsx(LocalizedText, { children: "Date basis" }),
                 i.jsxs("select", {
                   "aria-label": text("Date basis"),
                   value: k,
@@ -1379,7 +1458,7 @@ function Ede(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Fixed as-of date" }),
+                i.jsx(LocalizedText, { children: "Fixed as-of date" }),
                 i.jsx("input", {
                   "aria-label": text("Fixed as-of date"),
                   type: "date",
@@ -1392,7 +1471,9 @@ function Ede(e) {
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Numeric serial date system" }),
+                i.jsx(LocalizedText, {
+                  children: "Numeric serial date system",
+                }),
                 i.jsxs("select", {
                   "aria-label": text("Numeric serial date system"),
                   value: I,
@@ -1417,10 +1498,12 @@ function Ede(e) {
         i.jsxs("fieldset", {
           children: [
             i.jsx("legend", {
-              children: i.jsx(M, { children: "Inclusive aging buckets" }),
+              children: i.jsx(LocalizedText, {
+                children: "Inclusive aging buckets",
+              }),
             }),
             i.jsx("p", {
-              children: i.jsx(M, {
+              children: i.jsx(LocalizedText, {
                 children:
                   "Start at day 0. Bounds must be contiguous without overlap; the last bucket is open-ended. Future dates are separate exceptions.",
               }),
@@ -1433,20 +1516,22 @@ function Ede(e) {
                     children: i.jsxs("tr", {
                       children: [
                         i.jsx("th", {
-                          children: i.jsx(M, { children: "Label" }),
+                          children: i.jsx(LocalizedText, { children: "Label" }),
                         }),
                         i.jsx("th", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "From day (inclusive)",
                           }),
                         }),
                         i.jsx("th", {
-                          children: i.jsx(M, {
+                          children: i.jsx(LocalizedText, {
                             children: "To day (inclusive)",
                           }),
                         }),
                         i.jsx("th", {
-                          children: i.jsx(M, { children: "Action" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Action",
+                          }),
                         }),
                       ],
                     }),
@@ -1467,7 +1552,7 @@ function Ede(e) {
                               }),
                             }),
                             i.jsx("td", {
-                              children: i.jsx(ci, {
+                              children: i.jsx(LocalizedNumberField, {
                                 "aria-label": `Bucket ${ke + 1} from`,
                                 min: "0",
                                 step: "1",
@@ -1479,7 +1564,7 @@ function Ede(e) {
                               }),
                             }),
                             i.jsx("td", {
-                              children: i.jsx(ci, {
+                              children: i.jsx(LocalizedNumberField, {
                                 allowEmpty: true,
                                 "aria-label": `Bucket ${ke + 1} to`,
                                 min: "0",
@@ -1502,7 +1587,9 @@ function Ede(e) {
                                 disabled: V.length === 1,
                                 onClick: () =>
                                   D((je) => je.filter(($e, Je) => Je !== ke)),
-                                children: i.jsx(M, { children: "Remove" }),
+                                children: i.jsx(LocalizedText, {
+                                  children: "Remove",
+                                }),
                               }),
                             }),
                           ],
@@ -1515,7 +1602,7 @@ function Ede(e) {
               }),
             }),
             i.jsx("button", {
-              disabled: V.length >= aw.buckets,
+              disabled: V.length >= agingScheduleLimits.buckets,
               onClick: () =>
                 D((Me) => {
                   const ke = Me.at(-1),
@@ -1526,11 +1613,11 @@ function Ede(e) {
                     { label: `${je + 1}+ days`, from: je + 1, to: null },
                   ];
                 }),
-              children: i.jsx(M, { children: "Add bucket" }),
+              children: i.jsx(LocalizedText, { children: "Add bucket" }),
             }),
             i.jsx("button", {
-              onClick: () => D(structuredClone(U7)),
-              children: i.jsx(M, { children: "Reset buckets" }),
+              onClick: () => D(structuredClone(defaultAgingBuckets)),
+              children: i.jsx(LocalizedText, { children: "Reset buckets" }),
             }),
           ],
         }),
@@ -1546,14 +1633,14 @@ function Ede(e) {
                 lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
-              i.jsx(M, {
+              i.jsx(LocalizedText, {
                 children:
                   "Explicitly include hidden source and dependency cells within permitted host context",
               }),
             ],
           }),
         i.jsx("p", {
-          children: i.jsx(M, {
+          children: i.jsx(LocalizedText, {
             children:
               "Up to 500 selected cells. Dates use strict ISO calendar text or whole-day serials in the selected system. Invalid, missing, future and other-currency rows are counted separately. The declared currency alone is totaled; no conversion is performed.",
           }),
@@ -1565,11 +1652,15 @@ function Ede(e) {
               className: "aging-primary",
               disabled: !de,
               onClick: Te,
-              children: i.jsx(M, { children: "Run aging schedule" }),
+              children: i.jsx(LocalizedText, {
+                children: "Run aging schedule",
+              }),
             }),
             i.jsxs("label", {
               children: [
-                i.jsx(M, { children: "Load saved configuration/report" }),
+                i.jsx(LocalizedText, {
+                  children: "Load saved configuration/report",
+                }),
                 i.jsx("input", {
                   "aria-label": text("Load aging configuration"),
                   type: "file",
@@ -1586,7 +1677,9 @@ function Ede(e) {
             i.jsx("button", {
               disabled: !(ce != null && ce.current),
               onClick: Pe,
-              children: i.jsx(M, { children: "Download current aging report" }),
+              children: i.jsx(LocalizedText, {
+                children: "Download current aging report",
+              }),
             }),
           ],
         }),
@@ -1618,12 +1711,12 @@ function Ede(e) {
                 children: [
                   ge.request.dateBasis === "due" ? "Due date" : "Document date",
                   " ",
-                  i.jsx(M, { children: "basis · as of " }),
+                  i.jsx(LocalizedText, { children: "basis · as of " }),
                   ge.request.asOf,
                   " · ",
                   ge.request.dateSystem,
                   " ",
-                  i.jsx(M, { children: "serial system ·" }),
+                  i.jsx(LocalizedText, { children: "serial system ·" }),
                   " ",
                   ge.request.currency,
                 ],
@@ -1632,39 +1725,41 @@ function Ede(e) {
                 children: [
                   ge.counts.population,
                   " ",
-                  i.jsx(M, { children: "source rows ·" }),
+                  i.jsx(LocalizedText, { children: "source rows ·" }),
                   " ",
                   ge.counts.aged,
                   " ",
-                  i.jsx(M, { children: "aged · " }),
+                  i.jsx(LocalizedText, { children: "aged · " }),
                   ge.counts.excluded,
                   " ",
-                  i.jsx(M, { children: "excluded" }),
+                  i.jsx(LocalizedText, { children: "excluded" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
                   ge.counts.missingDates,
                   " ",
-                  i.jsx(M, { children: "missing dates ·" }),
+                  i.jsx(LocalizedText, { children: "missing dates ·" }),
                   " ",
                   ge.counts.invalidDates,
                   " ",
-                  i.jsx(M, { children: "invalid dates ·" }),
+                  i.jsx(LocalizedText, { children: "invalid dates ·" }),
                   " ",
                   ge.counts.futureDates,
                   " ",
-                  i.jsx(M, { children: "future dates ·" }),
+                  i.jsx(LocalizedText, { children: "future dates ·" }),
                   " ",
                   ge.counts.unsupportedCurrencies,
                   " ",
-                  i.jsx(M, { children: "unsupported currencies (including " }),
+                  i.jsx(LocalizedText, {
+                    children: "unsupported currencies (including ",
+                  }),
                   ge.counts.missingCurrencies,
                   " ",
-                  i.jsx(M, { children: "missing currencies) · " }),
+                  i.jsx(LocalizedText, { children: "missing currencies) · " }),
                   ge.counts.invalidAmounts,
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "invalid amounts. Exception categories may overlap.",
                   }),
@@ -1679,20 +1774,24 @@ function Ede(e) {
                     children: i.jsxs("tr", {
                       children: [
                         i.jsx("th", {
-                          children: i.jsx(M, { children: "Bucket" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Bucket",
+                          }),
                         }),
                         i.jsx("th", {
-                          children: i.jsx(M, { children: "Inclusive days" }),
+                          children: i.jsx(LocalizedText, {
+                            children: "Inclusive days",
+                          }),
                         }),
                         i.jsx("th", {
-                          children: i.jsx(M, { children: "Rows" }),
+                          children: i.jsx(LocalizedText, { children: "Rows" }),
                         }),
                         i.jsxs("th", {
                           children: [
-                            i.jsx(M, { children: "Signed " }),
+                            i.jsx(LocalizedText, { children: "Signed " }),
                             ge.totals.currency,
                             " ",
-                            i.jsx(M, { children: "total" }),
+                            i.jsx(LocalizedText, { children: "total" }),
                           ],
                         }),
                       ],
@@ -1720,24 +1819,26 @@ function Ede(e) {
               }),
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "Exact signed " }),
+                  i.jsx(LocalizedText, { children: "Exact signed " }),
                   ge.totals.currency,
                   " ",
-                  i.jsx(M, { children: "control totals: known source " }),
+                  i.jsx(LocalizedText, {
+                    children: "control totals: known source ",
+                  }),
                   ge.totals.exactKnownSourceAmount,
                   " ",
-                  i.jsx(M, { children: "= aged" }),
+                  i.jsx(LocalizedText, { children: "= aged" }),
                   " ",
                   ge.totals.exactAgedAmount,
                   " ",
-                  i.jsx(M, { children: "+ excluded known amount" }),
+                  i.jsx(LocalizedText, { children: "+ excluded known amount" }),
                   " ",
                   ge.totals.exactExcludedKnownAmount,
                   ".",
                   " ",
                   ge.totals.unknownOrOtherCurrencyRows,
                   " ",
-                  i.jsx(M, {
+                  i.jsx(LocalizedText, {
                     children:
                       "rows have unknown amounts or another/unknown currency and are outside these totals.",
                   }),
@@ -1745,15 +1846,15 @@ function Ede(e) {
               }),
               i.jsxs("p", {
                 children: [
-                  i.jsx(M, { children: "Source: " }),
+                  i.jsx(LocalizedText, { children: "Source: " }),
                   ge.sheetName,
                   "!",
                   ge.request.range,
                   " ",
-                  i.jsx(M, { children: "· workbook " }),
+                  i.jsx(LocalizedText, { children: "· workbook " }),
                   ge.workbookId,
                   " ",
-                  i.jsx(M, { children: "· revision" }),
+                  i.jsx(LocalizedText, { children: "· revision" }),
                   " ",
                   ge.revision,
                   " · ",
@@ -1762,7 +1863,7 @@ function Ede(e) {
               }),
               i.jsxs("label", {
                 children: [
-                  i.jsx(M, { children: "Rows to review" }),
+                  i.jsx(LocalizedText, { children: "Rows to review" }),
                   i.jsxs("select", {
                     "aria-label": text("Aging rows to review"),
                     value: q,
@@ -1816,25 +1917,29 @@ function Ede(e) {
                       children: i.jsxs("tr", {
                         children: [
                           i.jsx("th", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Source row / range",
                             }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Date / age" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Date / age",
+                            }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Amount / currency",
                             }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, {
+                            children: i.jsx(LocalizedText, {
                               children: "Bucket / disposition",
                             }),
                           }),
                           i.jsx("th", {
-                            children: i.jsx(M, { children: "Exceptions" }),
+                            children: i.jsx(LocalizedText, {
+                              children: "Exceptions",
+                            }),
                           }),
                           ge.headers.map((Me, ke) =>
                             i.jsxs(
@@ -1843,7 +1948,10 @@ function Ede(e) {
                                 children: [
                                   Me,
                                   " (",
-                                  ut(ct(ge.request.range).firstCol + ke),
+                                  columnIndexToLetters(
+                                    parseRangeAddress(ge.request.range)
+                                      .firstCol + ke,
+                                  ),
                                   ")",
                                 ],
                               },
@@ -1902,7 +2010,7 @@ function Ede(e) {
                                             "null",
                                         }),
                                         i.jsx("p", {
-                                          children: i.jsx(M, {
+                                          children: i.jsx(LocalizedText, {
                                             children: "Stored cell evidence",
                                           }),
                                         }),
@@ -1932,32 +2040,34 @@ function Ede(e) {
                   i.jsx("button", {
                     disabled: Ee === 0,
                     onClick: () => J(Ee - 1),
-                    children: i.jsx(M, { children: "Previous rows" }),
+                    children: i.jsx(LocalizedText, {
+                      children: "Previous rows",
+                    }),
                   }),
                   i.jsxs("span", {
                     children: [
-                      i.jsx(M, { children: "Page " }),
+                      i.jsx(LocalizedText, { children: "Page " }),
                       Ee + 1,
                       " ",
-                      i.jsx(M, { children: "of " }),
+                      i.jsx(LocalizedText, { children: "of " }),
                       we,
                       " · ",
                       se.length,
                       " ",
-                      i.jsx(M, { children: "rows in this view" }),
+                      i.jsx(LocalizedText, { children: "rows in this view" }),
                     ],
                   }),
                   i.jsx("button", {
                     disabled: Ee + 1 >= we,
                     onClick: () => J(Ee + 1),
-                    children: i.jsx(M, { children: "Next rows" }),
+                    children: i.jsx(LocalizedText, { children: "Next rows" }),
                   }),
                 ],
               }),
               i.jsxs("details", {
                 children: [
                   i.jsx("summary", {
-                    children: i.jsx(M, {
+                    children: i.jsx(LocalizedText, {
                       children: "Aging rules and limitations",
                     }),
                   }),
@@ -1969,7 +2079,9 @@ function Ede(e) {
         i.jsx("footer", {
           children: i.jsx("button", {
             onClick: e.onClose,
-            children: i.jsx(M, { children: "Close aging schedule" }),
+            children: i.jsx(LocalizedText, {
+              children: "Close aging schedule",
+            }),
           }),
         }),
       ],
@@ -1977,4 +2089,13 @@ function Ede(e) {
   });
 }
 
-export { Ede, II, Iz, Rz, Sz, l3, mde, pde };
+export {
+  AgingScheduleScreen,
+  materialityScreenLimits,
+  loadMaterialityConfiguration,
+  checkMaterialityReportFreshness,
+  requestAssistantAnswer,
+  buildMaterialitySourceEvidence,
+  exportMaterialityReportJson,
+  runMaterialityScreen,
+};

@@ -1,39 +1,74 @@
-import { es } from "../01-core-schemas-and-hashing.js";
-import { Mt } from "../02-financial-functions.js";
-import { Si, _N, gx, jn, oh, vs } from "./01-cell-styles-and-themes.js";
-import { Q3, l0 } from "./02-number-formats.js";
-import { SR } from "./05-consolidation-and-sources.js";
-import { Bu, Hn, NC, QU, Vh, ut } from "./06-data-model-and-analysis.js";
-import { Np, _t, ct, pB } from "./07-conditional-formatting.js";
-import { Vn, v0 } from "./09-calculation-engine.js";
-import { Nr, hR } from "./10-print-layout.js";
-import { e$, hi, t$ } from "./11-table-model.js";
+import { isDeepFrozenValue } from "../01-core-schemas-and-hashing.js";
+import { workbookLimits } from "../02-financial-functions.js";
+import {
+  throwFormatError,
+  assertNamedStyleBindingCurrent,
+  touchWorkbookModifiedAt,
+  assertSheetUnprotected,
+  validateCellStyle,
+  throwCellStyleError,
+} from "./01-cell-styles-and-themes.js";
+import {
+  buildNumberFormatCode,
+  validateNumberFormatSettings,
+} from "./02-number-formats.js";
+import { carryCalculatorRecordForward } from "./05-consolidation-and-sources.js";
+import {
+  requireBoundedText,
+  Hn,
+  NC,
+  QU,
+  isNonArrayObject,
+  columnIndexToLetters,
+} from "./06-data-model-and-analysis.js";
+import {
+  enumerateSelectionCells,
+  _t,
+  parseRangeAddress,
+  buildBorderPresetStyles,
+} from "./07-conditional-formatting.js";
+import {
+  calculateWorkbookWithSettings,
+  checkDataValidationBatch,
+} from "./09-calculation-engine.js";
+import { findSheetOrThrow, renameTableHeaderField } from "./10-print-layout.js";
+import {
+  normalizeWorkbookModel,
+  normalizeCellRecordInput,
+  t$,
+} from "./11-table-model.js";
 
-function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
-  if (!Array.isArray(r) || r.length > Mt.maxPatches)
+function applyCellPatchTransaction(
+  e,
+  r,
+  t = "Preparer",
+  n = "Edit cells",
+  o = {},
+) {
+  if (!Array.isArray(r) || r.length > workbookLimits.maxPatches)
     return Hn(
-      `A transaction may contain at most ${Mt.maxPatches} cell changes.`,
+      `A transaction may contain at most ${workbookLimits.maxPatches} cell changes.`,
     );
   if (r.length === 0) return e;
-  (Bu(t, "Actor", 100), Bu(n, "Action", 200));
+  (requireBoundedText(t, "Actor", 100), requireBoundedText(n, "Action", 200));
   const a = new Set();
   let s;
   const d = r.map((p) => {
       var A;
-      if (!Vh(p)) return Hn("Invalid cell patch.");
-      const m = Nr(e, p.sheetId);
-      jn(m);
+      if (!isNonArrayObject(p)) return Hn("Invalid cell patch.");
+      const m = findSheetOrThrow(e, p.sheetId);
+      assertSheetUnprotected(m);
       const { row, col } = _t(p.address);
       if (row >= m.rowCount || col >= m.colCount)
         return Hn(`Cell ${p.address} is outside sheet dimensions.`);
-      const b = `${ut(col)}${row + 1}`;
-      _N(e, hi(p.cell).style);
+      const b = `${columnIndexToLetters(col)}${row + 1}`;
+      assertNamedStyleBindingCurrent(e, normalizeCellRecordInput(p.cell).style);
       const y = m.cells[b];
       if (
         (y?.raw ?? null) !== p.cell?.raw ||
         !!(y != null && y.literal) != !!((A = p.cell) != null && A.literal)
       ) {
-        s ?? (s = Vn(e));
+        s ?? (s = calculateWorkbookWithSettings(e));
         const k = s.getSpillAnchor(m.id, b);
         if (k && k !== b) {
           const F = r.find((I) => I.sheetId === m.id && I.address === k);
@@ -55,8 +90,10 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
           {
             sheetId: m.id,
             address: b,
-            before: m.cells[b] ? hi(m.cells[b]) : undefined,
-            after: hi(p.cell),
+            before: m.cells[b]
+              ? normalizeCellRecordInput(m.cells[b])
+              : undefined,
+            after: normalizeCellRecordInput(p.cell),
           });
     }),
     u = d.filter((p) => !p.before).length;
@@ -64,13 +101,13 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
     e.sheets.reduce(
       (p, m) =>
         p +
-        (es(m.cells)
+        (isDeepFrozenValue(m.cells)
           ? (QU.get(m.cells) ?? Object.keys(m.cells).length)
           : Object.keys(m.cells).length),
       0,
     ) +
       u >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
     return Hn("Workbook exceeds the 100,000 populated cell limit.");
   const l = e.sheets.map((p) => {
@@ -84,29 +121,31 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
         { ...p, cells: v }
       );
     }),
-    c = hR(e, { ...e, sheets: l });
+    c = renameTableHeaderField(e, { ...e, sheets: l });
   if (c.sheets !== l)
     for (const p of c.sheets) {
-      const m = Nr(e, p.id);
+      const m = findSheetOrThrow(e, p.id);
       for (const [v, g] of Object.entries(p.cells)) {
         const b = d.find((y) => y.sheetId === p.id && y.address === v);
-        if (b) b.after = hi(g);
+        if (b) b.after = normalizeCellRecordInput(g);
         else if (
           JSON.stringify(m.cells[v]) !== JSON.stringify(g) &&
           (d.push({
             sheetId: p.id,
             address: v,
-            before: m.cells[v] ? hi(m.cells[v]) : undefined,
-            after: hi(g),
+            before: m.cells[v]
+              ? normalizeCellRecordInput(m.cells[v])
+              : undefined,
+            after: normalizeCellRecordInput(g),
           }),
-          d.length > Mt.maxPatches)
+          d.length > workbookLimits.maxPatches)
         )
           return Hn(
             "Renaming this table field affects more than 500 cells. Reduce the dependent formulas before renaming it.",
           );
       }
     }
-  const h = v0(
+  const h = checkDataValidationBatch(
     c,
     d.filter((p) => {
       return (
@@ -124,7 +163,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
     );
   if (
     e.events.reduce((p, m) => p + m.changes.length, 0) + d.length >
-    Mt.maxCells
+    workbookLimits.maxCells
   )
     return Hn(
       "Change history has reached its 100,000 cell-change limit. Export the workbook before starting a new workpaper.",
@@ -132,7 +171,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
   if (e.revision >= Number.MAX_SAFE_INTEGER - 1)
     return Hn("Workbook revision limit reached.");
   const f = {
-    ...gx(c),
+    ...touchWorkbookModifiedAt(c),
     revision: e.revision + 1,
     sheets: c.sheets,
     events: [
@@ -147,7 +186,7 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
     ],
   };
   return (
-    es(e) &&
+    isDeepFrozenValue(e) &&
       NC.has(e) &&
       c.sheets === l &&
       d.every((p) => {
@@ -157,21 +196,21 @@ function p0(e, r, t = "Preparer", n = "Edit cells", o = {}) {
         );
       }) &&
       t$(f),
-    SR(e, f),
+    carryCalculatorRecordForward(e, f),
     f
   );
 }
-function KJ(e, r, t, n, o = {}) {
-  o.readOnly && vs("This workbook is read-only.");
-  const a = Nr(e, r);
-  jn(a);
-  const s = oh(n),
-    d = Np(typeof t == "string" ? [t] : t),
+function applyBorderEditTransaction(e, r, t, n, o = {}) {
+  o.readOnly && throwCellStyleError("This workbook is read-only.");
+  const a = findSheetOrThrow(e, r);
+  assertSheetUnprotected(a);
+  const s = validateCellStyle(n),
+    d = enumerateSelectionCells(typeof t == "string" ? [t] : t),
     u = new Set(d);
   if (o.borders || Object.hasOwn(n, "borders") || Object.hasOwn(n, "border")) {
     const h = d.map(_t);
     (a.merges ?? []).some((f) => {
-      const p = ct(f);
+      const p = parseRangeAddress(f);
       return h.some(
         (m) =>
           m.row >= p.firstRow &&
@@ -180,7 +219,7 @@ function KJ(e, r, t, n, o = {}) {
           m.col <= p.lastCol,
       );
     }) &&
-      vs(
+      throwCellStyleError(
         "Unmerge the intersecting cells before applying border edges or presets.",
       );
   }
@@ -191,14 +230,14 @@ function KJ(e, r, t, n, o = {}) {
       o.borders &&
         (p.borders = {
           ...f?.style?.borders,
-          ...pB(h, u, o.borders.preset, o.borders.line),
+          ...buildBorderPresetStyles(h, u, o.borders.preset, o.borders.line),
         }),
       n.borders !== undefined &&
         (p.borders = {
           ...(o.borders ? p.borders : f?.style?.borders),
           ...s.borders,
         }));
-    const m = oh(p),
+    const m = validateCellStyle(p),
       v = {
         ...(f ?? { raw: null }),
         ...(Object.keys(m).length ? { style: m } : {}),
@@ -207,7 +246,8 @@ function KJ(e, r, t, n, o = {}) {
       Object.keys(m).length || delete v.style,
       !f && !Object.keys(m).length
         ? []
-        : JSON.stringify(oh(f?.style ?? {})) === JSON.stringify(m)
+        : JSON.stringify(validateCellStyle(f?.style ?? {})) ===
+            JSON.stringify(m)
           ? []
           : JSON.stringify(f) === JSON.stringify(v)
             ? []
@@ -215,16 +255,16 @@ function KJ(e, r, t, n, o = {}) {
     );
   });
   if (!l.length) return e;
-  const c = p0(e, l, "Preparer", "Format cell styles");
+  const c = applyCellPatchTransaction(e, l, "Preparer", "Format cell styles");
   return { ...e, sheets: c.sheets };
 }
-function nee(e, r, t, n, o = {}) {
-  o.readOnly && Si("This workbook is read-only.");
-  const a = Nr(e, r);
-  jn(a);
-  const s = l0(n),
-    d = Np(typeof t == "string" ? [t] : t),
-    u = Q3(s),
+function applyNumberFormatTransaction(e, r, t, n, o = {}) {
+  o.readOnly && throwFormatError("This workbook is read-only.");
+  const a = findSheetOrThrow(e, r);
+  assertSheetUnprotected(a);
+  const s = validateNumberFormatSettings(n),
+    d = enumerateSelectionCells(typeof t == "string" ? [t] : t),
+    u = buildNumberFormatCode(s),
     l = d.flatMap((h) => {
       const f = a.cells[h],
         p = {
@@ -247,12 +287,17 @@ function nee(e, r, t, n, o = {}) {
         : [{ sheetId: r, address: h, cell: p }];
     });
   if (!l.length) return e;
-  const c = p0(e, l, "Preparer", "Format numbers");
+  const c = applyCellPatchTransaction(e, l, "Preparer", "Format numbers");
   return { ...e, sheets: c.sheets };
 }
-function rh(e) {
-  const r = e$(e, true);
-  return NC.has(r) && es(r) ? r : t$(r);
+function buildCanonicalWorkbookSnapshot(e) {
+  const r = normalizeWorkbookModel(e, true);
+  return NC.has(r) && isDeepFrozenValue(r) ? r : t$(r);
 }
 
-export { KJ, nee, p0, rh };
+export {
+  applyBorderEditTransaction,
+  applyNumberFormatTransaction,
+  applyCellPatchTransaction,
+  buildCanonicalWorkbookSnapshot,
+};
