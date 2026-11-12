@@ -1,10 +1,9 @@
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
+
+/** Unit tests for the core model; they run in Node without a browser. */
 export default defineConfig({
-  plugins: [react()],
   test: {
-    setupFiles: ["./tests/browser-primitives.setup.ts"],
-    include: ["tests/*.test.ts", "tests/*.test.tsx"],
+    include: ["tests/unit/*.test.js"],
     environment: "node",
     testTimeout: 15000,
   },
