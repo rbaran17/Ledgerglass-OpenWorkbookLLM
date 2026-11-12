@@ -3,26 +3,28 @@
 The original TypeScript project was lost. This directory was recovered from the
 compiled application in `dist/` and is now the source the build uses.
 
-| Path                                 | Contents                                                                                                                                            |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.js`                            | The entry: loads the application modules in order                                                                                                   |
-| `index.js`                           | The library entry built by `npm run build:lib`: the editor component, the workbook model and the assistant protocol                                 |
-| `integrations/`                      | `createHttpAdapter`, an assistant adapter that asks the host's own server for a proposal                                                            |
-| `app/`                               | The application, split into 60 ordered modules; see [`app/README.md`](app/README.md) for what each one holds                                        |
-| `assistant/AssistantChat.js`         | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported                                                       |
-| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source                                                                           |
-| `workers/`                           | File-parser and calculation worker sources, bundled at build time and started as Blob workers                                                       |
-| `mcp/`                               | Model Context Protocol server for one approved selection, rewritten on the core model and `app/19b-assistant-protocol.js`; runs in Node from source |
-| `styles/`                            | Workbook and assistant stylesheets                                                                                                                  |
+| Path                                 | Contents                                                                                                                                                                                                                               |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.js`                            | The entry: loads the application modules in order                                                                                                                                                                                      |
+| `index.js`                           | The library entry built by `npm run build:lib`: the editor component, the workbook model and the assistant protocol                                                                                                                    |
+| `integrations/`                      | `createHttpAdapter`, an assistant adapter that asks the host's own server for a proposal                                                                                                                                               |
+| `app/`                               | The application, split into 60 ordered modules; see [`app/README.md`](app/README.md) for what each one holds                                                                                                                           |
+| `assistant/AssistantChat.js`         | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported                                                                                                                                          |
+| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source                                                                                                                                                              |
+| `workers/`                           | File-parser and calculation worker sources, bundled at build time and started as Blob workers                                                                                                                                          |
+| `mcp/`                               | Model Context Protocol server for one approved selection, rewritten on the core model and `app/19b-assistant-protocol.js`; runs in Node from source                                                                                    |
+| `agent-ui/`                          | The agent-rendered workbook, written as ordinary source: the workbook description an agent sends, the `AgentWorkbook` component, the AG-UI frontend tool and the A2UI catalog component; see [`docs/AGENT-UI.md`](../docs/AGENT-UI.md) |
+| `styles/`                            | Workbook and assistant stylesheets                                                                                                                                                                                                     |
 
 ## What to expect
 
 - The code is not the original. Only the public surface is typed (`types/`, for the library and the MCP server); the rest is untyped JavaScript with few comments. Module-level
   names (about 2,200 functions, components and constants) were assigned after
   recovery from strings, property names and usage, so they describe what the
-  code appears to do and some will be imprecise. Local variables are mostly
-  still single letters, except where a destructuring pattern preserved the
-  real name.
+  code appears to do and some will be imprecise. Local variables (about
+  23,000) were named the same way, in two passes checked to change nothing
+  but names; fewer than 200 remain as one or two letters where the code gave
+  no basis for a name.
 - The application lives in `app/` as 60 modules, each depending only on
   lower-numbered ones; the core model is split further into twelve files
   under `app/03-workbook-model/`. The main editor component,

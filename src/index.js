@@ -32,3 +32,30 @@ export {
   validateAssistantFormula,
   validateAssistantProposal,
 } from "./app/19b-assistant-protocol.js";
+
+/**
+ * Agent-rendered workbook: lets an agent show the editor through AG-UI (a frontend tool) or A2UI
+ * (a catalog component). See docs/AGENT-UI.md.
+ */
+export { AgentWorkbook } from "./agent-ui/AgentWorkbook.js";
+export {
+  WorkbookSpecError,
+  buildWorkbookFromSpec,
+  describeWorkbookAsSpec,
+  summarizeWorkbookForAgent,
+  workbookSpecLimits,
+  workbookSpecSchema,
+} from "./agent-ui/workbook-spec.js";
+export {
+  RENDER_WORKBOOK_TOOL_NAME,
+  createWorkbookToolResult,
+  createWorkbookToolSubscriber,
+  readRenderWorkbookCall,
+  renderWorkbookTool,
+} from "./agent-ui/ag-ui.js";
+export {
+  WORKBOOK_CATALOG_ID,
+  WORKBOOK_COMPONENT_NAME,
+  createWorkbookCatalog,
+  workbookCatalogInstructions,
+} from "./agent-ui/a2ui.js";

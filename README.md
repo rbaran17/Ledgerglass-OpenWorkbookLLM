@@ -35,7 +35,13 @@ provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
     <td><img src="docs/assets/workbook-health.png" alt="Workbook health diagnostics dialog"><br><sub><b>Workbook health:</b> diagnostics without workbook contents</sub></td>
     <td></td>
   </tr>
+  <tr>
+    <td><img src="docs/assets/agent-ag-ui.png" alt="A chat in which an agent's render_workbook tool call shows a budget workbook with live formulas"><br><sub><b>Agent-rendered (AG-UI):</b> the agent calls the <code>render_workbook</code> tool and the host shows the editor</sub></td>
+    <td><img src="docs/assets/agent-a2ui.png" alt="An A2UI surface with a text heading and a Workbook component showing a budget"><br><sub><b>Agent-rendered (A2UI):</b> the agent places a <code>Workbook</code> component on a surface; edits flow back to its data</sub></td>
+  </tr>
 </table>
+
+<sub>The two agent screenshots come from a demo host that uses the official AG-UI client and A2UI React renderer with a scripted stand-in agent, not a live model. See [Showing a workbook from an agent](docs/AGENT-UI.md).</sub>
 
 ## Contents
 
@@ -140,6 +146,8 @@ export function Workbook() {
 ```
 
 The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, its TypeScript declarations (`types/`) are hand-written for the public surface, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions.
+
+An AI agent can also show a workbook itself: as an AG-UI frontend tool (`render_workbook`) or as an A2UI catalog component (`Workbook`). `npm run test:agent-ui` checks both against the official AG-UI client and A2UI React renderer. See [Showing a workbook from an agent](docs/AGENT-UI.md).
 
 **As an iframe.** The served application can be embedded if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
 
@@ -277,6 +285,7 @@ scripts/
   worker-source-plugin.mjs  Build plugin for worker sources
 deploy/              Container runtime, health checks, nginx config, Kubernetes templates and tests
 docs/LIBRARY.md      Building and embedding the library
+docs/AGENT-UI.md     Letting an agent show a workbook (AG-UI and A2UI)
 docs/MCP.md          MCP tools, configuration and integration
 docs/assets/         Images used in this README
 .github/workflows/   CI workflow
@@ -293,6 +302,7 @@ Embedded-Workbook.html  Launcher for the embedded mode
 
 - **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
 - **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, adapters and model functions).
+- **Agent-rendered workbook:** [docs/AGENT-UI.md](docs/AGENT-UI.md) (AG-UI frontend tool and A2UI catalog component).
 - **MCP:** [docs/MCP.md](docs/MCP.md) (tools, configuration and integration).
 - **Docker:** [START-HERE-DOCKER.md](START-HERE-DOCKER.md) (container run and developer integration notes).
 - **History and licensing:** [HISTORY.md](HISTORY.md) (earlier remediation checkpoints), [LICENSE](LICENSE) (MIT), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (dependency licenses).

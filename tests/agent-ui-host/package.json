@@ -1,0 +1,14 @@
+{
+  "name": "ledgerglass-agent-ui-host",
+  "private": true,
+  "description": "Test fixture: the official AG-UI client and A2UI React renderer, used by scripts/verify-agent-ui.mjs. Not part of the library or the application.",
+  "type": "module",
+  "dependencies": {
+    "@a2ui/react": "0.15.0",
+    "@a2ui/web_core": "0.15.0",
+    "@ag-ui/client": "1.0.4"
+  },
+  "overrides": {
+    "dompurify": "^3.4.17"
+  }
+}

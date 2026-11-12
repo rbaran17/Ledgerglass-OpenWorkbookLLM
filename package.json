@@ -14,6 +14,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test:e2e": "playwright test",
     "test:lib": "node scripts/verify-lib.mjs",
+    "test:agent-ui": "npm run build:lib && npm ci --prefix tests/agent-ui-host --ignore-scripts --no-audit --no-fund && node scripts/verify-agent-ui.mjs",
     "start": "node scripts/serve.mjs",
     "build:portable": "npm run build && node scripts/portable.mjs",
     "format": "prettier --write src tests scripts *.ts",
