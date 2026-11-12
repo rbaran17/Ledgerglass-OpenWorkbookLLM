@@ -201,7 +201,7 @@ export function applyBorderEditTransaction(
 ): Workbook;
 ```
 
-Merges a style into every cell of a selection and returns a new workbook. A string is one area, so `"A1:B2,C3"` throws; pass an array for several areas. The selection may hold at most 500 cells, and it may not touch a merged area. The returned workbook keeps the original `revision` and `events`, so this change is not recorded in the history.
+Merges a style into every cell of a selection and returns a new workbook. A string is one area, so `"A1:B2,C3"` throws; pass an array for several areas. The selection may hold at most 500 cells, and it may not touch a merged area. The returned workbook's `revision` is one higher, and its `events` has one new event, `Apply border edit transaction`, with an empty change list.
 
 ```js
 import {
@@ -243,7 +243,7 @@ export function setCellHyperlink(
 ): Workbook;
 ```
 
-Sets the hyperlink of one cell and returns a new workbook. Pass `null` to remove the link. Throws if the link is invalid, the sheet is missing, the workbook is read-only, or the cell is inside a merged area and is not its first cell. The returned workbook keeps the original `revision` and `events`, so this change is not recorded in the history.
+Sets the hyperlink of one cell and returns a new workbook. Pass `null` to remove the link. Throws if the link is invalid, the sheet is missing, the workbook is read-only, or the cell is inside a merged area and is not its first cell. The returned workbook's `revision` is one higher, and its `events` has one new event, `Set cell hyperlink`, with an empty change list.
 
 ```js
 import { createBlankWorkbook, setCellHyperlink } from "@ledgerglass/workbook";
@@ -328,7 +328,7 @@ export function applyNumberFormatTransaction(
 ): Workbook;
 ```
 
-Applies a number format to every cell of a selection and returns a new workbook. A string is one area, so `"A1:B2,C3"` throws; pass an array for several areas. The selection may hold at most 500 cells. The returned workbook keeps the original `revision` and `events`, so this change is not recorded in the history.
+Applies a number format to every cell of a selection and returns a new workbook. A string is one area, so `"A1:B2,C3"` throws; pass an array for several areas. The selection may hold at most 500 cells. The returned workbook's `revision` is one higher, and its `events` has one new event, `Apply number format transaction`, with an empty change list.
 
 ```js
 import {

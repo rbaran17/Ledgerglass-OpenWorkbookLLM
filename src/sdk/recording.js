@@ -66,8 +66,16 @@ export function recordWorkbookChange(before, after, details = {}) {
   };
 }
 
+/** Log wording for functions whose recovered name describes the check they make, not the edit. */
+const actionLabels = {
+  assertNamePreviewCurrent: "Apply defined name change",
+  assertConditionalFormatPreviewCurrent: "Apply conditional format change",
+  withCalculationSettings: "Change calculation settings",
+};
+
 /** "renameWorksheet" -> "Rename worksheet" */
 function actionLabelFor(name) {
+  if (actionLabels[name]) return actionLabels[name];
   const words = name.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -100,9 +108,13 @@ export function recorded(name, modelFunction, actor = defaultActor) {
   const action = actionLabelFor(name);
   const wrapper = function (workbook, ...rest) {
     const result = modelFunction(workbook, ...rest);
-    return isWorkbook(workbook)
-      ? recordResult(workbook, result, action, actor)
-      : result;
+    if (!isWorkbook(workbook)) return result;
+    // A few edits (the protection functions) are asynchronous: record when they settle.
+    if (typeof result?.then === "function")
+      return result.then((settled) =>
+        recordResult(workbook, settled, action, actor),
+      );
+    return recordResult(workbook, result, action, actor);
   };
   Object.defineProperty(wrapper, "name", { value: name });
   return wrapper;

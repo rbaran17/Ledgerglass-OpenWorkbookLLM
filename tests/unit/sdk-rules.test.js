@@ -566,7 +566,7 @@ describe("conditional formatting rules", () => {
     expect(preview.changes).toEqual([]);
   });
 
-  test("assertConditionalFormatPreviewCurrent applies a current preview to a new workbook", () => {
+  test("assertConditionalFormatPreviewCurrent applies a current preview to a new workbook and records one event", () => {
     const workbook = sampleWorkbook();
     workbook.sheets[0].conditionalFormats = normalizeConditionalRules([
       conditionalRule(),
@@ -579,7 +579,12 @@ describe("conditional formatting rules", () => {
     const next = assertConditionalFormatPreviewCurrent(workbook, preview);
     expect(next.sheets[0].conditionalFormats[0].value).toBe("20");
     expect(workbook.sheets[0].conditionalFormats[0].value).toBe("10");
-    expect(next.revision).toBe(workbook.revision);
+    expect(next.revision).toBe(workbook.revision + 1);
+    expect(next.events.at(-1)).toMatchObject({
+      action: "Apply conditional format change",
+      actor: "Preparer",
+      changes: [],
+    });
   });
 
   test("assertConditionalFormatPreviewCurrent refuses a preview made from an older workbook", () => {

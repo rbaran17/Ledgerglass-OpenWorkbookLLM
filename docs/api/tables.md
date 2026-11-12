@@ -6,7 +6,7 @@ Worksheet tables give a range a header row, named columns and optional calculate
 
 Most functions here return a new workbook and leave the workbook they were given unchanged. Preview functions return a plan first, and a matching `apply…` function turns the plan into a workbook. A plan keeps a JSON snapshot of the workbook it was made from, so applying it to a different workbook throws.
 
-These functions do not change `revision` or add to `events`. A host that keeps an event history must record these changes itself.
+A function here that returns a changed workbook advances `revision` by one and adds one event, with an empty change list, named after the function (for example `Create worksheet table`), as the other edit functions do. Previews and checks record nothing; applying a preview records one event, such as `Apply table operation preview`. See [Edits are recorded](README.md#edits-are-recorded).
 
 ## Tables
 

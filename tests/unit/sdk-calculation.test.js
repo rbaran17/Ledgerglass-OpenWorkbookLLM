@@ -104,7 +104,7 @@ describe("normalizeCalculationSettings", () => {
 });
 
 describe("withCalculationSettings", () => {
-  test("returns a new workbook with the normalized settings and leaves the argument unchanged", () => {
+  test("returns a new workbook with the normalized settings and one more revision, and leaves the argument unchanged", () => {
     const workbook = workbookWith({ A1: 1 });
     const manual = withCalculationSettings(workbook, {
       ...defaultCalculationSettings,
@@ -113,7 +113,14 @@ describe("withCalculationSettings", () => {
     expect(manual).not.toBe(workbook);
     expect(manual.calculation.mode).toBe("manual");
     expect(manual.id).toBe(workbook.id);
-    expect(manual.revision).toBe(workbook.revision);
+    expect(manual.revision).toBe(workbook.revision + 1);
+    expect(manual.events.at(-1)).toMatchObject({
+      action: "Change calculation settings",
+      actor: "Preparer",
+      changes: [],
+    });
+    expect(workbook.revision).toBe(0);
+    expect(workbook.events).toEqual([]);
     expect(workbook.calculation).toBeUndefined();
   });
 

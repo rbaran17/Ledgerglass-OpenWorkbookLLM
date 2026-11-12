@@ -265,7 +265,7 @@ export function assertConditionalFormatPreviewCurrent(
 ): Workbook;
 ```
 
-Returns a new workbook with the previewed rules applied, or the same workbook when the preview has no changes. The revision and events are not changed. It throws if the workbook has changed since the preview was made.
+Returns a new workbook with the previewed rules applied, or the same workbook when the preview has no changes. In the first case the `revision` is one higher and `events` has one new event, `Apply conditional format change`, with an empty change list. In the second nothing is recorded. It throws if the workbook has changed since the preview was made.
 
 ```js
 import {
