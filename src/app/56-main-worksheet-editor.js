@@ -347,41 +347,64 @@ function MainWorksheetEditor({
   externalProposal,
   onExternalProposalStaged,
 }) {
-  var dc, Y, re, Et, Xr;
-  const V = ne.useMemo(() => createWorkbookDiagnosticsMonitor(), []),
-    D = reliability ?? V,
-    [B, _] = ne.useState(false),
-    C =
+  var sheetProtectionDetails,
+    ribbonSheetProtectionDetails,
+    workbookStructureDetails,
+    formulaInputNode,
+    workbookStructureLock;
+  const defaultDiagnosticsMonitor = ne.useMemo(
+      () => createWorkbookDiagnosticsMonitor(),
+      [],
+    ),
+    activeReliabilityMonitor = reliability ?? defaultDiagnosticsMonitor,
+    [isWorkbookHealthDialogOpen, setIsWorkbookHealthDialogOpen] =
+      ne.useState(false),
+    saveWarningDelayMs =
       Number.isFinite(saveWarningMs) &&
       saveWarningMs >= 1 &&
       saveWarningMs <= 12e4
         ? saveWarningMs
         : 15e3,
     { text, language } = useWorkbookMessages(),
-    R = useWorkbookMessages(),
-    L = (fe) => formatCellEntryForEdit(fe, R.entryLocale),
-    $ = ne.useId(),
-    [U, G] = ne.useState(() =>
+    workbookMessages = useWorkbookMessages(),
+    getEditableCellText = (fe) =>
+      formatCellEntryForEdit(fe, workbookMessages.entryLocale),
+    editorIdPrefix = ne.useId(),
+    [workbookSnapshot, setWorkbookSnapshot] = ne.useState(() =>
       buildCanonicalWorkbookSnapshot(initialWorkbook ?? createBlankWorkbook()),
     ),
-    H = ne.useMemo(
+    activeWorkbook = ne.useMemo(
       () =>
-        U.extensions || (extensions != null && extensions.length)
-          ? withExtensionHostScope(U, extensions)
-          : U,
-      [U, extensions],
+        workbookSnapshot.extensions || (extensions != null && extensions.length)
+          ? withExtensionHostScope(workbookSnapshot, extensions)
+          : workbookSnapshot,
+      [workbookSnapshot, extensions],
     ),
-    [Q, X$1] = ne.useState([]),
-    [J, q] = ne.useState([]),
-    W = linkedWorkbooks ?? J,
-    K = linkedWorkbooks !== undefined ? onLinkedWorkbooksChange : q,
-    te = consolidationWorkbooks ?? Q,
-    ae = consolidationWorkbooks ? onConsolidationWorkbooksChange : X$1,
-    [oe, de] = ne.useState(H.sheets.find((fe) => !fe.hidden).id),
-    he =
-      H.sheets.find((fe) => fe.id === oe && !fe.hidden) ??
-      H.sheets.find((fe) => !fe.hidden),
-    Se = ne.useMemo(
+    [
+      uncontrolledConsolidationWorkbooks,
+      setUncontrolledConsolidationWorkbooks,
+    ] = ne.useState([]),
+    [uncontrolledLinkedWorkbooks, setUncontrolledLinkedWorkbooks] = ne.useState(
+      [],
+    ),
+    effectiveLinkedWorkbooks = linkedWorkbooks ?? uncontrolledLinkedWorkbooks,
+    setLinkedWorkbooks =
+      linkedWorkbooks !== undefined
+        ? onLinkedWorkbooksChange
+        : setUncontrolledLinkedWorkbooks,
+    effectiveConsolidationWorkbooks =
+      consolidationWorkbooks ?? uncontrolledConsolidationWorkbooks,
+    setConsolidationWorkbooks = consolidationWorkbooks
+      ? onConsolidationWorkbooksChange
+      : setUncontrolledConsolidationWorkbooks,
+    [activeSheetId, setActiveSheetId] = ne.useState(
+      activeWorkbook.sheets.find((fe) => !fe.hidden).id,
+    ),
+    activeSheet =
+      activeWorkbook.sheets.find(
+        (fe) => fe.id === activeSheetId && !fe.hidden,
+      ) ?? activeWorkbook.sheets.find((fe) => !fe.hidden),
+    workbookPersistence = ne.useMemo(
       () =>
         instrumentWorkbookPersistence(
           workbookStore ??
@@ -394,76 +417,92 @@ function MainWorksheetEditor({
                   persistenceKey,
                 )
               : createWorkbookSession()),
-          D,
+          activeReliabilityMonitor,
         ),
-      [workbookStore, persistenceKey, D],
+      [workbookStore, persistenceKey, activeReliabilityMonitor],
     ),
-    le = ne.useRef(null),
-    [ce, ge] = ne.useState(null),
-    se = ne.useRef(false),
-    we = ne.useRef(!readOnly);
-  we.current = !readOnly;
-  const Ee = ne.useRef({ active: false, controllers: new Set() }),
-    Ae = ne.useRef(null),
-    ye = ne.useRef(onPersistenceStateChange);
-  ye.current = onPersistenceStateChange;
-  const [Te, Pe] = ne.useState(null),
-    qe = ne.useRef(null),
-    [ht, Re] = ne.useState(false),
-    [Me, ke] = ne.useState(0),
-    je = readOnly || !!((dc = he.protection) != null && dc.enabled),
-    [$e, Je] = ne.useState(null),
-    [ze, at] = ne.useState(),
-    [_e, Ze] = ne.useState(null),
-    lt = ne.useRef(null);
-  useDialogFocusTrap(lt);
-  const [be, ft] = ne.useState(null),
-    pt = ne.useRef(null),
-    Fe = ne.useRef(null),
-    [nt, mt] = ne.useState(0),
-    [Wt, Zt] = ne.useState(false),
-    [xt, or] = ne.useState("A1"),
-    [Wr, Rr] = ne.useState("A1"),
-    qt = ne.useRef("A1"),
-    [Ye, bt] = ne.useState("A1"),
-    [St, cr] = ne.useState([]);
-  function dr(fe) {
-    (bt(fe), cr([]));
+    persistedWorkbookRecordRef = ne.useRef(null),
+    [persistedWorkbookRecord, setPersistedWorkbookRecord] = ne.useState(null),
+    isWorkbookLoadedRef = ne.useRef(false),
+    isEditableRef = ne.useRef(!readOnly);
+  isEditableRef.current = !readOnly;
+  const persistenceSessionRef = ne.useRef({
+      active: false,
+      controllers: new Set(),
+    }),
+    saveAbortControllerRef = ne.useRef(null),
+    setSaveAbortControllerRef = ne.useRef(onPersistenceStateChange);
+  setSaveAbortControllerRef.current = onPersistenceStateChange;
+  const [persistenceError, setPersistenceError] = ne.useState(null),
+    persistenceMessageRef = ne.useRef(null),
+    [isSaveConflictDialogOpen, setIsSaveConflictDialogOpen] =
+      ne.useState(false),
+    [pendingSaveCount, setPendingSaveCount] = ne.useState(0),
+    isEditingLocked =
+      readOnly ||
+      !!(
+        (sheetProtectionDetails = activeSheet.protection) != null &&
+        sheetProtectionDetails.enabled
+      ),
+    [activeDialogMode, setActiveDialogMode] = ne.useState(null),
+    [automationInspection, setAutomationInspection] = ne.useState(),
+    [contextMenuState, setContextMenuState] = ne.useState(null),
+    appRootRef = ne.useRef(null);
+  useDialogFocusTrap(appRootRef);
+  const [tabBarSheetId, setTabBarSheetId] = ne.useState(null),
+    formulaInputRef = ne.useRef(null),
+    formulaSuggestionListRef = ne.useRef(null),
+    [formulaCaretPosition, setFormulaCaretPosition] = ne.useState(0),
+    [isFormulaBarFocused, setIsFormulaBarFocused] = ne.useState(false),
+    [activeCellAddress, setActiveCellAddress] = ne.useState("A1"),
+    [selectionAnchorAddress, setSelectionAnchorAddress] = ne.useState("A1"),
+    activeCellAddressRef = ne.useRef("A1"),
+    [activeSelectionRange, setActiveSelectionRange] = ne.useState("A1"),
+    [completedSelectionAreas, setCompletedSelectionAreas] = ne.useState([]);
+  function selectSingleRange(fe) {
+    (setActiveSelectionRange(fe), setCompletedSelectionAreas([]));
   }
-  function Ut(fe) {
+  function applySelectionAreas(fe) {
     const Oe = parseSelectionAreas(fe);
-    (cr(Oe.slice(0, -1)), bt(Oe.at(-1)));
+    (setCompletedSelectionAreas(Oe.slice(0, -1)),
+      setActiveSelectionRange(Oe.at(-1)));
   }
-  const Jt = ne.useMemo(() => [...St, Ye], [St, Ye]),
-    fr = ne.useMemo(() => Jt.map(parseRangeAddress), [Jt]),
-    br = Jt.join(", ");
-  function rt() {
-    if (Jt.length > 1)
+  const selectionAreas = ne.useMemo(
+      () => [...completedSelectionAreas, activeSelectionRange],
+      [completedSelectionAreas, activeSelectionRange],
+    ),
+    selectionAreaRanges = ne.useMemo(
+      () => selectionAreas.map(parseRangeAddress),
+      [selectionAreas],
+    ),
+    selectionAreasKey = selectionAreas.join(", ");
+  function requireSingleSelectionRange() {
+    if (selectionAreas.length > 1)
       throw Error(
         "This command requires one rectangular range. Click a cell or enter a single range to continue.",
       );
   }
-  const [Le, et] = ne.useState("A1"),
-    [st, kt] = ne.useState(""),
-    [gr, Ir] = ne.useState(null),
-    kr = ne.useRef(null),
-    Ke = ne.useRef({
+  const [goToReferenceText, setGoToReferenceText] = ne.useState("A1"),
+    [cellEditText, setCellEditText] = ne.useState(""),
+    [cellEditState, setCellEditState] = ne.useState(null),
+    activeCellEditRef = ne.useRef(null),
+    formulaPointerStateRef = ne.useRef({
       input: null,
       start: 0,
       end: 0,
       dragging: false,
       mode: true,
     }),
-    [Tt, zt] = ne.useState(null),
-    [Qe, Dt] = ne.useState(true),
-    It = ne.useRef(null),
-    ar = ne.useRef(() => {});
+    [activeFormulaReference, setActiveFormulaReference] = ne.useState(null),
+    [isFormulaPointMode, setIsFormulaPointMode] = ne.useState(true),
+    pendingCrossSheetTargetRef = ne.useRef(null),
+    formulaPointerMoveRef = ne.useRef(() => {});
   (ne.useEffect(() => {
     let fe = 0,
       Oe;
     const Be = () => {
-        if (!Ke.current.dragging || !Oe) return;
-        const gt = to.current;
+        if (!formulaPointerStateRef.current.dragging || !Oe) return;
+        const gt = gridContainerRef.current;
         if (gt) {
           const jt = gt.getBoundingClientRect();
           (Oe.y < jt.top + 28
@@ -479,22 +518,24 @@ function MainWorksheetEditor({
               Math.max(jt.top + 28, Math.min(jt.bottom - 8, Oe.y)),
             )
             ?.closest("[data-address]");
-          rr && gt.contains(rr) && ar.current(rr.dataset.address);
+          rr &&
+            gt.contains(rr) &&
+            formulaPointerMoveRef.current(rr.dataset.address);
         }
         fe = requestAnimationFrame(Be);
       },
       Ue = (gt) => {
-        Ke.current.dragging &&
+        formulaPointerStateRef.current.dragging &&
           ((Oe = { x: gt.clientX, y: gt.clientY }),
           fe || (fe = requestAnimationFrame(Be)));
       },
       Xe = () => {
-        const gt = Ke.current.dragging;
-        ((Ke.current.dragging = false),
+        const gt = formulaPointerStateRef.current.dragging;
+        ((formulaPointerStateRef.current.dragging = false),
           cancelAnimationFrame(fe),
           (fe = 0),
           (Oe = undefined),
-          gt && ls());
+          gt && restoreFormulaEditorFocus());
       };
     return (
       window.addEventListener("pointermove", Ue),
@@ -509,100 +550,125 @@ function MainWorksheetEditor({
     );
   }, []),
     ne.useEffect(() => {
-      (kr.current || $l(),
+      (activeCellEditRef.current || resetFormulaEditSession(),
         onCellEditPendingChange == null ||
-          onCellEditPendingChange(!!kr.current));
-    }, [st, gr, H, onCellEditPendingChange]));
-  const [Lr, Pr] = ne.useState(null),
-    [zr, jr] = ne.useState(""),
-    [ii, fn] = ne.useState({}),
-    [An, Bn] = ne.useState(),
-    [ei, jo] = ne.useState("full"),
-    Xo = JSON.stringify([H.id, he.id]),
-    Ui = ii[Xo],
-    [kn, po] = ne.useState(null),
-    [Gi, ti] = ne.useState(false),
-    Or = he.splitPanes,
-    za = [
-      H.id,
-      he.id,
-      Or?.horizontal !== undefined,
-      Or?.vertical !== undefined,
-      Or?.row,
-      Or?.col,
+          onCellEditPendingChange(!!activeCellEditRef.current));
+    }, [cellEditText, cellEditState, activeWorkbook, onCellEditPendingChange]));
+  const [sidePanelKind, setSidePanelKind] = ne.useState(null),
+    [filterValueSearch, setFilterValueSearch] = ne.useState(""),
+    [filterStateByScope, setFilterStateByScope] = ne.useState({}),
+    [activeFilterColumn, setActiveFilterColumn] = ne.useState(),
+    [auditPopulationScope, setAuditPopulationScope] = ne.useState("full"),
+    filterStateKey = JSON.stringify([activeWorkbook.id, activeSheet.id]),
+    activeFilterState = filterStateByScope[filterStateKey],
+    [activeColumnSort, setActiveColumnSort] = ne.useState(null),
+    [isShowingFormulas, setIsShowingFormulas] = ne.useState(false),
+    sheetSplitPanes = activeSheet.splitPanes,
+    splitPaneSizesKey = [
+      activeWorkbook.id,
+      activeSheet.id,
+      sheetSplitPanes?.horizontal !== undefined,
+      sheetSplitPanes?.vertical !== undefined,
+      sheetSplitPanes?.row,
+      sheetSplitPanes?.col,
     ].join(":"),
-    an = useSplitPaneSizes(za),
-    Ra = an.views[an.activeId],
-    na = Ra.top,
-    va = Ra.left;
-  function Co(fe) {
-    Ca(an.active.current, fe, an.current.current[an.active.current].left);
+    splitPaneSizes = useSplitPaneSizes(splitPaneSizesKey),
+    activePaneLayout = splitPaneSizes.views[splitPaneSizes.activeId],
+    activePaneScrollTop = activePaneLayout.top,
+    activePaneScrollLeft = activePaneLayout.left;
+  function scrollActivePaneVertically(fe) {
+    applyPaneScrollOffsets(
+      splitPaneSizes.active.current,
+      fe,
+      splitPaneSizes.current.current[splitPaneSizes.active.current].left,
+    );
   }
-  function rs(fe) {
-    Ca(an.active.current, an.current.current[an.active.current].top, fe);
+  function scrollActivePaneHorizontally(fe) {
+    applyPaneScrollOffsets(
+      splitPaneSizes.active.current,
+      splitPaneSizes.current.current[splitPaneSizes.active.current].top,
+      fe,
+    );
   }
-  const [ou, Go] = ne.useState(null),
-    [ns, mo] = ne.useState([]),
-    [Qi, ia] = ne.useState([]),
-    [Hs, vn] = ne.useState(""),
-    [qs, hn] = ne.useState(""),
-    [go, Cu] = ne.useState(false),
-    Yu = useOperationScope(),
-    au = ne.useRef(0),
-    ba = ne.useRef(null);
+  const [pendingScrollAddress, setPendingScrollAddress] = ne.useState(null),
+    [undoStack, setUndoStack] = ne.useState([]),
+    [redoStack, setRedoStack] = ne.useState([]),
+    [statusNotice, setStatusNotice] = ne.useState(""),
+    [errorNotice, setErrorNotice] = ne.useState(""),
+    [isOperationBusy, setIsOperationBusy] = ne.useState(false),
+    operationScope = useOperationScope(),
+    latestOperationIdRef = ne.useRef(0),
+    activeOperationControllerRef = ne.useRef(null);
   ne.useEffect(
     () => () => {
       var fe;
-      (au.current++, (fe = ba.current) == null || fe.abort());
+      (latestOperationIdRef.current++,
+        (fe = activeOperationControllerRef.current) == null || fe.abort());
     },
     [],
   );
-  const [oi, xs] = ne.useState(null),
-    [pl, su] = ne.useState(),
-    [vo, Ml] = ne.useState(null),
-    [is, lu] = ne.useState("duplicates"),
-    [os, eo] = ne.useState(null),
-    [oa, Dd] = ne.useState(25e3),
-    [jl, Uc] = ne.useState(5),
-    [Fl, Nf] = ne.useState("FY25-01"),
-    [$c, zc] = ne.useState(null),
-    [Od, um] = ne.useState("2025-12-31"),
-    [Ju, C0] = ne.useState(""),
-    [Md, A0] = ne.useState(createEmptyAssistantConversation),
-    [Xs, Bl] = ne.useState(null),
-    [ml, Rf] = ne.useState(null),
-    [gl, Ll] = ne.useState(null),
-    [Qu, Vc] = ne.useState(false),
-    [aa, Ia] = ne.useState(null),
-    [ec, cm] = ne.useState(true),
-    [vl, k0] = ne.useState(true),
-    [Ao, Wc] = ne.useState(100),
-    [wh, Hc] = ne.useState(false),
-    [S0, Pl] = ne.useState(false),
-    [as, jd] = ne.useState(""),
-    [uu, sa] = ne.useState(""),
-    ya = ne.useRef(null),
-    $i = ne.useRef([]),
-    [Fo, qc] = ne.useState(null),
-    Gs = ne.useRef(Fo);
-  Gs.current = Fo;
-  const [Xc, Fd] = ne.useState(null),
-    [ri, Au] = ne.useState(null),
-    ku = ne.useRef(null),
-    [Bo, Gc] = ne.useState(null),
-    [Zc, Zs] = ne.useState(null);
-  function Ul() {
-    (Gc(null), Zs(null), (ku.current = null));
+  const [delimitedImportExportSource, setDelimitedImportExportSource] =
+      ne.useState(null),
+    [pendingImportFile, setPendingImportFile] = ne.useState(),
+    [xlsxConversionReview, setXlsxConversionReview] = ne.useState(null),
+    [selectedAuditKind, setSelectedAuditKind] = ne.useState("duplicates"),
+    [auditAnalysisResult, setAuditAnalysisResult] = ne.useState(null),
+    [materialityThreshold, setMaterialityThreshold] = ne.useState(25e3),
+    [auditSampleSize, setAuditSampleSize] = ne.useState(5),
+    [samplingSeed, setSamplingSeed] = ne.useState("FY25-01"),
+    [agingReportPayload, setAgingReportPayload] = ne.useState(null),
+    [agingAsOfDate, setAgingAsOfDate] = ne.useState("2025-12-31"),
+    [auditSourceRange, setAuditSourceRange] = ne.useState(""),
+    [assistantSession, setAssistantSession] = ne.useState(
+      createEmptyAssistantConversation,
+    ),
+    [assistantProposal, setAssistantProposal] = ne.useState(null),
+    [validationReviewState, setValidationReviewState] = ne.useState(null),
+    [answerCitations, setAnswerCitations] = ne.useState(null),
+    [isAssistantBusy, setIsAssistantBusy] = ne.useState(false),
+    [promptDialogState, setPromptDialogState] = ne.useState(null),
+    [isGridlinesVisible, setIsGridlinesVisible] = ne.useState(true),
+    [isHeadingsVisible, setIsHeadingsVisible] = ne.useState(true),
+    [zoomPercent, setZoomPercent] = ne.useState(100),
+    [isFilterBarVisible, setIsFilterBarVisible] = ne.useState(false),
+    [isFindBarVisible, setIsFindBarVisible] = ne.useState(false),
+    [findQuery, setFindQuery] = ne.useState(""),
+    [replaceWithText, setReplaceWithText] = ne.useState(""),
+    dragAnchorRef = ne.useRef(null),
+    dragBaseSelectionsRef = ne.useRef([]),
+    [fillDragState, setFillDragState] = ne.useState(null),
+    fillDragStateRef = ne.useRef(fillDragState);
+  fillDragStateRef.current = fillDragState;
+  const [fillPreviewState, setFillPreviewState] = ne.useState(null),
+    [axisResizeState, setAxisResizeState] = ne.useState(null),
+    internalClipboardRef = ne.useRef(null),
+    [clipboardSnapshotState, setClipboardSnapshotState] = ne.useState(null),
+    [moveCellsSource, setMoveCellsSource] = ne.useState(null);
+  function clearCutSession() {
+    (setClipboardSnapshotState(null),
+      setMoveCellsSource(null),
+      (internalClipboardRef.current = null));
   }
-  const [, If] = ne.useState(0),
-    bl = useCalculationRun(H, calculationWorkerFactory, _f, D),
-    _a = bl.calculation,
-    Qr = _a.calculator,
-    Kc = ne.useMemo(() => {
-      if (!Ui || Ui.snapshot !== H) return { result: null, error: "" };
+  const [, setRenderRefreshCount] = ne.useState(0),
+    calculationRun = useCalculationRun(
+      activeWorkbook,
+      calculationWorkerFactory,
+      handleCalculationCompleted,
+      activeReliabilityMonitor,
+    ),
+    calculationState = calculationRun.calculation,
+    workbookCalculator = calculationState.calculator,
+    filterApplication = ne.useMemo(() => {
+      if (!activeFilterState || activeFilterState.snapshot !== activeWorkbook)
+        return { result: null, error: "" };
       try {
         return {
-          result: applyFilterConditions(H, he.id, Ui.definition, Qr),
+          result: applyFilterConditions(
+            activeWorkbook,
+            activeSheet.id,
+            activeFilterState.definition,
+            workbookCalculator,
+          ),
           error: "",
         };
       } catch (fe) {
@@ -611,264 +677,417 @@ function MainWorksheetEditor({
           error: fe instanceof Error ? fe.message : "Filtering is unavailable.",
         };
       }
-    }, [H, he.id, Ui, Qr]),
-    Hr = Kc.result,
-    Bd = !!Ui && Ui.snapshot !== H,
-    Yc = !!he.frozenRows,
-    tc = ne.useMemo(() => Hr?.hiddenRows ?? cn(he, "row"), [he, Hr]),
-    rc = ne.useMemo(() => cn(he, "column"), [he]),
-    ni = ne.useMemo(
-      () => createAxisVisibilityIndex(he.rowCount, tc),
-      [he.rowCount, tc],
+    }, [activeWorkbook, activeSheet.id, activeFilterState, workbookCalculator]),
+    filterResult = filterApplication.result,
+    isFilterStale =
+      !!activeFilterState && activeFilterState.snapshot !== activeWorkbook,
+    hasFrozenRows = !!activeSheet.frozenRows,
+    hiddenRowIndexes = ne.useMemo(
+      () => filterResult?.hiddenRows ?? cn(activeSheet, "row"),
+      [activeSheet, filterResult],
     ),
-    Sn = ne.useMemo(
-      () => createAxisVisibilityIndex(he.colCount, rc),
-      [he.colCount, rc],
+    hiddenColumnIndexes = ne.useMemo(
+      () => cn(activeSheet, "column"),
+      [activeSheet],
     ),
-    Su = Math.max(
-      he.frozenRows ?? 0,
-      zr || kn ? 1 : 0,
-      Hr && parseRangeAddress(Hr.context.range).firstRow === 0
-        ? parseRangeAddress(Hr.context.range).firstRow + 1
+    rowVisibilityIndex = ne.useMemo(
+      () => createAxisVisibilityIndex(activeSheet.rowCount, hiddenRowIndexes),
+      [activeSheet.rowCount, hiddenRowIndexes],
+    ),
+    columnVisibilityIndex = ne.useMemo(
+      () =>
+        createAxisVisibilityIndex(activeSheet.colCount, hiddenColumnIndexes),
+      [activeSheet.colCount, hiddenColumnIndexes],
+    ),
+    pinnedRowCount = Math.max(
+      activeSheet.frozenRows ?? 0,
+      filterValueSearch || activeColumnSort ? 1 : 0,
+      filterResult &&
+        parseRangeAddress(filterResult.context.range).firstRow === 0
+        ? parseRangeAddress(filterResult.context.range).firstRow + 1
         : 0,
     ),
-    Tu = he.frozenCols ?? 0;
+    frozenColumnCount = activeSheet.frozenCols ?? 0;
   ne.useEffect(() => {
-    const fe = _t(xt);
-    if (!ni.isHidden(fe.row) && !Sn.isHidden(fe.col)) return;
-    const Oe = ni.next(fe.row, 1, true) ?? ni.next(fe.row, -1, true),
-      Be = Sn.next(fe.col, 1, true) ?? Sn.next(fe.col, -1, true);
+    const fe = _t(activeCellAddress);
+    if (
+      !rowVisibilityIndex.isHidden(fe.row) &&
+      !columnVisibilityIndex.isHidden(fe.col)
+    )
+      return;
+    const Oe =
+        rowVisibilityIndex.next(fe.row, 1, true) ??
+        rowVisibilityIndex.next(fe.row, -1, true),
+      Be =
+        columnVisibilityIndex.next(fe.col, 1, true) ??
+        columnVisibilityIndex.next(fe.col, -1, true);
     if (Oe === null || Be === null || Oe === undefined || Be === undefined)
       return;
     const Ue = `${columnIndexToLetters(Be)}${Oe + 1}`;
-    (or(Ue), Rr(Ue), (qt.current = Ue), dr(Ue), Go(Ue));
-  }, [xt, ni, Sn]);
-  const co = defaultRowHeightOf(he),
-    Ks = defaultColumnWidthOf(he),
-    vi = Ao / 100,
-    Es = vl ? 58 : 0,
-    yl = ne.useRef(null),
-    to = ne.useRef(null),
-    Ld = ne.useRef(null),
-    Nu = ne.useMemo(() => createTextMeasurer(), []),
-    ss = ne.useRef(null),
-    Ys = ne.useRef(0),
-    sr = ne.useRef({
-      book: H,
-      readOnly: je,
-      sheetId: he.id,
-      range: Ye,
-      selectionKey: br,
+    (setActiveCellAddress(Ue),
+      setSelectionAnchorAddress(Ue),
+      (activeCellAddressRef.current = Ue),
+      selectSingleRange(Ue),
+      setPendingScrollAddress(Ue));
+  }, [activeCellAddress, rowVisibilityIndex, columnVisibilityIndex]);
+  const defaultRowHeight = defaultRowHeightOf(activeSheet),
+    defaultColumnWidth = defaultColumnWidthOf(activeSheet),
+    zoomScale = zoomPercent / 100,
+    rowHeaderWidth = isHeadingsVisible ? 58 : 0,
+    importFileInputRef = ne.useRef(null),
+    gridContainerRef = ne.useRef(null),
+    findInputRef = ne.useRef(null),
+    textMeasurer = ne.useMemo(() => createTextMeasurer(), []),
+    assistantAbortControllerRef = ne.useRef(null),
+    assistantRequestIdRef = ne.useRef(0),
+    latestEditStateRef = ne.useRef({
+      book: activeWorkbook,
+      readOnly: isEditingLocked,
+      sheetId: activeSheet.id,
+      range: activeSelectionRange,
+      selectionKey: selectionAreasKey,
     });
-  sr.current = {
-    book: H,
-    readOnly: je,
-    sheetId: he.id,
-    range: Ye,
-    selectionKey: br,
+  latestEditStateRef.current = {
+    book: activeWorkbook,
+    readOnly: isEditingLocked,
+    sheetId: activeSheet.id,
+    range: activeSelectionRange,
+    selectionKey: selectionAreasKey,
   };
-  const nc = ne.useRef(undefined);
-  function _f() {
-    (If((fe) => fe + 1), Bl(null), Ll(null), eo(null));
+  const lastExternalProposalIdRef = ne.useRef(undefined);
+  function handleCalculationCompleted() {
+    (setRenderRefreshCount((fe) => fe + 1),
+      setAssistantProposal(null),
+      setAnswerCitations(null),
+      setAuditAnalysisResult(null));
   }
-  function wa() {
-    (bl.run(),
-      vn(
-        bl.isolated
+  function runCalculationNow() {
+    (calculationRun.run(),
+      setStatusNotice(
+        calculationRun.isolated
           ? "Isolated calculation requested. Source cells and audit history are unchanged."
           : "Calculation refreshed. Source cells and audit history are unchanged.",
       ));
   }
-  const cu = ne.useMemo(
+  const commentedCellAddresses = ne.useMemo(
       () =>
         new Set(
-          (H.reviewThreads ?? [])
-            .filter((fe) => fe.anchor.sheetId === he.id && !fe.orphaned)
+          (activeWorkbook.reviewThreads ?? [])
+            .filter(
+              (fe) => fe.anchor.sheetId === activeSheet.id && !fe.orphaned,
+            )
             .map((fe) => fe.anchor.address),
         ),
-      [H.reviewThreads, he.id],
+      [activeWorkbook.reviewThreads, activeSheet.id],
     ),
-    ic = ne.useMemo(
-      () => (he.merges ?? []).map(parseRangeAddress),
-      [he.merges],
+    mergeRanges = ne.useMemo(
+      () => (activeSheet.merges ?? []).map(parseRangeAddress),
+      [activeSheet.merges],
     ),
-    ee = ne.useMemo(() => parseRangeAddress(Ye), [Ye]),
-    ie = ne.useMemo(() => countSelectionCells(Jt), [Jt]),
-    ve = { sheetId: he.id, range: Ye },
-    Ce = ne.useMemo(() => {
+    selectionRangeBounds = ne.useMemo(
+      () => parseRangeAddress(activeSelectionRange),
+      [activeSelectionRange],
+    ),
+    selectedCellCount = ne.useMemo(
+      () => countSelectionCells(selectionAreas),
+      [selectionAreas],
+    ),
+    assistantSelection = {
+      sheetId: activeSheet.id,
+      range: activeSelectionRange,
+    },
+    arrayDisplayResult = ne.useMemo(() => {
       try {
-        return { cells: vx(he, Qr), warning: "" };
+        return { cells: vx(activeSheet, workbookCalculator), warning: "" };
       } catch (fe) {
         return {
-          cells: he.cells,
+          cells: activeSheet.cells,
           warning:
             fe instanceof Error
               ? fe.message
               : "Array display exceeds this workbook's calculation budget.",
         };
       }
-    }, [he, Qr]);
+    }, [activeSheet, workbookCalculator]);
   ne.useEffect(() => {
-    Ce.warning && hn(Ce.warning);
-  }, [Ce.warning]);
-  const Ie = ne.useMemo(
-      () => evaluateConditionalFormatRules(he, Qr, Ce.cells),
-      [he, Qr, Ce],
+    arrayDisplayResult.warning && setErrorNotice(arrayDisplayResult.warning);
+  }, [arrayDisplayResult.warning]);
+  const conditionalFormatEvaluator = ne.useMemo(
+      () =>
+        evaluateConditionalFormatRules(
+          activeSheet,
+          workbookCalculator,
+          arrayDisplayResult.cells,
+        ),
+      [activeSheet, workbookCalculator, arrayDisplayResult],
     ),
-    He = ne.useMemo(() => (fe) => Ie(fe).style, [Ie]),
-    ot = Ie(xt).errors,
-    $t = ne.useMemo(
+    getConditionalRuleStyle = ne.useMemo(
+      () => (fe) => conditionalFormatEvaluator(fe).style,
+      [conditionalFormatEvaluator],
+    ),
+    activeCellFormulaErrors =
+      conditionalFormatEvaluator(activeCellAddress).errors,
+    activeCellReferenceDiagnostics = ne.useMemo(
       () => (
-        Qr(he.id, xt),
-        Qr.getReferenceDiagnostics().filter(
-          (fe) => fe.sheetId === he.id && fe.address === xt,
-        )
+        workbookCalculator(activeSheet.id, activeCellAddress),
+        workbookCalculator
+          .getReferenceDiagnostics()
+          .filter(
+            (fe) =>
+              fe.sheetId === activeSheet.id && fe.address === activeCellAddress,
+          )
       ),
-      [Qr, he.id, xt],
+      [workbookCalculator, activeSheet.id, activeCellAddress],
     ),
-    yt = ne.useMemo(
+    activeCellNamedFormulaDiagnostics = ne.useMemo(
       () => (
-        Qr(he.id, xt),
-        Qr.getNamedFormulaDiagnostics().filter(
-          (fe) => fe.sheetId === he.id && fe.address === xt,
-        )
+        workbookCalculator(activeSheet.id, activeCellAddress),
+        workbookCalculator
+          .getNamedFormulaDiagnostics()
+          .filter(
+            (fe) =>
+              fe.sheetId === activeSheet.id && fe.address === activeCellAddress,
+          )
       ),
-      [Qr, he.id, xt],
+      [workbookCalculator, activeSheet.id, activeCellAddress],
     ),
-    Pt = ne.useMemo(() => {
+    getAllCellEntries = ne.useMemo(() => {
       let fe;
       return () =>
         fe ??
-        (fe = Object.entries(Ce.cells).map(([Oe, Be]) => ({
+        (fe = Object.entries(arrayDisplayResult.cells).map(([Oe, Be]) => ({
           address: Oe,
           cell: Be,
           ..._t(Oe),
         })));
-    }, [Ce.cells]),
-    er = ne.useMemo(
+    }, [arrayDisplayResult.cells]),
+    selectedNumericValues = ne.useMemo(
       () =>
-        (ie <= 500
-          ? enumerateSelectionCells(Jt).map((fe) => ({ address: fe }))
-          : Pt().filter(({ row, col }) => fr.some((Be) => Tp(Be, row, col)))
+        (selectedCellCount <= 500
+          ? enumerateSelectionCells(selectionAreas).map((fe) => ({
+              address: fe,
+            }))
+          : getAllCellEntries().filter(({ row, col }) =>
+              selectionAreaRanges.some((Be) => Tp(Be, row, col)),
+            )
         )
-          .map(({ address }) => Qr(he.id, address))
+          .map(({ address }) => workbookCalculator(activeSheet.id, address))
           .filter(isFiniteNumber),
-      [Pt, fr, Jt, ie, Qr, he.id],
+      [
+        getAllCellEntries,
+        selectionAreaRanges,
+        selectionAreas,
+        selectedCellCount,
+        workbookCalculator,
+        activeSheet.id,
+      ],
     ),
-    Gt = er.reduce((fe, Oe) => fe + Oe, 0),
-    ur = he.cells[xt],
-    _r = ne.useMemo(() => {
-      if (!zr && !kn) return null;
+    selectedNumericSum = selectedNumericValues.reduce((fe, Oe) => fe + Oe, 0),
+    activeCell = activeSheet.cells[activeCellAddress],
+    sortedRowIndexes = ne.useMemo(() => {
+      if (!filterValueSearch && !activeColumnSort) return null;
       const fe = new Map();
-      for (const { address, row, cell } of Pt()) {
-        if (row < Su || ni.isHidden(row) || cell.raw === null) continue;
+      for (const { address, row, cell } of getAllCellEntries()) {
+        if (
+          row < pinnedRowCount ||
+          rowVisibilityIndex.isHidden(row) ||
+          cell.raw === null
+        )
+          continue;
         const Nt = fe.get(row) ?? [];
         (Nt.push(address), fe.set(row, Nt));
       }
-      const Oe = zr.toLowerCase(),
+      const Oe = filterValueSearch.toLowerCase(),
         Be = [...fe.keys()]
           .filter(
             (Ue) =>
               !Oe ||
               fe.get(Ue).some((Xe) =>
-                String(Qr(he.id, Xe) ?? "")
+                String(workbookCalculator(activeSheet.id, Xe) ?? "")
                   .toLowerCase()
                   .includes(Oe),
               ),
           )
           .sort((Ue, Xe) => Ue - Xe);
       return (
-        kn &&
+        activeColumnSort &&
           Be.sort((Ue, Xe) => {
-            const gt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Ue + 1}`),
-              Nt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Xe + 1}`);
+            const gt = workbookCalculator(
+                activeSheet.id,
+                `${columnIndexToLetters(activeColumnSort.col)}${Ue + 1}`,
+              ),
+              Nt = workbookCalculator(
+                activeSheet.id,
+                `${columnIndexToLetters(activeColumnSort.col)}${Xe + 1}`,
+              );
             return (
               (isFiniteNumber(gt) && isFiniteNumber(Nt)
                 ? gt - Nt
                 : String(gt ?? "").localeCompare(String(Nt ?? ""))) *
-              kn.direction
+              activeColumnSort.direction
             );
           }),
         Be
       );
-    }, [Pt, Qr, he.id, zr, kn, Su, ni]),
-    sn = ne.useMemo(
-      () => (_r ? new Map(_r.map((fe, Oe) => [fe, Oe])) : null),
-      [_r],
+    }, [
+      getAllCellEntries,
+      workbookCalculator,
+      activeSheet.id,
+      filterValueSearch,
+      activeColumnSort,
+      pinnedRowCount,
+      rowVisibilityIndex,
+    ]),
+    filteredRowPositionMap = ne.useMemo(
+      () =>
+        sortedRowIndexes
+          ? new Map(sortedRowIndexes.map((fe, Oe) => [fe, Oe]))
+          : null,
+      [sortedRowIndexes],
     ),
-    [bn, pn] = ne.useState({});
+    [bn, setAutoFitRowHeights] = ne.useState({});
   ne.useEffect(
-    () => pn({}),
+    () => setAutoFitRowHeights({}),
     [
-      he.id,
-      he.cells,
-      he.columnWidths,
-      he.rowHeights,
-      he.defaultRowHeight,
-      he.defaultColumnWidth,
-      Gi,
+      activeSheet.id,
+      activeSheet.cells,
+      activeSheet.columnWidths,
+      activeSheet.rowHeights,
+      activeSheet.defaultRowHeight,
+      activeSheet.defaultColumnWidth,
+      isShowingFormulas,
     ],
   );
-  const en = ne.useMemo(
+  const effectiveRowHeights = ne.useMemo(
       () => ({
         ...bn,
-        ...he.rowHeights,
-        ...(ri?.axis === "row" ? { [ri.index]: ri.size } : {}),
+        ...activeSheet.rowHeights,
+        ...(axisResizeState?.axis === "row"
+          ? { [axisResizeState.index]: axisResizeState.size }
+          : {}),
       }),
-      [bn, he.rowHeights, ri],
+      [bn, activeSheet.rowHeights, axisResizeState],
     ),
-    ln = ne.useMemo(
-      () => buildVisibleAxisLayout(he.rowCount, co, en, tc),
-      [he.rowCount, co, en, tc],
-    ),
-    Xn = ne.useMemo(
+    rowAxisLayout = ne.useMemo(
       () =>
         buildVisibleAxisLayout(
-          he.colCount,
-          Ks,
-          {
-            ...he.columnWidths,
-            ...(ri?.axis === "column" ? { [ri.index]: ri.size } : {}),
-          },
-          rc,
+          activeSheet.rowCount,
+          defaultRowHeight,
+          effectiveRowHeights,
+          hiddenRowIndexes,
         ),
-      [he.colCount, Ks, he.columnWidths, rc, ri],
+      [
+        activeSheet.rowCount,
+        defaultRowHeight,
+        effectiveRowHeights,
+        hiddenRowIndexes,
+      ],
     ),
-    Ni = ni.countBefore(Su),
-    yn = Sn.countBefore(Tu),
-    Dn = Array.from({ length: Ni }, (fe, Oe) => ni.logicalIndex(Oe)),
-    Ln = Array.from({ length: yn }, (fe, Oe) => Sn.logicalIndex(Oe)),
-    Gn = ne.useMemo(() => {
-      if (!_r) return sliceVisibleAxis(ln, Ni);
+    columnAxisLayout = ne.useMemo(
+      () =>
+        buildVisibleAxisLayout(
+          activeSheet.colCount,
+          defaultColumnWidth,
+          {
+            ...activeSheet.columnWidths,
+            ...(axisResizeState?.axis === "column"
+              ? { [axisResizeState.index]: axisResizeState.size }
+              : {}),
+          },
+          hiddenColumnIndexes,
+        ),
+      [
+        activeSheet.colCount,
+        defaultColumnWidth,
+        activeSheet.columnWidths,
+        hiddenColumnIndexes,
+        axisResizeState,
+      ],
+    ),
+    frozenRowCount = rowVisibilityIndex.countBefore(pinnedRowCount),
+    yn = columnVisibilityIndex.countBefore(frozenColumnCount),
+    frozenRowIndexes = Array.from({ length: frozenRowCount }, (fe, Oe) =>
+      rowVisibilityIndex.logicalIndex(Oe),
+    ),
+    frozenColumnIndexes = Array.from({ length: yn }, (fe, Oe) =>
+      columnVisibilityIndex.logicalIndex(Oe),
+    ),
+    scrollableRowLayout = ne.useMemo(() => {
+      if (!sortedRowIndexes)
+        return sliceVisibleAxis(rowAxisLayout, frozenRowCount);
       const fe = {};
-      for (const [Oe, Be] of Object.entries(en)) {
-        const Ue = sn?.get(Number(Oe));
+      for (const [Oe, Be] of Object.entries(effectiveRowHeights)) {
+        const Ue = filteredRowPositionMap?.get(Number(Oe));
         Ue !== undefined && Ue >= 0 && (fe[Ue] = Be);
       }
-      return buildVisibleAxisLayout(_r.length, co, fe);
-    }, [_r, sn, ln, Ni, en, co]),
-    mn = ne.useMemo(() => sliceVisibleAxis(Xn, yn), [Xn, yn]),
-    ko = Gn.count,
-    bi = (fe) => (_r ? _r[fe] : ni.logicalIndex(fe + Ni)),
-    ro = (fe) => {
-      if (!(fe < Su)) return sn ? sn.get(fe) : (ni.viewIndex(fe) ?? -1) - Ni;
+      return buildVisibleAxisLayout(
+        sortedRowIndexes.length,
+        defaultRowHeight,
+        fe,
+      );
+    }, [
+      sortedRowIndexes,
+      filteredRowPositionMap,
+      rowAxisLayout,
+      frozenRowCount,
+      effectiveRowHeights,
+      defaultRowHeight,
+    ]),
+    scrollableColumnLayout = ne.useMemo(
+      () => sliceVisibleAxis(columnAxisLayout, yn),
+      [columnAxisLayout, yn],
+    ),
+    matchingRowCount = scrollableRowLayout.count,
+    logicalRowAt = (fe) =>
+      sortedRowIndexes
+        ? sortedRowIndexes[fe]
+        : rowVisibilityIndex.logicalIndex(fe + frozenRowCount),
+    scrollableRowPositionOf = (fe) => {
+      if (!(fe < pinnedRowCount))
+        return filteredRowPositionMap
+          ? filteredRowPositionMap.get(fe)
+          : (rowVisibilityIndex.viewIndex(fe) ?? -1) - frozenRowCount;
     },
-    zi = ln.offset(Ni),
-    Ri = Xn.offset(yn);
-  function Lo(fe) {
-    const Oe = Math.max(1, fe.height - ((vl ? 22 : 0) + zi) * vi),
-      Be = Math.max(1, fe.width - (Es + Ri) * vi),
-      Ue = computeVirtualizedRange(Gn, fe.top, Oe, vi, 6),
-      Xe = computeVirtualizedRange(mn, fe.left, Be, vi, 3),
+    frozenRowsHeight = rowAxisLayout.offset(frozenRowCount),
+    frozenColumnsWidth = columnAxisLayout.offset(yn);
+  function computeGridViewport(fe) {
+    const Oe = Math.max(
+        1,
+        fe.height -
+          ((isHeadingsVisible ? 22 : 0) + frozenRowsHeight) * zoomScale,
+      ),
+      Be = Math.max(
+        1,
+        fe.width - (rowHeaderWidth + frozenColumnsWidth) * zoomScale,
+      ),
+      Ue = computeVirtualizedRange(
+        scrollableRowLayout,
+        fe.top,
+        Oe,
+        zoomScale,
+        6,
+      ),
+      Xe = computeVirtualizedRange(
+        scrollableColumnLayout,
+        fe.left,
+        Be,
+        zoomScale,
+        3,
+      ),
       gt = Array.from({ length: Ue.last - Ue.first }, (Mr, Br) =>
-        bi(Ue.first + Br),
+        logicalRowAt(Ue.first + Br),
       ),
       Nt = Array.from({ length: Xe.last - Xe.first }, (Mr, Br) =>
-        Sn.logicalIndex(Xe.first + Br + yn),
+        columnVisibilityIndex.logicalIndex(Xe.first + Br + yn),
       ),
       wt = Xe.leading,
       jt = Xe.trailing,
-      rr = Nt.length + Ln.length + Number(vl) + +(wt > 0) + +(jt > 0);
+      rr =
+        Nt.length +
+        frozenColumnIndexes.length +
+        Number(isHeadingsVisible) +
+        +(wt > 0) +
+        +(jt > 0);
     return {
       rowViewport: Oe,
       columnViewport: Be,
@@ -888,230 +1107,290 @@ function MainWorksheetEditor({
     columnWindow,
     shownRows,
     shownColumns,
-  } = Lo(Ra);
-  function Ca(fe, Oe, Be) {
-    const Ue = Lo(an.current.current[fe]),
-      Xe = computeVirtualizedRange(Gn, Oe, Ue.rowViewport, vi, 0).logicalOffset,
+  } = computeGridViewport(activePaneLayout);
+  function applyPaneScrollOffsets(fe, Oe, Be) {
+    const Ue = computeGridViewport(splitPaneSizes.current.current[fe]),
+      Xe = computeVirtualizedRange(
+        scrollableRowLayout,
+        Oe,
+        Ue.rowViewport,
+        zoomScale,
+        0,
+      ).logicalOffset,
       gt = computeVirtualizedRange(
-        mn,
+        scrollableColumnLayout,
         Be,
         Ue.columnViewport,
-        vi,
+        zoomScale,
         0,
       ).logicalOffset,
       Nt = {};
-    for (const wt of Pv(Or)) {
-      const jt = Lo(an.current.current[wt]),
-        rr = an.current.current[wt],
+    for (const wt of Pv(sheetSplitPanes)) {
+      const jt = computeGridViewport(splitPaneSizes.current.current[wt]),
+        rr = splitPaneSizes.current.current[wt],
         Mr = anchorsMatchOnAxis(fe, wt, "row")
-          ? logicalToPhysicalPixels(Xe, Gn.total, jt.rowViewport, vi)
+          ? logicalToPhysicalPixels(
+              Xe,
+              scrollableRowLayout.total,
+              jt.rowViewport,
+              zoomScale,
+            )
           : rr.top,
         Br = anchorsMatchOnAxis(fe, wt, "column")
-          ? logicalToPhysicalPixels(gt, mn.total, jt.columnViewport, vi)
+          ? logicalToPhysicalPixels(
+              gt,
+              scrollableColumnLayout.total,
+              jt.columnViewport,
+              zoomScale,
+            )
           : rr.left;
       Nt[wt] = { top: Mr, left: Br };
-      const xr = an.refs.current[wt];
+      const xr = splitPaneSizes.refs.current[wt];
       xr &&
         (Math.abs(xr.scrollTop - Mr) > 0.5 && (xr.scrollTop = Mr),
         Math.abs(xr.scrollLeft - Br) > 0.5 && (xr.scrollLeft = Br));
     }
-    an.patch(Nt);
+    splitPaneSizes.patch(Nt);
   }
   (ne.useEffect(() => {
     const fe = {};
-    for (const Be of Pv(Or)) {
-      const Ue = Lo(an.current.current[Be]),
-        Xe = Or
-          ? (ni.next(Or.row, 1, true) ?? ni.next(Or.row, -1, true) ?? 0)
+    for (const Be of Pv(sheetSplitPanes)) {
+      const Ue = computeGridViewport(splitPaneSizes.current.current[Be]),
+        Xe = sheetSplitPanes
+          ? (rowVisibilityIndex.next(sheetSplitPanes.row, 1, true) ??
+            rowVisibilityIndex.next(sheetSplitPanes.row, -1, true) ??
+            0)
           : 0,
-        gt = Or
-          ? (Sn.next(Or.col, 1, true) ?? Sn.next(Or.col, -1, true) ?? 0)
+        gt = sheetSplitPanes
+          ? (columnVisibilityIndex.next(sheetSplitPanes.col, 1, true) ??
+            columnVisibilityIndex.next(sheetSplitPanes.col, -1, true) ??
+            0)
           : 0,
         Nt = Be.startsWith("bottom")
           ? logicalToPhysicalPixels(
-              Gn.offset(Math.max(0, ro(Xe) ?? 0)),
-              Gn.total,
+              scrollableRowLayout.offset(
+                Math.max(0, scrollableRowPositionOf(Xe) ?? 0),
+              ),
+              scrollableRowLayout.total,
               Ue.rowViewport,
-              vi,
+              zoomScale,
             )
           : 0,
         wt = Be.endsWith("right")
           ? logicalToPhysicalPixels(
-              mn.offset(Math.max(0, (Sn.viewIndex(gt) ?? 0) - yn)),
-              mn.total,
+              scrollableColumnLayout.offset(
+                Math.max(0, (columnVisibilityIndex.viewIndex(gt) ?? 0) - yn),
+              ),
+              scrollableColumnLayout.total,
               Ue.columnViewport,
-              vi,
+              zoomScale,
             )
           : 0;
       fe[Be] = { top: Nt, left: wt };
-      const jt = an.refs.current[Be];
+      const jt = splitPaneSizes.refs.current[Be];
       jt && ((jt.scrollTop = Nt), (jt.scrollLeft = wt));
     }
-    an.patch(fe);
-    const Oe = Pv(Or).at(-1);
-    (an.activate(Oe), (to.current = an.refs.current[Oe] ?? null));
-  }, [za]),
+    splitPaneSizes.patch(fe);
+    const Oe = Pv(sheetSplitPanes).at(-1);
+    (splitPaneSizes.activate(Oe),
+      (gridContainerRef.current = splitPaneSizes.refs.current[Oe] ?? null));
+  }, [splitPaneSizesKey]),
     ne.useEffect(() => {
-      if (!to.current || typeof ResizeObserver > "u") return;
+      if (!gridContainerRef.current || typeof ResizeObserver > "u") return;
       const Oe = new ResizeObserver((Be) => {
         const Ue = {};
         for (const gt of Be) {
           const Nt = Number(gt.target.dataset.row),
             wt = gt.target.offsetHeight;
           Number.isInteger(Nt) &&
-            he.rowHeights?.[Nt] === undefined &&
-            ri?.axis !== "row" &&
-            wt > co &&
+            activeSheet.rowHeights?.[Nt] === undefined &&
+            axisResizeState?.axis !== "row" &&
+            wt > defaultRowHeight &&
             (Ue[Nt] = wt);
         }
         Object.keys(Ue).length &&
-          pn((gt) =>
+          setAutoFitRowHeights((gt) =>
             Object.entries(Ue).every(([Nt, wt]) => gt[Number(Nt)] === wt)
               ? gt
               : { ...gt, ...Ue },
           );
       });
       return (
-        Object.values(an.refs.current).forEach((Be) =>
+        Object.values(splitPaneSizes.refs.current).forEach((Be) =>
           Be.querySelectorAll("tr[data-row]").forEach((Ue) => Oe.observe(Ue)),
         ),
         () => Oe.disconnect()
       );
     }),
     ne.useEffect(() => {
-      if (!ou || !to.current) return;
-      const fe = _t(ou),
-        Oe = to.current;
-      if (ni.isHidden(fe.row) || Sn.isHidden(fe.col)) {
-        Go(null);
+      if (!pendingScrollAddress || !gridContainerRef.current) return;
+      const fe = _t(pendingScrollAddress),
+        Oe = gridContainerRef.current;
+      if (
+        rowVisibilityIndex.isHidden(fe.row) ||
+        columnVisibilityIndex.isHidden(fe.col)
+      ) {
+        setPendingScrollAddress(null);
         return;
       }
-      const Be = ro(fe.row);
-      if (Be === undefined && fe.row >= Su) {
-        (jr(""), po(null));
+      const Be = scrollableRowPositionOf(fe.row);
+      if (Be === undefined && fe.row >= pinnedRowCount) {
+        (setFilterValueSearch(""), setActiveColumnSort(null));
         return;
       }
-      let Ue = na,
-        Xe = va;
+      let Ue = activePaneScrollTop,
+        Xe = activePaneScrollLeft;
       if (Be !== undefined && Be >= 0) {
-        const Nt = Gn.offset(Be),
-          wt = Gn.offset(Be + 1);
+        const Nt = scrollableRowLayout.offset(Be),
+          wt = scrollableRowLayout.offset(Be + 1);
         let jt = rowWindow.logicalOffset;
         (Nt < jt
           ? (jt = Nt)
-          : wt > jt + rowViewport / vi && (jt = wt - rowViewport / vi),
-          (Ue = logicalToPhysicalPixels(jt, Gn.total, rowViewport, vi)));
+          : wt > jt + rowViewport / zoomScale &&
+            (jt = wt - rowViewport / zoomScale),
+          (Ue = logicalToPhysicalPixels(
+            jt,
+            scrollableRowLayout.total,
+            rowViewport,
+            zoomScale,
+          )));
       }
-      const gt = (Sn.viewIndex(fe.col) ?? 0) - yn;
+      const gt = (columnVisibilityIndex.viewIndex(fe.col) ?? 0) - yn;
       if (gt >= 0) {
-        const Nt = mn.offset(gt),
-          wt = mn.offset(gt + 1);
+        const Nt = scrollableColumnLayout.offset(gt),
+          wt = scrollableColumnLayout.offset(gt + 1);
         let jt = columnWindow.logicalOffset;
         (Nt < jt
           ? (jt = Nt)
-          : wt > jt + columnViewport / vi && (jt = wt - columnViewport / vi),
-          (Xe = logicalToPhysicalPixels(jt, mn.total, columnViewport, vi)));
+          : wt > jt + columnViewport / zoomScale &&
+            (jt = wt - columnViewport / zoomScale),
+          (Xe = logicalToPhysicalPixels(
+            jt,
+            scrollableColumnLayout.total,
+            columnViewport,
+            zoomScale,
+          )));
       }
-      ((Oe.scrollTop = Ue), (Oe.scrollLeft = Xe), Co(Ue), rs(Xe), Go(null));
+      ((Oe.scrollTop = Ue),
+        (Oe.scrollLeft = Xe),
+        scrollActivePaneVertically(Ue),
+        scrollActivePaneHorizontally(Xe),
+        setPendingScrollAddress(null));
     }, [
-      ou,
-      sn,
-      Gn,
-      mn,
-      Su,
+      pendingScrollAddress,
+      filteredRowPositionMap,
+      scrollableRowLayout,
+      scrollableColumnLayout,
+      pinnedRowCount,
       yn,
-      ni,
-      Sn,
+      rowVisibilityIndex,
+      columnVisibilityIndex,
       rowViewport,
       columnViewport,
-      vi,
+      zoomScale,
       rowWindow.logicalOffset,
       columnWindow.logicalOffset,
-      na,
-      va,
+      activePaneScrollTop,
+      activePaneScrollLeft,
     ]));
-  function Ii() {
-    return enumerateSelectionCells(Jt);
+  function getSelectedCellAddresses() {
+    return enumerateSelectionCells(selectionAreas);
   }
-  function Ho() {
-    To(
-      Ii().map((fe) => ({
-        sheetId: he.id,
+  function clearSelectedCellContents() {
+    applyCellPatches(
+      getSelectedCellAddresses().map((fe) => ({
+        sheetId: activeSheet.id,
         address: fe,
-        cell: { ...he.cells[fe], raw: null, literal: false },
+        cell: { ...activeSheet.cells[fe], raw: null, literal: false },
       })),
       "Clear contents",
     );
   }
-  const Wa = `${he.name}!${br}`;
+  const selectionReferenceLabel = `${activeSheet.name}!${selectionAreasKey}`;
   (ne.useEffect(() => {
-    kr.current || kt(L(he.cells[xt]));
-  }, [he, xt, R.entryLocale]),
+    activeCellEditRef.current ||
+      setCellEditText(
+        getEditableCellText(activeSheet.cells[activeCellAddress]),
+      );
+  }, [activeSheet, activeCellAddress, workbookMessages.entryLocale]),
     ne.useEffect(() => {
-      (et(br),
-        du("selection", () =>
+      (setGoToReferenceText(selectionAreasKey),
+        notifyHostCallback("selection", () =>
           onSelectionChange?.({
-            sheetId: he.id,
-            range: Ye,
-            ...(Jt.length > 1 ? { ranges: Jt } : {}),
+            sheetId: activeSheet.id,
+            range: activeSelectionRange,
+            ...(selectionAreas.length > 1 ? { ranges: selectionAreas } : {}),
           }),
         ));
-    }, [br, Ye, he.id, onSelectionChange]),
+    }, [
+      selectionAreasKey,
+      activeSelectionRange,
+      activeSheet.id,
+      onSelectionChange,
+    ]),
     ne.useEffect(() => {
-      se.current = false;
+      isWorkbookLoadedRef.current = false;
       const fe = { active: true, controllers: new Set() };
-      Ee.current = fe;
+      persistenceSessionRef.current = fe;
       try {
-        const Oe = Se.load();
-        if (((le.current = Oe), ge(Oe), Oe)) {
-          (G(buildCanonicalWorkbookSnapshot(Oe.workbook)),
-            (sr.current.book = Oe.workbook),
-            Zo(Oe.view),
-            vn(Oe.warning ?? "Restored your locally saved workbook."),
-            la("saved", Oe.workbook));
+        const Oe = workbookPersistence.load();
+        if (
+          ((persistedWorkbookRecordRef.current = Oe),
+          setPersistedWorkbookRecord(Oe),
+          Oe)
+        ) {
+          (setWorkbookSnapshot(buildCanonicalWorkbookSnapshot(Oe.workbook)),
+            (latestEditStateRef.current.book = Oe.workbook),
+            applyWorkbookView(Oe.view),
+            setStatusNotice(
+              Oe.warning ?? "Restored your locally saved workbook.",
+            ),
+            reportSaveStatus("saved", Oe.workbook));
           try {
-            du("loaded", () => onWorkbookLoaded?.(Oe.workbook));
+            notifyHostCallback("loaded", () => onWorkbookLoaded?.(Oe.workbook));
           } catch {
-            hn("The host could not acknowledge the loaded workbook.");
+            setErrorNotice(
+              "The host could not acknowledge the loaded workbook.",
+            );
           }
         }
-        se.current = true;
+        isWorkbookLoadedRef.current = true;
       } catch (Oe) {
-        (As(Oe),
-          (qe.current =
+        (reportSaveError(Oe),
+          (persistenceMessageRef.current =
             "The saved workbook could not be restored. Import a backup to recover it. Existing saved data will be preserved."),
-          hn(qe.current));
+          setErrorNotice(persistenceMessageRef.current));
       }
       return () => {
         var Be;
         fe.active = false;
         for (const Ue of fe.controllers) Ue.abort();
-        const Oe = Ee.current;
+        const Oe = persistenceSessionRef.current;
         Oe.active = false;
         for (const Ue of Oe.controllers) Ue.abort();
-        (Be = Ae.current) == null || Be.abort();
+        (Be = saveAbortControllerRef.current) == null || Be.abort();
       };
-    }, [Se]),
+    }, [workbookPersistence]),
     ne.useEffect(() => {
       var fe;
       if (readOnly) {
-        for (const Oe of Ee.current.controllers) Oe.abort();
-        (fe = Ae.current) == null || fe.abort();
+        for (const Oe of persistenceSessionRef.current.controllers) Oe.abort();
+        (fe = saveAbortControllerRef.current) == null || fe.abort();
       }
     }, [readOnly]),
     ne.useEffect(() => {
-      if (!persistenceKey && !("coordination" in Se)) return;
+      if (!persistenceKey && !("coordination" in workbookPersistence)) return;
       const fe = (Oe) => {
-        const Be = le.current?.guard,
+        const Be = persistedWorkbookRecordRef.current?.guard,
           Ue = persistenceKey ?? Be?.namespace;
         if (!(!Ue || (Oe.key !== null && Oe.key !== Ue)))
           try {
-            const gt = Se.load();
+            const gt = workbookPersistence.load();
             if (
               JSON.stringify(gt?.guard ?? null) === JSON.stringify(Be ?? null)
             )
               return;
-            As(
+            reportSaveError(
               new WorkbookRevisionConflictError(
                 "conflict",
                 "Another workbook window changed the saved version. Your local work has been retained.",
@@ -1119,21 +1398,21 @@ function MainWorksheetEditor({
               ),
             );
           } catch (gt) {
-            As(gt);
+            reportSaveError(gt);
           }
       };
       return (
         window.addEventListener("storage", fe),
         () => window.removeEventListener("storage", fe)
       );
-    }, [Se, persistenceKey]),
+    }, [workbookPersistence, persistenceKey]),
     ne.useEffect(() => {
       if (!persistenceKey && !workbookStorePersistent) return;
       const fe = (Oe) => {
-        (kr.current ||
-          Ee.current.controllers.size ||
-          JSON.stringify(le.current?.workbook) !==
-            JSON.stringify(sr.current.book)) &&
+        (activeCellEditRef.current ||
+          persistenceSessionRef.current.controllers.size ||
+          JSON.stringify(persistedWorkbookRecordRef.current?.workbook) !==
+            JSON.stringify(latestEditStateRef.current.book)) &&
           (Oe.preventDefault(), (Oe.returnValue = ""));
       };
       return (
@@ -1142,13 +1421,18 @@ function MainWorksheetEditor({
       );
     }, [persistenceKey, workbookStorePersistent]),
     ne.useEffect(() => {
-      if (!se.current || readOnly) return;
+      if (!isWorkbookLoadedRef.current || readOnly) return;
       const fe = setTimeout(() => {
         try {
-          const Oe = sr.current;
-          if (Oe.readOnly || Te || Ee.current.controllers.size) return;
-          const Be = yi(Oe.book, Oe.sheetId, Oe.range),
-            Ue = le.current;
+          const Oe = latestEditStateRef.current;
+          if (
+            Oe.readOnly ||
+            persistenceError ||
+            persistenceSessionRef.current.controllers.size
+          )
+            return;
+          const Be = buildWorkbookViewState(Oe.book, Oe.sheetId, Oe.range),
+            Ue = persistedWorkbookRecordRef.current;
           if (
             Ue &&
             JSON.stringify(Ue.view) === JSON.stringify(Be) &&
@@ -1156,45 +1440,60 @@ function MainWorksheetEditor({
               JSON.stringify(Ue.workbook) === JSON.stringify(Oe.book))
           )
             return;
-          const Xe = _i(Oe.book, Be);
+          const Xe = persistWorkbookSnapshot(Oe.book, Be);
           isPromiseLike(Xe) && Xe.catch(() => {});
         } catch (Oe) {
-          hn(
+          setErrorNotice(
             `${Oe instanceof Error ? Oe.message : "The current selection could not be saved."} Changes remain in this editor; export JSON to keep a copy.`,
           );
         }
       }, 400);
       return () => clearTimeout(fe);
-    }, [he.id, Ye, Se, readOnly, Te]),
+    }, [
+      activeSheet.id,
+      activeSelectionRange,
+      workbookPersistence,
+      readOnly,
+      persistenceError,
+    ]),
     ne.useEffect(() => {
-      (eo(null), zc(null));
-    }, [Ju, oa, jl, Fl, Od]),
+      (setAuditAnalysisResult(null), setAgingReportPayload(null));
+    }, [
+      auditSourceRange,
+      materialityThreshold,
+      auditSampleSize,
+      samplingSeed,
+      agingAsOfDate,
+    ]),
     ne.useEffect(() => {
       var fe;
       return (
-        Ys.current++,
-        (fe = ss.current) == null || fe.abort(),
-        Vc(false),
-        Bl(null),
-        Ll(null),
+        assistantRequestIdRef.current++,
+        (fe = assistantAbortControllerRef.current) == null || fe.abort(),
+        setIsAssistantBusy(false),
+        setAssistantProposal(null),
+        setAnswerCitations(null),
         () => {
-          return ss.current?.abort();
+          return assistantAbortControllerRef.current?.abort();
         }
       );
-    }, [H, he.id, br, adapter]),
+    }, [activeWorkbook, activeSheet.id, selectionAreasKey, adapter]),
     ne.useEffect(() => {
-      if (!externalProposal || externalProposal.requestId === nc.current)
+      if (
+        !externalProposal ||
+        externalProposal.requestId === lastExternalProposalIdRef.current
+      )
         return;
-      nc.current = externalProposal.requestId;
+      lastExternalProposalIdRef.current = externalProposal.requestId;
       let fe;
       try {
         if (
           JSON.stringify(externalProposal.context) !==
           JSON.stringify(
-            buildAssistantSelectionContext(H, {
-              sheetId: he.id,
-              range: Ye,
-              ranges: Jt,
+            buildAssistantSelectionContext(activeWorkbook, {
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
+              ranges: selectionAreas,
             }),
           )
         )
@@ -1202,36 +1501,46 @@ function MainWorksheetEditor({
             "The workbook or selected context changed. Request a new external proposal.",
           );
         const Oe = validateProposedCalculation(
-          H,
-          { sheetId: he.id, range: Ye },
+          activeWorkbook,
+          { sheetId: activeSheet.id, range: activeSelectionRange },
           externalProposal.proposal,
         );
-        (Ll(
+        (setAnswerCitations(
           buildAnswerCitations(
-            H,
-            { sheetId: he.id, range: Ye },
+            activeWorkbook,
+            { sheetId: activeSheet.id, range: activeSelectionRange },
             Oe,
             externalProposal.context,
           ),
         ),
-          Bl(Oe),
-          Pr("assistant"),
-          hn(""),
+          setAssistantProposal(Oe),
+          setSidePanelKind("assistant"),
+          setErrorNotice(""),
           (fe = { accepted: true }));
       } catch (Oe) {
         const Be =
           Oe instanceof Error ? Oe.message : "Invalid external proposal.";
-        (hn(Be), (fe = { accepted: false, error: Be }));
+        (setErrorNotice(Be), (fe = { accepted: false, error: Be }));
       }
       try {
-        du("proposal", () =>
+        notifyHostCallback("proposal", () =>
           onExternalProposalStaged?.(externalProposal.requestId, fe),
         );
       } catch {
-        hn("The host could not acknowledge the staged proposal.");
+        setErrorNotice("The host could not acknowledge the staged proposal.");
       }
-    }, [externalProposal, H, he.id, br, onExternalProposalStaged]));
-  function yi(fe, Oe = he.id, Be = Ye) {
+    }, [
+      externalProposal,
+      activeWorkbook,
+      activeSheet.id,
+      selectionAreasKey,
+      onExternalProposalStaged,
+    ]));
+  function buildWorkbookViewState(
+    fe,
+    Oe = activeSheet.id,
+    Be = activeSelectionRange,
+  ) {
     const Ue =
       fe.sheets.find((Xe) => Xe.id === Oe && !Xe.hidden) ??
       fe.sheets.find((Xe) => !Xe.hidden);
@@ -1240,48 +1549,51 @@ function MainWorksheetEditor({
       selection: { sheetId: Ue.id, range: Ue.id === Oe ? Be : "A1" },
     };
   }
-  function Zo(fe) {
+  function applyWorkbookView(fe) {
     const [Oe, Be = Oe] = fe.selection.range.split(":");
-    (de(fe.activeSheetId),
-      or(Oe),
-      Rr(Oe),
-      dr(fe.selection.range),
-      (qt.current = Be),
-      po(null),
-      jr(""),
-      Co(0),
-      rs(0),
-      Go(Oe));
+    (setActiveSheetId(fe.activeSheetId),
+      setActiveCellAddress(Oe),
+      setSelectionAnchorAddress(Oe),
+      selectSingleRange(fe.selection.range),
+      (activeCellAddressRef.current = Be),
+      setActiveColumnSort(null),
+      setFilterValueSearch(""),
+      scrollActivePaneVertically(0),
+      scrollActivePaneHorizontally(0),
+      setPendingScrollAddress(Oe));
   }
-  function la(fe, Oe, Be) {
+  function reportSaveStatus(fe, Oe, Be) {
     try {
-      du("save-state", () => {
-        return ye.current?.call(ye, {
-          status: fe,
-          workbookId: Oe.id,
-          revision: Oe.revision,
-          ...(Be ? { message: Be } : {}),
-        });
+      notifyHostCallback("save-state", () => {
+        return setSaveAbortControllerRef.current?.call(
+          setSaveAbortControllerRef,
+          {
+            status: fe,
+            workbookId: Oe.id,
+            revision: Oe.revision,
+            ...(Be ? { message: Be } : {}),
+          },
+        );
       });
     } catch {
-      hn(
+      setErrorNotice(
         "The host could not acknowledge the save status. Export JSON to retain your work.",
       );
     }
   }
-  function du(fe, Oe) {
+  function notifyHostCallback(fe, Oe) {
     const Be = () =>
-      hn(
+      setErrorNotice(
         "The application could not acknowledge this operation. Your local workbook is retained.",
       );
     try {
-      const Ue = D.run("host", fe, Oe);
+      const Ue = activeReliabilityMonitor.run("host", fe, Oe);
       Ue && typeof Ue.then == "function" && Promise.resolve(Ue).catch(Be);
     } catch {
       Be();
     }
   }
-  function As(fe) {
+  function reportSaveError(fe) {
     const Oe =
         fe instanceof WorkbookRevisionConflictError
           ? fe
@@ -1292,37 +1604,42 @@ function MainWorksheetEditor({
       Be =
         Oe instanceof WorkbookRevisionConflictError && Oe.code === "conflict"
           ? Oe
-          : (Ee.current.conflict ?? Oe);
+          : (persistenceSessionRef.current.conflict ?? Oe);
     (Be instanceof WorkbookRevisionConflictError &&
       Be.code === "conflict" &&
-      (Ee.current.conflict = Be),
-      Pe(Be),
-      vn(""),
-      (qe.current =
+      (persistenceSessionRef.current.conflict = Be),
+      setPersistenceError(Be),
+      setStatusNotice(""),
+      (persistenceMessageRef.current =
         Be.message +
         " Changes remain in this editor. Export JSON to keep a copy."),
-      hn(qe.current),
-      la(
+      setErrorNotice(persistenceMessageRef.current),
+      reportSaveStatus(
         Be instanceof WorkbookRevisionConflictError && Be.code === "conflict"
           ? "conflict"
           : "error",
-        sr.current.book,
+        latestEditStateRef.current.book,
         Be.message,
       ));
   }
-  function Jc(fe) {
-    const Oe = Ee.current;
+  function enqueueSaveOperation(fe) {
+    const Oe = persistenceSessionRef.current;
     if (Oe.controllers.size >= 20) {
       const gt = new WorkbookRevisionConflictError(
         "limit",
         "Twenty saves are already waiting. Your latest changes remain in this editor; retry saving after the pending saves finish, or export your work.",
       );
-      throw (As(gt), gt);
+      throw (reportSaveError(gt), gt);
     }
     const Be = new AbortController();
     Oe.controllers.add(Be);
     const Ue = () => {
-        if (!Oe.active || Oe !== Ee.current || Be.signal.aborted || !we.current)
+        if (
+          !Oe.active ||
+          Oe !== persistenceSessionRef.current ||
+          Be.signal.aborted ||
+          !isEditableRef.current
+        )
           throw new WorkbookRevisionConflictError(
             "unavailable",
             "The save was cancelled because this editor or its access changed.",
@@ -1339,35 +1656,37 @@ function MainWorksheetEditor({
         throw (
           Oe.controllers.delete(Be),
           Oe.active &&
-            Oe === Ee.current &&
-            (ke(Oe.controllers.size),
+            Oe === persistenceSessionRef.current &&
+            (setPendingSaveCount(Oe.controllers.size),
             Oe.controllers.size || (Oe.stalled = false),
-            As(gt)),
+            reportSaveError(gt)),
           gt
         );
       };
     try {
       const gt = Oe.tail ? Oe.tail.then(Ue) : Ue();
       if (!isPromiseLike(gt)) return (Oe.controllers.delete(Be), gt);
-      ke(Oe.controllers.size);
+      setPendingSaveCount(Oe.controllers.size);
       const Nt = setTimeout(() => {
-          if (!Oe.active || Oe !== Ee.current) return;
+          if (!Oe.active || Oe !== persistenceSessionRef.current) return;
           ((Oe.stalled = true),
-            D.start("persistence", "save").finish("failed", "timeout"),
-            As(
+            activeReliabilityMonitor
+              .start("persistence", "save")
+              .finish("failed", "timeout"),
+            reportSaveError(
               new WorkbookRevisionConflictError(
                 "unavailable",
                 "The save has not been acknowledged. Keep this editor open or export your local changes. Retrying is disabled until pending work finishes.",
               ),
             ));
-        }, C),
+        }, saveWarningDelayMs),
         wt = gt.then(
           (rr) => (
             clearTimeout(Nt),
             Oe.controllers.delete(Be),
             Oe.active &&
-              Oe === Ee.current &&
-              (ke(Oe.controllers.size),
+              Oe === persistenceSessionRef.current &&
+              (setPendingSaveCount(Oe.controllers.size),
               Oe.controllers.size || (Oe.stalled = false)),
             rr
           ),
@@ -1388,143 +1707,159 @@ function MainWorksheetEditor({
       return Xe(gt);
     }
   }
-  function Qc(fe, Oe) {
+  function acknowledgeSavedWorkbook(fe, Oe) {
     if (
       !Oe.active ||
-      Oe !== Ee.current ||
-      ((le.current = fe), ge(fe), !we.current || Oe.conflict)
+      Oe !== persistenceSessionRef.current ||
+      ((persistedWorkbookRecordRef.current = fe),
+      setPersistedWorkbookRecord(fe),
+      !isEditableRef.current || Oe.conflict)
     )
       return fe;
     if (
-      fe.workbook === sr.current.book ||
-      JSON.stringify(fe.workbook) === JSON.stringify(sr.current.book)
+      fe.workbook === latestEditStateRef.current.book ||
+      JSON.stringify(fe.workbook) ===
+        JSON.stringify(latestEditStateRef.current.book)
     ) {
-      Pe(null);
-      const Be = qe.current;
-      (hn((Ue) => (Ue === Be ? "" : Ue)),
-        (qe.current = null),
-        Oe.stalled && D.start("persistence", "save").finish("recovered"),
-        vn(
+      setPersistenceError(null);
+      const Be = persistenceMessageRef.current;
+      (setErrorNotice((Ue) => (Ue === Be ? "" : Ue)),
+        (persistenceMessageRef.current = null),
+        Oe.stalled &&
+          activeReliabilityMonitor
+            .start("persistence", "save")
+            .finish("recovered"),
+        setStatusNotice(
           persistenceKey
             ? "Saved to this browser"
             : workbookStore
               ? "Saved to the application"
               : "Changes kept in this session",
         ),
-        la("saved", fe.workbook));
+        reportSaveStatus("saved", fe.workbook));
     }
     return fe;
   }
-  function Uo() {
-    if (!(Ee.current.controllers.size || !we.current))
+  function recoverLocalWorkbook() {
+    if (!(
+      persistenceSessionRef.current.controllers.size || !isEditableRef.current
+    ))
       try {
-        const fe = sr.current.book,
-          Oe = yi(fe),
-          Be = findRecoverableCheckpoint(Se, fe);
+        const fe = latestEditStateRef.current.book,
+          Oe = buildWorkbookViewState(fe),
+          Be = findRecoverableCheckpoint(workbookPersistence, fe);
         if (Be) {
-          ((se.current = true),
-            Qc(Be, Ee.current),
-            D.start("persistence", "save").finish("recovered"));
+          ((isWorkbookLoadedRef.current = true),
+            acknowledgeSavedWorkbook(Be, persistenceSessionRef.current),
+            activeReliabilityMonitor
+              .start("persistence", "save")
+              .finish("recovered"));
           return;
         }
-        if (!se.current) {
-          const Xe = Se.load();
+        if (!isWorkbookLoadedRef.current) {
+          const Xe = workbookPersistence.load();
           if (Xe)
             throw new WorkbookRevisionConflictError(
               "conflict",
               "Saved data is available again. Compare it before replacing your local changes.",
               Xe.guard,
             );
-          se.current = true;
+          isWorkbookLoadedRef.current = true;
         }
-        const Ue = _i(fe, Oe);
+        const Ue = persistWorkbookSnapshot(fe, Oe);
         isPromiseLike(Ue) && Ue.catch(() => {});
       } catch (fe) {
-        As(fe);
+        reportSaveError(fe);
       }
   }
-  function _i(fe, Oe = yi(fe)) {
-    if (!se.current) {
+  function persistWorkbookSnapshot(fe, Oe = buildWorkbookViewState(fe)) {
+    if (!isWorkbookLoadedRef.current) {
       const gt = new WorkbookRevisionConflictError(
         "corrupt",
         "Saved data needs recovery before this session can overwrite it.",
       );
-      throw (As(gt), gt);
+      throw (reportSaveError(gt), gt);
     }
     const Be = workbookStore || persistenceKey ? structuredClone(fe) : fe,
       Ue = structuredClone(Oe),
-      Xe = Ee.current;
+      Xe = persistenceSessionRef.current;
     return (
-      la("saving", Be),
-      Jc((gt) => {
+      reportSaveStatus("saving", Be),
+      enqueueSaveOperation((gt) => {
         return chainMaybePromise(
-          Se.save(Be, Ue, le.current?.guard ?? null, {
-            allowIdentityChange: !!(
-              le.current && le.current.workbook.id !== Be.id
-            ),
-            signal: gt,
-          }),
-          (wt) => Qc(wt, Xe),
+          workbookPersistence.save(
+            Be,
+            Ue,
+            persistedWorkbookRecordRef.current?.guard ?? null,
+            {
+              allowIdentityChange: !!(
+                persistedWorkbookRecordRef.current &&
+                persistedWorkbookRecordRef.current.workbook.id !== Be.id
+              ),
+              signal: gt,
+            },
+          ),
+          (wt) => acknowledgeSavedWorkbook(wt, Xe),
         );
       })
     );
   }
-  function Tn() {
+  function exportLocalChangesJson() {
     saveBlobToFile(
-      new Blob([encodeNativeWorkbook(sr.current.book)], {
+      new Blob([encodeNativeWorkbook(latestEditStateRef.current.book)], {
         type: "application/json",
       }),
-      sr.current.book.name.replace(/[^a-zA-Z0-9 _.-]/g, "_") +
+      latestEditStateRef.current.book.name.replace(/[^a-zA-Z0-9 _.-]/g, "_") +
         " - local changes.json",
     );
   }
-  function Aa(fe) {
+  function reloadSavedWorkbook(fe) {
     var Ue;
-    const Oe = Se.load();
+    const Oe = workbookPersistence.load();
     if (!Oe || JSON.stringify(Oe.guard) !== JSON.stringify(fe.guard))
       throw new Error(
         "The saved version changed again. Refresh the comparison before reloading.",
       );
-    const Be = Ee.current;
+    const Be = persistenceSessionRef.current;
     Be.active = false;
     for (const Xe of Be.controllers) Xe.abort();
-    ((Ee.current = { active: true, controllers: new Set() }),
-      (Ue = Ae.current) == null || Ue.abort(),
-      (le.current = Oe),
-      ge(Oe),
-      (sr.current.book = Oe.workbook),
-      G(buildCanonicalWorkbookSnapshot(Oe.workbook)),
-      (kr.current = null),
-      Ir(null),
-      mo([]),
-      ia([]),
-      Bl(null),
-      Ll(null),
-      eo(null),
-      Zo(Oe.view),
-      Re(false),
-      Pe(null),
-      hn(""),
-      vn(
+    ((persistenceSessionRef.current = { active: true, controllers: new Set() }),
+      (Ue = saveAbortControllerRef.current) == null || Ue.abort(),
+      (persistedWorkbookRecordRef.current = Oe),
+      setPersistedWorkbookRecord(Oe),
+      (latestEditStateRef.current.book = Oe.workbook),
+      setWorkbookSnapshot(buildCanonicalWorkbookSnapshot(Oe.workbook)),
+      (activeCellEditRef.current = null),
+      setCellEditState(null),
+      setUndoStack([]),
+      setRedoStack([]),
+      setAssistantProposal(null),
+      setAnswerCitations(null),
+      setAuditAnalysisResult(null),
+      applyWorkbookView(Oe.view),
+      setIsSaveConflictDialogOpen(false),
+      setPersistenceError(null),
+      setErrorNotice(""),
+      setStatusNotice(
         "Loaded the saved workbook. The discarded local undo history has been cleared.",
       ));
     try {
-      du("change", () => onChange?.(Oe.workbook));
+      notifyHostCallback("change", () => onChange?.(Oe.workbook));
     } catch {
-      hn("The host could not acknowledge the reloaded workbook.");
+      setErrorNotice("The host could not acknowledge the reloaded workbook.");
     }
-    la("saved", Oe.workbook);
+    reportSaveStatus("saved", Oe.workbook);
   }
-  function di(fe, Oe = true, Be = false, Ue, Xe = false, gt) {
+  function commitWorkbookChange(fe, Oe = true, Be = false, Ue, Xe = false, gt) {
     var Nt;
     if (
       readOnly ||
-      ((je || sr.current.readOnly) &&
+      ((isEditingLocked || latestEditStateRef.current.readOnly) &&
         !Be &&
         !(
           Xe &&
           gt &&
-          sr.current.book.sheets.some((wt) => {
+          latestEditStateRef.current.book.sheets.some((wt) => {
             var jt;
             return (
               wt.id === gt && !((jt = wt.protection) != null && jt.enabled)
@@ -1535,64 +1870,67 @@ function MainWorksheetEditor({
       throw new Error("This workbook is read-only.");
     if (!(
       !Ue &&
-      (fe === sr.current.book ||
-        (fe.revision === sr.current.book.revision &&
-          JSON.stringify(fe) === JSON.stringify(sr.current.book)))
+      (fe === latestEditStateRef.current.book ||
+        (fe.revision === latestEditStateRef.current.book.revision &&
+          JSON.stringify(fe) ===
+            JSON.stringify(latestEditStateRef.current.book)))
     )) {
       if (
-        (Ue || (Nt = Ae.current) == null || Nt.abort(),
+        (Ue || (Nt = saveAbortControllerRef.current) == null || Nt.abort(),
         (fe = buildCanonicalWorkbookSnapshot(
           Ue || Xe ? fe : touchWorkbookModifiedAt(fe),
         )),
-        onBeforeChange == null || onBeforeChange(fe, sr.current.book),
+        onBeforeChange == null ||
+          onBeforeChange(fe, latestEditStateRef.current.book),
         Oe)
       ) {
-        const wt = sr.current.book;
-        (mo((jt) => [...jt.slice(-49), wt]), ia([]));
+        const wt = latestEditStateRef.current.book;
+        (setUndoStack((jt) => [...jt.slice(-49), wt]), setRedoStack([]));
       }
       if (
-        (carryCalculatorRecordForward(sr.current.book, fe),
-        (sr.current.book = fe),
-        G(fe),
-        Bl(null),
-        Ll(null),
-        eo(null),
-        hn(""),
+        (carryCalculatorRecordForward(latestEditStateRef.current.book, fe),
+        (latestEditStateRef.current.book = fe),
+        setWorkbookSnapshot(fe),
+        setAssistantProposal(null),
+        setAnswerCitations(null),
+        setAuditAnalysisResult(null),
+        setErrorNotice(""),
         Ue)
       )
-        ((le.current = Ue), ge(Ue));
+        ((persistedWorkbookRecordRef.current = Ue),
+          setPersistedWorkbookRecord(Ue));
       else
         try {
-          const wt = _i(fe);
+          const wt = persistWorkbookSnapshot(fe);
           isPromiseLike(wt) && wt.catch(() => {});
         } catch (wt) {
-          As(wt);
+          reportSaveError(wt);
         }
       try {
-        du("change", () => onChange?.(fe));
+        notifyHostCallback("change", () => onChange?.(fe));
       } catch {
-        hn(
+        setErrorNotice(
           "The host could not acknowledge the change. Export JSON to retain this revision.",
         );
       }
     }
   }
-  function Pn(fe) {
+  function runEditorCommand(fe) {
     if (fe === "xlsxSource") {
-      On(() =>
-        Ml({
-          snapshot: H,
-          report: buildSourceImportRecord(H),
-          fileName: H.xlsxSource.fileName,
+      runGuardedAction(() =>
+        setXlsxConversionReview({
+          snapshot: activeWorkbook,
+          report: buildSourceImportRecord(activeWorkbook),
+          fileName: activeWorkbook.xlsxSource.fileName,
           inspectOnly: true,
         }),
       );
       return;
     }
-    if (ui()) {
+    if (commitCellEdit()) {
       if (
-        (fe === "populationFilter" && Bn(undefined),
-        Jt.length > 1 &&
+        (fe === "populationFilter" && setActiveFilterColumn(undefined),
+        selectionAreas.length > 1 &&
           ![
             "search",
             "numberFormat",
@@ -1619,76 +1957,84 @@ function MainWorksheetEditor({
             "extensions",
           ].includes(fe))
       ) {
-        hn(
+        setErrorNotice(
           "This command requires one rectangular range. Click a cell or enter a single range to continue.",
         );
         return;
       }
       if (fe === "calculateNow") {
-        wa();
+        runCalculationNow();
         return;
       }
-      if (fe === "pasteSpecial" && Bo) {
-        Zs(Bo.snapshot);
+      if (fe === "pasteSpecial" && clipboardSnapshotState) {
+        setMoveCellsSource(clipboardSnapshotState.snapshot);
         return;
       }
-      (fe === "sheets" && ft(he.id),
-        fe === "automation" && at(undefined),
-        Je(fe));
+      (fe === "sheets" && setTabBarSheetId(activeSheet.id),
+        fe === "automation" && setAutomationInspection(undefined),
+        setActiveDialogMode(fe));
     }
   }
-  function So(fe, Oe) {
+  function commitWorkbookEdit(fe, Oe) {
     var Nt;
-    const Be = sr.current.book,
+    const Be = latestEditStateRef.current.book,
       Ue = applyWorkbookChange(Be, fe, actor, Oe),
       Xe = fe.sheets.find((wt) => !Be.sheets.some((jt) => jt.id === wt.id));
-    (di(
+    (commitWorkbookChange(
       Ue,
       true,
       Oe === "Unprotect sheet" &&
         !(
-          (Nt = fe.sheets.find((wt) => wt.id === he.id)?.protection) != null &&
-          Nt.enabled
+          (Nt = fe.sheets.find((wt) => wt.id === activeSheet.id)?.protection) !=
+            null && Nt.enabled
         ),
     ),
-      vn(Oe),
-      Xe && (Je(null), wi(Xe.id)));
+      setStatusNotice(Oe),
+      Xe && (setActiveDialogMode(null), switchActiveWorksheet(Xe.id)));
   }
-  function ua(fe, Oe) {
+  function replaceWorkbookSnapshot(fe, Oe) {
     if (readOnly) throw new Error("This workbook is read-only.");
-    const Be = sr.current.book;
+    const Be = latestEditStateRef.current.book;
     if (JSON.stringify(Be) === JSON.stringify(fe)) return;
     const Ue =
       JSON.stringify(Be.structureProtection) !==
       JSON.stringify(fe.structureProtection);
-    (di(applyWorkbookChange(Be, fe, actor, Oe), true, true),
-      Ue && (mo([]), ia([])),
-      fe.sheets.some((Xe) => Xe.id === he.id && !Xe.hidden) || Zo(yi(fe)),
-      vn(Oe));
+    (commitWorkbookChange(applyWorkbookChange(Be, fe, actor, Oe), true, true),
+      Ue && (setUndoStack([]), setRedoStack([])),
+      fe.sheets.some((Xe) => Xe.id === activeSheet.id && !Xe.hidden) ||
+        applyWorkbookView(buildWorkbookViewState(fe)),
+      setStatusNotice(Oe));
   }
-  function ca(fe, Oe) {
+  function commitWorkbookWithNewSheet(fe, Oe) {
     const Be = fe.sheets.find(
-      (Ue) => !sr.current.book.sheets.some((Xe) => Xe.id === Ue.id),
+      (Ue) =>
+        !latestEditStateRef.current.book.sheets.some((Xe) => Xe.id === Ue.id),
     );
-    (ua(fe, Oe), Be && (Je(null), wi(Be.id)));
+    (replaceWorkbookSnapshot(fe, Oe),
+      Be && (setActiveDialogMode(null), switchActiveWorksheet(Be.id)));
   }
-  function On(fe) {
+  function runGuardedAction(fe) {
     try {
       fe();
     } catch (Oe) {
-      hn(
+      setErrorNotice(
         Oe instanceof Error
           ? Oe.message
           : "The operation could not be completed.",
       );
     }
   }
-  function To(fe, Oe = "Edit cells", Be, Ue) {
+  function applyCellPatches(fe, Oe = "Edit cells", Be, Ue) {
     try {
       if (Ue && fe.some((Xe) => Xe.sheetId !== Ue))
         throw Error("The formula destination changed.");
-      di(
-        applyCellPatchTransaction(sr.current.book, fe, actor, Oe),
+      commitWorkbookChange(
+        applyCellPatchTransaction(
+          latestEditStateRef.current.book,
+          fe,
+          actor,
+          Oe,
+        ),
         true,
         false,
         undefined,
@@ -1698,30 +2044,30 @@ function MainWorksheetEditor({
     } catch (Xe) {
       throw (
         Xe instanceof DataValidationError &&
-          Rf({
+          setValidationReviewState({
             error: Xe,
             patches: structuredClone(fe),
             action: Oe,
-            snapshot: JSON.stringify(sr.current.book),
+            snapshot: JSON.stringify(latestEditStateRef.current.book),
             selectionGuard: Be,
           }),
         Xe
       );
     }
   }
-  function $l() {
-    ((Ke.current = {
+  function resetFormulaEditSession() {
+    ((formulaPointerStateRef.current = {
       input: null,
       start: 0,
       end: 0,
       dragging: false,
       mode: true,
     }),
-      zt(null),
-      Dt(true));
+      setActiveFormulaReference(null),
+      setIsFormulaPointMode(true));
   }
-  function ks(fe, Oe = false) {
-    const Be = Ke.current,
+  function syncFormulaEditorSelection(fe, Oe = false) {
+    const Be = formulaPointerStateRef.current,
       Ue = fe.selectionStart ?? fe.value.length,
       Xe = fe.selectionEnd ?? Ue;
     ((Be.input = fe),
@@ -1733,16 +2079,18 @@ function MainWorksheetEditor({
           ((Be.span = undefined),
           (Be.anchor = undefined),
           (Be.head = undefined),
-          zt(null))));
+          setActiveFormulaReference(null))));
   }
-  function ls() {
-    ((Ke.current.restoring = true),
+  function restoreFormulaEditorFocus() {
+    ((formulaPointerStateRef.current.restoring = true),
       requestAnimationFrame(() => {
         var Be;
-        if (!kr.current) return;
-        const fe = Ke.current,
+        if (!activeCellEditRef.current) return;
+        const fe = formulaPointerStateRef.current,
           Oe =
-            (Be = fe.input) != null && Be.isConnected ? fe.input : pt.current;
+            (Be = fe.input) != null && Be.isConnected
+              ? fe.input
+              : formulaInputRef.current;
         (Oe &&
           ((fe.input = Oe),
           Oe.focus({ preventScroll: true }),
@@ -1750,30 +2098,36 @@ function MainWorksheetEditor({
           (fe.restoring = false));
       }));
   }
-  function Ss() {
+  function isFormulaEditingLocked() {
     var Oe;
-    const fe = sr.current.book.sheets.find((Be) => {
-      return Be.id === (kr.current?.sheetId ?? he.id);
+    const fe = latestEditStateRef.current.book.sheets.find((Be) => {
+      return Be.id === (activeCellEditRef.current?.sheetId ?? activeSheet.id);
     });
     return readOnly || !fe || !!((Oe = fe.protection) != null && Oe.enabled);
   }
-  function ai(fe, Oe = false, Be) {
+  function insertFormulaReference(fe, Oe = false, Be) {
     var rr;
-    const Ue = kr.current,
-      Xe = Ke.current;
-    if (!(Ue != null && Ue.value.startsWith("=")) || Ss() || go) return false;
+    const Ue = activeCellEditRef.current,
+      Xe = formulaPointerStateRef.current;
+    if (
+      !(Ue != null && Ue.value.startsWith("=")) ||
+      isFormulaEditingLocked() ||
+      isOperationBusy
+    )
+      return false;
     const gt = Xe.span ?? findFormulaReferenceSpan(Ue.value, Xe.start, Xe.end);
     if (!gt) return false;
-    const Nt = Oe && Xe.sheetId === he.id && Xe.anchor ? Xe.anchor : fe,
+    const Nt =
+        Oe && Xe.sheetId === activeSheet.id && Xe.anchor ? Xe.anchor : fe,
       wt = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
       jt = replaceFormulaReferenceSpan(
         Ue.value,
         gt,
         wt,
-        Ue.sheetId === he.id ? undefined : he.name,
+        Ue.sheetId === activeSheet.id ? undefined : activeSheet.name,
       );
     return (
-      us(
+      beginCellEdit(
         jt.value,
         !!((rr = Xe.input) != null && rr.classList.contains("lg-cell-editor")),
       ),
@@ -1781,25 +2135,26 @@ function MainWorksheetEditor({
       (Xe.start = Xe.end = jt.span.end),
       (Xe.anchor = Nt),
       (Xe.head = fe),
-      (Xe.sheetId = he.id),
-      mt(jt.span.end),
-      zt({
-        sheetId: he.id,
+      (Xe.sheetId = activeSheet.id),
+      setFormulaCaretPosition(jt.span.end),
+      setActiveFormulaReference({
+        sheetId: activeSheet.id,
         range: wt,
         bounds: Be?.bounds ?? parseRangeAddress(wt),
       }),
-      ls(),
+      restoreFormulaEditorFocus(),
       true
     );
   }
-  ar.current = (fe) => {
-    Ke.current.head !== fe && ai(fe, true);
+  formulaPointerMoveRef.current = (fe) => {
+    formulaPointerStateRef.current.head !== fe &&
+      insertFormulaReference(fe, true);
   };
-  function Ha(fe) {
+  function handleFormulaPointerDown(fe) {
     var Nt;
     if (
       fe.button !== 0 ||
-      !((Nt = kr.current) != null && Nt.value.startsWith("="))
+      !((Nt = activeCellEditRef.current) != null && Nt.value.startsWith("="))
     )
       return false;
     const Oe = fe.target;
@@ -1808,147 +2163,168 @@ function MainWorksheetEditor({
       Ue = Oe.closest("[data-column]"),
       Xe = Oe.closest("[data-row-header]");
     let gt = false;
-    if (Be) gt = ai(Be.dataset.address, fe.shiftKey);
+    if (Be) gt = insertFormulaReference(Be.dataset.address, fe.shiftKey);
     else if (Ue) {
       const wt = Number(Ue.dataset.column);
-      gt = ai(`${columnIndexToLetters(wt)}1`, false, {
+      gt = insertFormulaReference(`${columnIndexToLetters(wt)}1`, false, {
         range: `${columnIndexToLetters(wt)}:${columnIndexToLetters(wt)}`,
         bounds: {
           firstRow: 0,
-          lastRow: he.rowCount - 1,
+          lastRow: activeSheet.rowCount - 1,
           firstCol: wt,
           lastCol: wt,
         },
       });
     } else if (Xe) {
       const wt = Number(Xe.dataset.rowHeader);
-      gt = ai(`A${wt + 1}`, false, {
+      gt = insertFormulaReference(`A${wt + 1}`, false, {
         range: `${wt + 1}:${wt + 1}`,
         bounds: {
           firstRow: wt,
           lastRow: wt,
           firstCol: 0,
-          lastCol: he.colCount - 1,
+          lastCol: activeSheet.colCount - 1,
         },
       });
     }
     return gt
       ? (fe.preventDefault(),
         fe.stopPropagation(),
-        (Ke.current.dragging = !!Be),
-        (ya.current = null),
+        (formulaPointerStateRef.current.dragging = !!Be),
+        (dragAnchorRef.current = null),
         true)
       : false;
   }
-  function qa(fe) {
-    if (fe.nativeEvent.isComposing || fe.altKey || Ss() || go) return false;
+  function handleFormulaKeyDown(fe) {
+    if (
+      fe.nativeEvent.isComposing ||
+      fe.altKey ||
+      isFormulaEditingLocked() ||
+      isOperationBusy
+    )
+      return false;
     const Oe = fe.currentTarget;
     if (!Oe.value.startsWith("=")) return false;
-    ks(Oe);
-    const Be = Ke.current;
+    syncFormulaEditorSelection(Oe);
+    const Be = formulaPointerStateRef.current;
     if (fe.key === "F2" && !fe.ctrlKey && !fe.metaKey)
       return (
         fe.preventDefault(),
-        kr.current || us(Oe.value),
+        activeCellEditRef.current || beginCellEdit(Oe.value),
         (Be.mode = !Be.mode),
-        Dt(Be.mode),
+        setIsFormulaPointMode(Be.mode),
         true
       );
     if (fe.key === "F4" && !fe.ctrlKey && !fe.metaKey) {
       const jt = $ae(Oe.value, Be.start, Be.end);
       return jt
         ? (fe.preventDefault(),
-          us(jt.value, Oe.classList.contains("lg-cell-editor")),
+          beginCellEdit(jt.value, Oe.classList.contains("lg-cell-editor")),
           (Be.span = jt.span),
           (Be.start = Be.end = jt.span.end),
-          mt(jt.span.end),
-          ls(),
+          setFormulaCaretPosition(jt.span.end),
+          restoreFormulaEditorFocus(),
           true)
         : false;
     }
     if ((fe.ctrlKey || fe.metaKey) && ["PageUp", "PageDown"].includes(fe.key)) {
       fe.preventDefault();
-      const jt = H.sheets.filter((Br) => !Br.hidden),
-        rr = jt.findIndex((Br) => Br.id === he.id),
+      const jt = activeWorkbook.sheets.filter((Br) => !Br.hidden),
+        rr = jt.findIndex((Br) => Br.id === activeSheet.id),
         Mr = jt[rr + (fe.key === "PageUp" ? -1 : 1)];
-      return (Mr && wi(Mr.id), true);
+      return (Mr && switchActiveWorksheet(Mr.id), true);
     }
     if (
       !Be.mode ||
       !fe.key.startsWith("Arrow") ||
-      !kr.current ||
+      !activeCellEditRef.current ||
       !(Be.span ?? findFormulaReferenceSpan(Oe.value, Be.start, Be.end))
     )
       return false;
     fe.preventDefault();
-    const Ue = _t(Be.sheetId === he.id && Be.head ? Be.head : xt),
+    const Ue = _t(
+        Be.sheetId === activeSheet.id && Be.head ? Be.head : activeCellAddress,
+      ),
       Xe = ["ArrowUp", "ArrowDown"].includes(fe.key),
       gt = ["ArrowUp", "ArrowLeft"].includes(fe.key) ? -1 : 1,
       Nt =
         fe.ctrlKey || fe.metaKey
-          ? Vl(Ue.row, Ue.col, Xe, gt)
+          ? jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
           : {
-              row: Xe ? cs(Ue.row, gt) : Ue.row,
-              col: Xe ? Ue.col : xl(Ue.col, gt),
+              row: Xe ? stepVisibleRowIndex(Ue.row, gt) : Ue.row,
+              col: Xe ? Ue.col : stepVisibleColumnIndex(Ue.col, gt),
             },
       wt = `${columnIndexToLetters(Nt.col)}${Nt.row + 1}`;
-    return (ai(wt, fe.shiftKey), fi(wt), true);
+    return (
+      insertFormulaReference(wt, fe.shiftKey),
+      requestCellScroll(wt),
+      true
+    );
   }
-  function wl(fe) {
-    fe.sheetId !== he.id &&
-      (de(fe.sheetId),
-      or(fe.address),
-      Rr(fe.address),
-      dr(fe.address),
-      po(null),
-      jr(""),
-      Go(fe.address));
+  function switchToEditSheet(fe) {
+    fe.sheetId !== activeSheet.id &&
+      (setActiveSheetId(fe.sheetId),
+      setActiveCellAddress(fe.address),
+      setSelectionAnchorAddress(fe.address),
+      selectSingleRange(fe.address),
+      setActiveColumnSort(null),
+      setFilterValueSearch(""),
+      setPendingScrollAddress(fe.address));
   }
-  function us(fe, Oe = false) {
+  function beginCellEdit(fe, Oe = false) {
     var Ue;
-    const Be = kr.current ? undefined : Qr.getSpillAnchor(he.id, xt);
-    if (Be && Be !== xt) {
-      hn(
+    const Be = activeCellEditRef.current
+      ? undefined
+      : workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress);
+    if (Be && Be !== activeCellAddress) {
+      setErrorNotice(
         `This cell belongs to the array formula in ${Be}. Edit that cell instead.`,
       );
       return;
     }
-    ((Ue = Ae.current) == null || Ue.abort(),
-      (kr.current = {
-        sheetId: kr.current?.sheetId ?? he.id,
-        address: kr.current?.address ?? xt,
+    ((Ue = saveAbortControllerRef.current) == null || Ue.abort(),
+      (activeCellEditRef.current = {
+        sheetId: activeCellEditRef.current?.sheetId ?? activeSheet.id,
+        address: activeCellEditRef.current?.address ?? activeCellAddress,
         value: fe,
-        locale: kr.current ? kr.current.locale : R.entryLocale,
-        originalText: kr.current?.originalText ?? L(he.cells[xt]),
+        locale: activeCellEditRef.current
+          ? activeCellEditRef.current.locale
+          : workbookMessages.entryLocale,
+        originalText:
+          activeCellEditRef.current?.originalText ??
+          getEditableCellText(activeSheet.cells[activeCellAddress]),
       }),
-      kt(fe),
-      Oe && Ir(fe));
+      setCellEditText(fe),
+      Oe && setCellEditState(fe));
   }
-  function pi() {
+  function focusGridSurface() {
     requestAnimationFrame(() => {
-      return to.current?.focus({ preventScroll: true });
+      return gridContainerRef.current?.focus({ preventScroll: true });
     });
   }
-  function Da() {
-    const fe = kr.current;
-    (fe && wl(fe),
-      $l(),
-      (kr.current = null),
-      Ir(null),
-      kt(fe?.originalText ?? L(he.cells[xt])),
-      pi());
+  function cancelCellEdit() {
+    const fe = activeCellEditRef.current;
+    (fe && switchToEditSheet(fe),
+      resetFormulaEditSession(),
+      (activeCellEditRef.current = null),
+      setCellEditState(null),
+      setCellEditText(
+        fe?.originalText ??
+          getEditableCellText(activeSheet.cells[activeCellAddress]),
+      ),
+      focusGridSurface());
   }
-  function ui(fe) {
-    const Oe = kr.current;
+  function commitCellEdit(fe) {
+    const Oe = activeCellEditRef.current;
     if (!Oe) return true;
     try {
       const Xe = autoCloseFormulaParens(Oe.value),
-        gt = sr.current.book.sheets.find((Nt) => Nt.id === Oe.sheetId)?.cells[
-          Oe.address
-        ];
+        gt = latestEditStateRef.current.book.sheets.find(
+          (Nt) => Nt.id === Oe.sheetId,
+        )?.cells[Oe.address];
       return (
         Xe !== Oe.originalText &&
-          To(
+          applyCellPatches(
             [
               {
                 sheetId: Oe.sheetId,
@@ -1956,7 +2332,7 @@ function MainWorksheetEditor({
                 cell: parseLocalizedCellEntry(
                   Xe,
                   gt,
-                  sr.current.book.datePolicy?.dateSystem,
+                  latestEditStateRef.current.book.datePolicy?.dateSystem,
                   Oe.locale,
                 ),
               },
@@ -1965,107 +2341,122 @@ function MainWorksheetEditor({
             undefined,
             Oe.sheetId,
           ),
-        (It.current =
-          Oe.sheetId !== he.id
+        (pendingCrossSheetTargetRef.current =
+          Oe.sheetId !== activeSheet.id
             ? { sheetId: Oe.sheetId, address: Oe.address }
             : null),
-        wl(Oe),
-        $l(),
-        (kr.current = null),
-        Ir(null),
-        kt(Xe),
+        switchToEditSheet(Oe),
+        resetFormulaEditSession(),
+        (activeCellEditRef.current = null),
+        setCellEditState(null),
+        setCellEditText(Xe),
         true
       );
     } catch (Xe) {
       return (
-        hn(Xe instanceof Error ? Xe.message : "The cell could not be saved."),
+        setErrorNotice(
+          Xe instanceof Error ? Xe.message : "The cell could not be saved.",
+        ),
         false
       );
     }
   }
-  function fi(fe) {
-    Go(fe);
+  function requestCellScroll(fe) {
+    setPendingScrollAddress(fe);
   }
-  function bo(fe) {
+  function applyZoomPercent(fe) {
     if (!Number.isFinite(fe) || fe < 50 || fe > 200) return;
     const Oe = fe / 100,
       Be = {};
-    for (const Ue of Pv(Or)) {
-      const Xe = an.current.current[Ue],
-        gt = Lo(Xe),
-        Nt = Math.max(1, Xe.height - ((vl ? 22 : 0) + zi) * Oe),
-        wt = Math.max(1, Xe.width - (Es + Ri) * Oe),
+    for (const Ue of Pv(sheetSplitPanes)) {
+      const Xe = splitPaneSizes.current.current[Ue],
+        gt = computeGridViewport(Xe),
+        Nt = Math.max(
+          1,
+          Xe.height - ((isHeadingsVisible ? 22 : 0) + frozenRowsHeight) * Oe,
+        ),
+        wt = Math.max(1, Xe.width - (rowHeaderWidth + frozenColumnsWidth) * Oe),
         jt = logicalToPhysicalPixels(
           gt.rowWindow.logicalOffset,
-          Gn.total,
+          scrollableRowLayout.total,
           Nt,
           Oe,
         ),
         rr = logicalToPhysicalPixels(
           gt.columnWindow.logicalOffset,
-          mn.total,
+          scrollableColumnLayout.total,
           wt,
           Oe,
         );
       Be[Ue] = { top: jt, left: rr };
-      const Mr = an.refs.current[Ue];
+      const Mr = splitPaneSizes.refs.current[Ue];
       Mr && ((Mr.scrollTop = jt), (Mr.scrollLeft = rr));
     }
-    (an.patch(Be), Wc(fe), Go(xt));
+    (splitPaneSizes.patch(Be),
+      setZoomPercent(fe),
+      setPendingScrollAddress(activeCellAddress));
   }
-  function da(fe, Oe = false, Be = false) {
-    if (!ui()) return;
-    if (!Oe && !zr && !kn) {
-      const gt = (he.merges ?? []).find((Nt) => lD(Nt, fe));
+  function selectCellAddress(fe, Oe = false, Be = false) {
+    if (!commitCellEdit()) return;
+    if (!Oe && !filterValueSearch && !activeColumnSort) {
+      const gt = (activeSheet.merges ?? []).find((Nt) => lD(Nt, fe));
       gt && (fe = gt.split(":")[0]);
     }
-    const Ue = Oe ? wy(Wr, fe) : fe;
+    const Ue = Oe ? wy(selectionAnchorAddress, fe) : fe;
     let Xe;
     try {
-      Xe = parseSelectionAreas(Be ? [...Jt, Ue] : [Ue]);
+      Xe = parseSelectionAreas(Be ? [...selectionAreas, Ue] : [Ue]);
     } catch (gt) {
-      hn(gt.message);
+      setErrorNotice(gt.message);
       return;
     }
-    (fi(fe),
-      (qt.current = fe),
-      or(Oe ? Wr : fe),
-      Ut(Xe),
-      Oe || Rr(fe),
-      Ir(null));
+    (requestCellScroll(fe),
+      (activeCellAddressRef.current = fe),
+      setActiveCellAddress(Oe ? selectionAnchorAddress : fe),
+      applySelectionAreas(Xe),
+      Oe || setSelectionAnchorAddress(fe),
+      setCellEditState(null));
   }
-  function wi(fe) {
+  function switchActiveWorksheet(fe) {
     var Oe;
-    if ((Oe = kr.current) != null && Oe.value.startsWith("=") && fe !== he.id) {
-      (de(fe),
-        po(null),
-        jr(""),
-        Co(0),
-        rs(0),
-        Ir(null),
-        (Ke.current.anchor = undefined),
-        (Ke.current.head = undefined),
-        zt(null),
-        ls());
+    if (
+      (Oe = activeCellEditRef.current) != null &&
+      Oe.value.startsWith("=") &&
+      fe !== activeSheet.id
+    ) {
+      (setActiveSheetId(fe),
+        setActiveColumnSort(null),
+        setFilterValueSearch(""),
+        scrollActivePaneVertically(0),
+        scrollActivePaneHorizontally(0),
+        setCellEditState(null),
+        (formulaPointerStateRef.current.anchor = undefined),
+        (formulaPointerStateRef.current.head = undefined),
+        setActiveFormulaReference(null),
+        restoreFormulaEditorFocus());
       return;
     }
-    ui() &&
-      ((qt.current = "A1"),
-      de(fe),
-      or("A1"),
-      Rr("A1"),
-      dr("A1"),
-      po(null),
-      jr(""),
-      Co(0),
-      rs(0),
-      eo(null),
-      C0(""),
-      to.current && ((to.current.scrollTop = 0), (to.current.scrollLeft = 0)),
-      pi());
+    commitCellEdit() &&
+      ((activeCellAddressRef.current = "A1"),
+      setActiveSheetId(fe),
+      setActiveCellAddress("A1"),
+      setSelectionAnchorAddress("A1"),
+      selectSingleRange("A1"),
+      setActiveColumnSort(null),
+      setFilterValueSearch(""),
+      scrollActivePaneVertically(0),
+      scrollActivePaneHorizontally(0),
+      setAuditAnalysisResult(null),
+      setAuditSourceRange(""),
+      gridContainerRef.current &&
+        ((gridContainerRef.current.scrollTop = 0),
+        (gridContainerRef.current.scrollLeft = 0)),
+      focusGridSurface());
   }
-  function Ts(fe, Oe) {
-    const Be = sr.current.book.sheets.find((Xe) => Xe.id === fe);
+  function navigateToSheetCell(fe, Oe) {
+    const Be = latestEditStateRef.current.book.sheets.find(
+      (Xe) => Xe.id === fe,
+    );
     if (!Be || Be.hidden)
       throw Error(
         "Unhide the target worksheet with Manage worksheets before navigating to it.",
@@ -2078,47 +2469,50 @@ function MainWorksheetEditor({
       throw Error(
         "The target cell is hidden. Unhide its row/column or expand its outline before navigating.",
       );
-    ui() &&
-      (fn((Xe) => {
+    commitCellEdit() &&
+      (setFilterStateByScope((Xe) => {
         const gt = { ...Xe };
-        return (delete gt[JSON.stringify([H.id, fe])], gt);
+        return (delete gt[JSON.stringify([activeWorkbook.id, fe])], gt);
       }),
-      de(fe),
-      or(Oe),
-      Rr(Oe),
-      (qt.current = Oe),
-      dr(Oe),
-      jr(""),
-      po(null),
-      Go(Oe));
+      setActiveSheetId(fe),
+      setActiveCellAddress(Oe),
+      setSelectionAnchorAddress(Oe),
+      (activeCellAddressRef.current = Oe),
+      selectSingleRange(Oe),
+      setFilterValueSearch(""),
+      setActiveColumnSort(null),
+      setPendingScrollAddress(Oe));
   }
-  function Pd(fe, Oe) {
+  function selectSheetRanges(fe, Oe) {
     const Be = parseSelectionAreas(Oe);
-    (Ts(fe, Be.at(-1).split(":")[0]), Ut(Be), Je(null), pi());
+    (navigateToSheetCell(fe, Be.at(-1).split(":")[0]),
+      applySelectionAreas(Be),
+      setActiveDialogMode(null),
+      focusGridSurface());
   }
-  function Vi(fe) {
-    On(() => {
-      const Oe = Ii();
+  function applyCellFormatPatch(fe) {
+    runGuardedAction(() => {
+      const Oe = getSelectedCellAddresses();
       if (
         fe.style &&
         (Object.hasOwn(fe.style, "border") ||
           Object.hasOwn(fe.style, "borders")) &&
-        Oe.some((Be) => (he.merges ?? []).some((Ue) => lD(Ue, Be)))
+        Oe.some((Be) => (activeSheet.merges ?? []).some((Ue) => lD(Ue, Be)))
       )
         throw Error("Unmerge selected cells before changing border edges.");
-      To(
+      applyCellPatches(
         Oe.map((Be) => {
           return {
-            sheetId: he.id,
+            sheetId: activeSheet.id,
             address: Be,
             cell: {
-              ...he.cells[Be],
-              raw: he.cells[Be]?.raw ?? null,
+              ...activeSheet.cells[Be],
+              raw: activeSheet.cells[Be]?.raw ?? null,
               ...fe,
               ...(fe.style
                 ? {
                     style: {
-                      ...he.cells[Be]?.style,
+                      ...activeSheet.cells[Be]?.style,
                       ...fe.style,
                     },
                   }
@@ -2130,85 +2524,101 @@ function MainWorksheetEditor({
       );
     });
   }
-  function Ud() {
-    On(() => {
-      if (!ui()) return;
-      const fe = parseGoToReference(H, he.id, Le),
+  function commitNameBoxReference() {
+    runGuardedAction(() => {
+      if (!commitCellEdit()) return;
+      const fe = parseGoToReference(
+          activeWorkbook,
+          activeSheet.id,
+          goToReferenceText,
+        ),
         Oe = fe.ranges,
         Be = parseRangeAddress(Oe.at(-1)),
         Ue = `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}`,
         Xe = `${columnIndexToLetters(Be.lastCol)}${Be.lastRow + 1}`;
       if (
-        fe.sheetId === he.id &&
-        (ni.isHidden(Be.firstRow) || Sn.isHidden(Be.firstCol))
+        fe.sheetId === activeSheet.id &&
+        (rowVisibilityIndex.isHidden(Be.firstRow) ||
+          columnVisibilityIndex.isHidden(Be.firstCol))
       )
         throw Error(
           `${Ue} is hidden. Use View → Hide & Unhide or Data → Group & Outline to reveal it.`,
         );
-      (fe.sheetId !== he.id && Ts(fe.sheetId, Ue),
-        or(Ue),
-        Rr(Ue),
-        (qt.current = Xe),
-        Ut(Oe),
-        fe.sheetId === he.id && fi(Ue));
+      (fe.sheetId !== activeSheet.id && navigateToSheetCell(fe.sheetId, Ue),
+        setActiveCellAddress(Ue),
+        setSelectionAnchorAddress(Ue),
+        (activeCellAddressRef.current = Xe),
+        applySelectionAreas(Oe),
+        fe.sheetId === activeSheet.id && requestCellScroll(Ue));
     });
   }
-  function fu(fe = false) {
-    On(() => {
-      if (je || sr.current.readOnly)
+  function undoOrRedo(fe = false) {
+    runGuardedAction(() => {
+      if (isEditingLocked || latestEditStateRef.current.readOnly)
         throw new Error("This workbook is read-only.");
-      const Oe = fe ? Qi[Qi.length - 1] : ns[ns.length - 1];
+      const Oe = fe
+        ? redoStack[redoStack.length - 1]
+        : undoStack[undoStack.length - 1];
       if (!Oe) return;
       if (
-        Oe.id === H.id &&
+        Oe.id === activeWorkbook.id &&
         JSON.stringify(Oe.structureProtection) !==
-          JSON.stringify(H.structureProtection)
+          JSON.stringify(activeWorkbook.structureProtection)
       )
         throw new Error(
           "Undo cannot change workbook structure protection. Use Manage worksheets to unlock it.",
         );
       const Be =
-        Oe.id !== H.id
-          ? recordCrossWorkbookImport(H, Oe, actor, fe ? "redo" : "undo")
+        Oe.id !== activeWorkbook.id
+          ? recordCrossWorkbookImport(
+              activeWorkbook,
+              Oe,
+              actor,
+              fe ? "redo" : "undo",
+            )
           : applyWorkbookChange(
-              H,
+              activeWorkbook,
               {
                 ...(isDeepFrozenValue(Oe) ? Oe : structuredClone(Oe)),
-                ...(H.rowOrigins
-                  ? { rowOrigins: structuredClone(H.rowOrigins) }
+                ...(activeWorkbook.rowOrigins
+                  ? { rowOrigins: structuredClone(activeWorkbook.rowOrigins) }
                   : {}),
-                revision: H.revision,
-                events: H.events,
+                revision: activeWorkbook.revision,
+                events: activeWorkbook.events,
               },
               actor,
               fe ? "Redo workbook change" : "Undo workbook change",
               { restoringHistory: true },
             );
-      (di(Be, false),
+      (commitWorkbookChange(Be, false),
         fe
-          ? (ia(Qi.slice(0, -1)), mo([...ns, H]))
-          : (mo(ns.slice(0, -1)), ia([...Qi, H])),
-        Be.sheets.some((Ue) => Ue.id === oe && !Ue.hidden) ||
-          wi(Be.sheets.find((Ue) => !Ue.hidden).id));
+          ? (setRedoStack(redoStack.slice(0, -1)),
+            setUndoStack([...undoStack, activeWorkbook]))
+          : (setUndoStack(undoStack.slice(0, -1)),
+            setRedoStack([...redoStack, activeWorkbook])),
+        Be.sheets.some((Ue) => Ue.id === activeSheetId && !Ue.hidden) ||
+          switchActiveWorksheet(Be.sheets.find((Ue) => !Ue.hidden).id));
     });
   }
-  async function Ns(fe) {
+  async function importWorkbookFromFile(fe) {
     var gt;
     if (!fe) return;
-    (gt = ba.current) == null || gt.abort();
+    (gt = activeOperationControllerRef.current) == null || gt.abort();
     const Oe = new AbortController(),
-      Be = ++au.current;
-    ba.current = Oe;
+      Be = ++latestOperationIdRef.current;
+    activeOperationControllerRef.current = Oe;
     const Ue = {
-        ...Yu,
-        signal: Yu.signal ? AbortSignal.any([Oe.signal, Yu.signal]) : Oe.signal,
+        ...operationScope,
+        signal: operationScope.signal
+          ? AbortSignal.any([Oe.signal, operationScope.signal])
+          : Oe.signal,
       },
-      Xe = () => Be === au.current;
-    (Cu(true), hn(""));
+      Xe = () => Be === latestOperationIdRef.current;
+    (setIsOperationBusy(true), setErrorNotice(""));
     try {
-      if (je) throw new Error("This workbook is read-only.");
+      if (isEditingLocked) throw new Error("This workbook is read-only.");
       if (/\.(xls|xlsb|xltx|ods)$/i.test(fe.name)) {
-        (su(fe), Je("workbookFormats"));
+        (setPendingImportFile(fe), setActiveDialogMode("workbookFormats"));
         return;
       }
       if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(fe.name)) {
@@ -2216,11 +2626,14 @@ function MainWorksheetEditor({
           throw new Error("Files must be 10 MB or smaller.");
         const wt = await importAutomationFile(fe, Ue);
         if (!Xe()) return;
-        if (sr.current.book !== H || sr.current.readOnly)
+        if (
+          latestEditStateRef.current.book !== activeWorkbook ||
+          latestEditStateRef.current.readOnly
+        )
           throw new Error(
             "The workbook changed while the file was being read. Open the file again.",
           );
-        (at(wt), Je("automation"));
+        (setAutomationInspection(wt), setActiveDialogMode("automation"));
         return;
       }
       if (/\.(csv|tsv)$/i.test(fe.name)) {
@@ -2228,12 +2641,15 @@ function MainWorksheetEditor({
           throw new Error("Files must be 10 MB or smaller.");
         const wt = await importDelimitedFile(fe, {}, Ue);
         if (!Xe()) return;
-        if (sr.current.book !== H || sr.current.readOnly)
+        if (
+          latestEditStateRef.current.book !== activeWorkbook ||
+          latestEditStateRef.current.readOnly
+        )
           throw new Error(
             "The workbook changed while the file was being read. Open the file again.",
           );
-        xs({
-          snapshot: H,
+        setDelimitedImportExportSource({
+          snapshot: activeWorkbook,
           bytes: new Uint8Array(),
           file: fe,
           initial: wt,
@@ -2243,22 +2659,27 @@ function MainWorksheetEditor({
       }
       const Nt = await importWorkbookFile(fe, Ue);
       if (!Xe()) return;
-      if (sr.current.book !== H || sr.current.readOnly)
+      if (
+        latestEditStateRef.current.book !== activeWorkbook ||
+        latestEditStateRef.current.readOnly
+      )
         throw new Error(
           "The workbook changed while the file was being read. Import again to replace the current revision.",
         );
       if (Nt.report) {
-        Ml({
-          snapshot: H,
+        setXlsxConversionReview({
+          snapshot: activeWorkbook,
           report: Nt.report,
           imported: Nt.workbook,
           fileName: fe.name,
         });
         return;
       }
-      (di(Nt.workbook),
-        wi(Nt.workbook.sheets.find((wt) => !wt.hidden).id),
-        vn(Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported."));
+      (commitWorkbookChange(Nt.workbook),
+        switchActiveWorksheet(Nt.workbook.sheets.find((wt) => !wt.hidden).id),
+        setStatusNotice(
+          Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported.",
+        ));
     } catch (Nt) {
       if (!Xe()) return;
       if (
@@ -2267,188 +2688,233 @@ function MainWorksheetEditor({
           ["FILE_ACTIVE", "FILE_INVALID"].includes(Nt.code)) &&
         /\.xlsx$/i.test(fe.name) &&
         fe.size <= workbookLimits.maxFileBytes &&
-        sr.current.book === H
+        latestEditStateRef.current.book === activeWorkbook
       )
         try {
           const wt = await importAutomationFile(fe, Ue);
           if (
             Xe() &&
-            !sr.current.readOnly &&
+            !latestEditStateRef.current.readOnly &&
             wt.items.length &&
-            sr.current.book === H
+            latestEditStateRef.current.book === activeWorkbook
           ) {
-            (at(wt), Je("automation"));
+            (setAutomationInspection(wt), setActiveDialogMode("automation"));
             return;
           }
         } catch {}
-      Xe() && hn(toFileProcessingError(Nt).message);
+      Xe() && setErrorNotice(toFileProcessingError(Nt).message);
     } finally {
       Xe() &&
-        ((ba.current = null), Cu(false), yl.current && (yl.current.value = ""));
+        ((activeOperationControllerRef.current = null),
+        setIsOperationBusy(false),
+        importFileInputRef.current && (importFileInputRef.current.value = ""));
     }
   }
-  async function hu(fe) {
-    (Cu(true), hn(""));
+  async function exportWorkbookAs(fe) {
+    (setIsOperationBusy(true), setErrorNotice(""));
     try {
       const Oe =
-        H.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook";
+        activeWorkbook.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) ||
+        "Workbook";
       if (fe === "xlsx") {
-        const Be = await exportWorkbookToXlsx(H);
+        const Be = await exportWorkbookToXlsx(activeWorkbook);
         (Be.report.warnings.push(
           "Full workbook export includes all filtered and hidden rows. Session filter views are not saved in XLSX. Use CSV/TSV with Visible population for a filtered extract.",
         ),
-          Ml({
-            snapshot: H,
+          setXlsxConversionReview({
+            snapshot: activeWorkbook,
             report: { ...Be.report, fileName: `${Oe}-derived.xlsx` },
             blob: Be.blob,
             fileName: `${Oe}-derived.xlsx`,
           }));
       }
       (fe === "csv" &&
-        xs({
-          snapshot: H,
-          sheetId: he.id,
-          ...(Hr ? { population: Hr.context.definition } : {}),
+        setDelimitedImportExportSource({
+          snapshot: activeWorkbook,
+          sheetId: activeSheet.id,
+          ...(filterResult
+            ? { population: filterResult.context.definition }
+            : {}),
         }),
         fe === "json" &&
-          (vn(
+          (setStatusNotice(
             "Native JSON exports the full workbook, including all filtered and hidden rows and any named filter views. Active session masks are not saved; load named criteria, preview and apply after reopening.",
           ),
           saveBlobToFile(
-            new Blob([encodeNativeWorkbook(H)], { type: "application/json" }),
+            new Blob([encodeNativeWorkbook(activeWorkbook)], {
+              type: "application/json",
+            }),
             `${Oe}.json`,
           )));
     } catch (Oe) {
-      hn(Oe instanceof Error ? Oe.message : "Export failed.");
+      setErrorNotice(Oe instanceof Error ? Oe.message : "Export failed.");
     } finally {
-      Cu(false);
+      setIsOperationBusy(false);
     }
   }
-  function Rs() {
-    On(() => {
-      if (ei === "visible" && !Hr)
+  function runCurrentAuditAnalysis() {
+    runGuardedAction(() => {
+      if (auditPopulationScope === "visible" && !filterResult)
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",
         );
-      const fe = runAuditAnalysis(H, he.id, is, {
-        range:
-          ei === "visible" && Hr
-            ? Hr.context.range
-            : Ju || formatOccupiedRangeAddress(he),
-        ...(ei === "visible"
-          ? {
-              population: {
-                definition: Hr?.context.definition ?? Ui?.definition,
-                scope: "visible",
-              },
-            }
-          : {}),
-        threshold: oa,
-        sampleSize: jl,
-        seed: Fl,
-        asOf: Od,
-      });
-      (eo(fe),
-        zc({
+      const fe = runAuditAnalysis(
+        activeWorkbook,
+        activeSheet.id,
+        selectedAuditKind,
+        {
+          range:
+            auditPopulationScope === "visible" && filterResult
+              ? filterResult.context.range
+              : auditSourceRange || formatOccupiedRangeAddress(activeSheet),
+          ...(auditPopulationScope === "visible"
+            ? {
+                population: {
+                  definition:
+                    filterResult?.context.definition ??
+                    activeFilterState?.definition,
+                  scope: "visible",
+                },
+              }
+            : {}),
+          threshold: materialityThreshold,
+          sampleSize: auditSampleSize,
+          seed: samplingSeed,
+          asOf: agingAsOfDate,
+        },
+      );
+      (setAuditAnalysisResult(fe),
+        setAgingReportPayload({
           schemaVersion: 1,
-          workbookId: H.id,
-          workbookName: H.name,
-          revision: H.revision,
-          sheetId: he.id,
-          sheetName: he.name,
+          workbookId: activeWorkbook.id,
+          workbookName: activeWorkbook.name,
+          revision: activeWorkbook.revision,
+          sheetId: activeSheet.id,
+          sheetName: activeSheet.name,
           generatedAt: new Date().toISOString(),
           actor,
-          populationScope: ei,
-          ...(Hr ? { filterContext: Hr.context } : {}),
-          kind: is,
+          populationScope: auditPopulationScope,
+          ...(filterResult ? { filterContext: filterResult.context } : {}),
+          kind: selectedAuditKind,
           parameters: {
             range:
-              ei === "visible" && Hr
-                ? Hr.context.range
-                : Ju || formatOccupiedRangeAddress(he),
-            threshold: oa,
-            sampleSize: jl,
-            seed: Fl,
-            asOf: Od,
+              auditPopulationScope === "visible" && filterResult
+                ? filterResult.context.range
+                : auditSourceRange || formatOccupiedRangeAddress(activeSheet),
+            threshold: materialityThreshold,
+            sampleSize: auditSampleSize,
+            seed: samplingSeed,
+            asOf: agingAsOfDate,
           },
           result: fe,
         }),
-        vn(
-          ei === "visible"
+        setStatusNotice(
+          auditPopulationScope === "visible"
             ? "Analysis completed on visible population rows; citations retain original worksheet addresses."
             : "Analysis completed on the full selected source range, including hidden and filtered rows.",
         ));
     });
   }
-  async function No(fe, Oe) {
+  async function askAssistantQuestion(fe, Oe) {
     var Xe;
     if (!fe.trim()) return null;
-    if (Jt.length > 1)
+    if (selectionAreas.length > 1)
       throw (
-        hn("Select one rectangular range before asking the assistant."),
+        setErrorNotice(
+          "Select one rectangular range before asking the assistant.",
+        ),
         new Error("Select one rectangular range before asking the assistant.")
       );
-    (Xe = ss.current) == null || Xe.abort();
-    const Be = ++Ys.current;
-    (Vc(true), Bl(null), Ll(null), hn(""), vn(""));
+    (Xe = assistantAbortControllerRef.current) == null || Xe.abort();
+    const Be = ++assistantRequestIdRef.current;
+    (setIsAssistantBusy(true),
+      setAssistantProposal(null),
+      setAnswerCitations(null),
+      setErrorNotice(""),
+      setStatusNotice(""));
     const Ue = new AbortController();
-    ss.current = Ue;
+    assistantAbortControllerRef.current = Ue;
     try {
-      const gt = buildAssistantSelectionContext(H, ve),
+      const gt = buildAssistantSelectionContext(
+          activeWorkbook,
+          assistantSelection,
+        ),
         Nt = await requestAssistantAnswer(adapter, fe, gt, {
           conversation: Oe,
           signal: Ue.signal,
-          reliability: D,
+          reliability: activeReliabilityMonitor,
         });
-      if (Ue.signal.aborted || Be !== Ys.current) return null;
-      const wt = validateProposedCalculation(H, ve, Nt);
-      return (Ll(buildAnswerCitations(H, ve, wt, gt)), Bl(wt), wt);
+      if (Ue.signal.aborted || Be !== assistantRequestIdRef.current)
+        return null;
+      const wt = validateProposedCalculation(
+        activeWorkbook,
+        assistantSelection,
+        Nt,
+      );
+      return (
+        setAnswerCitations(
+          buildAnswerCitations(activeWorkbook, assistantSelection, wt, gt),
+        ),
+        setAssistantProposal(wt),
+        wt
+      );
     } catch (gt) {
       if (
-        (Be === Ys.current &&
+        (Be === assistantRequestIdRef.current &&
           !Ue.signal.aborted &&
-          hn(
+          setErrorNotice(
             gt instanceof Error
               ? gt.message
               : "The assistant could not complete the request.",
           ),
-        Ue.signal.aborted || Be !== Ys.current)
+        Ue.signal.aborted || Be !== assistantRequestIdRef.current)
       )
         return null;
       throw gt;
     } finally {
-      Be === Ys.current && Vc(false);
+      Be === assistantRequestIdRef.current && setIsAssistantBusy(false);
     }
   }
-  function oc(fe) {
-    On(() => {
-      (di(fe),
-        mo([]),
-        ia([]),
-        wi(fe.sheets.find((Oe) => !Oe.hidden).id),
-        Hc(false),
-        Pl(false),
-        Pr(null));
+  function replaceActiveWorkbook(fe) {
+    runGuardedAction(() => {
+      (commitWorkbookChange(fe),
+        setUndoStack([]),
+        setRedoStack([]),
+        switchActiveWorksheet(fe.sheets.find((Oe) => !Oe.hidden).id),
+        setIsFilterBarVisible(false),
+        setIsFindBarVisible(false),
+        setSidePanelKind(null));
     });
   }
-  function ac() {
-    On(() =>
-      So(
-        setFreezePanes(H, he.id, Yc ? 0 : 1, he.frozenCols ?? 0),
-        Yc ? "Unfreeze rows" : "Freeze top row",
+  function toggleFreezeTopRow() {
+    runGuardedAction(() =>
+      commitWorkbookEdit(
+        setFreezePanes(
+          activeWorkbook,
+          activeSheet.id,
+          hasFrozenRows ? 0 : 1,
+          activeSheet.frozenCols ?? 0,
+        ),
+        hasFrozenRows ? "Unfreeze rows" : "Freeze top row",
       ),
     );
   }
-  function ed(fe = false) {
-    (rt(), Ii());
-    const Oe = { row: ee.firstRow, col: ee.firstCol },
-      Be = { row: ee.lastRow, col: ee.lastCol },
+  function selectionToTsv(fe = false) {
+    (requireSingleSelectionRange(), getSelectedCellAddresses());
+    const Oe = {
+        row: selectionRangeBounds.firstRow,
+        col: selectionRangeBounds.firstCol,
+      },
+      Be = {
+        row: selectionRangeBounds.lastRow,
+        col: selectionRangeBounds.lastCol,
+      },
       Ue = [];
     for (let Nt = Oe.row; Nt <= Be.row; Nt++) {
       const wt = [];
       for (let jt = Oe.col; jt <= Be.col; jt++) {
         const rr = `${columnIndexToLetters(jt)}${Nt + 1}`,
-          Mr = Qr(he.id, rr);
+          Mr = workbookCalculator(activeSheet.id, rr);
         wt.push(
           typeof Mr == "string" && /^[=+@-]/.test(Mr)
             ? `'${Mr}`
@@ -2462,59 +2928,83 @@ function MainWorksheetEditor({
         newline: `
 `,
       }),
-      gt = fe ? createCutSourceSnapshot(H, he.id, Ye) : null;
+      gt = fe
+        ? createCutSourceSnapshot(
+            activeWorkbook,
+            activeSheet.id,
+            activeSelectionRange,
+          )
+        : null;
     return (
-      Gc(gt ? { snapshot: gt, text: Xe } : null),
-      (ku.current = {
+      setClipboardSnapshotState(gt ? { snapshot: gt, text: Xe } : null),
+      (internalClipboardRef.current = {
         text: Xe,
-        snapshot: buildClipboardSnapshot(H, he.id, Ye),
+        snapshot: buildClipboardSnapshot(
+          activeWorkbook,
+          activeSheet.id,
+          activeSelectionRange,
+        ),
       }),
       Xe
     );
   }
-  async function Ru(fe) {
+  async function copyOrCutSelection(fe) {
     var Oe;
     try {
-      if (fe && je) throw new Error("This workbook is read-only.");
-      const Be = H,
-        Ue = ed(fe);
+      if (fe && isEditingLocked) throw new Error("This workbook is read-only.");
+      const Be = activeWorkbook,
+        Ue = selectionToTsv(fe);
       if ((await navigator.clipboard.writeText(Ue), fe)) {
         if (
-          sr.current.readOnly ||
-          sr.current.book !== Be ||
-          sr.current.sheetId !== he.id ||
-          sr.current.selectionKey !== br
+          latestEditStateRef.current.readOnly ||
+          latestEditStateRef.current.book !== Be ||
+          latestEditStateRef.current.sheetId !== activeSheet.id ||
+          latestEditStateRef.current.selectionKey !== selectionAreasKey
         )
           throw new Error("Workbook changed while copying. Copy again.");
-        vn("Cut is ready. Select a destination and paste to preview the move.");
+        setStatusNotice(
+          "Cut is ready. Select a destination and paste to preview the move.",
+        );
       }
-      fe || vn("Selection copied.");
+      fe || setStatusNotice("Selection copied.");
     } catch (Be) {
-      (fe && Gc(null),
-        hn(
+      (fe && setClipboardSnapshotState(null),
+        setErrorNotice(
           Be instanceof Error && Be.name !== "NotAllowedError"
             ? Be.message
             : "Clipboard access is unavailable. Use Ctrl/⌘ C or X with the grid focused.",
         ),
-        (Oe = to.current) == null || Oe.focus());
+        (Oe = gridContainerRef.current) == null || Oe.focus());
     }
   }
-  function zl(fe) {
-    On(() => {
-      if ((rt(), fe.length > workbookLimits.maxFileBytes))
+  function pasteClipboardText(fe) {
+    runGuardedAction(() => {
+      if (
+        (requireSingleSelectionRange(), fe.length > workbookLimits.maxFileBytes)
+      )
         throw new Error("Clipboard text is too large.");
-      const Oe = ku.current?.text === fe ? ku.current : null;
-      if (Oe && Bo?.text === fe) {
-        Zs(Bo.snapshot);
+      const Oe =
+        internalClipboardRef.current?.text === fe
+          ? internalClipboardRef.current
+          : null;
+      if (Oe && clipboardSnapshotState?.text === fe) {
+        setMoveCellsSource(clipboardSnapshotState.snapshot);
         return;
       }
       if (Oe) {
-        const wt = buildPastePreview(H, he.id, Ye, Oe.snapshot, {
-          mode: "all",
-          deferValidationWarnings: true,
-          readOnly: sr.current.readOnly,
-        });
-        (To(wt.patches, "Paste cells"), dr(wt.targetRange));
+        const wt = buildPastePreview(
+          activeWorkbook,
+          activeSheet.id,
+          activeSelectionRange,
+          Oe.snapshot,
+          {
+            mode: "all",
+            deferValidationWarnings: true,
+            readOnly: latestEditStateRef.current.readOnly,
+          },
+        );
+        (applyCellPatches(wt.patches, "Paste cells"),
+          selectSingleRange(wt.targetRange));
         return;
       }
       const Be = x7.parse(fe.replace(/\r?\n$/, ""), {
@@ -2524,7 +3014,7 @@ function MainWorksheetEditor({
       if (Be.errors.length)
         throw new Error("Clipboard text contains malformed quoted cells.");
       const Ue = Be.data,
-        Xe = _t(xt),
+        Xe = _t(activeCellAddress),
         gt = [];
       if (!Ue.length || Ue.some((wt) => wt.length !== Ue[0].length))
         throw new Error("Paste requires a rectangular range.");
@@ -2534,59 +3024,62 @@ function MainWorksheetEditor({
         );
       (Ue.forEach((wt, jt) =>
         wt.forEach((rr, Mr) => {
-          if (Xe.row + jt >= he.rowCount || Xe.col + Mr >= he.colCount)
+          if (
+            Xe.row + jt >= activeSheet.rowCount ||
+            Xe.col + Mr >= activeSheet.colCount
+          )
             throw new Error(
               "Paste exceeds the Excel worksheet boundary (XFD1048576).",
             );
           const Br = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
             xr = parseDateCellEntry(
               rr,
-              he.cells[Br],
-              sr.current.book.datePolicy?.dateSystem,
+              activeSheet.cells[Br],
+              latestEditStateRef.current.book.datePolicy?.dateSystem,
             );
-          gt.push({ sheetId: he.id, address: Br, cell: xr });
+          gt.push({ sheetId: activeSheet.id, address: Br, cell: xr });
         }),
       ),
-        To(gt, "Paste cells"),
-        dr(
+        applyCellPatches(gt, "Paste cells"),
+        selectSingleRange(
           wy(
-            xt,
+            activeCellAddress,
             `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
           ),
         ));
     });
   }
-  async function sc() {
+  async function pasteFromClipboard() {
     var fe;
     try {
-      const Oe = H,
+      const Oe = activeWorkbook,
         Be = await navigator.clipboard.readText();
       if (
-        sr.current.book !== Oe ||
-        sr.current.sheetId !== he.id ||
-        sr.current.selectionKey !== br
+        latestEditStateRef.current.book !== Oe ||
+        latestEditStateRef.current.sheetId !== activeSheet.id ||
+        latestEditStateRef.current.selectionKey !== selectionAreasKey
       )
         throw new Error("Workbook changed while pasting. Try again.");
-      zl(Be);
+      pasteClipboardText(Be);
     } catch {
-      (hn(
+      (setErrorNotice(
         "Clipboard access is unavailable. Use Ctrl/⌘ V with the grid focused.",
       ),
-        (fe = to.current) == null || fe.focus());
+        (fe = gridContainerRef.current) == null || fe.focus());
     }
   }
-  function lc() {
-    On(() => {
-      if (!as) return;
-      const fe = Object.keys(he.cells)
+  function findNextTextMatch() {
+    runGuardedAction(() => {
+      if (!findQuery) return;
+      const fe = Object.keys(activeSheet.cells)
         .filter((Ue) => {
           const Xe = _t(Ue);
           return (
-            !ni.isHidden(Xe.row) &&
-            !Sn.isHidden(Xe.col) &&
-            String(he.cells[Ue]?.raw ?? "")
+            !rowVisibilityIndex.isHidden(Xe.row) &&
+            !columnVisibilityIndex.isHidden(Xe.col) &&
+            String(activeSheet.cells[Ue]?.raw ?? "")
               .toLowerCase()
-              .includes(as.toLowerCase())
+              .includes(findQuery.toLowerCase())
           );
         })
         .sort((Ue, Xe) => {
@@ -2595,62 +3088,83 @@ function MainWorksheetEditor({
           return gt.row - Nt.row || gt.col - Nt.col;
         });
       if (!fe.length) {
-        vn(`We couldn't find “${as}”.`);
+        setStatusNotice(`We couldn't find “${findQuery}”.`);
         return;
       }
-      const Oe = _t(xt),
+      const Oe = _t(activeCellAddress),
         Be =
           fe.find((Ue) => {
             const Xe = _t(Ue);
             return Xe.row > Oe.row || (Xe.row === Oe.row && Xe.col > Oe.col);
           }) ?? fe[0];
-      (da(Be), vn(`${fe.length} matching cell${fe.length === 1 ? "" : "s"}.`));
+      (selectCellAddress(Be),
+        setStatusNotice(
+          `${fe.length} matching cell${fe.length === 1 ? "" : "s"}.`,
+        ));
     });
   }
-  function Ro() {
-    On(() => {
-      if (!as) throw new Error("Enter text to find.");
-      const fe = new RegExp(as.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"),
-        Oe = Ii()
+  function replaceTextInSelection() {
+    runGuardedAction(() => {
+      if (!findQuery) throw new Error("Enter text to find.");
+      const fe = new RegExp(
+          findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          "gi",
+        ),
+        Oe = getSelectedCellAddresses()
           .filter((Be) => {
             return (
-              typeof he.cells[Be]?.raw == "string" &&
-              String(he.cells[Be].raw).toLowerCase().includes(as.toLowerCase())
+              typeof activeSheet.cells[Be]?.raw == "string" &&
+              String(activeSheet.cells[Be].raw)
+                .toLowerCase()
+                .includes(findQuery.toLowerCase())
             );
           })
           .map((Be) => ({
-            sheetId: he.id,
+            sheetId: activeSheet.id,
             address: Be,
             cell: {
-              ...he.cells[Be],
-              raw: String(he.cells[Be].raw).replace(fe, () => uu),
+              ...activeSheet.cells[Be],
+              raw: String(activeSheet.cells[Be].raw).replace(
+                fe,
+                () => replaceWithText,
+              ),
             },
           }));
-      (Oe.length && To(Oe, "Replace text in selection"),
-        vn(`Replaced text in ${Oe.length} cells.`));
+      (Oe.length && applyCellPatches(Oe, "Replace text in selection"),
+        setStatusNotice(`Replaced text in ${Oe.length} cells.`));
     });
   }
-  function cs(fe, Oe) {
-    if (!_r) {
-      const Xe = ni.viewIndex(fe) ?? ni.countBefore(fe);
-      return ni.logicalIndex(Math.max(0, Math.min(ni.count - 1, Xe + Oe)));
+  function stepVisibleRowIndex(fe, Oe) {
+    if (!sortedRowIndexes) {
+      const Xe =
+        rowVisibilityIndex.viewIndex(fe) ?? rowVisibilityIndex.countBefore(fe);
+      return rowVisibilityIndex.logicalIndex(
+        Math.max(0, Math.min(rowVisibilityIndex.count - 1, Xe + Oe)),
+      );
     }
-    const Be = [...Dn, ..._r],
+    const Be = [...frozenRowIndexes, ...sortedRowIndexes],
       Ue = Be.indexOf(fe);
     return Be[Math.max(0, Math.min(Be.length - 1, Ue + Oe))] ?? fe;
   }
-  function xl(fe, Oe) {
-    const Be = Sn.viewIndex(fe) ?? Sn.countBefore(fe);
-    return Sn.logicalIndex(Math.max(0, Math.min(Sn.count - 1, Be + Oe)));
+  function stepVisibleColumnIndex(fe, Oe) {
+    const Be =
+      columnVisibilityIndex.viewIndex(fe) ??
+      columnVisibilityIndex.countBefore(fe);
+    return columnVisibilityIndex.logicalIndex(
+      Math.max(0, Math.min(columnVisibilityIndex.count - 1, Be + Oe)),
+    );
   }
-  function Vl(fe, Oe, Be, Ue) {
-    const Xe = Be && _r ? [...Dn, ..._r] : null,
-      gt = Be ? ni : Sn,
+  function jumpToDataEdge(fe, Oe, Be, Ue) {
+    const Xe =
+        Be && sortedRowIndexes
+          ? [...frozenRowIndexes, ...sortedRowIndexes]
+          : null,
+      gt = Be ? rowVisibilityIndex : columnVisibilityIndex,
       Nt = Xe ? new Map(Xe.map((xr, Sr) => [xr, Sr])) : null,
       wt = (xr) => (Nt ? (Nt.get(xr) ?? null) : gt.viewIndex(xr)),
       jt = wt(Be ? fe : Oe);
     if (jt === null) return { row: fe, col: Oe };
-    const rr = Pt().flatMap((xr) => {
+    const rr = getAllCellEntries().flatMap((xr) => {
         if (
           xr.cell.raw === null ||
           xr.cell.raw === "" ||
@@ -2664,10 +3178,10 @@ function MainWorksheetEditor({
       Br = Xe ? Xe[Mr] : gt.logicalIndex(Mr);
     return Be ? { row: Br, col: Oe } : { row: fe, col: Br };
   }
-  function pu(fe, Oe) {
-    const Be = It.current;
-    if (((It.current = null), Be)) {
-      const Nt = H.sheets.find((xr) => xr.id === Be.sheetId),
+  function moveSelectionAfterCommit(fe, Oe) {
+    const Be = pendingCrossSheetTargetRef.current;
+    if (((pendingCrossSheetTargetRef.current = null), Be)) {
+      const Nt = activeWorkbook.sheets.find((xr) => xr.id === Be.sheetId),
         wt = _t(Be.address),
         jt = fe === "Enter" ? "row" : "column",
         Mr =
@@ -2677,55 +3191,67 @@ function MainWorksheetEditor({
           ).next(jt === "row" ? wt.row : wt.col, Oe ? -1 : 1) ??
           (jt === "row" ? wt.row : wt.col),
         Br = `${columnIndexToLetters(jt === "column" ? Mr : wt.col)}${(jt === "row" ? Mr : wt.row) + 1}`;
-      (de(Be.sheetId), or(Br), Rr(Br), dr(Br), Go(Br), pi());
+      (setActiveSheetId(Be.sheetId),
+        setActiveCellAddress(Br),
+        setSelectionAnchorAddress(Br),
+        selectSingleRange(Br),
+        setPendingScrollAddress(Br),
+        focusGridSurface());
       return;
     }
-    const Ue = _t(xt),
-      Xe = fe === "Enter" ? cs(Ue.row, Oe ? -1 : 1) : Ue.row,
-      gt = fe === "Tab" ? xl(Ue.col, Oe ? -1 : 1) : Ue.col;
-    (da(`${columnIndexToLetters(gt)}${Xe + 1}`), pi());
+    const Ue = _t(activeCellAddress),
+      Xe = fe === "Enter" ? stepVisibleRowIndex(Ue.row, Oe ? -1 : 1) : Ue.row,
+      gt = fe === "Tab" ? stepVisibleColumnIndex(Ue.col, Oe ? -1 : 1) : Ue.col;
+    (selectCellAddress(`${columnIndexToLetters(gt)}${Xe + 1}`),
+      focusGridSurface());
   }
-  function td() {
-    if (!ui()) return;
-    dr(`A1:${columnIndexToLetters(he.colCount - 1)}${he.rowCount}`);
-    const fe = `${columnIndexToLetters(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`;
-    (or(fe), Rr(fe), (qt.current = fe), pi());
+  function selectAllCells() {
+    if (!commitCellEdit()) return;
+    selectSingleRange(
+      `A1:${columnIndexToLetters(activeSheet.colCount - 1)}${activeSheet.rowCount}`,
+    );
+    const fe = `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${rowVisibilityIndex.logicalIndex(0) + 1}`;
+    (setActiveCellAddress(fe),
+      setSelectionAnchorAddress(fe),
+      (activeCellAddressRef.current = fe),
+      focusGridSurface());
   }
-  function El(fe, Oe, Be) {
-    if (!ui()) return;
-    const Ue = _t(Wr)[fe === "column" ? "col" : "row"],
+  function selectRowOrColumn(fe, Oe, Be) {
+    if (!commitCellEdit()) return;
+    const Ue = _t(selectionAnchorAddress)[fe === "column" ? "col" : "row"],
       Xe = Be ? Math.min(Ue, Oe) : Oe,
       gt = Be ? Math.max(Ue, Oe) : Oe,
       Nt =
         fe === "column"
-          ? `${columnIndexToLetters(Oe)}${ni.logicalIndex(0) + 1}`
-          : `${columnIndexToLetters(Sn.logicalIndex(0))}${Oe + 1}`;
-    (dr(
+          ? `${columnIndexToLetters(Oe)}${rowVisibilityIndex.logicalIndex(0) + 1}`
+          : `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${Oe + 1}`;
+    (selectSingleRange(
       fe === "column"
-        ? `${columnIndexToLetters(Xe)}1:${columnIndexToLetters(gt)}${he.rowCount}`
-        : `A${Xe + 1}:${columnIndexToLetters(he.colCount - 1)}${gt + 1}`,
+        ? `${columnIndexToLetters(Xe)}1:${columnIndexToLetters(gt)}${activeSheet.rowCount}`
+        : `A${Xe + 1}:${columnIndexToLetters(activeSheet.colCount - 1)}${gt + 1}`,
     ),
-      (qt.current = Nt),
-      or(Be ? Wr : Nt),
-      Be || Rr(Nt),
-      pi());
+      (activeCellAddressRef.current = Nt),
+      setActiveCellAddress(Be ? selectionAnchorAddress : Nt),
+      Be || setSelectionAnchorAddress(Nt),
+      focusGridSurface());
   }
-  function Cl(fe, Oe) {
-    rt();
-    const { firstRow, lastRow, firstCol, lastCol } = ee,
+  function resolveSelectedAxisIndexes(fe, Oe) {
+    requireSingleSelectionRange();
+    const { firstRow, lastRow, firstCol, lastCol } = selectionRangeBounds,
       Nt =
         fe === "column"
-          ? firstRow === 0 && lastRow === he.rowCount - 1
-          : firstCol === 0 && lastCol === he.colCount - 1,
+          ? firstRow === 0 && lastRow === activeSheet.rowCount - 1
+          : firstCol === 0 && lastCol === activeSheet.colCount - 1,
       wt = fe === "column" ? firstCol : firstRow,
       jt = fe === "column" ? lastCol : lastRow;
     if (Oe !== undefined && (!Nt || Oe < wt || Oe > jt)) return [Oe];
     const rr = new Set();
-    for (const Br of Pt()) {
+    for (const Br of getAllCellEntries()) {
       const xr = fe === "column" ? Br.col : Br.row;
       xr >= wt && xr <= jt && rr.add(xr);
     }
-    const Mr = fe === "column" ? he.columnWidths : he.rowHeights;
+    const Mr =
+      fe === "column" ? activeSheet.columnWidths : activeSheet.rowHeights;
     for (const Br of Object.keys(Mr ?? {})) {
       const xr = Number(Br);
       xr >= wt && xr <= jt && rr.add(xr);
@@ -2733,9 +3259,9 @@ function MainWorksheetEditor({
     if (jt - wt < 500) for (let Br = wt; Br <= jt; Br++) rr.add(Br);
     return [...rr].sort((Br, xr) => Br - xr);
   }
-  function Oa(fe, Oe, Be) {
-    const Ue = sr.current.book,
-      Xe = Ue.sheets.find((rr) => rr.id === he.id),
+  function applyAxisSizes(fe, Oe, Be) {
+    const Ue = latestEditStateRef.current.book,
+      Xe = Ue.sheets.find((rr) => rr.id === activeSheet.id),
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(([rr, Mr]) => {
@@ -2748,15 +3274,16 @@ function MainWorksheetEditor({
       })
     )
       return;
-    const wt = _t(xt),
+    const wt = _t(activeCellAddress),
       jt =
-        (shownColumns.includes(wt.col) || Ln.includes(wt.col)) &&
-        (shownRows.includes(wt.row) || Dn.includes(wt.row));
-    (di({
+        (shownColumns.includes(wt.col) ||
+          frozenColumnIndexes.includes(wt.col)) &&
+        (shownRows.includes(wt.row) || frozenRowIndexes.includes(wt.row));
+    (commitWorkbookChange({
       ...Ue,
       revision: Ue.revision + 1,
       sheets: Ue.sheets.map((rr) =>
-        rr.id === he.id ? { ...rr, [gt]: { ...rr[gt], ...Oe } } : rr,
+        rr.id === activeSheet.id ? { ...rr, [gt]: { ...rr[gt], ...Oe } } : rr,
       ),
       events: [
         ...Ue.events,
@@ -2769,51 +3296,60 @@ function MainWorksheetEditor({
         },
       ],
     }),
-      jt && fi(xt));
+      jt && requestCellScroll(activeCellAddress));
   }
-  function Ko(fe, Oe) {
-    On(() => {
-      if (je || sr.current.readOnly || !ui()) return;
-      const Be = Cl(fe, Oe),
-        Ue = sr.current.book.sheets.find((jt) => jt.id === he.id),
-        Xe = calculateWorkbookWithSettings(sr.current.book),
+  function autoFitSelectedAxis(fe, Oe) {
+    runGuardedAction(() => {
+      if (
+        isEditingLocked ||
+        latestEditStateRef.current.readOnly ||
+        !commitCellEdit()
+      )
+        return;
+      const Be = resolveSelectedAxisIndexes(fe, Oe),
+        Ue = latestEditStateRef.current.book.sheets.find(
+          (jt) => jt.id === activeSheet.id,
+        ),
+        Xe = calculateWorkbookWithSettings(latestEditStateRef.current.book),
         gt =
           fe === "column"
             ? autoFitColumnWidths(
                 Ue,
                 Be,
                 Xe,
-                Nu,
-                Gi,
-                sr.current.book.datePolicy?.dateSystem,
+                textMeasurer,
+                isShowingFormulas,
+                latestEditStateRef.current.book.datePolicy?.dateSystem,
               )
             : autoFitRowHeights(
                 Ue,
                 Be,
                 Xe,
-                Nu,
-                Gi,
-                sr.current.book.datePolicy?.dateSystem,
+                textMeasurer,
+                isShowingFormulas,
+                latestEditStateRef.current.book.datePolicy?.dateSystem,
               );
-      (Oa(
+      (applyAxisSizes(
         fe,
         gt,
         `AutoFit ${fe === "column" ? "column widths" : "row heights"}`,
       ),
-        Au(null),
-        pi());
+        setAxisResizeState(null),
+        focusGridSurface());
     });
   }
-  function $d(fe, Oe, Be) {
+  function beginAxisResize(fe, Oe, Be) {
     if (
       (Be.preventDefault(),
       Be.stopPropagation(),
-      Be.button !== 0 || je || !ui())
+      Be.button !== 0 || isEditingLocked || !commitCellEdit())
     )
       return;
     const Ue =
-      fe === "column" ? Xn.size(Sn.viewIndex(Oe) ?? 0) : (en[Oe] ?? co);
-    Au({
+      fe === "column"
+        ? columnAxisLayout.size(columnVisibilityIndex.viewIndex(Oe) ?? 0)
+        : (effectiveRowHeights[Oe] ?? defaultRowHeight);
+    setAxisResizeState({
       axis: fe,
       index: Oe,
       start: fe === "column" ? Be.clientX : Be.clientY,
@@ -2822,9 +3358,9 @@ function MainWorksheetEditor({
     });
   }
   ne.useEffect(() => {
-    if (!ri) return;
+    if (!axisResizeState) return;
     const fe = (Xe) =>
-        Au(
+        setAxisResizeState(
           (gt) =>
             gt && {
               ...gt,
@@ -2836,29 +3372,29 @@ function MainWorksheetEditor({
                     gt.initial +
                       ((gt.axis === "column" ? Xe.clientX : Xe.clientY) -
                         gt.start) /
-                        vi,
+                        zoomScale,
                   ),
                 ),
               ),
             },
         ),
       Oe = () => {
-        (ri.size !== ri.initial &&
-          On(() =>
-            Oa(
-              ri.axis,
-              { [ri.index]: ri.size },
-              `Resize ${ri.axis} ${ri.axis === "column" ? columnIndexToLetters(ri.index) : ri.index + 1}`,
+        (axisResizeState.size !== axisResizeState.initial &&
+          runGuardedAction(() =>
+            applyAxisSizes(
+              axisResizeState.axis,
+              { [axisResizeState.index]: axisResizeState.size },
+              `Resize ${axisResizeState.axis} ${axisResizeState.axis === "column" ? columnIndexToLetters(axisResizeState.index) : axisResizeState.index + 1}`,
             ),
           ),
-          Au(null));
+          setAxisResizeState(null));
       },
-      Be = () => Au(null),
+      Be = () => setAxisResizeState(null),
       Ue = (Xe) => {
         Xe.key === "Escape" &&
           (!Xe.defaultPrevented &&
             Xe.target instanceof Element &&
-            Xe.target.closest(".lg-app") === lt.current &&
+            Xe.target.closest(".lg-app") === appRootRef.current &&
             Xe.preventDefault(),
           Be());
       };
@@ -2874,24 +3410,32 @@ function MainWorksheetEditor({
           window.removeEventListener("keydown", Ue));
       }
     );
-  }, [ri, H, he.id, vi, je]);
-  function Is(fe) {
+  }, [
+    axisResizeState,
+    activeWorkbook,
+    activeSheet.id,
+    zoomScale,
+    isEditingLocked,
+  ]);
+  function beginFillDrag(fe) {
     (fe.preventDefault(),
       fe.stopPropagation(),
-      !(fe.button !== 0 || je || !ui()) &&
-        On(() => {
-          Ii();
+      !(fe.button !== 0 || isEditingLocked || !commitCellEdit()) &&
+        runGuardedAction(() => {
+          getSelectedCellAddresses();
           const Oe = {
-            book: sr.current.book,
-            sheetId: he.id,
-            sourceRange: Ye,
-            targetRange: Ye,
+            book: latestEditStateRef.current.book,
+            sheetId: activeSheet.id,
+            sourceRange: activeSelectionRange,
+            targetRange: activeSelectionRange,
           };
-          ((ya.current = null), (Gs.current = Oe), qc(Oe));
+          ((dragAnchorRef.current = null),
+            (fillDragStateRef.current = Oe),
+            setFillDragState(Oe));
         }));
   }
-  function uc(fe) {
-    const Oe = Gs.current;
+  function extendFillDragTo(fe) {
+    const Oe = fillDragStateRef.current;
     if (!Oe) return;
     const Be = parseRangeAddress(Oe.sourceRange),
       Ue = _t(fe),
@@ -2906,34 +3450,34 @@ function MainWorksheetEditor({
         `${columnIndexToLetters(rr)}${wt + 1}`,
       ),
       Br = { ...Oe, targetRange: Mr };
-    ((Gs.current = Br), qc(Br));
+    ((fillDragStateRef.current = Br), setFillDragState(Br));
   }
   ne.useEffect(() => {
-    if (!Fo) return;
+    if (!fillDragState) return;
     const fe = () => {
-        ((Gs.current = null), qc(null));
+        ((fillDragStateRef.current = null), setFillDragState(null));
       },
       Oe = () => {
-        const Ue = Gs.current;
+        const Ue = fillDragStateRef.current;
         if ((fe(), !(!Ue || Ue.targetRange === Ue.sourceRange))) {
           if (
-            sr.current.readOnly ||
-            sr.current.book !== Ue.book ||
-            sr.current.sheetId !== Ue.sheetId
+            latestEditStateRef.current.readOnly ||
+            latestEditStateRef.current.book !== Ue.book ||
+            latestEditStateRef.current.sheetId !== Ue.sheetId
           ) {
-            hn(
+            setErrorNotice(
               "The workbook changed while filling. Select the cells and try again.",
             );
             return;
           }
-          Fd(Ue);
+          setFillPreviewState(Ue);
         }
       },
       Be = (Ue) => {
         Ue.key === "Escape" &&
           (!Ue.defaultPrevented &&
             Ue.target instanceof Element &&
-            Ue.target.closest(".lg-app") === lt.current &&
+            Ue.target.closest(".lg-app") === appRootRef.current &&
             Ue.preventDefault(),
           fe());
       };
@@ -2947,8 +3491,8 @@ function MainWorksheetEditor({
           window.removeEventListener("keydown", Be));
       }
     );
-  }, [!!Fo]);
-  function Qs(fe) {
+  }, [!!fillDragState]);
+  function handleGridKeyDown(fe) {
     var wt;
     if (
       fe.target !== fe.currentTarget ||
@@ -2982,14 +3526,14 @@ function MainWorksheetEditor({
     )
       return;
     if (
-      go &&
+      isOperationBusy &&
       ((Oe && ["z", "y", "b", "i", "u", "d", "r", "v"].includes(Be)) ||
         (!Oe &&
           (fe.key.length === 1 ||
             ["F2", "Delete", "Backspace"].includes(fe.key))))
     ) {
       (fe.preventDefault(),
-        vn("Wait for the current workbook operation to finish."));
+        setStatusNotice("Wait for the current workbook operation to finish."));
       return;
     }
     if (
@@ -2998,38 +3542,44 @@ function MainWorksheetEditor({
     ) {
       fe.preventDefault();
       const rr = (
-        fe.currentTarget.querySelector(`[data-address="${xt}"]`) ??
-        fe.currentTarget
+        fe.currentTarget.querySelector(
+          `[data-address="${activeCellAddress}"]`,
+        ) ?? fe.currentTarget
       ).getBoundingClientRect();
-      Ze({
+      setContextMenuState({
         x: rr.left + Math.min(40, rr.width),
         y: rr.top + Math.min(24, rr.height),
         kind:
-          parseRangeAddress(Ye).lastRow - parseRangeAddress(Ye).firstRow + 1 ===
-          he.rowCount
+          parseRangeAddress(activeSelectionRange).lastRow -
+            parseRangeAddress(activeSelectionRange).firstRow +
+            1 ===
+          activeSheet.rowCount
             ? "column"
-            : parseRangeAddress(Ye).lastCol -
-                  parseRangeAddress(Ye).firstCol +
+            : parseRangeAddress(activeSelectionRange).lastCol -
+                  parseRangeAddress(activeSelectionRange).firstCol +
                   1 ===
-                he.colCount
+                activeSheet.colCount
               ? "row"
               : "cell",
       });
       return;
     }
-    if (fe.key === "Escape" && Bo) {
+    if (fe.key === "Escape" && clipboardSnapshotState) {
       (fe.preventDefault(),
-        Ul(),
-        vn("Cut canceled; source cells remain unchanged."));
+        clearCutSession(),
+        setStatusNotice("Cut canceled; source cells remain unchanged."));
       return;
     }
-    if (fe.key === "Escape" && St.length) {
-      (fe.preventDefault(), dr(xt), Rr(xt), (qt.current = xt));
+    if (fe.key === "Escape" && completedSelectionAreas.length) {
+      (fe.preventDefault(),
+        selectSingleRange(activeCellAddress),
+        setSelectionAnchorAddress(activeCellAddress),
+        (activeCellAddressRef.current = activeCellAddress));
       return;
     }
     if (fe.key === "Escape" && !fe.ctrlKey && !fe.metaKey && !fe.shiftKey) {
       (fe.preventDefault(),
-        (wt = lt.current?.querySelector(
+        (wt = appRootRef.current?.querySelector(
           '[role="tab"][aria-selected="true"]',
         )) == null || wt.focus());
       return;
@@ -3038,7 +3588,7 @@ function MainWorksheetEditor({
       (fe.key === "F5" && !fe.shiftKey && !Oe) ||
       ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "g")
     ) {
-      (fe.preventDefault(), Pn("goToSpecial"));
+      (fe.preventDefault(), runEditorCommand("goToSpecial"));
       return;
     }
     if (
@@ -3046,82 +3596,106 @@ function MainWorksheetEditor({
       fe.shiftKey &&
       fe.key.toLowerCase() === "f"
     ) {
-      (fe.preventDefault(), Pn("search"));
+      (fe.preventDefault(), runEditorCommand("search"));
       return;
     }
-    if (St.length && ["Tab", "Enter"].includes(fe.key)) {
+    if (completedSelectionAreas.length && ["Tab", "Enter"].includes(fe.key)) {
       (fe.preventDefault(),
-        On(() => {
-          const jt = enumerateSelectionCells(Jt).filter((xr) => {
+        runGuardedAction(() => {
+          const jt = enumerateSelectionCells(selectionAreas).filter((xr) => {
             const Sr = _t(xr);
-            return !ni.isHidden(Sr.row) && !Sn.isHidden(Sr.col);
+            return (
+              !rowVisibilityIndex.isHidden(Sr.row) &&
+              !columnVisibilityIndex.isHidden(Sr.col)
+            );
           });
           if (!jt.length) return;
-          const rr = jt.indexOf(xt),
+          const rr = jt.indexOf(activeCellAddress),
             Mr = fe.shiftKey ? -1 : 1,
             Br = jt[(rr + Mr + jt.length) % jt.length];
-          ui() && (or(Br), Rr(Br), (qt.current = Br), fi(Br));
+          commitCellEdit() &&
+            (setActiveCellAddress(Br),
+            setSelectionAnchorAddress(Br),
+            (activeCellAddressRef.current = Br),
+            requestCellScroll(Br));
         }));
       return;
     }
-    const Ue = _t(fe.shiftKey && fe.key.startsWith("Arrow") ? qt.current : xt);
+    const Ue = _t(
+      fe.shiftKey && fe.key.startsWith("Arrow")
+        ? activeCellAddressRef.current
+        : activeCellAddress,
+    );
     let Xe = Ue.row,
       gt = Ue.col;
     if ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "z") {
-      (fe.preventDefault(), fu(fe.shiftKey));
+      (fe.preventDefault(), undoOrRedo(fe.shiftKey));
       return;
     }
     if (fe.ctrlKey || fe.metaKey) {
       const jt = fe.key.toLowerCase();
       if (jt === "1") {
-        (fe.preventDefault(), Pn("numberFormat"));
+        (fe.preventDefault(), runEditorCommand("numberFormat"));
         return;
       }
       if (jt === "v" && fe.altKey) {
-        (fe.preventDefault(), Pn("pasteSpecial"));
+        (fe.preventDefault(), runEditorCommand("pasteSpecial"));
         return;
       }
       if (jt === " ") {
-        (fe.preventDefault(), El("column", Ue.col, fe.shiftKey));
+        (fe.preventDefault(), selectRowOrColumn("column", Ue.col, fe.shiftKey));
         return;
       }
       if (jt === "pageup" || jt === "pagedown") {
         fe.preventDefault();
-        const rr = H.sheets.filter((xr) => !xr.hidden),
-          Mr = rr.findIndex((xr) => xr.id === he.id),
+        const rr = activeWorkbook.sheets.filter((xr) => !xr.hidden),
+          Mr = rr.findIndex((xr) => xr.id === activeSheet.id),
           Br = rr[Mr + (jt === "pageup" ? -1 : 1)];
-        Br && ui() && wi(Br.id);
+        Br && commitCellEdit() && switchActiveWorksheet(Br.id);
         return;
       }
       if (jt.startsWith("arrow")) {
         fe.preventDefault();
-        const rr = Vl(
+        const rr = jumpToDataEdge(
           Ue.row,
           Ue.col,
           jt === "arrowup" || jt === "arrowdown",
           jt === "arrowup" || jt === "arrowleft" ? -1 : 1,
         );
-        da(`${columnIndexToLetters(rr.col)}${rr.row + 1}`, fe.shiftKey);
+        selectCellAddress(
+          `${columnIndexToLetters(rr.col)}${rr.row + 1}`,
+          fe.shiftKey,
+        );
         return;
       }
       if (jt === "a") {
-        (fe.preventDefault(), td());
+        (fe.preventDefault(), selectAllCells());
         return;
       }
       if (["b", "i", "u"].includes(jt)) {
-        if ((fe.preventDefault(), !je)) {
+        if ((fe.preventDefault(), !isEditingLocked)) {
           const rr = jt === "b" ? "bold" : jt === "i" ? "italic" : "underline";
-          Vi({ style: { [rr]: !resolveEffectiveCellStyle(ur?.style)[rr] } });
+          applyCellFormatPatch({
+            style: { [rr]: !resolveEffectiveCellStyle(activeCell?.style)[rr] },
+          });
         }
         return;
       }
       if (jt === "d") {
         (fe.preventDefault(),
-          je ||
-            On(() => {
-              (rt(),
-                So(
-                  applyCellPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+          isEditingLocked ||
+            runGuardedAction(() => {
+              (requireSingleSelectionRange(),
+                commitWorkbookEdit(
+                  applyCellPreview(
+                    activeWorkbook,
+                    buildFillPreview(
+                      activeWorkbook,
+                      activeSheet.id,
+                      activeSelectionRange,
+                      "down",
+                    ),
+                  ),
                   "Fill down",
                 ));
             }));
@@ -3129,41 +3703,49 @@ function MainWorksheetEditor({
       }
       if (jt === "r") {
         (fe.preventDefault(),
-          je ||
-            On(() => {
-              (rt(),
-                So(
-                  applyCellPreview(H, buildFillPreview(H, he.id, Ye, "right")),
+          isEditingLocked ||
+            runGuardedAction(() => {
+              (requireSingleSelectionRange(),
+                commitWorkbookEdit(
+                  applyCellPreview(
+                    activeWorkbook,
+                    buildFillPreview(
+                      activeWorkbook,
+                      activeSheet.id,
+                      activeSelectionRange,
+                      "right",
+                    ),
+                  ),
                   "Fill right",
                 ));
             }));
         return;
       }
       if (jt === "y") {
-        (fe.preventDefault(), fu(true));
+        (fe.preventDefault(), undoOrRedo(true));
         return;
       }
       if (jt === "f" || jt === "h") {
         (fe.preventDefault(),
-          Pl(true),
+          setIsFindBarVisible(true),
           requestAnimationFrame(() => {
-            return Ld.current?.focus();
+            return findInputRef.current?.focus();
           }));
         return;
       }
       if (jt === "home") {
         (fe.preventDefault(),
-          da(
-            `${columnIndexToLetters(Sn.logicalIndex(0))}${ni.logicalIndex(0) + 1}`,
+          selectCellAddress(
+            `${columnIndexToLetters(columnVisibilityIndex.logicalIndex(0))}${rowVisibilityIndex.logicalIndex(0) + 1}`,
             fe.shiftKey,
           ));
         return;
       }
       if (jt === "end") {
         fe.preventDefault();
-        const rr = findOccupiedRangeBounds(he);
-        da(
-          `${columnIndexToLetters(Sn.next(rr?.lastCol ?? 0, -1, true) ?? Sn.logicalIndex(0))}${(ni.next(rr?.lastRow ?? 0, -1, true) ?? ni.logicalIndex(0)) + 1}`,
+        const rr = findOccupiedRangeBounds(activeSheet);
+        selectCellAddress(
+          `${columnIndexToLetters(columnVisibilityIndex.next(rr?.lastCol ?? 0, -1, true) ?? columnVisibilityIndex.logicalIndex(0))}${(rowVisibilityIndex.next(rr?.lastRow ?? 0, -1, true) ?? rowVisibilityIndex.logicalIndex(0)) + 1}`,
           fe.shiftKey,
         );
         return;
@@ -3171,19 +3753,21 @@ function MainWorksheetEditor({
       return;
     }
     if (fe.shiftKey && fe.key === " ") {
-      (fe.preventDefault(), El("row", Ue.row, false));
+      (fe.preventDefault(), selectRowOrColumn("row", Ue.row, false));
       return;
     }
     if (["Home", "PageUp", "PageDown"].includes(fe.key)) {
       (fe.preventDefault(),
         fe.key === "Home"
-          ? (gt = Sn.logicalIndex(0))
-          : (Xe = cs(
+          ? (gt = columnVisibilityIndex.logicalIndex(0))
+          : (Xe = stepVisibleRowIndex(
               Xe,
-              Math.max(1, Math.floor(rowViewport / vi / co) - 1) *
-                (fe.key === "PageUp" ? -1 : 1),
+              Math.max(
+                1,
+                Math.floor(rowViewport / zoomScale / defaultRowHeight) - 1,
+              ) * (fe.key === "PageUp" ? -1 : 1),
             )),
-        da(`${columnIndexToLetters(gt)}${Xe + 1}`, fe.shiftKey));
+        selectCellAddress(`${columnIndexToLetters(gt)}${Xe + 1}`, fe.shiftKey));
       return;
     }
     if (
@@ -3198,62 +3782,83 @@ function MainWorksheetEditor({
     ) {
       if (
         (fe.preventDefault(),
-        fe.key === "ArrowDown" && (Xe = cs(Xe, 1)),
-        fe.key === "Enter" && (Xe = cs(Xe, fe.shiftKey ? -1 : 1)),
-        fe.key === "ArrowUp" && (Xe = cs(Xe, -1)),
-        fe.key === "ArrowLeft" && (gt = xl(gt, -1)),
+        fe.key === "ArrowDown" && (Xe = stepVisibleRowIndex(Xe, 1)),
+        fe.key === "Enter" &&
+          (Xe = stepVisibleRowIndex(Xe, fe.shiftKey ? -1 : 1)),
+        fe.key === "ArrowUp" && (Xe = stepVisibleRowIndex(Xe, -1)),
+        fe.key === "ArrowLeft" && (gt = stepVisibleColumnIndex(gt, -1)),
         (fe.key === "ArrowRight" || fe.key === "Tab") &&
-          (gt = xl(gt, fe.shiftKey && fe.key === "Tab" ? -1 : 1)),
-        !fe.shiftKey && !zr && !kn)
+          (gt = stepVisibleColumnIndex(
+            gt,
+            fe.shiftKey && fe.key === "Tab" ? -1 : 1,
+          )),
+        !fe.shiftKey && !filterValueSearch && !activeColumnSort)
       ) {
-        const rr = ic.find((Mr) => Tp(Mr, Ue.row, Ue.col));
+        const rr = mergeRanges.find((Mr) => Tp(Mr, Ue.row, Ue.col));
         rr &&
-          (gt > Ue.col && (gt = Sn.next(rr.lastCol, 1) ?? Ue.col),
-          gt < Ue.col && (gt = Sn.next(rr.firstCol, -1) ?? Ue.col),
-          Xe > Ue.row && (Xe = ni.next(rr.lastRow, 1) ?? Ue.row),
-          Xe < Ue.row && (Xe = ni.next(rr.firstRow, -1) ?? Ue.row));
+          (gt > Ue.col &&
+            (gt = columnVisibilityIndex.next(rr.lastCol, 1) ?? Ue.col),
+          gt < Ue.col &&
+            (gt = columnVisibilityIndex.next(rr.firstCol, -1) ?? Ue.col),
+          Xe > Ue.row &&
+            (Xe = rowVisibilityIndex.next(rr.lastRow, 1) ?? Ue.row),
+          Xe < Ue.row &&
+            (Xe = rowVisibilityIndex.next(rr.firstRow, -1) ?? Ue.row));
       }
-      const jt = `${columnIndexToLetters(Math.max(0, Math.min(he.colCount - 1, gt)))}${Math.max(1, Math.min(he.rowCount, Xe + 1))}`;
-      da(jt, fe.shiftKey && !["Tab", "Enter"].includes(fe.key));
+      const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, gt)))}${Math.max(1, Math.min(activeSheet.rowCount, Xe + 1))}`;
+      selectCellAddress(jt, fe.shiftKey && !["Tab", "Enter"].includes(fe.key));
       return;
     }
-    (!je &&
+    (!isEditingLocked &&
       (fe.key === "Delete" || fe.key === "Backspace") &&
       (fe.preventDefault(),
-      On(() =>
-        To(
-          Ii().map((jt) => ({
-            sheetId: he.id,
+      runGuardedAction(() =>
+        applyCellPatches(
+          getSelectedCellAddresses().map((jt) => ({
+            sheetId: activeSheet.id,
             address: jt,
-            cell: { ...he.cells[jt], raw: null },
+            cell: { ...activeSheet.cells[jt], raw: null },
           })),
           "Clear selection",
         ),
       )),
-      !je &&
+      !isEditingLocked &&
         (fe.key === "F2" ||
           (fe.key.length === 1 && !fe.ctrlKey && !fe.metaKey && !fe.altKey)) &&
         (fe.preventDefault(),
-        (Ke.current.mode = fe.key !== "F2"),
-        Dt(Ke.current.mode),
-        us(fe.key === "F2" ? L(ur) : fe.key, true)));
+        (formulaPointerStateRef.current.mode = fe.key !== "F2"),
+        setIsFormulaPointMode(formulaPointerStateRef.current.mode),
+        beginCellEdit(
+          fe.key === "F2" ? getEditableCellText(activeCell) : fe.key,
+          true,
+        )));
   }
-  function el() {
-    aa &&
-      On(() => {
-        if (aa.kind === "note") Vi({ note: aa.value });
-        else if (aa.kind === "rename")
-          ua(renameWorkbook(H, aa.value), "Rename workbook");
+  function commitDialogInput() {
+    promptDialogState &&
+      runGuardedAction(() => {
+        if (promptDialogState.kind === "note")
+          applyCellFormatPatch({ note: promptDialogState.value });
+        else if (promptDialogState.kind === "rename")
+          replaceWorkbookSnapshot(
+            renameWorkbook(activeWorkbook, promptDialogState.value),
+            "Rename workbook",
+          );
         else {
-          const fe = addWorksheet(H, aa.value),
+          const fe = addWorksheet(activeWorkbook, promptDialogState.value),
             Oe = fe.sheets.at(-1);
-          (ua(fe, `Add sheet: ${Oe.name}`), wi(Oe.id));
+          (replaceWorkbookSnapshot(fe, `Add sheet: ${Oe.name}`),
+            switchActiveWorksheet(Oe.id));
         }
-        Ia(null);
+        setPromptDialogState(null);
       });
   }
-  const _s = Object.fromEntries(Ln.map((fe, Oe) => [fe, Es + Xn.offset(Oe)])),
-    Iu = (fe, Oe = false) =>
+  const frozenColumnLeftOffsets = Object.fromEntries(
+      frozenColumnIndexes.map((fe, Oe) => [
+        fe,
+        rowHeaderWidth + columnAxisLayout.offset(Oe),
+      ]),
+    ),
+    renderColumnHeader = (fe, Oe = false) =>
       i.jsxs(
         "th",
         {
@@ -3261,20 +3866,24 @@ function MainWorksheetEditor({
           scope: "col",
           "data-column": fe,
           "aria-colindex": fe + 2,
-          className: `${_t(xt).col === fe ? "lg-selected-header" : ""} ${Oe ? "lg-frozen-column" : ""}`,
+          className: `${_t(activeCellAddress).col === fe ? "lg-selected-header" : ""} ${Oe ? "lg-frozen-column" : ""}`,
           style: Oe
-            ? { position: "sticky", left: _s[fe], zIndex: 7 }
+            ? {
+                position: "sticky",
+                left: frozenColumnLeftOffsets[fe],
+                zIndex: 7,
+              }
             : undefined,
           onClick: (Be) => {
-            ai(`${columnIndexToLetters(fe)}1`, false, {
+            insertFormulaReference(`${columnIndexToLetters(fe)}1`, false, {
               range: `${columnIndexToLetters(fe)}:${columnIndexToLetters(fe)}`,
               bounds: {
                 firstRow: 0,
-                lastRow: he.rowCount - 1,
+                lastRow: activeSheet.rowCount - 1,
                 firstCol: fe,
                 lastCol: fe,
               },
-            }) || El("column", fe, Be.shiftKey);
+            }) || selectRowOrColumn("column", fe, Be.shiftKey);
           },
           children: [
             columnIndexToLetters(fe),
@@ -3283,13 +3892,13 @@ function MainWorksheetEditor({
               role: "separator",
               "aria-label": `Resize column ${columnIndexToLetters(fe)}`,
               "aria-orientation": "vertical",
-              "aria-disabled": je,
+              "aria-disabled": isEditingLocked,
               title: text(
                 "Drag to resize; double-click to AutoFit column width",
               ),
-              onPointerDown: (Be) => $d("column", fe, Be),
+              onPointerDown: (Be) => beginAxisResize("column", fe, Be),
               onDoubleClick: (Be) => {
-                (Be.stopPropagation(), Ko("column", fe));
+                (Be.stopPropagation(), autoFitSelectedAxis("column", fe));
               },
               onClick: (Be) => Be.stopPropagation(),
               lang: language(
@@ -3300,68 +3909,79 @@ function MainWorksheetEditor({
         },
         fe,
       ),
-    Ma = (fe, Oe, Be, Ue) => {
+    renderGridRow = (fe, Oe, Be, Ue) => {
       var gt;
       return i.jsx(
         WorksheetGridRow,
         {
-          idPrefix: `${$}-${Ue}`,
+          idPrefix: `${editorIdPrefix}-${Ue}`,
           row: fe,
           pinned: Oe,
-          pinnedTop: (vl ? 22 : 0) + ln.offset(ni.viewIndex(fe) ?? 0),
-          frozenColumns: Ln,
-          frozenColumnOffsets: _s,
-          headings: vl,
+          pinnedTop:
+            (isHeadingsVisible ? 22 : 0) +
+            rowAxisLayout.offset(rowVisibilityIndex.viewIndex(fe) ?? 0),
+          frozenColumns: frozenColumnIndexes,
+          frozenColumnOffsets: frozenColumnLeftOffsets,
+          headings: isHeadingsVisible,
           columns: Be.shownColumns,
           leftGap: Be.leftGap,
           rightGap: Be.rightGap,
-          minimumHeight: en[fe] ?? co,
+          minimumHeight: effectiveRowHeights[fe] ?? defaultRowHeight,
           fixedHeight:
-            he.rowHeights?.[fe] !== undefined ||
-            (ri?.axis === "row" && ri.index === fe),
+            activeSheet.rowHeights?.[fe] !== undefined ||
+            (axisResizeState?.axis === "row" && axisResizeState.index === fe),
           onRowSelect: (Nt) => {
-            ai(`A${fe + 1}`, false, {
+            insertFormulaReference(`A${fe + 1}`, false, {
               range: `${fe + 1}:${fe + 1}`,
               bounds: {
                 firstRow: fe,
                 lastRow: fe,
                 firstCol: 0,
-                lastCol: he.colCount - 1,
+                lastCol: activeSheet.colCount - 1,
               },
-            }) || El("row", fe, Nt);
+            }) || selectRowOrColumn("row", fe, Nt);
           },
-          onResize: (Nt) => $d("row", fe, Nt),
-          onAutoFit: () => Ko("row", fe),
-          onCancelEdit: Da,
-          onFormulaInput: ks,
-          onFormulaKey: qa,
-          formulaHelpId: `${$}-formula-help`,
-          onFormulaPick: ai,
-          formulaReference: Tt?.sheetId === he.id ? Tt.bounds : null,
+          onResize: (Nt) => beginAxisResize("row", fe, Nt),
+          onAutoFit: () => autoFitSelectedAxis("row", fe),
+          onCancelEdit: cancelCellEdit,
+          onFormulaInput: syncFormulaEditorSelection,
+          onFormulaKey: handleFormulaKeyDown,
+          formulaHelpId: `${editorIdPrefix}-formula-help`,
+          onFormulaPick: insertFormulaReference,
+          formulaReference:
+            activeFormulaReference?.sheetId === activeSheet.id
+              ? activeFormulaReference.bounds
+              : null,
           formulaDraftActive: !!(
-            (gt = kr.current) != null && gt.value.startsWith("=")
+            (gt = activeCellEditRef.current) != null && gt.value.startsWith("=")
           ),
           onDragStart: (Nt, wt) => {
-            ((ya.current = Nt), ($i.current = wt ? [...Jt] : []));
+            ((dragAnchorRef.current = Nt),
+              (dragBaseSelectionsRef.current = wt ? [...selectionAreas] : []));
           },
           onDragEnter: (Nt, wt) => {
-            if (Ke.current.dragging && wt === 1) {
-              ai(Nt, true);
+            if (formulaPointerStateRef.current.dragging && wt === 1) {
+              insertFormulaReference(Nt, true);
               return;
             }
-            Gs.current && wt === 1
-              ? uc(Nt)
-              : ya.current &&
+            fillDragStateRef.current && wt === 1
+              ? extendFillDragTo(Nt)
+              : dragAnchorRef.current &&
                 wt === 1 &&
-                ((qt.current = Nt),
-                On(() => Ut([...$i.current, wy(ya.current, Nt)])),
-                or(ya.current));
+                ((activeCellAddressRef.current = Nt),
+                runGuardedAction(() =>
+                  applySelectionAreas([
+                    ...dragBaseSelectionsRef.current,
+                    wy(dragAnchorRef.current, Nt),
+                  ]),
+                ),
+                setActiveCellAddress(dragAnchorRef.current));
           },
-          onNavigate: pu,
+          onNavigate: moveSelectionAfterCommit,
           onPivotDrill: (Nt) => {
             var jt;
             const wt = _t(Nt);
-            return (jt = he.pivots) != null &&
+            return (jt = activeSheet.pivots) != null &&
               jt.some((rr) => {
                 const Mr = parseRangeAddress(rr.outputRange);
                 return (
@@ -3371,56 +3991,67 @@ function MainWorksheetEditor({
                   wt.col <= Mr.lastCol
                 );
               })
-              ? (da(Nt), Pn("pivotExplore"), true)
+              ? (selectCellAddress(Nt), runEditorCommand("pivotExplore"), true)
               : false;
           },
-          commentAddresses: cu,
+          commentAddresses: commentedCellAddresses,
           onReview: (Nt) => {
-            (da(Nt), Pn("comments"));
+            (selectCellAddress(Nt), runEditorCommand("comments"));
           },
-          onLink: (Nt, wt) => On(() => Ts(Nt, wt)),
-          onFillStart: Is,
-          onFillOptions: () => Pn("fillSeries"),
-          fillDragging: !!Fo || St.length > 0,
-          workbook: H,
-          mergeBounds: ic,
-          displayedRows: Oe ? Dn : Be.shownRows,
+          onLink: (Nt, wt) =>
+            runGuardedAction(() => navigateToSheetCell(Nt, wt)),
+          onFillStart: beginFillDrag,
+          onFillOptions: () => runEditorCommand("fillSeries"),
+          fillDragging: !!fillDragState || completedSelectionAreas.length > 0,
+          workbook: activeWorkbook,
+          mergeBounds: mergeRanges,
+          displayedRows: Oe ? frozenRowIndexes : Be.shownRows,
           filterHeader:
-            Hr && fe === parseRangeAddress(Hr.context.range).firstRow
-              ? Hr.fields
+            filterResult &&
+            fe === parseRangeAddress(filterResult.context.range).firstRow
+              ? filterResult.fields
               : undefined,
           filteredColumns:
-            Hr?.context.definition.columns.map((Nt) => Nt.column) ?? [],
+            filterResult?.context.definition.columns.map((Nt) => Nt.column) ??
+            [],
           onColumnFilter: (Nt) => {
-            (Pn("populationFilter"), Bn(Nt));
+            (runEditorCommand("populationFilter"), setActiveFilterColumn(Nt));
           },
-          sortedView: !!(zr || kn),
-          ruleStyles: He,
-          conditionalFormatter: Ie,
-          sheetId: he.id,
-          cells: he.cells,
-          active: xt,
-          selectedBounds: Fo ? parseRangeAddress(Fo.targetRange) : ee,
-          selectionBounds: Fo ? [parseRangeAddress(Fo.targetRange)] : fr,
-          calc: Qr,
-          showFormulas: Gi,
+          sortedView: !!(filterValueSearch || activeColumnSort),
+          ruleStyles: getConditionalRuleStyle,
+          conditionalFormatter: conditionalFormatEvaluator,
+          sheetId: activeSheet.id,
+          cells: activeSheet.cells,
+          active: activeCellAddress,
+          selectedBounds: fillDragState
+            ? parseRangeAddress(fillDragState.targetRange)
+            : selectionRangeBounds,
+          selectionBounds: fillDragState
+            ? [parseRangeAddress(fillDragState.targetRange)]
+            : selectionAreaRanges,
+          calc: workbookCalculator,
+          showFormulas: isShowingFormulas,
           editing:
-            an.activeId === Ue && (!kr.current || kr.current.sheetId === he.id)
-              ? gr
+            splitPaneSizes.activeId === Ue &&
+            (!activeCellEditRef.current ||
+              activeCellEditRef.current.sheetId === activeSheet.id)
+              ? cellEditState
               : null,
-          setEditing: (Nt) => (Nt === null ? Da() : us(Nt, true)),
+          setEditing: (Nt) =>
+            Nt === null ? cancelCellEdit() : beginCellEdit(Nt, true),
           select: (Nt, wt, jt) => {
             var rr;
-            (da(Nt, wt, jt),
-              (rr = to.current) == null || rr.focus({ preventScroll: true }));
+            (selectCellAddress(Nt, wt, jt),
+              (rr = gridContainerRef.current) == null ||
+                rr.focus({ preventScroll: true }));
           },
-          saveCell: ui,
-          readOnly: je,
+          saveCell: commitCellEdit,
+          readOnly: isEditingLocked,
         },
         fe,
       );
     },
-    zd = (fe, Oe, Be) =>
+    renderVirtualSpacer = (fe, Oe, Be) =>
       fe > 0
         ? i.jsx(
             "tr",
@@ -3433,20 +4064,29 @@ function MainWorksheetEditor({
             Oe,
           )
         : null;
-  function tl(fe) {
+  function activateGridPane(fe) {
     var Oe;
-    return an.active.current === fe
+    return splitPaneSizes.active.current === fe
       ? true
-      : !((Oe = kr.current) != null && Oe.value.startsWith("=")) && !ui()
+      : !(
+            (Oe = activeCellEditRef.current) != null && Oe.value.startsWith("=")
+          ) && !commitCellEdit()
         ? false
-        : (an.activate(fe), (to.current = an.refs.current[fe] ?? null), true);
+        : (splitPaneSizes.activate(fe),
+          (gridContainerRef.current = splitPaneSizes.refs.current[fe] ?? null),
+          true);
   }
-  function Al(fe) {
-    const Oe = _t(xt),
-      Be = zr || kn ? undefined : ic.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
-      Ue = Be ? `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}` : xt,
-      Xe = an.views[fe],
-      gt = Lo(Xe),
+  function renderGridPane(fe) {
+    const Oe = _t(activeCellAddress),
+      Be =
+        filterValueSearch || activeColumnSort
+          ? undefined
+          : mergeRanges.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
+      Ue = Be
+        ? `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}`
+        : activeCellAddress,
+      Xe = splitPaneSizes.views[fe],
+      gt = computeGridViewport(Xe),
       {
         rowWindow,
         columnWindow,
@@ -3459,39 +4099,50 @@ function MainWorksheetEditor({
     return i.jsxs("div", {
       className: "lg-grid-stage",
       onPointerDownCapture: (Sr) => {
-        Ha(Sr) || tl(fe) || (Sr.preventDefault(), Sr.stopPropagation());
+        handleFormulaPointerDown(Sr) ||
+          activateGridPane(fe) ||
+          (Sr.preventDefault(), Sr.stopPropagation());
       },
-      onFocusCapture: () => tl(fe),
+      onFocusCapture: () => activateGridPane(fe),
       children: [
         i.jsx("div", {
           className: "lg-grid-scroll",
-          id: `${$}-${fe}-grid`,
+          id: `${editorIdPrefix}-${fe}-grid`,
           ref: (Sr) => {
-            (an.bindings[fe](Sr),
-              an.active.current === fe && (to.current = Sr));
+            (splitPaneSizes.bindings[fe](Sr),
+              splitPaneSizes.active.current === fe &&
+                (gridContainerRef.current = Sr));
           },
           tabIndex: 0,
           role: "grid",
-          "aria-rowcount": he.rowCount + 1,
-          "aria-colcount": he.colCount + 1,
-          "aria-readonly": je,
+          "aria-rowcount": activeSheet.rowCount + 1,
+          "aria-colcount": activeSheet.colCount + 1,
+          "aria-readonly": isEditingLocked,
           "aria-multiselectable": "true",
-          "aria-describedby": `${$}-grid-help`,
+          "aria-describedby": `${editorIdPrefix}-grid-help`,
           "aria-activedescendant":
-            [...Dn, ...shownRows].includes(_t(xt).row) &&
-            [...Ln, ...shownColumns].includes(_t(xt).col)
-              ? `${$}-${fe}-${Ue}`
+            [...frozenRowIndexes, ...shownRows].includes(
+              _t(activeCellAddress).row,
+            ) &&
+            [...frozenColumnIndexes, ...shownColumns].includes(
+              _t(activeCellAddress).col,
+            )
+              ? `${editorIdPrefix}-${fe}-${Ue}`
               : undefined,
-          "aria-label": Or
+          "aria-label": sheetSplitPanes
             ? `Worksheet pane ${fe.replace("-", " ")}`
             : text("Editable worksheet grid"),
           onScroll: (Sr) => {
-            Ca(fe, Sr.currentTarget.scrollTop, Sr.currentTarget.scrollLeft);
+            applyPaneScrollOffsets(
+              fe,
+              Sr.currentTarget.scrollTop,
+              Sr.currentTarget.scrollLeft,
+            );
           },
           onKeyDown: (Sr) => {
             var Wi;
             if (
-              Or &&
+              sheetSplitPanes &&
               Sr.key === "F6" &&
               Sr.target === Sr.currentTarget &&
               !Sr.defaultPrevented &&
@@ -3500,13 +4151,13 @@ function MainWorksheetEditor({
               !Sr.altKey
             ) {
               Sr.preventDefault();
-              const Di = Pv(Or),
+              const Di = Pv(sheetSplitPanes),
                 $o = Di.indexOf(fe),
                 Ds = Di[($o + (Sr.shiftKey ? Di.length - 1 : 1)) % Di.length];
-              tl(Ds) &&
-                ((Wi = an.refs.current[Ds]) == null ||
+              activateGridPane(Ds) &&
+                ((Wi = splitPaneSizes.refs.current[Ds]) == null ||
                   Wi.focus({ preventScroll: true }));
-            } else Qs(Sr);
+            } else handleGridKeyDown(Sr);
           },
           onContextMenu: (Sr) => {
             const Wi = Sr.target;
@@ -3515,31 +4166,31 @@ function MainWorksheetEditor({
             const Di = Wi.closest("[data-address]"),
               $o = Wi.closest("[data-column]"),
               Ds = Wi.closest("[data-row-header]");
-            if (!(!Di && !$o && !Ds) && ui()) {
+            if (!(!Di && !$o && !Ds) && commitCellEdit()) {
               if ((Sr.preventDefault(), $o)) {
                 const qo = Number($o.dataset.column);
-                fr.some(
+                selectionAreaRanges.some(
                   (yo) =>
                     yo.firstRow === 0 &&
-                    yo.lastRow === he.rowCount - 1 &&
+                    yo.lastRow === activeSheet.rowCount - 1 &&
                     qo >= yo.firstCol &&
                     qo <= yo.lastCol,
-                ) || El("column", qo, false);
+                ) || selectRowOrColumn("column", qo, false);
               } else if (Ds) {
                 const qo = Number(Ds.dataset.rowHeader);
-                fr.some(
+                selectionAreaRanges.some(
                   (yo) =>
                     yo.firstCol === 0 &&
-                    yo.lastCol === he.colCount - 1 &&
+                    yo.lastCol === activeSheet.colCount - 1 &&
                     qo >= yo.firstRow &&
                     qo <= yo.lastRow,
-                ) || El("row", qo, false);
+                ) || selectRowOrColumn("row", qo, false);
               } else if (Di) {
                 const qo = _t(Di.dataset.address);
-                fr.some((yo) => Tp(yo, qo.row, qo.col)) ||
-                  da(Di.dataset.address);
+                selectionAreaRanges.some((yo) => Tp(yo, qo.row, qo.col)) ||
+                  selectCellAddress(Di.dataset.address);
               }
-              Ze({
+              setContextMenuState({
                 x: Sr.clientX,
                 y: Sr.clientY,
                 kind: $o ? "column" : Ds ? "row" : "cell",
@@ -3550,50 +4201,60 @@ function MainWorksheetEditor({
             Sr.target !== Sr.currentTarget ||
               Sr.defaultPrevented ||
               (Sr.preventDefault(),
-              On(() => Sr.clipboardData.setData("text/plain", ed())));
+              runGuardedAction(() =>
+                Sr.clipboardData.setData("text/plain", selectionToTsv()),
+              ));
           },
           onCut: (Sr) => {
             Sr.target !== Sr.currentTarget ||
-              je ||
-              go ||
+              isEditingLocked ||
+              isOperationBusy ||
               Sr.defaultPrevented ||
               (Sr.preventDefault(),
-              On(() => {
-                (Sr.clipboardData.setData("text/plain", ed(true)),
-                  vn(
+              runGuardedAction(() => {
+                (Sr.clipboardData.setData("text/plain", selectionToTsv(true)),
+                  setStatusNotice(
                     "Cut is ready. Select a destination and paste to preview the move.",
                   ));
               }));
           },
           onPaste: (Sr) => {
             Sr.target !== Sr.currentTarget ||
-              je ||
-              go ||
+              isEditingLocked ||
+              isOperationBusy ||
               Sr.defaultPrevented ||
-              (Sr.preventDefault(), zl(Sr.clipboardData.getData("text/plain")));
+              (Sr.preventDefault(),
+              pasteClipboardText(Sr.clipboardData.getData("text/plain")));
           },
           onPointerUp: () => {
-            ya.current = null;
+            dragAnchorRef.current = null;
           },
           onPointerLeave: (Sr) => {
-            Sr.buttons === 0 && (ya.current = null);
+            Sr.buttons === 0 && (dragAnchorRef.current = null);
           },
           children: i.jsxs("table", {
-            className: `lg-grid ${ec ? "" : "no-gridlines"} ${vl ? "" : "no-headings"}`,
+            className: `lg-grid ${isGridlinesVisible ? "" : "no-gridlines"} ${isHeadingsVisible ? "" : "no-headings"}`,
             style: {
-              zoom: vi,
-              width: columnWindow.total + Ri + Es,
+              zoom: zoomScale,
+              width: columnWindow.total + frozenColumnsWidth + rowHeaderWidth,
               minWidth: 0,
             },
             role: "presentation",
             children: [
               i.jsxs("colgroup", {
                 children: [
-                  vl && i.jsx("col", { style: { width: Es } }),
-                  Ln.map((Sr) =>
+                  isHeadingsVisible &&
+                    i.jsx("col", { style: { width: rowHeaderWidth } }),
+                  frozenColumnIndexes.map((Sr) =>
                     i.jsx(
                       "col",
-                      { style: { width: Xn.size(Sn.viewIndex(Sr)) } },
+                      {
+                        style: {
+                          width: columnAxisLayout.size(
+                            columnVisibilityIndex.viewIndex(Sr),
+                          ),
+                        },
+                      },
                       Sr,
                     ),
                   ),
@@ -3601,7 +4262,13 @@ function MainWorksheetEditor({
                   shownColumns.map((Sr) =>
                     i.jsx(
                       "col",
-                      { style: { width: Xn.size(Sn.viewIndex(Sr)) } },
+                      {
+                        style: {
+                          width: columnAxisLayout.size(
+                            columnVisibilityIndex.viewIndex(Sr),
+                          ),
+                        },
+                      },
                       Sr,
                     ),
                   ),
@@ -3613,12 +4280,12 @@ function MainWorksheetEditor({
                   role: "row",
                   "aria-rowindex": 1,
                   children: [
-                    vl &&
+                    isHeadingsVisible &&
                       i.jsx("th", {
                         role: "columnheader",
                         className: "lg-corner",
                         "aria-label": text("Select all cells"),
-                        onClick: td,
+                        onClick: selectAllCells,
                         lang: language("Select all cells"),
                         "data-ui-label": "Select all cells",
                         children: i.jsx("span", {
@@ -3628,13 +4295,15 @@ function MainWorksheetEditor({
                           }),
                         }),
                       }),
-                    Ln.map((Sr) => Iu(Sr, true)),
+                    frozenColumnIndexes.map((Sr) =>
+                      renderColumnHeader(Sr, true),
+                    ),
                     leftGap > 0 &&
                       i.jsx("th", {
                         className: "lg-column-spacer",
                         "aria-hidden": "true",
                       }),
-                    shownColumns.map((Sr) => Iu(Sr)),
+                    shownColumns.map((Sr) => renderColumnHeader(Sr)),
                     rightGap > 0 &&
                       i.jsx("th", {
                         className: "lg-column-spacer",
@@ -3645,46 +4314,62 @@ function MainWorksheetEditor({
               }),
               i.jsxs("tbody", {
                 children: [
-                  Dn.map((Sr) => Ma(Sr, true, gt, fe)),
-                  zd(rowWindow.leading, "before", visibleColumnCount),
-                  shownRows.map((Sr) => Ma(Sr, false, gt, fe)),
-                  zd(rowWindow.trailing, "after", visibleColumnCount),
+                  frozenRowIndexes.map((Sr) => renderGridRow(Sr, true, gt, fe)),
+                  renderVirtualSpacer(
+                    rowWindow.leading,
+                    "before",
+                    visibleColumnCount,
+                  ),
+                  shownRows.map((Sr) => renderGridRow(Sr, false, gt, fe)),
+                  renderVirtualSpacer(
+                    rowWindow.trailing,
+                    "after",
+                    visibleColumnCount,
+                  ),
                 ],
               }),
             ],
           }),
         }),
         i.jsx(DrawingObjectOverlay, {
-          workbook: H,
-          sheetId: he.id,
-          selection: JSON.stringify(Jt),
-          calc: Qr,
-          readOnly: je,
-          scale: vi,
-          onWorkbookChange: So,
+          workbook: activeWorkbook,
+          sheetId: activeSheet.id,
+          selection: JSON.stringify(selectionAreas),
+          calc: workbookCalculator,
+          readOnly: isEditingLocked,
+          scale: zoomScale,
+          onWorkbookChange: commitWorkbookEdit,
           positionForCell: (Sr) => {
             const Wi = _t(Sr);
-            if (ni.isHidden(Wi.row) || Sn.isHidden(Wi.col)) return null;
-            const Di = ro(Wi.row),
-              $o = Wi.row < Su,
-              Ds = Wi.col < Tu;
+            if (
+              rowVisibilityIndex.isHidden(Wi.row) ||
+              columnVisibilityIndex.isHidden(Wi.col)
+            )
+              return null;
+            const Di = scrollableRowPositionOf(Wi.row),
+              $o = Wi.row < pinnedRowCount,
+              Ds = Wi.col < frozenColumnCount;
             if (!$o && Di === undefined) return null;
             const qo =
-                (Es +
+                (rowHeaderWidth +
                   (Ds
-                    ? Xn.offset(Sn.viewIndex(Wi.col))
-                    : Ri +
-                      mn.offset(Sn.viewIndex(Wi.col) - yn) -
+                    ? columnAxisLayout.offset(
+                        columnVisibilityIndex.viewIndex(Wi.col),
+                      )
+                    : frozenColumnsWidth +
+                      scrollableColumnLayout.offset(
+                        columnVisibilityIndex.viewIndex(Wi.col) - yn,
+                      ) -
                       columnWindow.logicalOffset)) *
-                vi,
+                zoomScale,
               yo =
-                ((vl ? 22 : 0) +
+                ((isHeadingsVisible ? 22 : 0) +
                   ($o
-                    ? ln.offset(ni.viewIndex(Wi.row))
-                    : zi +
-                      Gn.offset(Math.max(0, Di)) -
+                    ? rowAxisLayout.offset(rowVisibilityIndex.viewIndex(Wi.row))
+                    : frozenRowsHeight +
+                      scrollableRowLayout.offset(Math.max(0, Di)) -
                       rowWindow.logicalOffset)) *
-                vi;
+                zoomScale;
             return qo < -5e3 || yo < -5e3 || qo > Xe.width || yo > Xe.height
               ? null
               : { left: qo, top: yo };
@@ -3693,81 +4378,116 @@ function MainWorksheetEditor({
       ],
     });
   }
-  const cc = ne.useCallback((fe) => {
+  const closeContextMenu = ne.useCallback((fe) => {
       var Oe;
-      (Ze(null),
-        fe && ((Oe = to.current) == null || Oe.focus({ preventScroll: true })));
+      (setContextMenuState(null),
+        fe &&
+          ((Oe = gridContainerRef.current) == null ||
+            Oe.focus({ preventScroll: true })));
     }, []),
-    no = go
+    editBlockReason = isOperationBusy
       ? "Wait for the current workbook operation to finish."
-      : je
+      : isEditingLocked
         ? readOnly
           ? "The host has opened this workbook read-only."
           : "Unprotect the worksheet before editing."
         : undefined,
-    fo =
-      Jt.length > 1
+    multiRangeBlockReason =
+      selectionAreas.length > 1
         ? "Select one rectangular range for this command."
         : undefined;
-  let Xa;
+  let selectionReadError;
   try {
-    _e && Ii();
+    contextMenuState && getSelectedCellAddresses();
   } catch (fe) {
-    Xa = fe.message;
+    selectionReadError = fe.message;
   }
-  const ds = [
-    { name: "Cut", run: () => void Ru(true), reason: no ?? fo ?? Xa },
-    { name: "Copy", run: () => void Ru(false), reason: fo ?? Xa },
-    { name: "Paste", run: () => void sc(), reason: no ?? fo },
-    { name: "Paste Special", run: () => Pn("pasteSpecial"), reason: no ?? fo },
-    { name: "Format Cells", run: () => Pn("numberFormat"), reason: no },
-    { name: "Cell Styles", run: () => Pn("cellStyle"), reason: no },
+  const contextMenuActions = [
+    {
+      name: "Cut",
+      run: () => void copyOrCutSelection(true),
+      reason: editBlockReason ?? multiRangeBlockReason ?? selectionReadError,
+    },
+    {
+      name: "Copy",
+      run: () => void copyOrCutSelection(false),
+      reason: multiRangeBlockReason ?? selectionReadError,
+    },
+    {
+      name: "Paste",
+      run: () => void pasteFromClipboard(),
+      reason: editBlockReason ?? multiRangeBlockReason,
+    },
+    {
+      name: "Paste Special",
+      run: () => runEditorCommand("pasteSpecial"),
+      reason: editBlockReason ?? multiRangeBlockReason,
+    },
+    {
+      name: "Format Cells",
+      run: () => runEditorCommand("numberFormat"),
+      reason: editBlockReason,
+    },
+    {
+      name: "Cell Styles",
+      run: () => runEditorCommand("cellStyle"),
+      reason: editBlockReason,
+    },
     {
       name: "Insert / Delete / Move Rows",
-      run: () => Pn("insertRow"),
-      reason: no ?? fo,
+      run: () => runEditorCommand("insertRow"),
+      reason: editBlockReason ?? multiRangeBlockReason,
     },
     {
       name: "Insert / Delete / Move Columns",
-      run: () => Pn("insertColumn"),
-      reason: no ?? fo,
+      run: () => runEditorCommand("insertColumn"),
+      reason: editBlockReason ?? multiRangeBlockReason,
     },
-    { name: "AutoFit Column Width", run: () => Ko("column"), reason: no ?? fo },
-    { name: "AutoFit Row Height", run: () => Ko("row"), reason: no ?? fo },
+    {
+      name: "AutoFit Column Width",
+      run: () => autoFitSelectedAxis("column"),
+      reason: editBlockReason ?? multiRangeBlockReason,
+    },
+    {
+      name: "AutoFit Row Height",
+      run: () => autoFitSelectedAxis("row"),
+      reason: editBlockReason ?? multiRangeBlockReason,
+    },
     {
       name: "Hide / Unhide / Freeze",
-      run: () => Pn("viewSettings"),
-      reason: no ?? fo,
+      run: () => runEditorCommand("viewSettings"),
+      reason: editBlockReason ?? multiRangeBlockReason,
     },
     {
       name: "Clear Contents",
       run: () =>
-        On(() =>
-          To(
-            Ii().map((fe) => ({
-              sheetId: he.id,
+        runGuardedAction(() =>
+          applyCellPatches(
+            getSelectedCellAddresses().map((fe) => ({
+              sheetId: activeSheet.id,
               address: fe,
-              cell: { ...he.cells[fe], raw: null },
+              cell: { ...activeSheet.cells[fe], raw: null },
             })),
             "Clear selection",
           ),
         ),
-      reason: no ?? Xa,
+      reason: editBlockReason ?? selectionReadError,
     },
     {
       name: "Add / Edit Note",
-      run: () => Ia({ kind: "note", value: ur?.note ?? "" }),
-      reason: no,
+      run: () =>
+        setPromptDialogState({ kind: "note", value: activeCell?.note ?? "" }),
+      reason: editBlockReason,
     },
-    { name: "Comments", run: () => Pn("comments") },
-    { name: "Link", run: () => Pn("hyperlink") },
+    { name: "Comments", run: () => runEditorCommand("comments") },
+    { name: "Link", run: () => runEditorCommand("hyperlink") },
   ];
   return i.jsxs("div", {
     className: "lg-app",
-    ref: lt,
-    lang: R.locale,
+    ref: appRootRef,
+    lang: workbookMessages.locale,
     role: "region",
-    "aria-label": H.name,
+    "aria-label": activeWorkbook.name,
     onKeyDown: (fe) => {
       var wt;
       if (
@@ -3777,17 +4497,24 @@ function MainWorksheetEditor({
         fe.metaKey ||
         fe.altKey ||
         fe.nativeEvent.isComposing ||
-        $e ||
-        aa ||
-        (kr.current && (kr.current.value !== kr.current.originalText || !ui()))
+        activeDialogMode ||
+        promptDialogState ||
+        (activeCellEditRef.current &&
+          (activeCellEditRef.current.value !==
+            activeCellEditRef.current.originalText ||
+            !commitCellEdit()))
       )
         return;
       fe.preventDefault();
       const Oe = [
-          lt.current?.querySelector('[role="tab"][aria-selected="true"]'),
-          pt.current,
-          to.current,
-          lt.current?.querySelector('[data-sheet-id][aria-current="true"]'),
+          appRootRef.current?.querySelector(
+            '[role="tab"][aria-selected="true"]',
+          ),
+          formulaInputRef.current,
+          gridContainerRef.current,
+          appRootRef.current?.querySelector(
+            '[data-sheet-id][aria-current="true"]',
+          ),
         ].filter((jt) => !!jt),
         Be = document.activeElement,
         Ue =
@@ -3812,20 +4539,20 @@ function MainWorksheetEditor({
         children: [
           i.jsx("button", {
             onClick: () => {
-              return to.current?.focus();
+              return gridContainerRef.current?.focus();
             },
             children: i.jsx(LocalizedText, { children: "Skip to worksheet" }),
           }),
           i.jsx("button", {
             onClick: () => {
-              return pt.current?.focus();
+              return formulaInputRef.current?.focus();
             },
             children: i.jsx(LocalizedText, { children: "Skip to formula bar" }),
           }),
         ],
       }),
       i.jsx("p", {
-        id: `${$}-grid-help`,
+        id: `${editorIdPrefix}-grid-help`,
         className: "lg-sr-only",
         children: i.jsx(LocalizedText, {
           children:
@@ -3837,123 +4564,137 @@ function MainWorksheetEditor({
         role: "status",
         "aria-live": "polite",
         "aria-atomic": "true",
-        "aria-label": R.text("Cell position"),
-        children: R.message(
+        "aria-label": workbookMessages.text("Cell position"),
+        children: workbookMessages.message(
           "{sheet}, cell {address}, row {row}, column {column}. {value}{formula}{access}",
           {
-            sheet: he.name,
-            address: xt,
-            row: _t(xt).row + 1,
-            column: _t(xt).col + 1,
-            value: (Qr(he.id, xt) == null
-              ? R.text("Blank")
+            sheet: activeSheet.name,
+            address: activeCellAddress,
+            row: _t(activeCellAddress).row + 1,
+            column: _t(activeCellAddress).col + 1,
+            value: (workbookCalculator(activeSheet.id, activeCellAddress) ==
+            null
+              ? workbookMessages.text("Blank")
               : formatLocalizedNumberDisplay(
-                  Qr(he.id, xt),
-                  he.cells[xt],
-                  H.datePolicy?.dateSystem,
-                  R.entryLocale,
+                  workbookCalculator(activeSheet.id, activeCellAddress),
+                  activeSheet.cells[activeCellAddress],
+                  activeWorkbook.datePolicy?.dateSystem,
+                  workbookMessages.entryLocale,
                 )
             ).slice(0, 250),
             formula:
-              typeof he.cells[xt]?.raw == "string" &&
-              String(he.cells[xt].raw).startsWith("=") &&
-              !he.cells[xt].literal
-                ? R.message(" Formula: {formula}.", {
-                    formula: String(he.cells[xt].raw).slice(0, 250),
+              typeof activeSheet.cells[activeCellAddress]?.raw == "string" &&
+              String(activeSheet.cells[activeCellAddress].raw).startsWith(
+                "=",
+              ) &&
+              !activeSheet.cells[activeCellAddress].literal
+                ? workbookMessages.message(" Formula: {formula}.", {
+                    formula: String(
+                      activeSheet.cells[activeCellAddress].raw,
+                    ).slice(0, 250),
                   })
                 : "",
-            access: je ? R.text(" Read only.") : "",
+            access: isEditingLocked ? workbookMessages.text(" Read only.") : "",
           },
         ),
       }),
-      _e &&
+      contextMenuState &&
         i.jsx(
           GridContextMenu,
           {
-            ..._e,
-            label: `${_e.kind === "cell" ? "Cells" : _e.kind === "row" ? "Rows" : "Columns"} ${Ye}`,
-            actions: ds,
-            workbook: H,
-            selection: `${he.id}:${Jt.join(";")}`,
-            onClose: cc,
+            ...contextMenuState,
+            label: `${contextMenuState.kind === "cell" ? "Cells" : contextMenuState.kind === "row" ? "Rows" : "Columns"} ${activeSelectionRange}`,
+            actions: contextMenuActions,
+            workbook: activeWorkbook,
+            selection: `${activeSheet.id}:${selectionAreas.join(";")}`,
+            onClose: closeContextMenu,
           },
-          `${_e.x}:${_e.y}:${_e.kind}`,
+          `${contextMenuState.x}:${contextMenuState.y}:${contextMenuState.kind}`,
         ),
-      Xc &&
+      fillPreviewState &&
         i.jsx(FillPreviewDialog, {
-          workbook: H,
-          sheetId: Xc.sheetId,
-          sourceRange: Xc.sourceRange,
-          targetRange: Xc.targetRange,
-          readOnly: je,
-          onWorkbookChange: So,
-          onSelectionChange: dr,
+          workbook: activeWorkbook,
+          sheetId: fillPreviewState.sheetId,
+          sourceRange: fillPreviewState.sourceRange,
+          targetRange: fillPreviewState.targetRange,
+          readOnly: isEditingLocked,
+          onWorkbookChange: commitWorkbookEdit,
+          onSelectionChange: selectSingleRange,
           onClose: () => {
-            (Fd(null), pi());
+            (setFillPreviewState(null), focusGridSurface());
           },
         }),
-      Zc &&
+      moveCellsSource &&
         i.jsx(MoveCellsDialog, {
-          workbook: H,
-          source: Zc,
-          sheetId: he.id,
-          range: Ye,
+          workbook: activeWorkbook,
+          source: moveCellsSource,
+          sheetId: activeSheet.id,
+          range: activeSelectionRange,
           readOnly,
-          onWorkbookChange: ua,
-          onSelectionChange: dr,
-          onApplied: Ul,
+          onWorkbookChange: replaceWorkbookSnapshot,
+          onSelectionChange: selectSingleRange,
+          onApplied: clearCutSession,
           onClose: () => {
-            (Zs(null), pi());
+            (setMoveCellsSource(null), focusGridSurface());
           },
         }),
-      $e &&
+      activeDialogMode &&
         (() => {
           const fe = {
-            mode: $e,
-            workbook: H,
-            sheetId: he.id,
-            range: Ye,
-            readOnly: $e === "protection" ? readOnly : je,
-            onClose: () => Je(null),
-            onWorkbookChange: So,
+            mode: activeDialogMode,
+            workbook: activeWorkbook,
+            sheetId: activeSheet.id,
+            range: activeSelectionRange,
+            readOnly:
+              activeDialogMode === "protection" ? readOnly : isEditingLocked,
+            onClose: () => setActiveDialogMode(null),
+            onWorkbookChange: commitWorkbookEdit,
           };
-          if ($e === "automation")
+          if (activeDialogMode === "automation")
             return i.jsx(
               AutomationScriptsDialog,
               {
-                workbook: H,
-                sheetId: he.id,
-                range: Ye,
-                readOnly: je,
-                initialInspection: ze,
+                workbook: activeWorkbook,
+                sheetId: activeSheet.id,
+                range: activeSelectionRange,
+                readOnly: isEditingLocked,
+                initialInspection: automationInspection,
                 onClose: fe.onClose,
                 onPreserve: (Ue) => {
-                  const Xe = sr.current.book,
+                  const Xe = latestEditStateRef.current.book,
                     gt = preserveAutomationArtifact(Xe, Ue, {
                       actor,
-                      readOnly: sr.current.readOnly,
+                      readOnly: latestEditStateRef.current.readOnly,
                     });
-                  (gt !== Xe && di(gt),
-                    vn(
+                  (gt !== Xe && commitWorkbookChange(gt),
+                    setStatusNotice(
                       "Original automation bytes preserved in native JSON. No source code was executed.",
                     ));
                 },
                 onRemove: (Ue) =>
-                  di(
-                    removeAutomationArtifact(sr.current.book, Ue, {
-                      actor,
-                      readOnly: sr.current.readOnly,
-                    }),
+                  commitWorkbookChange(
+                    removeAutomationArtifact(
+                      latestEditStateRef.current.book,
+                      Ue,
+                      {
+                        actor,
+                        readOnly: latestEditStateRef.current.readOnly,
+                      },
+                    ),
                   ),
                 onApply: (Ue, Xe, gt) => {
-                  const Nt = runApprovedMigration(sr.current.book, Ue, {
-                    actor,
-                    scope: Xe,
-                    readOnly: sr.current.readOnly,
-                    retainSource: gt,
-                  });
-                  (di(Nt),
-                    vn(
+                  const Nt = runApprovedMigration(
+                    latestEditStateRef.current.book,
+                    Ue,
+                    {
+                      actor,
+                      scope: Xe,
+                      readOnly: latestEditStateRef.current.readOnly,
+                      retainSource: gt,
+                    },
+                  );
+                  (commitWorkbookChange(Nt),
+                    setStatusNotice(
                       "Reviewed migration applied in one Undo step; source hashes and run provenance recorded.",
                     ));
                 },
@@ -3965,78 +4706,109 @@ function MainWorksheetEditor({
                     Xe,
                   ),
               },
-              ze?.sha256 ?? "automation",
+              automationInspection?.sha256 ?? "automation",
             );
-          if ($e === "search" || $e === "goToSpecial")
+          if (
+            activeDialogMode === "search" ||
+            activeDialogMode === "goToSpecial"
+          )
             return i.jsx(
               FindReplaceDialog,
               {
                 ...fe,
-                ranges: Jt,
-                active: xt,
+                ranges: selectionAreas,
+                active: activeCellAddress,
                 readOnly,
-                initialTab: $e === "goToSpecial" ? "special" : "find",
-                onWorkbookChange: ua,
-                onNavigate: Ts,
-                onSelectRanges: Pd,
+                initialTab:
+                  activeDialogMode === "goToSpecial" ? "special" : "find",
+                onWorkbookChange: replaceWorkbookSnapshot,
+                onNavigate: navigateToSheetCell,
+                onSelectRanges: selectSheetRanges,
               },
-              $e,
+              activeDialogMode,
             );
-          if ($e === "cellStyle")
-            return i.jsx(FormatCellsDialog, { ...fe, ranges: Jt, active: xt });
-          if ($e === "themes")
-            return i.jsx(ThemesAndCellStylesDialog, { ...fe, ranges: Jt });
-          if ($e === "conditional")
+          if (activeDialogMode === "cellStyle")
+            return i.jsx(FormatCellsDialog, {
+              ...fe,
+              ranges: selectionAreas,
+              active: activeCellAddress,
+            });
+          if (activeDialogMode === "themes")
+            return i.jsx(ThemesAndCellStylesDialog, {
+              ...fe,
+              ranges: selectionAreas,
+            });
+          if (activeDialogMode === "conditional")
             return i.jsx(ConditionalFormattingRulesManager, { ...fe });
-          if ($e === "merge") return i.jsx(MergeCellsPreviewDialog, { ...fe });
-          if ($e === "numberFormat")
-            return i.jsx(M4e, { ...fe, ranges: Jt, active: xt });
-          if ($e === "outlines") return i.jsx(OutlineToolsPanel, { ...fe });
-          if ($e === "comments" || $e === "hyperlink")
+          if (activeDialogMode === "merge")
+            return i.jsx(MergeCellsPreviewDialog, { ...fe });
+          if (activeDialogMode === "numberFormat")
+            return i.jsx(M4e, {
+              ...fe,
+              ranges: selectionAreas,
+              active: activeCellAddress,
+            });
+          if (activeDialogMode === "outlines")
+            return i.jsx(OutlineToolsPanel, { ...fe });
+          if (
+            activeDialogMode === "comments" ||
+            activeDialogMode === "hyperlink"
+          )
             return i.jsx(ReviewToolsPanel, {
               ...fe,
-              range: xt,
-              mode: $e,
-              active: xt,
+              range: activeCellAddress,
+              mode: activeDialogMode,
+              active: activeCellAddress,
               actor,
-              onNavigate: Ts,
+              onNavigate: navigateToSheetCell,
             });
-          if (["pasteSpecial", "fillSeries", "viewSettings"].includes($e))
+          if (
+            ["pasteSpecial", "fillSeries", "viewSettings"].includes(
+              activeDialogMode,
+            )
+          )
             return i.jsx(
               PasteSpecialDialog,
               {
                 ...fe,
-                mode: $e,
-                clipboard: ku.current?.snapshot,
-                onSelectionChange: dr,
+                mode: activeDialogMode,
+                clipboard: internalClipboardRef.current?.snapshot,
+                onSelectionChange: selectSingleRange,
               },
-              $e,
+              activeDialogMode,
             );
-          if ($e === "sheets")
+          if (activeDialogMode === "sheets")
             return i.jsx(WorksheetTabBar, {
-              workbook: H,
-              sheetId: be ?? he.id,
+              workbook: activeWorkbook,
+              sheetId: tabBarSheetId ?? activeSheet.id,
               readOnly,
-              onWorkbookChange: ua,
+              onWorkbookChange: replaceWorkbookSnapshot,
               onSelectSheet: (Ue) => {
-                (Je(null), wi(Ue));
+                (setActiveDialogMode(null), switchActiveWorksheet(Ue));
               },
               onClose: fe.onClose,
             });
-          if (["workbookProperties", "versions", "template"].includes($e))
+          if (
+            ["workbookProperties", "versions", "template"].includes(
+              activeDialogMode,
+            )
+          )
             return i.jsx(WorkbookManagerDialog, {
-              mode: $e === "workbookProperties" ? "properties" : $e,
-              workbook: H,
+              mode:
+                activeDialogMode === "workbookProperties"
+                  ? "properties"
+                  : activeDialogMode,
+              workbook: activeWorkbook,
               readOnly,
               persistent: !!(
                 persistenceKey ||
                 (workbookStore && workbookStorePersistent)
               ),
-              checkpoints: (ce?.checkpoints ?? []).filter(
-                (Ue) => Ue.workbookId === H.id,
+              checkpoints: (persistedWorkbookRecord?.checkpoints ?? []).filter(
+                (Ue) => Ue.workbookId === activeWorkbook.id,
               ),
               onClose: fe.onClose,
-              onWorkbookChange: ua,
+              onWorkbookChange: replaceWorkbookSnapshot,
               onCreateWorkbook: (Ue) => {
                 if (readOnly) throw new Error("This workbook is read-only.");
                 (saveBlobToFile(
@@ -4045,45 +4817,56 @@ function MainWorksheetEditor({
                   }),
                   `${Ue.name.replace(/[^a-zA-Z0-9 _.-]/g, "_")}.json`,
                 ),
-                  vn(
+                  setStatusNotice(
                     "Created an independent workbook download. The template remains open.",
                   ));
               },
               onCheckpoint: (Ue) => {
                 if (readOnly) throw new Error("This workbook is read-only.");
-                const Xe = Ee.current,
-                  gt = sr.current.book;
-                return chainMaybePromise(_i(gt), () =>
-                  Jc((Nt) => {
-                    if (sr.current.book !== gt)
+                const Xe = persistenceSessionRef.current,
+                  gt = latestEditStateRef.current.book;
+                return chainMaybePromise(persistWorkbookSnapshot(gt), () =>
+                  enqueueSaveOperation((Nt) => {
+                    if (latestEditStateRef.current.book !== gt)
                       throw new Error(
                         "The workbook changed. Save the checkpoint again for the current revision.",
                       );
                     return chainMaybePromise(
-                      Se.checkpoint(Ue, le.current.guard, { signal: Nt }),
+                      workbookPersistence.checkpoint(
+                        Ue,
+                        persistedWorkbookRecordRef.current.guard,
+                        { signal: Nt },
+                      ),
                       (wt) => {
-                        Qc(wt, Xe);
+                        acknowledgeSavedWorkbook(wt, Xe);
                       },
                     );
                   }),
                 );
               },
-              onCompare: (Ue) => Se.compareCheckpoint(Ue, sr.current.book),
+              onCompare: (Ue) =>
+                workbookPersistence.compareCheckpoint(
+                  Ue,
+                  latestEditStateRef.current.book,
+                ),
               onRestore: (Ue) => {
                 var wt;
                 if (readOnly) throw new Error("This workbook is read-only.");
-                if (!le.current)
+                if (!persistedWorkbookRecordRef.current)
                   throw new Error(
                     "Save this workbook before restoring a checkpoint.",
                   );
-                const Xe = sr.current.book,
-                  gt = Ee.current;
-                (wt = Ae.current) == null || wt.abort();
+                const Xe = latestEditStateRef.current.book,
+                  gt = persistenceSessionRef.current;
+                (wt = saveAbortControllerRef.current) == null || wt.abort();
                 const Nt = new AbortController();
                 return (
-                  (Ae.current = Nt),
-                  Jc((jt) => {
-                    if (sr.current.book !== Xe || Nt.signal.aborted)
+                  (saveAbortControllerRef.current = Nt),
+                  enqueueSaveOperation((jt) => {
+                    if (
+                      latestEditStateRef.current.book !== Xe ||
+                      Nt.signal.aborted
+                    )
                       throw new Error(
                         "The workbook changed. Compare the checkpoint again before restoring.",
                       );
@@ -4094,24 +4877,26 @@ function MainWorksheetEditor({
                           throw gt.conflict;
                         if (
                           !gt.active ||
-                          gt !== Ee.current ||
+                          gt !== persistenceSessionRef.current ||
                           Nt.signal.aborted ||
-                          sr.current.book !== Xe ||
-                          kr.current ||
-                          sr.current.readOnly
+                          latestEditStateRef.current.book !== Xe ||
+                          activeCellEditRef.current ||
+                          latestEditStateRef.current.readOnly
                         )
                           throw new Error(
                             "The editor changed before the restore completed. Your current local changes were retained.",
                           );
-                        (di(xr.workbook, true, false, xr),
-                          Zo(xr.view),
-                          vn("Restored checkpoint as a new revision."),
-                          la("saved", xr.workbook));
+                        (commitWorkbookChange(xr.workbook, true, false, xr),
+                          applyWorkbookView(xr.view),
+                          setStatusNotice(
+                            "Restored checkpoint as a new revision.",
+                          ),
+                          reportSaveStatus("saved", xr.workbook));
                       },
-                      Br = Se.restoreCheckpoint(
+                      Br = workbookPersistence.restoreCheckpoint(
                         Ue,
                         Xe,
-                        le.current.guard,
+                        persistedWorkbookRecordRef.current.guard,
                         actor,
                         {
                           signal: Nt.signal,
@@ -4126,12 +4911,16 @@ function MainWorksheetEditor({
                 );
               },
             });
-          if (["table", "pivot", "query"].includes($e))
-            return i.jsx(TableToolsDialog, { ...fe, mode: $e }, $e);
-          if ($e === "pivotExplore")
+          if (["table", "pivot", "query"].includes(activeDialogMode))
+            return i.jsx(
+              TableToolsDialog,
+              { ...fe, mode: activeDialogMode },
+              activeDialogMode,
+            );
+          if (activeDialogMode === "pivotExplore")
             return i.jsx(PivotExplorerDialog, { ...fe });
-          if (["picture", "shape", "chart"].includes($e))
-            return i.jsx(PicturePropertiesDialog, { ...fe }, $e);
+          if (["picture", "shape", "chart"].includes(activeDialogMode))
+            return i.jsx(PicturePropertiesDialog, { ...fe }, activeDialogMode);
           if (
             [
               "margins",
@@ -4142,69 +4931,77 @@ function MainWorksheetEditor({
               "pageBreaks",
               "fit",
               "pageLayout",
-            ].includes($e)
+            ].includes(activeDialogMode)
           )
-            return i.jsx(PageSetupDialog, { ...fe }, $e);
-          if ($e === "functionCompatibility")
+            return i.jsx(PageSetupDialog, { ...fe }, activeDialogMode);
+          if (activeDialogMode === "functionCompatibility")
             return i.jsx(FormulaCompatibilityDialog, {
-              workbook: H,
-              onClose: () => Je(null),
-              onNavigate: Ts,
+              workbook: activeWorkbook,
+              onClose: () => setActiveDialogMode(null),
+              onNavigate: navigateToSheetCell,
             });
-          if (["function", "names"].includes($e))
+          if (["function", "names"].includes(activeDialogMode))
             return i.jsx(
               FunctionAndNameDialog,
               {
                 ...fe,
-                mode: $e,
+                mode: activeDialogMode,
                 onInsertFormula: (Ue) => {
-                  (Je(null),
-                    us(Ue),
-                    mt(Ue.length),
-                    Zt(true),
+                  (setActiveDialogMode(null),
+                    beginCellEdit(Ue),
+                    setFormulaCaretPosition(Ue.length),
+                    setIsFormulaBarFocused(true),
                     requestAnimationFrame(() => {
                       var Xe, gt;
-                      ((Xe = pt.current) == null || Xe.focus(),
-                        (gt = pt.current) == null ||
+                      ((Xe = formulaInputRef.current) == null || Xe.focus(),
+                        (gt = formulaInputRef.current) == null ||
                           gt.setSelectionRange(Ue.length, Ue.length));
                     }));
                 },
               },
-              $e,
+              activeDialogMode,
             );
-          if ($e === "populationFilter")
+          if (activeDialogMode === "populationFilter")
             return i.jsx(FilterViewsDialog, {
-              workbook: H,
-              sheetId: he.id,
-              range: Ye,
-              column: An,
-              definition: Ui?.definition,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
+              column: activeFilterColumn,
+              definition: activeFilterState?.definition,
               readOnly,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H)
+                if (latestEditStateRef.current.book !== activeWorkbook)
                   throw Error(
                     "The workbook changed. Reopen the filter tool before saving a view.",
                   );
-                ua(Ue, Xe);
+                replaceWorkbookSnapshot(Ue, Xe);
               },
               onClose: fe.onClose,
               onApply: (Ue) => {
                 try {
-                  (applyFilterConditions(H, he.id, Ue, Qr),
-                    fn((Xe) => ({
+                  (applyFilterConditions(
+                    activeWorkbook,
+                    activeSheet.id,
+                    Ue,
+                    workbookCalculator,
+                  ),
+                    setFilterStateByScope((Xe) => ({
                       ...Xe,
-                      [Xo]: { snapshot: H, definition: Ue },
+                      [filterStateKey]: {
+                        snapshot: activeWorkbook,
+                        definition: Ue,
+                      },
                     })),
-                    jr(""),
-                    po(null),
-                    jo("full"),
-                    Co(0),
-                    Je(null),
-                    vn(
+                    setFilterValueSearch(""),
+                    setActiveColumnSort(null),
+                    setAuditPopulationScope("full"),
+                    scrollActivePaneVertically(0),
+                    setActiveDialogMode(null),
+                    setStatusNotice(
                       "Filter view applied. Source rows, formulas and history are unchanged.",
                     ));
                 } catch (Xe) {
-                  hn(
+                  setErrorNotice(
                     Xe instanceof Error
                       ? Xe.message
                       : "Recalculate before filtering.",
@@ -4212,143 +5009,163 @@ function MainWorksheetEditor({
                 }
               },
             });
-          if ($e === "externalSources")
+          if (activeDialogMode === "externalSources")
             return i.jsx(ExternalDataRefreshDialog, {
-              workbook: H,
-              sheetId: he.id,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
               adapter: externalSourceAdapter,
-              reliability: D,
+              reliability: activeReliabilityMonitor,
               readOnly,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H)
+                if (latestEditStateRef.current.book !== activeWorkbook)
                   throw Error(
                     "The workbook changed. Preview the source again.",
                   );
-                ca(Ue, Xe);
+                commitWorkbookWithNewSheet(Ue, Xe);
               },
             });
-          if ($e === "solver" || $e === "statistics")
+          if (
+            activeDialogMode === "solver" ||
+            activeDialogMode === "statistics"
+          )
             return i.jsx(DataAnalysisDialog, {
-              workbook: H,
-              sheetId: he.id,
-              range: Ye,
-              initialKind: $e,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
+              initialKind: activeDialogMode,
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H)
+                if (latestEditStateRef.current.book !== activeWorkbook)
                   throw Error(
                     "The workbook changed. Preview the analysis again.",
                   );
-                ca(Ue, Xe);
+                commitWorkbookWithNewSheet(Ue, Xe);
               },
             });
-          if ($e === "extensions")
+          if (activeDialogMode === "extensions")
             return i.jsx(AddInsAndCustomFunctionsDialog, {
-              workbook: H,
+              workbook: activeWorkbook,
               extensions,
               readOnly,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H || sr.current.readOnly)
+                if (
+                  latestEditStateRef.current.book !== activeWorkbook ||
+                  latestEditStateRef.current.readOnly
+                )
                   throw Error(
                     "The workbook or permissions changed. Review extensions again.",
                   );
-                ua(Ue, Xe);
+                replaceWorkbookSnapshot(Ue, Xe);
               },
             });
-          if ($e === "workbookLinks")
+          if (activeDialogMode === "workbookLinks")
             return i.jsx(WorkbookLinksDialog, {
-              workbook: H,
+              workbook: activeWorkbook,
               readOnly,
-              approvedSources: W,
-              onApprovedSourcesChange: K,
+              approvedSources: effectiveLinkedWorkbooks,
+              onApprovedSourcesChange: setLinkedWorkbooks,
               allowFileSources: allowLinkedWorkbookFiles,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H || sr.current.readOnly)
+                if (
+                  latestEditStateRef.current.book !== activeWorkbook ||
+                  latestEditStateRef.current.readOnly
+                )
                   throw Error(
                     "The workbook or permissions changed. Preview links again.",
                   );
-                ua(Ue, Xe);
+                replaceWorkbookSnapshot(Ue, Xe);
               },
             });
-          if ($e === "importSources")
+          if (activeDialogMode === "importSources")
             return i.jsx(SourceImportDialog, {
-              workbook: H,
+              workbook: activeWorkbook,
               readOnly,
               extractor: documentExtractor,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H || sr.current.readOnly)
+                if (
+                  latestEditStateRef.current.book !== activeWorkbook ||
+                  latestEditStateRef.current.readOnly
+                )
                   throw Error(
                     "The workbook or permissions changed. Preview the source again.",
                   );
-                ca(Ue, Xe);
+                commitWorkbookWithNewSheet(Ue, Xe);
               },
             });
-          if ($e === "workbookFormats")
+          if (activeDialogMode === "workbookFormats")
             return i.jsx(FormatConversionDialog, {
-              workbook: H,
-              readOnly: je,
-              initialFile: pl,
+              workbook: activeWorkbook,
+              readOnly: isEditingLocked,
+              initialFile: pendingImportFile,
               onClose: () => {
-                (su(undefined), fe.onClose());
+                (setPendingImportFile(undefined), fe.onClose());
               },
               onWorkbookChange: (Ue) => {
-                if (sr.current.book !== H || sr.current.readOnly)
+                if (
+                  latestEditStateRef.current.book !== activeWorkbook ||
+                  latestEditStateRef.current.readOnly
+                )
                   throw Error(
                     "The workbook or permissions changed. Review the conversion again.",
                   );
-                (di(Ue), wi(Ue.sheets.find((Xe) => !Xe.hidden).id));
+                (commitWorkbookChange(Ue),
+                  switchActiveWorksheet(Ue.sheets.find((Xe) => !Xe.hidden).id));
               },
               onAutomation: async (Ue) => {
-                const Xe = await importAutomationFile(Ue, Yu);
-                (at(Xe), su(undefined), Je("automation"));
+                const Xe = await importAutomationFile(Ue, operationScope);
+                (setAutomationInspection(Xe),
+                  setPendingImportFile(undefined),
+                  setActiveDialogMode("automation"));
               },
             });
-          if ($e === "reportOutputs")
+          if (activeDialogMode === "reportOutputs")
             return i.jsx(ReportOutputsDialog, {
-              workbook: H,
-              sheetId: he.id,
-              range: Ye,
-              filter: Hr?.context.definition,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
+              filter: filterResult?.context.definition,
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H)
+                if (latestEditStateRef.current.book !== activeWorkbook)
                   throw Error(
                     "The workbook changed. Preview the report again.",
                   );
-                ua(Ue, Xe);
+                replaceWorkbookSnapshot(Ue, Xe);
               },
             });
-          if ($e === "dataModel")
+          if (activeDialogMode === "dataModel")
             return i.jsx(DataModelDialog, {
-              workbook: H,
-              sheetId: he.id,
-              range: Ye,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                if (sr.current.book !== H)
+                if (latestEditStateRef.current.book !== activeWorkbook)
                   throw Error("The workbook changed. Preview the model again.");
-                ca(Ue, Xe);
+                commitWorkbookWithNewSheet(Ue, Xe);
               },
             });
-          if ($e === "sort")
+          if (activeDialogMode === "sort")
             return i.jsx(CustomSortDialog, {
-              workbook: H,
-              sheetId: he.id,
-              range: Ye,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
+              range: activeSelectionRange,
               readOnly,
               onClose: fe.onClose,
               onWorkbookChange: (Ue, Xe) => {
-                (ua(Ue, Xe), po(null), jr(""));
+                (replaceWorkbookSnapshot(Ue, Xe),
+                  setActiveColumnSort(null),
+                  setFilterValueSearch(""));
               },
             });
           if (
@@ -4360,169 +5177,181 @@ function MainWorksheetEditor({
               "textCleanup",
               "fieldTransform",
               "duplicates",
-            ].includes($e)
+            ].includes(activeDialogMode)
           ) {
             const Ue = {
-              workbook: H,
-              sheetId: he.id,
+              workbook: activeWorkbook,
+              sheetId: activeSheet.id,
               range:
-                $e === "duplicates" && !Ye.includes(":")
-                  ? formatOccupiedRangeAddress(he)
-                  : Ye,
+                activeDialogMode === "duplicates" &&
+                !activeSelectionRange.includes(":")
+                  ? formatOccupiedRangeAddress(activeSheet)
+                  : activeSelectionRange,
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
-              onWorkbookChange: ca,
+              onWorkbookChange: commitWorkbookWithNewSheet,
             };
-            return $e === "consolidation"
+            return activeDialogMode === "consolidation"
               ? i.jsx(ConsolidationDialog, {
                   ...Ue,
                   initialDefinition:
-                    he.consolidation?.definition ?? consolidationDefinition,
-                  approvedWorkbooks: te,
-                  onApprovedWorkbooksChange: ae,
-                  allowFileSources: allowConsolidationFiles && !!ae,
+                    activeSheet.consolidation?.definition ??
+                    consolidationDefinition,
+                  approvedWorkbooks: effectiveConsolidationWorkbooks,
+                  onApprovedWorkbooksChange: setConsolidationWorkbooks,
+                  allowFileSources:
+                    allowConsolidationFiles && !!setConsolidationWorkbooks,
                 })
-              : $e === "transformationRecipes"
+              : activeDialogMode === "transformationRecipes"
                 ? i.jsx(TransformationRecipesDialog, { ...Ue })
-                : $e === "combinePopulations"
+                : activeDialogMode === "combinePopulations"
                   ? i.jsx(CombinePopulationsDialog, { ...Ue })
-                  : $e === "textToColumns"
+                  : activeDialogMode === "textToColumns"
                     ? i.jsx(TextToColumnsDialog, { ...Ue })
-                    : $e === "textCleanup"
+                    : activeDialogMode === "textCleanup"
                       ? i.jsx(TextCleanupDialog, { ...Ue })
-                      : $e === "fieldTransform"
+                      : activeDialogMode === "fieldTransform"
                         ? i.jsx(CleanAndReshapeDialog, { ...Ue })
                         : i.jsx(DuplicateReviewDialog, { ...Ue });
           }
-          return $e === "patterns"
+          return activeDialogMode === "patterns"
             ? i.jsx(PatternCheckDialog, {
-                workbook: H,
-                sheetId: he.id,
+                workbook: activeWorkbook,
+                sheetId: activeSheet.id,
                 range:
-                  Ju ||
-                  (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
+                  auditSourceRange ||
+                  (activeSelectionRange.includes(":")
+                    ? activeSelectionRange
+                    : formatOccupiedRangeAddress(activeSheet)),
                 readOnly,
                 allowHidden: true,
                 onClose: fe.onClose,
               })
-            : $e === "aging"
+            : activeDialogMode === "aging"
               ? i.jsx(AgingScheduleScreen, {
-                  workbook: H,
-                  sheetId: he.id,
+                  workbook: activeWorkbook,
+                  sheetId: activeSheet.id,
                   range:
-                    Ju ||
-                    (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
+                    auditSourceRange ||
+                    (activeSelectionRange.includes(":")
+                      ? activeSelectionRange
+                      : formatOccupiedRangeAddress(activeSheet)),
                   readOnly,
                   allowHidden: true,
                   onClose: fe.onClose,
                 })
-              : $e === "materiality"
+              : activeDialogMode === "materiality"
                 ? i.jsx(MaterialityRiskScreen, {
-                    workbook: H,
-                    sheetId: he.id,
+                    workbook: activeWorkbook,
+                    sheetId: activeSheet.id,
                     range:
-                      Ju ||
-                      (Ye.includes(":") ? Ye : formatOccupiedRangeAddress(he)),
+                      auditSourceRange ||
+                      (activeSelectionRange.includes(":")
+                        ? activeSelectionRange
+                        : formatOccupiedRangeAddress(activeSheet)),
                     readOnly,
                     allowHidden: true,
                     onClose: fe.onClose,
                   })
-                : $e === "workbookComparison"
+                : activeDialogMode === "workbookComparison"
                   ? i.jsx(WorkbookComparisonDialog, {
-                      workbook: H,
-                      sheetId: he.id,
-                      range: Ye.includes(":")
-                        ? Ye
-                        : formatOccupiedRangeAddress(he),
+                      workbook: activeWorkbook,
+                      sheetId: activeSheet.id,
+                      range: activeSelectionRange.includes(":")
+                        ? activeSelectionRange
+                        : formatOccupiedRangeAddress(activeSheet),
                       readOnly,
                       allowHidden: true,
                       onClose: fe.onClose,
                     })
-                  : $e === "scenarios" || $e === "dataTable"
+                  : activeDialogMode === "scenarios" ||
+                      activeDialogMode === "dataTable"
                     ? i.jsx(WhatIfAnalysisDialog, {
-                        workbook: H,
-                        sheetId: he.id,
-                        address: xt,
+                        workbook: activeWorkbook,
+                        sheetId: activeSheet.id,
+                        address: activeCellAddress,
                         initialKind:
-                          $e === "scenarios" ? "scenarios" : "one-variable",
+                          activeDialogMode === "scenarios"
+                            ? "scenarios"
+                            : "one-variable",
                         readOnly,
                         allowHidden: true,
                         onClose: fe.onClose,
-                        onWorkbookChange: ca,
+                        onWorkbookChange: commitWorkbookWithNewSheet,
                       })
-                    : $e === "goalSeek"
+                    : activeDialogMode === "goalSeek"
                       ? i.jsx(GoalSeekDialog, {
-                          workbook: H,
-                          sheetId: he.id,
-                          address: xt,
+                          workbook: activeWorkbook,
+                          sheetId: activeSheet.id,
+                          address: activeCellAddress,
                           readOnly,
                           allowHidden: true,
                           onClose: fe.onClose,
-                          onWorkbookChange: ua,
+                          onWorkbookChange: replaceWorkbookSnapshot,
                         })
-                      : $e === "calculation"
+                      : activeDialogMode === "calculation"
                         ? i.jsx(CalculationOptionsDialog, {
-                            workbook: H,
+                            workbook: activeWorkbook,
                             readOnly,
                             onClose: fe.onClose,
-                            onWorkbookChange: ua,
-                            onCalculated: _f,
-                            onCalculate: wa,
-                            onCancelCalculation: bl.cancel,
-                            onNavigate: Ts,
+                            onWorkbookChange: replaceWorkbookSnapshot,
+                            onCalculated: handleCalculationCompleted,
+                            onCalculate: runCalculationNow,
+                            onCancelCalculation: calculationRun.cancel,
+                            onNavigate: navigateToSheetCell,
                           })
-                        : $e === "formulaWatches"
+                        : activeDialogMode === "formulaWatches"
                           ? i.jsx(FormulaWatchWindow, {
-                              workbook: H,
-                              sheetId: he.id,
-                              range: Ye,
-                              ranges: Jt,
+                              workbook: activeWorkbook,
+                              sheetId: activeSheet.id,
+                              range: activeSelectionRange,
+                              ranges: selectionAreas,
                               readOnly,
                               allowHidden: true,
                               onClose: fe.onClose,
-                              onWorkbookChange: ua,
-                              onNavigate: Ts,
+                              onWorkbookChange: replaceWorkbookSnapshot,
+                              onNavigate: navigateToSheetCell,
                             })
-                          : $e === "evaluateFormula"
+                          : activeDialogMode === "evaluateFormula"
                             ? i.jsx(EvaluateFormulaDialog, {
-                                workbook: H,
-                                sheetId: he.id,
-                                address: xt,
+                                workbook: activeWorkbook,
+                                sheetId: activeSheet.id,
+                                address: activeCellAddress,
                                 allowHidden: true,
                                 onClose: fe.onClose,
-                                onNavigate: Ts,
+                                onNavigate: navigateToSheetCell,
                               })
-                            : $e === "tracePrecedents" ||
-                                $e === "traceDependents"
+                            : activeDialogMode === "tracePrecedents" ||
+                                activeDialogMode === "traceDependents"
                               ? i.jsx(CalculationInspectorDialog, {
-                                  workbook: H,
-                                  sheetId: he.id,
-                                  address: xt,
+                                  workbook: activeWorkbook,
+                                  sheetId: activeSheet.id,
+                                  address: activeCellAddress,
                                   initialDirection:
-                                    $e === "tracePrecedents"
+                                    activeDialogMode === "tracePrecedents"
                                       ? "precedents"
                                       : "dependents",
                                   allowHidden: true,
                                   onClose: fe.onClose,
-                                  onNavigate: Ts,
+                                  onNavigate: navigateToSheetCell,
                                 })
                               : i.jsx(
                                   DataToolDialogRouter,
-                                  { ...fe, onNavigate: Ts },
-                                  $e,
+                                  { ...fe, onNavigate: navigateToSheetCell },
+                                  activeDialogMode,
                                 );
         })(),
-      oi &&
+      delimitedImportExportSource &&
         i.jsx(DelimitedImportExportDialog, {
-          source: oi,
+          source: delimitedImportExportSource,
           blocked:
-            oi.snapshot !== H
+            delimitedImportExportSource.snapshot !== activeWorkbook
               ? "The workbook changed. Cancel and review again for the current revision."
-              : "bytes" in oi && je
+              : "bytes" in delimitedImportExportSource && isEditingLocked
                 ? "This workbook is read-only. Import is unavailable."
                 : undefined,
-          onClose: () => xs(null),
+          onClose: () => setDelimitedImportExportSource(null),
           onReport: (fe) =>
             saveBlobToFile(
               new Blob([JSON.stringify(fe, null, 2)], {
@@ -4531,24 +5360,30 @@ function MainWorksheetEditor({
               `${fe.fileName}.schema.json`,
             ),
           onImport: (fe, Oe) => {
-            if (sr.current.book !== oi.snapshot)
+            if (
+              latestEditStateRef.current.book !==
+              delimitedImportExportSource.snapshot
+            )
               throw new Error("The workbook changed. Review the file again.");
-            if (sr.current.readOnly)
+            if (latestEditStateRef.current.readOnly)
               throw new Error("This workbook is read-only.");
-            (di(fe),
-              wi(fe.sheets[0].id),
-              vn(
+            (commitWorkbookChange(fe),
+              switchActiveWorksheet(fe.sheets[0].id),
+              setStatusNotice(
                 `Imported ${Oe.records} records using the reviewed schema. Formula-like source text remains literal.`,
               ),
-              xs(null));
+              setDelimitedImportExportSource(null));
           },
           onExport: (fe, Oe) => {
-            if (sr.current.book !== oi.snapshot)
+            if (
+              latestEditStateRef.current.book !==
+              delimitedImportExportSource.snapshot
+            )
               throw new Error("The workbook changed. Review the export again.");
-            if (Oe.population && !("bytes" in oi)) {
+            if (Oe.population && !("bytes" in delimitedImportExportSource)) {
               const Be = exportWorksheetToCsv(
-                sr.current.book,
-                oi.sheetId,
+                latestEditStateRef.current.book,
+                delimitedImportExportSource.sheetId,
                 Oe.options,
               );
               if (
@@ -4567,19 +5402,21 @@ function MainWorksheetEditor({
               }),
               Oe.fileName,
             ),
-              vn(
+              setStatusNotice(
                 `Delimited data exported; ${Oe.safeTextChanges} formula-like text values neutralized under the reviewed safe-export policy.`,
               ),
-              xs(null));
+              setDelimitedImportExportSource(null));
           },
         }),
-      vo &&
+      xlsxConversionReview &&
         i.jsx(XlsxConversionReview, {
-          report: vo.report,
-          inspectOnly: vo.inspectOnly,
+          report: xlsxConversionReview.report,
+          inspectOnly: xlsxConversionReview.inspectOnly,
           onOriginal: () =>
-            On(() => {
-              const fe = requireRetainedXlsxSource(vo.imported ?? vo.snapshot);
+            runGuardedAction(() => {
+              const fe = requireRetainedXlsxSource(
+                xlsxConversionReview.imported ?? xlsxConversionReview.snapshot,
+              );
               saveBlobToFile(
                 new Blob([new Uint8Array(fe.bytes)], {
                   type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -4588,38 +5425,48 @@ function MainWorksheetEditor({
               );
             }),
           blocked:
-            vo.snapshot !== H
+            xlsxConversionReview.snapshot !== activeWorkbook
               ? "The workbook changed. Cancel and review the file again for the current revision."
-              : vo.imported && je
+              : xlsxConversionReview.imported && isEditingLocked
                 ? "This workbook is read-only. Import is unavailable."
                 : undefined,
-          onClose: () => Ml(null),
+          onClose: () => setXlsxConversionReview(null),
           onReport: () =>
             saveBlobToFile(
-              new Blob([JSON.stringify(vo.report, null, 2)], {
+              new Blob([JSON.stringify(xlsxConversionReview.report, null, 2)], {
                 type: "application/json",
               }),
-              `${vo.fileName}.compatibility.json`,
+              `${xlsxConversionReview.fileName}.compatibility.json`,
             ),
           onConfirm: () =>
-            On(() => {
-              if (sr.current.book !== vo.snapshot)
+            runGuardedAction(() => {
+              if (
+                latestEditStateRef.current.book !==
+                xlsxConversionReview.snapshot
+              )
                 throw new Error("The workbook changed. Review the file again.");
-              if (vo.imported) {
-                if (sr.current.readOnly)
+              if (xlsxConversionReview.imported) {
+                if (latestEditStateRef.current.readOnly)
                   throw new Error("This workbook is read-only.");
-                (di(vo.imported),
-                  wi(vo.imported.sheets.find((fe) => !fe.hidden).id),
-                  vn(
+                (commitWorkbookChange(xlsxConversionReview.imported),
+                  switchActiveWorksheet(
+                    xlsxConversionReview.imported.sheets.find(
+                      (fe) => !fe.hidden,
+                    ).id,
+                  ),
+                  setStatusNotice(
                     "Derived XLSX workbook opened. The exact original is available from File → Original XLSX and compatibility. Save native JSON to retain it across sessions.",
                   ));
               } else
-                vo.blob &&
-                  (saveBlobToFile(vo.blob, vo.fileName),
-                  vn(
+                xlsxConversionReview.blob &&
+                  (saveBlobToFile(
+                    xlsxConversionReview.blob,
+                    xlsxConversionReview.fileName,
+                  ),
+                  setStatusNotice(
                     "Derived XLSX downloaded. Keep a native JSON backup for full application metadata.",
                   ));
-              Ml(null);
+              setXlsxConversionReview(null);
             }),
         }),
       i.jsxs("div", {
@@ -4628,131 +5475,167 @@ function MainWorksheetEditor({
           i.jsx("input", {
             type: "file",
             "aria-label": text("Import workbook file"),
-            ref: yl,
+            ref: importFileInputRef,
             accept:
               ".xlsx,.xltx,.xls,.xlsb,.xlsm,.xltm,.ods,.csv,.tsv,.json,.bas,.vba,.cls,.ts,.osts,.xlam",
             hidden: true,
             onChange: (fe) => {
-              return void Ns(fe.target.files?.[0]);
+              return void importWorkbookFromFile(fe.target.files?.[0]);
             },
             lang: language("Import workbook file"),
             "data-ui-label": "Import workbook file",
           }),
           i.jsx(WorkbookRibbon, {
-            onTool: Pn,
-            sheetProtected: !!((Y = he.protection) != null && Y.enabled),
+            onTool: runEditorCommand,
+            sheetProtected: !!(
+              (ribbonSheetProtectionDetails = activeSheet.protection) != null &&
+              ribbonSheetProtectionDetails.enabled
+            ),
             allowProtectionChange: !readOnly,
             workbookStructureProtected: !!(
-              (re = H.structureProtection) != null && re.enabled
+              (workbookStructureDetails = activeWorkbook.structureProtection) !=
+                null && workbookStructureDetails.enabled
             ),
-            readOnly: je,
-            busy: go,
-            canUndo: ns.length > 0,
-            canRedo: Qi.length > 0,
-            cell: ur,
-            showFormulas: Gi,
-            gridlines: ec,
-            headings: vl,
-            freezeRows: Yc,
-            zoom: Ao,
-            onFormat: Vi,
-            onUndo: () => fu(),
-            onRedo: () => fu(true),
+            readOnly: isEditingLocked,
+            busy: isOperationBusy,
+            canUndo: undoStack.length > 0,
+            canRedo: redoStack.length > 0,
+            cell: activeCell,
+            showFormulas: isShowingFormulas,
+            gridlines: isGridlinesVisible,
+            headings: isHeadingsVisible,
+            freezeRows: hasFrozenRows,
+            zoom: zoomPercent,
+            onFormat: applyCellFormatPatch,
+            onUndo: () => undoOrRedo(),
+            onRedo: () => undoOrRedo(true),
             onImport: () => {
-              return yl.current?.click();
+              return importFileInputRef.current?.click();
             },
-            onExport: (fe) => void hu(fe),
-            onNew: () => oc(createBlankWorkbook()),
-            onDemo: () => oc(buildSampleLedgerWorkbook()),
-            onRename: () => Ia({ kind: "rename", value: H.name }),
+            onExport: (fe) => void exportWorkbookAs(fe),
+            onNew: () => replaceActiveWorkbook(createBlankWorkbook()),
+            onDemo: () => replaceActiveWorkbook(buildSampleLedgerWorkbook()),
+            onRename: () =>
+              setPromptDialogState({
+                kind: "rename",
+                value: activeWorkbook.name,
+              }),
             onAddSheet: () =>
-              Ia({ kind: "sheet", value: `Sheet${H.sheets.length + 1}` }),
-            onAddRow: () => Pn("insertRow"),
-            onAddColumn: () => Pn("insertColumn"),
-            onAutoFitColumns: () => Ko("column"),
-            onAutoFitRows: () => Ko("row"),
+              setPromptDialogState({
+                kind: "sheet",
+                value: `Sheet${activeWorkbook.sheets.length + 1}`,
+              }),
+            onAddRow: () => runEditorCommand("insertRow"),
+            onAddColumn: () => runEditorCommand("insertColumn"),
+            onAutoFitColumns: () => autoFitSelectedAxis("column"),
+            onAutoFitRows: () => autoFitSelectedAxis("row"),
             onAutosum: () =>
-              On(() => To([applyAutoSum(H, he.id, xt)], "AutoSum")),
+              runGuardedAction(() =>
+                applyCellPatches(
+                  [
+                    applyAutoSum(
+                      activeWorkbook,
+                      activeSheet.id,
+                      activeCellAddress,
+                    ),
+                  ],
+                  "AutoSum",
+                ),
+              ),
             onFillDown: () =>
-              On(() => {
-                (rt(),
-                  So(
-                    applyCellPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+              runGuardedAction(() => {
+                (requireSingleSelectionRange(),
+                  commitWorkbookEdit(
+                    applyCellPreview(
+                      activeWorkbook,
+                      buildFillPreview(
+                        activeWorkbook,
+                        activeSheet.id,
+                        activeSelectionRange,
+                        "down",
+                      ),
+                    ),
                     "Fill down",
                   ));
               }),
-            onClear: () => On(Ho),
-            onCopy: () => void Ru(false),
-            onCut: () => void Ru(true),
-            onPaste: () => void sc(),
-            onFind: () => Pl((fe) => !fe),
+            onClear: () => runGuardedAction(clearSelectedCellContents),
+            onCopy: () => void copyOrCutSelection(false),
+            onCut: () => void copyOrCutSelection(true),
+            onPaste: () => void pasteFromClipboard(),
+            onFind: () => setIsFindBarVisible((fe) => !fe),
             onSort: (fe) => {
-              (po(
+              (setActiveColumnSort(
                 fe
-                  ? { col: _t(xt).col, direction: fe === "asc" ? 1 : -1 }
+                  ? {
+                      col: _t(activeCellAddress).col,
+                      direction: fe === "asc" ? 1 : -1,
+                    }
                   : null,
               ),
-                Co(0),
-                to.current && (to.current.scrollTop = 0));
+                scrollActivePaneVertically(0),
+                gridContainerRef.current &&
+                  (gridContainerRef.current.scrollTop = 0));
             },
             onToggleFilter: () => {
-              (Hc((fe) => !fe), jr(""));
+              (setIsFilterBarVisible((fe) => !fe), setFilterValueSearch(""));
             },
-            onShowFormulas: () => ti((fe) => !fe),
-            onGridlines: () => cm((fe) => !fe),
-            onHeadings: () => k0((fe) => !fe),
-            onFreeze: ac,
-            onZoom: bo,
-            onPanel: Pr,
+            onShowFormulas: () => setIsShowingFormulas((fe) => !fe),
+            onGridlines: () => setIsGridlinesVisible((fe) => !fe),
+            onHeadings: () => setIsHeadingsVisible((fe) => !fe),
+            onFreeze: toggleFreezeTopRow,
+            onZoom: applyZoomPercent,
+            onPanel: setSidePanelKind,
             onNote: () =>
-              Ia({
+              setPromptDialogState({
                 kind: "note",
-                value: ur?.note ?? "",
+                value: activeCell?.note ?? "",
               }),
             onReviewed: () =>
-              Vi({ tickmark: ur != null && ur.tickmark ? "" : "✓" }),
+              applyCellFormatPatch({
+                tickmark: activeCell != null && activeCell.tickmark ? "" : "✓",
+              }),
           }),
           i.jsx(ConsolidationStatusBanner, {
-            workbook: H,
-            sheetId: he.id,
-            options: { approvedWorkbooks: te },
-            onReview: () => Pn("consolidation"),
+            workbook: activeWorkbook,
+            sheetId: activeSheet.id,
+            options: { approvedWorkbooks: effectiveConsolidationWorkbooks },
+            onReview: () => runEditorCommand("consolidation"),
           }),
           i.jsx(CustomFunctionReviewBanner, {
-            workbook: H,
+            workbook: activeWorkbook,
             extensions,
-            onReview: () => Pn("extensions"),
+            onReview: () => runEditorCommand("extensions"),
           }),
           i.jsx(WorkbookLinkStatusBadge, {
-            workbook: H,
-            sources: W,
-            onReview: () => Pn("workbookLinks"),
+            workbook: activeWorkbook,
+            sources: effectiveLinkedWorkbooks,
+            onReview: () => runEditorCommand("workbookLinks"),
           }),
           i.jsx(ExternalSourceStatusPanel, {
-            workbook: H,
-            sheetId: he.id,
-            onReview: () => Pn("externalSources"),
+            workbook: activeWorkbook,
+            sheetId: activeSheet.id,
+            onReview: () => runEditorCommand("externalSources"),
           }),
           i.jsx(AnalysisSnapshotNotice, {
-            workbook: H,
-            sheetId: he.id,
+            workbook: activeWorkbook,
+            sheetId: activeSheet.id,
             onReview: () => {
-              return Pn(
-                he.analysisReport?.request.kind === "solver"
+              return runEditorCommand(
+                activeSheet.analysisReport?.request.kind === "solver"
                   ? "solver"
                   : "statistics",
               );
             },
           }),
           i.jsx(DataModelSnapshotNotice, {
-            workbook: H,
-            sheetId: he.id,
-            onReview: () => Pn("dataModel"),
+            workbook: activeWorkbook,
+            sheetId: activeSheet.id,
+            onReview: () => runEditorCommand("dataModel"),
           }),
-          (_a.report.settings.mode === "manual" ||
-            _a.report.pending > 0 ||
-            _a.report.execution?.state === "timeout" ||
-            _a.report.execution?.state === "failed") &&
+          (calculationState.report.settings.mode === "manual" ||
+            calculationState.report.pending > 0 ||
+            calculationState.report.execution?.state === "timeout" ||
+            calculationState.report.execution?.state === "failed") &&
             i.jsxs("div", {
               className: "lg-notice",
               role: "status",
@@ -4762,50 +5645,50 @@ function MainWorksheetEditor({
               children: [
                 i.jsxs("span", {
                   children: [
-                    _a.report.settings.mode === "manual"
+                    calculationState.report.settings.mode === "manual"
                       ? "Manual calculation"
                       : "Calculation",
                     " ",
                     "· ",
-                    _a.report.pending,
+                    calculationState.report.pending,
                     " ",
                     i.jsx(LocalizedText, { children: "pending formulas" }),
-                    _a.report.execution?.state === "timeout" ||
-                    _a.report.execution?.state === "failed"
-                      ? ` · ${_a.report.execution.message}`
+                    calculationState.report.execution?.state === "timeout" ||
+                    calculationState.report.execution?.state === "failed"
+                      ? ` · ${calculationState.report.execution.message}`
                       : "",
                   ],
                 }),
                 i.jsx("button", {
-                  onClick: () => Pn("calculateNow"),
+                  onClick: () => runEditorCommand("calculateNow"),
                   children: i.jsx(LocalizedText, { children: "Calculate Now" }),
                 }),
-                _a.report.execution?.mode === "worker" &&
-                  _a.report.execution.state === "pending" &&
+                calculationState.report.execution?.mode === "worker" &&
+                  calculationState.report.execution.state === "pending" &&
                   i.jsx("button", {
-                    onClick: bl.cancel,
+                    onClick: calculationRun.cancel,
                     children: i.jsx(LocalizedText, {
                       children: "Cancel calculation",
                     }),
                   }),
                 i.jsx("button", {
-                  onClick: () => Pn("calculation"),
+                  onClick: () => runEditorCommand("calculation"),
                   children: i.jsx(LocalizedText, {
                     children: "Calculation Options",
                   }),
                 }),
               ],
             }),
-          (qs || Hs) &&
+          (errorNotice || statusNotice) &&
             i.jsxs("div", {
-              className: `lg-notice ${qs ? "error" : ""}`,
-              role: qs ? "alert" : "status",
+              className: `lg-notice ${errorNotice ? "error" : ""}`,
+              role: errorNotice ? "alert" : "status",
               children: [
-                i.jsx(LocalizedText, { children: qs || Hs }),
+                i.jsx(LocalizedText, { children: errorNotice || statusNotice }),
                 i.jsx("button", {
                   "aria-label": text("Dismiss notification"),
                   onClick: () => {
-                    (hn(""), vn(""));
+                    (setErrorNotice(""), setStatusNotice(""));
                   },
                   lang: language("Dismiss notification"),
                   "data-ui-label": "Dismiss notification",
@@ -4813,8 +5696,8 @@ function MainWorksheetEditor({
                 }),
               ],
             }),
-          kr.current &&
-            kr.current.locale !== R.entryLocale &&
+          activeCellEditRef.current &&
+            activeCellEditRef.current.locale !== workbookMessages.entryLocale &&
             i.jsx("p", {
               role: "status",
               className: "lg-notice",
@@ -4823,7 +5706,7 @@ function MainWorksheetEditor({
                   "The current edit keeps its original numeric locale until you apply or cancel it.",
               }),
             }),
-          Te &&
+          persistenceError &&
             i.jsxs("div", {
               className: "lg-notice",
               role: "status",
@@ -4836,42 +5719,42 @@ function MainWorksheetEditor({
                     children: "Your local changes are retained in this editor.",
                   }),
                 }),
-                Te instanceof WorkbookRevisionConflictError &&
-                Te.code === "conflict"
+                persistenceError instanceof WorkbookRevisionConflictError &&
+                persistenceError.code === "conflict"
                   ? i.jsx("button", {
-                      onClick: () => Re(true),
+                      onClick: () => setIsSaveConflictDialogOpen(true),
                       children: i.jsx(LocalizedText, {
                         children: "Review save conflict",
                       }),
                     })
                   : i.jsx("button", {
-                      disabled: readOnly || Me > 0,
-                      onClick: Uo,
+                      disabled: readOnly || pendingSaveCount > 0,
+                      onClick: recoverLocalWorkbook,
                       children: i.jsx(LocalizedText, {
                         children: "Retry saving",
                       }),
                     }),
-                Me > 0 &&
+                pendingSaveCount > 0 &&
                   i.jsx("span", {
                     children: i.jsx(LocalizedText, {
                       children: "Waiting for save acknowledgement",
                     }),
                   }),
                 i.jsx("button", {
-                  onClick: Tn,
+                  onClick: exportLocalChangesJson,
                   children: i.jsx(LocalizedText, {
                     children: "Export my changes",
                   }),
                 }),
               ],
             }),
-          ht &&
+          isSaveConflictDialogOpen &&
             i.jsx(WorkbookSaveConflictDialog, {
-              workbook: H,
-              loadSaved: () => Se.load(),
-              onExport: Tn,
-              onReload: Aa,
-              onClose: () => Re(false),
+              workbook: activeWorkbook,
+              loadSaved: () => workbookPersistence.load(),
+              onExport: exportLocalChangesJson,
+              onReload: reloadSavedWorkbook,
+              onClose: () => setIsSaveConflictDialogOpen(false),
             }),
           i.jsx(ConnectionStatusNotice, {}),
           i.jsxs("div", {
@@ -4889,13 +5772,15 @@ function MainWorksheetEditor({
                       i.jsx("input", {
                         className: "lg-name-box",
                         "aria-label": text("Selected range"),
-                        value: Le,
-                        onChange: (fe) => et(fe.target.value),
-                        onBlur: Ud,
+                        value: goToReferenceText,
+                        onChange: (fe) => setGoToReferenceText(fe.target.value),
+                        onBlur: commitNameBoxReference,
                         onKeyDown: (fe) => {
                           var Oe;
                           fe.key === "Enter" &&
-                            (Ud(), (Oe = to.current) == null || Oe.focus());
+                            (commitNameBoxReference(),
+                            (Oe = gridContainerRef.current) == null ||
+                              Oe.focus());
                         },
                         lang: language("Selected range"),
                         "data-ui-label": "Selected range",
@@ -4905,18 +5790,18 @@ function MainWorksheetEditor({
                         "aria-label": text("Cancel cell edit"),
                         onPointerDown: (fe) => fe.preventDefault(),
                         onMouseDown: (fe) => fe.preventDefault(),
-                        onClick: Da,
+                        onClick: cancelCellEdit,
                         lang: language("Cancel cell edit"),
                         "data-ui-label": "Cancel cell edit",
                         children: i.jsx(X, { size: 15 }),
                       }),
                       i.jsx("button", {
                         "aria-label": text("Apply cell value"),
-                        disabled: Ss(),
+                        disabled: isFormulaEditingLocked(),
                         onPointerDown: (fe) => fe.preventDefault(),
                         onMouseDown: (fe) => fe.preventDefault(),
                         onClick: () => {
-                          ui() && pi();
+                          commitCellEdit() && focusGridSurface();
                         },
                         lang: language("Apply cell value"),
                         "data-ui-label": "Apply cell value",
@@ -4927,27 +5812,34 @@ function MainWorksheetEditor({
                         children: i.jsx(LocalizedText, { children: "ƒx" }),
                       }),
                       i.jsx("input", {
-                        ref: pt,
+                        ref: formulaInputRef,
                         "aria-label": text("Formula bar"),
-                        readOnly: Ss(),
-                        value: st,
+                        readOnly: isFormulaEditingLocked(),
+                        value: cellEditText,
                         "aria-describedby":
-                          (Et = kr.current) != null && Et.value.startsWith("=")
-                            ? `${$}-formula-help`
+                          (formulaInputNode = activeCellEditRef.current) !=
+                            null && formulaInputNode.value.startsWith("=")
+                            ? `${editorIdPrefix}-formula-help`
                             : undefined,
                         onFocus: (fe) => {
-                          (!kr.current && st.startsWith("=") && !je && us(st),
-                            Zt(true),
-                            ks(fe.currentTarget));
+                          (!activeCellEditRef.current &&
+                            cellEditText.startsWith("=") &&
+                            !isEditingLocked &&
+                            beginCellEdit(cellEditText),
+                            setIsFormulaBarFocused(true),
+                            syncFormulaEditorSelection(fe.currentTarget));
                         },
                         onSelect: (fe) => {
-                          (ks(fe.currentTarget),
-                            mt(fe.currentTarget.selectionStart ?? st.length));
+                          (syncFormulaEditorSelection(fe.currentTarget),
+                            setFormulaCaretPosition(
+                              fe.currentTarget.selectionStart ??
+                                cellEditText.length,
+                            ));
                         },
                         onChange: (fe) => {
-                          (us(fe.target.value),
-                            ks(fe.currentTarget, true),
-                            mt(
+                          (beginCellEdit(fe.target.value),
+                            syncFormulaEditorSelection(fe.currentTarget, true),
+                            setFormulaCaretPosition(
                               fe.target.selectionStart ??
                                 fe.target.value.length,
                             ));
@@ -4956,75 +5848,86 @@ function MainWorksheetEditor({
                           isWithinFormulaSuggestions(
                             fe.currentTarget,
                             fe.relatedTarget,
-                          ) || (Zt(false), ui());
+                          ) ||
+                            (setIsFormulaBarFocused(false), commitCellEdit());
                         },
                         onKeyDown: (fe) => {
                           var Oe, Be;
                           if (!fe.nativeEvent.isComposing) {
                             if (fe.key === "Escape") {
                               if (
-                                !Ke.current.span &&
-                                st.length > 1 &&
-                                (Oe = Fe.current) != null &&
+                                !formulaPointerStateRef.current.span &&
+                                cellEditText.length > 1 &&
+                                (Oe = formulaSuggestionListRef.current) !=
+                                  null &&
                                 Oe.handleKeyDown(fe)
                               )
                                 return;
-                              (fe.preventDefault(), Da());
+                              (fe.preventDefault(), cancelCellEdit());
                               return;
                             }
-                            qa(fe) ||
-                              ((Be = Fe.current) != null &&
+                            handleFormulaKeyDown(fe) ||
+                              ((Be = formulaSuggestionListRef.current) !=
+                                null &&
                                 Be.handleKeyDown(fe)) ||
                               ((fe.key === "Enter" || fe.key === "Tab") &&
                                 (fe.preventDefault(),
-                                ui() && pu(fe.key, fe.shiftKey)));
+                                commitCellEdit() &&
+                                  moveSelectionAfterCommit(
+                                    fe.key,
+                                    fe.shiftKey,
+                                  )));
                           }
                         },
                         lang: language("Formula bar"),
                         "data-ui-label": "Formula bar",
                       }),
                       i.jsx(FormulaSuggestionList, {
-                        ref: Fe,
+                        ref: formulaSuggestionListRef,
                         onExit: () => {
-                          (Zt(false), ui());
+                          (setIsFormulaBarFocused(false), commitCellEdit());
                         },
-                        value: st,
-                        caret: nt,
-                        workbook: H,
-                        sheetId: he.id,
-                        inputRef: pt,
-                        disabled: Ss() || !Wt,
+                        value: cellEditText,
+                        caret: formulaCaretPosition,
+                        workbook: activeWorkbook,
+                        sheetId: activeSheet.id,
+                        inputRef: formulaInputRef,
+                        disabled:
+                          isFormulaEditingLocked() || !isFormulaBarFocused,
                         onAccept: (fe, Oe) => {
-                          (us(fe),
-                            mt(Oe),
+                          (beginCellEdit(fe),
+                            setFormulaCaretPosition(Oe),
                             requestAnimationFrame(() => {
                               var Be, Ue;
-                              ((Be = pt.current) == null || Be.focus(),
-                                (Ue = pt.current) == null ||
+                              ((Be = formulaInputRef.current) == null ||
+                                Be.focus(),
+                                (Ue = formulaInputRef.current) == null ||
                                   Ue.setSelectionRange(Oe, Oe));
                             }));
                         },
                       }),
                     ],
                   }),
-                  kr.current?.value.startsWith("=") &&
+                  activeCellEditRef.current?.value.startsWith("=") &&
                     i.jsxs("div", {
                       className: "lg-formula-entry-help",
-                      id: `${$}-formula-help`,
+                      id: `${editorIdPrefix}-formula-help`,
                       lang: "en",
                       children: [
                         i.jsxs("span", {
                           children: [
                             "Editing",
                             " ",
-                            H.sheets.find((fe) => {
-                              return fe.id === kr.current?.sheetId;
+                            activeWorkbook.sheets.find((fe) => {
+                              return (
+                                fe.id === activeCellEditRef.current?.sheetId
+                              );
                             })?.name,
                             "!",
-                            kr.current?.address,
+                            activeCellEditRef.current?.address,
                             " ·",
                             " ",
-                            Qe ? "Point mode" : "Edit mode",
+                            isFormulaPointMode ? "Point mode" : "Edit mode",
                             " · Select cells to insert a reference. F2 switches arrow keys; F4 locks references. Enter applies; Esc cancels.",
                           ],
                         }),
@@ -5033,13 +5936,17 @@ function MainWorksheetEditor({
                           "aria-live": "polite",
                           "aria-atomic": "true",
                           "aria-label": "Formula reference",
-                          children: Tt
-                            ? `Reference: ${H.sheets.find((fe) => fe.id === Tt.sheetId)?.name}!${Tt.range}`
+                          children: activeFormulaReference
+                            ? `Reference: ${activeWorkbook.sheets.find((fe) => fe.id === activeFormulaReference.sheetId)?.name}!${activeFormulaReference.range}`
                             : "Formula not yet applied",
                         }),
                       ],
                     }),
-                  findDataValidationsInRange(H, he.id, xt).map((fe) =>
+                  findDataValidationsInRange(
+                    activeWorkbook,
+                    activeSheet.id,
+                    activeCellAddress,
+                  ).map((fe) =>
                     i.jsxs(
                       "div",
                       {
@@ -5065,24 +5972,26 @@ function MainWorksheetEditor({
                                 i.jsx(LocalizedText, {
                                   children: "Choose a value for ",
                                 }),
-                                xt,
+                                activeCellAddress,
                                 " ",
                                 i.jsxs("select", {
-                                  "aria-label": `Validation dropdown for ${xt}`,
-                                  disabled: je,
+                                  "aria-label": `Validation dropdown for ${activeCellAddress}`,
+                                  disabled: isEditingLocked,
                                   value: "",
                                   onChange: (Oe) => {
                                     const Be = fe.list[Number(Oe.target.value)];
                                     Be !== undefined &&
-                                      On(() => {
-                                        (Da(),
-                                          To(
+                                      runGuardedAction(() => {
+                                        (cancelCellEdit(),
+                                          applyCellPatches(
                                             [
                                               {
-                                                sheetId: he.id,
-                                                address: xt,
+                                                sheetId: activeSheet.id,
+                                                address: activeCellAddress,
                                                 cell: {
-                                                  ...he.cells[xt],
+                                                  ...activeSheet.cells[
+                                                    activeCellAddress
+                                                  ],
                                                   raw: Be,
                                                   literal: true,
                                                 },
@@ -5114,7 +6023,10 @@ function MainWorksheetEditor({
                       fe.id,
                     ),
                   ),
-                  Qr.getSpillDiagnostic(he.id, xt) &&
+                  workbookCalculator.getSpillDiagnostic(
+                    activeSheet.id,
+                    activeCellAddress,
+                  ) &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
@@ -5122,13 +6034,22 @@ function MainWorksheetEditor({
                       lang: language("Array spill diagnostic"),
                       "data-ui-label": "Array spill diagnostic",
                       children: [
-                        xt,
+                        activeCellAddress,
                         ": ",
-                        Qr.getSpillDiagnostic(he.id, xt).message,
+                        workbookCalculator.getSpillDiagnostic(
+                          activeSheet.id,
+                          activeCellAddress,
+                        ).message,
                       ],
                     }),
-                  (Qr.getSpillAnchor(he.id, xt) ||
-                    Qr.getSpillRange(he.id, xt)) &&
+                  (workbookCalculator.getSpillAnchor(
+                    activeSheet.id,
+                    activeCellAddress,
+                  ) ||
+                    workbookCalculator.getSpillRange(
+                      activeSheet.id,
+                      activeCellAddress,
+                    )) &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       role: "status",
@@ -5138,17 +6059,23 @@ function MainWorksheetEditor({
                       children: [
                         i.jsx(LocalizedText, { children: "Dynamic array" }),
                         " ",
-                        Qr.getSpillRange(
-                          he.id,
-                          Qr.getSpillAnchor(he.id, xt) ?? xt,
+                        workbookCalculator.getSpillRange(
+                          activeSheet.id,
+                          workbookCalculator.getSpillAnchor(
+                            activeSheet.id,
+                            activeCellAddress,
+                          ) ?? activeCellAddress,
                         ),
                         ".",
-                        Qr.getSpillAnchor(he.id, xt)
-                          ? ` Edit the formula in ${Qr.getSpillAnchor(he.id, xt)}; this cell is a calculated result.`
+                        workbookCalculator.getSpillAnchor(
+                          activeSheet.id,
+                          activeCellAddress,
+                        )
+                          ? ` Edit the formula in ${workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress)}; this cell is a calculated result.`
                           : " Results resize when source data changes.",
                       ],
                     }),
-                  yt.length > 0 &&
+                  activeCellNamedFormulaDiagnostics.length > 0 &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
@@ -5156,13 +6083,15 @@ function MainWorksheetEditor({
                       lang: language("Named formula diagnostic"),
                       "data-ui-label": "Named formula diagnostic",
                       children: [
-                        xt,
+                        activeCellAddress,
                         ":",
                         " ",
-                        yt.map((fe) => fe.message).join(" "),
+                        activeCellNamedFormulaDiagnostics
+                          .map((fe) => fe.message)
+                          .join(" "),
                       ],
                     }),
-                  $t.length > 0 &&
+                  activeCellReferenceDiagnostics.length > 0 &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
@@ -5170,58 +6099,68 @@ function MainWorksheetEditor({
                       lang: language("Formula reference diagnostic"),
                       "data-ui-label": "Formula reference diagnostic",
                       children: [
-                        xt,
+                        activeCellAddress,
                         ":",
                         " ",
-                        $t.map((fe) => fe.message).join(" "),
+                        activeCellReferenceDiagnostics
+                          .map((fe) => fe.message)
+                          .join(" "),
                       ],
                     }),
-                  ot.length > 0 &&
+                  activeCellFormulaErrors.length > 0 &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
                       children: [
-                        xt,
+                        activeCellAddress,
                         ":",
                         " ",
-                        ot.map((fe) => fe.message).join(" "),
+                        activeCellFormulaErrors
+                          .map((fe) => fe.message)
+                          .join(" "),
                         " ",
                         i.jsx("button", {
                           type: "button",
-                          onClick: () => Pn("conditional"),
+                          onClick: () => runEditorCommand("conditional"),
                           children: i.jsx(LocalizedText, {
                             children: "Review conditional rules",
                           }),
                         }),
                       ],
                     }),
-                  (describeNamedStyleFallback(ur?.style) ||
-                    H.styleCatalog?.missingTheme) &&
+                  (describeNamedStyleFallback(activeCell?.style) ||
+                    activeWorkbook.styleCatalog?.missingTheme) &&
                     i.jsxs("div", {
                       className: "lg-format-warning",
                       role: "status",
                       children: [
-                        describeNamedStyleFallback(ur?.style) ||
-                          collectStyleFallbackWarnings(H).join(" "),
+                        describeNamedStyleFallback(activeCell?.style) ||
+                          collectStyleFallbackWarnings(activeWorkbook).join(
+                            " ",
+                          ),
                         i.jsx("button", {
-                          onClick: () => Pn("themes"),
+                          onClick: () => runEditorCommand("themes"),
                           children: i.jsx(LocalizedText, {
                             children: "Review themes and styles",
                           }),
                         }),
                       ],
                     }),
-                  getImportedNumberFormatWarning(he.cells[xt]) &&
+                  getImportedNumberFormatWarning(
+                    activeSheet.cells[activeCellAddress],
+                  ) &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       role: "status",
                       children: [
-                        xt,
+                        activeCellAddress,
                         ": ",
-                        getImportedNumberFormatWarning(he.cells[xt]),
+                        getImportedNumberFormatWarning(
+                          activeSheet.cells[activeCellAddress],
+                        ),
                       ],
                     }),
-                  Ui &&
+                  activeFilterState &&
                     i.jsxs("div", {
                       className: "lg-population-context",
                       role: "status",
@@ -5231,25 +6170,25 @@ function MainWorksheetEditor({
                       children: [
                         i.jsx(Filter, { size: 14 }),
                         i.jsx("strong", {
-                          children: Bd
+                          children: isFilterStale
                             ? "Filter paused — workbook changed"
-                            : Kc.error
+                            : filterApplication.error
                               ? "Filter unavailable — source rows shown"
-                              : `${Hr?.context.visibleRows} visible / ${Hr?.context.totalRows} total data rows`,
+                              : `${filterResult?.context.visibleRows} visible / ${filterResult?.context.totalRows} total data rows`,
                         }),
-                        Hr &&
+                        filterResult &&
                           i.jsxs("span", {
                             children: [
-                              Hr.context.range,
+                              filterResult.context.range,
                               " ·",
                               " ",
-                              Hr.context.filteredRows,
+                              filterResult.context.filteredRows,
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "filtered out ·",
                               }),
                               " ",
-                              Hr.context.hiddenMatchingRows,
+                              filterResult.context.hiddenMatchingRows,
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "matching rows manually hidden",
@@ -5257,27 +6196,35 @@ function MainWorksheetEditor({
                             ],
                           }),
                         i.jsx("button", {
-                          onClick: () => Pn("populationFilter"),
-                          children: Bd ? "Review and reapply" : "Edit filters",
+                          onClick: () => runEditorCommand("populationFilter"),
+                          children: isFilterStale
+                            ? "Review and reapply"
+                            : "Edit filters",
                         }),
                         i.jsx("button", {
                           onClick: () => {
-                            (fn((fe) => {
+                            (setFilterStateByScope((fe) => {
                               const Oe = { ...fe };
-                              return (delete Oe[Xo], Oe);
+                              return (delete Oe[filterStateKey], Oe);
                             }),
-                              jo("full"));
+                              setAuditPopulationScope("full"));
                           },
                           children: i.jsx(LocalizedText, {
                             children: "Clear population filters",
                           }),
                         }),
-                        Hr &&
+                        filterResult &&
                           i.jsx("button", {
                             onClick: () =>
                               saveBlobToFile(
                                 new Blob(
-                                  [JSON.stringify(Hr.context, null, 2)],
+                                  [
+                                    JSON.stringify(
+                                      filterResult.context,
+                                      null,
+                                      2,
+                                    ),
+                                  ],
                                   { type: "application/json" },
                                 ),
                                 "Population-filter-context.json",
@@ -5301,11 +6248,14 @@ function MainWorksheetEditor({
                             }),
                           ],
                         }),
-                        Kc.error &&
-                          i.jsx("span", { role: "alert", children: Kc.error }),
+                        filterApplication.error &&
+                          i.jsx("span", {
+                            role: "alert",
+                            children: filterApplication.error,
+                          }),
                       ],
                     }),
-                  Hr?.context.visibleRows === 0 &&
+                  filterResult?.context.visibleRows === 0 &&
                     i.jsxs("div", {
                       className: "lg-population-empty",
                       role: "status",
@@ -5314,7 +6264,7 @@ function MainWorksheetEditor({
                           children: "No matching visible records. All",
                         }),
                         " ",
-                        Hr.context.totalRows,
+                        filterResult.context.totalRows,
                         " ",
                         i.jsx(LocalizedText, {
                           children:
@@ -5322,7 +6272,7 @@ function MainWorksheetEditor({
                         }),
                       ],
                     }),
-                  wh &&
+                  isFilterBarVisible &&
                     i.jsxs("div", {
                       className: "lg-find-bar",
                       children: [
@@ -5332,15 +6282,16 @@ function MainWorksheetEditor({
                           placeholder: text(
                             "Filter rows (first row is a header)",
                           ),
-                          value: zr,
+                          value: filterValueSearch,
                           onChange: (fe) => {
-                            (jr(fe.target.value),
-                              fn((Oe) => {
+                            (setFilterValueSearch(fe.target.value),
+                              setFilterStateByScope((Oe) => {
                                 const Be = { ...Oe };
-                                return (delete Be[Xo], Be);
+                                return (delete Be[filterStateKey], Be);
                               }),
-                              Co(0),
-                              to.current && (to.current.scrollTop = 0));
+                              scrollActivePaneVertically(0),
+                              gridContainerRef.current &&
+                                (gridContainerRef.current.scrollTop = 0));
                           },
                           lang: language("Filter rows"),
                           "data-ui-label": "Filter rows",
@@ -5348,7 +6299,9 @@ function MainWorksheetEditor({
                         i.jsx("button", {
                           "aria-label": text("Close filter"),
                           onClick: () => {
-                            (Hc(false), jr(""), pi());
+                            (setIsFilterBarVisible(false),
+                              setFilterValueSearch(""),
+                              focusGridSurface());
                           },
                           lang: language("Close filter"),
                           "data-ui-label": "Close filter",
@@ -5357,30 +6310,30 @@ function MainWorksheetEditor({
                       ],
                     }),
                   i.jsx(PivotResultsStatusBar, {
-                    workbook: H,
-                    sheetId: oe,
-                    onOpen: () => Pn("pivot"),
-                    onExplore: () => Pn("pivotExplore"),
+                    workbook: activeWorkbook,
+                    sheetId: activeSheetId,
+                    onOpen: () => runEditorCommand("pivot"),
+                    onExplore: () => runEditorCommand("pivotExplore"),
                   }),
-                  S0 &&
+                  isFindBarVisible &&
                     i.jsxs("div", {
                       className: "lg-find-bar",
                       children: [
                         i.jsx(Search, { size: 14 }),
                         i.jsx("input", {
-                          ref: Ld,
+                          ref: findInputRef,
                           "aria-label": text("Find text"),
                           placeholder: text("Find"),
-                          value: as,
-                          onChange: (fe) => jd(fe.target.value),
+                          value: findQuery,
+                          onChange: (fe) => setFindQuery(fe.target.value),
                           onKeyDown: (fe) => {
-                            fe.key === "Enter" && lc();
+                            fe.key === "Enter" && findNextTextMatch();
                           },
                           lang: language("Find text"),
                           "data-ui-label": "Find text",
                         }),
                         i.jsx("button", {
-                          onClick: lc,
+                          onClick: findNextTextMatch,
                           children: i.jsx(LocalizedText, {
                             children: "Find Next",
                           }),
@@ -5388,14 +6341,14 @@ function MainWorksheetEditor({
                         i.jsx("input", {
                           "aria-label": text("Replace text"),
                           placeholder: text("Replace with"),
-                          value: uu,
-                          onChange: (fe) => sa(fe.target.value),
+                          value: replaceWithText,
+                          onChange: (fe) => setReplaceWithText(fe.target.value),
                           lang: language("Replace text"),
                           "data-ui-label": "Replace text",
                         }),
                         i.jsx("button", {
-                          disabled: je,
-                          onClick: Ro,
+                          disabled: isEditingLocked,
+                          onClick: replaceTextInSelection,
                           children: i.jsx(LocalizedText, {
                             children: "Replace in selection",
                           }),
@@ -5403,7 +6356,7 @@ function MainWorksheetEditor({
                         i.jsx("button", {
                           "aria-label": text("Close find"),
                           onClick: () => {
-                            (Pl(false), pi());
+                            (setIsFindBarVisible(false), focusGridSurface());
                           },
                           lang: language("Close find"),
                           "data-ui-label": "Close find",
@@ -5411,13 +6364,13 @@ function MainWorksheetEditor({
                         }),
                       ],
                     }),
-                  Fo &&
+                  fillDragState &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       role: "status",
                       children: [
                         i.jsx(LocalizedText, { children: "Fill preview · " }),
-                        Fo.targetRange,
+                        fillDragState.targetRange,
                         " ",
                         i.jsx(LocalizedText, {
                           children:
@@ -5425,8 +6378,8 @@ function MainWorksheetEditor({
                         }),
                       ],
                     }),
-                  zr &&
-                    ko === 0 &&
+                  filterValueSearch &&
+                    matchingRowCount === 0 &&
                     i.jsx("div", {
                       className: "lg-population-empty",
                       role: "status",
@@ -5435,7 +6388,7 @@ function MainWorksheetEditor({
                           "No rows match this search. Source data is unchanged; clear the search to restore the view.",
                       }),
                     }),
-                  (zr || kn) &&
+                  (filterValueSearch || activeColumnSort) &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       children: [
@@ -5445,20 +6398,23 @@ function MainWorksheetEditor({
                           children:
                             "View only · source row numbers and formula references stay fixed",
                         }),
-                        zr && ` · ${ko} matching rows`,
+                        filterValueSearch &&
+                          ` · ${matchingRowCount} matching rows`,
                       ],
                     }),
-                  Bo &&
+                  clipboardSnapshotState &&
                     i.jsxs("div", {
                       className: "lg-view-note",
                       role: "status",
                       children: [
                         i.jsx(LocalizedText, { children: "Cut ready:" }),
                         " ",
-                        H.sheets.find((fe) => fe.id === Bo.snapshot.sheetId)
-                          ?.name ?? "Deleted worksheet",
+                        activeWorkbook.sheets.find(
+                          (fe) =>
+                            fe.id === clipboardSnapshotState.snapshot.sheetId,
+                        )?.name ?? "Deleted worksheet",
                         "!",
-                        Bo.snapshot.range,
+                        clipboardSnapshotState.snapshot.range,
                         " ",
                         i.jsx(LocalizedText, {
                           children: "· Paste to review the move.",
@@ -5466,7 +6422,7 @@ function MainWorksheetEditor({
                         " ",
                         i.jsx("button", {
                           type: "button",
-                          onClick: Ul,
+                          onClick: clearCutSession,
                           children: i.jsx(LocalizedText, {
                             children: "Cancel cut",
                           }),
@@ -5474,18 +6430,22 @@ function MainWorksheetEditor({
                       ],
                     }),
                   i.jsx(SplitPaneLayout, {
-                    split: Or,
-                    snapshot: H,
-                    readOnly: je,
-                    active: an.activeId,
+                    split: sheetSplitPanes,
+                    snapshot: activeWorkbook,
+                    readOnly: isEditingLocked,
+                    active: splitPaneSizes.activeId,
                     onResize: (fe) =>
-                      On(() =>
-                        So(
-                          setSplitPanes(sr.current.book, he.id, fe),
+                      runGuardedAction(() =>
+                        commitWorkbookEdit(
+                          setSplitPanes(
+                            latestEditStateRef.current.book,
+                            activeSheet.id,
+                            fe,
+                          ),
                           "Resize split panes",
                         ),
                       ),
-                    renderPane: Al,
+                    renderPane: renderGridPane,
                   }),
                   i.jsxs("div", {
                     className: "lg-sheet-tabs",
@@ -5496,26 +6456,29 @@ function MainWorksheetEditor({
                     children: [
                       i.jsxs("div", {
                         children: [
-                          H.sheets
+                          activeWorkbook.sheets
                             .filter((fe) => !fe.hidden)
                             .map((fe) =>
                               i.jsx(
                                 "button",
                                 {
                                   "aria-current":
-                                    fe.id === he.id ? "true" : undefined,
-                                  className: fe.id === he.id ? "active" : "",
+                                    fe.id === activeSheet.id
+                                      ? "true"
+                                      : undefined,
+                                  className:
+                                    fe.id === activeSheet.id ? "active" : "",
                                   "data-sheet-id": fe.id,
-                                  tabIndex: fe.id === he.id ? 0 : -1,
+                                  tabIndex: fe.id === activeSheet.id ? 0 : -1,
                                   onPointerDown: (Oe) => {
                                     var Be;
-                                    (Be = kr.current) != null &&
+                                    (Be = activeCellEditRef.current) != null &&
                                       Be.value.startsWith("=") &&
                                       Oe.preventDefault();
                                   },
                                   onMouseDown: (Oe) => {
                                     var Be;
-                                    (Be = kr.current) != null &&
+                                    (Be = activeCellEditRef.current) != null &&
                                       Be.value.startsWith("=") &&
                                       Oe.preventDefault();
                                   },
@@ -5533,7 +6496,7 @@ function MainWorksheetEditor({
                                     )
                                       return;
                                     Oe.preventDefault();
-                                    const Be = H.sheets.filter(
+                                    const Be = activeWorkbook.sheets.filter(
                                         (gt) => !gt.hidden,
                                       ),
                                       Ue = Be.findIndex(
@@ -5551,10 +6514,10 @@ function MainWorksheetEditor({
                                                     : Be.length - 1)) %
                                                   Be.length
                                               ];
-                                    (wi(Xe.id),
+                                    (switchActiveWorksheet(Xe.id),
                                       requestAnimationFrame(() => {
                                         return Array.from(
-                                          lt.current?.querySelectorAll(
+                                          appRootRef.current?.querySelectorAll(
                                             "[data-sheet-id]",
                                           ) ?? [],
                                         )
@@ -5565,18 +6528,22 @@ function MainWorksheetEditor({
                                           ?.focus();
                                       }));
                                   },
-                                  onClick: () => wi(fe.id),
+                                  onClick: () => switchActiveWorksheet(fe.id),
                                   style: fe.tabColor
                                     ? {
                                         boxShadow: `inset 0 -3px ${fe.tabColor}`,
                                       }
                                     : undefined,
                                   onDoubleClick: () => {
-                                    ui() && (ft(fe.id), Je("sheets"));
+                                    commitCellEdit() &&
+                                      (setTabBarSheetId(fe.id),
+                                      setActiveDialogMode("sheets"));
                                   },
                                   onContextMenu: (Oe) => {
                                     (Oe.preventDefault(),
-                                      ui() && (ft(fe.id), Je("sheets")));
+                                      commitCellEdit() &&
+                                        (setTabBarSheetId(fe.id),
+                                        setActiveDialogMode("sheets")));
                                   },
                                   children: fe.name,
                                 },
@@ -5589,13 +6556,14 @@ function MainWorksheetEditor({
                             disabled:
                               readOnly ||
                               !!(
-                                (Xr = H.structureProtection) != null &&
-                                Xr.enabled
+                                (workbookStructureLock =
+                                  activeWorkbook.structureProtection) != null &&
+                                workbookStructureLock.enabled
                               ),
                             onClick: () =>
-                              Ia({
+                              setPromptDialogState({
                                 kind: "sheet",
-                                value: `Sheet ${H.sheets.length + 1}`,
+                                value: `Sheet ${activeWorkbook.sheets.length + 1}`,
                               }),
                             lang: language("Add worksheet"),
                             "data-ui-label": "Add worksheet",
@@ -5604,7 +6572,7 @@ function MainWorksheetEditor({
                           i.jsx("button", {
                             "aria-label": text("Manage worksheets"),
                             title: text("Manage worksheets"),
-                            onClick: () => Pn("sheets"),
+                            onClick: () => runEditorCommand("sheets"),
                             lang: language("Manage worksheets"),
                             "data-ui-label": "Manage worksheets",
                             children: i.jsx(Layers, { size: 16 }),
@@ -5615,7 +6583,7 @@ function MainWorksheetEditor({
                         className: "lg-book-name",
                         title: text("Workbook name"),
                         lang: language("Workbook name"),
-                        children: H.name,
+                        children: activeWorkbook.name,
                       }),
                     ],
                   }),
@@ -5630,20 +6598,20 @@ function MainWorksheetEditor({
                         children: [
                           i.jsx("span", { className: "lg-ready-dot" }),
                           i.jsx(LocalizedText, {
-                            children: go ? "Working…" : "Ready",
+                            children: isOperationBusy ? "Working…" : "Ready",
                           }),
                           i.jsx("button", {
                             type: "button",
-                            onClick: () => _(true),
+                            onClick: () => setIsWorkbookHealthDialogOpen(true),
                             children: i.jsx(LocalizedText, {
                               children: "Workbook health",
                             }),
                           }),
-                          go &&
-                            ba.current &&
+                          isOperationBusy &&
+                            activeOperationControllerRef.current &&
                             i.jsx("button", {
                               onClick: () => {
-                                return ba.current?.abort();
+                                return activeOperationControllerRef.current?.abort();
                               },
                               children: i.jsx(LocalizedText, {
                                 children: "Cancel file processing",
@@ -5659,12 +6627,14 @@ function MainWorksheetEditor({
                             ),
                             children: [
                               i.jsx(LocalizedText, { children: "Count: " }),
-                              ie,
+                              selectedCellCount,
                               " ",
-                              St.length > 0 ? `· ${Jt.length} areas ` : "",
+                              completedSelectionAreas.length > 0
+                                ? `· ${selectionAreas.length} areas `
+                                : "",
                               " ",
                               i.jsx(LocalizedText, { children: "· Numbers: " }),
-                              er.length,
+                              selectedNumericValues.length,
                               i.jsxs("span", {
                                 className: "lg-selection-inclusion",
                                 children: [
@@ -5677,7 +6647,7 @@ function MainWorksheetEditor({
                               }),
                             ],
                           }),
-                          je ? " · Read only" : "",
+                          isEditingLocked ? " · Read only" : "",
                         ],
                       }),
                       i.jsxs("div", {
@@ -5688,7 +6658,10 @@ function MainWorksheetEditor({
                               " ",
                               i.jsx("b", {
                                 children: formatNumberWithPattern(
-                                  er.length ? Gt / er.length : 0,
+                                  selectedNumericValues.length
+                                    ? selectedNumericSum /
+                                        selectedNumericValues.length
+                                    : 0,
                                 ),
                               }),
                             ],
@@ -5698,10 +6671,13 @@ function MainWorksheetEditor({
                               i.jsx(LocalizedText, { children: "Sum" }),
                               " ",
                               i.jsx("b", {
-                                children: formatNumberWithPattern(Gt, {
-                                  raw: 0,
-                                  format: "number",
-                                }),
+                                children: formatNumberWithPattern(
+                                  selectedNumericSum,
+                                  {
+                                    raw: 0,
+                                    format: "number",
+                                  },
+                                ),
                               }),
                             ],
                           }),
@@ -5712,7 +6688,8 @@ function MainWorksheetEditor({
                         children: [
                           i.jsx("button", {
                             "aria-label": text("Zoom out"),
-                            onClick: () => bo(Math.max(50, Ao - 10)),
+                            onClick: () =>
+                              applyZoomPercent(Math.max(50, zoomPercent - 10)),
                             lang: language("Zoom out"),
                             "data-ui-label": "Zoom out",
                             children: "−",
@@ -5723,52 +6700,54 @@ function MainWorksheetEditor({
                             min: "50",
                             max: "200",
                             step: "10",
-                            value: Ao,
-                            onChange: (fe) => bo(Number(fe.target.value)),
+                            value: zoomPercent,
+                            onChange: (fe) =>
+                              applyZoomPercent(Number(fe.target.value)),
                             lang: language("Zoom"),
                             "data-ui-label": "Zoom",
                           }),
                           i.jsx("button", {
                             "aria-label": text("Zoom in"),
-                            onClick: () => bo(Math.min(200, Ao + 10)),
+                            onClick: () =>
+                              applyZoomPercent(Math.min(200, zoomPercent + 10)),
                             lang: language("Zoom in"),
                             "data-ui-label": "Zoom in",
                             children: "+",
                           }),
-                          i.jsxs("span", { children: [Ao, "%"] }),
+                          i.jsxs("span", { children: [zoomPercent, "%"] }),
                         ],
                       }),
                     ],
                   }),
                 ],
               }),
-              Lr &&
+              sidePanelKind &&
                 i.jsxs("section", {
                   "aria-label":
-                    Lr === "assistant"
+                    sidePanelKind === "assistant"
                       ? "Workbook assistant panel"
                       : "Workbook side panel",
-                  className: `lg-panel ${Lr === "assistant" ? "lg-chat-panel" : ""}`,
+                  className: `lg-panel ${sidePanelKind === "assistant" ? "lg-chat-panel" : ""}`,
                   children: [
                     i.jsxs("div", {
                       className: "lg-panel-heading",
                       children: [
                         i.jsxs("div", {
                           children: [
-                            Lr === "checks"
+                            sidePanelKind === "checks"
                               ? i.jsx(ClipboardCheck, { size: 18 })
-                              : Lr === "assistant"
+                              : sidePanelKind === "assistant"
                                 ? i.jsx(Sparkles, { size: 18 })
-                                : Lr === "history"
+                                : sidePanelKind === "history"
                                   ? i.jsx(History, { size: 18 })
                                   : i.jsx(CircleHelp, { size: 18 }),
                             i.jsx("h2", {
                               children:
-                                Lr === "checks"
+                                sidePanelKind === "checks"
                                   ? "Audit toolkit"
-                                  : Lr === "assistant"
+                                  : sidePanelKind === "assistant"
                                     ? "Workbook assistant"
-                                    : Lr === "history"
+                                    : sidePanelKind === "history"
                                       ? "Activity"
                                       : "About this workspace",
                             }),
@@ -5776,7 +6755,7 @@ function MainWorksheetEditor({
                         }),
                         i.jsx("button", {
                           "aria-label": text("Close side panel"),
-                          onClick: () => Pr(null),
+                          onClick: () => setSidePanelKind(null),
                           lang: language("Close side panel"),
                           "data-ui-label": "Close side panel",
                           children: i.jsx(PanelRightClose, { size: 16 }),
@@ -5786,7 +6765,7 @@ function MainWorksheetEditor({
                     i.jsxs("div", {
                       className: "lg-panel-body",
                       children: [
-                        Lr === "checks" &&
+                        sidePanelKind === "checks" &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("span", {
@@ -5807,9 +6786,10 @@ function MainWorksheetEditor({
                                   }),
                                   i.jsxs("select", {
                                     "aria-label": text("Analysis population"),
-                                    value: ei,
+                                    value: auditPopulationScope,
                                     onChange: (fe) => {
-                                      (jo(fe.target.value), eo(null));
+                                      (setAuditPopulationScope(fe.target.value),
+                                        setAuditAnalysisResult(null));
                                     },
                                     lang: language("Analysis population"),
                                     "data-ui-label": "Analysis population",
@@ -5821,7 +6801,7 @@ function MainWorksheetEditor({
                                       }),
                                       i.jsx("option", {
                                         value: "visible",
-                                        disabled: !Hr,
+                                        disabled: !filterResult,
                                         children: "Visible filter population",
                                       }),
                                     ],
@@ -5836,8 +6816,9 @@ function MainWorksheetEditor({
                                       "Applies to the five checks below. Pattern checks and other tool dialogs use their own complete source ranges and explicit source filters.",
                                   }),
                                   " ",
-                                  ei === "visible" && Hr
-                                    ? `Using ${Hr.context.range}, ${Hr.context.visibleRows} visible / ${Hr.context.totalRows} total rows. The custom check range is ignored.`
+                                  auditPopulationScope === "visible" &&
+                                  filterResult
+                                    ? `Using ${filterResult.context.range}, ${filterResult.context.visibleRows} visible / ${filterResult.context.totalRows} total rows. The custom check range is ignored.`
                                     : "Full scope includes hidden and filtered rows.",
                                 ],
                               }),
@@ -5852,7 +6833,7 @@ function MainWorksheetEditor({
                                 className: "lg-test-choices",
                                 children: [
                                   i.jsxs("button", {
-                                    onClick: () => Pn("patterns"),
+                                    onClick: () => runEditorCommand("patterns"),
                                     children: [
                                       i.jsx(ListFilter, { size: 17 }),
                                       i.jsxs("span", {
@@ -5914,13 +6895,16 @@ function MainWorksheetEditor({
                                             fe.kind === "materiality" ||
                                             fe.kind === "aging"
                                           ) {
-                                            Pn(fe.kind);
+                                            runEditorCommand(fe.kind);
                                             return;
                                           }
-                                          (lu(fe.kind), eo(null));
+                                          (setSelectedAuditKind(fe.kind),
+                                            setAuditAnalysisResult(null));
                                         },
                                         className:
-                                          is === fe.kind ? "active" : "",
+                                          selectedAuditKind === fe.kind
+                                            ? "active"
+                                            : "",
                                         children: [
                                           i.jsx(fe.icon, { size: 17 }),
                                           i.jsxs("span", {
@@ -5936,7 +6920,7 @@ function MainWorksheetEditor({
                                           i.jsx("span", {
                                             className: "lg-radio",
                                             children:
-                                              is === fe.kind &&
+                                              selectedAuditKind === fe.kind &&
                                               i.jsx("span", {}),
                                           }),
                                         ],
@@ -5955,9 +6939,10 @@ function MainWorksheetEditor({
                                   " ",
                                   i.jsx("input", {
                                     "aria-label": text("Audit source range"),
-                                    placeholder: `A1:${columnIndexToLetters(he.colCount - 1)}${he.rowCount} (entire sheet)`,
-                                    value: Ju,
-                                    onChange: (fe) => C0(fe.target.value),
+                                    placeholder: `A1:${columnIndexToLetters(activeSheet.colCount - 1)}${activeSheet.rowCount} (entire sheet)`,
+                                    value: auditSourceRange,
+                                    onChange: (fe) =>
+                                      setAuditSourceRange(fe.target.value),
                                     lang: language("Audit source range"),
                                     "data-ui-label": "Audit source range",
                                   }),
@@ -5970,12 +6955,12 @@ function MainWorksheetEditor({
                                     children: "First row contains field names.",
                                   }),
                                   " ",
-                                  ei === "visible"
+                                  auditPopulationScope === "visible"
                                     ? "Uses the visible rows of the applied filter range."
                                     : "Includes all source rows.",
                                 ],
                               }),
-                              is === "materiality" &&
+                              selectedAuditKind === "materiality" &&
                                 i.jsxs("label", {
                                   className: "lg-field",
                                   children: [
@@ -5987,14 +6972,15 @@ function MainWorksheetEditor({
                                         "Materiality threshold",
                                       ),
                                       min: "0",
-                                      value: oa,
-                                      onValueChange: (fe) => Dd(Number(fe)),
+                                      value: materialityThreshold,
+                                      onValueChange: (fe) =>
+                                        setMaterialityThreshold(Number(fe)),
                                       lang: language("Materiality threshold"),
                                       "data-ui-label": "Materiality threshold",
                                     }),
                                   ],
                                 }),
-                              is === "sample" &&
+                              selectedAuditKind === "sample" &&
                                 i.jsxs("div", {
                                   className: "lg-two-fields",
                                   children: [
@@ -6007,8 +6993,9 @@ function MainWorksheetEditor({
                                         i.jsx(LocalizedNumberField, {
                                           "aria-label": text("Sample size"),
                                           min: "1",
-                                          value: jl,
-                                          onValueChange: (fe) => Uc(Number(fe)),
+                                          value: auditSampleSize,
+                                          onValueChange: (fe) =>
+                                            setAuditSampleSize(Number(fe)),
                                           lang: language("Sample size"),
                                           "data-ui-label": "Sample size",
                                         }),
@@ -6022,8 +7009,9 @@ function MainWorksheetEditor({
                                         }),
                                         i.jsx("input", {
                                           "aria-label": text("Sampling seed"),
-                                          value: Fl,
-                                          onChange: (fe) => Nf(fe.target.value),
+                                          value: samplingSeed,
+                                          onChange: (fe) =>
+                                            setSamplingSeed(fe.target.value),
                                           lang: language("Sampling seed"),
                                           "data-ui-label": "Sampling seed",
                                         }),
@@ -6031,7 +7019,7 @@ function MainWorksheetEditor({
                                     }),
                                   ],
                                 }),
-                              is === "aging" &&
+                              selectedAuditKind === "aging" &&
                                 i.jsxs("label", {
                                   className: "lg-field",
                                   children: [
@@ -6041,8 +7029,9 @@ function MainWorksheetEditor({
                                     i.jsx("input", {
                                       "aria-label": text("Aging as of date"),
                                       type: "date",
-                                      value: Od,
-                                      onChange: (fe) => um(fe.target.value),
+                                      value: agingAsOfDate,
+                                      onChange: (fe) =>
+                                        setAgingAsOfDate(fe.target.value),
                                       lang: language("Aging as of date"),
                                       "data-ui-label": "Aging as of date",
                                     }),
@@ -6050,7 +7039,7 @@ function MainWorksheetEditor({
                                 }),
                               i.jsxs("button", {
                                 className: "lg-button dark full",
-                                onClick: Rs,
+                                onClick: runCurrentAuditAnalysis,
                                 children: [
                                   i.jsx(ClipboardCheck, { size: 15 }),
                                   i.jsx(LocalizedText, {
@@ -6059,29 +7048,41 @@ function MainWorksheetEditor({
                                   i.jsx(ArrowUpRight, { size: 15 }),
                                 ],
                               }),
-                              os
+                              auditAnalysisResult
                                 ? i.jsxs("div", {
                                     className: "lg-results",
                                     children: [
                                       i.jsxs("div", {
                                         className: "lg-results-heading",
                                         children: [
-                                          i.jsx("h4", { children: os.title }),
+                                          i.jsx("h4", {
+                                            children: auditAnalysisResult.title,
+                                          }),
                                           i.jsx("span", {
-                                            children: os.findings.length,
+                                            children:
+                                              auditAnalysisResult.findings
+                                                .length,
                                           }),
                                         ],
                                       }),
-                                      i.jsx("p", { children: os.summary }),
+                                      i.jsx("p", {
+                                        children: auditAnalysisResult.summary,
+                                      }),
                                       i.jsxs("button", {
                                         className: "lg-button full",
                                         onClick: () =>
                                           saveBlobToFile(
                                             new Blob(
-                                              [JSON.stringify($c, null, 2)],
+                                              [
+                                                JSON.stringify(
+                                                  agingReportPayload,
+                                                  null,
+                                                  2,
+                                                ),
+                                              ],
                                               { type: "application/json" },
                                             ),
-                                            `Audit-${is}-revision-${H.revision}.json`,
+                                            `Audit-${selectedAuditKind}-revision-${activeWorkbook.revision}.json`,
                                           ),
                                         children: [
                                           i.jsx(Download, { size: 13 }),
@@ -6090,7 +7091,7 @@ function MainWorksheetEditor({
                                           }),
                                         ],
                                       }),
-                                      os.findings.map((fe) =>
+                                      auditAnalysisResult.findings.map((fe) =>
                                         i.jsxs(
                                           "article",
                                           {
@@ -6110,24 +7111,34 @@ function MainWorksheetEditor({
                                                       "button",
                                                       {
                                                         onClick: () => {
-                                                          (fn((Ue) => {
-                                                            const Xe = {
-                                                              ...Ue,
-                                                            };
-                                                            return (
-                                                              delete Xe[
-                                                                JSON.stringify([
-                                                                  H.id,
-                                                                  Oe.sheetId,
-                                                                ])
-                                                              ],
-                                                              Xe
-                                                            );
-                                                          }),
-                                                            wi(Oe.sheetId),
-                                                            da(Oe.address),
-                                                            eo(os),
-                                                            vn(
+                                                          (setFilterStateByScope(
+                                                            (Ue) => {
+                                                              const Xe = {
+                                                                ...Ue,
+                                                              };
+                                                              return (
+                                                                delete Xe[
+                                                                  JSON.stringify(
+                                                                    [
+                                                                      activeWorkbook.id,
+                                                                      Oe.sheetId,
+                                                                    ],
+                                                                  )
+                                                                ],
+                                                                Xe
+                                                              );
+                                                            },
+                                                          ),
+                                                            switchActiveWorksheet(
+                                                              Oe.sheetId,
+                                                            ),
+                                                            selectCellAddress(
+                                                              Oe.address,
+                                                            ),
+                                                            setAuditAnalysisResult(
+                                                              auditAnalysisResult,
+                                                            ),
+                                                            setStatusNotice(
                                                               `${Oe.sheetName}!${Oe.address}: ${String(Oe.value ?? "")}`,
                                                             ));
                                                         },
@@ -6175,7 +7186,7 @@ function MainWorksheetEditor({
                                   }),
                             ],
                           }),
-                        Lr === "assistant" &&
+                        sidePanelKind === "assistant" &&
                           i.jsx(ne.Suspense, {
                             fallback: i.jsx("p", {
                               role: "status",
@@ -6183,44 +7194,50 @@ function MainWorksheetEditor({
                               children: "Loading chat…",
                             }),
                             children: i.jsx(LazyAssistantChat, {
-                              session: Md,
-                              setSession: A0,
+                              session: assistantSession,
+                              setSession: setAssistantSession,
                               adapter,
                               local:
                                 adapter === Vj || adapter.localOnly === true,
                               scope: JSON.stringify([
-                                H.id,
-                                H.revision,
-                                he.id,
-                                br,
+                                activeWorkbook.id,
+                                activeWorkbook.revision,
+                                activeSheet.id,
+                                selectionAreasKey,
                                 workbookInstanceKey(adapter),
                               ]),
-                              selectionLabel: Wa,
-                              selectedCount: ie,
-                              busy: Qu,
-                              proposalId: Xs?.id,
-                              onSend: No,
+                              selectionLabel: selectionReferenceLabel,
+                              selectedCount: selectedCellCount,
+                              busy: isAssistantBusy,
+                              proposalId: assistantProposal?.id,
+                              onSend: askAssistantQuestion,
                               onCancel: () => {
                                 var fe;
-                                (Ys.current++,
-                                  (fe = ss.current) == null || fe.abort(),
-                                  Vc(false),
-                                  Qu &&
-                                    vn(
+                                (assistantRequestIdRef.current++,
+                                  (fe = assistantAbortControllerRef.current) ==
+                                    null || fe.abort(),
+                                  setIsAssistantBusy(false),
+                                  isAssistantBusy &&
+                                    setStatusNotice(
                                       "Assistant request cancelled. No workbook changes were made.",
                                     ));
                               },
                               onReset: () => {
-                                (Bl(null), Ll(null), hn(""));
+                                (setAssistantProposal(null),
+                                  setAnswerCitations(null),
+                                  setErrorNotice(""));
                               },
                               review:
-                                Xs && gl
+                                assistantProposal && answerCitations
                                   ? i.jsxs(i.Fragment, {
                                       children: [
-                                        Xs &&
-                                          gl &&
-                                          !evaluateAnswerEvidence(H, ve, gl)
-                                            .current &&
+                                        assistantProposal &&
+                                          answerCitations &&
+                                          !evaluateAnswerEvidence(
+                                            activeWorkbook,
+                                            assistantSelection,
+                                            answerCitations,
+                                          ).current &&
                                           i.jsx("p", {
                                             role: "status",
                                             children: i.jsx(LocalizedText, {
@@ -6228,25 +7245,29 @@ function MainWorksheetEditor({
                                                 "The answer evidence is stale or unavailable. Request a fresh answer before review.",
                                             }),
                                           }),
-                                        Xs &&
-                                          gl &&
-                                          evaluateAnswerEvidence(H, ve, gl)
-                                            .current &&
+                                        assistantProposal &&
+                                          answerCitations &&
+                                          evaluateAnswerEvidence(
+                                            activeWorkbook,
+                                            assistantSelection,
+                                            answerCitations,
+                                          ).current &&
                                           i.jsxs("div", {
                                             className: "lg-proposal",
                                             children: [
                                               i.jsx("span", {
                                                 className: "lg-eyebrow",
-                                                children: Xs.patches.length
+                                                children: assistantProposal
+                                                  .patches.length
                                                   ? "REVIEW PROPOSED CHANGES"
                                                   : "RESPONSE",
                                               }),
                                               i.jsx(
                                                 AssistantAnswerEvidence,
                                                 {
-                                                  workbook: H,
-                                                  selection: ve,
-                                                  evidence: gl,
+                                                  workbook: activeWorkbook,
+                                                  selection: assistantSelection,
+                                                  evidence: answerCitations,
                                                   renderText: (fe) =>
                                                     i.jsx(
                                                       LazyAssistantChatMarkdown,
@@ -6255,8 +7276,11 @@ function MainWorksheetEditor({
                                                       },
                                                     ),
                                                   onNavigate: (fe, Oe) => {
-                                                    const Be = sr.current;
-                                                    if (kr.current)
+                                                    const Be =
+                                                      latestEditStateRef.current;
+                                                    if (
+                                                      activeCellEditRef.current
+                                                    )
                                                       throw Error(
                                                         "Finish the current cell edit and request fresh evidence before following a citation.",
                                                       );
@@ -6268,176 +7292,202 @@ function MainWorksheetEditor({
                                                           sheetId: Be.sheetId,
                                                           range: Be.range,
                                                         },
-                                                        gl,
+                                                        answerCitations,
                                                       ).current
                                                     )
                                                       throw Error(
                                                         "The current approved source changed. Request a fresh answer.",
                                                       );
-                                                    ((zr || kn || Ui) &&
-                                                      (fn((Ue) => {
-                                                        const Xe = { ...Ue };
-                                                        return (
-                                                          delete Xe[Xo],
-                                                          Xe
-                                                        );
-                                                      }),
-                                                      jr(""),
-                                                      po(null),
-                                                      vn(
+                                                    ((filterValueSearch ||
+                                                      activeColumnSort ||
+                                                      activeFilterState) &&
+                                                      (setFilterStateByScope(
+                                                        (Ue) => {
+                                                          const Xe = { ...Ue };
+                                                          return (
+                                                            delete Xe[
+                                                              filterStateKey
+                                                            ],
+                                                            Xe
+                                                          );
+                                                        },
+                                                      ),
+                                                      setFilterValueSearch(""),
+                                                      setActiveColumnSort(null),
+                                                      setStatusNotice(
                                                         "The row view was cleared to reveal the cited cell. The approved shared range is unchanged.",
                                                       )),
-                                                      or(Oe),
-                                                      Go(Oe),
-                                                      pi());
+                                                      setActiveCellAddress(Oe),
+                                                      setPendingScrollAddress(
+                                                        Oe,
+                                                      ),
+                                                      focusGridSurface());
                                                   },
                                                 },
-                                                Xs.id,
+                                                assistantProposal.id,
                                               ),
-                                              Xs.patches.map((fe) => {
-                                                var Be;
-                                                return i.jsxs(
-                                                  "div",
-                                                  {
-                                                    className: "lg-diff",
-                                                    children: [
-                                                      i.jsx("b", {
-                                                        children: fe.address,
-                                                      }),
-                                                      i.jsx("del", {
-                                                        children: String(
-                                                          he.cells[fe.address]
-                                                            ?.raw ?? "(blank)",
-                                                        ),
-                                                      }),
-                                                      i.jsxs("span", {
-                                                        children: [
-                                                          String(
-                                                            fe.cell.raw ??
-                                                              "(blank)",
+                                              assistantProposal.patches.map(
+                                                (fe) => {
+                                                  var Be;
+                                                  return i.jsxs(
+                                                    "div",
+                                                    {
+                                                      className: "lg-diff",
+                                                      children: [
+                                                        i.jsx("b", {
+                                                          children: fe.address,
+                                                        }),
+                                                        i.jsx("del", {
+                                                          children: String(
+                                                            activeSheet.cells[
+                                                              fe.address
+                                                            ]?.raw ?? "(blank)",
                                                           ),
-                                                          (Be =
-                                                            fe.cell.style) !=
-                                                            null && Be.fill
-                                                            ? " · highlight"
-                                                            : "",
-                                                        ],
-                                                      }),
-                                                      i.jsx("dl", {
-                                                        className:
-                                                          "lg-proposal-fields",
-                                                        "aria-label":
-                                                          fe.address +
-                                                          " proposed field changes",
-                                                        children: [
-                                                          [
-                                                            "Value type",
-                                                            he.cells[fe.address]
-                                                              ?.raw == null
-                                                              ? "blank"
-                                                              : typeof he.cells[
-                                                                  fe.address
-                                                                ]?.raw,
-                                                            fe.cell.raw === null
-                                                              ? "blank"
-                                                              : typeof fe.cell
-                                                                  .raw,
+                                                        }),
+                                                        i.jsxs("span", {
+                                                          children: [
+                                                            String(
+                                                              fe.cell.raw ??
+                                                                "(blank)",
+                                                            ),
+                                                            (Be =
+                                                              fe.cell.style) !=
+                                                              null && Be.fill
+                                                              ? " · highlight"
+                                                              : "",
                                                           ],
-                                                          ...Array.from(
-                                                            new Set([
-                                                              ...Object.keys(
-                                                                he.cells[
-                                                                  fe.address
-                                                                ] ?? {},
-                                                              ),
-                                                              ...Object.keys(
-                                                                fe.cell,
-                                                              ),
-                                                            ]),
-                                                          )
-                                                            .filter(
-                                                              (gt) =>
-                                                                gt !== "raw",
+                                                        }),
+                                                        i.jsx("dl", {
+                                                          className:
+                                                            "lg-proposal-fields",
+                                                          "aria-label":
+                                                            fe.address +
+                                                            " proposed field changes",
+                                                          children: [
+                                                            [
+                                                              "Value type",
+                                                              activeSheet.cells[
+                                                                fe.address
+                                                              ]?.raw == null
+                                                                ? "blank"
+                                                                : typeof activeSheet
+                                                                    .cells[
+                                                                    fe.address
+                                                                  ]?.raw,
+                                                              fe.cell.raw ===
+                                                              null
+                                                                ? "blank"
+                                                                : typeof fe.cell
+                                                                    .raw,
+                                                            ],
+                                                            ...Array.from(
+                                                              new Set([
+                                                                ...Object.keys(
+                                                                  activeSheet
+                                                                    .cells[
+                                                                    fe.address
+                                                                  ] ?? {},
+                                                                ),
+                                                                ...Object.keys(
+                                                                  fe.cell,
+                                                                ),
+                                                              ]),
                                                             )
-                                                            .map((gt) => {
-                                                              return [
-                                                                gt,
-                                                                he.cells[
-                                                                  fe.address
-                                                                ]?.[gt],
-                                                                fe.cell[gt],
-                                                              ];
-                                                            }),
-                                                        ]
-                                                          .filter(
-                                                            ([, gt, Nt]) =>
-                                                              JSON.stringify(
-                                                                gt,
-                                                              ) !==
-                                                              JSON.stringify(
-                                                                Nt,
-                                                              ),
-                                                          )
-                                                          .map(([gt, Nt, wt]) =>
-                                                            i.jsxs(
-                                                              ne.Fragment,
-                                                              {
-                                                                children: [
-                                                                  i.jsx("dt", {
-                                                                    children:
-                                                                      String(
-                                                                        gt,
-                                                                      ),
-                                                                  }),
-                                                                  i.jsxs("dd", {
+                                                              .filter(
+                                                                (gt) =>
+                                                                  gt !== "raw",
+                                                              )
+                                                              .map((gt) => {
+                                                                return [
+                                                                  gt,
+                                                                  activeSheet
+                                                                    .cells[
+                                                                    fe.address
+                                                                  ]?.[gt],
+                                                                  fe.cell[gt],
+                                                                ];
+                                                              }),
+                                                          ]
+                                                            .filter(
+                                                              ([, gt, Nt]) =>
+                                                                JSON.stringify(
+                                                                  gt,
+                                                                ) !==
+                                                                JSON.stringify(
+                                                                  Nt,
+                                                                ),
+                                                            )
+                                                            .map(
+                                                              ([gt, Nt, wt]) =>
+                                                                i.jsxs(
+                                                                  ne.Fragment,
+                                                                  {
                                                                     children: [
                                                                       i.jsx(
-                                                                        "del",
+                                                                        "dt",
                                                                         {
                                                                           children:
-                                                                            Nt ===
-                                                                            undefined
-                                                                              ? "(not set)"
-                                                                              : JSON.stringify(
-                                                                                  Nt,
-                                                                                ),
+                                                                            String(
+                                                                              gt,
+                                                                            ),
                                                                         },
                                                                       ),
-                                                                      i.jsx(
-                                                                        "ins",
+                                                                      i.jsxs(
+                                                                        "dd",
                                                                         {
                                                                           children:
-                                                                            wt ===
-                                                                            undefined
-                                                                              ? "(not set)"
-                                                                              : JSON.stringify(
-                                                                                  wt,
-                                                                                ),
+                                                                            [
+                                                                              i.jsx(
+                                                                                "del",
+                                                                                {
+                                                                                  children:
+                                                                                    Nt ===
+                                                                                    undefined
+                                                                                      ? "(not set)"
+                                                                                      : JSON.stringify(
+                                                                                          Nt,
+                                                                                        ),
+                                                                                },
+                                                                              ),
+                                                                              i.jsx(
+                                                                                "ins",
+                                                                                {
+                                                                                  children:
+                                                                                    wt ===
+                                                                                    undefined
+                                                                                      ? "(not set)"
+                                                                                      : JSON.stringify(
+                                                                                          wt,
+                                                                                        ),
+                                                                                },
+                                                                              ),
+                                                                            ],
                                                                         },
                                                                       ),
                                                                     ],
-                                                                  }),
-                                                                ],
-                                                              },
-                                                              String(gt),
+                                                                  },
+                                                                  String(gt),
+                                                                ),
                                                             ),
-                                                          ),
-                                                      }),
-                                                    ],
-                                                  },
-                                                  fe.address,
-                                                );
-                                              }),
-                                              Xs.patches.length > 0 &&
+                                                        }),
+                                                      ],
+                                                    },
+                                                    fe.address,
+                                                  );
+                                                },
+                                              ),
+                                              assistantProposal.patches.length >
+                                                0 &&
                                                 i.jsxs(i.Fragment, {
                                                   children: [
                                                     i.jsxs("button", {
                                                       className:
                                                         "lg-button dark full",
-                                                      disabled: je,
+                                                      disabled: isEditingLocked,
                                                       onClick: () =>
-                                                        On(() => {
-                                                          const fe = sr.current,
+                                                        runGuardedAction(() => {
+                                                          const fe =
+                                                              latestEditStateRef.current,
                                                             Oe = {
                                                               sheetId:
                                                                 fe.sheetId,
@@ -6445,11 +7495,11 @@ function MainWorksheetEditor({
                                                             };
                                                           if (
                                                             fe.readOnly ||
-                                                            kr.current ||
+                                                            activeCellEditRef.current ||
                                                             !evaluateAnswerEvidence(
                                                               fe.book,
                                                               Oe,
-                                                              gl,
+                                                              answerCitations,
                                                             ).current
                                                           )
                                                             throw Error(
@@ -6459,14 +7509,14 @@ function MainWorksheetEditor({
                                                             validateProposedCalculation(
                                                               fe.book,
                                                               Oe,
-                                                              Xs,
+                                                              assistantProposal,
                                                             );
-                                                          (To(
+                                                          (applyCellPatches(
                                                             Be.patches,
                                                             `Accepted assistant proposal ${Be.id}`,
                                                             fe.selectionKey,
                                                           ),
-                                                            vn(
+                                                            setStatusNotice(
                                                               "Reviewed proposal applied and recorded in activity.",
                                                             ));
                                                         }),
@@ -6477,7 +7527,8 @@ function MainWorksheetEditor({
                                                         i.jsx(LocalizedText, {
                                                           children: "Apply ",
                                                         }),
-                                                        Xs.patches.length,
+                                                        assistantProposal
+                                                          .patches.length,
                                                         " ",
                                                         i.jsx(LocalizedText, {
                                                           children: "changes",
@@ -6488,7 +7539,12 @@ function MainWorksheetEditor({
                                                       className:
                                                         "lg-button full",
                                                       onClick: () => {
-                                                        (Bl(null), Ll(null));
+                                                        (setAssistantProposal(
+                                                          null,
+                                                        ),
+                                                          setAnswerCitations(
+                                                            null,
+                                                          ));
                                                       },
                                                       children: i.jsx(
                                                         LocalizedText,
@@ -6507,7 +7563,7 @@ function MainWorksheetEditor({
                                   : null,
                             }),
                           }),
-                        Lr === "history" &&
+                        sidePanelKind === "history" &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("span", {
@@ -6528,7 +7584,7 @@ function MainWorksheetEditor({
                                     "Local activity is included in JSON exports. This log is editable with the file and is not an immutable audit record.",
                                 }),
                               }),
-                              H.events.length === 0
+                              activeWorkbook.events.length === 0
                                 ? i.jsxs("div", {
                                     className: "lg-empty",
                                     children: [
@@ -6543,7 +7599,7 @@ function MainWorksheetEditor({
                                   })
                                 : i.jsx("div", {
                                     className: "lg-timeline",
-                                    children: [...H.events]
+                                    children: [...activeWorkbook.events]
                                       .reverse()
                                       .map((fe) =>
                                         i.jsxs(
@@ -6573,7 +7629,7 @@ function MainWorksheetEditor({
                                                     "small",
                                                     {
                                                       children: [
-                                                        H.sheets.find(
+                                                        activeWorkbook.sheets.find(
                                                           (Nt) =>
                                                             Nt.id ===
                                                             Oe.sheetId,
@@ -6615,7 +7671,7 @@ function MainWorksheetEditor({
                                   }),
                             ],
                           }),
-                        Lr === "help" &&
+                        sidePanelKind === "help" &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("span", {
@@ -6715,101 +7771,123 @@ function MainWorksheetEditor({
           }),
         ],
       }),
-      B && i.jsx(WorkbookHealthDialog, { monitor: D, onClose: () => _(false) }),
-      ml &&
+      isWorkbookHealthDialogOpen &&
+        i.jsx(WorkbookHealthDialog, {
+          monitor: activeReliabilityMonitor,
+          onClose: () => setIsWorkbookHealthDialogOpen(false),
+        }),
+      validationReviewState &&
         i.jsx(ValidationReviewDialog, {
-          error: ml.error,
-          readOnly: je,
+          error: validationReviewState.error,
+          readOnly: isEditingLocked,
           onRetry: () => {
-            (Rf(null),
+            (setValidationReviewState(null),
               requestAnimationFrame(() => {
-                return pt.current?.focus();
+                return formulaInputRef.current?.focus();
               }));
           },
           onCancel: () => {
-            (Rf(null), hn(""), Da());
+            (setValidationReviewState(null),
+              setErrorNotice(""),
+              cancelCellEdit());
           },
           onAccept: () =>
-            On(() => {
-              if (sr.current.readOnly)
+            runGuardedAction(() => {
+              if (latestEditStateRef.current.readOnly)
                 throw Error("This workbook is read-only.");
               if (
-                ml.selectionGuard &&
-                ml.selectionGuard !== sr.current.selectionKey
+                validationReviewState.selectionGuard &&
+                validationReviewState.selectionGuard !==
+                  latestEditStateRef.current.selectionKey
               )
                 throw Error(
                   "Approved selection changed. Review the proposal again.",
                 );
-              if (ml.snapshot !== JSON.stringify(sr.current.book))
+              if (
+                validationReviewState.snapshot !==
+                JSON.stringify(latestEditStateRef.current.book)
+              )
                 throw Error("Workbook changed. Review the batch again.");
-              (di(
+              (commitWorkbookChange(
                 applyCellPatchTransaction(
-                  sr.current.book,
-                  ml.patches,
+                  latestEditStateRef.current.book,
+                  validationReviewState.patches,
                   actor,
-                  ml.action,
+                  validationReviewState.action,
                   {
-                    validationApproval: assertNoStopValidationIssues(ml.error),
+                    validationApproval: assertNoStopValidationIssues(
+                      validationReviewState.error,
+                    ),
                   },
                 ),
               ),
-                Rf(null),
-                (kr.current = null),
-                Ir(null),
-                vn("Validation warnings accepted for the complete batch."),
-                pi());
+                setValidationReviewState(null),
+                (activeCellEditRef.current = null),
+                setCellEditState(null),
+                setStatusNotice(
+                  "Validation warnings accepted for the complete batch.",
+                ),
+                focusGridSurface());
             }),
         }),
-      aa &&
+      promptDialogState &&
         i.jsx("div", {
           className: "lg-modal-backdrop",
           onKeyDown: (fe) => {
-            fe.key === "Escape" && Ia(null);
+            fe.key === "Escape" && setPromptDialogState(null);
           },
           onMouseDown: (fe) => {
-            fe.target === fe.currentTarget && Ia(null);
+            fe.target === fe.currentTarget && setPromptDialogState(null);
           },
           children: i.jsxs("section", {
             className: "lg-modal",
             role: "dialog",
             "aria-modal": "true",
-            "aria-labelledby": `${$}-dialog-title`,
+            "aria-labelledby": `${editorIdPrefix}-dialog-title`,
             children: [
               i.jsx("button", {
                 className: "lg-modal-close",
                 "aria-label": text("Close dialog"),
-                onClick: () => Ia(null),
+                onClick: () => setPromptDialogState(null),
                 lang: language("Close dialog"),
                 "data-ui-label": "Close dialog",
                 children: i.jsx(X, { size: 18 }),
               }),
               i.jsx("h2", {
-                id: `${$}-dialog-title`,
+                id: `${editorIdPrefix}-dialog-title`,
                 children:
-                  aa.kind === "note"
+                  promptDialogState.kind === "note"
                     ? "Add a cell note"
-                    : aa.kind === "rename"
+                    : promptDialogState.kind === "rename"
                       ? "Rename workbook"
                       : "Add worksheet",
               }),
-              aa.kind === "note"
+              promptDialogState.kind === "note"
                 ? i.jsx("textarea", {
                     autoFocus: true,
                     "aria-label": text("Cell note"),
                     rows: 5,
-                    value: aa.value,
-                    onChange: (fe) => Ia({ ...aa, value: fe.target.value }),
+                    value: promptDialogState.value,
+                    onChange: (fe) =>
+                      setPromptDialogState({
+                        ...promptDialogState,
+                        value: fe.target.value,
+                      }),
                     lang: language("Cell note"),
                     "data-ui-label": "Cell note",
                   })
                 : i.jsx("input", {
                     autoFocus: true,
                     "aria-label": text("Name"),
-                    value: aa.value,
-                    onChange: (fe) => Ia({ ...aa, value: fe.target.value }),
+                    value: promptDialogState.value,
+                    onChange: (fe) =>
+                      setPromptDialogState({
+                        ...promptDialogState,
+                        value: fe.target.value,
+                      }),
                     onKeyDown: (fe) => {
-                      (fe.key === "Enter" && el(),
-                        fe.key === "Escape" && Ia(null));
+                      (fe.key === "Enter" && commitDialogInput(),
+                        fe.key === "Escape" && setPromptDialogState(null));
                     },
                     lang: language("Name"),
                     "data-ui-label": "Name",
@@ -6819,12 +7897,12 @@ function MainWorksheetEditor({
                 children: [
                   i.jsx("button", {
                     className: "lg-button",
-                    onClick: () => Ia(null),
+                    onClick: () => setPromptDialogState(null),
                     children: i.jsx(LocalizedText, { children: "Cancel" }),
                   }),
                   i.jsx("button", {
                     className: "lg-button dark",
-                    onClick: el,
+                    onClick: commitDialogInput,
                     children: i.jsx(LocalizedText, { children: "Save" }),
                   }),
                 ],
