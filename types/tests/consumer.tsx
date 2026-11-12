@@ -147,10 +147,9 @@ const agentRaw = readRenderWorkbookCall("{}");
 // @ts-expect-error the call may have been rejected, so workbook is not there yet
 agentRaw.workbook;
 
-const agentMessage: WorkbookToolMessage = createWorkbookToolResult(
-  "call-1",
-  { sheets: [{ name: "Plan" }] },
-);
+const agentMessage: WorkbookToolMessage = createWorkbookToolResult("call-1", {
+  sheets: [{ name: "Plan" }],
+});
 agentMessage.role satisfies "tool";
 
 const agentSubscriber = createWorkbookToolSubscriber({

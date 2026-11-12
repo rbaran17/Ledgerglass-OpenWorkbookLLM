@@ -315,18 +315,17 @@ export function describeWorkbookAsSpec(
 ): WorkbookSpec;
 
 /** Props of `AgentWorkbook`: the editor's props, except `initialWorkbook`, plus the description. */
-export interface AgentWorkbookProps
-  extends Pick<
-    AuditWorkbookProps,
-    | "onChange"
-    | "onWorkbookLoaded"
-    | "onSelectionChange"
-    | "adapter"
-    | "actor"
-    | "readOnly"
-    | "persistenceKey"
-    | "workbookStore"
-  > {
+export interface AgentWorkbookProps extends Pick<
+  AuditWorkbookProps,
+  | "onChange"
+  | "onWorkbookLoaded"
+  | "onSelectionChange"
+  | "adapter"
+  | "actor"
+  | "readOnly"
+  | "persistenceKey"
+  | "workbookStore"
+> {
   spec: WorkbookSpec;
   /** Stable identifier, such as the tool call or surface identifier. */
   workbookId?: string;

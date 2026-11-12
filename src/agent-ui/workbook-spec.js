@@ -34,7 +34,7 @@ export const workbookSpecSchema = Object.freeze({
   properties: {
     title: {
       type: "string",
-      description: "Short name of the workbook, shown above the grid.",
+      description: "Short name of the workbook.",
     },
     sheets: {
       type: "array",
