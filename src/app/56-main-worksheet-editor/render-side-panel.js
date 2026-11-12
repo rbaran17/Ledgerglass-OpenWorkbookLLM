@@ -13,55 +13,24 @@ import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { WorkbookCapacityLimits } from "../20-calculation-options-and-assistant.js";
 
 function renderSidePanel({
+  selectionState,
+  formulaEntryState,
+  dialogState,
+  filterSortState,
+  auditState,
+  navigationState,
+  operationStatusState,
+  assistantState,
   adapter,
   text,
   language,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  setActiveCellAddress,
   selectionAreasKey,
-  activeCellEditRef,
-  sidePanelKind,
-  setSidePanelKind,
-  filterValueSearch,
-  setFilterValueSearch,
-  setFilterStateByScope,
-  auditPopulationScope,
-  setAuditPopulationScope,
   filterStateKey,
   activeFilterState,
-  activeColumnSort,
-  setActiveColumnSort,
-  setPendingScrollAddress,
-  setStatusNotice,
-  setErrorNotice,
-  selectedAuditKind,
-  setSelectedAuditKind,
-  auditAnalysisResult,
-  setAuditAnalysisResult,
-  materialityThreshold,
-  setMaterialityThreshold,
-  auditSampleSize,
-  setAuditSampleSize,
-  samplingSeed,
-  setSamplingSeed,
-  agingReportPayload,
-  agingAsOfDate,
-  setAgingAsOfDate,
-  auditSourceRange,
-  setAuditSourceRange,
-  assistantSession,
-  setAssistantSession,
-  assistantProposal,
-  setAssistantProposal,
-  answerCitations,
-  setAnswerCitations,
-  isAssistantBusy,
-  setIsAssistantBusy,
   filterResult,
-  assistantAbortControllerRef,
-  assistantRequestIdRef,
   latestEditStateRef,
   selectedCellCount,
   assistantSelection,
@@ -76,33 +45,33 @@ function renderSidePanel({
   askAssistantQuestion,
 }) {
   return (
-    sidePanelKind &&
+    dialogState.sidePanelKind &&
     i.jsxs("section", {
       "aria-label":
-        sidePanelKind === "assistant"
+        dialogState.sidePanelKind === "assistant"
           ? "Workbook assistant panel"
           : "Workbook side panel",
-      className: `lg-panel ${sidePanelKind === "assistant" ? "lg-chat-panel" : ""}`,
+      className: `lg-panel ${dialogState.sidePanelKind === "assistant" ? "lg-chat-panel" : ""}`,
       children: [
         i.jsxs("div", {
           className: "lg-panel-heading",
           children: [
             i.jsxs("div", {
               children: [
-                sidePanelKind === "checks"
+                dialogState.sidePanelKind === "checks"
                   ? i.jsx(ClipboardCheck, { size: 18 })
-                  : sidePanelKind === "assistant"
+                  : dialogState.sidePanelKind === "assistant"
                     ? i.jsx(Sparkles, { size: 18 })
-                    : sidePanelKind === "history"
+                    : dialogState.sidePanelKind === "history"
                       ? i.jsx(History, { size: 18 })
                       : i.jsx(CircleHelp, { size: 18 }),
                 i.jsx("h2", {
                   children:
-                    sidePanelKind === "checks"
+                    dialogState.sidePanelKind === "checks"
                       ? "Audit toolkit"
-                      : sidePanelKind === "assistant"
+                      : dialogState.sidePanelKind === "assistant"
                         ? "Workbook assistant"
-                        : sidePanelKind === "history"
+                        : dialogState.sidePanelKind === "history"
                           ? "Activity"
                           : "About this workspace",
                 }),
@@ -110,7 +79,7 @@ function renderSidePanel({
             }),
             i.jsx("button", {
               "aria-label": text("Close side panel"),
-              onClick: () => setSidePanelKind(null),
+              onClick: () => dialogState.setSidePanelKind(null),
               lang: language("Close side panel"),
               "data-ui-label": "Close side panel",
               children: i.jsx(PanelRightClose, { size: 16 }),
@@ -121,30 +90,14 @@ function renderSidePanel({
           className: "lg-panel-body",
           children: [
             renderChecksPanel({
+              dialogState,
+              filterSortState,
+              auditState,
+              operationStatusState,
               text,
               language,
               activeWorkbook,
               activeSheet,
-              sidePanelKind,
-              setFilterStateByScope,
-              auditPopulationScope,
-              setAuditPopulationScope,
-              setStatusNotice,
-              selectedAuditKind,
-              setSelectedAuditKind,
-              auditAnalysisResult,
-              setAuditAnalysisResult,
-              materialityThreshold,
-              setMaterialityThreshold,
-              auditSampleSize,
-              setAuditSampleSize,
-              samplingSeed,
-              setSamplingSeed,
-              agingReportPayload,
-              agingAsOfDate,
-              setAgingAsOfDate,
-              auditSourceRange,
-              setAuditSourceRange,
               filterResult,
               runEditorCommand,
               selectCellAddress,
@@ -152,34 +105,20 @@ function renderSidePanel({
               runCurrentAuditAnalysis,
             }),
             renderAssistantPanel({
+              selectionState,
+              formulaEntryState,
+              dialogState,
+              filterSortState,
+              navigationState,
+              operationStatusState,
+              assistantState,
               adapter,
               activeWorkbook,
               activeSheet,
               isEditingLocked,
-              setActiveCellAddress,
               selectionAreasKey,
-              activeCellEditRef,
-              sidePanelKind,
-              filterValueSearch,
-              setFilterValueSearch,
-              setFilterStateByScope,
               filterStateKey,
               activeFilterState,
-              activeColumnSort,
-              setActiveColumnSort,
-              setPendingScrollAddress,
-              setStatusNotice,
-              setErrorNotice,
-              assistantSession,
-              setAssistantSession,
-              assistantProposal,
-              setAssistantProposal,
-              answerCitations,
-              setAnswerCitations,
-              isAssistantBusy,
-              setIsAssistantBusy,
-              assistantAbortControllerRef,
-              assistantRequestIdRef,
               latestEditStateRef,
               selectedCellCount,
               assistantSelection,
@@ -189,7 +128,7 @@ function renderSidePanel({
               focusGridSurface,
               askAssistantQuestion,
             }),
-            sidePanelKind === "history" &&
+            dialogState.sidePanelKind === "history" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("span", {
@@ -286,7 +225,7 @@ function renderSidePanel({
                       }),
                 ],
               }),
-            sidePanelKind === "help" &&
+            dialogState.sidePanelKind === "help" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("span", {

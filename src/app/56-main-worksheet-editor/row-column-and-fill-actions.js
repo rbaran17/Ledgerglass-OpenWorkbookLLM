@@ -14,17 +14,14 @@ import {
 import { wy } from "../55-external-source-refresh.js";
 
 function createRowColumnAndFillActions({
+  selectionState,
+  viewDisplayState,
+  dragFillState,
   actor,
   activeSheet,
   isEditingLocked,
-  activeCellAddress,
-  activeSelectionRange,
   requireSingleSelectionRange,
-  isShowingFormulas,
-  dragAnchorRef,
-  setFillDragState,
   fillDragStateRef,
-  setAxisResizeState,
   columnVisibilityIndex,
   defaultRowHeight,
   textMeasurer,
@@ -82,7 +79,7 @@ function createRowColumnAndFillActions({
       )
     )
       return;
-    const wt = _t(activeCellAddress),
+    const wt = _t(selectionState.activeCellAddress),
       jt =
         (shownColumns.includes(wt.col) ||
           frozenColumnIndexes.includes(wt.col)) &&
@@ -104,7 +101,7 @@ function createRowColumnAndFillActions({
         },
       ],
     }),
-      jt && requestCellScroll(activeCellAddress));
+      jt && requestCellScroll(selectionState.activeCellAddress));
   }
   function autoFitSelectedAxis(fe, Oe) {
     runGuardedAction(() => {
@@ -126,7 +123,7 @@ function createRowColumnAndFillActions({
                 Be,
                 Xe,
                 textMeasurer,
-                isShowingFormulas,
+                viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
               )
             : autoFitRowHeights(
@@ -134,7 +131,7 @@ function createRowColumnAndFillActions({
                 Be,
                 Xe,
                 textMeasurer,
-                isShowingFormulas,
+                viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
               );
       (applyAxisSizes(
@@ -142,7 +139,7 @@ function createRowColumnAndFillActions({
         gt,
         `AutoFit ${fe === "column" ? "column widths" : "row heights"}`,
       ),
-        setAxisResizeState(null),
+        viewDisplayState.setAxisResizeState(null),
         focusGridSurface());
     });
   }
@@ -157,7 +154,7 @@ function createRowColumnAndFillActions({
       fe === "column"
         ? columnAxisLayout.size(columnVisibilityIndex.viewIndex(Oe) ?? 0)
         : (effectiveRowHeights[Oe] ?? defaultRowHeight);
-    setAxisResizeState({
+    viewDisplayState.setAxisResizeState({
       axis: fe,
       index: Oe,
       start: fe === "column" ? Be.clientX : Be.clientY,
@@ -174,12 +171,12 @@ function createRowColumnAndFillActions({
           const Oe = {
             book: latestEditStateRef.current.book,
             sheetId: activeSheet.id,
-            sourceRange: activeSelectionRange,
-            targetRange: activeSelectionRange,
+            sourceRange: selectionState.activeSelectionRange,
+            targetRange: selectionState.activeSelectionRange,
           };
-          ((dragAnchorRef.current = null),
+          ((dragFillState.dragAnchorRef.current = null),
             (fillDragStateRef.current = Oe),
-            setFillDragState(Oe));
+            dragFillState.setFillDragState(Oe));
         }));
   }
   function extendFillDragTo(fe) {
@@ -198,7 +195,7 @@ function createRowColumnAndFillActions({
         `${columnIndexToLetters(rr)}${wt + 1}`,
       ),
       Br = { ...Oe, targetRange: Mr };
-    ((fillDragStateRef.current = Br), setFillDragState(Br));
+    ((fillDragStateRef.current = Br), dragFillState.setFillDragState(Br));
   }
   return {
     applyAxisSizes,

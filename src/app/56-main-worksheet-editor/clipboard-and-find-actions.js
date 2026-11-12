@@ -10,26 +10,19 @@ import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { wy } from "../55-external-source-refresh.js";
 
 function createClipboardAndFindActions({
+  selectionState,
+  operationStatusState,
+  findReplaceState,
+  clipboardState,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  activeCellAddress,
-  activeSelectionRange,
   selectSingleRange,
   selectionAreasKey,
   requireSingleSelectionRange,
-  setStatusNotice,
-  setErrorNotice,
-  findQuery,
-  replaceWithText,
-  internalClipboardRef,
-  clipboardSnapshotState,
-  setClipboardSnapshotState,
-  setMoveCellsSource,
   workbookCalculator,
   rowVisibilityIndex,
   columnVisibilityIndex,
-  gridContainerRef,
   latestEditStateRef,
   selectionRangeBounds,
   getSelectedCellAddresses,
@@ -70,17 +63,19 @@ function createClipboardAndFindActions({
         ? createCutSourceSnapshot(
             activeWorkbook,
             activeSheet.id,
-            activeSelectionRange,
+            selectionState.activeSelectionRange,
           )
         : null;
     return (
-      setClipboardSnapshotState(gt ? { snapshot: gt, text: Xe } : null),
-      (internalClipboardRef.current = {
+      clipboardState.setClipboardSnapshotState(
+        gt ? { snapshot: gt, text: Xe } : null,
+      ),
+      (clipboardState.internalClipboardRef.current = {
         text: Xe,
         snapshot: buildClipboardSnapshot(
           activeWorkbook,
           activeSheet.id,
-          activeSelectionRange,
+          selectionState.activeSelectionRange,
         ),
       }),
       Xe
@@ -99,19 +94,19 @@ function createClipboardAndFindActions({
           latestEditStateRef.current.selectionKey !== selectionAreasKey
         )
           throw new Error("Workbook changed while copying. Copy again.");
-        setStatusNotice(
+        operationStatusState.setStatusNotice(
           "Cut is ready. Select a destination and paste to preview the move.",
         );
       }
-      fe || setStatusNotice("Selection copied.");
+      fe || operationStatusState.setStatusNotice("Selection copied.");
     } catch (Be) {
-      (fe && setClipboardSnapshotState(null),
-        setErrorNotice(
+      (fe && clipboardState.setClipboardSnapshotState(null),
+        operationStatusState.setErrorNotice(
           Be instanceof Error && Be.name !== "NotAllowedError"
             ? Be.message
             : "Clipboard access is unavailable. Use Ctrl/⌘ C or X with the grid focused.",
         ),
-        gridContainerRef.current?.focus());
+        selectionState.gridContainerRef.current?.focus());
     }
   }
   function pasteClipboardText(fe) {
@@ -121,18 +116,20 @@ function createClipboardAndFindActions({
       )
         throw new Error("Clipboard text is too large.");
       const Oe =
-        internalClipboardRef.current?.text === fe
-          ? internalClipboardRef.current
+        clipboardState.internalClipboardRef.current?.text === fe
+          ? clipboardState.internalClipboardRef.current
           : null;
-      if (Oe && clipboardSnapshotState?.text === fe) {
-        setMoveCellsSource(clipboardSnapshotState.snapshot);
+      if (Oe && clipboardState.clipboardSnapshotState?.text === fe) {
+        clipboardState.setMoveCellsSource(
+          clipboardState.clipboardSnapshotState.snapshot,
+        );
         return;
       }
       if (Oe) {
         const wt = buildPastePreview(
           activeWorkbook,
           activeSheet.id,
-          activeSelectionRange,
+          selectionState.activeSelectionRange,
           Oe.snapshot,
           {
             mode: "all",
@@ -151,7 +148,7 @@ function createClipboardAndFindActions({
       if (Be.errors.length)
         throw new Error("Clipboard text contains malformed quoted cells.");
       const Ue = Be.data,
-        Xe = _t(activeCellAddress),
+        Xe = _t(selectionState.activeCellAddress),
         gt = [];
       if (!Ue.length || Ue.some((wt) => wt.length !== Ue[0].length))
         throw new Error("Paste requires a rectangular range.");
@@ -180,7 +177,7 @@ function createClipboardAndFindActions({
         applyCellPatches(gt, "Paste cells"),
         selectSingleRange(
           wy(
-            activeCellAddress,
+            selectionState.activeCellAddress,
             `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
           ),
         ));
@@ -198,15 +195,15 @@ function createClipboardAndFindActions({
         throw new Error("Workbook changed while pasting. Try again.");
       pasteClipboardText(Be);
     } catch {
-      (setErrorNotice(
+      (operationStatusState.setErrorNotice(
         "Clipboard access is unavailable. Use Ctrl/⌘ V with the grid focused.",
       ),
-        gridContainerRef.current?.focus());
+        selectionState.gridContainerRef.current?.focus());
     }
   }
   function findNextTextMatch() {
     runGuardedAction(() => {
-      if (!findQuery) return;
+      if (!findReplaceState.findQuery) return;
       const fe = Object.keys(activeSheet.cells)
         .filter((Ue) => {
           const Xe = _t(Ue);
@@ -215,7 +212,7 @@ function createClipboardAndFindActions({
             !columnVisibilityIndex.isHidden(Xe.col) &&
             String(activeSheet.cells[Ue]?.raw ?? "")
               .toLowerCase()
-              .includes(findQuery.toLowerCase())
+              .includes(findReplaceState.findQuery.toLowerCase())
           );
         })
         .sort((Ue, Xe) => {
@@ -224,26 +221,28 @@ function createClipboardAndFindActions({
           return gt.row - Nt.row || gt.col - Nt.col;
         });
       if (!fe.length) {
-        setStatusNotice(`We couldn't find “${findQuery}”.`);
+        operationStatusState.setStatusNotice(
+          `We couldn't find “${findReplaceState.findQuery}”.`,
+        );
         return;
       }
-      const Oe = _t(activeCellAddress),
+      const Oe = _t(selectionState.activeCellAddress),
         Be =
           fe.find((Ue) => {
             const Xe = _t(Ue);
             return Xe.row > Oe.row || (Xe.row === Oe.row && Xe.col > Oe.col);
           }) ?? fe[0];
       (selectCellAddress(Be),
-        setStatusNotice(
+        operationStatusState.setStatusNotice(
           `${fe.length} matching cell${fe.length === 1 ? "" : "s"}.`,
         ));
     });
   }
   function replaceTextInSelection() {
     runGuardedAction(() => {
-      if (!findQuery) throw new Error("Enter text to find.");
+      if (!findReplaceState.findQuery) throw new Error("Enter text to find.");
       const fe = new RegExp(
-          findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+          findReplaceState.findQuery.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
           "gi",
         ),
         Oe = getSelectedCellAddresses()
@@ -252,7 +251,7 @@ function createClipboardAndFindActions({
               typeof activeSheet.cells[Be]?.raw == "string" &&
               String(activeSheet.cells[Be].raw)
                 .toLowerCase()
-                .includes(findQuery.toLowerCase()),
+                .includes(findReplaceState.findQuery.toLowerCase()),
           )
           .map((Be) => ({
             sheetId: activeSheet.id,
@@ -261,12 +260,14 @@ function createClipboardAndFindActions({
               ...activeSheet.cells[Be],
               raw: String(activeSheet.cells[Be].raw).replace(
                 fe,
-                () => replaceWithText,
+                () => findReplaceState.replaceWithText,
               ),
             },
           }));
       (Oe.length && applyCellPatches(Oe, "Replace text in selection"),
-        setStatusNotice(`Replaced text in ${Oe.length} cells.`));
+        operationStatusState.setStatusNotice(
+          `Replaced text in ${Oe.length} cells.`,
+        ));
     });
   }
   return {

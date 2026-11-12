@@ -11,31 +11,22 @@ import {
 } from "../53-find-replace-go-to.js";
 
 function createViewAndSelectionActions({
+  selectionState,
+  filterSortState,
+  navigationState,
+  operationStatusState,
+  viewDisplayState,
+  clipboardState,
   activeReliabilityMonitor,
   setActiveSheetId,
   activeSheet,
-  setActiveCellAddress,
-  setSelectionAnchorAddress,
-  activeCellAddressRef,
-  activeSelectionRange,
-  setActiveSelectionRange,
-  setCompletedSelectionAreas,
   selectionAreas,
-  setFilterValueSearch,
-  setActiveColumnSort,
   sheetSplitPanes,
   splitPaneSizes,
-  setPendingScrollAddress,
-  setErrorNotice,
-  isHeadingsVisible,
-  internalClipboardRef,
-  setClipboardSnapshotState,
-  setMoveCellsSource,
   rowVisibilityIndex,
   columnVisibilityIndex,
   zoomScale,
   rowHeaderWidth,
-  gridContainerRef,
   getAllCellEntries,
   sortedRowIndexes,
   yn,
@@ -48,12 +39,13 @@ function createViewAndSelectionActions({
   frozenColumnsWidth,
 }) {
   function selectSingleRange(fe) {
-    (setActiveSelectionRange(fe), setCompletedSelectionAreas([]));
+    (selectionState.setActiveSelectionRange(fe),
+      selectionState.setCompletedSelectionAreas([]));
   }
   function applySelectionAreas(fe) {
     const Oe = parseSelectionAreas(fe);
-    (setCompletedSelectionAreas(Oe.slice(0, -1)),
-      setActiveSelectionRange(Oe.at(-1)));
+    (selectionState.setCompletedSelectionAreas(Oe.slice(0, -1)),
+      selectionState.setActiveSelectionRange(Oe.at(-1)));
   }
   function requireSingleSelectionRange() {
     if (selectionAreas.length > 1)
@@ -76,15 +68,16 @@ function createViewAndSelectionActions({
     );
   }
   function clearCutSession() {
-    (setClipboardSnapshotState(null),
-      setMoveCellsSource(null),
-      (internalClipboardRef.current = null));
+    (clipboardState.setClipboardSnapshotState(null),
+      clipboardState.setMoveCellsSource(null),
+      (clipboardState.internalClipboardRef.current = null));
   }
   function computeGridViewport(fe) {
     const Oe = Math.max(
         1,
         fe.height -
-          ((isHeadingsVisible ? 22 : 0) + frozenRowsHeight) * zoomScale,
+          ((viewDisplayState.isHeadingsVisible ? 22 : 0) + frozenRowsHeight) *
+            zoomScale,
       ),
       Be = Math.max(
         1,
@@ -115,7 +108,7 @@ function createViewAndSelectionActions({
       rr =
         Nt.length +
         frozenColumnIndexes.length +
-        Number(isHeadingsVisible) +
+        Number(viewDisplayState.isHeadingsVisible) +
         +(wt > 0) +
         +(jt > 0);
     return {
@@ -180,7 +173,7 @@ function createViewAndSelectionActions({
   function buildWorkbookViewState(
     fe,
     Oe = activeSheet.id,
-    Be = activeSelectionRange,
+    Be = selectionState.activeSelectionRange,
   ) {
     const Ue =
       fe.sheets.find((Xe) => Xe.id === Oe && !Xe.hidden) ??
@@ -193,19 +186,19 @@ function createViewAndSelectionActions({
   function applyWorkbookView(fe) {
     const [Oe, Be = Oe] = fe.selection.range.split(":");
     (setActiveSheetId(fe.activeSheetId),
-      setActiveCellAddress(Oe),
-      setSelectionAnchorAddress(Oe),
+      selectionState.setActiveCellAddress(Oe),
+      selectionState.setSelectionAnchorAddress(Oe),
       selectSingleRange(fe.selection.range),
-      (activeCellAddressRef.current = Be),
-      setActiveColumnSort(null),
-      setFilterValueSearch(""),
+      (selectionState.activeCellAddressRef.current = Be),
+      filterSortState.setActiveColumnSort(null),
+      filterSortState.setFilterValueSearch(""),
       scrollActivePaneVertically(0),
       scrollActivePaneHorizontally(0),
-      setPendingScrollAddress(Oe));
+      navigationState.setPendingScrollAddress(Oe));
   }
   function notifyHostCallback(fe, Oe) {
     const Be = () =>
-      setErrorNotice(
+      operationStatusState.setErrorNotice(
         "The application could not acknowledge this operation. Your local workbook is retained.",
       );
     try {
@@ -219,7 +212,7 @@ function createViewAndSelectionActions({
     try {
       fe();
     } catch (Oe) {
-      setErrorNotice(
+      operationStatusState.setErrorNotice(
         Oe instanceof Error
           ? Oe.message
           : "The operation could not be completed.",
@@ -228,11 +221,11 @@ function createViewAndSelectionActions({
   }
   function focusGridSurface() {
     requestAnimationFrame(() =>
-      gridContainerRef.current?.focus({ preventScroll: true }),
+      selectionState.gridContainerRef.current?.focus({ preventScroll: true }),
     );
   }
   function requestCellScroll(fe) {
-    setPendingScrollAddress(fe);
+    navigationState.setPendingScrollAddress(fe);
   }
   function stepVisibleRowIndex(fe, Oe) {
     if (!sortedRowIndexes) {

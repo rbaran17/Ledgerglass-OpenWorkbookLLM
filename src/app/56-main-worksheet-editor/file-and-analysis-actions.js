@@ -21,41 +21,21 @@ import { requestAssistantAnswer } from "../21-aging-and-materiality-screens.js";
 import { buildAnswerCitations } from "../51-pattern-checks-and-citations.js";
 
 function createFileAndAnalysisActions({
+  dialogState,
+  auditState,
+  operationStatusState,
+  importExportState,
+  assistantState,
   adapter,
   actor,
   activeReliabilityMonitor,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  setActiveDialogMode,
-  setAutomationInspection,
   selectionAreas,
-  auditPopulationScope,
   activeFilterState,
-  setStatusNotice,
-  setErrorNotice,
-  setIsOperationBusy,
   operationScope,
-  latestOperationIdRef,
-  activeOperationControllerRef,
-  setDelimitedImportExportSource,
-  setPendingImportFile,
-  setXlsxConversionReview,
-  selectedAuditKind,
-  setAuditAnalysisResult,
-  materialityThreshold,
-  auditSampleSize,
-  samplingSeed,
-  setAgingReportPayload,
-  agingAsOfDate,
-  auditSourceRange,
-  setAssistantProposal,
-  setAnswerCitations,
-  setIsAssistantBusy,
   filterResult,
-  importFileInputRef,
-  assistantAbortControllerRef,
-  assistantRequestIdRef,
   latestEditStateRef,
   assistantSelection,
   commitWorkbookChange,
@@ -64,22 +44,24 @@ function createFileAndAnalysisActions({
 }) {
   async function importWorkbookFromFile(fe) {
     if (!fe) return;
-    activeOperationControllerRef.current?.abort();
+    operationStatusState.activeOperationControllerRef.current?.abort();
     const Oe = new AbortController(),
-      Be = ++latestOperationIdRef.current;
-    activeOperationControllerRef.current = Oe;
+      Be = ++operationStatusState.latestOperationIdRef.current;
+    operationStatusState.activeOperationControllerRef.current = Oe;
     const Ue = {
         ...operationScope,
         signal: operationScope.signal
           ? AbortSignal.any([Oe.signal, operationScope.signal])
           : Oe.signal,
       },
-      Xe = () => Be === latestOperationIdRef.current;
-    (setIsOperationBusy(true), setErrorNotice(""));
+      Xe = () => Be === operationStatusState.latestOperationIdRef.current;
+    (operationStatusState.setIsOperationBusy(true),
+      operationStatusState.setErrorNotice(""));
     try {
       if (isEditingLocked) throw new Error("This workbook is read-only.");
       if (/\.(xls|xlsb|xltx|ods)$/i.test(fe.name)) {
-        (setPendingImportFile(fe), setActiveDialogMode("workbookFormats"));
+        (importExportState.setPendingImportFile(fe),
+          dialogState.setActiveDialogMode("workbookFormats"));
         return;
       }
       if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(fe.name)) {
@@ -94,7 +76,8 @@ function createFileAndAnalysisActions({
           throw new Error(
             "The workbook changed while the file was being read. Open the file again.",
           );
-        (setAutomationInspection(wt), setActiveDialogMode("automation"));
+        (dialogState.setAutomationInspection(wt),
+          dialogState.setActiveDialogMode("automation"));
         return;
       }
       if (/\.(csv|tsv)$/i.test(fe.name)) {
@@ -109,7 +92,7 @@ function createFileAndAnalysisActions({
           throw new Error(
             "The workbook changed while the file was being read. Open the file again.",
           );
-        setDelimitedImportExportSource({
+        importExportState.setDelimitedImportExportSource({
           snapshot: activeWorkbook,
           bytes: new Uint8Array(),
           file: fe,
@@ -128,7 +111,7 @@ function createFileAndAnalysisActions({
           "The workbook changed while the file was being read. Import again to replace the current revision.",
         );
       if (Nt.report) {
-        setXlsxConversionReview({
+        importExportState.setXlsxConversionReview({
           snapshot: activeWorkbook,
           report: Nt.report,
           imported: Nt.workbook,
@@ -138,7 +121,7 @@ function createFileAndAnalysisActions({
       }
       (commitWorkbookChange(Nt.workbook),
         switchActiveWorksheet(Nt.workbook.sheets.find((wt) => !wt.hidden).id),
-        setStatusNotice(
+        operationStatusState.setStatusNotice(
           Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported.",
         ));
     } catch (Nt) {
@@ -159,20 +142,24 @@ function createFileAndAnalysisActions({
             wt.items.length &&
             latestEditStateRef.current.book === activeWorkbook
           ) {
-            (setAutomationInspection(wt), setActiveDialogMode("automation"));
+            (dialogState.setAutomationInspection(wt),
+              dialogState.setActiveDialogMode("automation"));
             return;
           }
         } catch {}
-      Xe() && setErrorNotice(toFileProcessingError(Nt).message);
+      Xe() &&
+        operationStatusState.setErrorNotice(toFileProcessingError(Nt).message);
     } finally {
       Xe() &&
-        ((activeOperationControllerRef.current = null),
-        setIsOperationBusy(false),
-        importFileInputRef.current && (importFileInputRef.current.value = ""));
+        ((operationStatusState.activeOperationControllerRef.current = null),
+        operationStatusState.setIsOperationBusy(false),
+        importExportState.importFileInputRef.current &&
+          (importExportState.importFileInputRef.current.value = ""));
     }
   }
   async function exportWorkbookAs(fe) {
-    (setIsOperationBusy(true), setErrorNotice(""));
+    (operationStatusState.setIsOperationBusy(true),
+      operationStatusState.setErrorNotice(""));
     try {
       const Oe =
         activeWorkbook.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) ||
@@ -182,7 +169,7 @@ function createFileAndAnalysisActions({
         (Be.report.warnings.push(
           "Full workbook export includes all filtered and hidden rows. Session filter views are not saved in XLSX. Use CSV/TSV with Visible population for a filtered extract.",
         ),
-          setXlsxConversionReview({
+          importExportState.setXlsxConversionReview({
             snapshot: activeWorkbook,
             report: { ...Be.report, fileName: `${Oe}-derived.xlsx` },
             blob: Be.blob,
@@ -190,7 +177,7 @@ function createFileAndAnalysisActions({
           }));
       }
       (fe === "csv" &&
-        setDelimitedImportExportSource({
+        importExportState.setDelimitedImportExportSource({
           snapshot: activeWorkbook,
           sheetId: activeSheet.id,
           ...(filterResult
@@ -198,7 +185,7 @@ function createFileAndAnalysisActions({
             : {}),
         }),
         fe === "json" &&
-          (setStatusNotice(
+          (operationStatusState.setStatusNotice(
             "Native JSON exports the full workbook, including all filtered and hidden rows and any named filter views. Active session masks are not saved; load named criteria, preview and apply after reopening.",
           ),
           saveBlobToFile(
@@ -208,27 +195,30 @@ function createFileAndAnalysisActions({
             `${Oe}.json`,
           )));
     } catch (Oe) {
-      setErrorNotice(Oe instanceof Error ? Oe.message : "Export failed.");
+      operationStatusState.setErrorNotice(
+        Oe instanceof Error ? Oe.message : "Export failed.",
+      );
     } finally {
-      setIsOperationBusy(false);
+      operationStatusState.setIsOperationBusy(false);
     }
   }
   function runCurrentAuditAnalysis() {
     runGuardedAction(() => {
-      if (auditPopulationScope === "visible" && !filterResult)
+      if (auditState.auditPopulationScope === "visible" && !filterResult)
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",
         );
       const fe = runAuditAnalysis(
         activeWorkbook,
         activeSheet.id,
-        selectedAuditKind,
+        auditState.selectedAuditKind,
         {
           range:
-            auditPopulationScope === "visible" && filterResult
+            auditState.auditPopulationScope === "visible" && filterResult
               ? filterResult.context.range
-              : auditSourceRange || formatOccupiedRangeAddress(activeSheet),
-          ...(auditPopulationScope === "visible"
+              : auditState.auditSourceRange ||
+                formatOccupiedRangeAddress(activeSheet),
+          ...(auditState.auditPopulationScope === "visible"
             ? {
                 population: {
                   definition:
@@ -238,14 +228,14 @@ function createFileAndAnalysisActions({
                 },
               }
             : {}),
-          threshold: materialityThreshold,
-          sampleSize: auditSampleSize,
-          seed: samplingSeed,
-          asOf: agingAsOfDate,
+          threshold: auditState.materialityThreshold,
+          sampleSize: auditState.auditSampleSize,
+          seed: auditState.samplingSeed,
+          asOf: auditState.agingAsOfDate,
         },
       );
-      (setAuditAnalysisResult(fe),
-        setAgingReportPayload({
+      (auditState.setAuditAnalysisResult(fe),
+        auditState.setAgingReportPayload({
           schemaVersion: 1,
           workbookId: activeWorkbook.id,
           workbookName: activeWorkbook.name,
@@ -254,23 +244,24 @@ function createFileAndAnalysisActions({
           sheetName: activeSheet.name,
           generatedAt: new Date().toISOString(),
           actor,
-          populationScope: auditPopulationScope,
+          populationScope: auditState.auditPopulationScope,
           ...(filterResult ? { filterContext: filterResult.context } : {}),
-          kind: selectedAuditKind,
+          kind: auditState.selectedAuditKind,
           parameters: {
             range:
-              auditPopulationScope === "visible" && filterResult
+              auditState.auditPopulationScope === "visible" && filterResult
                 ? filterResult.context.range
-                : auditSourceRange || formatOccupiedRangeAddress(activeSheet),
-            threshold: materialityThreshold,
-            sampleSize: auditSampleSize,
-            seed: samplingSeed,
-            asOf: agingAsOfDate,
+                : auditState.auditSourceRange ||
+                  formatOccupiedRangeAddress(activeSheet),
+            threshold: auditState.materialityThreshold,
+            sampleSize: auditState.auditSampleSize,
+            seed: auditState.samplingSeed,
+            asOf: auditState.agingAsOfDate,
           },
           result: fe,
         }),
-        setStatusNotice(
-          auditPopulationScope === "visible"
+        operationStatusState.setStatusNotice(
+          auditState.auditPopulationScope === "visible"
             ? "Analysis completed on visible population rows; citations retain original worksheet addresses."
             : "Analysis completed on the full selected source range, including hidden and filtered rows.",
         ));
@@ -280,20 +271,20 @@ function createFileAndAnalysisActions({
     if (!fe.trim()) return null;
     if (selectionAreas.length > 1)
       throw (
-        setErrorNotice(
+        operationStatusState.setErrorNotice(
           "Select one rectangular range before asking the assistant.",
         ),
         new Error("Select one rectangular range before asking the assistant.")
       );
-    assistantAbortControllerRef.current?.abort();
-    const Be = ++assistantRequestIdRef.current;
-    (setIsAssistantBusy(true),
-      setAssistantProposal(null),
-      setAnswerCitations(null),
-      setErrorNotice(""),
-      setStatusNotice(""));
+    assistantState.assistantAbortControllerRef.current?.abort();
+    const Be = ++assistantState.assistantRequestIdRef.current;
+    (assistantState.setIsAssistantBusy(true),
+      assistantState.setAssistantProposal(null),
+      assistantState.setAnswerCitations(null),
+      operationStatusState.setErrorNotice(""),
+      operationStatusState.setStatusNotice(""));
     const Ue = new AbortController();
-    assistantAbortControllerRef.current = Ue;
+    assistantState.assistantAbortControllerRef.current = Ue;
     try {
       const gt = buildAssistantSelectionContext(
           activeWorkbook,
@@ -304,7 +295,10 @@ function createFileAndAnalysisActions({
           signal: Ue.signal,
           reliability: activeReliabilityMonitor,
         });
-      if (Ue.signal.aborted || Be !== assistantRequestIdRef.current)
+      if (
+        Ue.signal.aborted ||
+        Be !== assistantState.assistantRequestIdRef.current
+      )
         return null;
       const wt = validateProposedCalculation(
         activeWorkbook,
@@ -312,27 +306,29 @@ function createFileAndAnalysisActions({
         Nt,
       );
       return (
-        setAnswerCitations(
+        assistantState.setAnswerCitations(
           buildAnswerCitations(activeWorkbook, assistantSelection, wt, gt),
         ),
-        setAssistantProposal(wt),
+        assistantState.setAssistantProposal(wt),
         wt
       );
     } catch (gt) {
       if (
-        (Be === assistantRequestIdRef.current &&
+        (Be === assistantState.assistantRequestIdRef.current &&
           !Ue.signal.aborted &&
-          setErrorNotice(
+          operationStatusState.setErrorNotice(
             gt instanceof Error
               ? gt.message
               : "The assistant could not complete the request.",
           ),
-        Ue.signal.aborted || Be !== assistantRequestIdRef.current)
+        Ue.signal.aborted ||
+          Be !== assistantState.assistantRequestIdRef.current)
       )
         return null;
       throw gt;
     } finally {
-      Be === assistantRequestIdRef.current && setIsAssistantBusy(false);
+      Be === assistantState.assistantRequestIdRef.current &&
+        assistantState.setIsAssistantBusy(false);
     }
   }
   return {

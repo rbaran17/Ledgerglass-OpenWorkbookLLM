@@ -8,33 +8,22 @@ import {
 } from "../04-cell-input-paste-and-fill.js";
 
 function renderEditorRibbon({
+  selectionState,
+  dialogState,
+  filterSortState,
+  viewDisplayState,
+  operationStatusState,
+  findReplaceState,
+  importExportState,
   readOnly,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  activeCellAddress,
-  activeSelectionRange,
   requireSingleSelectionRange,
-  setSidePanelKind,
-  setFilterValueSearch,
-  setActiveColumnSort,
-  isShowingFormulas,
-  setIsShowingFormulas,
   scrollActivePaneVertically,
   undoStack,
   redoStack,
-  isOperationBusy,
-  setPromptDialogState,
-  isGridlinesVisible,
-  setIsGridlinesVisible,
-  isHeadingsVisible,
-  setIsHeadingsVisible,
-  zoomPercent,
-  setIsFilterBarVisible,
-  setIsFindBarVisible,
   hasFrozenRows,
-  importFileInputRef,
-  gridContainerRef,
   activeCell,
   clearSelectedCellContents,
   runEditorCommand,
@@ -57,29 +46,29 @@ function renderEditorRibbon({
     allowProtectionChange: !readOnly,
     workbookStructureProtected: !!activeWorkbook.structureProtection?.enabled,
     readOnly: isEditingLocked,
-    busy: isOperationBusy,
+    busy: operationStatusState.isOperationBusy,
     canUndo: undoStack.length > 0,
     canRedo: redoStack.length > 0,
     cell: activeCell,
-    showFormulas: isShowingFormulas,
-    gridlines: isGridlinesVisible,
-    headings: isHeadingsVisible,
+    showFormulas: viewDisplayState.isShowingFormulas,
+    gridlines: viewDisplayState.isGridlinesVisible,
+    headings: viewDisplayState.isHeadingsVisible,
     freezeRows: hasFrozenRows,
-    zoom: zoomPercent,
+    zoom: viewDisplayState.zoomPercent,
     onFormat: applyCellFormatPatch,
     onUndo: () => undoOrRedo(),
     onRedo: () => undoOrRedo(true),
-    onImport: () => importFileInputRef.current?.click(),
+    onImport: () => importExportState.importFileInputRef.current?.click(),
     onExport: (fe) => void exportWorkbookAs(fe),
     onNew: () => replaceActiveWorkbook(createBlankWorkbook()),
     onDemo: () => replaceActiveWorkbook(buildSampleLedgerWorkbook()),
     onRename: () =>
-      setPromptDialogState({
+      dialogState.setPromptDialogState({
         kind: "rename",
         value: activeWorkbook.name,
       }),
     onAddSheet: () =>
-      setPromptDialogState({
+      dialogState.setPromptDialogState({
         kind: "sheet",
         value: `Sheet${activeWorkbook.sheets.length + 1}`,
       }),
@@ -90,7 +79,13 @@ function renderEditorRibbon({
     onAutosum: () =>
       runGuardedAction(() =>
         applyCellPatches(
-          [applyAutoSum(activeWorkbook, activeSheet.id, activeCellAddress)],
+          [
+            applyAutoSum(
+              activeWorkbook,
+              activeSheet.id,
+              selectionState.activeCellAddress,
+            ),
+          ],
           "AutoSum",
         ),
       ),
@@ -103,7 +98,7 @@ function renderEditorRibbon({
               buildFillPreview(
                 activeWorkbook,
                 activeSheet.id,
-                activeSelectionRange,
+                selectionState.activeSelectionRange,
                 "down",
               ),
             ),
@@ -114,30 +109,32 @@ function renderEditorRibbon({
     onCopy: () => void copyOrCutSelection(false),
     onCut: () => void copyOrCutSelection(true),
     onPaste: () => void pasteFromClipboard(),
-    onFind: () => setIsFindBarVisible((fe) => !fe),
+    onFind: () => findReplaceState.setIsFindBarVisible((fe) => !fe),
     onSort: (fe) => {
-      (setActiveColumnSort(
+      (filterSortState.setActiveColumnSort(
         fe
           ? {
-              col: _t(activeCellAddress).col,
+              col: _t(selectionState.activeCellAddress).col,
               direction: fe === "asc" ? 1 : -1,
             }
           : null,
       ),
         scrollActivePaneVertically(0),
-        gridContainerRef.current && (gridContainerRef.current.scrollTop = 0));
+        selectionState.gridContainerRef.current &&
+          (selectionState.gridContainerRef.current.scrollTop = 0));
     },
     onToggleFilter: () => {
-      (setIsFilterBarVisible((fe) => !fe), setFilterValueSearch(""));
+      (filterSortState.setIsFilterBarVisible((fe) => !fe),
+        filterSortState.setFilterValueSearch(""));
     },
-    onShowFormulas: () => setIsShowingFormulas((fe) => !fe),
-    onGridlines: () => setIsGridlinesVisible((fe) => !fe),
-    onHeadings: () => setIsHeadingsVisible((fe) => !fe),
+    onShowFormulas: () => viewDisplayState.setIsShowingFormulas((fe) => !fe),
+    onGridlines: () => viewDisplayState.setIsGridlinesVisible((fe) => !fe),
+    onHeadings: () => viewDisplayState.setIsHeadingsVisible((fe) => !fe),
     onFreeze: toggleFreezeTopRow,
     onZoom: applyZoomPercent,
-    onPanel: setSidePanelKind,
+    onPanel: dialogState.setSidePanelKind,
     onNote: () =>
-      setPromptDialogState({
+      dialogState.setPromptDialogState({
         kind: "note",
         value: activeCell?.note ?? "",
       }),

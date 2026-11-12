@@ -18,30 +18,14 @@ import { columnIndexToLetters } from "../03-workbook-model.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 
 function renderChecksPanel({
+  dialogState,
+  filterSortState,
+  auditState,
+  operationStatusState,
   text,
   language,
   activeWorkbook,
   activeSheet,
-  sidePanelKind,
-  setFilterStateByScope,
-  auditPopulationScope,
-  setAuditPopulationScope,
-  setStatusNotice,
-  selectedAuditKind,
-  setSelectedAuditKind,
-  auditAnalysisResult,
-  setAuditAnalysisResult,
-  materialityThreshold,
-  setMaterialityThreshold,
-  auditSampleSize,
-  setAuditSampleSize,
-  samplingSeed,
-  setSamplingSeed,
-  agingReportPayload,
-  agingAsOfDate,
-  setAgingAsOfDate,
-  auditSourceRange,
-  setAuditSourceRange,
   filterResult,
   runEditorCommand,
   selectCellAddress,
@@ -49,7 +33,7 @@ function renderChecksPanel({
   runCurrentAuditAnalysis,
 }) {
   return (
-    sidePanelKind === "checks" &&
+    dialogState.sidePanelKind === "checks" &&
     i.jsxs(i.Fragment, {
       children: [
         i.jsx("span", {
@@ -70,10 +54,10 @@ function renderChecksPanel({
             }),
             i.jsxs("select", {
               "aria-label": text("Analysis population"),
-              value: auditPopulationScope,
+              value: auditState.auditPopulationScope,
               onChange: (fe) => {
-                (setAuditPopulationScope(fe.target.value),
-                  setAuditAnalysisResult(null));
+                (auditState.setAuditPopulationScope(fe.target.value),
+                  auditState.setAuditAnalysisResult(null));
               },
               lang: language("Analysis population"),
               "data-ui-label": "Analysis population",
@@ -100,7 +84,7 @@ function renderChecksPanel({
                 "Applies to the five checks below. Pattern checks and other tool dialogs use their own complete source ranges and explicit source filters.",
             }),
             " ",
-            auditPopulationScope === "visible" && filterResult
+            auditState.auditPopulationScope === "visible" && filterResult
               ? `Using ${filterResult.context.range}, ${filterResult.context.visibleRows} visible / ${filterResult.context.totalRows} total rows. The custom check range is ignored.`
               : "Full scope includes hidden and filtered rows.",
           ],
@@ -176,10 +160,11 @@ function renderChecksPanel({
                       runEditorCommand(fe.kind);
                       return;
                     }
-                    (setSelectedAuditKind(fe.kind),
-                      setAuditAnalysisResult(null));
+                    (auditState.setSelectedAuditKind(fe.kind),
+                      auditState.setAuditAnalysisResult(null));
                   },
-                  className: selectedAuditKind === fe.kind ? "active" : "",
+                  className:
+                    auditState.selectedAuditKind === fe.kind ? "active" : "",
                   children: [
                     i.jsx(fe.icon, { size: 17 }),
                     i.jsxs("span", {
@@ -195,7 +180,8 @@ function renderChecksPanel({
                     i.jsx("span", {
                       className: "lg-radio",
                       children:
-                        selectedAuditKind === fe.kind && i.jsx("span", {}),
+                        auditState.selectedAuditKind === fe.kind &&
+                        i.jsx("span", {}),
                     }),
                   ],
                 },
@@ -214,8 +200,8 @@ function renderChecksPanel({
             i.jsx("input", {
               "aria-label": text("Audit source range"),
               placeholder: `A1:${columnIndexToLetters(activeSheet.colCount - 1)}${activeSheet.rowCount} (entire sheet)`,
-              value: auditSourceRange,
-              onChange: (fe) => setAuditSourceRange(fe.target.value),
+              value: auditState.auditSourceRange,
+              onChange: (fe) => auditState.setAuditSourceRange(fe.target.value),
               lang: language("Audit source range"),
               "data-ui-label": "Audit source range",
             }),
@@ -228,12 +214,12 @@ function renderChecksPanel({
               children: "First row contains field names.",
             }),
             " ",
-            auditPopulationScope === "visible"
+            auditState.auditPopulationScope === "visible"
               ? "Uses the visible rows of the applied filter range."
               : "Includes all source rows.",
           ],
         }),
-        selectedAuditKind === "materiality" &&
+        auditState.selectedAuditKind === "materiality" &&
           i.jsxs("label", {
             className: "lg-field",
             children: [
@@ -243,14 +229,15 @@ function renderChecksPanel({
               i.jsx(LocalizedNumberField, {
                 "aria-label": text("Materiality threshold"),
                 min: "0",
-                value: materialityThreshold,
-                onValueChange: (fe) => setMaterialityThreshold(Number(fe)),
+                value: auditState.materialityThreshold,
+                onValueChange: (fe) =>
+                  auditState.setMaterialityThreshold(Number(fe)),
                 lang: language("Materiality threshold"),
                 "data-ui-label": "Materiality threshold",
               }),
             ],
           }),
-        selectedAuditKind === "sample" &&
+        auditState.selectedAuditKind === "sample" &&
           i.jsxs("div", {
             className: "lg-two-fields",
             children: [
@@ -263,8 +250,9 @@ function renderChecksPanel({
                   i.jsx(LocalizedNumberField, {
                     "aria-label": text("Sample size"),
                     min: "1",
-                    value: auditSampleSize,
-                    onValueChange: (fe) => setAuditSampleSize(Number(fe)),
+                    value: auditState.auditSampleSize,
+                    onValueChange: (fe) =>
+                      auditState.setAuditSampleSize(Number(fe)),
                     lang: language("Sample size"),
                     "data-ui-label": "Sample size",
                   }),
@@ -278,8 +266,9 @@ function renderChecksPanel({
                   }),
                   i.jsx("input", {
                     "aria-label": text("Sampling seed"),
-                    value: samplingSeed,
-                    onChange: (fe) => setSamplingSeed(fe.target.value),
+                    value: auditState.samplingSeed,
+                    onChange: (fe) =>
+                      auditState.setSamplingSeed(fe.target.value),
                     lang: language("Sampling seed"),
                     "data-ui-label": "Sampling seed",
                   }),
@@ -287,7 +276,7 @@ function renderChecksPanel({
               }),
             ],
           }),
-        selectedAuditKind === "aging" &&
+        auditState.selectedAuditKind === "aging" &&
           i.jsxs("label", {
             className: "lg-field",
             children: [
@@ -297,8 +286,8 @@ function renderChecksPanel({
               i.jsx("input", {
                 "aria-label": text("Aging as of date"),
                 type: "date",
-                value: agingAsOfDate,
-                onChange: (fe) => setAgingAsOfDate(fe.target.value),
+                value: auditState.agingAsOfDate,
+                onChange: (fe) => auditState.setAgingAsOfDate(fe.target.value),
                 lang: language("Aging as of date"),
                 "data-ui-label": "Aging as of date",
               }),
@@ -315,7 +304,7 @@ function renderChecksPanel({
             i.jsx(ArrowUpRight, { size: 15 }),
           ],
         }),
-        auditAnalysisResult
+        auditState.auditAnalysisResult
           ? i.jsxs("div", {
               className: "lg-results",
               children: [
@@ -323,24 +312,33 @@ function renderChecksPanel({
                   className: "lg-results-heading",
                   children: [
                     i.jsx("h4", {
-                      children: auditAnalysisResult.title,
+                      children: auditState.auditAnalysisResult.title,
                     }),
                     i.jsx("span", {
-                      children: auditAnalysisResult.findings.length,
+                      children: auditState.auditAnalysisResult.findings.length,
                     }),
                   ],
                 }),
                 i.jsx("p", {
-                  children: auditAnalysisResult.summary,
+                  children: auditState.auditAnalysisResult.summary,
                 }),
                 i.jsxs("button", {
                   className: "lg-button full",
                   onClick: () =>
                     saveBlobToFile(
-                      new Blob([JSON.stringify(agingReportPayload, null, 2)], {
-                        type: "application/json",
-                      }),
-                      `Audit-${selectedAuditKind}-revision-${activeWorkbook.revision}.json`,
+                      new Blob(
+                        [
+                          JSON.stringify(
+                            auditState.agingReportPayload,
+                            null,
+                            2,
+                          ),
+                        ],
+                        {
+                          type: "application/json",
+                        },
+                      ),
+                      `Audit-${auditState.selectedAuditKind}-revision-${activeWorkbook.revision}.json`,
                     ),
                   children: [
                     i.jsx(Download, { size: 13 }),
@@ -349,7 +347,7 @@ function renderChecksPanel({
                     }),
                   ],
                 }),
-                auditAnalysisResult.findings.map((fe) =>
+                auditState.auditAnalysisResult.findings.map((fe) =>
                   i.jsxs(
                     "article",
                     {
@@ -368,24 +366,28 @@ function renderChecksPanel({
                               "button",
                               {
                                 onClick: () => {
-                                  (setFilterStateByScope((Ue) => {
-                                    const Xe = {
-                                      ...Ue,
-                                    };
-                                    return (
-                                      delete Xe[
-                                        JSON.stringify([
-                                          activeWorkbook.id,
-                                          Oe.sheetId,
-                                        ])
-                                      ],
-                                      Xe
-                                    );
-                                  }),
+                                  (filterSortState.setFilterStateByScope(
+                                    (Ue) => {
+                                      const Xe = {
+                                        ...Ue,
+                                      };
+                                      return (
+                                        delete Xe[
+                                          JSON.stringify([
+                                            activeWorkbook.id,
+                                            Oe.sheetId,
+                                          ])
+                                        ],
+                                        Xe
+                                      );
+                                    },
+                                  ),
                                     switchActiveWorksheet(Oe.sheetId),
                                     selectCellAddress(Oe.address),
-                                    setAuditAnalysisResult(auditAnalysisResult),
-                                    setStatusNotice(
+                                    auditState.setAuditAnalysisResult(
+                                      auditState.auditAnalysisResult,
+                                    ),
+                                    operationStatusState.setStatusNotice(
                                       `${Oe.sheetName}!${Oe.address}: ${String(Oe.value ?? "")}`,
                                     ));
                                 },

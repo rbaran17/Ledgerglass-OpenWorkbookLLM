@@ -2,16 +2,15 @@ import i from "react/jsx-runtime";
 import { Layers, Plus } from "lucide-react";
 
 function renderSheetTabs({
+  dialogState,
+  selectionState,
+  navigationState,
+  formulaEntryState,
   readOnly,
   text,
   language,
   activeWorkbook,
   activeSheet,
-  setActiveDialogMode,
-  appRootRef,
-  setTabBarSheetId,
-  activeCellEditRef,
-  setPromptDialogState,
   runEditorCommand,
   commitCellEdit,
   switchActiveWorksheet,
@@ -36,12 +35,14 @@ function renderSheetTabs({
                   "data-sheet-id": fe.id,
                   tabIndex: fe.id === activeSheet.id ? 0 : -1,
                   onPointerDown: (Oe) => {
-                    activeCellEditRef.current?.value.startsWith("=") &&
-                      Oe.preventDefault();
+                    formulaEntryState.activeCellEditRef.current?.value.startsWith(
+                      "=",
+                    ) && Oe.preventDefault();
                   },
                   onMouseDown: (Oe) => {
-                    activeCellEditRef.current?.value.startsWith("=") &&
-                      Oe.preventDefault();
+                    formulaEntryState.activeCellEditRef.current?.value.startsWith(
+                      "=",
+                    ) && Oe.preventDefault();
                   },
                   onKeyDown: (Oe) => {
                     if (
@@ -71,7 +72,7 @@ function renderSheetTabs({
                     (switchActiveWorksheet(Xe.id),
                       requestAnimationFrame(() =>
                         Array.from(
-                          appRootRef.current?.querySelectorAll(
+                          selectionState.appRootRef.current?.querySelectorAll(
                             "[data-sheet-id]",
                           ) ?? [],
                         )
@@ -87,13 +88,14 @@ function renderSheetTabs({
                     : undefined,
                   onDoubleClick: () => {
                     commitCellEdit() &&
-                      (setTabBarSheetId(fe.id), setActiveDialogMode("sheets"));
+                      (navigationState.setTabBarSheetId(fe.id),
+                      dialogState.setActiveDialogMode("sheets"));
                   },
                   onContextMenu: (Oe) => {
                     (Oe.preventDefault(),
                       commitCellEdit() &&
-                        (setTabBarSheetId(fe.id),
-                        setActiveDialogMode("sheets")));
+                        (navigationState.setTabBarSheetId(fe.id),
+                        dialogState.setActiveDialogMode("sheets")));
                   },
                   children: fe.name,
                 },
@@ -105,7 +107,7 @@ function renderSheetTabs({
             "aria-label": text("Add worksheet"),
             disabled: readOnly || !!activeWorkbook.structureProtection?.enabled,
             onClick: () =>
-              setPromptDialogState({
+              dialogState.setPromptDialogState({
                 kind: "sheet",
                 value: `Sheet ${activeWorkbook.sheets.length + 1}`,
               }),

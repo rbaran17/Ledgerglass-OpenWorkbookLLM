@@ -25,10 +25,14 @@ compiled application in `dist/` and is now the source the build uses.
   under `app/03-workbook-model/`. The main editor component,
   `app/56-main-worksheet-editor.js` (about 3,000 lines of state, effects and
   wiring), delegates to twenty modules under `app/56-main-worksheet-editor/`:
-  `render-*.js` build parts of the interface and `*-actions.js` hold the
-  editor's commands. Each takes what it reads from the component as one
-  explicit object, so their long parameter lists show how entangled the
-  editor's state still is. Module
+  `render-*.js` build parts of the interface, `*-actions.js` hold the
+  editor's commands and `editor-state.js` groups 85 of the editor's state
+  declarations into 14 hooks by subject (persistence, selection, formula
+  entry, find and replace, and so on). Each render and action module takes
+  what it reads from the component as one explicit object, in which a group
+  of related state arrives as a single slice such as `findReplaceState`.
+  Only two state values are used by just one module, so the state is
+  genuinely shared; the remaining long parameter lists show that. Module
   boundaries follow dependency order, not the original project's files.
 - In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, saxes, the formula parser,
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
@@ -68,9 +72,9 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-1. Reduce the coupling in `app/56-main-worksheet-editor/`: turn the render
-   functions into components and the action factories into hooks that own
-   their state, so each takes a handful of inputs instead of dozens.
+1. Reduce the coupling in `app/56-main-worksheet-editor/` further: move the
+   derived values and effects that belong to one state slice into its hook,
+   then turn the render functions into components that take slices.
 2. Name the file-parser worker's own parsing code and reconcile the last
    near-duplicates (`importXlsxWorkbook`, `normalizeWorkbookModel`) with
    their application twins.
