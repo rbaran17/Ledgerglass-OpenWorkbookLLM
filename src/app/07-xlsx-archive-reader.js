@@ -14,9 +14,9 @@ import {
 import {
   unsupportedXlsxMarkers,
   excelMessagePatterns,
-  fileParserWorkerSource,
   fileProcessingErrorMessages,
 } from "./06-analysis-tools.js";
+import { fileParserWorkerSource } from "./06b-file-parser-worker-source.js";
 
 class FileProcessingError extends Error {
   constructor(r, t = fileProcessingErrorMessages[r]) {

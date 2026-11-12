@@ -1936,3 +1936,25 @@ export {
   isFormulaCellValue,
 };
 export { throwErrorMessage, isPlainDataObject, isFiniteNumber };
+
+/* Also used by the workers. */
+export {
+  FormulaErrorClass,
+  a1CellPattern,
+  a1ReferenceAnchorPattern,
+  aggregateFunctionNames,
+  databaseFunctionLimits,
+  linkedCellValueSchema,
+  tU,
+  workbookLinkPackageSchema,
+  workbookLinkSourceSchema,
+};
+
+/* Also used by the workers. */
+export {
+  assertPlainTextLabel,
+  isBoundedString,
+  isIsoDateString,
+  requireBoundedList,
+  requirePivotFieldName,
+};

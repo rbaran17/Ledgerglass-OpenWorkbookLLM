@@ -2260,3 +2260,6 @@ export {
   validateReviewedTableHeaders,
   zU,
 };
+
+/* Also used by the workers. */
+export { validateFilterRequest };

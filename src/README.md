@@ -20,7 +20,7 @@ compiled application in `dist/` and is now the source the build uses.
   code appears to do and some will be imprecise. Local variables are mostly
   still single letters, except where a destructuring pattern preserved the
   real name.
-- The application lives in `app/` as 57 modules, each depending only on
+- The application lives in `app/` as 59 modules, each depending only on
   lower-numbered ones; the core model is split further into twelve files
   under `app/03-workbook-model/`. The main editor component,
   `app/56-main-worksheet-editor.js` (about 3,000 lines of state, effects and
@@ -38,9 +38,16 @@ compiled application in `dist/` and is now the source the build uses.
   banners and known signatures, so a small library without a banner could
   still be present.
 - The workers (`workers/*.worker.js`) are bundled by
-  `scripts/worker-source-plugin.mjs` and contain their own copies of the core
-  model, under different minified names from `main.js`. The MCP SDK is not
-  part of the browser application.
+  `scripts/worker-source-plugin.mjs`. They import the core model from
+  `app/01-…`, `app/02-…`, `app/03-workbook-model/` and `app/06-…` instead of
+  carrying their own copies: the calculation worker is now about 100 lines
+  (its message handler) and the file parser about 5,900 (the XLSX, CSV and
+  XML reading that only runs there). Those core modules must stay free of
+  React, DOM access and worker-source imports so the workers can load them;
+  `app/01b-…` and `app/06b-…` exist to keep such things out of them. About
+  1,700 lines in the file parser still duplicate `app/07-…` and `app/08-…`,
+  which cannot be imported yet because they reach interface modules. The
+  MCP SDK is not part of the browser application.
 
 ## Safety net
 
@@ -58,7 +65,8 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 1. Reduce the coupling in `app/56-main-worksheet-editor/`: turn the render
    functions into components and the action factories into hooks that own
    their state, so each takes a handful of inputs instead of dozens.
-2. Share the core model between the application and the workers instead of
-   keeping three copies.
+2. Finish sharing code with the file-parser worker: separate the XLSX reading
+   and writing in `app/07-…` and `app/08-…` from the interface code they
+   import, then drop the worker's remaining copies.
 3. Review the assigned names, name the remaining locals, and add types.
 4. Grow the browser checks and add unit tests around the core model.

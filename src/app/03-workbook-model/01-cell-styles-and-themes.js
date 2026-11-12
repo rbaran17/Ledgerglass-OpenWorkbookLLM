@@ -2134,3 +2134,26 @@ export {
   numberFormatToIntlOptions,
 };
 export { isPlainObjectLiteral };
+
+/* Also used by the workers. */
+export {
+  $b,
+  BN,
+  assertAxisCapacity,
+  isTextOnlyFormatSection,
+  parseCustomNumberFormat,
+  parseDateTimeFormatCode,
+  parseNumberFormatCode,
+};
+
+/* Also used by the workers. */
+export {
+  assertKnownStyleKeys,
+  assertOutlineGroupNesting,
+  isValidUtcTimestamp,
+  officeThemeDefinition,
+  outlineGroupLimits,
+  supportedCellStyleKeys,
+  validateNamedStyleBinding,
+  validateStyleColor,
+};

@@ -2061,3 +2061,16 @@ export {
   isVisibleWorksheet,
 };
 export { unquoteSheetName, quoteSheetName };
+
+/* Also used by the workers. */
+export {
+  Bne,
+  S5,
+  inspectFormulaForMigration,
+  isFormulaClosure,
+  reusableFormulaLimits,
+  sheetPrefixPattern,
+};
+
+/* Also used by the workers. */
+export { invalidXmlCharPattern, isPlainObject, validateWorksheetName };

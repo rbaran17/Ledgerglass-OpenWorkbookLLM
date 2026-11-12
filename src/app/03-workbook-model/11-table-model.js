@@ -2223,3 +2223,6 @@ export {
   refreshQueryDefinition,
   duplicateWorksheet,
 };
+
+/* Also used by the workers. */
+export { normalizeCellRecord, validateTableSourceEvidence };

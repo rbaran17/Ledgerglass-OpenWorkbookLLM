@@ -1600,3 +1600,27 @@ export {
   formatCellValueWithNumberFormat,
   matrixResultFunctionNames,
 };
+
+/* Also used by the workers. */
+export {
+  addConversionUnitSymbols,
+  arithmeticFunctionNames,
+  binaryPrefixExponents,
+  conversionUnits,
+  dotProductWithCompensation,
+  findConversionUnit,
+  formatNumericSection,
+  formatTemporalSerialValue,
+  getLocaleDecimalSeparator,
+  isReferenceArgument,
+  regressionSizeLimits,
+  renderTextSectionPattern,
+  roundDecimalToDigits,
+  roundQuotientWithMode,
+  roundToNearestMultiple,
+  siPrefixPowersOfTen,
+  sumDecimalParts,
+  sumWithKahanCompensation,
+  toSignedDecimalParts,
+  toUnsignedDecimalParts,
+};

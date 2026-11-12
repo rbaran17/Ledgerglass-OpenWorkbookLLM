@@ -2111,3 +2111,15 @@ export {
   acceptWorkerCalculationResult,
   checkDataValidationBatch,
 };
+
+/* Also used by the workers. */
+export {
+  PO,
+  cellSnapshotSchema,
+  filterRequestSchema,
+  kU,
+  recalculateWorkbookFormulas,
+};
+
+/* Also used by the workers. */
+export { evaluateValidationRule };

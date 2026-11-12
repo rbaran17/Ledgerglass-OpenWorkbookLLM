@@ -2268,3 +2268,20 @@ export {
   countSelectionCells,
   yQ,
 };
+
+/* Also used by the workers. */
+export {
+  evidenceAddressSchema,
+  evidenceCellRecordSchema,
+  evidenceFieldValueSchema,
+  evidenceSourceOriginSchema,
+  evidenceTransformStepSchema,
+};
+
+/* Also used by the workers. */
+export {
+  normalizeFormulaWatchAddress,
+  normalizeWhatIfCell,
+  normalizeWhatIfCellReferences,
+  normalizeWorksheetToolText,
+};

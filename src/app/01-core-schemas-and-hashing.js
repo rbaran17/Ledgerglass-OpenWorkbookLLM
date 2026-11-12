@@ -1,4 +1,3 @@
-import ne from "react";
 import {
   iso,
   string,
@@ -53,9 +52,7 @@ function unwrapDefaultExport(e) {
     : e;
 }
 
-const Gq = unwrapDefaultExport(ne),
-  uEe = copyModuleProperties({ __proto__: null, default: Gq }, [ne]),
-  deepFrozenValueSet = new WeakSet();
+const deepFrozenValueSet = new WeakSet();
 function isDeepFrozenValue(e) {
   return !!e && typeof e == "object" && deepFrozenValueSet.has(e);
 }
@@ -2075,7 +2072,6 @@ export {
   copyExtensionCacheEntries,
   validateSavedRecipeMetadata,
   walkFormulaNodes,
-  Gq,
   calculationBudgetDefaults,
   resolveCalculationBudget,
   isoDateTimeSchemaFactory,
@@ -2122,7 +2118,6 @@ export {
   hasLinkedOrBoundCells,
   serialToDateParts,
   normalizeDatePolicy,
-  uEe,
   dateSystemSerialOffset,
   dateSystemMaxSerial,
   calculationFeatureSupport,
@@ -2130,4 +2125,47 @@ export {
   listInstalledExtensionFunctions,
   parseDateText,
 };
+export { copyModuleProperties };
 export { boundedTextSchema };
+
+/* Also used by the workers. */
+export {
+  SJ,
+  UJ,
+  aggregateMeasureSchema,
+  cellScalarSchema,
+  columnTypeProfileSchema,
+  deepFrozenValueSet,
+  distinctFieldListSchema,
+  extensionEntityTypeSchema,
+  extensionManifestSchema,
+  extensionMatrixTypeSchema,
+  extensionPermissionSchema,
+  extensionScalarKindSchema,
+  extensionScalarTypeSchema,
+  extensionValueTypeSchema,
+  filterConditionSchema,
+  hasExtensionCacheForSheet,
+  isExcelLeapYear,
+  isValidFormulaName,
+  isoTimestampSchema,
+  linkedOrBoundCellCache,
+  millisecondsPerDay,
+  nD,
+  nonnegativeSafeIntegerSchema,
+  numericColumnSummarySchema,
+  objectDefineProperty,
+  od,
+  opaqueIdSchema,
+  safeIdentifierSchema,
+  serialZeroUtcMs,
+  sha256HexSchema,
+  sheetRangeSourceSchema,
+  singleLineTextSchema,
+  transformationRecipeSchema,
+  transformationRecipeVersionSchema,
+  transformationRunEvidenceSchema,
+  transformationStepRunSchema,
+  transformationStepSchema,
+  utf8Encoder,
+};

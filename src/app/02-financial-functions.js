@@ -1077,3 +1077,13 @@ export {
   minColumnWidth,
 };
 export { coerceValueToText, flattenNestedValues };
+
+/* Also used by the workers. */
+export {
+  compensatedSum,
+  countSignChanges,
+  financialArgumentRanges,
+  parseDateTimeText,
+  solveRateCandidates,
+  supportedTextFunctionNames,
+};

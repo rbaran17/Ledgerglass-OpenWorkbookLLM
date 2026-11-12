@@ -1276,3 +1276,13 @@ export {
   validateDrawingObjects,
   rewriteStructuredReferences,
 };
+
+/* Also used by the workers. */
+export {
+  normalizeOutputDestination,
+  normalizeSourceFilters,
+  requireMetadataId,
+  tablePaletteStyleNames,
+  validateFieldList,
+  xf,
+};

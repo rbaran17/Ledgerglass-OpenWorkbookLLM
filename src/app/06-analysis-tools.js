@@ -1,7 +1,4 @@
-import __fileParserWorkerSource from "../workers/file-parser.worker.js?worker-source";
-
-const fileParserWorkerSource = __fileParserWorkerSource,
-  unsupportedXlsxMarkers = [
+const unsupportedXlsxMarkers = [
     "#BLOCKED!",
     "#CALC!",
     "#CYCLE!",
@@ -2677,6 +2674,5 @@ const fileParserWorkerSource = __fileParserWorkerSource,
 export {
   unsupportedXlsxMarkers,
   excelMessagePatterns,
-  fileParserWorkerSource,
   fileProcessingErrorMessages,
 };

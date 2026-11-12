@@ -2242,3 +2242,39 @@ export {
   savedFilterViewLimits,
   zie,
 };
+
+/* Also used by the workers. */
+export {
+  MO,
+  boundedLabelSchema,
+  buildSheetCalculationSnapshot,
+  buildWorkbookCalculationDescriptor,
+  buildWorkbookCalculationSignature,
+  categoryValueSchema,
+  columnNameSchema,
+  consolidationDefinitionSchema,
+  consolidationEvidenceSchema,
+  consolidationIssueSchema,
+  consolidationSourceResultSchema,
+  consolidationSourceSchema,
+  consolidationSourceSnapshotSchema,
+  consolidationSubtotalSchema,
+  consolidationTotalsSchema,
+  dynamicFunctionPattern,
+  externalSourceErrorCodes,
+  externalSourceKinds,
+  isoDateTimeSchema,
+  matchCriteriaValue,
+  scalarValueSchema,
+  sourceApprovalSchema,
+  sourceColumnSchema,
+  sourceControlFieldSchema,
+  sourceIdSchema,
+  sourceRefreshStateSchema,
+  sourceResultPayloadSchema,
+  sourceTableSchema,
+  throwInvalidCalculationSettings,
+};
+
+/* Also used by the workers. */
+export { externalSourceErrorMessages };
