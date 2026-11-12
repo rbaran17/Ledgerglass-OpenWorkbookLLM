@@ -3,6 +3,7 @@ import {
   flattenNestedValues,
 } from "../02-text-and-financial-functions.js";
 import qre from "fast-formula-parser";
+import formulaOperators from "fast-formula-parser/formulas/operators.js";
 import { unwrapDefaultExport } from "../01-schemas-date-functions-and-validation.js";
 import {
   builtInDateTimeFormats,
@@ -359,6 +360,18 @@ function buildNumberFormatCode(e) {
   return t + s + a + (r.negative === "parentheses" ? `;(${s}${a})` : "");
 }
 const FormulaParser = unwrapDefaultExport(qre);
+// The parser library joins operands of "&" with JavaScript's own number
+// formatting. Replace that one operator so "&" converts numbers the same way
+// as CONCAT and the other text functions do.
+unwrapDefaultExport(formulaOperators).Infix.concatOp = (
+  left,
+  operator,
+  right,
+  leftIsArray,
+  rightIsArray,
+) =>
+  coerceValueToText(leftIsArray ? left[0][0] : left) +
+  coerceValueToText(rightIsArray ? right[0][0] : right);
 function toSignedDecimalParts(e) {
   const [r, t = "0"] = Math.abs(e).toString().split("e"),
     [n, o = ""] = r.split(".");
