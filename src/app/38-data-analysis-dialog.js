@@ -7,7 +7,7 @@ import c_ from "react-dom/server";
 import {
   deepFreezeValue,
   fingerprintCanonicalValue,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   assertWorkbookStructureEditable,
   formatNumberWithPattern,
@@ -34,15 +34,15 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { readSourceRectangles } from "./12-formula-dependency-inspector.js";
-import { ChartReportSvg } from "./31-pivot-explore-and-slicers.js";
+import { readSourceRectangles } from "./12-consolidation-and-dependency-inspection.js";
+import { ChartReportSvg } from "./31-pivot-explorer-and-charts.js";
 import { normalizeAnalysisPermissions } from "./36-watch-window-and-goal-seek.js";
 import {
   readSavedAnalysisReport,
   commitAnalysisResult,
   runAnalysisRequest,
   parseNumericText,
-} from "./37-linear-solver-engine.js";
+} from "./37-statistics-and-linear-solver.js";
 
 function DataAnalysisDialog(e) {
   const { text } = useWorkbookMessages(),

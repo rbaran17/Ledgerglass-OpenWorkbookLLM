@@ -1,11 +1,11 @@
-import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+import { isFormulaInputValue } from "./11-local-workbook-store-and-versions.js";
 import { eI, formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { throwWithMessage, isFormulaCellValue } from "./03-workbook-model.js";
-import { coerceCellValueToText } from "./16-text-split-tools.js";
+import { coerceCellValueToText } from "./16-transformation-recipe-engine.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { workbookLimits } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   formatNumberWithPattern,
   findSheetOrThrow,
@@ -24,7 +24,7 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { importWorkbookFile } from "./07-xlsx-archive-reader.js";
+import { importWorkbookFile } from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   patternCheckBudgets,

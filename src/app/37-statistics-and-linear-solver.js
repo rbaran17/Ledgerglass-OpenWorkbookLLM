@@ -1,6 +1,6 @@
-import { buildCompositeKey } from "./11-workbook-formats-dialog.js";
+import { buildCompositeKey } from "./11-local-workbook-store-and-versions.js";
 
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
 import {
   assertWorkbookStructureEditable,
   parseAnalysisRequest,
@@ -22,7 +22,7 @@ import {
 import {
   readSourceHeaders,
   inspectOutputNameSafety,
-} from "./12-formula-dependency-inspector.js";
+} from "./12-consolidation-and-dependency-inspection.js";
 import {
   assertSolverMagnitude,
   parseRangeBounds,

@@ -3,8 +3,8 @@ import ne from "react";
 import i from "react/jsx-runtime";
 import { X } from "lucide-react";
 import { string, number, array, literal, unknown, object } from "zod";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   validateRetainedSourceFile,
   assertWorkbookStructureEditable,
@@ -24,13 +24,16 @@ import {
   previewWorkbookLinkOperation,
   buildWorkbookLinkReview,
 } from "./05-add-ins-and-custom-functions.js";
-import { importWorkbookFile, runFileImport } from "./07-xlsx-archive-reader.js";
+import {
+  importWorkbookFile,
+  runFileImport,
+} from "./07-file-import-and-worker-dispatch.js";
 import {
   F$,
   buildExchangeSchemaReport,
   importXlsxWorkbook,
   createEmptyExportLedger,
-} from "./08-xlsx-export-and-preservation.js";
+} from "./08-xlsx-import-export-and-preservation.js";
 
 function buildSourceImportRecord(e) {
   const r = requireRetainedXlsxSource(e),

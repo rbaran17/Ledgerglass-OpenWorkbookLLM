@@ -9,8 +9,8 @@ import {
   discriminatedUnion,
   literal,
 } from "zod";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   isSameContentHash,
@@ -35,8 +35,8 @@ import {
   createLocalWorkbookStore,
   WorkbookRevisionConflictError,
   compareWorkbookVersions,
-} from "./11-workbook-formats-dialog.js";
-import { inspectOutputNameSafety } from "./12-formula-dependency-inspector.js";
+} from "./11-local-workbook-store-and-versions.js";
+import { inspectOutputNameSafety } from "./12-consolidation-and-dependency-inspection.js";
 import {
   resolveAxisScale,
   physicalToLogicalPixels,

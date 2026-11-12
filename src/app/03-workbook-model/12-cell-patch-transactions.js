@@ -2,8 +2,8 @@ import {
   isNonArrayObject,
   throwWithMessage,
 } from "./01-cell-styles-and-themes.js";
-import { isDeepFrozenValue } from "../01-core-schemas-and-hashing.js";
-import { workbookLimits } from "../02-financial-functions.js";
+import { isDeepFrozenValue } from "../01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "../02-text-and-financial-functions.js";
 import {
   throwWorkbookError,
   assertNamedStyleBindingCurrent,
@@ -15,8 +15,8 @@ import {
 import {
   buildNumberFormatCode,
   validateNumberFormatSettings,
-} from "./02-number-formats.js";
-import { carryCalculatorRecordForward } from "./05-consolidation-and-sources.js";
+} from "./02-formula-function-evaluators.js";
+import { carryCalculatorRecordForward } from "./05-formula-engine-and-name-operations.js";
 import {
   requireBoundedText,
   NC,
@@ -28,12 +28,15 @@ import {
   _t,
   parseRangeAddress,
   buildBorderPresetStyles,
-} from "./07-conditional-formatting.js";
+} from "./07-conditional-rules-worksheet-features.js";
 import {
   calculateWorkbookWithSettings,
   checkDataValidationBatch,
 } from "./09-calculation-engine.js";
-import { findSheetOrThrow, renameTableHeaderField } from "./10-print-layout.js";
+import {
+  findSheetOrThrow,
+  renameTableHeaderField,
+} from "./10-table-filters-and-pivot-views.js";
 import {
   normalizeWorkbookModel,
   normalizeCellRecordInput,

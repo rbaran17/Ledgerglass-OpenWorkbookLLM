@@ -16,7 +16,7 @@ import {
   Tp,
   isWithinFormulaSuggestions,
 } from "../53-find-replace-go-to.js";
-import { ConditionalFormatIndicator } from "../23-format-cells-dialog.js";
+import { ConditionalFormatIndicator } from "../23-format-cells-and-conditional-formatting.js";
 import { CellValuePreview } from "../22-themes-and-cell-styles.js";
 
 function WorksheetGridRow({

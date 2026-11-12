@@ -26,7 +26,7 @@ import {
 import {
   applyStructuralEdit,
   DataValidationDialog,
-} from "./27-data-validation-dialog.js";
+} from "./27-validation-and-structural-edits.js";
 import {
   DuplicateReviewDialog,
   StructureToolDialog,

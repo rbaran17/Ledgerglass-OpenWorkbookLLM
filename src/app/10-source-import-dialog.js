@@ -15,7 +15,7 @@ import { assertFormatInspectionCurrent } from "./05-add-ins-and-custom-functions
 import {
   importWorkbookFile,
   importNativeJsonFile,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 import {
   commitSourceImport,
   toSourceFileDescriptor,

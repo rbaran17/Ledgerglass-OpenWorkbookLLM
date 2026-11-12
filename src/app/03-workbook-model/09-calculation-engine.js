@@ -9,8 +9,11 @@ import {
   findVolatileFunctionNames,
   workbookUsesNowOrToday,
   workbookHasVolatileFunctions,
-} from "../01-core-schemas-and-hashing.js";
-import { fileImportLimits, workbookLimits } from "../02-financial-functions.js";
+} from "../01-schemas-date-functions-and-validation.js";
+import {
+  fileImportLimits,
+  workbookLimits,
+} from "../02-text-and-financial-functions.js";
 import {
   string,
   number,
@@ -34,7 +37,7 @@ import {
 import {
   FormulaParser,
   matrixResultFunctionNames,
-} from "./02-number-formats.js";
+} from "./02-formula-function-evaluators.js";
 import { evaluateReusableFormula, y5 } from "./03-defined-names.js";
 import {
   builtinFunctionNames,
@@ -60,7 +63,7 @@ import {
   isCalculationRecordCurrent,
   buildReportCellValueMap,
   calculatorRecords,
-} from "./05-consolidation-and-sources.js";
+} from "./05-formula-engine-and-name-operations.js";
 import {
   AU,
   nonEmptyLabelSchema,
@@ -77,11 +80,11 @@ import {
   evaluateConditionalFormatRules,
   _t,
   parseRangeAddress,
-} from "./07-conditional-formatting.js";
+} from "./07-conditional-rules-worksheet-features.js";
 import {
   rewriteFormulaReferences,
   rewriteStructuredReferences,
-} from "./08-chart-model.js";
+} from "./08-table-pivot-query-definitions.js";
 
 function evaluateWorkbookFormulas(e, r = {}, t, n) {
   const o = listInstalledExtensionFunctions(e),

@@ -10,8 +10,8 @@ import {
   normalizeDatePolicy,
   dateSystemMaxSerial,
   parseDateText,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   textJoinSpecSchema,
   validateFieldTransformRecipe,
@@ -32,7 +32,7 @@ import {
   readSourceHeaders,
   matchKeyPopulations,
   inspectFormulaDependencies,
-} from "./12-formula-dependency-inspector.js";
+} from "./12-consolidation-and-dependency-inspection.js";
 import {
   validateTextToColumnsRequest,
   assertSelectionInAuthorizedSheet,

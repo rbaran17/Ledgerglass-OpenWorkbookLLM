@@ -8,7 +8,7 @@ import {
   isFiniteNumber,
 } from "./04-pivot-tables-and-pictures.js";
 import { isNullOrEmptyValue } from "./03-defined-names.js";
-import { workbookLimits } from "../02-financial-functions.js";
+import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { cn } from "./01-cell-styles-and-themes.js";
 import {
   validateDrawingColor,
@@ -41,7 +41,12 @@ import {
   validateCalculatedColumnFormula,
 } from "./04-pivot-tables-and-pictures.js";
 import { columnIndexToLetters } from "./06-data-model-and-analysis.js";
-import { _t, aP, parseRangeAddress, oP } from "./07-conditional-formatting.js";
+import {
+  _t,
+  aP,
+  parseRangeAddress,
+  oP,
+} from "./07-conditional-rules-worksheet-features.js";
 
 function serializeDefinedNames(e, r) {
   const t = validateDefinedName(r.definedNames, r);

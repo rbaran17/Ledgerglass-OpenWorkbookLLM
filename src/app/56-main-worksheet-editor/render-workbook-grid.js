@@ -9,15 +9,25 @@ import {
 } from "../03-workbook-model.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { Filter, Search, X } from "lucide-react";
-import { PivotResultsStatusBar } from "../29-conditional-formatting-dialog.js";
+import { PivotResultsStatusBar } from "../29-worksheet-tools-and-pivot-panels.js";
 import { SplitPaneLayout } from "../53-find-replace-go-to.js";
 import { renderSheetTabs } from "./render-sheet-tabs.js";
 import { renderStatusBar } from "./render-status-bar.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 
 function renderWorkbookGrid({
+  dialogState,
+  selectionState,
+  navigationState,
+  formulaEntryState,
+  filterSortState,
+  auditState,
+  operationStatusState,
+  viewDisplayState,
+  findReplaceState,
+  dragFillState,
+  clipboardState,
   readOnly,
-  setIsWorkbookHealthDialogOpen,
   text,
   language,
   editorIdPrefix,
@@ -25,56 +35,17 @@ function renderWorkbookGrid({
   activeSheetId,
   activeSheet,
   isEditingLocked,
-  setActiveDialogMode,
-  appRootRef,
-  setTabBarSheetId,
-  formulaInputRef,
-  formulaSuggestionListRef,
-  formulaCaretPosition,
-  setFormulaCaretPosition,
-  isFormulaBarFocused,
-  setIsFormulaBarFocused,
-  activeCellAddress,
-  completedSelectionAreas,
   selectionAreas,
-  goToReferenceText,
-  setGoToReferenceText,
-  cellEditText,
-  activeCellEditRef,
-  formulaPointerStateRef,
-  activeFormulaReference,
-  isFormulaPointMode,
-  filterValueSearch,
-  setFilterValueSearch,
-  setFilterStateByScope,
-  setAuditPopulationScope,
   filterStateKey,
   activeFilterState,
-  activeColumnSort,
   sheetSplitPanes,
   splitPaneSizes,
   scrollActivePaneVertically,
-  isOperationBusy,
-  activeOperationControllerRef,
-  setPromptDialogState,
-  zoomPercent,
-  isFilterBarVisible,
-  setIsFilterBarVisible,
-  isFindBarVisible,
-  setIsFindBarVisible,
-  findQuery,
-  setFindQuery,
-  replaceWithText,
-  setReplaceWithText,
-  fillDragState,
-  clipboardSnapshotState,
   clearCutSession,
   workbookCalculator,
   filterApplication,
   filterResult,
   isFilterStale,
-  gridContainerRef,
-  findInputRef,
   latestEditStateRef,
   selectedCellCount,
   activeCellFormulaErrors,
@@ -110,24 +81,15 @@ function renderWorkbookGrid({
     "data-ui-label": "Spreadsheet workbook",
     children: [
       renderFormulaBar({
+        formulaEntryState,
+        navigationState,
+        selectionState,
         text,
         language,
         editorIdPrefix,
         activeWorkbook,
         activeSheet,
         isEditingLocked,
-        formulaInputRef,
-        formulaSuggestionListRef,
-        formulaCaretPosition,
-        setFormulaCaretPosition,
-        isFormulaBarFocused,
-        setIsFormulaBarFocused,
-        goToReferenceText,
-        setGoToReferenceText,
-        cellEditText,
-        activeCellEditRef,
-        formulaPointerStateRef,
-        gridContainerRef,
         syncFormulaEditorSelection,
         isFormulaEditingLocked,
         handleFormulaKeyDown,
@@ -138,7 +100,7 @@ function renderWorkbookGrid({
         commitNameBoxReference,
         moveSelectionAfterCommit,
       }),
-      activeCellEditRef.current?.value.startsWith("=") &&
+      formulaEntryState.activeCellEditRef.current?.value.startsWith("=") &&
         i.jsxs("div", {
           className: "lg-formula-entry-help",
           id: `${editorIdPrefix}-formula-help`,
@@ -149,13 +111,17 @@ function renderWorkbookGrid({
                 "Editing",
                 " ",
                 activeWorkbook.sheets.find(
-                  (fe) => fe.id === activeCellEditRef.current?.sheetId,
+                  (fe) =>
+                    fe.id ===
+                    formulaEntryState.activeCellEditRef.current?.sheetId,
                 )?.name,
                 "!",
-                activeCellEditRef.current?.address,
+                formulaEntryState.activeCellEditRef.current?.address,
                 " ·",
                 " ",
-                isFormulaPointMode ? "Point mode" : "Edit mode",
+                formulaEntryState.isFormulaPointMode
+                  ? "Point mode"
+                  : "Edit mode",
                 " · Select cells to insert a reference. F2 switches arrow keys; F4 locks references. Enter applies; Esc cancels.",
               ],
             }),
@@ -164,8 +130,8 @@ function renderWorkbookGrid({
               "aria-live": "polite",
               "aria-atomic": "true",
               "aria-label": "Formula reference",
-              children: activeFormulaReference
-                ? `Reference: ${activeWorkbook.sheets.find((fe) => fe.id === activeFormulaReference.sheetId)?.name}!${activeFormulaReference.range}`
+              children: formulaEntryState.activeFormulaReference
+                ? `Reference: ${activeWorkbook.sheets.find((fe) => fe.id === formulaEntryState.activeFormulaReference.sheetId)?.name}!${formulaEntryState.activeFormulaReference.range}`
                 : "Formula not yet applied",
             }),
           ],
@@ -173,7 +139,7 @@ function renderWorkbookGrid({
       findDataValidationsInRange(
         activeWorkbook,
         activeSheet.id,
-        activeCellAddress,
+        selectionState.activeCellAddress,
       ).map((fe) =>
         i.jsxs(
           "div",
@@ -200,10 +166,10 @@ function renderWorkbookGrid({
                     i.jsx(LocalizedText, {
                       children: "Choose a value for ",
                     }),
-                    activeCellAddress,
+                    selectionState.activeCellAddress,
                     " ",
                     i.jsxs("select", {
-                      "aria-label": `Validation dropdown for ${activeCellAddress}`,
+                      "aria-label": `Validation dropdown for ${selectionState.activeCellAddress}`,
                       disabled: isEditingLocked,
                       value: "",
                       onChange: (Oe) => {
@@ -215,9 +181,11 @@ function renderWorkbookGrid({
                                 [
                                   {
                                     sheetId: activeSheet.id,
-                                    address: activeCellAddress,
+                                    address: selectionState.activeCellAddress,
                                     cell: {
-                                      ...activeSheet.cells[activeCellAddress],
+                                      ...activeSheet.cells[
+                                        selectionState.activeCellAddress
+                                      ],
                                       raw: Be,
                                       literal: true,
                                     },
@@ -247,7 +215,7 @@ function renderWorkbookGrid({
       ),
       workbookCalculator.getSpillDiagnostic(
         activeSheet.id,
-        activeCellAddress,
+        selectionState.activeCellAddress,
       ) &&
         i.jsxs("div", {
           className: "lg-format-warning",
@@ -256,16 +224,22 @@ function renderWorkbookGrid({
           lang: language("Array spill diagnostic"),
           "data-ui-label": "Array spill diagnostic",
           children: [
-            activeCellAddress,
+            selectionState.activeCellAddress,
             ": ",
             workbookCalculator.getSpillDiagnostic(
               activeSheet.id,
-              activeCellAddress,
+              selectionState.activeCellAddress,
             ).message,
           ],
         }),
-      (workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress) ||
-        workbookCalculator.getSpillRange(activeSheet.id, activeCellAddress)) &&
+      (workbookCalculator.getSpillAnchor(
+        activeSheet.id,
+        selectionState.activeCellAddress,
+      ) ||
+        workbookCalculator.getSpillRange(
+          activeSheet.id,
+          selectionState.activeCellAddress,
+        )) &&
         i.jsxs("div", {
           className: "lg-view-note",
           role: "status",
@@ -279,12 +253,15 @@ function renderWorkbookGrid({
               activeSheet.id,
               workbookCalculator.getSpillAnchor(
                 activeSheet.id,
-                activeCellAddress,
-              ) ?? activeCellAddress,
+                selectionState.activeCellAddress,
+              ) ?? selectionState.activeCellAddress,
             ),
             ".",
-            workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress)
-              ? ` Edit the formula in ${workbookCalculator.getSpillAnchor(activeSheet.id, activeCellAddress)}; this cell is a calculated result.`
+            workbookCalculator.getSpillAnchor(
+              activeSheet.id,
+              selectionState.activeCellAddress,
+            )
+              ? ` Edit the formula in ${workbookCalculator.getSpillAnchor(activeSheet.id, selectionState.activeCellAddress)}; this cell is a calculated result.`
               : " Results resize when source data changes.",
           ],
         }),
@@ -296,7 +273,7 @@ function renderWorkbookGrid({
           lang: language("Named formula diagnostic"),
           "data-ui-label": "Named formula diagnostic",
           children: [
-            activeCellAddress,
+            selectionState.activeCellAddress,
             ":",
             " ",
             activeCellNamedFormulaDiagnostics.map((fe) => fe.message).join(" "),
@@ -310,7 +287,7 @@ function renderWorkbookGrid({
           lang: language("Formula reference diagnostic"),
           "data-ui-label": "Formula reference diagnostic",
           children: [
-            activeCellAddress,
+            selectionState.activeCellAddress,
             ":",
             " ",
             activeCellReferenceDiagnostics.map((fe) => fe.message).join(" "),
@@ -321,7 +298,7 @@ function renderWorkbookGrid({
           className: "lg-format-warning",
           role: "status",
           children: [
-            activeCellAddress,
+            selectionState.activeCellAddress,
             ":",
             " ",
             activeCellFormulaErrors.map((fe) => fe.message).join(" "),
@@ -351,15 +328,17 @@ function renderWorkbookGrid({
             }),
           ],
         }),
-      getImportedNumberFormatWarning(activeSheet.cells[activeCellAddress]) &&
+      getImportedNumberFormatWarning(
+        activeSheet.cells[selectionState.activeCellAddress],
+      ) &&
         i.jsxs("div", {
           className: "lg-view-note",
           role: "status",
           children: [
-            activeCellAddress,
+            selectionState.activeCellAddress,
             ": ",
             getImportedNumberFormatWarning(
-              activeSheet.cells[activeCellAddress],
+              activeSheet.cells[selectionState.activeCellAddress],
             ),
           ],
         }),
@@ -404,11 +383,11 @@ function renderWorkbookGrid({
             }),
             i.jsx("button", {
               onClick: () => {
-                (setFilterStateByScope((fe) => {
+                (filterSortState.setFilterStateByScope((fe) => {
                   const Oe = { ...fe };
                   return (delete Oe[filterStateKey], Oe);
                 }),
-                  setAuditPopulationScope("full"));
+                  auditState.setAuditPopulationScope("full"));
               },
               children: i.jsx(LocalizedText, {
                 children: "Clear population filters",
@@ -466,7 +445,7 @@ function renderWorkbookGrid({
             }),
           ],
         }),
-      isFilterBarVisible &&
+      filterSortState.isFilterBarVisible &&
         i.jsxs("div", {
           className: "lg-find-bar",
           children: [
@@ -474,16 +453,16 @@ function renderWorkbookGrid({
             i.jsx("input", {
               "aria-label": text("Filter rows"),
               placeholder: text("Filter rows (first row is a header)"),
-              value: filterValueSearch,
+              value: filterSortState.filterValueSearch,
               onChange: (fe) => {
-                (setFilterValueSearch(fe.target.value),
-                  setFilterStateByScope((Oe) => {
+                (filterSortState.setFilterValueSearch(fe.target.value),
+                  filterSortState.setFilterStateByScope((Oe) => {
                     const Be = { ...Oe };
                     return (delete Be[filterStateKey], Be);
                   }),
                   scrollActivePaneVertically(0),
-                  gridContainerRef.current &&
-                    (gridContainerRef.current.scrollTop = 0));
+                  selectionState.gridContainerRef.current &&
+                    (selectionState.gridContainerRef.current.scrollTop = 0));
               },
               lang: language("Filter rows"),
               "data-ui-label": "Filter rows",
@@ -491,8 +470,8 @@ function renderWorkbookGrid({
             i.jsx("button", {
               "aria-label": text("Close filter"),
               onClick: () => {
-                (setIsFilterBarVisible(false),
-                  setFilterValueSearch(""),
+                (filterSortState.setIsFilterBarVisible(false),
+                  filterSortState.setFilterValueSearch(""),
                   focusGridSurface());
               },
               lang: language("Close filter"),
@@ -507,17 +486,17 @@ function renderWorkbookGrid({
         onOpen: () => runEditorCommand("pivot"),
         onExplore: () => runEditorCommand("pivotExplore"),
       }),
-      isFindBarVisible &&
+      findReplaceState.isFindBarVisible &&
         i.jsxs("div", {
           className: "lg-find-bar",
           children: [
             i.jsx(Search, { size: 14 }),
             i.jsx("input", {
-              ref: findInputRef,
+              ref: findReplaceState.findInputRef,
               "aria-label": text("Find text"),
               placeholder: text("Find"),
-              value: findQuery,
-              onChange: (fe) => setFindQuery(fe.target.value),
+              value: findReplaceState.findQuery,
+              onChange: (fe) => findReplaceState.setFindQuery(fe.target.value),
               onKeyDown: (fe) => {
                 fe.key === "Enter" && findNextTextMatch();
               },
@@ -533,8 +512,9 @@ function renderWorkbookGrid({
             i.jsx("input", {
               "aria-label": text("Replace text"),
               placeholder: text("Replace with"),
-              value: replaceWithText,
-              onChange: (fe) => setReplaceWithText(fe.target.value),
+              value: findReplaceState.replaceWithText,
+              onChange: (fe) =>
+                findReplaceState.setReplaceWithText(fe.target.value),
               lang: language("Replace text"),
               "data-ui-label": "Replace text",
             }),
@@ -548,7 +528,8 @@ function renderWorkbookGrid({
             i.jsx("button", {
               "aria-label": text("Close find"),
               onClick: () => {
-                (setIsFindBarVisible(false), focusGridSurface());
+                (findReplaceState.setIsFindBarVisible(false),
+                  focusGridSurface());
               },
               lang: language("Close find"),
               "data-ui-label": "Close find",
@@ -556,20 +537,20 @@ function renderWorkbookGrid({
             }),
           ],
         }),
-      fillDragState &&
+      dragFillState.fillDragState &&
         i.jsxs("div", {
           className: "lg-view-note",
           role: "status",
           children: [
             i.jsx(LocalizedText, { children: "Fill preview · " }),
-            fillDragState.targetRange,
+            dragFillState.fillDragState.targetRange,
             " ",
             i.jsx(LocalizedText, {
               children: "· Release to review, or press Escape to cancel",
             }),
           ],
         }),
-      filterValueSearch &&
+      filterSortState.filterValueSearch &&
         matchingRowCount === 0 &&
         i.jsx("div", {
           className: "lg-population-empty",
@@ -579,7 +560,7 @@ function renderWorkbookGrid({
               "No rows match this search. Source data is unchanged; clear the search to restore the view.",
           }),
         }),
-      (filterValueSearch || activeColumnSort) &&
+      (filterSortState.filterValueSearch || filterSortState.activeColumnSort) &&
         i.jsxs("div", {
           className: "lg-view-note",
           children: [
@@ -589,10 +570,11 @@ function renderWorkbookGrid({
               children:
                 "View only · source row numbers and formula references stay fixed",
             }),
-            filterValueSearch && ` · ${matchingRowCount} matching rows`,
+            filterSortState.filterValueSearch &&
+              ` · ${matchingRowCount} matching rows`,
           ],
         }),
-      clipboardSnapshotState &&
+      clipboardState.clipboardSnapshotState &&
         i.jsxs("div", {
           className: "lg-view-note",
           role: "status",
@@ -600,10 +582,12 @@ function renderWorkbookGrid({
             i.jsx(LocalizedText, { children: "Cut ready:" }),
             " ",
             activeWorkbook.sheets.find(
-              (fe) => fe.id === clipboardSnapshotState.snapshot.sheetId,
+              (fe) =>
+                fe.id ===
+                clipboardState.clipboardSnapshotState.snapshot.sheetId,
             )?.name ?? "Deleted worksheet",
             "!",
-            clipboardSnapshotState.snapshot.range,
+            clipboardState.clipboardSnapshotState.snapshot.range,
             " ",
             i.jsx(LocalizedText, {
               children: "· Paste to review the move.",
@@ -637,30 +621,28 @@ function renderWorkbookGrid({
         renderPane: renderGridPane,
       }),
       renderSheetTabs({
+        dialogState,
+        selectionState,
+        navigationState,
+        formulaEntryState,
         readOnly,
         text,
         language,
         activeWorkbook,
         activeSheet,
-        setActiveDialogMode,
-        appRootRef,
-        setTabBarSheetId,
-        activeCellEditRef,
-        setPromptDialogState,
         runEditorCommand,
         commitCellEdit,
         switchActiveWorksheet,
       }),
       renderStatusBar({
-        setIsWorkbookHealthDialogOpen,
+        dialogState,
+        selectionState,
+        operationStatusState,
+        viewDisplayState,
         text,
         language,
         isEditingLocked,
-        completedSelectionAreas,
         selectionAreas,
-        isOperationBusy,
-        activeOperationControllerRef,
-        zoomPercent,
         selectedCellCount,
         selectedNumericValues,
         selectedNumericSum,

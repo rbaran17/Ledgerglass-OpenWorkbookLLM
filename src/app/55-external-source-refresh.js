@@ -1,6 +1,6 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
 import {
   isExternalSourceError,
   ExternalSourceError,
@@ -12,7 +12,7 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { buildLocalDemoProposal } from "./20-calculation-options-and-sources.js";
+import { buildLocalDemoProposal } from "./20-calculation-options-and-assistant.js";
 import {
   snapshotSheetContent,
   EH,

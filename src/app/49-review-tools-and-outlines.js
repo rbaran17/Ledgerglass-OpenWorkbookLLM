@@ -34,7 +34,7 @@ import {
   staleOutlineMessage,
   formatRowColumnSpan,
   wS,
-} from "./48-format-cells-and-move.js";
+} from "./48-move-cells-and-reference-repair.js";
 
 function OutlineToolsPanel(e) {
   const { text, language } = useWorkbookMessages(),

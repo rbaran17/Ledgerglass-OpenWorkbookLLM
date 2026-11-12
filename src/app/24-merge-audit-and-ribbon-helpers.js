@@ -11,8 +11,8 @@ import {
   workbookHasVolatileFunctions,
   readMonotonicClockMs,
   defineDataPropertyByKey,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   getWorkbookCalculation,
   getCurrentCalculatorRecord,
@@ -44,7 +44,7 @@ import {
 import {
   previewMergeCells,
   assertMergePreviewCurrent,
-} from "./23-format-cells-dialog.js";
+} from "./23-format-cells-and-conditional-formatting.js";
 
 function MergeCellsPreviewDialog(e) {
   const { text, language } = useWorkbookMessages(),

@@ -11,16 +11,12 @@ import {
 } from "../03-workbook-model.js";
 
 function createFormulaEntryActions({
+  formulaEntryState,
+  selectionState,
+  operationStatusState,
+  dragFillState,
   activeWorkbook,
   activeSheet,
-  setFormulaCaretPosition,
-  activeCellAddress,
-  activeCellEditRef,
-  formulaPointerStateRef,
-  setActiveFormulaReference,
-  setIsFormulaPointMode,
-  isOperationBusy,
-  dragAnchorRef,
   syncFormulaEditorSelection,
   restoreFormulaEditorFocus,
   isFormulaEditingLocked,
@@ -32,12 +28,12 @@ function createFormulaEntryActions({
   jumpToDataEdge,
 }) {
   function insertFormulaReference(fe, Oe = false, Be) {
-    const Ue = activeCellEditRef.current,
-      Xe = formulaPointerStateRef.current;
+    const Ue = formulaEntryState.activeCellEditRef.current,
+      Xe = formulaEntryState.formulaPointerStateRef.current;
     if (
       !Ue?.value.startsWith("=") ||
       isFormulaEditingLocked() ||
-      isOperationBusy
+      operationStatusState.isOperationBusy
     )
       return false;
     const gt = Xe.span ?? findFormulaReferenceSpan(Ue.value, Xe.start, Xe.end);
@@ -58,8 +54,8 @@ function createFormulaEntryActions({
       (Xe.anchor = Nt),
       (Xe.head = fe),
       (Xe.sheetId = activeSheet.id),
-      setFormulaCaretPosition(jt.span.end),
-      setActiveFormulaReference({
+      formulaEntryState.setFormulaCaretPosition(jt.span.end),
+      formulaEntryState.setActiveFormulaReference({
         sheetId: activeSheet.id,
         range: wt,
         bounds: Be?.bounds ?? parseRangeAddress(wt),
@@ -69,7 +65,10 @@ function createFormulaEntryActions({
     );
   }
   function handleFormulaPointerDown(fe) {
-    if (fe.button !== 0 || !activeCellEditRef.current?.value.startsWith("="))
+    if (
+      fe.button !== 0 ||
+      !formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
+    )
       return false;
     const Oe = fe.target;
     if (Oe.closest('input,button,a,[role="separator"]')) return false;
@@ -104,8 +103,8 @@ function createFormulaEntryActions({
     return gt
       ? (fe.preventDefault(),
         fe.stopPropagation(),
-        (formulaPointerStateRef.current.dragging = !!Be),
-        (dragAnchorRef.current = null),
+        (formulaEntryState.formulaPointerStateRef.current.dragging = !!Be),
+        (dragFillState.dragAnchorRef.current = null),
         true)
       : false;
   }
@@ -114,19 +113,19 @@ function createFormulaEntryActions({
       fe.nativeEvent.isComposing ||
       fe.altKey ||
       isFormulaEditingLocked() ||
-      isOperationBusy
+      operationStatusState.isOperationBusy
     )
       return false;
     const Oe = fe.currentTarget;
     if (!Oe.value.startsWith("=")) return false;
     syncFormulaEditorSelection(Oe);
-    const Be = formulaPointerStateRef.current;
+    const Be = formulaEntryState.formulaPointerStateRef.current;
     if (fe.key === "F2" && !fe.ctrlKey && !fe.metaKey)
       return (
         fe.preventDefault(),
-        activeCellEditRef.current || beginCellEdit(Oe.value),
+        formulaEntryState.activeCellEditRef.current || beginCellEdit(Oe.value),
         (Be.mode = !Be.mode),
-        setIsFormulaPointMode(Be.mode),
+        formulaEntryState.setIsFormulaPointMode(Be.mode),
         true
       );
     if (fe.key === "F4" && !fe.ctrlKey && !fe.metaKey) {
@@ -136,7 +135,7 @@ function createFormulaEntryActions({
           beginCellEdit(jt.value, Oe.classList.contains("lg-cell-editor")),
           (Be.span = jt.span),
           (Be.start = Be.end = jt.span.end),
-          setFormulaCaretPosition(jt.span.end),
+          formulaEntryState.setFormulaCaretPosition(jt.span.end),
           restoreFormulaEditorFocus(),
           true)
         : false;
@@ -151,13 +150,15 @@ function createFormulaEntryActions({
     if (
       !Be.mode ||
       !fe.key.startsWith("Arrow") ||
-      !activeCellEditRef.current ||
+      !formulaEntryState.activeCellEditRef.current ||
       !(Be.span ?? findFormulaReferenceSpan(Oe.value, Be.start, Be.end))
     )
       return false;
     fe.preventDefault();
     const Ue = _t(
-        Be.sheetId === activeSheet.id && Be.head ? Be.head : activeCellAddress,
+        Be.sheetId === activeSheet.id && Be.head
+          ? Be.head
+          : selectionState.activeCellAddress,
       ),
       Xe = ["ArrowUp", "ArrowDown"].includes(fe.key),
       gt = ["ArrowUp", "ArrowLeft"].includes(fe.key) ? -1 : 1,

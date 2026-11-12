@@ -3,15 +3,14 @@ import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { formatNumberWithPattern } from "../03-workbook-model.js";
 
 function renderStatusBar({
-  setIsWorkbookHealthDialogOpen,
+  dialogState,
+  selectionState,
+  operationStatusState,
+  viewDisplayState,
   text,
   language,
   isEditingLocked,
-  completedSelectionAreas,
   selectionAreas,
-  isOperationBusy,
-  activeOperationControllerRef,
-  zoomPercent,
   selectedCellCount,
   selectedNumericValues,
   selectedNumericSum,
@@ -28,19 +27,22 @@ function renderStatusBar({
         children: [
           i.jsx("span", { className: "lg-ready-dot" }),
           i.jsx(LocalizedText, {
-            children: isOperationBusy ? "Working…" : "Ready",
+            children: operationStatusState.isOperationBusy
+              ? "Working…"
+              : "Ready",
           }),
           i.jsx("button", {
             type: "button",
-            onClick: () => setIsWorkbookHealthDialogOpen(true),
+            onClick: () => dialogState.setIsWorkbookHealthDialogOpen(true),
             children: i.jsx(LocalizedText, {
               children: "Workbook health",
             }),
           }),
-          isOperationBusy &&
-            activeOperationControllerRef.current &&
+          operationStatusState.isOperationBusy &&
+            operationStatusState.activeOperationControllerRef.current &&
             i.jsx("button", {
-              onClick: () => activeOperationControllerRef.current?.abort(),
+              onClick: () =>
+                operationStatusState.activeOperationControllerRef.current?.abort(),
               children: i.jsx(LocalizedText, {
                 children: "Cancel file processing",
               }),
@@ -57,7 +59,7 @@ function renderStatusBar({
               i.jsx(LocalizedText, { children: "Count: " }),
               selectedCellCount,
               " ",
-              completedSelectionAreas.length > 0
+              selectionState.completedSelectionAreas.length > 0
                 ? `· ${selectionAreas.length} areas `
                 : "",
               " ",
@@ -111,7 +113,8 @@ function renderStatusBar({
         children: [
           i.jsx("button", {
             "aria-label": text("Zoom out"),
-            onClick: () => applyZoomPercent(Math.max(50, zoomPercent - 10)),
+            onClick: () =>
+              applyZoomPercent(Math.max(50, viewDisplayState.zoomPercent - 10)),
             lang: language("Zoom out"),
             "data-ui-label": "Zoom out",
             children: "−",
@@ -122,19 +125,22 @@ function renderStatusBar({
             min: "50",
             max: "200",
             step: "10",
-            value: zoomPercent,
+            value: viewDisplayState.zoomPercent,
             onChange: (fe) => applyZoomPercent(Number(fe.target.value)),
             lang: language("Zoom"),
             "data-ui-label": "Zoom",
           }),
           i.jsx("button", {
             "aria-label": text("Zoom in"),
-            onClick: () => applyZoomPercent(Math.min(200, zoomPercent + 10)),
+            onClick: () =>
+              applyZoomPercent(
+                Math.min(200, viewDisplayState.zoomPercent + 10),
+              ),
             lang: language("Zoom in"),
             "data-ui-label": "Zoom in",
             children: "+",
           }),
-          i.jsxs("span", { children: [zoomPercent, "%"] }),
+          i.jsxs("span", { children: [viewDisplayState.zoomPercent, "%"] }),
         ],
       }),
     ],

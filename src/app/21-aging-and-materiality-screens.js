@@ -3,11 +3,11 @@ import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import {
   buildCompositeKey,
   isFormulaInputValue,
-} from "./11-workbook-formats-dialog.js";
+} from "./11-local-workbook-store-and-versions.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { workbookLimits } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   calculateWorkbookWithSettings,
   cn,
@@ -24,16 +24,16 @@ import {
 import {
   importNativeJsonFile,
   toFileProcessingError,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
-import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import { inspectFormulaDependencies } from "./12-consolidation-and-dependency-inspection.js";
 import {
   parseAssistantChatRequest,
   validateAssistantProposal,
   LLMRequestError,
   raceWithAbortSignal,
   validateCalculationClock,
-} from "./20-calculation-options-and-sources.js";
+} from "./20-calculation-options-and-assistant.js";
 
 async function requestAssistantAnswer(e, r, t, n = {}) {
   if (n.reliability) {

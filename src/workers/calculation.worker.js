@@ -4,13 +4,13 @@ import {
   estimateWorkbookMemoryBytes,
   resolveCalculationBudget,
   setExtensionCacheEntries,
-} from "../app/01-core-schemas-and-hashing.js";
+} from "../app/01-schemas-date-functions-and-validation.js";
 
 import {
   carryCalculatorRecordForward,
   getCalculationInputSignature,
   zie,
-} from "../app/03-workbook-model/05-consolidation-and-sources.js";
+} from "../app/03-workbook-model/05-formula-engine-and-name-operations.js";
 
 import {
   getWorkbookCalculation,

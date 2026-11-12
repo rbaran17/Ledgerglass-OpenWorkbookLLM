@@ -1,7 +1,7 @@
 import {
   coerceValueToText,
   flattenNestedValues,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import {
   isNonArrayObject,
   failWithMessage,
@@ -16,7 +16,7 @@ import {
   normalizeFunctionName,
   dropBlankTextTokens,
   sha256HexDigest,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 import {
   toMatrixArgument,
   valuesEqualIgnoringCase,
@@ -25,7 +25,7 @@ import {
   notModernFunctionSentinel,
   modernFunctionNames,
   matrixResultFunctionNames,
-} from "./02-number-formats.js";
+} from "./02-formula-function-evaluators.js";
 
 function evaluateDefinedNameFunction(e, r, t) {
   if (!modernFunctionNames.includes(e)) return notModernFunctionSentinel;

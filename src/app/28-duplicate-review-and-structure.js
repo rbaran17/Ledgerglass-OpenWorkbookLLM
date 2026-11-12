@@ -2,7 +2,7 @@ import { isFormulaCellValue } from "./03-workbook-model.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { workbookLimits } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   findRowOrigin,
   calculateWorkbookWithSettings,
@@ -23,7 +23,7 @@ import {
   structuralEditLimits,
   qk,
   applyDuplicateReviewPreview,
-} from "./27-data-validation-dialog.js";
+} from "./27-validation-and-structural-edits.js";
 
 function DuplicateReviewDialog(e) {
   const { text, language } = useWorkbookMessages(),

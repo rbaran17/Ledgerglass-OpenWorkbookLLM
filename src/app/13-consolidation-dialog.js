@@ -1,8 +1,8 @@
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   consolidationFormatVersion,
@@ -21,14 +21,14 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { importWorkbookFile } from "./07-xlsx-archive-reader.js";
+import { importWorkbookFile } from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   readSourceTableRecords,
   buildConsolidationOutputCells,
   createConsolidationPreview,
   buildAuthorizedContextSnapshot,
-} from "./12-formula-dependency-inspector.js";
+} from "./12-consolidation-and-dependency-inspection.js";
 
 function publishConsolidatedSchedule(e, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");

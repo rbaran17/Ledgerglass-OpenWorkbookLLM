@@ -1,3 +1,18 @@
+import {
+  DateSeriesRangeError,
+  dateToExcelSerial,
+  excelEpochUtc,
+  parseSeriesSeedDate,
+  s$,
+  throwDateSeriesRangeError,
+} from "./06c-package-and-worksheet-parsing.js";
+
+import {
+  formatCellAddress,
+  maxExcelDateSerial,
+  utcDateFromParts,
+} from "./06c-package-and-worksheet-parsing.js";
+
 import { isPlainObjectValue, throwWorkbookError } from "./03-workbook-model.js";
 import ne from "react";
 import i from "react/jsx-runtime";
@@ -16,8 +31,8 @@ import {
   dateSystemSerialOffset,
   dateSystemMaxSerial,
   listInstalledExtensionFunctions,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   formatNumberWithPattern,
   evaluateWorkbookFormulas,
@@ -37,12 +52,11 @@ import {
   shiftFormulaReferences,
 } from "./03-workbook-model.js";
 
-const formatCellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  formatRangeAddress = (e, r, t, n) => {
-    const o = formatCellAddress(e, r),
-      a = formatCellAddress(e + t - 1, r + n - 1);
-    return o === a ? o : `${o}:${a}`;
-  };
+const formatRangeAddress = (e, r, t, n) => {
+  const o = formatCellAddress(e, r),
+    a = formatCellAddress(e + t - 1, r + n - 1);
+  return o === a ? o : `${o}:${a}`;
+};
 function eI(e) {
   return (
     e &&
@@ -509,58 +523,11 @@ function buildFillPreview(e, r, t, n, o = {}) {
     )
   );
 }
-const s$ = 864e5,
-  excelEpochUtc = Date.UTC(1899, 11, 31),
-  maxExcelDateSerial = 2958465;
-class DateSeriesRangeError extends Error {}
-function throwDateSeriesRangeError() {
-  throw new DateSeriesRangeError(
-    "Date series must stay between 1899-12-31 and 9999-12-31.",
-  );
-}
-function utcDateFromParts(e, r, t) {
-  const n = new Date(0);
-  return (n.setUTCHours(0, 0, 0, 0), n.setUTCFullYear(e, r, t), n);
-}
+
 function excelSerialToDate(e) {
   return new Date(excelEpochUtc + (e > 60 ? e - 1 : e) * s$);
 }
-function dateToExcelSerial(e) {
-  const r = (e.getTime() - excelEpochUtc) / s$,
-    t = r >= 60 ? r + 1 : r;
-  return (
-    (!Number.isSafeInteger(t) || t < 0 || t > maxExcelDateSerial) &&
-      throwDateSeriesRangeError(),
-    t
-  );
-}
-function parseSeriesSeedDate(e, r = "1900") {
-  if (typeof e == "number")
-    return (
-      (!Number.isSafeInteger(e) || e < 0 || e > dateSystemMaxSerial(r)) &&
-        throwWorkbookError(
-          `Date values must be whole Excel ${r} serials between 0 and ${dateSystemMaxSerial(r)}.`,
-        ),
-      e
-    );
-  if (
-    ((typeof e != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e)) &&
-      throwWorkbookError(
-        "Enter a date as YYYY-MM-DD or a whole Excel date serial.",
-      ),
-    e === "1900-02-29" && r === "1900")
-  )
-    return 60;
-  const [t, n, o] = e.split("-").map(Number),
-    a = utcDateFromParts(t, n - 1, o);
-  return (
-    (a.getUTCFullYear() !== t ||
-      a.getUTCMonth() !== n - 1 ||
-      a.getUTCDate() !== o) &&
-      throwWorkbookError("The series date is not a valid calendar date."),
-    parseSeriesSeedDate(dateToExcelSerial(a) - dateSystemSerialOffset(r), r)
-  );
-}
+
 function stepSeriesDateSerial(e, r, t, n) {
   if (
     (Number.isSafeInteger(r) ||

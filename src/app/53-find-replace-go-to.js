@@ -10,7 +10,7 @@ import {
   minRowHeight,
   maxColumnWidth,
   minColumnWidth,
-} from "./02-financial-functions.js";
+} from "./02-text-and-financial-functions.js";
 import {
   formatNumberWithPattern,
   defaultRowHeightOf,

@@ -9,29 +9,29 @@ import { FindReplaceDialog } from "../53-find-replace-go-to.js";
 import {
   ConditionalFormattingRulesManager,
   FormatCellsDialog,
-} from "../23-format-cells-dialog.js";
+} from "../23-format-cells-and-conditional-formatting.js";
 import { ThemesAndCellStylesDialog } from "../22-themes-and-cell-styles.js";
-import { MergeCellsPreviewDialog } from "../24-merge-and-audit-analysis.js";
-import { M4e } from "../48-format-cells-and-move.js";
+import { MergeCellsPreviewDialog } from "../24-merge-audit-and-ribbon-helpers.js";
+import { M4e } from "../48-move-cells-and-reference-repair.js";
 import {
   OutlineToolsPanel,
   ReviewToolsPanel,
-} from "../49-outlines-and-comments.js";
+} from "../49-review-tools-and-outlines.js";
 import { PasteSpecialDialog } from "../47-fill-and-paste-special.js";
 import {
   CustomSortDialog,
   WorksheetTabBar,
 } from "../45-sorting-and-worksheets.js";
 import { WorkbookManagerDialog } from "../46-workbook-manager.js";
-import { TableToolsDialog } from "../30-table-and-pivot-builder.js";
-import { PivotExplorerDialog } from "../31-pivot-explore-and-slicers.js";
-import { PicturePropertiesDialog } from "../32-drawing-and-chart-export.js";
+import { TableToolsDialog } from "../30-table-tools-dialog.js";
+import { PivotExplorerDialog } from "../31-pivot-explorer-and-charts.js";
+import { PicturePropertiesDialog } from "../32-drawing-objects-and-printing.js";
 import { PageSetupDialog } from "../33-page-setup-and-print.js";
 import {
   CalculationInspectorDialog,
   EvaluateFormulaDialog,
   FormulaCompatibilityDialog,
-} from "../35-formula-compatibility-report.js";
+} from "../35-formula-inspection-and-compatibility.js";
 import { FunctionAndNameDialog } from "../34-function-browser-and-names.js";
 import { FilterViewsDialog } from "../19-filter-views-dialog.js";
 import {
@@ -43,8 +43,8 @@ import { DataAnalysisDialog } from "../38-data-analysis-dialog.js";
 import { AddInsAndCustomFunctionsDialog } from "../05-add-ins-and-custom-functions.js";
 import { WorkbookLinksDialog } from "../09-workbook-links.js";
 import { SourceImportDialog } from "../10-source-import-dialog.js";
-import { FormatConversionDialog } from "../11-workbook-formats-dialog.js";
-import { ReportOutputsDialog } from "../39-report-outputs.js";
+import { FormatConversionDialog } from "../11-local-workbook-store-and-versions.js";
+import { ReportOutputsDialog } from "../39-report-outputs-and-what-if.js";
 import { DataModelDialog } from "../15-data-model-dialog.js";
 import { PatternCheckDialog } from "../51-pattern-checks-and-citations.js";
 import {
@@ -52,31 +52,41 @@ import {
   formatOccupiedRangeAddress,
 } from "../03-workbook-model.js";
 import { AgingScheduleScreen } from "../21-aging-and-materiality-screens.js";
-import { MaterialityRiskScreen } from "../50-materiality-screen.js";
+import { MaterialityRiskScreen } from "../50-materiality-screen-and-pattern-checks.js";
 import { WorkbookComparisonDialog } from "../52-workbook-comparison.js";
-import { WhatIfAnalysisDialog } from "../40-what-if-analysis.js";
+import { WhatIfAnalysisDialog } from "../40-what-if-and-delimited-dialogs.js";
 import {
   FormulaWatchWindow,
   GoalSeekDialog,
 } from "../36-watch-window-and-goal-seek.js";
-import { CalculationOptionsDialog } from "../20-calculation-options-and-sources.js";
-import { DataToolDialogRouter } from "../29-conditional-formatting-dialog.js";
+import { CalculationOptionsDialog } from "../20-calculation-options-and-assistant.js";
+import { DataToolDialogRouter } from "../29-worksheet-tools-and-pivot-panels.js";
 import {
   ConsolidationDialog,
   saveBlobToFile,
 } from "../13-consolidation-dialog.js";
-import { encodeNativeWorkbook } from "../08-xlsx-export-and-preservation.js";
-import { importAutomationFile } from "../07-xlsx-archive-reader.js";
+import { encodeNativeWorkbook } from "../08-xlsx-import-export-and-preservation.js";
+import { importAutomationFile } from "../07-file-import-and-worker-dispatch.js";
 import { TransformationRecipesDialog } from "../18-transformation-recipes-dialog.js";
 import {
   CombinePopulationsDialog,
   TextToColumnsDialog,
-} from "../42-combine-populations.js";
+} from "../42-combine-populations-and-text-columns.js";
 import { TextCleanupDialog } from "../43-text-cleanup.js";
 import { CleanAndReshapeDialog } from "../44-clean-and-reshape.js";
 import { DuplicateReviewDialog } from "../28-duplicate-review-and-structure.js";
 
 function renderEditorDialogs({
+  persistenceState,
+  dialogState,
+  navigationState,
+  formulaEntryState,
+  selectionState,
+  filterSortState,
+  auditState,
+  operationStatusState,
+  importExportState,
+  clipboardState,
   extensions,
   allowLinkedWorkbookFiles,
   documentExtractor,
@@ -96,39 +106,13 @@ function renderEditorDialogs({
   setConsolidationWorkbooks,
   activeSheet,
   workbookPersistence,
-  persistedWorkbookRecordRef,
-  persistedWorkbookRecord,
-  persistenceSessionRef,
-  saveAbortControllerRef,
   isEditingLocked,
-  activeDialogMode,
-  setActiveDialogMode,
-  automationInspection,
-  setAutomationInspection,
-  tabBarSheetId,
-  formulaInputRef,
-  setFormulaCaretPosition,
-  setIsFormulaBarFocused,
-  activeCellAddress,
-  activeSelectionRange,
   selectSingleRange,
   selectionAreas,
-  activeCellEditRef,
-  setFilterValueSearch,
-  setFilterStateByScope,
-  activeFilterColumn,
-  setAuditPopulationScope,
   filterStateKey,
   activeFilterState,
-  setActiveColumnSort,
   scrollActivePaneVertically,
-  setStatusNotice,
-  setErrorNotice,
   operationScope,
-  pendingImportFile,
-  setPendingImportFile,
-  auditSourceRange,
-  internalClipboardRef,
   calculationRun,
   workbookCalculator,
   filterResult,
@@ -150,27 +134,29 @@ function renderEditorDialogs({
   selectSheetRanges,
 }) {
   return (
-    activeDialogMode &&
+    dialogState.activeDialogMode &&
     (() => {
       const fe = {
-        mode: activeDialogMode,
+        mode: dialogState.activeDialogMode,
         workbook: activeWorkbook,
         sheetId: activeSheet.id,
-        range: activeSelectionRange,
+        range: selectionState.activeSelectionRange,
         readOnly:
-          activeDialogMode === "protection" ? readOnly : isEditingLocked,
-        onClose: () => setActiveDialogMode(null),
+          dialogState.activeDialogMode === "protection"
+            ? readOnly
+            : isEditingLocked,
+        onClose: () => dialogState.setActiveDialogMode(null),
         onWorkbookChange: commitWorkbookEdit,
       };
-      if (activeDialogMode === "automation")
+      if (dialogState.activeDialogMode === "automation")
         return i.jsx(
           AutomationScriptsDialog,
           {
             workbook: activeWorkbook,
             sheetId: activeSheet.id,
-            range: activeSelectionRange,
+            range: selectionState.activeSelectionRange,
             readOnly: isEditingLocked,
-            initialInspection: automationInspection,
+            initialInspection: dialogState.automationInspection,
             onClose: fe.onClose,
             onPreserve: (Ue) => {
               const Xe = latestEditStateRef.current.book,
@@ -179,7 +165,7 @@ function renderEditorDialogs({
                   readOnly: latestEditStateRef.current.readOnly,
                 });
               (gt !== Xe && commitWorkbookChange(gt),
-                setStatusNotice(
+                operationStatusState.setStatusNotice(
                   "Original automation bytes preserved in native JSON. No source code was executed.",
                 ));
             },
@@ -202,7 +188,7 @@ function renderEditorDialogs({
                 },
               );
               (commitWorkbookChange(Nt),
-                setStatusNotice(
+                operationStatusState.setStatusNotice(
                   "Reviewed migration applied in one Undo step; source hashes and run provenance recorded.",
                 ));
             },
@@ -214,100 +200,109 @@ function renderEditorDialogs({
                 Xe,
               ),
           },
-          automationInspection?.sha256 ?? "automation",
+          dialogState.automationInspection?.sha256 ?? "automation",
         );
-      if (activeDialogMode === "search" || activeDialogMode === "goToSpecial")
+      if (
+        dialogState.activeDialogMode === "search" ||
+        dialogState.activeDialogMode === "goToSpecial"
+      )
         return i.jsx(
           FindReplaceDialog,
           {
             ...fe,
             ranges: selectionAreas,
-            active: activeCellAddress,
+            active: selectionState.activeCellAddress,
             readOnly,
-            initialTab: activeDialogMode === "goToSpecial" ? "special" : "find",
+            initialTab:
+              dialogState.activeDialogMode === "goToSpecial"
+                ? "special"
+                : "find",
             onWorkbookChange: replaceWorkbookSnapshot,
             onNavigate: navigateToSheetCell,
             onSelectRanges: selectSheetRanges,
           },
-          activeDialogMode,
+          dialogState.activeDialogMode,
         );
-      if (activeDialogMode === "cellStyle")
+      if (dialogState.activeDialogMode === "cellStyle")
         return i.jsx(FormatCellsDialog, {
           ...fe,
           ranges: selectionAreas,
-          active: activeCellAddress,
+          active: selectionState.activeCellAddress,
         });
-      if (activeDialogMode === "themes")
+      if (dialogState.activeDialogMode === "themes")
         return i.jsx(ThemesAndCellStylesDialog, {
           ...fe,
           ranges: selectionAreas,
         });
-      if (activeDialogMode === "conditional")
+      if (dialogState.activeDialogMode === "conditional")
         return i.jsx(ConditionalFormattingRulesManager, { ...fe });
-      if (activeDialogMode === "merge")
+      if (dialogState.activeDialogMode === "merge")
         return i.jsx(MergeCellsPreviewDialog, { ...fe });
-      if (activeDialogMode === "numberFormat")
+      if (dialogState.activeDialogMode === "numberFormat")
         return i.jsx(M4e, {
           ...fe,
           ranges: selectionAreas,
-          active: activeCellAddress,
+          active: selectionState.activeCellAddress,
         });
-      if (activeDialogMode === "outlines")
+      if (dialogState.activeDialogMode === "outlines")
         return i.jsx(OutlineToolsPanel, { ...fe });
-      if (activeDialogMode === "comments" || activeDialogMode === "hyperlink")
+      if (
+        dialogState.activeDialogMode === "comments" ||
+        dialogState.activeDialogMode === "hyperlink"
+      )
         return i.jsx(ReviewToolsPanel, {
           ...fe,
-          range: activeCellAddress,
-          mode: activeDialogMode,
-          active: activeCellAddress,
+          range: selectionState.activeCellAddress,
+          mode: dialogState.activeDialogMode,
+          active: selectionState.activeCellAddress,
           actor,
           onNavigate: navigateToSheetCell,
         });
       if (
         ["pasteSpecial", "fillSeries", "viewSettings"].includes(
-          activeDialogMode,
+          dialogState.activeDialogMode,
         )
       )
         return i.jsx(
           PasteSpecialDialog,
           {
             ...fe,
-            mode: activeDialogMode,
-            clipboard: internalClipboardRef.current?.snapshot,
+            mode: dialogState.activeDialogMode,
+            clipboard: clipboardState.internalClipboardRef.current?.snapshot,
             onSelectionChange: selectSingleRange,
           },
-          activeDialogMode,
+          dialogState.activeDialogMode,
         );
-      if (activeDialogMode === "sheets")
+      if (dialogState.activeDialogMode === "sheets")
         return i.jsx(WorksheetTabBar, {
           workbook: activeWorkbook,
-          sheetId: tabBarSheetId ?? activeSheet.id,
+          sheetId: navigationState.tabBarSheetId ?? activeSheet.id,
           readOnly,
           onWorkbookChange: replaceWorkbookSnapshot,
           onSelectSheet: (Ue) => {
-            (setActiveDialogMode(null), switchActiveWorksheet(Ue));
+            (dialogState.setActiveDialogMode(null), switchActiveWorksheet(Ue));
           },
           onClose: fe.onClose,
         });
       if (
         ["workbookProperties", "versions", "template"].includes(
-          activeDialogMode,
+          dialogState.activeDialogMode,
         )
       )
         return i.jsx(WorkbookManagerDialog, {
           mode:
-            activeDialogMode === "workbookProperties"
+            dialogState.activeDialogMode === "workbookProperties"
               ? "properties"
-              : activeDialogMode,
+              : dialogState.activeDialogMode,
           workbook: activeWorkbook,
           readOnly,
           persistent: !!(
             persistenceKey ||
             (workbookStore && workbookStorePersistent)
           ),
-          checkpoints: (persistedWorkbookRecord?.checkpoints ?? []).filter(
-            (Ue) => Ue.workbookId === activeWorkbook.id,
-          ),
+          checkpoints: (
+            persistenceState.persistedWorkbookRecord?.checkpoints ?? []
+          ).filter((Ue) => Ue.workbookId === activeWorkbook.id),
           onClose: fe.onClose,
           onWorkbookChange: replaceWorkbookSnapshot,
           onCreateWorkbook: (Ue) => {
@@ -318,13 +313,13 @@ function renderEditorDialogs({
               }),
               `${Ue.name.replace(/[^a-zA-Z0-9 _.-]/g, "_")}.json`,
             ),
-              setStatusNotice(
+              operationStatusState.setStatusNotice(
                 "Created an independent workbook download. The template remains open.",
               ));
           },
           onCheckpoint: (Ue) => {
             if (readOnly) throw new Error("This workbook is read-only.");
-            const Xe = persistenceSessionRef.current,
+            const Xe = persistenceState.persistenceSessionRef.current,
               gt = latestEditStateRef.current.book;
             return chainMaybePromise(persistWorkbookSnapshot(gt), () =>
               enqueueSaveOperation((Nt) => {
@@ -335,7 +330,7 @@ function renderEditorDialogs({
                 return chainMaybePromise(
                   workbookPersistence.checkpoint(
                     Ue,
-                    persistedWorkbookRecordRef.current.guard,
+                    persistenceState.persistedWorkbookRecordRef.current.guard,
                     { signal: Nt },
                   ),
                   (wt) => {
@@ -352,16 +347,16 @@ function renderEditorDialogs({
             ),
           onRestore: (Ue) => {
             if (readOnly) throw new Error("This workbook is read-only.");
-            if (!persistedWorkbookRecordRef.current)
+            if (!persistenceState.persistedWorkbookRecordRef.current)
               throw new Error(
                 "Save this workbook before restoring a checkpoint.",
               );
             const Xe = latestEditStateRef.current.book,
-              gt = persistenceSessionRef.current;
-            saveAbortControllerRef.current?.abort();
+              gt = persistenceState.persistenceSessionRef.current;
+            persistenceState.saveAbortControllerRef.current?.abort();
             const Nt = new AbortController();
             return (
-              (saveAbortControllerRef.current = Nt),
+              (persistenceState.saveAbortControllerRef.current = Nt),
               enqueueSaveOperation((jt) => {
                 if (latestEditStateRef.current.book !== Xe || Nt.signal.aborted)
                   throw new Error(
@@ -374,10 +369,10 @@ function renderEditorDialogs({
                       throw gt.conflict;
                     if (
                       !gt.active ||
-                      gt !== persistenceSessionRef.current ||
+                      gt !== persistenceState.persistenceSessionRef.current ||
                       Nt.signal.aborted ||
                       latestEditStateRef.current.book !== Xe ||
-                      activeCellEditRef.current ||
+                      formulaEntryState.activeCellEditRef.current ||
                       latestEditStateRef.current.readOnly
                     )
                       throw new Error(
@@ -385,13 +380,15 @@ function renderEditorDialogs({
                       );
                     (commitWorkbookChange(xr.workbook, true, false, xr),
                       applyWorkbookView(xr.view),
-                      setStatusNotice("Restored checkpoint as a new revision."),
+                      operationStatusState.setStatusNotice(
+                        "Restored checkpoint as a new revision.",
+                      ),
                       reportSaveStatus("saved", xr.workbook));
                   },
                   Br = workbookPersistence.restoreCheckpoint(
                     Ue,
                     Xe,
-                    persistedWorkbookRecordRef.current.guard,
+                    persistenceState.persistedWorkbookRecordRef.current.guard,
                     actor,
                     {
                       signal: Nt.signal,
@@ -406,16 +403,20 @@ function renderEditorDialogs({
             );
           },
         });
-      if (["table", "pivot", "query"].includes(activeDialogMode))
+      if (["table", "pivot", "query"].includes(dialogState.activeDialogMode))
         return i.jsx(
           TableToolsDialog,
-          { ...fe, mode: activeDialogMode },
-          activeDialogMode,
+          { ...fe, mode: dialogState.activeDialogMode },
+          dialogState.activeDialogMode,
         );
-      if (activeDialogMode === "pivotExplore")
+      if (dialogState.activeDialogMode === "pivotExplore")
         return i.jsx(PivotExplorerDialog, { ...fe });
-      if (["picture", "shape", "chart"].includes(activeDialogMode))
-        return i.jsx(PicturePropertiesDialog, { ...fe }, activeDialogMode);
+      if (["picture", "shape", "chart"].includes(dialogState.activeDialogMode))
+        return i.jsx(
+          PicturePropertiesDialog,
+          { ...fe },
+          dialogState.activeDialogMode,
+        );
       if (
         [
           "margins",
@@ -426,43 +427,43 @@ function renderEditorDialogs({
           "pageBreaks",
           "fit",
           "pageLayout",
-        ].includes(activeDialogMode)
+        ].includes(dialogState.activeDialogMode)
       )
-        return i.jsx(PageSetupDialog, { ...fe }, activeDialogMode);
-      if (activeDialogMode === "functionCompatibility")
+        return i.jsx(PageSetupDialog, { ...fe }, dialogState.activeDialogMode);
+      if (dialogState.activeDialogMode === "functionCompatibility")
         return i.jsx(FormulaCompatibilityDialog, {
           workbook: activeWorkbook,
-          onClose: () => setActiveDialogMode(null),
+          onClose: () => dialogState.setActiveDialogMode(null),
           onNavigate: navigateToSheetCell,
         });
-      if (["function", "names"].includes(activeDialogMode))
+      if (["function", "names"].includes(dialogState.activeDialogMode))
         return i.jsx(
           FunctionAndNameDialog,
           {
             ...fe,
-            mode: activeDialogMode,
+            mode: dialogState.activeDialogMode,
             onInsertFormula: (Ue) => {
-              (setActiveDialogMode(null),
+              (dialogState.setActiveDialogMode(null),
                 beginCellEdit(Ue),
-                setFormulaCaretPosition(Ue.length),
-                setIsFormulaBarFocused(true),
+                formulaEntryState.setFormulaCaretPosition(Ue.length),
+                formulaEntryState.setIsFormulaBarFocused(true),
                 requestAnimationFrame(() => {
-                  (formulaInputRef.current?.focus(),
-                    formulaInputRef.current?.setSelectionRange(
+                  (formulaEntryState.formulaInputRef.current?.focus(),
+                    formulaEntryState.formulaInputRef.current?.setSelectionRange(
                       Ue.length,
                       Ue.length,
                     ));
                 }));
             },
           },
-          activeDialogMode,
+          dialogState.activeDialogMode,
         );
-      if (activeDialogMode === "populationFilter")
+      if (dialogState.activeDialogMode === "populationFilter")
         return i.jsx(FilterViewsDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
-          range: activeSelectionRange,
-          column: activeFilterColumn,
+          range: selectionState.activeSelectionRange,
+          column: filterSortState.activeFilterColumn,
           definition: activeFilterState?.definition,
           readOnly,
           onWorkbookChange: (Ue, Xe) => {
@@ -481,23 +482,23 @@ function renderEditorDialogs({
                 Ue,
                 workbookCalculator,
               ),
-                setFilterStateByScope((Xe) => ({
+                filterSortState.setFilterStateByScope((Xe) => ({
                   ...Xe,
                   [filterStateKey]: {
                     snapshot: activeWorkbook,
                     definition: Ue,
                   },
                 })),
-                setFilterValueSearch(""),
-                setActiveColumnSort(null),
-                setAuditPopulationScope("full"),
+                filterSortState.setFilterValueSearch(""),
+                filterSortState.setActiveColumnSort(null),
+                auditState.setAuditPopulationScope("full"),
                 scrollActivePaneVertically(0),
-                setActiveDialogMode(null),
-                setStatusNotice(
+                dialogState.setActiveDialogMode(null),
+                operationStatusState.setStatusNotice(
                   "Filter view applied. Source rows, formulas and history are unchanged.",
                 ));
             } catch (Xe) {
-              setErrorNotice(
+              operationStatusState.setErrorNotice(
                 Xe instanceof Error
                   ? Xe.message
                   : "Recalculate before filtering.",
@@ -505,7 +506,7 @@ function renderEditorDialogs({
             }
           },
         });
-      if (activeDialogMode === "externalSources")
+      if (dialogState.activeDialogMode === "externalSources")
         return i.jsx(ExternalDataRefreshDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
@@ -519,12 +520,15 @@ function renderEditorDialogs({
             commitWorkbookWithNewSheet(Ue, Xe);
           },
         });
-      if (activeDialogMode === "solver" || activeDialogMode === "statistics")
+      if (
+        dialogState.activeDialogMode === "solver" ||
+        dialogState.activeDialogMode === "statistics"
+      )
         return i.jsx(DataAnalysisDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
-          range: activeSelectionRange,
-          initialKind: activeDialogMode,
+          range: selectionState.activeSelectionRange,
+          initialKind: dialogState.activeDialogMode,
           readOnly,
           allowHidden: true,
           onClose: fe.onClose,
@@ -534,7 +538,7 @@ function renderEditorDialogs({
             commitWorkbookWithNewSheet(Ue, Xe);
           },
         });
-      if (activeDialogMode === "extensions")
+      if (dialogState.activeDialogMode === "extensions")
         return i.jsx(AddInsAndCustomFunctionsDialog, {
           workbook: activeWorkbook,
           extensions,
@@ -551,7 +555,7 @@ function renderEditorDialogs({
             replaceWorkbookSnapshot(Ue, Xe);
           },
         });
-      if (activeDialogMode === "workbookLinks")
+      if (dialogState.activeDialogMode === "workbookLinks")
         return i.jsx(WorkbookLinksDialog, {
           workbook: activeWorkbook,
           readOnly,
@@ -570,7 +574,7 @@ function renderEditorDialogs({
             replaceWorkbookSnapshot(Ue, Xe);
           },
         });
-      if (activeDialogMode === "importSources")
+      if (dialogState.activeDialogMode === "importSources")
         return i.jsx(SourceImportDialog, {
           workbook: activeWorkbook,
           readOnly,
@@ -587,13 +591,13 @@ function renderEditorDialogs({
             commitWorkbookWithNewSheet(Ue, Xe);
           },
         });
-      if (activeDialogMode === "workbookFormats")
+      if (dialogState.activeDialogMode === "workbookFormats")
         return i.jsx(FormatConversionDialog, {
           workbook: activeWorkbook,
           readOnly: isEditingLocked,
-          initialFile: pendingImportFile,
+          initialFile: importExportState.pendingImportFile,
           onClose: () => {
-            (setPendingImportFile(undefined), fe.onClose());
+            (importExportState.setPendingImportFile(undefined), fe.onClose());
           },
           onWorkbookChange: (Ue) => {
             if (
@@ -608,16 +612,16 @@ function renderEditorDialogs({
           },
           onAutomation: async (Ue) => {
             const Xe = await importAutomationFile(Ue, operationScope);
-            (setAutomationInspection(Xe),
-              setPendingImportFile(undefined),
-              setActiveDialogMode("automation"));
+            (dialogState.setAutomationInspection(Xe),
+              importExportState.setPendingImportFile(undefined),
+              dialogState.setActiveDialogMode("automation"));
           },
         });
-      if (activeDialogMode === "reportOutputs")
+      if (dialogState.activeDialogMode === "reportOutputs")
         return i.jsx(ReportOutputsDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
-          range: activeSelectionRange,
+          range: selectionState.activeSelectionRange,
           filter: filterResult?.context.definition,
           readOnly,
           allowHidden: true,
@@ -628,11 +632,11 @@ function renderEditorDialogs({
             replaceWorkbookSnapshot(Ue, Xe);
           },
         });
-      if (activeDialogMode === "dataModel")
+      if (dialogState.activeDialogMode === "dataModel")
         return i.jsx(DataModelDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
-          range: activeSelectionRange,
+          range: selectionState.activeSelectionRange,
           readOnly,
           allowHidden: true,
           onClose: fe.onClose,
@@ -642,17 +646,17 @@ function renderEditorDialogs({
             commitWorkbookWithNewSheet(Ue, Xe);
           },
         });
-      if (activeDialogMode === "sort")
+      if (dialogState.activeDialogMode === "sort")
         return i.jsx(CustomSortDialog, {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
-          range: activeSelectionRange,
+          range: selectionState.activeSelectionRange,
           readOnly,
           onClose: fe.onClose,
           onWorkbookChange: (Ue, Xe) => {
             (replaceWorkbookSnapshot(Ue, Xe),
-              setActiveColumnSort(null),
-              setFilterValueSearch(""));
+              filterSortState.setActiveColumnSort(null),
+              filterSortState.setFilterValueSearch(""));
           },
         });
       if (
@@ -664,22 +668,22 @@ function renderEditorDialogs({
           "textCleanup",
           "fieldTransform",
           "duplicates",
-        ].includes(activeDialogMode)
+        ].includes(dialogState.activeDialogMode)
       ) {
         const Ue = {
           workbook: activeWorkbook,
           sheetId: activeSheet.id,
           range:
-            activeDialogMode === "duplicates" &&
-            !activeSelectionRange.includes(":")
+            dialogState.activeDialogMode === "duplicates" &&
+            !selectionState.activeSelectionRange.includes(":")
               ? formatOccupiedRangeAddress(activeSheet)
-              : activeSelectionRange,
+              : selectionState.activeSelectionRange,
           readOnly,
           allowHidden: true,
           onClose: fe.onClose,
           onWorkbookChange: commitWorkbookWithNewSheet,
         };
-        return activeDialogMode === "consolidation"
+        return dialogState.activeDialogMode === "consolidation"
           ? i.jsx(ConsolidationDialog, {
               ...Ue,
               initialDefinition:
@@ -690,76 +694,76 @@ function renderEditorDialogs({
               allowFileSources:
                 allowConsolidationFiles && !!setConsolidationWorkbooks,
             })
-          : activeDialogMode === "transformationRecipes"
+          : dialogState.activeDialogMode === "transformationRecipes"
             ? i.jsx(TransformationRecipesDialog, { ...Ue })
-            : activeDialogMode === "combinePopulations"
+            : dialogState.activeDialogMode === "combinePopulations"
               ? i.jsx(CombinePopulationsDialog, { ...Ue })
-              : activeDialogMode === "textToColumns"
+              : dialogState.activeDialogMode === "textToColumns"
                 ? i.jsx(TextToColumnsDialog, { ...Ue })
-                : activeDialogMode === "textCleanup"
+                : dialogState.activeDialogMode === "textCleanup"
                   ? i.jsx(TextCleanupDialog, { ...Ue })
-                  : activeDialogMode === "fieldTransform"
+                  : dialogState.activeDialogMode === "fieldTransform"
                     ? i.jsx(CleanAndReshapeDialog, { ...Ue })
                     : i.jsx(DuplicateReviewDialog, { ...Ue });
       }
-      return activeDialogMode === "patterns"
+      return dialogState.activeDialogMode === "patterns"
         ? i.jsx(PatternCheckDialog, {
             workbook: activeWorkbook,
             sheetId: activeSheet.id,
             range:
-              auditSourceRange ||
-              (activeSelectionRange.includes(":")
-                ? activeSelectionRange
+              auditState.auditSourceRange ||
+              (selectionState.activeSelectionRange.includes(":")
+                ? selectionState.activeSelectionRange
                 : formatOccupiedRangeAddress(activeSheet)),
             readOnly,
             allowHidden: true,
             onClose: fe.onClose,
           })
-        : activeDialogMode === "aging"
+        : dialogState.activeDialogMode === "aging"
           ? i.jsx(AgingScheduleScreen, {
               workbook: activeWorkbook,
               sheetId: activeSheet.id,
               range:
-                auditSourceRange ||
-                (activeSelectionRange.includes(":")
-                  ? activeSelectionRange
+                auditState.auditSourceRange ||
+                (selectionState.activeSelectionRange.includes(":")
+                  ? selectionState.activeSelectionRange
                   : formatOccupiedRangeAddress(activeSheet)),
               readOnly,
               allowHidden: true,
               onClose: fe.onClose,
             })
-          : activeDialogMode === "materiality"
+          : dialogState.activeDialogMode === "materiality"
             ? i.jsx(MaterialityRiskScreen, {
                 workbook: activeWorkbook,
                 sheetId: activeSheet.id,
                 range:
-                  auditSourceRange ||
-                  (activeSelectionRange.includes(":")
-                    ? activeSelectionRange
+                  auditState.auditSourceRange ||
+                  (selectionState.activeSelectionRange.includes(":")
+                    ? selectionState.activeSelectionRange
                     : formatOccupiedRangeAddress(activeSheet)),
                 readOnly,
                 allowHidden: true,
                 onClose: fe.onClose,
               })
-            : activeDialogMode === "workbookComparison"
+            : dialogState.activeDialogMode === "workbookComparison"
               ? i.jsx(WorkbookComparisonDialog, {
                   workbook: activeWorkbook,
                   sheetId: activeSheet.id,
-                  range: activeSelectionRange.includes(":")
-                    ? activeSelectionRange
+                  range: selectionState.activeSelectionRange.includes(":")
+                    ? selectionState.activeSelectionRange
                     : formatOccupiedRangeAddress(activeSheet),
                   readOnly,
                   allowHidden: true,
                   onClose: fe.onClose,
                 })
-              : activeDialogMode === "scenarios" ||
-                  activeDialogMode === "dataTable"
+              : dialogState.activeDialogMode === "scenarios" ||
+                  dialogState.activeDialogMode === "dataTable"
                 ? i.jsx(WhatIfAnalysisDialog, {
                     workbook: activeWorkbook,
                     sheetId: activeSheet.id,
-                    address: activeCellAddress,
+                    address: selectionState.activeCellAddress,
                     initialKind:
-                      activeDialogMode === "scenarios"
+                      dialogState.activeDialogMode === "scenarios"
                         ? "scenarios"
                         : "one-variable",
                     readOnly,
@@ -767,17 +771,17 @@ function renderEditorDialogs({
                     onClose: fe.onClose,
                     onWorkbookChange: commitWorkbookWithNewSheet,
                   })
-                : activeDialogMode === "goalSeek"
+                : dialogState.activeDialogMode === "goalSeek"
                   ? i.jsx(GoalSeekDialog, {
                       workbook: activeWorkbook,
                       sheetId: activeSheet.id,
-                      address: activeCellAddress,
+                      address: selectionState.activeCellAddress,
                       readOnly,
                       allowHidden: true,
                       onClose: fe.onClose,
                       onWorkbookChange: replaceWorkbookSnapshot,
                     })
-                  : activeDialogMode === "calculation"
+                  : dialogState.activeDialogMode === "calculation"
                     ? i.jsx(CalculationOptionsDialog, {
                         workbook: activeWorkbook,
                         readOnly,
@@ -788,11 +792,11 @@ function renderEditorDialogs({
                         onCancelCalculation: calculationRun.cancel,
                         onNavigate: navigateToSheetCell,
                       })
-                    : activeDialogMode === "formulaWatches"
+                    : dialogState.activeDialogMode === "formulaWatches"
                       ? i.jsx(FormulaWatchWindow, {
                           workbook: activeWorkbook,
                           sheetId: activeSheet.id,
-                          range: activeSelectionRange,
+                          range: selectionState.activeSelectionRange,
                           ranges: selectionAreas,
                           readOnly,
                           allowHidden: true,
@@ -800,23 +804,24 @@ function renderEditorDialogs({
                           onWorkbookChange: replaceWorkbookSnapshot,
                           onNavigate: navigateToSheetCell,
                         })
-                      : activeDialogMode === "evaluateFormula"
+                      : dialogState.activeDialogMode === "evaluateFormula"
                         ? i.jsx(EvaluateFormulaDialog, {
                             workbook: activeWorkbook,
                             sheetId: activeSheet.id,
-                            address: activeCellAddress,
+                            address: selectionState.activeCellAddress,
                             allowHidden: true,
                             onClose: fe.onClose,
                             onNavigate: navigateToSheetCell,
                           })
-                        : activeDialogMode === "tracePrecedents" ||
-                            activeDialogMode === "traceDependents"
+                        : dialogState.activeDialogMode === "tracePrecedents" ||
+                            dialogState.activeDialogMode === "traceDependents"
                           ? i.jsx(CalculationInspectorDialog, {
                               workbook: activeWorkbook,
                               sheetId: activeSheet.id,
-                              address: activeCellAddress,
+                              address: selectionState.activeCellAddress,
                               initialDirection:
-                                activeDialogMode === "tracePrecedents"
+                                dialogState.activeDialogMode ===
+                                "tracePrecedents"
                                   ? "precedents"
                                   : "dependents",
                               allowHidden: true,
@@ -826,7 +831,7 @@ function renderEditorDialogs({
                           : i.jsx(
                               DataToolDialogRouter,
                               { ...fe, onNavigate: navigateToSheetCell },
-                              activeDialogMode,
+                              dialogState.activeDialogMode,
                             );
     })()
   );

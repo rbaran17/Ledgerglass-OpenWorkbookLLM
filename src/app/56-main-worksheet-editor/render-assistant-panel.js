@@ -12,37 +12,23 @@ import {
 } from "../51-pattern-checks-and-citations.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { Check } from "lucide-react";
-import { validateProposedCalculation } from "../20-calculation-options-and-sources.js";
+import { validateProposedCalculation } from "../20-calculation-options-and-assistant.js";
 
 function renderAssistantPanel({
+  selectionState,
+  formulaEntryState,
+  dialogState,
+  filterSortState,
+  navigationState,
+  operationStatusState,
+  assistantState,
   adapter,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  setActiveCellAddress,
   selectionAreasKey,
-  activeCellEditRef,
-  sidePanelKind,
-  filterValueSearch,
-  setFilterValueSearch,
-  setFilterStateByScope,
   filterStateKey,
   activeFilterState,
-  activeColumnSort,
-  setActiveColumnSort,
-  setPendingScrollAddress,
-  setStatusNotice,
-  setErrorNotice,
-  assistantSession,
-  setAssistantSession,
-  assistantProposal,
-  setAssistantProposal,
-  answerCitations,
-  setAnswerCitations,
-  isAssistantBusy,
-  setIsAssistantBusy,
-  assistantAbortControllerRef,
-  assistantRequestIdRef,
   latestEditStateRef,
   selectedCellCount,
   assistantSelection,
@@ -53,7 +39,7 @@ function renderAssistantPanel({
   askAssistantQuestion,
 }) {
   return (
-    sidePanelKind === "assistant" &&
+    dialogState.sidePanelKind === "assistant" &&
     i.jsx(ne.Suspense, {
       fallback: i.jsx("p", {
         role: "status",
@@ -61,8 +47,8 @@ function renderAssistantPanel({
         children: "Loading chat…",
       }),
       children: i.jsx(LazyAssistantChat, {
-        session: assistantSession,
-        setSession: setAssistantSession,
+        session: assistantState.assistantSession,
+        setSession: assistantState.setAssistantSession,
         adapter,
         local: adapter === Vj || adapter.localOnly === true,
         scope: JSON.stringify([
@@ -74,33 +60,33 @@ function renderAssistantPanel({
         ]),
         selectionLabel: selectionReferenceLabel,
         selectedCount: selectedCellCount,
-        busy: isAssistantBusy,
-        proposalId: assistantProposal?.id,
+        busy: assistantState.isAssistantBusy,
+        proposalId: assistantState.assistantProposal?.id,
         onSend: askAssistantQuestion,
         onCancel: () => {
-          (assistantRequestIdRef.current++,
-            assistantAbortControllerRef.current?.abort(),
-            setIsAssistantBusy(false),
-            isAssistantBusy &&
-              setStatusNotice(
+          (assistantState.assistantRequestIdRef.current++,
+            assistantState.assistantAbortControllerRef.current?.abort(),
+            assistantState.setIsAssistantBusy(false),
+            assistantState.isAssistantBusy &&
+              operationStatusState.setStatusNotice(
                 "Assistant request cancelled. No workbook changes were made.",
               ));
         },
         onReset: () => {
-          (setAssistantProposal(null),
-            setAnswerCitations(null),
-            setErrorNotice(""));
+          (assistantState.setAssistantProposal(null),
+            assistantState.setAnswerCitations(null),
+            operationStatusState.setErrorNotice(""));
         },
         review:
-          assistantProposal && answerCitations
+          assistantState.assistantProposal && assistantState.answerCitations
             ? i.jsxs(i.Fragment, {
                 children: [
-                  assistantProposal &&
-                    answerCitations &&
+                  assistantState.assistantProposal &&
+                    assistantState.answerCitations &&
                     !evaluateAnswerEvidence(
                       activeWorkbook,
                       assistantSelection,
-                      answerCitations,
+                      assistantState.answerCitations,
                     ).current &&
                     i.jsx("p", {
                       role: "status",
@@ -109,19 +95,20 @@ function renderAssistantPanel({
                           "The answer evidence is stale or unavailable. Request a fresh answer before review.",
                       }),
                     }),
-                  assistantProposal &&
-                    answerCitations &&
+                  assistantState.assistantProposal &&
+                    assistantState.answerCitations &&
                     evaluateAnswerEvidence(
                       activeWorkbook,
                       assistantSelection,
-                      answerCitations,
+                      assistantState.answerCitations,
                     ).current &&
                     i.jsxs("div", {
                       className: "lg-proposal",
                       children: [
                         i.jsx("span", {
                           className: "lg-eyebrow",
-                          children: assistantProposal.patches.length
+                          children: assistantState.assistantProposal.patches
+                            .length
                             ? "REVIEW PROPOSED CHANGES"
                             : "RESPONSE",
                         }),
@@ -130,14 +117,14 @@ function renderAssistantPanel({
                           {
                             workbook: activeWorkbook,
                             selection: assistantSelection,
-                            evidence: answerCitations,
+                            evidence: assistantState.answerCitations,
                             renderText: (fe) =>
                               i.jsx(LazyAssistantChatMarkdown, {
                                 children: fe,
                               }),
                             onNavigate: (fe, Oe) => {
                               const Be = latestEditStateRef.current;
-                              if (activeCellEditRef.current)
+                              if (formulaEntryState.activeCellEditRef.current)
                                 throw Error(
                                   "Finish the current cell edit and request fresh evidence before following a citation.",
                                 );
@@ -149,32 +136,32 @@ function renderAssistantPanel({
                                     sheetId: Be.sheetId,
                                     range: Be.range,
                                   },
-                                  answerCitations,
+                                  assistantState.answerCitations,
                                 ).current
                               )
                                 throw Error(
                                   "The current approved source changed. Request a fresh answer.",
                                 );
-                              ((filterValueSearch ||
-                                activeColumnSort ||
+                              ((filterSortState.filterValueSearch ||
+                                filterSortState.activeColumnSort ||
                                 activeFilterState) &&
-                                (setFilterStateByScope((Ue) => {
+                                (filterSortState.setFilterStateByScope((Ue) => {
                                   const Xe = { ...Ue };
                                   return (delete Xe[filterStateKey], Xe);
                                 }),
-                                setFilterValueSearch(""),
-                                setActiveColumnSort(null),
-                                setStatusNotice(
+                                filterSortState.setFilterValueSearch(""),
+                                filterSortState.setActiveColumnSort(null),
+                                operationStatusState.setStatusNotice(
                                   "The row view was cleared to reveal the cited cell. The approved shared range is unchanged.",
                                 )),
-                                setActiveCellAddress(Oe),
-                                setPendingScrollAddress(Oe),
+                                selectionState.setActiveCellAddress(Oe),
+                                navigationState.setPendingScrollAddress(Oe),
                                 focusGridSurface());
                             },
                           },
-                          assistantProposal.id,
+                          assistantState.assistantProposal.id,
                         ),
-                        assistantProposal.patches.map((fe) =>
+                        assistantState.assistantProposal.patches.map((fe) =>
                           i.jsxs(
                             "div",
                             {
@@ -265,7 +252,7 @@ function renderAssistantPanel({
                             fe.address,
                           ),
                         ),
-                        assistantProposal.patches.length > 0 &&
+                        assistantState.assistantProposal.patches.length > 0 &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("button", {
@@ -280,11 +267,12 @@ function renderAssistantPanel({
                                       };
                                     if (
                                       fe.readOnly ||
-                                      activeCellEditRef.current ||
+                                      formulaEntryState.activeCellEditRef
+                                        .current ||
                                       !evaluateAnswerEvidence(
                                         fe.book,
                                         Oe,
-                                        answerCitations,
+                                        assistantState.answerCitations,
                                       ).current
                                     )
                                       throw Error(
@@ -293,14 +281,14 @@ function renderAssistantPanel({
                                     const Be = validateProposedCalculation(
                                       fe.book,
                                       Oe,
-                                      assistantProposal,
+                                      assistantState.assistantProposal,
                                     );
                                     (applyCellPatches(
                                       Be.patches,
                                       `Accepted assistant proposal ${Be.id}`,
                                       fe.selectionKey,
                                     ),
-                                      setStatusNotice(
+                                      operationStatusState.setStatusNotice(
                                         "Reviewed proposal applied and recorded in activity.",
                                       ));
                                   }),
@@ -311,7 +299,8 @@ function renderAssistantPanel({
                                   i.jsx(LocalizedText, {
                                     children: "Apply ",
                                   }),
-                                  assistantProposal.patches.length,
+                                  assistantState.assistantProposal.patches
+                                    .length,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children: "changes",
@@ -321,8 +310,8 @@ function renderAssistantPanel({
                               i.jsx("button", {
                                 className: "lg-button full",
                                 onClick: () => {
-                                  (setAssistantProposal(null),
-                                    setAnswerCitations(null));
+                                  (assistantState.setAssistantProposal(null),
+                                    assistantState.setAnswerCitations(null));
                                 },
                                 children: i.jsx(LocalizedText, {
                                   children: "Discard proposal",

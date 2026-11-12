@@ -7,24 +7,15 @@ import {
 } from "../53-find-replace-go-to.js";
 
 function renderFormulaBar({
+  formulaEntryState,
+  navigationState,
+  selectionState,
   text,
   language,
   editorIdPrefix,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  formulaInputRef,
-  formulaSuggestionListRef,
-  formulaCaretPosition,
-  setFormulaCaretPosition,
-  isFormulaBarFocused,
-  setIsFormulaBarFocused,
-  goToReferenceText,
-  setGoToReferenceText,
-  cellEditText,
-  activeCellEditRef,
-  formulaPointerStateRef,
-  gridContainerRef,
   syncFormulaEditorSelection,
   isFormulaEditingLocked,
   handleFormulaKeyDown,
@@ -41,12 +32,13 @@ function renderFormulaBar({
       i.jsx("input", {
         className: "lg-name-box",
         "aria-label": text("Selected range"),
-        value: goToReferenceText,
-        onChange: (fe) => setGoToReferenceText(fe.target.value),
+        value: navigationState.goToReferenceText,
+        onChange: (fe) => navigationState.setGoToReferenceText(fe.target.value),
         onBlur: commitNameBoxReference,
         onKeyDown: (fe) => {
           fe.key === "Enter" &&
-            (commitNameBoxReference(), gridContainerRef.current?.focus());
+            (commitNameBoxReference(),
+            selectionState.gridContainerRef.current?.focus());
         },
         lang: language("Selected range"),
         "data-ui-label": "Selected range",
@@ -78,52 +70,58 @@ function renderFormulaBar({
         children: i.jsx(LocalizedText, { children: "ƒx" }),
       }),
       i.jsx("input", {
-        ref: formulaInputRef,
+        ref: formulaEntryState.formulaInputRef,
         "aria-label": text("Formula bar"),
         readOnly: isFormulaEditingLocked(),
-        value: cellEditText,
-        "aria-describedby": activeCellEditRef.current?.value.startsWith("=")
-          ? `${editorIdPrefix}-formula-help`
-          : undefined,
+        value: formulaEntryState.cellEditText,
+        "aria-describedby":
+          formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
+            ? `${editorIdPrefix}-formula-help`
+            : undefined,
         onFocus: (fe) => {
-          (!activeCellEditRef.current &&
-            cellEditText.startsWith("=") &&
+          (!formulaEntryState.activeCellEditRef.current &&
+            formulaEntryState.cellEditText.startsWith("=") &&
             !isEditingLocked &&
-            beginCellEdit(cellEditText),
-            setIsFormulaBarFocused(true),
+            beginCellEdit(formulaEntryState.cellEditText),
+            formulaEntryState.setIsFormulaBarFocused(true),
             syncFormulaEditorSelection(fe.currentTarget));
         },
         onSelect: (fe) => {
           (syncFormulaEditorSelection(fe.currentTarget),
-            setFormulaCaretPosition(
-              fe.currentTarget.selectionStart ?? cellEditText.length,
+            formulaEntryState.setFormulaCaretPosition(
+              fe.currentTarget.selectionStart ??
+                formulaEntryState.cellEditText.length,
             ));
         },
         onChange: (fe) => {
           (beginCellEdit(fe.target.value),
             syncFormulaEditorSelection(fe.currentTarget, true),
-            setFormulaCaretPosition(
+            formulaEntryState.setFormulaCaretPosition(
               fe.target.selectionStart ?? fe.target.value.length,
             ));
         },
         onBlur: (fe) => {
           isWithinFormulaSuggestions(fe.currentTarget, fe.relatedTarget) ||
-            (setIsFormulaBarFocused(false), commitCellEdit());
+            (formulaEntryState.setIsFormulaBarFocused(false), commitCellEdit());
         },
         onKeyDown: (fe) => {
           if (!fe.nativeEvent.isComposing) {
             if (fe.key === "Escape") {
               if (
-                !formulaPointerStateRef.current.span &&
-                cellEditText.length > 1 &&
-                formulaSuggestionListRef.current?.handleKeyDown(fe)
+                !formulaEntryState.formulaPointerStateRef.current.span &&
+                formulaEntryState.cellEditText.length > 1 &&
+                formulaEntryState.formulaSuggestionListRef.current?.handleKeyDown(
+                  fe,
+                )
               )
                 return;
               (fe.preventDefault(), cancelCellEdit());
               return;
             }
             handleFormulaKeyDown(fe) ||
-              formulaSuggestionListRef.current?.handleKeyDown(fe) ||
+              formulaEntryState.formulaSuggestionListRef.current?.handleKeyDown(
+                fe,
+              ) ||
               ((fe.key === "Enter" || fe.key === "Tab") &&
                 (fe.preventDefault(),
                 commitCellEdit() &&
@@ -134,22 +132,26 @@ function renderFormulaBar({
         "data-ui-label": "Formula bar",
       }),
       i.jsx(FormulaSuggestionList, {
-        ref: formulaSuggestionListRef,
+        ref: formulaEntryState.formulaSuggestionListRef,
         onExit: () => {
-          (setIsFormulaBarFocused(false), commitCellEdit());
+          (formulaEntryState.setIsFormulaBarFocused(false), commitCellEdit());
         },
-        value: cellEditText,
-        caret: formulaCaretPosition,
+        value: formulaEntryState.cellEditText,
+        caret: formulaEntryState.formulaCaretPosition,
         workbook: activeWorkbook,
         sheetId: activeSheet.id,
-        inputRef: formulaInputRef,
-        disabled: isFormulaEditingLocked() || !isFormulaBarFocused,
+        inputRef: formulaEntryState.formulaInputRef,
+        disabled:
+          isFormulaEditingLocked() || !formulaEntryState.isFormulaBarFocused,
         onAccept: (fe, Oe) => {
           (beginCellEdit(fe),
-            setFormulaCaretPosition(Oe),
+            formulaEntryState.setFormulaCaretPosition(Oe),
             requestAnimationFrame(() => {
-              (formulaInputRef.current?.focus(),
-                formulaInputRef.current?.setSelectionRange(Oe, Oe));
+              (formulaEntryState.formulaInputRef.current?.focus(),
+                formulaEntryState.formulaInputRef.current?.setSelectionRange(
+                  Oe,
+                  Oe,
+                ));
             }));
         },
       }),

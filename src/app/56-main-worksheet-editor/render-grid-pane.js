@@ -1,29 +1,25 @@
 import { Pv, _t, columnIndexToLetters } from "../03-workbook-model.js";
 import i from "react/jsx-runtime";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
-import { DrawingObjectOverlay } from "../32-drawing-and-chart-export.js";
+import { DrawingObjectOverlay } from "../32-drawing-objects-and-printing.js";
 import { Tp } from "../53-find-replace-go-to.js";
 
 function createGridPaneRenderer({
+  selectionState,
+  filterSortState,
+  operationStatusState,
+  viewDisplayState,
+  dragFillState,
   text,
   language,
   editorIdPrefix,
   activeWorkbook,
   activeSheet,
   isEditingLocked,
-  setContextMenuState,
-  activeCellAddress,
   selectionAreas,
   selectionAreaRanges,
-  filterValueSearch,
-  activeColumnSort,
   sheetSplitPanes,
   splitPaneSizes,
-  setStatusNotice,
-  isOperationBusy,
-  isGridlinesVisible,
-  isHeadingsVisible,
-  dragAnchorRef,
   workbookCalculator,
   rowVisibilityIndex,
   columnVisibilityIndex,
@@ -31,7 +27,6 @@ function createGridPaneRenderer({
   frozenColumnCount,
   zoomScale,
   rowHeaderWidth,
-  gridContainerRef,
   mergeRanges,
   rowAxisLayout,
   columnAxisLayout,
@@ -61,14 +56,14 @@ function createGridPaneRenderer({
   activateGridPane,
 }) {
   function renderGridPane(fe) {
-    const Oe = _t(activeCellAddress),
+    const Oe = _t(selectionState.activeCellAddress),
       Be =
-        filterValueSearch || activeColumnSort
+        filterSortState.filterValueSearch || filterSortState.activeColumnSort
           ? undefined
           : mergeRanges.find((Sr) => Tp(Sr, Oe.row, Oe.col)),
       Ue = Be
         ? `${columnIndexToLetters(Be.firstCol)}${Be.firstRow + 1}`
-        : activeCellAddress,
+        : selectionState.activeCellAddress,
       Xe = splitPaneSizes.views[fe],
       gt = computeGridViewport(Xe),
       {
@@ -95,7 +90,7 @@ function createGridPaneRenderer({
           ref: (Sr) => {
             (splitPaneSizes.bindings[fe](Sr),
               splitPaneSizes.active.current === fe &&
-                (gridContainerRef.current = Sr));
+                (selectionState.gridContainerRef.current = Sr));
           },
           tabIndex: 0,
           role: "grid",
@@ -106,10 +101,10 @@ function createGridPaneRenderer({
           "aria-describedby": `${editorIdPrefix}-grid-help`,
           "aria-activedescendant":
             [...frozenRowIndexes, ...shownRows].includes(
-              _t(activeCellAddress).row,
+              _t(selectionState.activeCellAddress).row,
             ) &&
             [...frozenColumnIndexes, ...shownColumns].includes(
-              _t(activeCellAddress).col,
+              _t(selectionState.activeCellAddress).col,
             )
               ? `${editorIdPrefix}-${fe}-${Ue}`
               : undefined,
@@ -172,7 +167,7 @@ function createGridPaneRenderer({
                 selectionAreaRanges.some((yo) => Tp(yo, qo.row, qo.col)) ||
                   selectCellAddress(Di.dataset.address);
               }
-              setContextMenuState({
+              selectionState.setContextMenuState({
                 x: Sr.clientX,
                 y: Sr.clientY,
                 kind: $o ? "column" : Ds ? "row" : "cell",
@@ -190,12 +185,12 @@ function createGridPaneRenderer({
           onCut: (Sr) => {
             Sr.target !== Sr.currentTarget ||
               isEditingLocked ||
-              isOperationBusy ||
+              operationStatusState.isOperationBusy ||
               Sr.defaultPrevented ||
               (Sr.preventDefault(),
               runGuardedAction(() => {
                 (Sr.clipboardData.setData("text/plain", selectionToTsv(true)),
-                  setStatusNotice(
+                  operationStatusState.setStatusNotice(
                     "Cut is ready. Select a destination and paste to preview the move.",
                   ));
               }));
@@ -203,19 +198,19 @@ function createGridPaneRenderer({
           onPaste: (Sr) => {
             Sr.target !== Sr.currentTarget ||
               isEditingLocked ||
-              isOperationBusy ||
+              operationStatusState.isOperationBusy ||
               Sr.defaultPrevented ||
               (Sr.preventDefault(),
               pasteClipboardText(Sr.clipboardData.getData("text/plain")));
           },
           onPointerUp: () => {
-            dragAnchorRef.current = null;
+            dragFillState.dragAnchorRef.current = null;
           },
           onPointerLeave: (Sr) => {
-            Sr.buttons === 0 && (dragAnchorRef.current = null);
+            Sr.buttons === 0 && (dragFillState.dragAnchorRef.current = null);
           },
           children: i.jsxs("table", {
-            className: `lg-grid ${isGridlinesVisible ? "" : "no-gridlines"} ${isHeadingsVisible ? "" : "no-headings"}`,
+            className: `lg-grid ${viewDisplayState.isGridlinesVisible ? "" : "no-gridlines"} ${viewDisplayState.isHeadingsVisible ? "" : "no-headings"}`,
             style: {
               zoom: zoomScale,
               width: columnWindow.total + frozenColumnsWidth + rowHeaderWidth,
@@ -225,7 +220,7 @@ function createGridPaneRenderer({
             children: [
               i.jsxs("colgroup", {
                 children: [
-                  isHeadingsVisible &&
+                  viewDisplayState.isHeadingsVisible &&
                     i.jsx("col", { style: { width: rowHeaderWidth } }),
                   frozenColumnIndexes.map((Sr) =>
                     i.jsx(
@@ -262,7 +257,7 @@ function createGridPaneRenderer({
                   role: "row",
                   "aria-rowindex": 1,
                   children: [
-                    isHeadingsVisible &&
+                    viewDisplayState.isHeadingsVisible &&
                       i.jsx("th", {
                         role: "columnheader",
                         className: "lg-corner",
@@ -345,7 +340,7 @@ function createGridPaneRenderer({
                       columnWindow.logicalOffset)) *
                 zoomScale,
               yo =
-                ((isHeadingsVisible ? 22 : 0) +
+                ((viewDisplayState.isHeadingsVisible ? 22 : 0) +
                   ($o
                     ? rowAxisLayout.offset(rowVisibilityIndex.viewIndex(Wi.row))
                     : frozenRowsHeight +

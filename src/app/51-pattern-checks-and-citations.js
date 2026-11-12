@@ -1,4 +1,4 @@
-import { parseNumericText } from "./37-linear-solver-engine.js";
+import { parseNumericText } from "./37-statistics-and-linear-solver.js";
 import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
 
 import { X } from "lucide-react";
@@ -7,7 +7,7 @@ import ne from "react";
 import {
   buildCalculationClock,
   sha256HexDigest,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   findRowOrigin,
   _t,
@@ -23,14 +23,14 @@ import {
 import {
   importNativeJsonFile,
   toFileProcessingError,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   validateCitationRange,
   validateProposedCalculation,
   answerGroundingLimits,
   buildAssistantSelectionContext,
-} from "./20-calculation-options-and-sources.js";
+} from "./20-calculation-options-and-assistant.js";
 import {
   formatScreenCountsSummary,
   exportScreenReportJson,
@@ -43,7 +43,7 @@ import {
   normalizePatternCheckSettings,
   screenRuleLabels,
   parseScreenReportRequest,
-} from "./50-materiality-screen.js";
+} from "./50-materiality-screen-and-pattern-checks.js";
 
 function PatternCheckDialog(e) {
   const { text, language } = useWorkbookMessages(),

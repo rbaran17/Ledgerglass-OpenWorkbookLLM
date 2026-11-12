@@ -1,4 +1,4 @@
-import { flattenNestedValues } from "../02-financial-functions.js";
+import { flattenNestedValues } from "../02-text-and-financial-functions.js";
 import { isPlainObjectValue } from "./01-cell-styles-and-themes.js";
 import { isNullOrEmptyValue } from "./03-defined-names.js";
 import {
@@ -13,7 +13,7 @@ import {
   normalizeDatePolicy,
   dateSystemMaxSerial,
   fingerprintCanonicalValue,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 import {
   fileImportLimits,
   evaluateFinancialFunction,
@@ -21,7 +21,7 @@ import {
   evaluateTextFunction,
   notTextFunctionSentinel,
   broadcastOverArrays,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import {
   string,
   number,
@@ -58,7 +58,7 @@ import {
   notOwnedLogicalSentinel,
   formatCellValueWithNumberFormat,
   matrixResultFunctionNames,
-} from "./02-number-formats.js";
+} from "./02-formula-function-evaluators.js";
 import {
   definedNameScopeKey,
   evaluateDefinedNameFunction,

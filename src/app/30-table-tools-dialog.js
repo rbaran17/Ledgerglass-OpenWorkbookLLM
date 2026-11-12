@@ -28,7 +28,7 @@ import {
   toggleListValue,
   tryComputePivotRows,
   TableColumnTypesPanel,
-} from "./29-conditional-formatting-dialog.js";
+} from "./29-worksheet-tools-and-pivot-panels.js";
 
 function TableToolsDialog({
   mode,

@@ -3,11 +3,11 @@ import { isFiniteNumber } from "./04-pivot-tables-and-pictures.js";
 import {
   workbookLimits,
   maxSelectionAreas,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import {
   hasLinkedOrBoundCells,
   isoDateTimeSchemaFactory,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 import {
   string,
   number,
@@ -62,7 +62,7 @@ import {
   sumDecimalPartsToNumber,
   exactAverageOfNumbers,
   exactProductOfNumbers,
-} from "./02-number-formats.js";
+} from "./02-formula-function-evaluators.js";
 import {
   throwXlsxDefinedNameError,
   spreadsheetMlNamespace,

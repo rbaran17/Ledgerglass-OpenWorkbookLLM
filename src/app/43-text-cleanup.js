@@ -6,14 +6,14 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { describeInferredTextRule } from "./16-text-split-tools.js";
+import { describeInferredTextRule } from "./16-transformation-recipe-engine.js";
 import {
   createTextFunctionField,
   previewTextCleanup,
   getTextFunctionSpec,
   createTextCleanupOutput,
   stringifyEscapedJson,
-} from "./42-combine-populations.js";
+} from "./42-combine-populations-and-text-columns.js";
 
 function TextCleanupDialog(e) {
   const { text, language } = useWorkbookMessages(),

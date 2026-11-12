@@ -2,12 +2,12 @@ import { failWithMessage } from "./03-workbook-model.js";
 import {
   buildCompositeKey,
   isFormulaInputValue,
-} from "./11-workbook-formats-dialog.js";
+} from "./11-local-workbook-store-and-versions.js";
 import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { workbookLimits } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   normalizeHiddenIntervals,
@@ -42,7 +42,7 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import { inspectFormulaDependencies } from "./12-consolidation-and-dependency-inspection.js";
 
 function DataValidationDialog({
   workbook,

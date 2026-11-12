@@ -1,6 +1,6 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
 import {
   assertWorkbookStructureEditable,
   daxFunctionNames,
@@ -26,7 +26,7 @@ import {
 import {
   readSourceHeaders,
   inspectOutputNameSafety,
-} from "./12-formula-dependency-inspector.js";
+} from "./12-consolidation-and-dependency-inspection.js";
 import {
   requireNumericOperand,
   requireLogicalOperand,

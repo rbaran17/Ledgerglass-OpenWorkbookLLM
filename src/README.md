@@ -3,14 +3,14 @@
 The original TypeScript project was lost. This directory was recovered from the
 compiled application in `dist/` and is now the source the build uses.
 
-| Path | Contents |
-| --- | --- |
-| `main.js` | The entry: loads the application modules in order and re-exports what the assistant panel needs |
-| `app/` | The application, split into 57 ordered modules; see [`app/README.md`](app/README.md) for what each one holds |
-| `assistant/AssistantChat.js` | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported |
-| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source |
-| `workers/` | File-parser and calculation worker sources, bundled at build time and started as Blob workers |
-| `styles/` | Workbook and assistant stylesheets |
+| Path                                 | Contents                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `main.js`                            | The entry: loads the application modules in order and re-exports what the assistant panel needs              |
+| `app/`                               | The application, split into 57 ordered modules; see [`app/README.md`](app/README.md) for what each one holds |
+| `assistant/AssistantChat.js`         | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported                |
+| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source                                    |
+| `workers/`                           | File-parser and calculation worker sources, bundled at build time and started as Blob workers                |
+| `styles/`                            | Workbook and assistant stylesheets                                                                           |
 
 ## What to expect
 
@@ -20,15 +20,19 @@ compiled application in `dist/` and is now the source the build uses.
   code appears to do and some will be imprecise. Local variables are mostly
   still single letters, except where a destructuring pattern preserved the
   real name.
-- The application lives in `app/` as 59 modules, each depending only on
+- The application lives in `app/` as 60 modules, each depending only on
   lower-numbered ones; the core model is split further into twelve files
   under `app/03-workbook-model/`. The main editor component,
   `app/56-main-worksheet-editor.js` (about 3,000 lines of state, effects and
   wiring), delegates to twenty modules under `app/56-main-worksheet-editor/`:
-  `render-*.js` build parts of the interface and `*-actions.js` hold the
-  editor's commands. Each takes what it reads from the component as one
-  explicit object, so their long parameter lists show how entangled the
-  editor's state still is. Module
+  `render-*.js` build parts of the interface, `*-actions.js` hold the
+  editor's commands and `editor-state.js` groups 85 of the editor's state
+  declarations into 14 hooks by subject (persistence, selection, formula
+  entry, find and replace, and so on). Each render and action module takes
+  what it reads from the component as one explicit object, in which a group
+  of related state arrives as a single slice such as `findReplaceState`.
+  Only two state values are used by just one module, so the state is
+  genuinely shared; the remaining long parameter lists show that. Module
   boundaries follow dependency order, not the original project's files.
 - In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, saxes, the formula parser,
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
@@ -39,15 +43,17 @@ compiled application in `dist/` and is now the source the build uses.
   still be present.
 - The workers (`workers/*.worker.js`) are bundled by
   `scripts/worker-source-plugin.mjs`. They import the core model from
-  `app/01-…`, `app/02-…`, `app/03-workbook-model/` and `app/06-…` instead of
-  carrying their own copies: the calculation worker is now about 100 lines
-  (its message handler) and the file parser about 5,900 (the XLSX, CSV and
-  XML reading that only runs there). Those core modules must stay free of
-  React, DOM access and worker-source imports so the workers can load them;
-  `app/01b-…` and `app/06b-…` exist to keep such things out of them. About
-  1,700 lines in the file parser still duplicate `app/07-…` and `app/08-…`,
-  which cannot be imported yet because they reach interface modules. The
-  MCP SDK is not part of the browser application.
+  `app/01-…`, `app/02-…`, `app/03-workbook-model/`, `app/06-…` and
+  `app/06c-package-and-worksheet-parsing.js` instead of carrying their own copies: the
+  calculation worker is about 100 lines (its message handler) and the file
+  parser about 3,900 (parsing that only runs there, still with minified
+  names). Those modules must stay free of React, DOM access and
+  worker-source imports so the workers can load them; `app/01b-…` and
+  `app/06b-…` exist to keep such things out of them, and `app/06c-…` holds
+  the file-format code that modules 04, 05, 07 and 08 share with the worker.
+  About 800 lines in the file parser still closely resemble application
+  code but differ in what they call, so they are not shared. The MCP SDK is
+  not part of the browser application.
 
 ## Safety net
 
@@ -66,12 +72,12 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-1. Reduce the coupling in `app/56-main-worksheet-editor/`: turn the render
-   functions into components and the action factories into hooks that own
-   their state, so each takes a handful of inputs instead of dozens.
-2. Finish sharing code with the file-parser worker: separate the XLSX reading
-   and writing in `app/07-…` and `app/08-…` from the interface code they
-   import, then drop the worker's remaining copies.
+1. Reduce the coupling in `app/56-main-worksheet-editor/` further: move the
+   derived values and effects that belong to one state slice into its hook,
+   then turn the render functions into components that take slices.
+2. Name the file-parser worker's own parsing code and reconcile the last
+   near-duplicates (`importXlsxWorkbook`, `normalizeWorkbookModel`) with
+   their application twins.
 3. Review the assigned names, name the remaining locals, and add types.
 4. Keep growing the unit tests and browser checks; XLSX export, printing
    and the data tools have the least coverage.

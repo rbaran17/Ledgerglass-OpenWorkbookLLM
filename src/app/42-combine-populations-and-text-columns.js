@@ -2,7 +2,10 @@ import { formatCellValueForDisplay } from "./17-recipe-step-editors.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { fileImportLimits, workbookLimits } from "./02-financial-functions.js";
+import {
+  fileImportLimits,
+  workbookLimits,
+} from "./02-text-and-financial-functions.js";
 import {
   normalizeTextCleanups,
   createWorksheetRecord,
@@ -21,7 +24,7 @@ import {
 import {
   buildConsolidationOutput,
   assertConsolidationPreviewCurrent,
-} from "./12-formula-dependency-inspector.js";
+} from "./12-consolidation-and-dependency-inspection.js";
 import {
   assertSelectionInAuthorizedSheet,
   validateTextToColumnsPermissions,
@@ -31,7 +34,7 @@ import {
   discoverArrayFormulaAnchors,
   applyTextSplitPreview,
   buildTextSplitResult,
-} from "./16-text-split-tools.js";
+} from "./16-transformation-recipe-engine.js";
 import { w2 } from "./41-automation-and-scripts.js";
 
 function CombinePopulationsDialog(e) {

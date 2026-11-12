@@ -1,13 +1,13 @@
 import "./03-workbook-model/01-cell-styles-and-themes.js";
-import "./03-workbook-model/02-number-formats.js";
+import "./03-workbook-model/02-formula-function-evaluators.js";
 import "./03-workbook-model/03-defined-names.js";
 import "./03-workbook-model/04-pivot-tables-and-pictures.js";
-import "./03-workbook-model/05-consolidation-and-sources.js";
+import "./03-workbook-model/05-formula-engine-and-name-operations.js";
 import "./03-workbook-model/06-data-model-and-analysis.js";
-import "./03-workbook-model/07-conditional-formatting.js";
-import "./03-workbook-model/08-chart-model.js";
+import "./03-workbook-model/07-conditional-rules-worksheet-features.js";
+import "./03-workbook-model/08-table-pivot-query-definitions.js";
 import "./03-workbook-model/09-calculation-engine.js";
-import "./03-workbook-model/10-print-layout.js";
+import "./03-workbook-model/10-table-filters-and-pivot-views.js";
 import "./03-workbook-model/11-table-model.js";
 import "./03-workbook-model/12-cell-patch-transactions.js";
 export {
@@ -75,7 +75,7 @@ export {
   validateNumberFormatSettings,
   formatCellValueWithNumberFormat,
   matrixResultFunctionNames,
-} from "./03-workbook-model/02-number-formats.js";
+} from "./03-workbook-model/02-formula-function-evaluators.js";
 export {
   assertWorkbookStructureEditable,
   describeSheetDeletionImpacts,
@@ -133,7 +133,7 @@ export {
   parseConsolidationDefinition,
   assertNamePreviewCurrent,
   computeSourceControlTotals,
-} from "./03-workbook-model/05-consolidation-and-sources.js";
+} from "./03-workbook-model/05-formula-engine-and-name-operations.js";
 export {
   validateRetainedSourceFile,
   verifyPrintSnapshotGuard,
@@ -223,7 +223,7 @@ export {
   applyAxisStructureEdit,
   countSelectionCells,
   yQ,
-} from "./03-workbook-model/07-conditional-formatting.js";
+} from "./03-workbook-model/07-conditional-rules-worksheet-features.js";
 export {
   rewriteFormulaReferences,
   setSheetDrawingObjects,
@@ -234,7 +234,7 @@ export {
   buildTableCellEntries,
   validateDrawingObjects,
   rewriteStructuredReferences,
-} from "./03-workbook-model/08-chart-model.js";
+} from "./03-workbook-model/08-table-pivot-query-definitions.js";
 export {
   validateObjectReportRequest,
   evaluateWorkbookFormulas,
@@ -285,7 +285,7 @@ export {
   buildPivotChartModel,
   applyNamedStyleChange,
   zU,
-} from "./03-workbook-model/10-print-layout.js";
+} from "./03-workbook-model/10-table-filters-and-pivot-views.js";
 export {
   assertConditionalFormatPreviewCurrent,
   addWorksheet,
@@ -345,4 +345,4 @@ export {
   isFiniteNumber,
   isFormulaCellValue,
 } from "./03-workbook-model/04-pivot-tables-and-pictures.js";
-export { rangesIntersect } from "./03-workbook-model/08-chart-model.js";
+export { rangesIntersect } from "./03-workbook-model/08-table-pivot-query-definitions.js";
