@@ -17,10 +17,10 @@ compiled application in `dist/` and is now the source the build uses.
 - The code is formatted but not original: identifiers are the minifier's, and
   there are no types or comments.
 - The application lives in `app/` as 57 modules, each depending only on
-  lower-numbered ones. `app/03-workbook-model.js` is about 20,000 lines
-  because the core model inside it is mutually recursive and cannot be cut
-  without restructuring. Module boundaries follow dependency order, not the
-  original project's files.
+  lower-numbered ones; the core model is split further into twelve files
+  under `app/03-workbook-model/`. `app/56-main-worksheet-editor.js` is about
+  7,000 lines because it is essentially one very large component. Module
+  boundaries follow dependency order, not the original project's files.
 - In `main.js`, React, ReactDOM, ExcelJS, Papa Parse, zod, saxes, the formula parser,
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
   `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse,
@@ -46,8 +46,8 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-1. Break up `app/03-workbook-model.js` and `app/56-main-worksheet-editor.js`,
-   the two largest modules.
+1. Break up `app/56-main-worksheet-editor.js`, a single 6,400-line component
+   that needs real refactoring rather than moving code.
 2. Share the core model between the application and the workers instead of
    keeping three copies.
 3. Give exported and frequently used identifiers meaningful names; add types.
