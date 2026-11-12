@@ -1,61 +1,61 @@
 import "./styles/workbook.css";
-import "./app/part-01.js";
-import "./app/part-02.js";
-import "./app/part-03.js";
-import "./app/part-04.js";
-import "./app/part-05.js";
-import "./app/part-06.js";
-import "./app/part-07.js";
-import "./app/part-08.js";
-import "./app/part-09.js";
-import "./app/part-10.js";
-import "./app/part-11.js";
-import "./app/part-12.js";
-import "./app/part-13.js";
-import "./app/part-14.js";
-import "./app/part-15.js";
-import "./app/part-16.js";
-import "./app/part-17.js";
-import "./app/part-18.js";
-import "./app/part-19.js";
-import "./app/part-20.js";
-import "./app/part-21.js";
-import "./app/part-22.js";
-import "./app/part-23.js";
-import "./app/part-24.js";
-import "./app/part-25.js";
-import "./app/part-26.js";
-import "./app/part-27.js";
-import "./app/part-28.js";
-import "./app/part-29.js";
-import "./app/part-30.js";
-import "./app/part-31.js";
-import "./app/part-32.js";
-import "./app/part-33.js";
-import "./app/part-34.js";
-import "./app/part-35.js";
-import "./app/part-36.js";
-import "./app/part-37.js";
-import "./app/part-38.js";
-import "./app/part-39.js";
-import "./app/part-40.js";
-import "./app/part-41.js";
-import "./app/part-42.js";
-import "./app/part-43.js";
-import "./app/part-44.js";
-import "./app/part-45.js";
-import "./app/part-46.js";
-import "./app/part-47.js";
-import "./app/part-48.js";
-import "./app/part-49.js";
-import "./app/part-50.js";
-import "./app/part-51.js";
-import "./app/part-52.js";
-import "./app/part-53.js";
-import "./app/part-54.js";
-import "./app/part-55.js";
-import "./app/part-56.js";
-import "./app/part-57.js";
+import "./app/01-core-schemas-and-hashing.js";
+import "./app/02-financial-functions.js";
+import "./app/03-workbook-model.js";
+import "./app/04-cell-input-paste-and-fill.js";
+import "./app/05-add-ins-and-custom-functions.js";
+import "./app/06-analysis-tools.js";
+import "./app/07-xlsx-archive-reader.js";
+import "./app/08-xlsx-export-and-preservation.js";
+import "./app/09-workbook-links.js";
+import "./app/10-source-import-dialog.js";
+import "./app/11-workbook-formats-dialog.js";
+import "./app/12-formula-dependency-inspector.js";
+import "./app/13-consolidation-dialog.js";
+import "./app/14-dax-data-model-engine.js";
+import "./app/15-data-model-dialog.js";
+import "./app/16-text-split-tools.js";
+import "./app/17-recipe-step-editors.js";
+import "./app/18-transformation-recipes-dialog.js";
+import "./app/19-filter-views-dialog.js";
+import "./app/20-calculation-options-and-sources.js";
+import "./app/21-aging-and-materiality-screens.js";
+import "./app/22-themes-and-cell-styles.js";
+import "./app/23-format-cells-dialog.js";
+import "./app/24-merge-and-audit-analysis.js";
+import "./app/25-color-picker.js";
+import "./app/26-workbook-ribbon.js";
+import "./app/27-data-validation-dialog.js";
+import "./app/28-duplicate-review-and-structure.js";
+import "./app/29-conditional-formatting-dialog.js";
+import "./app/30-table-and-pivot-builder.js";
+import "./app/31-pivot-explore-and-slicers.js";
+import "./app/32-drawing-and-chart-export.js";
+import "./app/33-page-setup-and-print.js";
+import "./app/34-function-browser-and-names.js";
+import "./app/35-formula-compatibility-report.js";
+import "./app/36-watch-window-and-goal-seek.js";
+import "./app/37-linear-solver-engine.js";
+import "./app/38-data-analysis-dialog.js";
+import "./app/39-report-outputs.js";
+import "./app/40-what-if-analysis.js";
+import "./app/41-automation-and-scripts.js";
+import "./app/42-combine-populations.js";
+import "./app/43-text-cleanup.js";
+import "./app/44-clean-and-reshape.js";
+import "./app/45-sorting-and-worksheets.js";
+import "./app/46-workbook-manager.js";
+import "./app/47-fill-and-paste-special.js";
+import "./app/48-format-cells-and-move.js";
+import "./app/49-outlines-and-comments.js";
+import "./app/50-materiality-screen.js";
+import "./app/51-pattern-checks-and-citations.js";
+import "./app/52-workbook-comparison.js";
+import "./app/53-find-replace-go-to.js";
+import "./app/54-workbook-save-conflicts.js";
+import "./app/55-external-source-refresh.js";
+import "./app/56-main-worksheet-editor.js";
+import "./app/57-workspace-shell.js";
 export {
   ArrowUp as A,
   Check as C,
@@ -73,6 +73,19 @@ export {
 export { default as j } from "react/jsx-runtime";
 export { default as r } from "react";
 export { default as b } from "react-dom";
-export { Gq as R, uEe as a, ax as g } from "./app/part-01.js";
-export { M as W, Lae as k, Dr as u } from "./app/part-04.js";
-export { cEe as h, Zm as l, dEe as p, Ez as v } from "./app/part-20.js";
+export {
+  Gq as R,
+  uEe as a,
+  ax as g,
+} from "./app/01-core-schemas-and-hashing.js";
+export {
+  M as W,
+  Lae as k,
+  Dr as u,
+} from "./app/04-cell-input-paste-and-fill.js";
+export {
+  cEe as h,
+  Zm as l,
+  dEe as p,
+  Ez as v,
+} from "./app/20-calculation-options-and-sources.js";
