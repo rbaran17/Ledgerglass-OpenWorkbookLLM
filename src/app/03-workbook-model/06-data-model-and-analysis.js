@@ -1,4 +1,11 @@
 import {
+  isNonArrayObject,
+  buildSnapshotGuard,
+  isPlainObjectValue,
+  throwWithMessage,
+} from "./01-cell-styles-and-themes.js";
+import { isFiniteNumber } from "./04-pivot-tables-and-pictures.js";
+import {
   string,
   number,
   boolean,
@@ -788,10 +795,9 @@ const sourceImportLimits = Object.freeze({
     confidence: 0.9,
   }),
   documentSourceFormats = ["json", "xml", "pdf", "png", "jpeg", "html"],
-  createLimitedTextSchema = (e) => string().max(e),
   retainedSourceHashSchema = string().regex(/^[a-f0-9]{64}$/),
   IU = union([
-    createLimitedTextSchema(32767),
+    createBoundedTextSchema(32767),
     number().finite(),
     boolean(),
     _null(),
@@ -822,9 +828,9 @@ function Poe(e, r) {
 const nativeCellValueSchema = object({
     value: IU,
     type: _enum(["string", "number", "boolean", "null", "array", "object"]),
-    path: createLimitedTextSchema(2048),
-    lexical: createLimitedTextSchema(32767).optional(),
-    declaredType: createLimitedTextSchema(200).optional(),
+    path: createBoundedTextSchema(2048),
+    lexical: createBoundedTextSchema(32767).optional(),
+    declaredType: createBoundedTextSchema(200).optional(),
     missing: boolean().optional(),
     confidence: number().min(0).max(1),
     region: sourceRegionSchema.optional(),
@@ -844,14 +850,14 @@ const nativeCellValueSchema = object({
       "Missing fields must be null placeholders.",
     ),
   extractedTableSchema = object({
-    id: createLimitedTextSchema(200).min(1),
-    name: createLimitedTextSchema(200).min(1),
-    path: createLimitedTextSchema(2048),
+    id: createBoundedTextSchema(200).min(1),
+    name: createBoundedTextSchema(200).min(1),
+    path: createBoundedTextSchema(2048),
     ambiguous: boolean(),
     columns: array(
       object({
-        name: createLimitedTextSchema(200).min(1),
-        path: createLimitedTextSchema(2048),
+        name: createBoundedTextSchema(200).min(1),
+        path: createBoundedTextSchema(2048),
       }).strict(),
     )
       .min(1)
@@ -870,13 +876,13 @@ const nativeCellValueSchema = object({
         });
     }),
   retainedSourceFileSchema = object({
-    fileName: createLimitedTextSchema(255)
+    fileName: createBoundedTextSchema(255)
       .min(1)
       .refine((e) => !/[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(e)),
     format: _enum(documentSourceFormats),
     byteLength: number().int().min(1).max(sourceImportLimits.bytes),
     sha256: retainedSourceHashSchema,
-    base64: createLimitedTextSchema(
+    base64: createBoundedTextSchema(
       Math.ceil(sourceImportLimits.bytes / 3) * 4,
     ),
   }).strict(),
@@ -888,9 +894,9 @@ const nativeCellValueSchema = object({
     sha256: retainedSourceHashSchema,
     tables: array(extractedTableSchema).max(sourceImportLimits.tables),
     method: _enum(["native-json", "native-xml", "document-adapter"]),
-    extractor: createLimitedTextSchema(200).min(1),
+    extractor: createBoundedTextSchema(200).min(1),
     pageCount: number().int().min(1).max(1e4).optional(),
-    warnings: array(createLimitedTextSchema(2048)).max(30),
+    warnings: array(createBoundedTextSchema(2048)).max(30),
   }).strict(),
   reviewCorrectionSchema = object({
     decision: _enum(["accept", "exclude", "correct"]),
@@ -902,13 +908,13 @@ const nativeCellValueSchema = object({
       "A corrected value is required.",
     ),
   sourceImportRecordSchema = object({
-    id: createLimitedTextSchema(100).min(1),
-    sheetId: createLimitedTextSchema(100).min(1),
-    sheetName: createLimitedTextSchema(31).min(1),
+    id: createBoundedTextSchema(100).min(1),
+    sheetId: createBoundedTextSchema(100).min(1),
+    sheetName: createBoundedTextSchema(31).min(1),
     importedAt: string().datetime(),
     original: retainedSourceFileSchema,
     method: extractedDocumentSchema.shape.method,
-    extractor: createLimitedTextSchema(200).min(1),
+    extractor: createBoundedTextSchema(200).min(1),
     pageCount: number().int().min(1).max(1e4).optional(),
     table: extractedTableSchema,
     resolutions: record(string().regex(/^\d+:\d+$/), reviewCorrectionSchema),
@@ -1441,11 +1447,6 @@ const B2 = 100,
     "missing-sheet",
     "out-of-bounds",
   ],
-  WO = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e)),
   HO = (e, r) => Object.keys(e).every((t) => r.includes(t)),
   isBoundedPlainText = (e, r) =>
     typeof e == "string" &&
@@ -1462,8 +1463,7 @@ const whatIfLimits = {
     workUnits: 5e4,
     savedAnalyses: 40,
   },
-  cellAddressKey = (e) => JSON.stringify([e.sheetId, e.address]),
-  qE = (e) => typeof e == "number" && Number.isFinite(e);
+  cellAddressKey = (e) => JSON.stringify([e.sheetId, e.address]);
 function validateWhatIfFields(e, r) {
   if (
     !e ||
@@ -1494,7 +1494,7 @@ function requireWhatIfList(e, r, t = 1) {
 }
 function validateWhatIfValues(e, r) {
   return requireWhatIfList(e, r).map((t) => {
-    if (!qE(t))
+    if (!isFiniteNumber(t))
       throw Error("Every what-if input value must be a finite number.");
     return t;
   });
@@ -1579,13 +1579,7 @@ function validatePrintPageBreaks(e, r) {
     return e.length ? [...e] : undefined;
   }
 }
-function createPrintSnapshotGuard(e) {
-  return Object.freeze({
-    workbookId: e.id,
-    revision: e.revision,
-    snapshotGuard: JSON.stringify(e),
-  });
-}
+
 function verifyPrintSnapshotGuard(e, r) {
   if (
     r.workbookId !== e.id ||
@@ -1630,18 +1624,13 @@ const textCleanupFunctionNames = [
     "TEXTBEFORE",
     "TEXTAFTER",
   ],
-  sae = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e)),
   throwTextCleanupEvidenceError = () => {
     throw Error(
       "Invalid or over-capacity text cleanup evidence. Keep the original native backup.",
     );
   };
 function assertPlainObjectKeys(e, r) {
-  (!sae(e) || Object.keys(e).some((t) => !r.includes(t))) &&
+  (!isPlainObjectValue(e) || Object.keys(e).some((t) => !r.includes(t))) &&
     throwTextCleanupEvidenceError();
 }
 function WU(e) {
@@ -1876,18 +1865,14 @@ const JU = new WeakSet(),
     "date",
   ]),
   hasOwnKey = (e, r) => Object.prototype.hasOwnProperty.call(e, r),
-  isNonArrayObject = (e) => !!e && typeof e == "object" && !Array.isArray(e),
-  Hn = (e) => {
-    throw new Error(e);
-  },
   requireBoundedText = (e, r, t = 32767) =>
     typeof e == "string" && e.length <= t
       ? e
-      : Hn(`${r} must be text of at most ${t} characters.`),
+      : throwWithMessage(`${r} must be text of at most ${t} characters.`),
   P2 = (e, r, t, n) =>
     typeof e == "number" && Number.isInteger(e) && e >= r && e <= t
       ? e
-      : Hn(`${n} must be an integer between ${r} and ${t}.`);
+      : throwWithMessage(`${n} must be an integer between ${r} and ${t}.`);
 function columnIndexToLetters(e) {
   P2(e, 0, workbookLimits.maxCols - 1, "Column");
   let r = "";
@@ -1981,7 +1966,6 @@ export {
   daxFunctionNames,
   HO,
   alternateFormatExtensions,
-  Hn,
   readRetainedXlsxSource,
   transformCellValueSchema,
   JU,
@@ -2003,13 +1987,11 @@ export {
   validateModelQuery,
   xlsxInspectionLimits,
   textCleanupFunctionNames,
-  isNonArrayObject,
   validateSourceImports,
   cellAddressKey,
   reportOutputLimits,
   hashRecordExcludingHash,
   validateDataModel,
-  WO,
   requireRetainedXlsxSource,
   WU,
   decodeAutomationArtifact,
@@ -2033,10 +2015,8 @@ export {
   validateExtractedSourceTables,
   requireWhatIfList,
   assertTextCleanupEvidenceUnchanged,
-  createPrintSnapshotGuard,
   automationLimits,
   throwDaxError,
-  qE,
   normalizeAlternateFormatSource,
   expandHeaderFooterTemplate,
   daxExpressionLimits,

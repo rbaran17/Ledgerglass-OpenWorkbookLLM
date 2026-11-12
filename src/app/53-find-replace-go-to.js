@@ -1,3 +1,5 @@
+import { throwWithMessage, isFormulaCellValue } from "./03-workbook-model.js";
+import { eI, formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { Search, X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -40,8 +42,6 @@ import {
   applyFormulaCompletion,
 } from "./33-page-setup-and-print.js";
 import {
-  E_,
-  throwSearchError,
   compareCellPositions,
   compileSearchPattern,
   searchWorkbookCells,
@@ -49,27 +49,25 @@ import {
   findAdjacentSearchResult,
   normalizeSearchRequest,
   describeHiddenState,
-  deepFreezeRecord,
   createSearchBudget,
   toComparableCellValue,
   comparisonLimits,
   matchTextWithBudget,
   rangeContainsCell,
-  toA1CellAddress,
 } from "./52-workbook-comparison.js";
 
 function replaceSearchMatches(e, r, t, n = {}) {
-  (n.readOnly && throwSearchError("This workbook is read-only."),
+  (n.readOnly && throwWithMessage("This workbook is read-only."),
     n.readOnly !== undefined &&
       typeof n.readOnly != "boolean" &&
-      throwSearchError("Read-only must be boolean."),
+      throwWithMessage("Read-only must be boolean."),
     (typeof t != "string" || t.length > 32767) &&
-      throwSearchError(
+      throwWithMessage(
         "Replacement text must contain at most 32,767 characters.",
       ),
     r.lookIn &&
       !["raw", "formulas"].includes(r.lookIn) &&
-      throwSearchError(
+      throwWithMessage(
         "Replace searches Raw contents or Formulas only. Calculated and formatted results are read-only search modes.",
       ));
   const o = searchWorkbookCells(e, r),
@@ -85,7 +83,7 @@ function replaceSearchMatches(e, r, t, n = {}) {
       : o.results;
   n.match &&
     !u.length &&
-    throwSearchError(
+    throwWithMessage(
       "The chosen cell does not match this search. Find it again before replacing.",
     );
   const l = [];
@@ -103,7 +101,7 @@ function replaceSearchMatches(e, r, t, n = {}) {
       b.reduce((F, [I, O]) => F + O - I, 0) +
       b.length * t.length >
       32767 &&
-      throwSearchError(
+      throwWithMessage(
         `Replacement would exceed 32,767 characters at ${g.sheetName}!${g.address}.`,
       );
     for (const [F, I] of b) ((y += g.text.slice(w, F) + t), (w = I));
@@ -114,7 +112,7 @@ function replaceSearchMatches(e, r, t, n = {}) {
       (l.push({ sheetId: g.sheetId, address: g.address, cell: k }),
       (h += b.length),
       l.length > workbookLimits.maxPatches &&
-        throwSearchError(
+        throwWithMessage(
           "Replace may change at most 500 cells, including dependent formula changes. Narrow the scope or replace one result.",
         ));
   }
@@ -136,7 +134,7 @@ function replaceSearchMatches(e, r, t, n = {}) {
   };
   return l.length
     ? buildCellChangePreview(e, l, f, n.readOnly)
-    : deepFreezeRecord({
+    : eI({
         ...f,
         workbookId: e.id,
         revision: e.revision,
@@ -152,12 +150,12 @@ function assertReplacePreviewCurrent(e, r, t = {}) {
     ? applyCellChangePreview(e, r, t)
     : (t.readOnly !== undefined &&
         typeof t.readOnly != "boolean" &&
-        throwSearchError("Read-only must be boolean."),
-      t.readOnly && throwSearchError("This workbook is read-only."),
+        throwWithMessage("Read-only must be boolean."),
+      t.readOnly && throwWithMessage("This workbook is read-only."),
       (r.workbookId !== e.id ||
         r.revision !== e.revision ||
         r.snapshotGuard !== JSON.stringify(e)) &&
-        throwSearchError(
+        throwWithMessage(
           "The workbook changed after this preview. Create a new preview before applying it.",
         ),
       e);
@@ -185,8 +183,8 @@ function buildSelectionRanges(e) {
       : (t.push(o), n.set(a, o));
   }
   return t.map((o) => {
-    const a = toA1CellAddress(o.firstRow, o.firstCol),
-      s = toA1CellAddress(o.lastRow, o.lastCol);
+    const a = formatCellAddress(o.firstRow, o.firstCol),
+      s = formatCellAddress(o.lastRow, o.lastCol);
     return a === s ? a : `${a}:${s}`;
   });
 }
@@ -196,20 +194,20 @@ function selectSpecialCells(e, r, t) {
     a = calculateWorkbookWithSettings(e),
     s = describeHiddenState(o);
   (n.scope === "workbook" &&
-    throwSearchError(
+    throwWithMessage(
       "Go To Special selects cells on one sheet. Choose Selection or Sheet.",
     ),
     ["formulas", "errors", "constants", "blanks", "notes"].includes(t) ||
-      throwSearchError("Choose a supported Go To Special category."));
+      throwWithMessage("Choose a supported Go To Special category."));
   const d = findOccupiedRangeBounds(o),
     u =
       n.scope === "selection"
         ? n.ranges
         : d
           ? [
-              toA1CellAddress(d.firstRow, d.firstCol) +
+              formatCellAddress(d.firstRow, d.firstCol) +
                 ":" +
-                toA1CellAddress(d.lastRow, d.lastCol),
+                formatCellAddress(d.lastRow, d.lastCol),
             ]
           : [],
     l = u.map(parseRangeAddress),
@@ -220,14 +218,14 @@ function selectSpecialCells(e, r, t) {
       const m = buildSelectionRanges(h);
       return (
         m.length > comparisonLimits.maxSpecialAreas &&
-          throwSearchError(
+          throwWithMessage(
             "This selection contains more than 256 separate areas. Narrow the selection.",
           ),
-        deepFreezeRecord({
+        eI({
           sheetId: o.id,
           kind: t,
           count: h.length,
-          addresses: h.map((v) => toA1CellAddress(v.row, v.col)),
+          addresses: h.map((v) => formatCellAddress(v.row, v.col)),
           ranges: m,
           workbookId: e.id,
           revision: e.revision,
@@ -240,7 +238,7 @@ function selectSpecialCells(e, r, t) {
     try {
       c.push(...enumerateSelectionCells(u, comparisonLimits.maxBlankScan));
     } catch {
-      throwSearchError(
+      throwWithMessage(
         "Blank selection scans at most 100,000 cells. Select a smaller rectangle.",
       );
     }
@@ -248,7 +246,7 @@ function selectSpecialCells(e, r, t) {
     for (const m of a.getSpillEntries(o.id))
       Object.hasOwn(o.cells, m.address) || c.push(m.address);
   c.length > workbookLimits.maxCells &&
-    throwSearchError("Go To Special scans at most 100,000 cells.");
+    throwWithMessage("Go To Special scans at most 100,000 cells.");
   let p = 0;
   for (const m of c) {
     const v = _t(m);
@@ -258,7 +256,7 @@ function selectSpecialCells(e, r, t) {
     )
       continue;
     const g = o.cells[m],
-      b = E_(g);
+      b = isFormulaCellValue(g);
     let y = false;
     if (t === "formulas") y = b;
     else if (t === "notes") y = !!(g != null && g.note);
@@ -267,7 +265,7 @@ function selectSpecialCells(e, r, t) {
       if (!b && g && g.raw !== null) continue;
       ++p > comparisonLimits.maxCalculatedCells &&
         t === "errors" &&
-        throwSearchError(
+        throwWithMessage(
           "Error selection calculates at most 10,000 cells. Narrow the selection.",
         );
       const w = a(o.id, m);
@@ -283,7 +281,7 @@ function selectSpecialCells(e, r, t) {
     y &&
       (h.push(v),
       h.length > comparisonLimits.maxSpecialCells &&
-        throwSearchError(
+        throwWithMessage(
           "Go To Special may select at most 500 cells. Narrow the selection.",
         ));
   }
@@ -2013,7 +2011,7 @@ const D2e = 16e6;
 function Tp(e, r, t) {
   return r >= e.firstRow && r <= e.lastRow && t >= e.firstCol && t <= e.lastCol;
 }
-const clampValueToRange = (e, r, t) => Math.max(r, Math.min(t, e));
+
 function lowerBoundIndex(e, r) {
   let t = 0,
     n = e.length;
@@ -2039,7 +2037,7 @@ function buildVisibleAxisLayout(e, r, t = {}, n = []) {
     d = [0];
   for (const l of s) d.push(d.at(-1) + a[l] - r);
   const u = (l) => {
-    const c = clampValueToRange(l, 0, e);
+    const c = clampNumber(l, 0, e);
     return c * r + d[lowerBoundIndex(s, c)];
   };
   return {
@@ -2106,15 +2104,13 @@ function resolveAxisScale(e, r, t, n = D2e) {
 function physicalToLogicalPixels(e, r, t, n) {
   const o = resolveAxisScale(r, t, n);
   return o.physicalMax
-    ? ((clampValueToRange(e, 0, o.physicalMax) / o.physicalMax) *
-        o.logicalMax) /
-        n
+    ? ((clampNumber(e, 0, o.physicalMax) / o.physicalMax) * o.logicalMax) / n
     : 0;
 }
 function logicalToPhysicalPixels(e, r, t, n) {
   const o = resolveAxisScale(r, t, n);
   return o.logicalMax
-    ? (clampValueToRange(e * n, 0, o.logicalMax) / o.logicalMax) * o.physicalMax
+    ? (clampNumber(e * n, 0, o.logicalMax) / o.logicalMax) * o.physicalMax
     : 0;
 }
 
@@ -2131,8 +2127,8 @@ export {
   autoFitRowHeights,
   isWithinFormulaSuggestions,
   FormulaSuggestionList,
-  clampValueToRange,
   logicalToPhysicalPixels,
   resolveCellNavigation,
   FindReplaceDialog,
 };
+export { clampNumber };

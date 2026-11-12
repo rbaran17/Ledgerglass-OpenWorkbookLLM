@@ -19,7 +19,7 @@ import {
   recipeStepKindLabels,
   publishRecipeOutput,
   createRecipeStep,
-  formatRecipeCellValue,
+  formatCellValueForDisplay,
   normalizeRecipeRunRequest,
   RecipeStepEditor,
 } from "./17-recipe-step-editors.js";
@@ -805,7 +805,9 @@ function TransformationRecipesDialog(e) {
                                                 "td",
                                                 {
                                                   children:
-                                                    formatRecipeCellValue(Pe),
+                                                    formatCellValueForDisplay(
+                                                      Pe,
+                                                    ),
                                                 },
                                                 qe,
                                               ),

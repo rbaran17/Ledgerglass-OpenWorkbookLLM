@@ -1,12 +1,16 @@
+import {
+  isNonArrayObject,
+  throwWithMessage,
+} from "./01-cell-styles-and-themes.js";
 import { isDeepFrozenValue } from "../01-core-schemas-and-hashing.js";
 import { workbookLimits } from "../02-financial-functions.js";
 import {
-  throwFormatError,
+  throwWorkbookError,
   assertNamedStyleBindingCurrent,
   touchWorkbookModifiedAt,
   assertSheetUnprotected,
   validateCellStyle,
-  throwCellStyleError,
+  failWithMessage,
 } from "./01-cell-styles-and-themes.js";
 import {
   buildNumberFormatCode,
@@ -15,10 +19,8 @@ import {
 import { carryCalculatorRecordForward } from "./05-consolidation-and-sources.js";
 import {
   requireBoundedText,
-  Hn,
   NC,
   QU,
-  isNonArrayObject,
   columnIndexToLetters,
 } from "./06-data-model-and-analysis.js";
 import {
@@ -46,7 +48,7 @@ function applyCellPatchTransaction(
   o = {},
 ) {
   if (!Array.isArray(r) || r.length > workbookLimits.maxPatches)
-    return Hn(
+    return throwWithMessage(
       `A transaction may contain at most ${workbookLimits.maxPatches} cell changes.`,
     );
   if (r.length === 0) return e;
@@ -55,12 +57,14 @@ function applyCellPatchTransaction(
   let s;
   const d = r.map((p) => {
       var A;
-      if (!isNonArrayObject(p)) return Hn("Invalid cell patch.");
+      if (!isNonArrayObject(p)) return throwWithMessage("Invalid cell patch.");
       const m = findSheetOrThrow(e, p.sheetId);
       assertSheetUnprotected(m);
       const { row, col } = _t(p.address);
       if (row >= m.rowCount || col >= m.colCount)
-        return Hn(`Cell ${p.address} is outside sheet dimensions.`);
+        return throwWithMessage(
+          `Cell ${p.address} is outside sheet dimensions.`,
+        );
       const b = `${columnIndexToLetters(col)}${row + 1}`;
       assertNamedStyleBindingCurrent(e, normalizeCellRecordInput(p.cell).style);
       const y = m.cells[b];
@@ -78,14 +82,14 @@ function applyCellPatchTransaction(
               typeof F.cell.raw == "string" &&
               F.cell.raw.startsWith("="))
           )
-            return Hn(
+            return throwWithMessage(
               `Cell ${b} belongs to the array formula in ${k}. Edit the array formula instead.`,
             );
         }
       }
       const w = `${m.id}:${b}`;
       return a.has(w)
-        ? Hn("A transaction cannot change the same cell twice.")
+        ? throwWithMessage("A transaction cannot change the same cell twice.")
         : (a.add(w),
           {
             sheetId: m.id,
@@ -109,7 +113,9 @@ function applyCellPatchTransaction(
       u >
     workbookLimits.maxCells
   )
-    return Hn("Workbook exceeds the 100,000 populated cell limit.");
+    return throwWithMessage(
+      "Workbook exceeds the 100,000 populated cell limit.",
+    );
   const l = e.sheets.map((p) => {
       const m = d.filter((g) => g.sheetId === p.id);
       if (!m.length) return p;
@@ -140,7 +146,7 @@ function applyCellPatchTransaction(
           }),
           d.length > workbookLimits.maxPatches)
         )
-          return Hn(
+          return throwWithMessage(
             "Renaming this table field affects more than 500 cells. Reduce the dependent formulas before renaming it.",
           );
       }
@@ -158,18 +164,18 @@ function applyCellPatchTransaction(
     (h && (n = `${n.slice(0, 140)} (accepted ${h} validation warnings)`),
     e.events.length >= 2e3)
   )
-    return Hn(
+    return throwWithMessage(
       "Change history has reached its 2,000 transaction limit. Export the workbook before starting a new workpaper.",
     );
   if (
     e.events.reduce((p, m) => p + m.changes.length, 0) + d.length >
     workbookLimits.maxCells
   )
-    return Hn(
+    return throwWithMessage(
       "Change history has reached its 100,000 cell-change limit. Export the workbook before starting a new workpaper.",
     );
   if (e.revision >= Number.MAX_SAFE_INTEGER - 1)
-    return Hn("Workbook revision limit reached.");
+    return throwWithMessage("Workbook revision limit reached.");
   const f = {
     ...touchWorkbookModifiedAt(c),
     revision: e.revision + 1,
@@ -201,7 +207,7 @@ function applyCellPatchTransaction(
   );
 }
 function applyBorderEditTransaction(e, r, t, n, o = {}) {
-  o.readOnly && throwCellStyleError("This workbook is read-only.");
+  o.readOnly && failWithMessage("This workbook is read-only.");
   const a = findSheetOrThrow(e, r);
   assertSheetUnprotected(a);
   const s = validateCellStyle(n),
@@ -219,7 +225,7 @@ function applyBorderEditTransaction(e, r, t, n, o = {}) {
           m.col <= p.lastCol,
       );
     }) &&
-      throwCellStyleError(
+      failWithMessage(
         "Unmerge the intersecting cells before applying border edges or presets.",
       );
   }
@@ -259,7 +265,7 @@ function applyBorderEditTransaction(e, r, t, n, o = {}) {
   return { ...e, sheets: c.sheets };
 }
 function applyNumberFormatTransaction(e, r, t, n, o = {}) {
-  o.readOnly && throwFormatError("This workbook is read-only.");
+  o.readOnly && throwWorkbookError("This workbook is read-only.");
   const a = findSheetOrThrow(e, r);
   assertSheetUnprotected(a);
   const s = validateNumberFormatSettings(n),

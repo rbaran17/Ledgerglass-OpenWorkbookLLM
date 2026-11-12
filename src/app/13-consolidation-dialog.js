@@ -6,7 +6,7 @@ import { workbookLimits } from "./02-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   consolidationFormatVersion,
-  serializeTypedCategoryKey,
+  serializeTypedKeyValues,
   createWorksheetRecord,
   sumConsolidationAmounts,
   formatOccupiedRangeAddress,
@@ -119,7 +119,7 @@ function publishConsolidatedSchedule(e, r, t = {}) {
     v = (E, A) => {
       const k = new Map();
       for (const F of E) {
-        const I = serializeTypedCategoryKey(F.categories.slice(0, A)),
+        const I = serializeTypedKeyValues(F.categories.slice(0, A)),
           O = k.get(I) ?? [];
         (O.push(F), k.set(I, O));
       }
@@ -255,7 +255,7 @@ function checkConsolidationFreshness(e, r, t = {}) {
   }
   return { state: o.length ? "stale" : "current", messages: o };
 }
-function rce(e, r) {
+function saveBlobToFile(e, r) {
   const t = URL.createObjectURL(e),
     n = document.createElement("a");
   ((n.href = t),
@@ -1323,7 +1323,7 @@ function ConsolidationDialog(e) {
                       ),
                       i.jsx("button", {
                         onClick: () =>
-                          rce(
+                          saveBlobToFile(
                             new Blob(
                               [
                                 JSON.stringify(
@@ -1687,3 +1687,4 @@ export {
   caseFoldText,
   buildTypedValueKey,
 };
+export { saveBlobToFile };

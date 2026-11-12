@@ -1,3 +1,5 @@
+import { rangesOverlap } from "./15-data-model-dialog.js";
+import { countRangeCells } from "./08-xlsx-export-and-preservation.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -1749,50 +1751,36 @@ function ConditionalFormatIndicator({ decoration, children }) {
     ],
   });
 }
-const normalizeRangeBounds = (e, r) => {
-    const t = parseRangeAddress(e),
-      n = parseRangeAddress(r);
-    return (
-      t.firstRow <= n.lastRow &&
-      t.lastRow >= n.firstRow &&
-      t.firstCol <= n.lastCol &&
-      t.lastCol >= n.firstCol
-    );
-  },
-  rangeToA1Address = (e) => {
-    const r = parseRangeAddress(e);
-    return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
-  },
-  rangeCellCount = (e) => {
-    const r = parseRangeAddress(e);
-    return (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1);
-  };
+const rangeToA1Address = (e) => {
+  const r = parseRangeAddress(e);
+  return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
+};
 function previewMergeCells(e, r, t, n = false, o = {}) {
   if (o.readOnly) throw Error("This workbook is read-only.");
   const a = findSheetOrThrow(e, r);
   assertSheetUnprotected(a);
   const s = rangeToA1Address(t);
-  if (rangeCellCount(s) > 500)
+  if (countRangeCells(s) > 500)
     throw Error("Preview a merge or unmerge of at most 500 cells.");
-  if (!n && rangeCellCount(s) < 2)
+  if (!n && countRangeCells(s) < 2)
     throw Error("Select at least two cells to merge.");
-  const d = (a.merges ?? []).filter((p) => normalizeRangeBounds(p, s));
+  const d = (a.merges ?? []).filter((p) => rangesOverlap(p, s));
   if (!n && d.length) throw Error("Unmerge overlapping areas first.");
   if (n && !d.length)
     throw Error("The selected range does not intersect a merged area.");
   const u = n ? d : [s];
-  if (u.reduce((p, m) => p + rangeCellCount(m), 0) > 500)
+  if (u.reduce((p, m) => p + countRangeCells(m), 0) > 500)
     throw Error(
       "Unmerge fewer areas; this preview supports at most 500 affected cells.",
     );
   if (!n) {
-    if ((a.tables ?? []).some((p) => normalizeRangeBounds(p.range, s)))
+    if ((a.tables ?? []).some((p) => rangesOverlap(p.range, s)))
       throw Error(
         "Merging cells inside a table is unsupported. Convert the table first.",
       );
     if (
       [...(a.pivots ?? []), ...(a.queries ?? [])].some((p) =>
-        normalizeRangeBounds(p.outputRange, s),
+        rangesOverlap(p.outputRange, s),
       )
     )
       throw Error("Merging generated analysis output is unsupported.");
@@ -1808,7 +1796,7 @@ function previewMergeCells(e, r, t, n = false, o = {}) {
             "Merge checking supports at most 10,000 active formulas per worksheet.",
           );
         const g = l.getSpillRange(r, m);
-        if (g && normalizeRangeBounds(g, s))
+        if (g && rangesOverlap(g, s))
           throw Error(
             `Unmergeable array output at ${g}. Move or remove its formula first.`,
           );

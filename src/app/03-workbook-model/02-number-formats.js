@@ -1,3 +1,7 @@
+import {
+  coerceValueToText,
+  flattenNestedValues,
+} from "../02-financial-functions.js";
 import qre from "fast-formula-parser";
 import { unwrapDefaultExport } from "../01-core-schemas-and-hashing.js";
 import {
@@ -5,7 +9,7 @@ import {
   validateNumberFormatCode,
   dateTimeFormatKinds,
   supportedNumberLocales,
-  throwFormatError,
+  throwWorkbookError,
   supportedCurrencyCodes,
   Uv,
   numericFormatKinds,
@@ -28,59 +32,61 @@ function validateNumberFormatSettings(e) {
           "pattern",
         ].includes(a),
     )) &&
-    throwFormatError(
+    throwWorkbookError(
       "Number format must be a supported plain settings object.",
     );
   const r = e;
   Uv.includes(r.category) ||
-    throwFormatError("Choose a supported number format category.");
+    throwWorkbookError("Choose a supported number format category.");
   const t = r.category,
     n = r.locale ?? "en-US";
   supportedNumberLocales.includes(n) ||
-    throwFormatError("Choose one of the supported display locales.");
+    throwWorkbookError("Choose one of the supported display locales.");
   const o = { category: t, locale: n };
   if (numericFormatKinds.has(t)) {
     if (t === "currency" || t === "accounting") {
       const u = r.currency ?? "USD";
       (supportedCurrencyCodes.includes(u) ||
-        throwFormatError("Choose a supported currency."),
+        throwWorkbookError("Choose a supported currency."),
         (o.currency = u));
     } else
       r.currency !== undefined &&
-        throwFormatError(
+        throwWorkbookError(
           "Currency applies only to Currency or Accounting formats.",
         );
     const s = r.decimals ?? (o.currency === "JPY" ? 0 : 2);
     ((typeof s != "number" || !Number.isInteger(s) || s < 0 || s > 12) &&
-      throwFormatError("Choose 0–12 decimal places."),
+      throwWorkbookError("Choose 0–12 decimal places."),
       (o.decimals = s),
       r.useGrouping !== undefined &&
         typeof r.useGrouping != "boolean" &&
-        throwFormatError("The grouping option must be true or false."),
+        throwWorkbookError("The grouping option must be true or false."),
       (o.useGrouping = r.useGrouping ?? t !== "percent"));
     const d = r.scale ?? 1;
     ((![1, 1e3, 1e6].includes(d) || (t === "percent" && d !== 1)) &&
-      throwFormatError(
+      throwWorkbookError(
         "Choose units, thousands or millions; percentages use units.",
       ),
       (o.scale = d),
       r.negative !== undefined &&
         (typeof r.negative != "string" ||
           !["minus", "parentheses"].includes(r.negative)) &&
-        throwFormatError("Choose minus signs or parentheses for negatives."),
+        throwWorkbookError("Choose minus signs or parentheses for negatives."),
       t === "accounting" &&
         r.negative !== undefined &&
         r.negative !== "parentheses" &&
-        throwFormatError("Accounting negatives use parentheses."),
+        throwWorkbookError("Accounting negatives use parentheses."),
       (o.negative =
         t === "accounting" ? "parentheses" : (r.negative ?? "minus")),
       r.pattern !== undefined &&
-        throwFormatError("Use the Custom category to enter a format pattern."));
+        throwWorkbookError(
+          "Use the Custom category to enter a format pattern.",
+        ));
   } else if (
     ([r.currency, r.decimals, r.useGrouping, r.scale, r.negative].some(
       (a) => a !== undefined,
     ) &&
-      throwFormatError(
+      throwWorkbookError(
         "These numeric settings do not apply to the chosen category.",
       ),
     dateTimeFormatKinds.has(t) || t === "custom")
@@ -91,25 +97,25 @@ function validateNumberFormatSettings(e) {
       !s ||
       s.length > 200 ||
       /[\u0000-\u001f\u007f]/.test(s)) &&
-      throwFormatError(
+      throwWorkbookError(
         "Enter a format pattern of 1–200 characters without control characters.",
       ),
       (o.pattern = s));
     const d = validateNumberFormatCode(o.pattern);
     if (t !== "custom") {
       d.kind !== "temporal" &&
-        throwFormatError(
+        throwWorkbookError(
           "Choose a date, time or elapsed-time pattern for this category.",
         );
       const u = d.category;
       u !== t &&
-        throwFormatError(
+        throwWorkbookError(
           `This pattern is a ${u} format. Choose the matching category or Custom.`,
         );
     }
   } else
     r.pattern !== undefined &&
-      throwFormatError("General does not accept a custom pattern.");
+      throwWorkbookError("General does not accept a custom pattern.");
   return o;
 }
 function renderTextSectionPattern(e, r) {
@@ -1150,8 +1156,6 @@ const statisticalFunctionNames = [
     "PERMUTATIONA",
   ],
   notStatisticalSentinel = Symbol("not-statistical-function"),
-  flattenArgumentValues = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenArgumentValues) : [e],
   isReferenceArgument = (e) => !!e && typeof e == "object" && "ref" in e;
 function sumWithKahanCompensation(e) {
   let r = 0,
@@ -1216,9 +1220,9 @@ function evaluateStatisticalFunction(e, r, t) {
       return Number.isFinite(z) ? z : n();
     };
   if (e === "COUNTA")
-    return c.flatMap(flattenArgumentValues).filter((O) => O != null).length;
+    return c.flatMap(flattenNestedValues).filter((O) => O != null).length;
   if (e === "COUNTBLANK")
-    return c.flatMap(flattenArgumentValues).filter((O) => O == null || O === "")
+    return c.flatMap(flattenNestedValues).filter((O) => O == null || O === "")
       .length;
   const v = o ? 1 : 0;
   if (u) {
@@ -1238,7 +1242,7 @@ function evaluateStatisticalFunction(e, r, t) {
   for (const [O, j] of g.entries()) {
     const z =
       Array.isArray(j) || isReferenceArgument(r[o || a || s || d ? v : O]);
-    for (const V of flattenArgumentValues(j)) {
+    for (const V of flattenNestedValues(j)) {
       if (t.isIssue(V)) {
         if (e === "COUNT") continue;
         throw V;
@@ -1545,16 +1549,14 @@ const modernFunctionNames = [
     "XLOOKUP",
   ],
   notModernFunctionSentinel = Symbol("not a modern function"),
-  flattenNestedArguments = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenNestedArguments) : [e],
   toMatrixArgument = (e) =>
     Array.isArray(e) ? (e.every(Array.isArray) ? e : [e]) : [[e]],
-  zh = (e) =>
-    e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e),
   compareSortValues = (e, r) =>
     typeof e == "number" && typeof r == "number"
       ? e - r
-      : zh(e).toLowerCase().localeCompare(zh(r).toLowerCase()),
+      : coerceValueToText(e)
+          .toLowerCase()
+          .localeCompare(coerceValueToText(r).toLowerCase()),
   valuesEqualIgnoringCase = (e, r) =>
     typeof e == "string" && typeof r == "string"
       ? e.toLowerCase() === r.toLowerCase()
@@ -1566,7 +1568,6 @@ const modernFunctionNames = [
   };
 
 export {
-  flattenNestedArguments,
   notRegressionSentinel,
   notArithmeticSentinel,
   notSpecialistSentinel,
@@ -1602,5 +1603,4 @@ export {
   notOwnedLogicalSentinel,
   formatCellValueWithNumberFormat,
   matrixResultFunctionNames,
-  zh,
 };

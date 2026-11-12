@@ -1,3 +1,4 @@
+import { formatCellValueForDisplay } from "./17-recipe-step-editors.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
@@ -1338,18 +1339,11 @@ function AutomationScriptsDialog(e) {
     }),
   });
 }
-const w2 = 25,
-  formatAutomationValue = (e) =>
-    e === null
-      ? "(blank)"
-      : typeof e == "boolean"
-        ? String(e).toUpperCase()
-        : String(e);
+const w2 = 25;
 
 export {
   AutomationScriptsDialog,
   removeAutomationArtifact,
-  formatAutomationValue,
   runApprovedMigration,
   preserveAutomationArtifact,
   w2,

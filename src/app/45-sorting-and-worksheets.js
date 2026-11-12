@@ -1,3 +1,4 @@
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import {
   X,
   Plus,
@@ -47,7 +48,6 @@ import {
   MW,
   N3,
   stableSortPolicy,
-  formatSortCellAddress,
   resolveSortSourceRange,
   assertSortSafeFormulas,
   isNonBlankCellEntry,
@@ -162,7 +162,7 @@ function buildSortPreview(e, r, t = {}) {
     for (const [C, T] of Object.entries(B.cells))
       if (N3(T)) {
         const N = _t(C),
-          R = B.id === n.id ? formatSortCellAddress(I(N.row), N.col) : C,
+          R = B.id === n.id ? formatCellAddress(I(N.row), N.col) : C,
           L = _.cells[R]?.raw;
         L !== T.raw &&
           k.push({

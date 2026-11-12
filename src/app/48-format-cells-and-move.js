@@ -1,3 +1,16 @@
+import {
+  assertWorkbookWritable,
+  eI,
+  formatCellAddress,
+} from "./04-cell-input-paste-and-fill.js";
+import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+import { formatSortRangeAddress } from "./44-clean-and-reshape.js";
+import {
+  rangesIntersect,
+  isCellInsideRange,
+  quoteSheetName,
+  throwWorkbookError,
+} from "./03-workbook-model.js";
 import { X, ArrowRight } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -38,26 +51,17 @@ import {
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
 import {
-  $W,
   pasteOperationLimits,
   hasCellContent,
   parseWholeColumnReference,
-  Hh,
-  PW,
-  R3,
-  deepFreezeRecords,
   assertCutSourceWithinLimit,
   createCutSourceSnapshot,
-  rangesIntersect,
   rangeContainsRange,
   parseMovableA1Rectangle,
-  quoteSheetNameForFormula,
-  isCellInsideRange,
   assertFormulaReferencesMovable,
   verifyCutSourceSnapshot,
   isUnsafeStructuredReference,
   assertRangeWithinBoundary,
-  throwCellOperationError,
 } from "./47-fill-and-paste-special.js";
 
 function remapReferenceForMove(e, r, t) {
@@ -85,7 +89,7 @@ function remapReferenceForMove(e, r, t) {
     };
   if (e.source.id === e.target.id && rangeContainsRange(n, a))
     return { sheetId: r, reference: t, changed: false };
-  throwCellOperationError(
+  throwWorkbookError(
     `Reference ${e.source.name}!${t} includes cells outside the moved block. This move would require a split or cross-sheet range; use explicit references first.`,
   );
 }
@@ -132,7 +136,7 @@ function XW(e, r, t = new Set()) {
 function repairReferencesForMove(e, r, t, n, o = false) {
   ((e.characters += r.length),
     e.characters > pasteOperationLimits.formulaCharacters &&
-      throwCellOperationError(
+      throwWorkbookError(
         "Reference repair exceeds 10 million formula characters. Simplify the workbook before moving cells.",
       ));
   const a = assertFormulaReferencesMovable(r);
@@ -142,12 +146,12 @@ function repairReferencesForMove(e, r, t, n, o = false) {
     let c = l.text;
     if (
       (l.kind === "dynamic" &&
-        throwCellOperationError(
+        throwWorkbookError(
           `${l.name} can refer to cells dynamically. Replace dynamic references with explicit A1 references before moving cells.`,
         ),
       isUnsafeStructuredReference(l) &&
         o &&
-        throwCellOperationError(
+        throwWorkbookError(
           "A current-row structured reference cannot be safely moved out of its table context.",
         ),
       l.kind === "name" && o && !l.sheet)
@@ -170,12 +174,12 @@ function repairReferencesForMove(e, r, t, n, o = false) {
         v = f ?? p;
       (v &&
         XW(e.book, v) &&
-        throwCellOperationError(
+        throwWorkbookError(
           `Name ${l.name} contains a current-row structured reference. Use an explicit qualified cell reference before moving this formula.`,
         ),
         t !== n &&
           (f || m || (p && !qW(e.book, p))) &&
-          throwCellOperationError(
+          throwWorkbookError(
             `Name ${l.name} depends on worksheet scope. Keep the formula on its sheet or replace that name with explicit qualified references before moving it.`,
           ));
     }
@@ -188,17 +192,17 @@ function repairReferencesForMove(e, r, t, n, o = false) {
       if (!h)
         !l.sheet &&
           rangesIntersect(parseWholeColumnReference(l.reference), e.from) &&
-          throwCellOperationError(
+          throwWorkbookError(
             "A workbook-level name has a context-dependent unqualified reference. Qualify its worksheet before moving cells.",
           );
       else {
         const f = remapReferenceForMove(e, h, l.reference);
         f.changed
-          ? (c = `${l.sheet || f.sheetId !== n ? quoteSheetNameForFormula(findSheetOrThrow(e.book, f.sheetId).name) + "!" : ""}${f.reference}`)
+          ? (c = `${l.sheet || f.sheetId !== n ? quoteSheetName(findSheetOrThrow(e.book, f.sheetId).name) + "!" : ""}${f.reference}`)
           : !l.sheet &&
             t !== n &&
             t &&
-            (c = `${quoteSheetNameForFormula(findSheetOrThrow(e.book, t).name)}!${l.reference}`);
+            (c = `${quoteSheetName(findSheetOrThrow(e.book, t).name)}!${l.reference}`);
       }
     }
     c !== l.text && ((s += r.slice(d, l.start) + c), (d = l.end));
@@ -224,7 +228,7 @@ function computeDrawingFootprint(e, r) {
             if (g === null) return m;
             ((m = g),
               ++v > 1e3 &&
-                throwCellOperationError(
+                throwWorkbookError(
                   "Drawing footprint exceeds the move inspection budget.",
                 ));
           }
@@ -235,7 +239,7 @@ function computeDrawingFootprint(e, r) {
             ((m = g),
               (p += h(m)),
               ++v > 1e3 &&
-                throwCellOperationError(
+                throwWorkbookError(
                   "Drawing footprint exceeds the move inspection budget.",
                 ));
           }
@@ -255,34 +259,34 @@ function findMoveBlockers(e) {
   ]) {
     for (const o of t.merges ?? [])
       rangesIntersect(n, parseRangeAddress(o)) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "Unmerge the source and destination before moving cells.",
         );
     for (const o of t.tables ?? [])
       rangesIntersect(n, parseRangeAddress(o.range)) &&
-        throwCellOperationError(
+        throwWorkbookError(
           `The move intersects table ${o.name}. Table-cell moves are not supported; use ordinary cells outside tables.`,
         );
     for (const o of [...(t.pivots ?? []), ...(t.queries ?? [])])
       rangesIntersect(n, parseRangeAddress(o.outputRange)) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "The move intersects a generated PivotTable or query output. Move ordinary cells instead.",
         );
     for (const o of [...(t.validations ?? []), ...(t.conditionalFormats ?? [])])
       rangesIntersect(n, parseRangeAddress(o.range)) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "The move intersects a validation or conditional-formatting rule. Remove or relocate the rule first.",
         );
     for (const o of t.objects ?? [])
       (isCellInsideRange(n, _t(o.anchor)) ||
         rangesIntersect(n, computeDrawingFootprint(t, o))) &&
-        throwCellOperationError(
+        throwWorkbookError(
           `The move intersects drawing ${o.label || o.id}. Drawing footprints cannot be moved or partially overwritten by this command.`,
         );
     for (const o of r)
       o.sheetId === t.id &&
         rangesIntersect(n, parseRangeAddress(o.range)) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "The move intersects a dynamic-array footprint. Convert it to ordinary values or move cells outside the array.",
         );
   }
@@ -294,10 +298,10 @@ function collectFormulaEntries(e) {
     o = 0;
   for (const a of e.sheets)
     for (const [s, d] of Object.entries(a.cells))
-      if (PW(d)) {
+      if (isFormulaInputValue(d)) {
         (++n > pasteOperationLimits.formulaCells ||
           (o += d.raw.length) > pasteOperationLimits.formulaCharacters) &&
-          throwCellOperationError(
+          throwWorkbookError(
             "Array inspection supports at most 10,000 formulas and 10 million formula characters. Simplify the workbook before moving cells.",
           );
         const u = r.getSpillRange(a.id, s);
@@ -316,7 +320,7 @@ function formulaEntriesSignature(e) {
 `);
 }
 function computeRangeMoveResult(e, r, t, n, o, a = {}) {
-  $W(a.readOnly);
+  assertWorkbookWritable(a.readOnly);
   const s = findSheetOrThrow(e, r),
     d = findSheetOrThrow(e, n);
   (assertSheetUnprotected(s), assertSheetUnprotected(d));
@@ -326,7 +330,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
     h = u.lastCol - u.firstCol + 1;
   (l.lastRow !== l.firstRow || l.lastCol !== l.firstCol) &&
     (l.lastRow - l.firstRow + 1 !== c || l.lastCol - l.firstCol + 1 !== h) &&
-    throwCellOperationError(
+    throwWorkbookError(
       "Choose one destination cell or a rectangle with exactly the source dimensions.",
     );
   const f = {
@@ -336,9 +340,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
     lastCol: l.firstCol + h - 1,
   };
   (f.lastRow >= d.rowCount || f.lastCol >= d.colCount) &&
-    throwCellOperationError(
-      "The moved cells would exceed the worksheet boundary.",
-    );
+    throwWorkbookError("The moved cells would exceed the worksheet boundary.");
   const p = a.sourceSnapshot ?? createCutSourceSnapshot(e, r, t);
   verifyCutSourceSnapshot(e, p, r, t);
   const m = {
@@ -351,8 +353,10 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
       dc: f.firstCol - u.firstCol,
       characters: 0,
     },
-    v = R3(t),
-    g = R3(`${Hh(f.firstRow, f.firstCol)}:${Hh(f.lastRow, f.lastCol)}`),
+    v = formatSortRangeAddress(t),
+    g = formatSortRangeAddress(
+      `${formatCellAddress(f.firstRow, f.firstCol)}:${formatCellAddress(f.lastRow, f.lastCol)}`,
+    ),
     b = [],
     y = r === n && m.dr === 0 && m.dc === 0;
   y || findMoveBlockers(m);
@@ -363,7 +367,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
   const F = (B) => {
     (b.push(B),
       b.length > pasteOperationLimits.metadataChanges &&
-        throwCellOperationError(
+        throwWorkbookError(
           "The move would change more than 500 metadata references. Narrow the source.",
         ));
   };
@@ -372,7 +376,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
       e.sheets.some((B) => {
         return B.conditionalFormats?.some((C) => C.kind === "formula");
       }) &&
-      throwCellOperationError(
+      throwWorkbookError(
         "Range moves cannot repair formula-based conditional rules yet. Remove those rules before moving cells.",
       ),
     !y)
@@ -387,20 +391,20 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
         !(
           N.anchor.sheetId === r && isCellInsideRange(u, _t(N.anchor.address))
         ) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "The destination contains an existing review discussion. Choose a destination without anchored discussions to preserve its evidence context.",
         );
     const _ = findSheetOrThrow(w, r),
       C = findSheetOrThrow(w, n);
     for (let N = u.firstRow; N <= u.lastRow; N++)
       for (let R = u.firstCol; R <= u.lastCol; R++) {
-        const L = Hh(N, R);
+        const L = formatCellAddress(N, R);
         hasCellContent(s.cells[L]) && delete _.cells[L];
       }
     for (let N = u.firstRow; N <= u.lastRow; N++)
       for (let R = u.firstCol; R <= u.lastCol; R++) {
-        const L = Hh(N, R),
-          $ = Hh(N + m.dr, R + m.dc),
+        const L = formatCellAddress(N, R),
+          $ = formatCellAddress(N + m.dr, R + m.dc),
           U = s.cells[L],
           G = d.cells[$];
         (!(r === n && isCellInsideRange(u, _t($))) &&
@@ -416,11 +420,11 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
     for (const N of w.sheets)
       for (const [R, L] of Object.entries(N.cells)) {
         ++T > workbookLimits.maxCells &&
-          throwCellOperationError(
+          throwWorkbookError(
             "Range moves inspect at most 100,000 populated cells.",
           );
         const $ = E.has(`${N.id}:${R}`);
-        if (PW(L)) {
+        if (isFormulaInputValue(L)) {
           const G = repairReferencesForMove(m, L.raw, $ ? r : N.id, N.id, $);
           G !== L.raw && ((L.raw = G), k++);
         }
@@ -435,7 +439,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
           ((L.hyperlink = {
             ...U,
             sheetId: n,
-            address: Hh(G.row + m.dr, G.col + m.dc),
+            address: formatCellAddress(G.row + m.dr, G.col + m.dc),
           }),
             JSON.stringify(U) !== JSON.stringify(L.hyperlink) &&
               (k++,
@@ -498,7 +502,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
         ((N.anchor = {
           sheetId: n,
           sheetName: d.name,
-          address: Hh(R.row + m.dr, R.col + m.dc),
+          address: formatCellAddress(R.row + m.dr, R.col + m.dc),
         }),
           F({
             kind: "review-anchor",
@@ -526,7 +530,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
           const L = remapReferenceForMove(m, N.id, R.range);
           L.changed &&
             (L.sheetId !== N.id &&
-              throwCellOperationError(
+              throwWorkbookError(
                 "A chart source cannot follow data to another worksheet in this implementation. Move the chart data on its current sheet.",
               ),
             assertSheetUnprotected(findSheetOrThrow(e, N.id)),
@@ -560,7 +564,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
             ...(R ? { after: normalizeCellRecordInput(R) } : {}),
           }),
           I.length > pasteOperationLimits.changedCells &&
-            throwCellOperationError(
+            throwWorkbookError(
               "A move may change at most 500 cells in total, including source clears, destination cells, and dependent references. Move a smaller block.",
             ),
           !(B.id === r && isCellInsideRange(u, _t(T))) &&
@@ -571,17 +575,17 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
   const j = I.length > 0 || b.length > 0;
   j &&
     (formulaEntriesSignature(e) !== formulaEntriesSignature(w) &&
-      throwCellOperationError(
+      throwWorkbookError(
         "The move would create, remove, or resize a dynamic-array footprint. Convert the affected array to ordinary values before moving cells.",
       ),
     (e.events.length >= 2e3 ||
       e.events.reduce((B, _) => B + _.changes.length, 0) + I.length >
         workbookLimits.maxCells) &&
-      throwCellOperationError(
+      throwWorkbookError(
         "The move exceeds workbook history limits. Export the workbook before starting a new workpaper.",
       ),
     e.revision >= Number.MAX_SAFE_INTEGER - 1 &&
-      throwCellOperationError("Workbook revision limit reached."),
+      throwWorkbookError("Workbook revision limit reached."),
     checkDataValidationBatch(
       w,
       I.filter((B) => {
@@ -618,7 +622,7 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
       summary: `Move ${s.name}!${v} to ${d.name}!${g}: ${I.length} cell changes, ${A} destination cells overwritten, ${b.length} metadata changes.`,
     };
   return {
-    plan: deepFreezeRecords(D),
+    plan: eI(D),
     next: j ? { ...z, revision: e.revision, events: e.events } : e,
   };
 }
@@ -626,12 +630,12 @@ function buildRangeMovePlan(e, r, t, n, o, a = {}) {
   return computeRangeMoveResult(e, r, t, n, o, a).plan;
 }
 function applyRangeMovePreview(e, r, t = {}) {
-  ($W(t.readOnly),
+  (assertWorkbookWritable(t.readOnly),
     (!r ||
       r.workbookId !== e.id ||
       r.revision !== e.revision ||
       r.snapshotGuard !== JSON.stringify(e)) &&
-      throwCellOperationError(
+      throwWorkbookError(
         "The workbook changed after this move preview. Cut the source again before moving it.",
       ));
   const n = computeRangeMoveResult(
@@ -647,7 +651,7 @@ function applyRangeMovePreview(e, r, t = {}) {
       JSON.stringify(r.previewChanges) ||
       JSON.stringify(n.plan.metadataChanges) !==
         JSON.stringify(r.metadataChanges)) &&
-      throwCellOperationError(
+      throwWorkbookError(
         "The move no longer matches its preview. Cut the source again.",
       ),
     n.next

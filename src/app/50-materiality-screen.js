@@ -1,3 +1,7 @@
+import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
+import { throwErrorMessage, isNullOrEmptyValue } from "./03-workbook-model.js";
+import { cloneStructuredValue } from "./11-workbook-formats-dialog.js";
+import { parseNumericText } from "./37-linear-solver-engine.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -36,7 +40,6 @@ import {
   runMaterialityScreen,
 } from "./21-aging-and-materiality-screens.js";
 import {
-  Aj,
   comparatorSymbols,
   formatCellValueLabel,
 } from "./49-outlines-and-comments.js";
@@ -49,7 +52,7 @@ function MaterialityRiskScreen(e) {
     s = ne.useRef(""),
     d = ne.useRef(0),
     u = ne.useRef(true),
-    l = Aj(e.range),
+    l = listRangeColumnIndexes(e.range),
     [c, h] = ne.useState(e.range),
     [f, p] = ne.useState(true),
     [m, v] = ne.useState(l[0] ?? 0),
@@ -109,7 +112,7 @@ function MaterialityRiskScreen(e) {
           }
         : checkMaterialityReportFreshness(e.workbook, N, ae, oe)
       : null,
-    we = Aj(c),
+    we = listRangeColumnIndexes(c),
     Ee = se != null && se.disclose ? N : null,
     Ae = Ee?.rows.filter((Me) => K === "all" || Me.disposition === K) ?? [],
     ye = Math.max(1, Math.ceil(Ae.length / materialityScreenLimits.pageSize)),
@@ -972,12 +975,7 @@ const gf = Object.freeze({
     })
     .strict(),
   KW = new WeakMap(),
-  throwScreenError = (e) => {
-    throw Error(e);
-  },
-  rN = (e, r) => `${columnIndexToLetters(r)}${e}`,
-  cloneScreenValue = (e) => structuredClone(e),
-  isBlankScreenValue = (e) => e === null || e === "";
+  rN = (e, r) => `${columnIndexToLetters(r)}${e}`;
 function parseIsoCalendarDate(e) {
   if (
     typeof e != "string" ||
@@ -1036,31 +1034,33 @@ function normalizePatternCheckSettings(e, r) {
     o = parseRangeAddress(n.range),
     a = e.sheets.find((s) => s.id === n.sheetId);
   ((!a || o.lastRow >= a.rowCount || o.lastCol >= a.colCount) &&
-    throwScreenError("Pattern source is outside current worksheet dimensions."),
+    throwErrorMessage(
+      "Pattern source is outside current worksheet dimensions.",
+    ),
     (o.lastRow - o.firstRow + 1) * (o.lastCol - o.firstCol + 1) >
       gf.sourceCells &&
-      throwScreenError(
+      throwErrorMessage(
         "Pattern checks support at most 500 selected source cells.",
       ),
     new Set(n.rules.map((s) => s.id)).size !== n.rules.length &&
-      throwScreenError("Every rule needs a unique ID."),
+      throwErrorMessage("Every rule needs a unique ID."),
     (new Set(n.excludedRows).size !== n.excludedRows.length ||
       n.excludedRows.some(
         (s) => s <= o.firstRow + Number(n.headers) || s > o.lastRow + 1,
       )) &&
-      throwScreenError(
+      throwErrorMessage(
         "Explicit exclusions must be distinct data-row numbers inside the selected range.",
       ));
   for (const s of n.rules) {
     const d = ruleKeyColumns(s);
     if (
       (new Set(d).size !== d.length &&
-        throwScreenError(`Rule ${s.id} has duplicate field mappings.`),
+        throwErrorMessage(`Rule ${s.id} has duplicate field mappings.`),
       s.kind === "sequence" &&
         s.start !== null &&
         s.end !== null &&
         (s.start > s.end || (s.end - s.start) % s.step !== 0) &&
-        throwScreenError(
+        throwErrorMessage(
           "Sequence bounds must be chronological integers on the declared step.",
         ),
       s.kind === "round-amount")
@@ -1068,19 +1068,19 @@ function normalizePatternCheckSettings(e, r) {
       const u = toScaledIntegerAmount(s.increment, s.precision),
         l = toScaledIntegerAmount(s.tolerance, s.precision);
       (u === null || u === 0n || l === null || l * 2n >= u) &&
-        throwScreenError(
+        throwErrorMessage(
           "Round-amount increment/tolerance must fit the declared precision; tolerance must be less than half the increment.",
         );
     }
     (s.kind === "weekend" &&
       new Set(s.days).size !== s.days.length &&
-      throwScreenError(
+      throwErrorMessage(
         "Weekend weekdays must be distinct (0=Sunday through 6=Saturday).",
       ),
       s.kind === "holiday" &&
         (new Set(s.dates).size !== s.dates.length ||
           s.dates.some((u) => parseIsoCalendarDate(u) === null)) &&
-        throwScreenError(
+        throwErrorMessage(
           "Holiday dates must be distinct valid ISO calendar dates.",
         ));
   }
@@ -1089,7 +1089,7 @@ function normalizePatternCheckSettings(e, r) {
       n.combination.ruleIds.some(
         (s) => !n.rules.some((d) => d.id === s && d.kind !== "sequence"),
       )) &&
-      throwScreenError(
+      throwErrorMessage(
         "Row combinations require distinct existing row rules. Sequence gaps are separate interval findings, not missing source rows.",
       ),
     {
@@ -1130,7 +1130,7 @@ function summarizeRuleOutcome(e, r) {
   }, 0n);
   return (
     n > BigInt(Number.MAX_SAFE_INTEGER) &&
-      throwScreenError(
+      throwErrorMessage(
         "The total missing-value count exceeds the exact integer reporting limit. Split sequence groups into smaller checks.",
       ),
     (t.gapValues = Number(n)),
@@ -1149,7 +1149,7 @@ function buildRowMatchKey(e, r) {
   );
   return t.some(
     (n) =>
-      isBlankScreenValue(n) || (typeof n == "number" && !Number.isFinite(n)),
+      isNullOrEmptyValue(n) || (typeof n == "number" && !Number.isFinite(n)),
   )
     ? null
     : { key: JSON.stringify(t.map((n) => [typeof n, n])), values: t };
@@ -1178,7 +1178,7 @@ function runPatternChecks(e, r, t = {}) {
       origin: findRowOrigin(e, s.sheetId, y.sourceRow - 1),
       exclusionReason: n.excludedRows.includes(y.sourceRow)
         ? "Explicitly excluded source row."
-        : n.excludeBlankRows && y.values.every(isBlankScreenValue)
+        : n.excludeBlankRows && y.values.every(isNullOrEmptyValue)
           ? "Entire selected row is blank; excluded under the visible blank-row policy."
           : null,
     })),
@@ -1216,7 +1216,7 @@ function runPatternChecks(e, r, t = {}) {
       })),
     p = n.rules.map((y) => {
       const w = {
-          rule: cloneScreenValue(y),
+          rule: cloneStructuredValue(y),
           version: "1.0.0",
           status: "complete",
           messages: [],
@@ -1241,7 +1241,7 @@ function runPatternChecks(e, r, t = {}) {
                 ));
           }
           w.counts = summarizeRuleOutcome(w.rows, w.findings);
-          for (const C of w.findings) C.counts = cloneScreenValue(w.counts);
+          for (const C of w.findings) C.counts = cloneStructuredValue(w.counts);
           return (
             w.status === "complete" &&
               !w.counts.tested &&
@@ -1294,7 +1294,7 @@ function runPatternChecks(e, r, t = {}) {
             y.blankKeys === "exclude" &&
             R.some(
               ($) =>
-                isBlankScreenValue($) ||
+                isNullOrEmptyValue($) ||
                 (typeof $ == "string" && y.trimText && !$.trim()),
             )
               ? ((T.disposition = "excluded"),
@@ -1402,8 +1402,8 @@ function runPatternChecks(e, r, t = {}) {
               L +
               " Review candidate only; this is not proof of error or fraud.",
             rule: { id: y.id, kind: y.kind, version: "1.0.0" },
-            parameters: cloneScreenValue(y),
-            source: cloneScreenValue(l),
+            parameters: cloneStructuredValue(y),
+            source: cloneStructuredValue(l),
             sourceCells: h(N, A),
             group: { id: U, key: C, memberRows: [...T] },
             counts: createEmptyCounts(u.length),
@@ -1545,8 +1545,8 @@ function runPatternChecks(e, r, t = {}) {
         title: `Combined review candidate — row ${y.sourceRow}`,
         detail: `${n.combination.mode === "all" ? "All" : "At least one"} selected row rule matched. Review candidate only; not proof of error or fraud.`,
         rule: { id: "combined", kind: n.combination.mode, version: "1.0.0" },
-        parameters: cloneScreenValue(n.combination),
-        source: cloneScreenValue(l),
+        parameters: cloneStructuredValue(n.combination),
+        source: cloneStructuredValue(l),
         sourceCells: h([y.sourceRow], F),
         group: { id: k, key: [y.sourceRow], memberRows: [y.sourceRow] },
         counts: createEmptyCounts(u.length),
@@ -1561,7 +1561,7 @@ function runPatternChecks(e, r, t = {}) {
       !m.counts.tested &&
       ((m.status = "not-applicable"),
       m.messages.push("No row was eligible for every selected check.")));
-  for (const y of m.findings) y.counts = cloneScreenValue(m.counts);
+  for (const y of m.findings) y.counts = cloneStructuredValue(m.counts);
   const g = {
     population: u.length,
     excluded: u.filter((y) => y.exclusionReason).length,
@@ -1573,7 +1573,7 @@ function runPatternChecks(e, r, t = {}) {
     gapValues: p.reduce((y, w) => y + w.counts.gapValues, 0),
   };
   Number.isSafeInteger(g.gapValues) ||
-    throwScreenError(
+    throwErrorMessage(
       "The aggregate missing-value count exceeds the exact integer reporting limit. Run fewer sequence rules.",
     );
   const b = {
@@ -1613,7 +1613,7 @@ function runPatternChecks(e, r, t = {}) {
   return (
     new TextEncoder().encode(JSON.stringify(b, null, 2)).length >
       gf.reportBytes &&
-      throwScreenError(
+      throwErrorMessage(
         "The complete pattern report exceeds 2,000,000 bytes. Select fewer cells/rules; results are never silently truncated.",
       ),
     KW.set(b, {
@@ -1666,13 +1666,13 @@ function checkReportCurrency(e, r, t, n = {}) {
 }
 function exportScreenReportJson(e, r, t, n = {}) {
   const o = checkReportCurrency(e, r, t, n);
-  return (o.current || throwScreenError(o.reason), JSON.stringify(r, null, 2));
+  return (o.current || throwErrorMessage(o.reason), JSON.stringify(r, null, 2));
 }
 function parseScreenReportRequest(e, r) {
   const t = r;
   return (
     (!t || t.schemaVersion !== 1 || t.kind !== "pattern-audit") &&
-      throwScreenError("Choose a pattern-audit configuration or report."),
+      throwErrorMessage("Choose a pattern-audit configuration or report."),
     normalizePatternCheckSettings(e, t.request)
   );
 }
@@ -1692,19 +1692,6 @@ const screenRuleLabels = {
     "Friday",
     "Saturday",
   ],
-  rangeColumnIndexes = (e) => {
-    try {
-      const r = parseRangeAddress(e);
-      return r.lastCol - r.firstCol < 500
-        ? Array.from(
-            { length: r.lastCol - r.firstCol + 1 },
-            (t, n) => r.firstCol + n,
-          )
-        : [];
-    } catch {
-      return [];
-    }
-  },
   buildScreenRule = (e, r) => {
     const t = { id: r, label: screenRuleLabels[e] };
     switch (e) {
@@ -1763,13 +1750,10 @@ const screenRuleLabels = {
   },
   formatScreenCountsSummary = (e) =>
     `${e.population} population · ${e.excluded} excluded · ${e.invalid} invalid · ${e.tested} tested · ${e.matched} matched · ${e.notMatched} not matched · ${e.notTested} not tested · ${e.findings} findings · ${e.gapValues} missing sequence values`,
-  parseNumericText = (e) => (e.trim() === "" ? NaN : Number(e)),
   nanToEmptyText = (e) => (e === null || Number.isNaN(e) ? "" : e);
 
 export {
   formatScreenCountsSummary,
-  parseNumericText,
-  rangeColumnIndexes,
   exportScreenReportJson,
   nanToEmptyText,
   MaterialityRiskScreen,

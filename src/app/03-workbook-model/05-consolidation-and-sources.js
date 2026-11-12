@@ -1,3 +1,6 @@
+import { flattenNestedValues } from "../02-financial-functions.js";
+import { isPlainObjectValue } from "./01-cell-styles-and-themes.js";
+import { isNullOrEmptyValue } from "./03-defined-names.js";
 import {
   evaluateDateFunction,
   notDateFunctionSentinel,
@@ -65,7 +68,6 @@ import {
   pO,
 } from "./03-defined-names.js";
 import {
-  flattenNestedValues,
   findFormulaErrorArg,
   builtinFunctionNameSet,
   evaluateDatabaseFunction,
@@ -1148,18 +1150,13 @@ const defaultCalculationSettings = Object.freeze({
     maxChange: 0.001,
     timeBudgetMs: 2500,
   }),
-  Ny = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e)),
   throwInvalidCalculationSettings = () => {
     throw Error(
       "Invalid calculation settings. Choose Automatic or Manual, explicit iteration, 1–1000 iterations, convergence from 0 to 1, a 1–10000 ms time budget, 1–128 MiB working data and 1000–10000000 work units.",
     );
   };
 function normalizeCalculationSettings(e) {
-  return !Ny(e) ||
+  return !isPlainObjectValue(e) ||
     Object.keys(e).some(
       (r) =>
         ![
@@ -1215,7 +1212,7 @@ function importFormulaCacheEvidence(e, r) {
     );
   };
   if (
-    !Ny(t) ||
+    !isPlainObjectValue(t) ||
     t.schemaVersion !== 1 ||
     typeof t.fileName != "string" ||
     !t.fileName ||
@@ -1224,7 +1221,7 @@ function importFormulaCacheEvidence(e, r) {
     !/^[a-f0-9]{64}$/.test(t.sourceSha256) ||
     typeof t.importedAt != "string" ||
     !Number.isFinite(Date.parse(t.importedAt)) ||
-    !Ny(t.sourceSettings) ||
+    !isPlainObjectValue(t.sourceSettings) ||
     !Array.isArray(t.entries) ||
     t.entries.length > 1e5
   )
@@ -1255,7 +1252,7 @@ function importFormulaCacheEvidence(e, r) {
     s = new Set(),
     d = t.entries.map((u) => {
       if (
-        !Ny(u) ||
+        !isPlainObjectValue(u) ||
         typeof u.sheetId != "string" ||
         !u.sheetId ||
         u.sheetId.length > 100 ||
@@ -1274,7 +1271,7 @@ function importFormulaCacheEvidence(e, r) {
       if (u.cache !== undefined) {
         const h = u.cache;
         if (
-          !Ny(h) ||
+          !isPlainObjectValue(h) ||
           !["error", "blank", "number", "text", "boolean"].includes(
             String(h.type),
           ) ||
@@ -1541,11 +1538,10 @@ const filterEvaluationLimits = Object.freeze({
   }),
   savedFilterViewHelpText =
     "View only. Column rules intersect (AND); advanced groups use OR of AND rules. Counts include blank records in the declared range. Manual/outline hiding is separate. Full scope includes every data row; visible scope excludes filtered and manually hidden rows. Applying a view leaves source addresses, formulas, identities and history unchanged. Native JSON, XLSX, print and AI selections use full source data. Active masks are session state; named criteria can be saved in native JSON and require a fresh preview before reuse.",
-  isBlankCriterionValue = (e) => e === null || e === "",
   normalizeComparableText = (e, r = false) =>
     r ? e.normalize("NFC") : e.normalize("NFC").toLocaleLowerCase("en-US"),
   comparableCellValueKey = (e, r = false) =>
-    isBlankCriterionValue(e)
+    isNullOrEmptyValue(e)
       ? "blank"
       : `${typeof e}:${typeof e == "string" ? normalizeComparableText(e, r) : e}`,
   textFilterOperators = [
@@ -1609,8 +1605,8 @@ function parseWildcardPattern(e, r) {
   return o === t.length;
 }
 function matchesTextFilter(e, r, t, n) {
-  if (r.operator === "blank") return isBlankCriterionValue(e);
-  if (r.operator === "notBlank") return !isBlankCriterionValue(e);
+  if (r.operator === "blank") return isNullOrEmptyValue(e);
+  if (r.operator === "notBlank") return !isNullOrEmptyValue(e);
   if (r.type === "value") {
     const s =
       comparableCellValueKey(e, n) === comparableCellValueKey(r.value, n);
@@ -1859,7 +1855,7 @@ function parseConsolidationDefinition(e) {
     throw Error(`Invalid consolidation: ${r.error.issues[0]?.message}`);
   return r.data;
 }
-const serializeTypedCategoryKey = (e) =>
+const serializeTypedKeyValues = (e) =>
   JSON.stringify(e.map((r) => [typeof r, r]));
 function sumConsolidationAmounts(e) {
   let r = 0,
@@ -1876,7 +1872,7 @@ function buildConsolidationSubtotals(e) {
   const r = new Map();
   for (const t of e)
     for (let n = 1; n <= t.categories.length; n++) {
-      const o = serializeTypedCategoryKey(t.categories.slice(0, n)),
+      const o = serializeTypedKeyValues(t.categories.slice(0, n)),
         a = r.get(o) ?? [];
       (a.push(t), r.set(o, a));
     }
@@ -2221,7 +2217,7 @@ export {
   normalizeNameForComparison,
   consolidationFormatVersion,
   filterEvaluationLimits,
-  serializeTypedCategoryKey,
+  serializeTypedKeyValues,
   defaultCalculationSettings,
   makeFormulaError,
   createWorkbookFormulaEngine,

@@ -1,3 +1,4 @@
+import { formatCellValueForDisplay } from "./17-recipe-step-editors.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -1441,12 +1442,7 @@ function EvaluateFormulaDialog(e) {
     }),
   });
 }
-const formatInspectedValue = (e) =>
-  e === null
-    ? "(blank)"
-    : typeof e == "boolean"
-      ? String(e).toUpperCase()
-      : String(e);
+
 function CalculationInspectorDialog(e) {
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
@@ -1704,7 +1700,7 @@ function CalculationInspectorDialog(e) {
                       }),
                       i.jsx("dd", {
                         children: i.jsx("code", {
-                          children: formatInspectedValue(b.target.raw),
+                          children: formatCellValueForDisplay(b.target.raw),
                         }),
                       }),
                       i.jsx("dt", {
@@ -1716,7 +1712,7 @@ function CalculationInspectorDialog(e) {
                         children: [
                           b.target.resultStatus === "unavailable"
                             ? "Unavailable"
-                            : formatInspectedValue(b.target.result),
+                            : formatCellValueForDisplay(b.target.result),
                           b.target.resultNote &&
                             i.jsx("small", { children: b.target.resultNote }),
                         ],
@@ -1834,7 +1830,9 @@ function CalculationInspectorDialog(e) {
                                     i.jsx("td", { children: k.depth }),
                                     i.jsx("td", {
                                       children: i.jsx("code", {
-                                        children: formatInspectedValue(k.raw),
+                                        children: formatCellValueForDisplay(
+                                          k.raw,
+                                        ),
                                       }),
                                     }),
                                     i.jsx("td", {
@@ -1846,7 +1844,7 @@ function CalculationInspectorDialog(e) {
                                                 children: "Unavailable",
                                               }),
                                             })
-                                          : formatInspectedValue(k.result),
+                                          : formatCellValueForDisplay(k.result),
                                     }),
                                   ],
                                 },

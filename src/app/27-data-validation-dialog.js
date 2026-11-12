@@ -1,3 +1,9 @@
+import { failWithMessage } from "./03-workbook-model.js";
+import {
+  buildCompositeKey,
+  isFormulaInputValue,
+} from "./11-workbook-formats-dialog.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -1261,24 +1267,18 @@ const structuralEditLimits = {
   depth: 8,
   pageSize: 20,
 };
-function throwReviewError(e) {
-  throw Error(e);
-}
-const stringifyKeyPair = (e, r) => JSON.stringify([e, r]),
-  Yf = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  isFormulaSource = (e) =>
-    !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("=");
+
 function resolveDuplicateReviewScope(e, r) {
   return (
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      throwReviewError("Include hidden must be boolean."),
+      failWithMessage("Include hidden must be boolean."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      throwReviewError("The duplicate review host context is invalid."),
+      failWithMessage("The duplicate review host context is invalid."),
     {
       includeHidden: !!r.includeHidden,
       allowedSheetIds: [
@@ -1326,7 +1326,7 @@ function Qde(e, r) {
     if (!a) return;
     ((t += a.length),
       t > 1e6 &&
-        throwReviewError(
+        failWithMessage(
           "Output-name safety inspection exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ));
     const u = Jde(e, a.replace(/"(?:[^"]|"")*"/g, ""), s, d);
@@ -1342,11 +1342,11 @@ function Qde(e, r) {
   };
   for (const a of e.sheets) {
     for (const [s, d] of Object.entries(a.cells))
-      isFormulaSource(d) && o(String(d.raw), a.id, s);
+      isFormulaInputValue(d) && o(String(d.raw), a.id, s);
     for (const s of a.conditionalFormats ?? [])
       if (s.kind === "formula") {
         const d = parseRangeAddress(s.range);
-        o(s.formula, a.id, Yf(d.firstRow, d.firstCol));
+        o(s.formula, a.id, formatCellAddress(d.firstRow, d.firstCol));
       }
     for (const s of a.tables ?? []) {
       const d = parseRangeAddress(s.range);
@@ -1354,7 +1354,10 @@ function Qde(e, r) {
         o(
           u.calculatedFormula,
           a.id,
-          Yf(Math.min(d.firstRow + 1, d.lastRow), d.firstCol + l),
+          formatCellAddress(
+            Math.min(d.firstRow + 1, d.lastRow),
+            d.firstCol + l,
+          ),
         ),
       );
     }
@@ -1380,20 +1383,20 @@ function normalizeDuplicateReviewRequest(e, r) {
           "outputSheetName",
         ].includes(s),
     )) &&
-    throwReviewError("Invalid duplicate review request."),
+    failWithMessage("Invalid duplicate review request."),
     (typeof r.sheetId != "string" || typeof r.range != "string") &&
-      throwReviewError("Choose a source worksheet and one rectangular range."));
+      failWithMessage("Choose a source worksheet and one rectangular range."));
   const t = parseRangeAddress(r.range),
     n = t.lastCol - t.firstCol + 1,
     o = t.lastRow - t.firstRow + 1;
   (n * o > structuralEditLimits.sourceCells &&
-    throwReviewError("Select at most 500 source cells for duplicate review."),
+    failWithMessage("Select at most 500 source cells for duplicate review."),
     (!Array.isArray(r.keyColumns) ||
       !r.keyColumns.length ||
       r.keyColumns.some(
         (s) => !Number.isInteger(s) || s < t.firstCol || s > t.lastCol,
       )) &&
-      throwReviewError(
+      failWithMessage(
         "Choose one or more key columns inside the source range.",
       ),
     ([r.headers, r.caseSensitive, r.trimText].some(
@@ -1401,33 +1404,33 @@ function normalizeDuplicateReviewRequest(e, r) {
     ) ||
       !["raw", "calculated"].includes(r.comparison) ||
       !["match", "keep"].includes(r.blankPolicy)) &&
-      throwReviewError(
+      failWithMessage(
         "Choose valid comparison, header, case, trim and blank rules.",
       ),
     o <= (r.headers ? 1 : 0) &&
-      throwReviewError(
+      failWithMessage(
         "The source must contain at least one data row after its header.",
       ),
     typeof r.outputSheetName != "string" &&
-      throwReviewError("Choose a new output worksheet name."));
+      failWithMessage("Choose a new output worksheet name."));
   const a = r.outputSheetName.trim();
   return (
     (!a ||
       a.length > 31 ||
       /[\\/\[\]*?:\u0000-\u001f]/.test(a) ||
       /^'|'$/.test(a)) &&
-      throwReviewError(
+      failWithMessage(
         "The output sheet needs a valid Excel worksheet name of 1–31 characters.",
       ),
     e.sheets.some((s) => s.name.toLowerCase() === a.toLowerCase()) &&
-      throwReviewError("A worksheet with that output name already exists."),
+      failWithMessage("A worksheet with that output name already exists."),
     Qde(e, a) &&
-      throwReviewError(
+      failWithMessage(
         "That output name is already referenced by workbook formulas or formula metadata. Choose a different name to avoid reconnecting an unresolved source reference.",
       ),
     {
       ...r,
-      range: `${Yf(t.firstRow, t.firstCol)}:${Yf(t.lastRow, t.lastCol)}`,
+      range: `${formatCellAddress(t.firstRow, t.firstCol)}:${formatCellAddress(t.lastRow, t.lastCol)}`,
       keyColumns: [...new Set(r.keyColumns)].sort((s, d) => s - d),
       outputSheetName: a,
     }
@@ -1452,13 +1455,14 @@ function runDuplicateInspection(e, r, t, n) {
   const o = parseRangeAddress(t),
     a = [];
   for (let v = o.firstRow; v <= o.lastRow; v++)
-    for (let g = o.firstCol; g <= o.lastCol; g++) a.push(Yf(v, g));
+    for (let g = o.firstCol; g <= o.lastCol; g++)
+      a.push(formatCellAddress(v, g));
   if (
     (a.some((v) => !r.cells[v] || r.cells[v].raw === null) &&
-      throwReviewError(
+      failWithMessage(
         "Calculated comparison requires populated source cells; blank or possible spill-child cells are outside this subset. Use raw comparison or a populated selection.",
       ),
-    !a.some((v) => isFormulaSource(r.cells[v])))
+    !a.some((v) => isFormulaInputValue(r.cells[v])))
   )
     return new Map(a.map((v) => [v, r.cells[v].raw]));
   const s = {
@@ -1490,7 +1494,7 @@ function runDuplicateInspection(e, r, t, n) {
     }
   }
   d ||
-    throwReviewError(
+    failWithMessage(
       "A temporary duplicate inspection context could not be isolated.",
     );
   const u = inspectFormulaDependencies(
@@ -1520,7 +1524,7 @@ function runDuplicateInspection(e, r, t, n) {
     u.coverage.depthLimited ||
     u.cycles.length ||
     u.issues.some((v) => v.from === u.target.key || l.has(v.from))) &&
-    throwReviewError(
+    failWithMessage(
       "Calculated comparison requires a complete supported static dependency closure within 1,000 cells, 5,000 scanned formulas and depth 8; hidden, dynamic, unsupported or cyclic dependencies are excluded.",
     );
   const c = new Set([
@@ -1549,10 +1553,10 @@ function runDuplicateInspection(e, r, t, n) {
       b = g.cells[v.address];
     if (
       ((!b || b.raw === null) &&
-        throwReviewError(
+        failWithMessage(
           "Calculated comparison requires populated static dependencies; blank or possible spill-child dependencies are unsupported.",
         ),
-      isFormulaSource(b))
+      isFormulaInputValue(b))
     ) {
       const y = resolveDefinedNameValue(String(b.raw), e, g.id).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
@@ -1567,7 +1571,7 @@ function runDuplicateInspection(e, r, t, n) {
               .replace(/^_XLWS\./, ""),
           ),
         )) &&
-        throwReviewError(
+        failWithMessage(
           "Calculated comparison excludes volatile, dynamic-reference and array/spill formulas. Raw comparison can preserve their formula text without execution.",
         );
     }
@@ -1580,7 +1584,7 @@ function runDuplicateInspection(e, r, t, n) {
           ...v,
           cells: Object.fromEntries(
             Object.entries(v.cells).filter(([g]) =>
-              l.has(stringifyKeyPair(v.id, g)),
+              l.has(buildCompositeKey(v.id, g)),
             ),
           ),
         })),
@@ -1590,31 +1594,29 @@ function runDuplicateInspection(e, r, t, n) {
   for (const v of u.nodes) {
     const g = f(v.sheetId, v.address);
     (f.getOperationalErrors().length &&
-      throwReviewError(
+      failWithMessage(
         `An operational calculation error (${f.getOperationalErrors().join(", ")}) prevents duplicate review, even when a formula handler conceals it.`,
       ),
       f.getSpillRange(v.sheetId, v.address) &&
-        throwReviewError(
+        failWithMessage(
           "Calculated comparison requires scalar cells; a dependency produced an array/spill result.",
         ),
-      isFormulaSource(
+      isFormulaInputValue(
         e.sheets.find((b) => b.id === v.sheetId).cells[v.address],
       ) &&
         typeof g == "string" &&
         /^#(?:[A-Z0-9_/.]+[!?]?)/.test(g) &&
-        throwReviewError(
+        failWithMessage(
           "Calculated comparison cannot group formula errors or error-like formula strings; correct them or use raw comparison.",
         ),
       typeof g == "number" &&
         !Number.isFinite(g) &&
-        throwReviewError(
-          "Nonfinite values cannot be used in duplicate review.",
-        ),
+        failWithMessage("Nonfinite values cannot be used in duplicate review."),
       v.sheetId === r.id && a.includes(v.address) && p.set(v.address, g));
   }
   return (
     (f.getOperationalErrors().length || p.size !== a.length) &&
-      throwReviewError(
+      failWithMessage(
         "Calculated source coverage is incomplete or encountered an operational error.",
       ),
     p
@@ -1622,14 +1624,14 @@ function runDuplicateInspection(e, r, t, n) {
 }
 function createDuplicateReviewSheet(e, r, t = {}) {
   (t.readOnly &&
-    throwReviewError(
+    failWithMessage(
       "This workbook is read-only. A derived worksheet cannot be created.",
     ),
     assertWorkbookStructureEditable(e));
   const n = normalizeDuplicateReviewRequest(e, r),
     o = resolveDuplicateReviewScope(e, t),
     a = e.sheets.find((j) => j.id === n.sheetId);
-  a || throwReviewError("The source worksheet no longer exists.");
+  a || failWithMessage("The source worksheet no longer exists.");
   const s = parseRangeAddress(n.range),
     d = s.lastCol - s.firstCol + 1;
   ((!o.allowedSheetIds.includes(a.id) ||
@@ -1640,7 +1642,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
         cn(a, "column").some(
           (j) => j.start <= s.lastCol && j.end >= s.firstCol,
         )))) &&
-    throwReviewError(
+    failWithMessage(
       "The source range is outside the visible, authorized host context. Include hidden only within permitted host scope.",
     ),
     (a.merges ?? []).some((j) => {
@@ -1652,7 +1654,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
         z.lastCol >= s.firstCol
       );
     }) &&
-      throwReviewError(
+      failWithMessage(
         "Unmerge the selected source before duplicate review so row boundaries are unambiguous.",
       ));
   const u =
@@ -1660,13 +1662,13 @@ function createDuplicateReviewSheet(e, r, t = {}) {
         ? runDuplicateInspection(e, a, n.range, o)
         : null,
     l = (j, z) => {
-      const V = Yf(j, z),
+      const V = formatCellAddress(j, z),
         D = structuredClone(a.cells[V] ?? { raw: null }),
         B = u ? u.get(V) : D.raw;
       return (
         typeof B == "number" &&
           !Number.isFinite(B) &&
-          throwReviewError(
+          failWithMessage(
             "Nonfinite values cannot be used in duplicate review.",
           ),
         { cell: D, value: B }
@@ -1687,7 +1689,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
         const $ = L - s.firstCol,
           U = V[$];
         let G = D[$];
-        return n.comparison === "raw" && isFormulaSource(U)
+        return n.comparison === "raw" && isFormulaInputValue(U)
           ? ["formula", G]
           : (typeof G == "string" &&
               (n.trimText && (G = G.trim()),
@@ -1698,7 +1700,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
       C = JSON.stringify(B),
       T = {
         sourceRow: j + 1,
-        sourceRange: `${Yf(j, s.firstCol)}:${Yf(j, s.lastCol)}`,
+        sourceRange: `${formatCellAddress(j, s.firstCol)}:${formatCellAddress(j, s.lastCol)}`,
         cells: V,
         values: D,
         normalizedKey: C,
@@ -1754,7 +1756,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
       ...(typeof j == "string" && j.startsWith("=") ? { literal: true } : {}),
     }),
     w = (j, z, V) => {
-      b.cells[Yf(j - 1, z)] = V;
+      b.cells[formatCellAddress(j - 1, z)] = V;
     };
   (w(1, 0, y("Unique population — static source snapshot")),
     w(
@@ -1767,7 +1769,9 @@ function createDuplicateReviewSheet(e, r, t = {}) {
   const E = (j) => {
       (c.forEach((z, V) => {
         const D =
-          n.headers && u ? u.get(Yf(s.firstRow, s.firstCol + V)) : z.raw;
+          n.headers && u
+            ? u.get(formatCellAddress(s.firstRow, s.firstCol + V))
+            : z.raw;
         w(j, V, {
           ...structuredClone(z),
           ...y(D),
@@ -1823,7 +1827,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
   e.sheets.reduce((j, z) => j + Object.keys(z.cells).length, 0) +
     Object.keys(b.cells).length >
     workbookLimits.maxCells &&
-    throwReviewError(
+    failWithMessage(
       "The derived worksheet would exceed the workbook's stored-cell budget.",
     );
   const O = structuredClone(e);
@@ -1831,7 +1835,7 @@ function createDuplicateReviewSheet(e, r, t = {}) {
     O.sheets.push(b),
     new TextEncoder().encode(JSON.stringify(O)).byteLength >
       workbookLimits.maxNativeBytes &&
-      throwReviewError(
+      failWithMessage(
         "The derived workbook would exceed the native file budget.",
       ),
     {
@@ -1850,15 +1854,15 @@ function createDuplicateReviewSheet(e, r, t = {}) {
   );
 }
 function applyDuplicateReviewPreview(e, r, t = {}) {
-  (t.readOnly && throwReviewError("This workbook is read-only."),
+  (t.readOnly && failWithMessage("This workbook is read-only."),
     JSON.stringify(e) !== r.snapshot &&
-      throwReviewError(
+      failWithMessage(
         "The workbook changed after duplicate review. Preview again before Apply.",
       ));
   const n = createDuplicateReviewSheet(e, r.request, t);
   return (
     JSON.stringify(n) !== JSON.stringify(r) &&
-      throwReviewError(
+      failWithMessage(
         "The duplicate preview or host context changed. Preview and review again.",
       ),
     n.next

@@ -1,3 +1,5 @@
+import { buildCompositeKey } from "./11-workbook-formats-dialog.js";
+import { LabeledField } from "./14-dax-data-model-engine.js";
 import i from "react/jsx-runtime";
 import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
 import {
@@ -26,7 +28,6 @@ import {
   assertSolverMagnitude,
   parseRangeBounds,
   assertAutomaticCalculation,
-  gxe,
   normalizeAnalysisPermissions,
   rejectRangeAsScalar,
   p_,
@@ -61,7 +62,7 @@ function linearizeSolverFormula(e, r, t) {
       return y.coefficients.some(Boolean) ? u(y, w.constant) : u(w, y.constant);
     },
     h = (y, w, E = 0) => {
-      const A = gxe(y, w);
+      const A = buildCompositeKey(y, w);
       if (a.has(A)) throw Error("Solver formulas contain a cycle.");
       if (o.has(A)) return o.get(A);
       if (
@@ -1195,14 +1196,11 @@ function readSavedAnalysisReport(e, r, t = {}) {
         }
   );
 }
-const LabeledField = (e, r) =>
-    i.jsxs("label", { children: [i.jsx(LocalizedText, { children: e }), r] }),
-  parseNumericInput = (e) => (e.trim() === "" ? NaN : Number(e));
+const parseNumericText = (e) => (e.trim() === "" ? NaN : Number(e));
 
 export {
   readSavedAnalysisReport,
   commitAnalysisResult,
   runAnalysisRequest,
-  LabeledField,
-  parseNumericInput,
+  parseNumericText,
 };

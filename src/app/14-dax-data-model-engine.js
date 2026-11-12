@@ -1,3 +1,4 @@
+import { createUuid } from "./03-workbook-model.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
@@ -1985,18 +1986,16 @@ function DataModelDefinitionEditor({ definition, onChange }) {
     ],
   });
 }
-const LabeledModelField = (e, r) =>
-    i.jsxs("label", { children: [i.jsx(LocalizedText, { children: e }), r] }),
-  createModelId = () => crypto.randomUUID();
+const LabeledField = (e, r) =>
+  i.jsxs("label", { children: [i.jsx(LocalizedText, { children: e }), r] });
 
 export {
-  createModelId,
   previewDataModelOutput,
   DataModelDefinitionEditor,
   publishDataModelReport,
   getModelReportStatus,
   removeDataModelFromWorkbook,
-  LabeledModelField,
+  LabeledField,
   buildModelTableFromRange,
   DaxExpressionInput,
 };

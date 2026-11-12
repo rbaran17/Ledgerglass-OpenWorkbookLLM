@@ -1730,19 +1730,10 @@ function XlsxConversionReview({
     }),
   });
 }
-const downloadBlobFile = ({ filename, blob }) => {
-  const t = URL.createObjectURL(blob),
-    n = document.createElement("a");
-  ((n.href = t),
-    (n.download = filename),
-    n.click(),
-    setTimeout(() => URL.revokeObjectURL(t), 1e3));
-};
 
 export {
   validateConvertedSource,
   SourceImportDialog,
   describeSourceFile,
-  downloadBlobFile,
   XlsxConversionReview,
 };

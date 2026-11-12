@@ -1,3 +1,4 @@
+import { isFormulaCellValue } from "./03-workbook-model.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -804,8 +805,6 @@ function DuplicateReviewDialog(e) {
   });
 }
 const structurePreviewRegistry = new WeakMap(),
-  isFormulaCellValue = (e) =>
-    typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
   containsRefError = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
   formatAxisAddress = (e, r) =>
     e.axis === "row" ? String(r + 1) : columnIndexToLetters(r);

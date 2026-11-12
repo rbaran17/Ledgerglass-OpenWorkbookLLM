@@ -1,3 +1,5 @@
+import { createUuid, isFiniteNumber } from "./03-workbook-model.js";
+import { saveBlobToFile } from "./13-consolidation-dialog.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
@@ -1415,17 +1417,8 @@ const isPromiseLike = (e) => !!e && typeof e.then == "function";
 function chainMaybePromise(e, r) {
   return isPromiseLike(e) ? e.then(r) : r(e);
 }
-const Vj = buildLocalDemoProposal(),
-  createRandomUuid = () => crypto.randomUUID(),
-  NS = (e) => typeof e == "number" && Number.isFinite(e);
-function Jd(e, r) {
-  const t = URL.createObjectURL(e),
-    n = document.createElement("a");
-  ((n.href = t),
-    (n.download = r),
-    n.click(),
-    setTimeout(() => URL.revokeObjectURL(t), 5e3));
-}
+const Vj = buildLocalDemoProposal();
+
 function wy(e, r) {
   const t = _t(e),
     n = _t(r);
@@ -1444,10 +1437,7 @@ const LazyAssistantChat = ne.lazy(() =>
 
 export {
   isPromiseLike,
-  Jd,
   ExternalSourceStatusPanel,
-  NS,
-  createRandomUuid,
   workbookInstanceKey,
   chainMaybePromise,
   Vj,

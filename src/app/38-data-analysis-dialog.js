@@ -1,3 +1,5 @@
+import { LabeledField } from "./14-dax-data-model-engine.js";
+import { downloadBlobAsFile } from "./09-workbook-links.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -39,8 +41,7 @@ import {
   readSavedAnalysisReport,
   commitAnalysisResult,
   runAnalysisRequest,
-  LabeledField,
-  parseNumericInput,
+  parseNumericText,
 } from "./37-linear-solver-engine.js";
 
 function DataAnalysisDialog(e) {
@@ -153,7 +154,7 @@ function DataAnalysisDialog(e) {
       i.jsx(LocalizedNumberField, {
         "aria-label": text(te),
         value: ae === undefined || !Number.isFinite(ae) ? "" : ae,
-        onValueChange: (de) => oe(parseNumericInput(de)),
+        onValueChange: (de) => oe(parseNumericText(de)),
       });
   (ne.useEffect(() => {
     var oe;
@@ -179,7 +180,7 @@ function DataAnalysisDialog(e) {
                   ...F,
                   outputName: w,
                   ...(F.method === "histogram"
-                    ? { bins: O.split(",").map(parseNumericInput) }
+                    ? { bins: O.split(",").map(parseNumericText) }
                     : {}),
                 },
           ae = runAnalysisRequest(e.workbook, te, $);
@@ -2055,14 +2056,6 @@ async function renderReportPngBlob(e) {
     URL.revokeObjectURL(t);
   }
 }
-const downloadReportFile = ({ filename, blob }) => {
-  const t = URL.createObjectURL(blob),
-    n = document.createElement("a");
-  ((n.href = t),
-    (n.download = filename),
-    n.click(),
-    setTimeout(() => URL.revokeObjectURL(t), 1e3));
-};
 
 export {
   describeReportOutputStatus,
@@ -2077,5 +2070,4 @@ export {
   renderReportPngBlob,
   DataAnalysisDialog,
   validateReportSourceScope,
-  downloadReportFile,
 };
