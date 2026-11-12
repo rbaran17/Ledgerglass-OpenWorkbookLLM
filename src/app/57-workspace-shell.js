@@ -47,10 +47,10 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
   const o = ne.useRef(null);
   return (
     ne.useEffect(() => {
-      const a = (s) => {
+      const a = (event) => {
         o.current?.open &&
-          s.target instanceof Node &&
-          !o.current.contains(s.target) &&
+          event.target instanceof Node &&
+          !o.current.contains(event.target) &&
           (o.current.open = false);
       };
       return (
@@ -61,13 +61,13 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
     i.jsxs("details", {
       ref: o,
       className: `emb-header-menu ${className}`,
-      onKeyDown: (a) => {
-        a.key === "Escape" &&
-          a.currentTarget.open &&
-          (a.preventDefault(),
-          a.stopPropagation(),
-          (a.currentTarget.open = false),
-          a.currentTarget.querySelector("summary")?.focus());
+      onKeyDown: (event) => {
+        event.key === "Escape" &&
+          event.currentTarget.open &&
+          (event.preventDefault(),
+          event.stopPropagation(),
+          (event.currentTarget.open = false),
+          event.currentTarget.querySelector("summary")?.focus());
       },
       children: [
         i.jsx("summary", {
@@ -79,8 +79,8 @@ function EmbeddedHeaderMenu({ label, trigger, children, className = "" }) {
           className: "emb-menu-panel",
           role: "region",
           "aria-label": label,
-          onClick: (a) => {
-            a.target.closest("button") &&
+          onClick: (event) => {
+            event.target.closest("button") &&
               (o.current && (o.current.open = false),
               o.current?.querySelector("summary")?.focus());
           },
@@ -111,7 +111,9 @@ function restoreSavedWorkspaceDocuments() {
         (!t.versionStores ||
           typeof t.versionStores != "object" ||
           Array.isArray(t.versionStores) ||
-          !Object.values(t.versionStores).every((n) => typeof n == "string")))
+          !Object.values(t.versionStores).every(
+            (versionStore) => typeof versionStore == "string",
+          )))
     )
       throw new Error("Invalid workspace");
     return {
@@ -132,29 +134,29 @@ function restoreSavedWorkspaceDocuments() {
     };
   }
 }
-function persistWorkspaceDocumentVersion(e, r) {
-  const t = e.documents[r];
-  let n = e.versionStores?.[r] ?? JSON.stringify(t);
-  const o = createLocalWorkbookStore(
+function persistWorkspaceDocumentVersion(e, workspaceDocumentKind) {
+  const t = e.documents[workspaceDocumentKind];
+  let n = e.versionStores?.[workspaceDocumentKind] ?? JSON.stringify(t);
+  const localWorkbookStore = createLocalWorkbookStore(
       {
         getItem: () => n,
         setItem: (d, u) => {
           n = u;
         },
       },
-      buildEmbeddedDemoKey(r),
+      buildEmbeddedDemoKey(workspaceDocumentKind),
     ),
-    a = o.load();
+    a = localWorkbookStore.load();
   return (
     JSON.stringify(a.workbook) !== JSON.stringify(t) &&
-      o.save(t, a.view, a.guard),
+      localWorkbookStore.save(t, a.view, a.guard),
     n
   );
 }
-function createWorkspaceDocumentStore(e, r) {
+function createWorkspaceDocumentStore(e, workspaceDocumentKind) {
   let t = null;
   try {
-    t = persistWorkspaceDocumentVersion(e, r);
+    t = persistWorkspaceDocumentVersion(e, workspaceDocumentKind);
   } catch {}
   return createLocalWorkbookStore(
     {
@@ -163,22 +165,22 @@ function createWorkspaceDocumentStore(e, r) {
         t = o;
       },
     },
-    buildEmbeddedDemoKey(r),
+    buildEmbeddedDemoKey(workspaceDocumentKind),
   );
 }
 async function recoverSavedWorkspaceDocuments(e) {
   const r = await Promise.all(
-    workspaceDocumentKinds.map(async (t) => {
-      const n = buildEmbeddedDemoKey(t),
-        o = saveWorkbookWithLock(
+    workspaceDocumentKinds.map(async (workspaceDocumentKind) => {
+      const embeddedDemoKey = buildEmbeddedDemoKey(workspaceDocumentKind),
+        store = saveWorkbookWithLock(
           {
             getItem: (a) => localStorage.getItem(a),
             setItem: (a, s) => localStorage.setItem(a, s),
           },
-          n,
+          embeddedDemoKey,
         );
       try {
-        if (e.legacy && localStorage.getItem(n) === null) {
+        if (e.legacy && localStorage.getItem(embeddedDemoKey) === null) {
           if (!navigator.locks)
             throw new Error(
               "This browser cannot coordinate safe workbook saves between tabs.",
@@ -187,46 +189,49 @@ async function recoverSavedWorkspaceDocuments(e) {
             d = setTimeout(() => s.abort(), 5e3);
           try {
             await navigator.locks.request(
-              workbookLockName(n),
+              workbookLockName(embeddedDemoKey),
               { mode: "exclusive", signal: s.signal },
               (u) => {
                 if (
                   s.signal.aborted ||
                   !u ||
                   u.mode !== "exclusive" ||
-                  u.name !== workbookLockName(n)
+                  u.name !== workbookLockName(embeddedDemoKey)
                 )
                   throw new Error(
                     "Safe workbook recovery could not acquire its document lock.",
                   );
-                if (localStorage.getItem(n) !== null) return;
+                if (localStorage.getItem(embeddedDemoKey) !== null) return;
                 const l = restoreSavedWorkspaceDocuments();
                 if (l.restoreProblem || !l.legacy)
                   throw new Error(
                     "The original saved workspace changed during recovery.",
                   );
-                localStorage.setItem(n, persistWorkspaceDocumentVersion(l, t));
+                localStorage.setItem(
+                  embeddedDemoKey,
+                  persistWorkspaceDocumentVersion(l, workspaceDocumentKind),
+                );
               },
             );
           } finally {
             clearTimeout(d);
           }
         }
-        const a = o.load();
+        const a = store.load();
         if (!a && e.restoreProblem) throw new Error(e.restoreProblem);
         return {
-          id: t,
-          store: o,
-          workbook: a?.workbook ?? e.documents[t],
+          id: workspaceDocumentKind,
+          store: store,
+          workbook: a?.workbook ?? e.documents[workspaceDocumentKind],
           problem: "",
         };
-      } catch (a) {
-        const s = `${a instanceof Error ? a.message : "Saved workbooks could not be restored."} Original saved data is preserved. Changes are kept in this tab; export a copy to keep them.`;
+      } catch (error) {
+        const problem = `${error instanceof Error ? error.message : "Saved workbooks could not be restored."} Original saved data is preserved. Changes are kept in this tab; export a copy to keep them.`;
         return {
-          id: t,
-          store: createWorkspaceDocumentStore(e, t),
-          workbook: e.documents[t],
-          problem: s,
+          id: workspaceDocumentKind,
+          store: createWorkspaceDocumentStore(e, workspaceDocumentKind),
+          workbook: e.documents[workspaceDocumentKind],
+          problem: problem,
         };
       }
     }),
@@ -253,13 +258,16 @@ function EmbeddedWorkbookWorkspace() {
     h = ne.useMemo(
       () =>
         Object.fromEntries(
-          workspaceDocumentKinds.map((R) => [
-            R,
+          workspaceDocumentKinds.map((workspaceDocumentKind) => [
+            workspaceDocumentKind,
             {
-              onChange: (L) => t(($) => ({ ...$, [R]: L })),
-              onWorkbookLoaded: (L) => t(($) => ({ ...$, [R]: L })),
-              onSelectionChange: (L) => F(($) => ({ ...$, [R]: L })),
-              onPersistenceStateChange: (L) => c(($) => ({ ...$, [R]: L })),
+              onChange: (L) => t(($) => ({ ...$, [workspaceDocumentKind]: L })),
+              onWorkbookLoaded: (L) =>
+                t(($) => ({ ...$, [workspaceDocumentKind]: L })),
+              onSelectionChange: (L) =>
+                F(($) => ({ ...$, [workspaceDocumentKind]: L })),
+              onPersistenceStateChange: (L) =>
+                c(($) => ({ ...$, [workspaceDocumentKind]: L })),
             },
           ]),
         ),
@@ -279,15 +287,15 @@ function EmbeddedWorkbookWorkspace() {
           "The workbook could not be saved. Changes remain in this tab.")
         : ""),
     j = !O && I?.status === "saved",
-    z = ne.useMemo(() => buildLocalDemoProposal(), []),
-    V = r[a],
+    adapter = ne.useMemo(() => buildLocalDemoProposal(), []),
+    workbook = r[a],
     D = k[a]
-      ? V.sheets.find((R) => R.id === k[a].sheetId)
-      : V.sheets.find((R) => !R.hidden),
+      ? workbook.sheets.find((sheet) => sheet.id === k[a].sheetId)
+      : workbook.sheets.find((sheet) => !sheet.hidden),
     B = k[a]?.range ?? "A1",
     _ = `${D?.name ?? "Sheet1"}!${B}`,
-    C = workspaceDocumentKinds.filter((R) =>
-      `${workspaceDocumentLabels[R]} ${r[R].name}`
+    C = workspaceDocumentKinds.filter((workspaceDocumentKind) =>
+      `${workspaceDocumentLabels[workspaceDocumentKind]} ${r[workspaceDocumentKind].name}`
         .toLowerCase()
         .includes(y.toLowerCase()),
     );
@@ -309,8 +317,8 @@ function EmbeddedWorkbookWorkspace() {
     }, [a]),
     ne.useEffect(() => {
       if (!E) return;
-      const R = (L) => {
-        L.key === "Escape" && A(false);
+      const R = (event) => {
+        event.key === "Escape" && A(false);
       };
       return (
         document.addEventListener("keydown", R),
@@ -470,18 +478,18 @@ function EmbeddedWorkbookWorkspace() {
             trigger: i.jsx(LayoutGrid, { size: 21, "aria-hidden": "true" }),
             children: [
               i.jsx("h2", { children: "Your workbooks" }),
-              workspaceDocumentKinds.map((R) =>
+              workspaceDocumentKinds.map((workspaceDocumentKind) =>
                 i.jsxs(
                   "button",
                   {
                     type: "button",
-                    onClick: () => T(R),
+                    onClick: () => T(workspaceDocumentKind),
                     children: [
                       i.jsx(FileSpreadsheet, { size: 18 }),
-                      workspaceDocumentLabels[R],
+                      workspaceDocumentLabels[workspaceDocumentKind],
                     ],
                   },
-                  R,
+                  workspaceDocumentKind,
                 ),
               ),
               i.jsxs("button", {
@@ -562,7 +570,7 @@ function EmbeddedWorkbookWorkspace() {
                 "aria-label": "Search workpapers",
                 placeholder: "Find a workpaper",
                 value: y,
-                onChange: (R) => w(R.target.value),
+                onChange: (event) => w(event.target.value),
               }),
             ],
           }),
@@ -691,20 +699,21 @@ function EmbeddedWorkbookWorkspace() {
           i.jsx("div", {
             className: "emb-mobile-documents",
             "aria-label": "Choose workpaper",
-            children: workspaceDocumentKinds.map((R) =>
+            children: workspaceDocumentKinds.map((workspaceDocumentKind) =>
               i.jsxs(
                 "button",
                 {
                   type: "button",
-                  className: a === R && f ? "emb-mobile-active" : "",
-                  "aria-label": `Open ${workspaceDocumentLabels[R]}`,
-                  onClick: () => T(R),
+                  className:
+                    a === workspaceDocumentKind && f ? "emb-mobile-active" : "",
+                  "aria-label": `Open ${workspaceDocumentLabels[workspaceDocumentKind]}`,
+                  onClick: () => T(workspaceDocumentKind),
                   children: [
                     i.jsx(FileSpreadsheet, { size: 14 }),
-                    workspaceDocumentLabels[R],
+                    workspaceDocumentLabels[workspaceDocumentKind],
                   ],
                 },
-                R,
+                workspaceDocumentKind,
               ),
             ),
           }),
@@ -739,7 +748,7 @@ function EmbeddedWorkbookWorkspace() {
                           i.jsx("strong", {
                             children: workspaceDocumentLabels[a],
                           }),
-                          i.jsx("span", { children: V.name }),
+                          i.jsx("span", { children: workbook.name }),
                         ],
                       }),
                       i.jsx("span", {
@@ -812,7 +821,7 @@ function EmbeddedWorkbookWorkspace() {
                         initialWorkbook: n.documents[R],
                         ...h[R],
                         actor: "Example preparer",
-                        adapter: z,
+                        adapter: adapter,
                         workbookStore: n.stores[R],
                         workbookStorePersistent: !n.problems[R],
                       }),
@@ -840,7 +849,7 @@ function EmbeddedWorkbookWorkspace() {
                   }),
                   i.jsxs("span", {
                     children: [
-                      V.sheets.filter((R) => !R.hidden).length,
+                      workbook.sheets.filter((sheet) => !sheet.hidden).length,
                       " sheets",
                       i.jsx("span", {
                         className: "emb-footer-divider",
@@ -848,7 +857,7 @@ function EmbeddedWorkbookWorkspace() {
                       }),
                       "Revision",
                       " ",
-                      V.revision,
+                      workbook.revision,
                     ],
                   }),
                 ],
@@ -912,20 +921,20 @@ function EmbeddedWorkbookWorkspace() {
             role: "dialog",
             "aria-modal": "true",
             "aria-labelledby": "emb-info-title",
-            onClick: (R) => R.stopPropagation(),
-            onKeyDown: (R) => {
-              if (R.key !== "Tab") return;
+            onClick: (event) => event.stopPropagation(),
+            onKeyDown: (event) => {
+              if (event.key !== "Tab") return;
               const L = Array.from(
-                  R.currentTarget.querySelectorAll("button:not(:disabled)"),
+                  event.currentTarget.querySelectorAll("button:not(:disabled)"),
                 ),
                 $ = L[0],
                 U = L.at(-1);
-              (R.shiftKey &&
+              (event.shiftKey &&
                 document.activeElement === $ &&
-                (R.preventDefault(), U?.focus()),
-                !R.shiftKey &&
+                (event.preventDefault(), U?.focus()),
+                !event.shiftKey &&
                   document.activeElement === U &&
-                  (R.preventDefault(), $?.focus()));
+                  (event.preventDefault(), $?.focus()));
             },
             children: [
               i.jsx("button", {

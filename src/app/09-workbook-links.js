@@ -35,30 +35,44 @@ import {
   createEmptyExportLedger,
 } from "./08-xlsx-import-export-and-preservation.js";
 
-function buildSourceImportRecord(e) {
-  const r = requireRetainedXlsxSource(e),
-    t = importXlsxWorkbook(r.bytes, createEmptyExportLedger()),
-    n = buildExchangeSchemaReport("import", r.fileName, r.bytes.length, e, t);
-  return ((n.partInventory = F$(unzipSync(r.bytes), r.sha256)), n);
+function buildSourceImportRecord(activeWorkbook) {
+  const r = requireRetainedXlsxSource(activeWorkbook),
+    xlsxWorkbookPackage = importXlsxWorkbook(
+      r.bytes,
+      createEmptyExportLedger(),
+    ),
+    exchangeSchemaReport = buildExchangeSchemaReport(
+      "import",
+      r.fileName,
+      r.bytes.length,
+      activeWorkbook,
+      xlsxWorkbookPackage,
+    );
+  return (
+    (exchangeSchemaReport.partInventory = F$(unzipSync(r.bytes), r.sha256)),
+    exchangeSchemaReport
+  );
 }
 const operationScopeContext = ne.createContext({}),
   useOperationScope = () => ne.useContext(operationScopeContext);
 function useCancellableOperation() {
-  const e = useOperationScope(),
+  const operationScope = useOperationScope(),
     r = ne.useRef(null),
-    t = ne.useCallback(() => r.current?.abort(), []);
+    cancel = ne.useCallback(() => r.current?.abort(), []);
   return (
-    ne.useEffect(() => () => t(), [t]),
+    ne.useEffect(() => () => cancel(), [cancel]),
     {
-      cancel: t,
+      cancel: cancel,
       begin: () => {
-        t();
+        cancel();
         const n = new AbortController();
         return (
           (r.current = n),
           {
-            ...e,
-            signal: e.signal ? AbortSignal.any([n.signal, e.signal]) : n.signal,
+            ...operationScope,
+            signal: operationScope.signal
+              ? AbortSignal.any([n.signal, operationScope.signal])
+              : n.signal,
           }
         );
       },
@@ -68,10 +82,11 @@ function useCancellableOperation() {
 function WorkbookLinkStatusBadge({ workbook, sources, onReview }) {
   const n = ne.useMemo(() => {
     try {
-      const o = buildWorkbookLinkReview(workbook, { sources });
-      return !o.links.length && !o.unsupported.length
+      const workbookLinkReview = buildWorkbookLinkReview(workbook, { sources });
+      return !workbookLinkReview.links.length &&
+        !workbookLinkReview.unsupported.length
         ? null
-        : `${o.links.length} workbook link targets · ${o.links.filter((a) => a.status !== "matches-approved-snapshot").length} need source review · ${o.unsupported.length} unsupported. Displayed linked values are cached snapshots.`;
+        : `${workbookLinkReview.links.length} workbook link targets · ${workbookLinkReview.links.filter((link) => link.status !== "matches-approved-snapshot").length} need source review · ${workbookLinkReview.unsupported.length} unsupported. Displayed linked values are cached snapshots.`;
     } catch {
       return "Workbook link inventory needs review; links exceed the supported review limit.";
     }
@@ -94,13 +109,13 @@ function WorkbookLinksDialog(e) {
   const r = ne.useRef(e);
   r.current = e;
   const t = ne.useRef(null),
-    n = useCancellableOperation(),
+    cancellableOperation = useCancellableOperation(),
     o = ne.useRef(0),
     a = ne.useRef(true),
     [s, d] = ne.useState([]),
     [u, l] = ne.useState(""),
-    [c, h] = ne.useState(""),
-    [f, p] = ne.useState("refresh"),
+    [replacementTarget, h] = ne.useState(""),
+    [action, p] = ne.useState("refresh"),
     [m, v] = ne.useState(false),
     [g, b] = ne.useState(false),
     [y, w] = ne.useState(null),
@@ -108,29 +123,30 @@ function WorkbookLinksDialog(e) {
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(0),
     [j, z] = ne.useState(0),
-    [V, D] = ne.useState(false),
-    [B, _] = ne.useState(null),
-    [C, T] = ne.useState(""),
-    [N, R] = ne.useState([]),
+    [disabled, D] = ne.useState(false),
+    [workbook, _] = ne.useState(null),
+    [target, T] = ne.useState(""),
+    [allowedSheetIds, R] = ne.useState([]),
     [L, $] = ne.useState([]),
-    [U, G] = ne.useState(false),
-    H = e.approvedSources ?? s,
+    [checked, G] = ne.useState(false),
+    sources = e.approvedSources ?? s,
     Q = ne.useMemo(() => {
       try {
         return {
-          inventory: buildWorkbookLinkReview(e.workbook, { sources: H }),
+          inventory: buildWorkbookLinkReview(e.workbook, { sources: sources }),
           error: "",
         };
-      } catch (se) {
-        return { inventory: null, error: se.message };
+      } catch (error) {
+        return { inventory: null, error: error.message };
       }
-    }, [e.workbook, H]),
+    }, [e.workbook, sources]),
     X$1 = Q.inventory,
-    J = X$1?.links.find((se) => se.target === (u || X$1.links[0]?.target)),
+    J = X$1?.links.find((link) => link.target === (u || X$1.links[0]?.target)),
     q = J?.target ?? "",
     W =
-      X$1?.cells.filter((se) => se.references.some((we) => we.target === q)) ??
-      [],
+      X$1?.cells.filter((cell) =>
+        cell.references.some((reference) => reference.target === q),
+      ) ?? [],
     K = (se) => {
       if (e.approvedSources !== undefined && !e.onApprovedSourcesChange)
         throw Error("Source approvals are controlled by your host.");
@@ -145,14 +161,14 @@ function WorkbookLinksDialog(e) {
     });
   (ne.useEffect(() => {
     a.current = true;
-    const se = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       t.current?.focus(),
       () => {
         ((a.current = false),
           o.current++,
-          n.cancel(),
-          se?.isConnected && se.focus());
+          cancellableOperation.cancel(),
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -163,19 +179,23 @@ function WorkbookLinksDialog(e) {
       (A(""), F(""));
       try {
         se();
-      } catch (we) {
-        A(we instanceof Error ? we.message : "Workbook link operation failed.");
+      } catch (error) {
+        A(
+          error instanceof Error
+            ? error.message
+            : "Workbook link operation failed.",
+        );
       }
     },
-    oe = () =>
+    onClick = () =>
       ae(() => {
         (w(
           previewWorkbookLinkOperation(
             e.workbook,
             {
-              action: f,
+              action: action,
               target: q,
-              replacementTarget: c,
+              replacementTarget: replacementTarget,
               activateLiteral: m,
               acknowledgeCached: g,
             },
@@ -199,19 +219,19 @@ function WorkbookLinksDialog(e) {
       const we = ++o.current;
       (D(true), A(""), _(null), w(null));
       try {
-        const Ee = await importWorkbookFile(se, n.begin());
+        const Ee = await importWorkbookFile(se, cancellableOperation.begin());
         if (!a.current || we !== o.current) return;
         (_(Ee.workbook),
           T(q || `[${se.name}]`),
           R(
             Ee.workbook.sheets
-              .filter((Ae) => !Ae.hidden && !Ae.veryHidden)
+              .filter((sheet) => !sheet.hidden && !sheet.veryHidden)
               .map((Ae) => Ae.id),
           ),
           $(Ee.warnings),
           G(false));
-      } catch (Ee) {
-        a.current && we === o.current && A(Ee.message);
+      } catch (error) {
+        a.current && we === o.current && A(error.message);
       } finally {
         a.current && we === o.current && D(false);
       }
@@ -231,10 +251,10 @@ function WorkbookLinksDialog(e) {
       "aria-label": "Workbook links",
       tabIndex: -1,
       ref: t,
-      onKeyDown: (se) => {
+      onKeyDown: (event) => {
         if (
-          (se.key === "Escape" && (se.preventDefault(), e.onClose()),
-          se.key === "Tab")
+          (event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const Ee = Array.from(
               t.current?.querySelectorAll(
@@ -243,13 +263,13 @@ function WorkbookLinksDialog(e) {
             ).filter((Te) => !Te.hidden),
             Ae = Ee[0],
             ye = Ee.at(-1);
-          se.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === Ae ||
             document.activeElement === t.current)
-            ? (se.preventDefault(), ye == null || ye.focus())
-            : !se.shiftKey &&
+            ? (event.preventDefault(), ye == null || ye.focus())
+            : !event.shiftKey &&
               document.activeElement === ye &&
-              (se.preventDefault(), Ae == null || Ae.focus());
+              (event.preventDefault(), Ae == null || Ae.focus());
         }
       },
       children: [
@@ -305,17 +325,17 @@ function WorkbookLinksDialog(e) {
                         i.jsx("select", {
                           "aria-label": "Linked workbook",
                           value: q,
-                          onChange: (se) => {
-                            (l(se.target.value), v(false), b(false), le());
+                          onChange: (event) => {
+                            (l(event.target.value), v(false), b(false), le());
                           },
-                          children: X$1.links.map((se) =>
+                          children: X$1.links.map((link) =>
                             i.jsxs(
                               "option",
                               {
-                                value: se.target,
-                                children: [se.target, " · ", se.status],
+                                value: link.target,
+                                children: [link.target, " · ", link.status],
                               },
-                              se.target,
+                              link.target,
                             ),
                           ),
                         }),
@@ -402,7 +422,10 @@ function WorkbookLinksDialog(e) {
                                           }),
                                           i.jsx("td", {
                                             children: se.references
-                                              .filter((we) => we.target === q)
+                                              .filter(
+                                                (reference) =>
+                                                  reference.target === q,
+                                              )
                                               .map(
                                                 (we) =>
                                                   `${we.sheet}!${we.range}`,
@@ -458,9 +481,9 @@ function WorkbookLinksDialog(e) {
                             "Operation",
                             i.jsxs("select", {
                               "aria-label": "Link operation",
-                              value: f,
-                              onChange: (se) => {
-                                (p(se.target.value), le());
+                              value: action,
+                              onChange: (event) => {
+                                (p(event.target.value), le());
                               },
                               children: [
                                 i.jsx("option", {
@@ -479,35 +502,37 @@ function WorkbookLinksDialog(e) {
                             }),
                           ],
                         }),
-                        f === "replace" &&
+                        action === "replace" &&
                           i.jsxs("label", {
                             children: [
                               "Replacement source",
                               i.jsxs("select", {
                                 "aria-label": "Replacement source",
-                                value: c,
-                                onChange: (se) => {
-                                  (h(se.target.value), le());
+                                value: replacementTarget,
+                                onChange: (event) => {
+                                  (h(event.target.value), le());
                                 },
                                 children: [
                                   i.jsx("option", {
                                     value: "",
                                     children: "Choose an approved source",
                                   }),
-                                  H.filter((se) => se.target !== q).map((se) =>
-                                    i.jsxs(
-                                      "option",
-                                      {
-                                        value: se.target,
-                                        children: [
-                                          se.target,
-                                          " · ",
-                                          se.workbook.name,
-                                        ],
-                                      },
-                                      se.target,
+                                  sources
+                                    .filter((event) => event.target !== q)
+                                    .map((se) =>
+                                      i.jsxs(
+                                        "option",
+                                        {
+                                          value: se.target,
+                                          children: [
+                                            se.target,
+                                            " · ",
+                                            se.workbook.name,
+                                          ],
+                                        },
+                                        se.target,
+                                      ),
                                     ),
-                                  ),
                                 ],
                               }),
                             ],
@@ -519,22 +544,22 @@ function WorkbookLinksDialog(e) {
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: m,
-                                onChange: (se) => {
-                                  (v(se.target.checked), le());
+                                onChange: (event) => {
+                                  (v(event.target.checked), le());
                                 },
                               }),
                               "Activate these inert formulas using only reviewed cached source values",
                             ],
                           }),
-                        f === "break" &&
+                        action === "break" &&
                           i.jsxs("label", {
                             className: "lg-links-check",
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: g,
-                                onChange: (se) => {
-                                  (b(se.target.checked), le());
+                                onChange: (event) => {
+                                  (b(event.target.checked), le());
                                 },
                               }),
                               "I understand that complete formulas will be replaced with the previewed cached values",
@@ -542,12 +567,12 @@ function WorkbookLinksDialog(e) {
                           }),
                         i.jsx("button", {
                           className: "lg-reports-primary",
-                          disabled: e.readOnly || V,
-                          onClick: oe,
+                          disabled: e.readOnly || disabled,
+                          onClick: onClick,
                           children:
-                            f === "refresh"
+                            action === "refresh"
                               ? "Preview refresh"
-                              : f === "replace"
+                              : action === "replace"
                                 ? "Preview replacement"
                                 : "Preview break links",
                         }),
@@ -587,20 +612,20 @@ function WorkbookLinksDialog(e) {
                   i.jsx("summary", {
                     children: "Retained XLSX target inventory",
                   }),
-                  e.workbook.workbookLinks.packageTargets.map((se) =>
+                  e.workbook.workbookLinks.packageTargets.map((packageTarget) =>
                     i.jsxs(
                       "p",
                       {
                         children: [
-                          se.key,
+                          packageTarget.key,
                           " → ",
-                          se.target,
+                          packageTarget.target,
                           " (",
-                          se.part,
+                          packageTarget.part,
                           "). Retained original metadata; never fetched.",
                         ],
                       },
-                      se.key,
+                      packageTarget.key,
                     ),
                   ),
                 ],
@@ -609,33 +634,38 @@ function WorkbookLinksDialog(e) {
               className: "lg-links-card",
               children: [
                 i.jsx("h3", { children: "Approved source snapshots" }),
-                H.length
+                sources.length
                   ? i.jsx("ul", {
-                      children: H.map((se) =>
+                      children: sources.map((source) =>
                         i.jsxs(
                           "li",
                           {
                             children: [
-                              se.target,
+                              source.target,
                               " · ",
-                              se.workbook.name,
+                              source.workbook.name,
                               " · revision",
                               " ",
-                              se.workbook.revision,
+                              source.workbook.revision,
                               " · ",
-                              se.allowedSheetIds.length,
+                              source.allowedSheetIds.length,
                               " approved worksheets",
                               " ",
                               (!e.approvedSources ||
                                 e.onApprovedSourcesChange) &&
                                 i.jsxs("button", {
                                   onClick: () =>
-                                    ae(() => K(H.filter((we) => we !== se))),
-                                  children: ["Remove approval for ", se.target],
+                                    ae(() =>
+                                      K(sources.filter((we) => we !== source)),
+                                    ),
+                                  children: [
+                                    "Remove approval for ",
+                                    source.target,
+                                  ],
                                 }),
                             ],
                           },
-                          se.target,
+                          source.target,
                         ),
                       ),
                     })
@@ -651,10 +681,10 @@ function WorkbookLinksDialog(e) {
                           "aria-label": "Attach source workbook",
                           type: "file",
                           accept: ".xlsx,.xltx,.json,.csv,.tsv",
-                          disabled: V,
-                          onChange: (se) => {
-                            const we = se.target.files?.[0];
-                            ((se.target.value = ""), we && he(we));
+                          disabled: disabled,
+                          onChange: (event) => {
+                            const we = event.target.files?.[0];
+                            ((event.target.value = ""), we && he(we));
                           },
                         }),
                       ],
@@ -663,7 +693,7 @@ function WorkbookLinksDialog(e) {
                       children:
                         "Your host supplies source approvals. Ask the host application to attach an authorized snapshot.",
                     }),
-                V &&
+                disabled &&
                   i.jsxs(i.Fragment, {
                     children: [
                       i.jsx("p", {
@@ -672,24 +702,27 @@ function WorkbookLinksDialog(e) {
                       }),
                       i.jsx("button", {
                         onClick: () => {
-                          (o.current++, n.cancel(), D(false), _(null));
+                          (o.current++,
+                            cancellableOperation.cancel(),
+                            D(false),
+                            _(null));
                         },
                         children: "Cancel source inspection",
                       }),
                     ],
                   }),
-                B &&
+                workbook &&
                   i.jsxs("div", {
                     className: "lg-links-pending",
                     children: [
-                      i.jsxs("h4", { children: ["Approve ", B.name] }),
+                      i.jsxs("h4", { children: ["Approve ", workbook.name] }),
                       i.jsxs("label", {
                         children: [
                           "Exact formula qualifier",
                           i.jsx("input", {
                             "aria-label": "Source qualifier",
-                            value: C,
-                            onChange: (se) => T(se.target.value),
+                            value: target,
+                            onChange: (event) => T(event.target.value),
                           }),
                         ],
                       }),
@@ -697,7 +730,7 @@ function WorkbookLinksDialog(e) {
                         children:
                           "Match the selected reference exactly. A matching filename alone does not grant access.",
                       }),
-                      B.sheets.map((se) =>
+                      workbook.sheets.map((sheet) =>
                         i.jsxs(
                           "label",
                           {
@@ -705,22 +738,25 @@ function WorkbookLinksDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: N.includes(se.id),
-                                disabled: !!(se.hidden || se.veryHidden),
-                                onChange: (we) =>
+                                checked: allowedSheetIds.includes(sheet.id),
+                                disabled: !!(sheet.hidden || sheet.veryHidden),
+                                onChange: (event) =>
                                   R(
-                                    we.target.checked
-                                      ? [...N, se.id]
-                                      : N.filter((Ee) => Ee !== se.id),
+                                    event.target.checked
+                                      ? [...allowedSheetIds, sheet.id]
+                                      : allowedSheetIds.filter(
+                                          (allowedSheetId) =>
+                                            allowedSheetId !== sheet.id,
+                                        ),
                                   ),
                               }),
-                              se.name,
-                              se.hidden || se.veryHidden
+                              sheet.name,
+                              sheet.hidden || sheet.veryHidden
                                 ? " (hidden; host approval required)"
                                 : "",
                             ],
                           },
-                          se.id,
+                          sheet.id,
                         ),
                       ),
                       L.length > 0 &&
@@ -737,19 +773,25 @@ function WorkbookLinksDialog(e) {
                         children: [
                           i.jsx("input", {
                             type: "checkbox",
-                            checked: U,
-                            onChange: (se) => G(se.target.checked),
+                            checked: checked,
+                            onChange: (event) => G(event.target.checked),
                           }),
                           "I approve this source and the selected worksheets for explicit refresh",
                         ],
                       }),
                       i.jsx("button", {
-                        disabled: !U || !N.length,
+                        disabled: !checked || !allowedSheetIds.length,
                         onClick: () =>
                           ae(() => {
                             const se = [
-                              ...H.filter((we) => we.target !== C),
-                              { target: C, workbook: B, allowedSheetIds: N },
+                              ...sources.filter(
+                                (event) => event.target !== target,
+                              ),
+                              {
+                                target: target,
+                                workbook: workbook,
+                                allowedSheetIds: allowedSheetIds,
+                              },
                             ];
                             (buildWorkbookLinkReview(e.workbook, {
                               sources: se,
@@ -853,7 +895,7 @@ function WorkbookLinksDialog(e) {
                   }),
                   i.jsx("button", {
                     className: "lg-reports-primary",
-                    disabled: e.readOnly || V,
+                    disabled: e.readOnly || disabled,
                     onClick: de,
                     children: "Apply reviewed link changes",
                   }),
@@ -894,16 +936,16 @@ function WorkbookLinksDialog(e) {
 function Rue(e, r) {
   return runFileImport("source", e, r);
 }
-function toSourceFileDescriptor(e) {
+function toSourceFileDescriptor(inspection) {
   return {
-    fileName: e.fileName,
-    bytes: assertSourceInspectionCurrent(e),
-    sha256: e.sha256,
+    fileName: inspection.fileName,
+    bytes: assertSourceInspectionCurrent(inspection),
+    sha256: inspection.sha256,
   };
 }
-function parseExtractionResult(e, r) {
-  const t = assertSourceInspectionCurrent(e);
-  if (e.method !== "document-adapter")
+function parseExtractionResult(inspection, r) {
+  const t = assertSourceInspectionCurrent(inspection);
+  if (inspection.method !== "document-adapter")
     throw Error("JSON/XML use the native structured parser.");
   const n = object({
     schemaVersion: literal(1),
@@ -914,39 +956,40 @@ function parseExtractionResult(e, r) {
   })
     .strict()
     .parse(r);
-  if (n.sourceSha256 !== e.sha256)
+  if (n.sourceSha256 !== inspection.sha256)
     throw Error("Extraction does not match the selected source hash.");
-  if (["png", "jpeg"].includes(e.format) && n.pageCount !== 1)
+  if (["png", "jpeg"].includes(inspection.format) && n.pageCount !== 1)
     throw Error("An image has one source page.");
   const o = validateExtractedSourceTables({
-    ...e,
+    ...inspection,
     extractor: n.extractor,
     pageCount: n.pageCount,
     tables: n.tables,
     warnings: [
-      ...e.warnings,
+      ...inspection.warnings,
       "Extraction values, confidence and regions are adapter assertions. Review the original; hashes do not prove extraction accuracy.",
     ],
   });
-  for (const a of o.tables)
-    for (const s of a.rows)
-      for (const d of s)
+  for (const table of o.tables)
+    for (const row of table.rows)
+      for (const d of row)
         if (d.region.page > n.pageCount)
           throw Error("A source region exceeds the declared page count.");
   return (
-    o.tables.length > 1 && o.tables.forEach((a) => (a.ambiguous = true)),
-    recordSourceInspection(o, t, e.fileName),
+    o.tables.length > 1 &&
+      o.tables.forEach((table) => (table.ambiguous = true)),
+    recordSourceInspection(o, t, inspection.fileName),
     o
   );
 }
-async function runDocumentExtraction(e, r, t, n = {}) {
-  if (t !== true)
+async function runDocumentExtraction(inspection, extractor, checked, n = {}) {
+  if (checked !== true)
     throw Error(
       "Approve the host extractor before sharing the selected source.",
     );
-  if (e.method !== "document-adapter")
+  if (inspection.method !== "document-adapter")
     throw Error("Choose a document source for extraction.");
-  const o = toSourceFileDescriptor(e);
+  const sourceFileDescriptor = toSourceFileDescriptor(inspection);
   if (n.signal?.aborted) throw Error("Document extraction cancelled.");
   const a = n.timeoutMs ?? 3e4;
   if (!Number.isInteger(a) || a < 1 || a > 6e4)
@@ -973,9 +1016,12 @@ async function runDocumentExtraction(e, r, t, n = {}) {
         )),
         Promise.resolve()
           .then(() =>
-            r.extract({
-              file: new File([new Uint8Array(o.bytes)], o.fileName),
-              sha256: e.sha256,
+            extractor.extract({
+              file: new File(
+                [new Uint8Array(sourceFileDescriptor.bytes)],
+                sourceFileDescriptor.fileName,
+              ),
+              sha256: inspection.sha256,
               signal: s.signal,
             }),
           )
@@ -983,7 +1029,7 @@ async function runDocumentExtraction(e, r, t, n = {}) {
             (b) => {
               if (!m)
                 try {
-                  v(undefined, parseExtractionResult(e, b));
+                  v(undefined, parseExtractionResult(inspection, b));
                 } catch {
                   v(
                     Error(
@@ -1003,114 +1049,124 @@ async function runDocumentExtraction(e, r, t, n = {}) {
   }
 }
 const importPreviewRegistry = new WeakMap();
-function buildSourceReview(e, r, t) {
-  const n = assertSourceInspectionCurrent(r);
+function buildSourceReview(workbook, inspection, t) {
+  const n = assertSourceInspectionCurrent(inspection);
   if (
-    (validateExtractedSourceTables(r),
-    assertWorkbookStructureEditable(e),
+    (validateExtractedSourceTables(inspection),
+    assertWorkbookStructureEditable(workbook),
     typeof t.sheetName != "string" ||
       !t.sheetName.trim() ||
       t.sheetName.length > 31 ||
       /[\\/?*\[\]:\x00-\x1f]/.test(t.sheetName) ||
-      e.sheets.some(
-        (p) => p.name.toLowerCase() === t.sheetName.trim().toLowerCase(),
+      workbook.sheets.some(
+        (sheet) =>
+          sheet.name.toLowerCase() === t.sheetName.trim().toLowerCase(),
       ))
   )
     throw Error("Choose a unique worksheet name of 1–31 characters.");
-  const o = r.tables.find((p) => p.id === t.tableId);
+  const o = inspection.tables.find((table) => table.id === t.tableId);
   if (!o) throw Error("Select a source table.");
-  if ((o.ambiguous || r.tables.length > 1) && t.ambiguityReviewed !== true)
+  if (
+    (o.ambiguous || inspection.tables.length > 1) &&
+    t.ambiguityReviewed !== true
+  )
     throw Error("Review and confirm the ambiguous table selection.");
   if (!t.resolutions || typeof t.resolutions != "object")
     throw Error("Invalid source review.");
-  const a = {},
+  const cells = {},
     s = new Set();
-  let d = 0,
-    u = 0,
-    l = 0;
+  let accepted = 0,
+    excluded = 0,
+    corrected = 0;
   if (
-    (o.columns.forEach((p, m) => {
-      a[columnIndexToLetters(m) + "1"] = {
-        raw: p.name,
+    (o.columns.forEach((column, m) => {
+      cells[columnIndexToLetters(m) + "1"] = {
+        raw: column.name,
         literal: true,
         style: { bold: true },
       };
     }),
-    o.rows.forEach((p, m) =>
-      p.forEach((v, g) => {
+    o.rows.forEach((row, m) =>
+      row.forEach((v, g) => {
         const b = `${m}:${g}`;
         s.add(b);
         const y = t.resolutions[b],
-          w = resolveExtractedCellValue(v, y);
+          extractedCellValue = resolveExtractedCellValue(v, y);
         (y?.decision === "exclude"
-          ? u++
+          ? excluded++
           : y?.decision === "correct"
-            ? l++
-            : d++,
-          (a[columnIndexToLetters(g) + (m + 2)] = {
-            raw: w,
-            ...(typeof w == "string" ? { literal: true } : {}),
+            ? corrected++
+            : accepted++,
+          (cells[columnIndexToLetters(g) + (m + 2)] = {
+            raw: extractedCellValue,
+            ...(typeof extractedCellValue == "string" ? { literal: true } : {}),
           }));
       }),
     ),
-    Object.keys(t.resolutions).some((p) => !s.has(p)))
+    Object.keys(t.resolutions).some((resolution) => !s.has(resolution)))
   )
     throw Error("A review decision refers to an unknown cell.");
   const c = {
       id: crypto.randomUUID(),
       name: t.sheetName.trim(),
-      cells: a,
+      cells: cells,
       rowCount: workbookLimits.maxRows,
       colCount: workbookLimits.maxCols,
     },
-    h = {
+    record = {
       id: crypto.randomUUID(),
       sheetId: c.id,
       sheetName: c.name,
       importedAt: new Date().toISOString(),
-      original: buildRetainedSourceRecord(n, r.fileName, r.format),
-      method: r.method,
-      extractor: r.extractor,
-      ...(r.pageCount ? { pageCount: r.pageCount } : {}),
+      original: buildRetainedSourceRecord(
+        n,
+        inspection.fileName,
+        inspection.format,
+      ),
+      method: inspection.method,
+      extractor: inspection.extractor,
+      ...(inspection.pageCount ? { pageCount: inspection.pageCount } : {}),
       table: structuredClone(o),
       resolutions: structuredClone(t.resolutions),
       ambiguityReviewed: t.ambiguityReviewed,
     };
   normalizeWorkbookInput({
-    ...e,
-    sheets: [...e.sheets, c],
-    sourceImports: [...(e.sourceImports ?? []), h],
+    ...workbook,
+    sheets: [...workbook.sheets, c],
+    sourceImports: [...(workbook.sourceImports ?? []), record],
   });
   const f = {
-    workbookHash: fingerprintCanonicalValue(e),
-    inspection: r,
+    workbookHash: fingerprintCanonicalValue(workbook),
+    inspection: inspection,
     review: structuredClone(t),
-    record: h,
+    record: record,
     sheet: c,
-    accepted: d,
-    excluded: u,
-    corrected: l,
+    accepted: accepted,
+    excluded: excluded,
+    corrected: corrected,
   };
   return (importPreviewRegistry.set(f, fingerprintCanonicalValue(f)), f);
 }
-function commitSourceImport(e, r, t = {}) {
+function commitSourceImport(workbook, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
   if (
-    (assertWorkbookStructureEditable(e),
+    (assertWorkbookStructureEditable(workbook),
     importPreviewRegistry.get(r) !== fingerprintCanonicalValue(r) ||
-      r.workbookHash !== fingerprintCanonicalValue(e))
+      r.workbookHash !== fingerprintCanonicalValue(workbook))
   )
     throw Error("The workbook or review changed. Preview the import again.");
   assertSourceInspectionCurrent(r.inspection);
-  const n = normalizeWorkbookInput({
-    ...e,
-    sheets: [...e.sheets, r.sheet],
-    sourceImports: [...(e.sourceImports ?? []), r.record],
+  const workbookInput = normalizeWorkbookInput({
+    ...workbook,
+    sheets: [...workbook.sheets, r.sheet],
+    sourceImports: [...(workbook.sourceImports ?? []), r.record],
   });
-  return (importPreviewRegistry.delete(r), n);
+  return (importPreviewRegistry.delete(r), workbookInput);
 }
-function findSourceImport(e, r) {
-  const t = e.sourceImports?.find((o) => o.id === r);
+function findSourceImport(workbook, r) {
+  const t = workbook.sourceImports?.find(
+    (sourceImport) => sourceImport.id === r,
+  );
   if (!t) throw Error("Source import is unavailable.");
   return {
     bytes: validateRetainedSourceFile(t.original),
@@ -1118,25 +1174,28 @@ function findSourceImport(e, r) {
     sha256: t.original.sha256,
   };
 }
-function resolveImportedSourceCell(e, r, t, n) {
-  const o = e.sourceImports?.find((p) => p.id === r),
-    a = o?.table.rows[t]?.[n];
-  if (!o || !a) throw Error("Imported source cell is unavailable.");
-  const s = columnIndexToLetters(n) + (t + 2),
-    d = e.sheets.find((p) => p.id === o.sheetId),
-    u = d?.cells[s],
+function resolveImportedSourceCell(workbook, r, t, n) {
+  const o = workbook.sourceImports?.find(
+      (sourceImport) => sourceImport.id === r,
+    ),
+    source = o?.table.rows[t]?.[n];
+  if (!o || !source) throw Error("Imported source cell is unavailable.");
+  const address = columnIndexToLetters(n) + (t + 2),
+    d = workbook.sheets.find((sheet) => sheet.id === o.sheetId),
+    cell = d?.cells[address],
     l = o.resolutions[`${t}:${n}`],
-    c = resolveExtractedCellValue(a, l);
+    extractedCellValue = resolveExtractedCellValue(source, l);
   return {
-    address: s,
+    address: address,
     sheetId: o.sheetId,
     sourceHash: o.original.sha256,
-    source: a,
+    source: source,
     decision: l?.decision ?? "accepted",
-    importedValue: c,
-    currentValue: u?.raw ?? null,
+    importedValue: extractedCellValue,
+    currentValue: cell?.raw ?? null,
     status: d
-      ? u?.raw === c && (typeof c != "string" || u.literal === true)
+      ? cell?.raw === extractedCellValue &&
+        (typeof extractedCellValue != "string" || cell.literal === true)
         ? "matches-import"
         : "changed"
       : "missing-sheet",

@@ -69,31 +69,35 @@ function CalculationOptionsDialog(e) {
     [l, c] = ne.useState(""),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState(0),
-    [v, g] = ne.useState(() => normalizeDatePolicy(e.workbook.datePolicy));
+    [datePolicy, g] = ne.useState(() =>
+      normalizeDatePolicy(e.workbook.datePolicy),
+    );
   (ne.useEffect(() => {
     (u(getWorkbookCalculation(e.workbook).report.settings),
       g(normalizeDatePolicy(e.workbook.datePolicy)),
       m(0));
   }, [e.workbook]),
     ne.useEffect(() => {
-      const j = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current
           ?.querySelector('[data-ui-label="Close Calculation Options"]')
           ?.focus(),
         () => {
-          j?.isConnected && j.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
   const b = (j) => {
       try {
         (j(), c(""));
-      } catch (z) {
-        c(z instanceof Error ? z.message : "Calculation action failed.");
+      } catch (error) {
+        c(
+          error instanceof Error ? error.message : "Calculation action failed.",
+        );
       }
     },
-    y = () =>
+    onClick = () =>
       b(() => {
         if (e.onCalculate) {
           e.onCalculate();
@@ -112,20 +116,23 @@ function CalculationOptionsDialog(e) {
         e.onWorkbookChange(
           {
             ...withCalculationSettings(e.workbook, d),
-            datePolicy: normalizeDatePolicy(v),
+            datePolicy: normalizeDatePolicy(datePolicy),
           },
-          `Set calculation to ${d.mode}; iteration ${d.iterative ? "enabled" : "disabled"}; dates ${v.dateSystem} ${v.textDateOrder}, time zone ${v.timeZone}`,
+          `Set calculation to ${d.mode}; iteration ${d.iterative ? "enabled" : "disabled"}; dates ${datePolicy.dateSystem} ${datePolicy.textDateOrder}, time zone ${datePolicy.timeZone}`,
         );
       }),
     E = () =>
       b(() => {
-        const j = buildCalculationEvidence(e.workbook, report);
+        const calculationEvidence = buildCalculationEvidence(
+          e.workbook,
+          report,
+        );
         if (e.onExport) {
-          e.onExport(j);
+          e.onExport(calculationEvidence);
           return;
         }
         const z = URL.createObjectURL(
-            new Blob([j], { type: "application/json" }),
+            new Blob([calculationEvidence], { type: "application/json" }),
           ),
           V = document.createElement("a");
         ((V.href = z),
@@ -133,17 +140,17 @@ function CalculationOptionsDialog(e) {
           V.click(),
           setTimeout(() => URL.revokeObjectURL(z), 1e3));
       }),
-    A = report.cells.filter((j) =>
-      `${e.workbook.sheets.find((V) => V.id === j.sheetId)?.name}!${j.address} ${j.formula} ${j.status} ${j.result.value}`
+    A = report.cells.filter((cell) =>
+      `${e.workbook.sheets.find((sheet) => sheet.id === cell.sheetId)?.name}!${cell.address} ${cell.formula} ${cell.status} ${cell.result.value}`
         .toLowerCase()
         .includes(h.toLowerCase()),
     ),
     k = A.slice(p * 100, (p + 1) * 100),
-    F = (j) => {
+    onKeyDown = (event) => {
       var V, D;
       if (
-        (j.key === "Escape" && (j.stopPropagation(), e.onClose()),
-        j.key !== "Tab")
+        (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+        event.key !== "Tab")
       )
         return;
       const z = [
@@ -151,11 +158,11 @@ function CalculationOptionsDialog(e) {
           'button:not(:disabled),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
         ),
       ];
-      j.shiftKey && document.activeElement === z[0]
-        ? (j.preventDefault(), (V = z.at(-1)) == null || V.focus())
-        : !j.shiftKey &&
+      event.shiftKey && document.activeElement === z[0]
+        ? (event.preventDefault(), (V = z.at(-1)) == null || V.focus())
+        : !event.shiftKey &&
           document.activeElement === z.at(-1) &&
-          (j.preventDefault(), (D = z[0]) == null || D.focus());
+          (event.preventDefault(), (D = z[0]) == null || D.focus());
     };
   return i.jsx("div", {
     className: "fw-backdrop",
@@ -165,7 +172,7 @@ function CalculationOptionsDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: F,
+      onKeyDown: onKeyDown,
       children: [
         i.jsxs("header", {
           children: [
@@ -207,7 +214,7 @@ function CalculationOptionsDialog(e) {
                 i.jsxs("select", {
                   "aria-label": text("Calculation mode"),
                   value: d.mode,
-                  onChange: (j) => u({ ...d, mode: j.target.value }),
+                  onChange: (event) => u({ ...d, mode: event.target.value }),
                   lang: language("Calculation mode"),
                   "data-ui-label": "Calculation mode",
                   children: [
@@ -225,7 +232,8 @@ function CalculationOptionsDialog(e) {
                 i.jsx("input", {
                   type: "checkbox",
                   checked: d.iterative,
-                  onChange: (j) => u({ ...d, iterative: j.target.checked }),
+                  onChange: (event) =>
+                    u({ ...d, iterative: event.target.checked }),
                 }),
                 i.jsx(LocalizedText, {
                   children: "Enable iterative calculation",
@@ -302,8 +310,9 @@ function CalculationOptionsDialog(e) {
                 i.jsx(LocalizedText, { children: "Workbook date system" }),
                 i.jsxs("select", {
                   "aria-label": text("Workbook date system"),
-                  value: v.dateSystem,
-                  onChange: (j) => g({ ...v, dateSystem: j.target.value }),
+                  value: datePolicy.dateSystem,
+                  onChange: (event) =>
+                    g({ ...datePolicy, dateSystem: event.target.value }),
                   lang: language("Workbook date system"),
                   "data-ui-label": "Workbook date system",
                   children: [
@@ -319,7 +328,7 @@ function CalculationOptionsDialog(e) {
                 }),
               ],
             }),
-            v.dateSystem !== report.dateContext.dateSystem &&
+            datePolicy.dateSystem !== report.dateContext.dateSystem &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
@@ -332,8 +341,9 @@ function CalculationOptionsDialog(e) {
                 i.jsx(LocalizedText, { children: "Text date order" }),
                 i.jsxs("select", {
                   "aria-label": text("Text date order"),
-                  value: v.textDateOrder,
-                  onChange: (j) => g({ ...v, textDateOrder: j.target.value }),
+                  value: datePolicy.textDateOrder,
+                  onChange: (event) =>
+                    g({ ...datePolicy, textDateOrder: event.target.value }),
                   lang: language("Text date order"),
                   "data-ui-label": "Text date order",
                   children: [
@@ -354,8 +364,9 @@ function CalculationOptionsDialog(e) {
                 i.jsx(LocalizedText, { children: "Calculation time zone" }),
                 i.jsx("input", {
                   "aria-label": text("Calculation time zone"),
-                  value: v.timeZone,
-                  onChange: (j) => g({ ...v, timeZone: j.target.value }),
+                  value: datePolicy.timeZone,
+                  onChange: (event) =>
+                    g({ ...datePolicy, timeZone: event.target.value }),
                   placeholder: text("UTC or America/New_York"),
                   lang: language("Calculation time zone"),
                   "data-ui-label": "Calculation time zone",
@@ -381,7 +392,7 @@ function CalculationOptionsDialog(e) {
           className: "fw-toolbar",
           children: [
             i.jsx("button", {
-              onClick: y,
+              onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Calculate Now" }),
             }),
             report.execution?.mode === "worker" &&
@@ -405,8 +416,8 @@ function CalculationOptionsDialog(e) {
                 i.jsx("input", {
                   "aria-label": text("Find formula results"),
                   value: h,
-                  onChange: (j) => {
-                    (f(j.target.value), m(0));
+                  onChange: (event) => {
+                    (f(event.target.value), m(0));
                   },
                   lang: language("Find formula results"),
                   "data-ui-label": "Find formula results",
@@ -615,7 +626,7 @@ function CalculationOptionsDialog(e) {
                   j
                     .map((z) => {
                       const V = z.lastIndexOf(":");
-                      return `${e.workbook.sheets.find((B) => B.id === z.slice(0, V))?.name ?? "(removed sheet)"}!${z.slice(V + 1)}`;
+                      return `${e.workbook.sheets.find((sheet) => sheet.id === z.slice(0, V))?.name ?? "(removed sheet)"}!${z.slice(V + 1)}`;
                     })
                     .join(" → "),
                 )
@@ -674,8 +685,9 @@ function CalculationOptionsDialog(e) {
                                 e.onClose());
                             },
                             children: [
-                              e.workbook.sheets.find((D) => D.id === j.sheetId)
-                                ?.name,
+                              e.workbook.sheets.find(
+                                (sheet) => sheet.id === j.sheetId,
+                              )?.name,
                               "!",
                               j.address,
                             ],
@@ -734,8 +746,10 @@ function CalculationOptionsDialog(e) {
                                               }),
                                               " ",
                                               D.solver.candidates
-                                                .map((_) =>
-                                                  _.rate.toPrecision(12),
+                                                .map((candidate) =>
+                                                  candidate.rate.toPrecision(
+                                                    12,
+                                                  ),
                                                 )
                                                 .join(", ") || "None",
                                               ".",
@@ -872,7 +886,7 @@ function CalculationOptionsDialog(e) {
   });
 }
 function GridContextMenu({
-  x,
+  x: left,
   y,
   label,
   actions,
@@ -882,7 +896,7 @@ function GridContextMenu({
 }) {
   const d = ne.useRef(null),
     u = ne.useRef({ workbook, snapshot: JSON.stringify(workbook), selection }),
-    [l, c] = ne.useState({ left: x, top: y }),
+    [l, c] = ne.useState({ left: left, top: y }),
     f =
       u.current.workbook !== workbook ||
       u.current.snapshot !== JSON.stringify(workbook) ||
@@ -894,10 +908,10 @@ function GridContextMenu({
       const p = d.current?.getBoundingClientRect();
       p &&
         c({
-          left: Math.max(8, Math.min(x, window.innerWidth - p.width - 8)),
+          left: Math.max(8, Math.min(left, window.innerWidth - p.width - 8)),
           top: Math.max(8, Math.min(y, window.innerHeight - p.height - 8)),
         });
-    }, [x, y]),
+    }, [left, y]),
     ne.useEffect(() => {
       let p = false;
       const m = requestAnimationFrame(() =>
@@ -924,7 +938,7 @@ function GridContextMenu({
       role: "menu",
       "aria-label": `${label} commands`,
       style: l,
-      onContextMenu: (p) => p.preventDefault(),
+      onContextMenu: (event) => event.preventDefault(),
       onKeyDown: (p) => {
         if (p.defaultPrevented || p.ctrlKey || p.metaKey || p.altKey) return;
         const m = Array.from(
@@ -946,24 +960,24 @@ function GridContextMenu({
       },
       children: [
         i.jsx("strong", { children: label }),
-        actions.map((p, m) => {
-          const v = f ?? p.reason;
+        actions.map((action, m) => {
+          const v = f ?? action.reason;
           return i.jsxs(
             "button",
             {
               type: "button",
               role: "menuitem",
               tabIndex: m === 0 ? 0 : -1,
-              "aria-label": p.name,
+              "aria-label": action.name,
               "aria-disabled": !!v,
               "aria-description": v,
-              title: v ? `${p.name}: ${v}` : p.name,
+              title: v ? `${action.name}: ${v}` : action.name,
               onClick: () => {
-                v || (onClose(true), p.run());
+                v || (onClose(true), action.run());
               },
-              children: [p.name, v && i.jsx("small", { children: v })],
+              children: [action.name, v && i.jsx("small", { children: v })],
             },
-            p.name,
+            action.name,
           );
         }),
       ],
@@ -1025,10 +1039,10 @@ function WorkbookCapacityLimits() {
   });
 }
 const attachmentAcceptAttribute = Object.keys(attachmentMediaTypes)
-  .map((e) => `.${e}`)
+  .map((attachmentMediaType) => `.${attachmentMediaType}`)
   .join(",");
 
-function readAttachmentBytes(e, r) {
+function readAttachmentBytes(e, signal) {
   return new Promise((t, n) => {
     const o = new FileReader();
     let a = false;
@@ -1036,7 +1050,7 @@ function readAttachmentBytes(e, r) {
         a ||
           ((a = true),
           clearTimeout(u),
-          r?.removeEventListener("abort", d),
+          signal?.removeEventListener("abort", d),
           c ? n(c) : t(new Uint8Array(l)));
       },
       d = () => {
@@ -1064,34 +1078,39 @@ function readAttachmentBytes(e, r) {
           undefined,
           new DOMException("File preparation cancelled.", "AbortError"),
         )),
-      r?.addEventListener("abort", d, { once: true }),
-      r?.aborted ? d() : o.readAsArrayBuffer(e));
+      signal?.addEventListener("abort", d, { once: true }),
+      signal?.aborted ? d() : o.readAsArrayBuffer(e));
   });
 }
-async function prepareChatAttachment(e, r) {
+async function prepareChatAttachment(e, signal) {
   assertCondition(
     isSafeAttachmentFilename(e.name),
     "Use a filename of 1–180 characters without path or control characters.",
   );
-  const t = getFileExtension(e.name);
+  const fileExtension = getFileExtension(e.name);
   (assertCondition(
-    Object.hasOwn(attachmentMediaTypes, t),
+    Object.hasOwn(attachmentMediaTypes, fileExtension),
     "Supported attachments: TXT, Markdown, CSV, TSV, JSON, PDF, DOCX, XLSX, PNG, JPEG and WebP.",
   ),
     assertCondition(
       e.size > 0 && e.size <= assistantRequestLimits.fileBytes,
       "Each attachment must be nonempty and no larger than 5 MB.",
     ));
-  const n = await readAttachmentBytes(e, r);
+  const attachmentBytes = await readAttachmentBytes(e, signal);
   assertCondition(
-    n.length === e.size && matchesFileSignature(n, t),
+    attachmentBytes.length === e.size &&
+      matchesFileSignature(attachmentBytes, fileExtension),
     "The file content does not match its extension. Choose the original supported file.",
   );
   let o;
-  const a = textAttachmentExtensions.has(t) ? "utf8" : "base64";
-  if (a === "utf8") {
+  const encoding = textAttachmentExtensions.has(fileExtension)
+    ? "utf8"
+    : "base64";
+  if (encoding === "utf8") {
     try {
-      o = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(n);
+      o = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(
+        attachmentBytes,
+      );
     } catch {
       throw new Error(
         "Text attachments must use UTF-8 encoding. Save the file as UTF-8 and try again.",
@@ -1103,33 +1122,33 @@ async function prepareChatAttachment(e, r) {
     );
   } else {
     let s = "";
-    for (let d = 0; d < n.length; d += 8192)
-      s += String.fromCharCode(...n.subarray(d, d + 8192));
+    for (let d = 0; d < attachmentBytes.length; d += 8192)
+      s += String.fromCharCode(...attachmentBytes.subarray(d, d + 8192));
     o = btoa(s);
   }
   return {
     id: crypto.randomUUID(),
     name: e.name,
-    mediaType: attachmentMediaTypes[t],
-    size: n.length,
-    encoding: a,
+    mediaType: attachmentMediaTypes[fileExtension],
+    size: attachmentBytes.length,
+    encoding: encoding,
     data: o,
   };
 }
 
-function isAbortOrTimeoutError(e) {
-  return e instanceof LLMRequestError
-    ? new LLMRequestError(e.code)
-    : e instanceof Error && e.name === "TimeoutError"
+function isAbortOrTimeoutError(error) {
+  return error instanceof LLMRequestError
+    ? new LLMRequestError(error.code)
+    : error instanceof Error && error.name === "TimeoutError"
       ? new LLMRequestError("timeout")
-      : e instanceof Error && e.name === "AbortError"
+      : error instanceof Error && error.name === "AbortError"
         ? new LLMRequestError("cancelled")
         : new LLMRequestError("unavailable");
 }
-async function raceWithAbortSignal(e, r, t = 3e4) {
-  if (!Number.isFinite(t) || t < 1 || t > 12e4)
+async function raceWithAbortSignal(e, signal, timeoutMs = 3e4) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1 || timeoutMs > 12e4)
     throw new LLMRequestError("invalid_request");
-  if (r?.aborted) throw new LLMRequestError("cancelled");
+  if (signal?.aborted) throw new LLMRequestError("cancelled");
   const n = new AbortController();
   let o;
   const a = new Promise((l, c) => {
@@ -1140,21 +1159,21 @@ async function raceWithAbortSignal(e, r, t = 3e4) {
       (o(c), n.abort(c));
     },
     d = () => s("cancelled");
-  r?.addEventListener("abort", d, { once: true });
-  const u = setTimeout(() => s("timeout"), t);
+  signal?.addEventListener("abort", d, { once: true });
+  const u = setTimeout(() => s("timeout"), timeoutMs);
   try {
     return await Promise.race([a, e(n.signal)]);
-  } catch (l) {
-    throw isAbortOrTimeoutError(l);
+  } catch (error) {
+    throw isAbortOrTimeoutError(error);
   } finally {
-    (clearTimeout(u), r?.removeEventListener("abort", d));
+    (clearTimeout(u), signal?.removeEventListener("abort", d));
   }
 }
 
-function validateCalculationClock(e) {
+function validateCalculationClock(assistantSelectionContext) {
   try {
-    (assertCondition(isPlainRecord(e), "context"),
-      assertNoUnexpectedFields(e, [
+    (assertCondition(isPlainRecord(assistantSelectionContext), "context"),
+      assertNoUnexpectedFields(assistantSelectionContext, [
         "workbookId",
         "revision",
         "sheetId",
@@ -1164,63 +1183,82 @@ function validateCalculationClock(e) {
         "datePolicy",
         "calculationClock",
       ]));
-    const r = normalizeDatePolicy(e.datePolicy);
-    if (e.calculationClock !== undefined) {
-      const d = e.calculationClock;
-      (assertCondition(isPlainRecord(d), "clock"),
+    const datePolicy = normalizeDatePolicy(
+      assistantSelectionContext.datePolicy,
+    );
+    if (assistantSelectionContext.calculationClock !== undefined) {
+      const calculationClock = assistantSelectionContext.calculationClock;
+      (assertCondition(isPlainRecord(calculationClock), "clock"),
         assertCondition(
-          typeof d.calculatedAt == "string" &&
-            /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(d.calculatedAt),
+          typeof calculationClock.calculatedAt == "string" &&
+            /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(
+              calculationClock.calculatedAt,
+            ),
           "clock timestamp",
         ));
-      const u = resolveLocalDateTime(r, new Date(d.calculatedAt));
-      (assertNoUnexpectedFields(d, Object.keys(u)),
+      const localDateTime = resolveLocalDateTime(
+        datePolicy,
+        new Date(calculationClock.calculatedAt),
+      );
+      (assertNoUnexpectedFields(calculationClock, Object.keys(localDateTime)),
         assertCondition(
-          Object.entries(u).every(([l, c]) => d[l] === c),
+          Object.entries(localDateTime).every(
+            ([l, c]) => calculationClock[l] === c,
+          ),
           "clock policy/value mismatch",
         ));
     }
     for (const d of ["workbookId", "sheetId", "sheetName"])
       assertCondition(
-        typeof e[d] == "string" && e[d].length > 0 && e[d].length <= 200,
+        typeof assistantSelectionContext[d] == "string" &&
+          assistantSelectionContext[d].length > 0 &&
+          assistantSelectionContext[d].length <= 200,
         "identity",
       );
     (assertCondition(
-      Number.isSafeInteger(e.revision) && e.revision >= 0,
+      Number.isSafeInteger(assistantSelectionContext.revision) &&
+        assistantSelectionContext.revision >= 0,
       "revision",
     ),
       assertCondition(
-        typeof e.range == "string" && e.range.length <= 64,
+        typeof assistantSelectionContext.range == "string" &&
+          assistantSelectionContext.range.length <= 64,
         "range",
       ));
-    const t = e.range.split(":");
+    const t = assistantSelectionContext.range.split(":");
     assertCondition(t.length <= 2, "range");
-    const n = parseCellAddress(t[0]),
+    const cellAddress = parseCellAddress(t[0]),
       o = parseCellAddress(t[1] ?? t[0]),
-      a = (o.row - n.row + 1) * (o.col - n.col + 1);
+      a = (o.row - cellAddress.row + 1) * (o.col - cellAddress.col + 1);
     (assertCondition(
-      o.row >= n.row && o.col >= n.col && a <= workbookLimits.maxLLMCells,
+      o.row >= cellAddress.row &&
+        o.col >= cellAddress.col &&
+        a <= workbookLimits.maxLLMCells,
       "bounds",
     ),
       assertCondition(
-        Array.isArray(e.cells) && e.cells.length === a,
+        Array.isArray(assistantSelectionContext.cells) &&
+          assistantSelectionContext.cells.length === a,
         "population",
       ));
     const s = new Set();
-    for (const d of e.cells) {
-      (assertCondition(isPlainRecord(d), "cell"),
-        assertNoUnexpectedFields(d, ["address", "raw", "value"]),
+    for (const cell of assistantSelectionContext.cells) {
+      (assertCondition(isPlainRecord(cell), "cell"),
+        assertNoUnexpectedFields(cell, ["address", "raw", "value"]),
         assertCondition(
-          typeof d.address == "string" && !s.has(d.address),
+          typeof cell.address == "string" && !s.has(cell.address),
           "address",
         ));
-      const u = parseCellAddress(d.address);
+      const u = parseCellAddress(cell.address);
       (assertCondition(
-        u.row >= n.row && u.row <= o.row && u.col >= n.col && u.col <= o.col,
+        u.row >= cellAddress.row &&
+          u.row <= o.row &&
+          u.col >= cellAddress.col &&
+          u.col <= o.col,
         "scope",
       ),
-        s.add(d.address));
-      for (const l of [d.raw, d.value])
+        s.add(cell.address));
+      for (const l of [cell.raw, cell.value])
         assertCondition(
           l === null ||
             typeof l == "boolean" ||

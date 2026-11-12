@@ -26,8 +26,8 @@ function WorkbookManagerDialog(e) {
         ? `${e.workbook.name.slice(0, 185)} — copy`
         : e.workbook.name,
     ),
-    [d, u] = ne.useState(e.workbook.metadata?.engagement ?? ""),
-    [l, c] = ne.useState(e.workbook.metadata?.period ?? ""),
+    [engagement, u] = ne.useState(e.workbook.metadata?.engagement ?? ""),
+    [period, c] = ne.useState(e.workbook.metadata?.period ?? ""),
     [h, f] = ne.useState(""),
     [p, m] = ne.useState(""),
     [v, g] = ne.useState(null),
@@ -44,18 +44,18 @@ function WorkbookManagerDialog(e) {
     ),
     [],
   );
-  const [I, O] = ne.useState(false),
+  const [checked, O] = ne.useState(false),
     [j, z] = ne.useState(0),
     V = !!(
       e.workbook.structureProtection?.enabled ||
-      e.workbook.sheets.some((U) => U.protection?.enabled)
+      e.workbook.sheets.some((sheet) => sheet.protection?.enabled)
     );
   (ne.useEffect(() => {
-    const U = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       n.current?.querySelector("input, button")?.focus(),
       () => {
-        U?.isConnected && U.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
@@ -63,17 +63,18 @@ function WorkbookManagerDialog(e) {
       (g(null), O(false), z(0));
     }, [e.workbook.revision, e.workbook.id]));
   const D = (U) =>
-      e.workbook.sheets.find((X) => X.id === U)?.name ??
-      v?.structuralChanges.find((X) => X.path === `sheets.${U}`)?.before
-        ?.name ??
+      e.workbook.sheets.find((sheet) => sheet.id === U)?.name ??
+      v?.structuralChanges.find(
+        (structuralChange) => structuralChange.path === `sheets.${U}`,
+      )?.before?.name ??
       "Removed worksheet",
     B = v
       ? [
-          ...v.cellChanges.map((U) => ({
-            label: `${D(U.sheetId)}!${U.address}`,
-            before: formatAuditCellValue(U.before),
-            after: formatAuditCellValue(U.after),
-            attribution: U.attribution,
+          ...v.cellChanges.map((cellChange) => ({
+            label: `${D(cellChange.sheetId)}!${cellChange.address}`,
+            before: formatAuditCellValue(cellChange.before),
+            after: formatAuditCellValue(cellChange.after),
+            attribution: cellChange.attribution,
           })),
           ...[...v.structuralChanges, ...v.metadataChanges].map((U) => {
             const G = U.path.split(".");
@@ -114,10 +115,10 @@ function WorkbookManagerDialog(e) {
           }).finally(() => {
             F.current && k(false);
           }));
-      } catch (G) {
+      } catch (error) {
         y(
-          G instanceof Error
-            ? G.message
+          error instanceof Error
+            ? error.message
             : "The workbook operation could not be completed.",
         );
       }
@@ -130,11 +131,11 @@ function WorkbookManagerDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": "wm-title",
       className: "wm-dialog",
-      onKeyDown: (U) => {
+      onKeyDown: (event) => {
         if (
-          (U.key === "Escape" &&
-            (U.preventDefault(), U.stopPropagation(), o.current()),
-          U.key === "Tab")
+          (event.key === "Escape" &&
+            (event.preventDefault(), event.stopPropagation(), o.current()),
+          event.key === "Tab")
         ) {
           const H = Array.from(
               n.current?.querySelectorAll(
@@ -143,11 +144,11 @@ function WorkbookManagerDialog(e) {
             ),
             Q = H[0],
             X = H.at(-1);
-          U.shiftKey && document.activeElement === Q
-            ? (U.preventDefault(), X == null || X.focus())
-            : !U.shiftKey &&
+          event.shiftKey && document.activeElement === Q
+            ? (event.preventDefault(), X == null || X.focus())
+            : !event.shiftKey &&
               document.activeElement === X &&
-              (U.preventDefault(), Q == null || Q.focus());
+              (event.preventDefault(), Q == null || Q.focus());
         }
       },
       children: [
@@ -176,8 +177,8 @@ function WorkbookManagerDialog(e) {
           children: [
             e.mode !== "versions"
               ? i.jsxs("form", {
-                  onSubmit: (U) => {
-                    (U.preventDefault(),
+                  onSubmit: (event) => {
+                    (event.preventDefault(),
                       _(() => {
                         if (e.readOnly)
                           throw new Error("This workbook is read-only.");
@@ -185,16 +186,16 @@ function WorkbookManagerDialog(e) {
                           ? (e.onCreateWorkbook(
                               createWorkbookFromTemplate(e.workbook, {
                                 name: a,
-                                engagement: d,
-                                period: l,
+                                engagement: engagement,
+                                period: period,
                               }),
                             ),
                             e.onClose())
                           : (e.onWorkbookChange(
                               updateWorkbookProperties(e.workbook, {
                                 name: a,
-                                engagement: d,
-                                period: l,
+                                engagement: engagement,
+                                period: period,
                               }),
                               "Update workbook properties",
                             ),
@@ -218,7 +219,7 @@ function WorkbookManagerDialog(e) {
                           maxLength: 200,
                           value: a,
                           disabled: e.readOnly || A,
-                          onChange: (U) => s(U.target.value),
+                          onChange: (event) => s(event.target.value),
                           lang: language("Workbook name"),
                           "data-ui-label": "Workbook name",
                         }),
@@ -234,10 +235,10 @@ function WorkbookManagerDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Engagement"),
                               required: e.mode === "template",
-                              value: d,
+                              value: engagement,
                               maxLength: 200,
                               disabled: e.readOnly || A,
-                              onChange: (U) => u(U.target.value),
+                              onChange: (event) => u(event.target.value),
                               lang: language("Engagement"),
                               "data-ui-label": "Engagement",
                             }),
@@ -250,11 +251,11 @@ function WorkbookManagerDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Period"),
                               required: e.mode === "template",
-                              value: l,
+                              value: period,
                               maxLength: 100,
                               placeholder: text("For example, FY2026"),
                               disabled: e.readOnly || A,
-                              onChange: (U) => c(U.target.value),
+                              onChange: (event) => c(event.target.value),
                               lang: language("Period"),
                               "data-ui-label": "Period",
                             }),
@@ -349,8 +350,8 @@ function WorkbookManagerDialog(e) {
                     }),
                     i.jsxs("form", {
                       className: "wm-checkpoint",
-                      onSubmit: (U) => {
-                        (U.preventDefault(),
+                      onSubmit: (event) => {
+                        (event.preventDefault(),
                           _(() => {
                             if (e.readOnly)
                               throw new Error("This workbook is read-only.");
@@ -373,7 +374,7 @@ function WorkbookManagerDialog(e) {
                               required: true,
                               maxLength: 100,
                               disabled: e.readOnly || A,
-                              onChange: (U) => f(U.target.value),
+                              onChange: (event) => f(event.target.value),
                               lang: language("Checkpoint name"),
                               "data-ui-label": "Checkpoint name",
                             }),
@@ -535,9 +536,9 @@ function WorkbookManagerDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: I,
+                                checked: checked,
                                 disabled: e.readOnly || V || A,
-                                onChange: (U) => O(U.target.checked),
+                                onChange: (event) => O(event.target.checked),
                               }),
                               i.jsx(LocalizedText, {
                                 children:
@@ -547,7 +548,7 @@ function WorkbookManagerDialog(e) {
                           }),
                           i.jsx("button", {
                             className: "wm-primary",
-                            disabled: e.readOnly || V || !I || A,
+                            disabled: e.readOnly || V || !checked || A,
                             onClick: () =>
                               _(() => {
                                 const U = e.onRestore(p),

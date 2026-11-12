@@ -55,28 +55,31 @@ function isPlainObjectLiteral(e) {
     [Object.prototype, null].includes(Object.getPrototypeOf(e))
   );
 }
-function validateStyleColor(e) {
+function validateStyleColor(color) {
   return (
-    (typeof e != "string" || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(e)) &&
+    (typeof color != "string" ||
+      !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(color)) &&
       failWithMessage("Style colors must use hexadecimal colors."),
-    e
+    color
   );
 }
-function validateCellBorder(e) {
+function validateCellBorder(line) {
   return (
-    (!isPlainObjectLiteral(e) ||
-      Object.keys(e).some((r) => !["style", "color"].includes(r)) ||
-      !borderLineStyles.includes(e.style)) &&
+    (!isPlainObjectLiteral(line) ||
+      Object.keys(line).some((r) => !["style", "color"].includes(r)) ||
+      !borderLineStyles.includes(line.style)) &&
       failWithMessage(
         "Choose a supported border line style and hexadecimal color.",
       ),
-    e.color !== undefined && validateStyleColor(e.color),
-    e.style === "none"
+    line.color !== undefined && validateStyleColor(line.color),
+    line.style === "none"
       ? { style: "none" }
       : {
-          style: e.style,
+          style: line.style,
           color:
-            e.color === undefined ? "#000000" : validateStyleColor(e.color),
+            line.color === undefined
+              ? "#000000"
+              : validateStyleColor(line.color),
         }
   );
 }
@@ -128,20 +131,23 @@ function validateCellStyle(e) {
     e.borders !== undefined)
   ) {
     (!isPlainObjectLiteral(e.borders) ||
-      Object.keys(e.borders).some((n) => !cellBorderEdges.includes(n))) &&
+      Object.keys(e.borders).some(
+        (border) => !cellBorderEdges.includes(border),
+      )) &&
       failWithMessage(
         "Cell borders support top, right, bottom and left edges only.",
       );
     const t = {};
-    for (const n of cellBorderEdges)
-      e.borders[n] !== undefined && (t[n] = validateCellBorder(e.borders[n]));
+    for (const cellBorderEdge of cellBorderEdges)
+      e.borders[cellBorderEdge] !== undefined &&
+        (t[cellBorderEdge] = validateCellBorder(e.borders[cellBorderEdge]));
     Object.keys(t).length && (r.borders = t);
   }
   return r;
 }
-function validateNamedStyleBinding(e) {
-  (!isPlainObjectLiteral(e) ||
-    Object.keys(e).some(
+function validateNamedStyleBinding(binding) {
+  (!isPlainObjectLiteral(binding) ||
+    Object.keys(binding).some(
       (t) =>
         !["namespace", "styleId", "base", "missing", "themeFallback"].includes(
           t,
@@ -151,30 +157,31 @@ function validateNamedStyleBinding(e) {
       "Named style binding must contain a namespace, style ID and supported base.",
     );
   for (const t of ["namespace", "styleId"])
-    (typeof e[t] != "string" ||
-      !e[t].trim() ||
-      e[t].length > 100 ||
-      /[\x00-\x1f\x7f]/.test(e[t])) &&
+    (typeof binding[t] != "string" ||
+      !binding[t].trim() ||
+      binding[t].length > 100 ||
+      /[\x00-\x1f\x7f]/.test(binding[t])) &&
       failWithMessage(
         "Named style identifiers must contain 1–100 characters without control characters.",
       );
-  (!isPlainObjectLiteral(e.base) || Object.hasOwn(e.base, "binding")) &&
+  (!isPlainObjectLiteral(binding.base) ||
+    Object.hasOwn(binding.base, "binding")) &&
     failWithMessage("A named style base cannot contain another binding.");
   for (const t of ["missing", "themeFallback"])
-    e[t] !== undefined &&
-      e[t] !== true &&
+    binding[t] !== undefined &&
+      binding[t] !== true &&
       failWithMessage("Invalid named style fallback flag.");
-  const r = validateCellStyle(e.base);
+  const base = validateCellStyle(binding.base);
   return (
-    e.missing &&
-      Object.keys(r).length &&
+    binding.missing &&
+      Object.keys(base).length &&
       failWithMessage("A missing named style must use an empty fallback base."),
     {
-      namespace: e.namespace,
-      styleId: e.styleId,
-      base: r,
-      ...(e.missing ? { missing: true } : {}),
-      ...(e.themeFallback ? { themeFallback: true } : {}),
+      namespace: binding.namespace,
+      styleId: binding.styleId,
+      base: base,
+      ...(binding.missing ? { missing: true } : {}),
+      ...(binding.themeFallback ? { themeFallback: true } : {}),
     }
   );
 }
@@ -192,27 +199,30 @@ function resolveEffectiveCellStyle(e) {
     o
   );
 }
-function resolveBorderEdge(e, r) {
-  if (((e = resolveEffectiveCellStyle(e)), e?.borders?.[r]))
-    return e.borders[r];
+function resolveBorderEdge(e, cellBorderEdge) {
+  if (((e = resolveEffectiveCellStyle(e)), e?.borders?.[cellBorderEdge]))
+    return e.borders[cellBorderEdge];
   if (e?.border === "none") return { style: "none" };
-  if (e?.border === "all" || (e?.border === "bottom" && r === "bottom"))
+  if (
+    e?.border === "all" ||
+    (e?.border === "bottom" && cellBorderEdge === "bottom")
+  )
     return { style: "thin", color: "#000000" };
 }
-function borderWidthPx(e) {
-  return !e || e.style === "none"
+function borderWidthPx(borderEdge) {
+  return !borderEdge || borderEdge.style === "none"
     ? 0
-    : e.style === "medium"
+    : borderEdge.style === "medium"
       ? 2
-      : e.style === "thick" || e.style === "double"
+      : borderEdge.style === "thick" || borderEdge.style === "double"
         ? 3
         : 1;
 }
-function borderToCssShorthand(e) {
-  if (e)
-    return e.style === "none"
+function borderToCssShorthand(borderEdge) {
+  if (borderEdge)
+    return borderEdge.style === "none"
       ? "none"
-      : `${borderWidthPx(e)}px ${["dotted", "dashed", "double"].includes(e.style) ? e.style : "solid"} ${e.color ?? "#000000"}`;
+      : `${borderWidthPx(borderEdge)}px ${["dotted", "dashed", "double"].includes(borderEdge.style) ? borderEdge.style : "solid"} ${borderEdge.color ?? "#000000"}`;
 }
 function indentToPx(e) {
   return (
@@ -224,7 +234,7 @@ function indentToPx(e) {
 }
 function cellStyleToCss(e, r, t = {}) {
   e = resolveEffectiveCellStyle(e);
-  const n = e?.align ?? (typeof r == "number" ? "right" : "left"),
+  const textAlign = e?.align ?? (typeof r == "number" ? "right" : "left"),
     o = indentToPx(e),
     a = [e?.underline && "underline", e?.strikethrough && "line-through"]
       .filter(Boolean)
@@ -237,10 +247,10 @@ function cellStyleToCss(e, r, t = {}) {
     fontFamily: e?.fontFamily,
     fontSize: e?.fontSize ? `${e.fontSize}pt` : undefined,
     textDecoration: a || "none",
-    textAlign: n,
+    textAlign: textAlign,
     verticalAlign: e?.verticalAlign,
-    paddingLeft: 3 + (n === "left" ? o : 0),
-    paddingRight: 3 + (n === "right" ? o : 0),
+    paddingLeft: 3 + (textAlign === "left" ? o : 0),
+    paddingRight: 3 + (textAlign === "right" ? o : 0),
     borderTop:
       borderToCssShorthand(resolveBorderEdge(e, "top")) ?? t.defaultBorder,
     borderRight:
@@ -265,9 +275,9 @@ function measureCellBorderInsets(e) {
     const t = e?.border === "all" ? 2 : e?.border === "none" ? 0 : 1;
     return { horizontal: t, vertical: t };
   }
-  const r = (t) => {
-    const n = resolveBorderEdge(e, t);
-    return n ? borderWidthPx(n) : 0.5;
+  const r = (cellBorderEdge) => {
+    const borderEdge = resolveBorderEdge(e, cellBorderEdge);
+    return borderEdge ? borderWidthPx(borderEdge) : 0.5;
   };
   return {
     horizontal: r("left") + r("right"),
@@ -375,66 +385,72 @@ function canonicalStyleKey(e) {
           .join(",")}}`
       : JSON.stringify(e);
 }
-function validateWorkbookTheme(e) {
-  (isPlainObjectLiteral(e) || failWithMessage("Choose a workbook theme."),
-    assertKnownStyleKeys(e, ["name", "palette", "fonts"], "theme"),
-    (!isPlainObjectLiteral(e.palette) || !isPlainObjectLiteral(e.fonts)) &&
+function validateWorkbookTheme(theme) {
+  (isPlainObjectLiteral(theme) || failWithMessage("Choose a workbook theme."),
+    assertKnownStyleKeys(theme, ["name", "palette", "fonts"], "theme"),
+    (!isPlainObjectLiteral(theme.palette) ||
+      !isPlainObjectLiteral(theme.fonts)) &&
       failWithMessage("A theme needs eight colors and body and heading fonts."),
-    assertKnownStyleKeys(e.palette, themePaletteRoles, "theme palette"),
-    assertKnownStyleKeys(e.fonts, ["body", "heading"], "theme font"));
-  const r = {};
-  for (const t of themePaletteRoles) {
-    const n = e.palette[t];
+    assertKnownStyleKeys(theme.palette, themePaletteRoles, "theme palette"),
+    assertKnownStyleKeys(theme.fonts, ["body", "heading"], "theme font"));
+  const palette = {};
+  for (const themePaletteRole of themePaletteRoles) {
+    const n = theme.palette[themePaletteRole];
     ((typeof n != "string" || !/^#[0-9a-f]{6}$/i.test(n)) &&
       failWithMessage("Theme colors must use six-digit hexadecimal colors."),
-      (r[t] = n.toUpperCase()));
+      (palette[themePaletteRole] = n.toUpperCase()));
   }
   for (const t of ["body", "heading"])
-    supportedFontFamilies.includes(e.fonts[t]) ||
+    supportedFontFamilies.includes(theme.fonts[t]) ||
       failWithMessage("Choose a supported theme font.");
   return {
-    name: validateBoundedStyleText(e.name, "Theme name"),
-    palette: r,
-    fonts: { body: e.fonts.body, heading: e.fonts.heading },
+    name: validateBoundedStyleText(theme.name, "Theme name"),
+    palette: palette,
+    fonts: { body: theme.fonts.body, heading: theme.fonts.heading },
   };
 }
-function validateNamedStyleDefinition(e) {
-  (isPlainObjectLiteral(e) ||
+function validateNamedStyleDefinition(definition) {
+  (isPlainObjectLiteral(definition) ||
     failWithMessage("Named style definition must be an object."),
     assertKnownStyleKeys(
-      e,
+      definition,
       ["base", "fontRole", "fillRole", "colorRole", "borderRoles"],
       "named style",
     ),
-    (!isPlainObjectLiteral(e.base) || Object.hasOwn(e.base, "binding")) &&
+    (!isPlainObjectLiteral(definition.base) ||
+      Object.hasOwn(definition.base, "binding")) &&
       failWithMessage(
         "A named style definition needs supported formatting without another binding.",
       ));
-  const r = { base: validateCellStyle(e.base) };
-  e.fontRole !== undefined &&
-    (["body", "heading"].includes(e.fontRole) ||
+  const r = { base: validateCellStyle(definition.base) };
+  definition.fontRole !== undefined &&
+    (["body", "heading"].includes(definition.fontRole) ||
       failWithMessage("Choose Body or Heading theme font."),
-    (r.fontRole = e.fontRole));
+    (r.fontRole = definition.fontRole));
   for (const n of ["fillRole", "colorRole"])
-    e[n] !== undefined &&
-      (themePaletteRoles.includes(e[n]) ||
+    definition[n] !== undefined &&
+      (themePaletteRoles.includes(definition[n]) ||
         failWithMessage("Choose a supported theme color role."),
-      (r[n] = e[n]));
-  if (e.borderRoles !== undefined) {
-    (isPlainObjectLiteral(e.borderRoles) ||
+      (r[n] = definition[n]));
+  if (definition.borderRoles !== undefined) {
+    (isPlainObjectLiteral(definition.borderRoles) ||
       failWithMessage("Border color roles must be an object."),
-      assertKnownStyleKeys(e.borderRoles, cellBorderEdges, "border role"));
+      assertKnownStyleKeys(
+        definition.borderRoles,
+        cellBorderEdges,
+        "border role",
+      ));
     const n = {};
-    for (const o of cellBorderEdges)
-      e.borderRoles[o] !== undefined &&
-        (themePaletteRoles.includes(e.borderRoles[o]) ||
+    for (const cellBorderEdge of cellBorderEdges)
+      definition.borderRoles[cellBorderEdge] !== undefined &&
+        (themePaletteRoles.includes(definition.borderRoles[cellBorderEdge]) ||
           failWithMessage("Choose a supported border color role."),
-        (!resolveBorderEdge(r.base, o) ||
-          resolveBorderEdge(r.base, o)?.style === "none") &&
+        (!resolveBorderEdge(r.base, cellBorderEdge) ||
+          resolveBorderEdge(r.base, cellBorderEdge)?.style === "none") &&
           failWithMessage(
             "Add a border line before assigning its theme color.",
           ),
-        (n[o] = e.borderRoles[o]));
+        (n[cellBorderEdge] = definition.borderRoles[cellBorderEdge]));
     Object.keys(n).length && (r.borderRoles = n);
   }
   return r;
@@ -455,11 +471,15 @@ function validateWorkbookStyleCatalog(e) {
       failWithMessage("A workbook supports at most 50 named styles."));
   const r = new Set(),
     t = new Set(),
-    n = e.styles.map((s) => {
-      (isPlainObjectLiteral(s) || failWithMessage("Invalid named style."),
-        assertKnownStyleKeys(s, ["id", "name", "definition"], "named style"));
-      const d = validateBoundedStyleText(s.id, "Style ID", 100),
-        u = validateBoundedStyleText(s.name, "Style name");
+    styles = e.styles.map((style) => {
+      (isPlainObjectLiteral(style) || failWithMessage("Invalid named style."),
+        assertKnownStyleKeys(
+          style,
+          ["id", "name", "definition"],
+          "named style",
+        ));
+      const d = validateBoundedStyleText(style.id, "Style ID", 100),
+        u = validateBoundedStyleText(style.name, "Style name");
       return (
         (r.has(d) || t.has(u.toLocaleLowerCase("en-US"))) &&
           failWithMessage(
@@ -470,30 +490,30 @@ function validateWorkbookStyleCatalog(e) {
         {
           id: d,
           name: u,
-          definition: validateNamedStyleDefinition(s.definition),
+          definition: validateNamedStyleDefinition(style.definition),
         }
       );
     }),
     o = e.theme === undefined || e.missingTheme === true,
-    a =
+    theme =
       e.theme === undefined
         ? cloneStyleValue(officeThemeDefinition)
         : validateWorkbookTheme(e.theme);
   return (
     o &&
-      canonicalStyleKey(a) !== canonicalStyleKey(officeThemeDefinition) &&
+      canonicalStyleKey(theme) !== canonicalStyleKey(officeThemeDefinition) &&
       failWithMessage("A missing theme must use the Office fallback."),
     {
       namespace: validateBoundedStyleText(e.namespace, "Style namespace", 100),
-      theme: a,
-      styles: n,
+      theme: theme,
+      styles: styles,
       ...(o ? { missingTheme: true } : {}),
     }
   );
 }
-function createDefaultStyleCatalog(e) {
+function createDefaultStyleCatalog(namespace) {
   return validateWorkbookStyleCatalog({
-    namespace: e,
+    namespace: namespace,
     theme: officeThemeDefinition,
     styles: [
       {
@@ -546,16 +566,19 @@ function createDefaultStyleCatalog(e) {
     ],
   });
 }
-function resolveNamedStyleAppearance(e, r) {
-  const t = cloneStyleValue(e.base);
-  (e.fontRole && (t.fontFamily = r.fonts[e.fontRole]),
-    e.fillRole && (t.fill = r.palette[e.fillRole]),
-    e.colorRole && (t.color = r.palette[e.colorRole]));
-  for (const o of cellBorderEdges)
-    e.borderRoles?.[o] &&
+function resolveNamedStyleAppearance(definition, theme) {
+  const t = cloneStyleValue(definition.base);
+  (definition.fontRole && (t.fontFamily = theme.fonts[definition.fontRole]),
+    definition.fillRole && (t.fill = theme.palette[definition.fillRole]),
+    definition.colorRole && (t.color = theme.palette[definition.colorRole]));
+  for (const cellBorderEdge of cellBorderEdges)
+    definition.borderRoles?.[cellBorderEdge] &&
       (t.borders = {
         ...t.borders,
-        [o]: { ...resolveBorderEdge(t, o), color: r.palette[e.borderRoles[o]] },
+        [cellBorderEdge]: {
+          ...resolveBorderEdge(t, cellBorderEdge),
+          color: theme.palette[definition.borderRoles[cellBorderEdge]],
+        },
       });
   return validateCellStyle(t);
 }
@@ -565,7 +588,7 @@ function resolveNamedStyleBinding(e, r) {
     failWithMessage(
       "This style belongs to another workbook. Import or remap its style catalog before pasting the binding.",
     );
-  const t = e?.styles.find((n) => n.id === r.styleId);
+  const t = e?.styles.find((style) => style.id === r.styleId);
   return {
     namespace: r.namespace,
     styleId: r.styleId,
@@ -574,31 +597,35 @@ function resolveNamedStyleBinding(e, r) {
     ...(e?.missingTheme ? { themeFallback: true } : {}),
   };
 }
-function reconcileWorkbookStyleBindings(e, r) {
-  const t = e === undefined ? undefined : validateWorkbookStyleCatalog(e);
-  t ? (r.styleCatalog = t) : delete r.styleCatalog;
-  const n = isPlainObjectLiteral(e) && e.theme === undefined;
-  for (const a of r.sheets)
-    for (const s of hasLinkedOrBoundCells(a.cells)
-      ? Object.values(a.cells)
+function reconcileWorkbookStyleBindings(styleCatalog, workbook) {
+  const t =
+    styleCatalog === undefined
+      ? undefined
+      : validateWorkbookStyleCatalog(styleCatalog);
+  t ? (workbook.styleCatalog = t) : delete workbook.styleCatalog;
+  const n =
+    isPlainObjectLiteral(styleCatalog) && styleCatalog.theme === undefined;
+  for (const sheet of workbook.sheets)
+    for (const s of hasLinkedOrBoundCells(sheet.cells)
+      ? Object.values(sheet.cells)
       : []) {
       if (!s.style?.binding) continue;
       const d = validateNamedStyleBinding(s.style.binding),
-        u = resolveNamedStyleBinding(t, d);
-      (!u.missing &&
+        namedStyleBinding = resolveNamedStyleBinding(t, d);
+      (!namedStyleBinding.missing &&
         !n &&
-        canonicalStyleKey(d) !== canonicalStyleKey(u) &&
+        canonicalStyleKey(d) !== canonicalStyleKey(namedStyleBinding) &&
         failWithMessage(
           "Named style appearance does not match the workbook catalog. Reapply the style from a trusted catalog.",
         ),
-        (s.style.binding = u));
+        (s.style.binding = namedStyleBinding));
     }
 }
-function assertNamedStyleBindingCurrent(e, r) {
+function assertNamedStyleBindingCurrent(workbook, r) {
   if (!r?.binding) return;
   const t = validateNamedStyleBinding(r.binding),
-    n = resolveNamedStyleBinding(e.styleCatalog, t);
-  canonicalStyleKey(t) !== canonicalStyleKey(n) &&
+    namedStyleBinding = resolveNamedStyleBinding(workbook.styleCatalog, t);
+  canonicalStyleKey(t) !== canonicalStyleKey(namedStyleBinding) &&
     failWithMessage(
       "Named style binding is stale or inconsistent with this workbook. Reapply its named style.",
     );
@@ -609,37 +636,38 @@ function describeNamedStyleFallback(e) {
   if (e?.binding?.themeFallback)
     return "Workbook theme is missing. The Office theme is shown.";
 }
-function collectStyleFallbackWarnings(e) {
+function collectStyleFallbackWarnings(workbook) {
   const r = new Set();
-  e.styleCatalog?.missingTheme &&
+  workbook.styleCatalog?.missingTheme &&
     r.add("Workbook theme is missing. The Office theme is shown.");
-  for (const n of e.sheets)
-    for (const o of Object.values(n.cells)) {
-      const a = describeNamedStyleFallback(o.style);
+  for (const sheet of workbook.sheets)
+    for (const cell of Object.values(sheet.cells)) {
+      const a = describeNamedStyleFallback(cell.style);
       a && r.add(a);
     }
   return [...r];
 }
 function hasBorderEdgeChanges(e, r) {
   return cellBorderEdges.some(
-    (t) =>
-      canonicalStyleKey(resolveBorderEdge(e, t)) !==
-      canonicalStyleKey(resolveBorderEdge(r, t)),
+    (cellBorderEdge) =>
+      canonicalStyleKey(resolveBorderEdge(e, cellBorderEdge)) !==
+      canonicalStyleKey(resolveBorderEdge(r, cellBorderEdge)),
   );
 }
 function renameStyleNamespace(e, r) {
   const t = validateBoundedStyleText(r, "Style namespace", 100),
-    n = cloneStyleValue(e),
-    o = n.styleCatalog?.namespace;
-  if (!o) return n;
-  n.styleCatalog.namespace = t;
+    workbook = cloneStyleValue(e),
+    o = workbook.styleCatalog?.namespace;
+  if (!o) return workbook;
+  workbook.styleCatalog.namespace = t;
   const a = (d) => {
     d?.style?.binding?.namespace === o && (d.style.binding.namespace = t);
   };
-  for (const d of n.sheets) for (const u of Object.values(d.cells)) a(u);
-  for (const d of n.events)
-    for (const u of d.changes) (a(u.before), a(u.after));
-  return n;
+  for (const sheet of workbook.sheets)
+    for (const cell of Object.values(sheet.cells)) a(cell);
+  for (const d of workbook.events)
+    for (const change of d.changes) (a(change.before), a(change.after));
+  return workbook;
 }
 function validateRowColumnMove(e, r) {
   if (
@@ -693,12 +721,12 @@ function mapIndexAfterMove(e, r) {
 function planMoveSegments(e, r, t) {
   if (t.permutation) {
     const o = [],
-      a = (s, d, u) => {
-        if (s > d) return;
+      a = (start, end, offset) => {
+        if (start > end) return;
         const l = o.at(-1);
-        l && l.end + 1 === s && l.offset === u
-          ? (l.end = d)
-          : o.push({ start: s, end: d, offset: u });
+        l && l.end + 1 === start && l.offset === offset
+          ? (l.end = end)
+          : o.push({ start: start, end: end, offset: offset });
       };
     a(e, Math.min(r, t.index - 1), 0);
     for (
@@ -716,16 +744,16 @@ function planMoveSegments(e, r, t) {
       ),
     ),
   ].sort((o, a) => o - a);
-  return n.slice(0, -1).map((o, a) => ({
-    start: o,
+  return n.slice(0, -1).map((start, a) => ({
+    start: start,
     end: n[a + 1] - 1,
-    offset: mapIndexAfterMove(o, t) - o,
+    offset: mapIndexAfterMove(start, t) - start,
   }));
 }
-function mapRangeAfterMove(e, r, t) {
-  if (t.permutation && e <= t.index && r >= t.index + t.count - 1)
-    return [{ start: e, end: r }];
-  const n = planMoveSegments(e, r, t)
+function mapRangeAfterMove(start, end, t) {
+  if (t.permutation && start <= t.index && end >= t.index + t.count - 1)
+    return [{ start: start, end: end }];
+  const n = planMoveSegments(start, end, t)
       .map((a) => ({ start: a.start + a.offset, end: a.end + a.offset }))
       .sort((a, s) => a.start - s.start),
     o = [];
@@ -735,13 +763,16 @@ function mapRangeAfterMove(e, r, t) {
   }
   return o;
 }
-function resolveMovedRange(e, r, t, n = "range", o = false) {
-  const a = mapRangeAfterMove(e, r, t);
+function resolveMovedRange(start, end, t, n = "range", o = false) {
+  const a = mapRangeAfterMove(start, end, t);
   if (a.length !== 1)
     throw new Error(
       `This move would split ${n} into separate ranges. Move the complete range or use explicit cell references first.`,
     );
-  if (o && new Set(planMoveSegments(e, r, t).map((s) => s.offset)).size !== 1)
+  if (
+    o &&
+    new Set(planMoveSegments(start, end, t).map((s) => s.offset)).size !== 1
+  )
     throw new Error(
       `This move would reorder part of ${n}. Move the complete structure together.`,
     );
@@ -799,70 +830,87 @@ function normalizeReviewAuthor(e = "Reviewer") {
     reviewThreadLimits.authorLength,
   );
 }
-function resolveReviewTimestamp(e = {}, r) {
+function resolveReviewTimestamp(e = {}, updatedAt) {
   const t =
     e.timestamp === undefined
-      ? new Date(Math.max(Date.now(), r ? Date.parse(r) : 0)).toISOString()
+      ? new Date(
+          Math.max(Date.now(), updatedAt ? Date.parse(updatedAt) : 0),
+        ).toISOString()
       : normalizeReviewTimestamp(e.timestamp);
   return (
-    r &&
-      t < r &&
+    updatedAt &&
+      t < updatedAt &&
       throwWithMessage(
         "The review time cannot precede the existing discussion.",
       ),
     t
   );
 }
-function aQ(e, r) {
-  const t = new Map(e.sheets.map((d) => [d.id, d]));
+function aQ(workbook, timestamp) {
+  const t = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet]));
   let n = false;
-  const o = e.reviewThreads?.map((d) => {
-      if (d.orphaned) return d;
-      const u = t.get(d.anchor.sheetId);
+  const reviewThreads = workbook.reviewThreads?.map((reviewThread) => {
+      if (reviewThread.orphaned) return reviewThread;
+      const u = t.get(reviewThread.anchor.sheetId);
       if (!u) {
         n = true;
-        const l = resolveReviewTimestamp({ timestamp: r }, d.updatedAt);
+        const reviewTimestamp = resolveReviewTimestamp(
+          { timestamp: timestamp },
+          reviewThread.updatedAt,
+        );
         return {
-          ...d,
-          updatedAt: l,
-          orphaned: { reason: "worksheet-deleted", createdAt: l },
+          ...reviewThread,
+          updatedAt: reviewTimestamp,
+          orphaned: { reason: "worksheet-deleted", createdAt: reviewTimestamp },
         };
       }
-      return u.name !== d.anchor.sheetName
-        ? ((n = true), { ...d, anchor: { ...d.anchor, sheetName: u.name } })
-        : d;
+      return u.name !== reviewThread.anchor.sheetName
+        ? ((n = true),
+          {
+            ...reviewThread,
+            anchor: { ...reviewThread.anchor, sheetName: u.name },
+          })
+        : reviewThread;
     }),
-    a = e.sheets.map((d) => {
-      let u;
-      for (const [c, h] of Object.entries(d.cells))
+    sheets = workbook.sheets.map((sheet) => {
+      let cells;
+      for (const [c, h] of Object.entries(sheet.cells))
         h.hyperlink?.kind !== "internal" ||
           t.has(h.hyperlink.sheetId) ||
-          ((u ??= { ...d.cells }),
-          (u[c] = { ...h }),
-          delete u[c].hyperlink,
+          ((cells ??= { ...sheet.cells }),
+          (cells[c] = { ...h }),
+          delete cells[c].hyperlink,
           (n = true));
-      return u ? { ...d, cells: u } : d;
+      return cells ? { ...sheet, cells: cells } : sheet;
     });
-  return n ? { ...e, sheets: a, ...(o ? { reviewThreads: o } : {}) } : e;
+  return n
+    ? {
+        ...workbook,
+        sheets: sheets,
+        ...(reviewThreads ? { reviewThreads: reviewThreads } : {}),
+      }
+    : workbook;
 }
-function uQ(e, r) {
+function uQ(workbook, r) {
   return {
-    ...e,
-    ...(e.reviewThreads
+    ...workbook,
+    ...(workbook.reviewThreads
       ? {
-          reviewThreads: e.reviewThreads.map((t) => ({
-            ...t,
+          reviewThreads: workbook.reviewThreads.map((reviewThread) => ({
+            ...reviewThread,
             anchor: {
-              ...t.anchor,
-              sheetId: r.get(t.anchor.sheetId) ?? t.anchor.sheetId,
+              ...reviewThread.anchor,
+              sheetId:
+                r.get(reviewThread.anchor.sheetId) ??
+                reviewThread.anchor.sheetId,
             },
           })),
         }
       : {}),
-    sheets: e.sheets.map((t) => ({
-      ...t,
+    sheets: workbook.sheets.map((sheet) => ({
+      ...sheet,
       cells: Object.fromEntries(
-        Object.entries(t.cells).map(([n, o]) => [
+        Object.entries(sheet.cells).map(([n, o]) => [
           n,
           o.hyperlink?.kind === "internal"
             ? {
@@ -878,27 +926,30 @@ function uQ(e, r) {
     })),
   };
 }
-function createReviewThread(e, r) {
-  const t = uQ(e, r);
+function createReviewThread(workbook, r) {
+  const t = uQ(workbook, r);
   return t.reviewThreads
     ? {
         ...t,
-        reviewThreads: t.reviewThreads.map((n) => ({
-          ...n,
+        reviewThreads: t.reviewThreads.map((reviewThread) => ({
+          ...reviewThread,
           id: crypto.randomUUID(),
-          messages: n.messages.map((o) => ({ ...o, id: crypto.randomUUID() })),
+          messages: reviewThread.messages.map((message) => ({
+            ...message,
+            id: crypto.randomUUID(),
+          })),
         })),
       }
     : t;
 }
-function fQ(e, r) {
+function fQ(e, sheetId) {
   return e.formulaWatches?.length
     ? {
         ...e,
-        formulaWatches: e.formulaWatches.map((n) =>
-          !n.orphaned && n.anchor.sheetId === r
-            ? { ...n, orphaned: "deleted-sheet" }
-            : n,
+        formulaWatches: e.formulaWatches.map((formulaWatch) =>
+          !formulaWatch.orphaned && formulaWatch.anchor.sheetId === sheetId
+            ? { ...formulaWatch, orphaned: "deleted-sheet" }
+            : formulaWatch,
         ),
       }
     : e;
@@ -907,23 +958,27 @@ function createFormulaWatch(e, r) {
   return e.formulaWatches?.length
     ? {
         ...e,
-        formulaWatches: e.formulaWatches.map((n) => ({
-          ...n,
+        formulaWatches: e.formulaWatches.map((formulaWatch) => ({
+          ...formulaWatch,
           id: crypto.randomUUID(),
           anchor: {
-            ...n.anchor,
-            sheetId: r.get(n.anchor.sheetId) ?? n.anchor.sheetId,
+            ...formulaWatch.anchor,
+            sheetId:
+              r.get(formulaWatch.anchor.sheetId) ?? formulaWatch.anchor.sheetId,
           },
         })),
       }
     : e;
 }
-function Pv(e) {
+function Pv(sheetSplitPanes) {
   return [
     "top-left",
-    ...(e?.vertical !== undefined ? ["top-right"] : []),
-    ...(e?.horizontal !== undefined
-      ? ["bottom-left", ...(e?.vertical !== undefined ? ["bottom-right"] : [])]
+    ...(sheetSplitPanes?.vertical !== undefined ? ["top-right"] : []),
+    ...(sheetSplitPanes?.horizontal !== undefined
+      ? [
+          "bottom-left",
+          ...(sheetSplitPanes?.vertical !== undefined ? ["bottom-right"] : []),
+        ]
       : []),
   ];
 }
@@ -932,22 +987,23 @@ function anchorsMatchOnAxis(e, r, t) {
     e.split("-")[t === "row" ? 0 : 1] === r.split("-")[t === "row" ? 0 : 1]
   );
 }
-function validateSplitPaneState(e, r) {
-  if (e === undefined) return;
+function validateSplitPaneState(splitPanes, r) {
+  if (splitPanes === undefined) return;
   if (
-    !e ||
-    typeof e != "object" ||
-    Array.isArray(e) ||
-    (Object.getPrototypeOf(e) !== Object.prototype &&
-      Object.getPrototypeOf(e) !== null) ||
-    Object.keys(e).some(
-      (n) => !["horizontal", "vertical", "row", "col"].includes(n),
+    !splitPanes ||
+    typeof splitPanes != "object" ||
+    Array.isArray(splitPanes) ||
+    (Object.getPrototypeOf(splitPanes) !== Object.prototype &&
+      Object.getPrototypeOf(splitPanes) !== null) ||
+    Object.keys(splitPanes).some(
+      (splitPane) =>
+        !["horizontal", "vertical", "row", "col"].includes(splitPane),
     )
   )
     throw Error(
       "Split panes require divider percentages and valid row/column anchors.",
     );
-  const t = e;
+  const t = splitPanes;
   if (t.horizontal === undefined && t.vertical === undefined)
     throw Error("Choose a horizontal split, vertical split, or both.");
   for (const n of [t.horizontal, t.vertical])
@@ -1003,21 +1059,21 @@ function defaultRowHeightOf(e) {
 function defaultColumnWidthOf(e) {
   return e.defaultColumnWidth ?? defaultColumnWidth;
 }
-function rowHeightAt(e, r) {
-  if (!Number.isInteger(r) || r < 0 || r >= e.rowCount)
+function rowHeightAt(sheet, r) {
+  if (!Number.isInteger(r) || r < 0 || r >= sheet.rowCount)
     throw Error("Row index is outside the worksheet.");
-  return e.rowHeights?.[r] ?? defaultRowHeightOf(e);
+  return sheet.rowHeights?.[r] ?? defaultRowHeightOf(sheet);
 }
-function columnWidthAt(e, r) {
-  if (!Number.isInteger(r) || r < 0 || r >= e.colCount)
+function columnWidthAt(sheet, r) {
+  if (!Number.isInteger(r) || r < 0 || r >= sheet.colCount)
     throw Error("Column index is outside the worksheet.");
-  return e.columnWidths?.[r] ?? defaultColumnWidthOf(e);
+  return sheet.columnWidths?.[r] ?? defaultColumnWidthOf(sheet);
 }
-function buildSnapshotGuard(e) {
+function buildSnapshotGuard(workbook) {
   return Object.freeze({
-    workbookId: e.id,
-    revision: e.revision,
-    snapshotGuard: JSON.stringify(e),
+    workbookId: workbook.id,
+    revision: workbook.revision,
+    snapshotGuard: JSON.stringify(workbook),
   });
 }
 const worksheetCapacityLimits = {
@@ -1070,56 +1126,67 @@ function normalizeHiddenIntervals(e, r) {
   }
   return n;
 }
-function createAxisVisibilityIndex(e, r = []) {
-  const t = normalizeHiddenIntervals(r, e),
+function createAxisVisibilityIndex(logicalCount, r = []) {
+  const hiddenIntervals = normalizeHiddenIntervals(r, logicalCount),
     n = [0];
-  for (const l of t) n.push(n.at(-1) + l.end - l.start + 1);
-  const o = e - n.at(-1),
+  for (const hiddenInterval of hiddenIntervals)
+    n.push(n.at(-1) + hiddenInterval.end - hiddenInterval.start + 1);
+  const count = logicalCount - n.at(-1),
     a = (l) => {
       let c = 0,
-        h = t.length;
+        h = hiddenIntervals.length;
       for (; c < h;) {
         const f = (c + h) >>> 1;
-        t[f].start <= l ? (c = f + 1) : (h = f);
+        hiddenIntervals[f].start <= l ? (c = f + 1) : (h = f);
       }
       return c - 1;
     },
-    s = (l) => {
-      const c = Math.max(0, Math.min(e, Math.floor(l))),
+    countBefore = (l) => {
+      const c = Math.max(0, Math.min(logicalCount, Math.floor(l))),
         h = a(c - 1),
         f =
           h < 0
             ? 0
-            : n[h] + Math.min(c - t[h].start, t[h].end - t[h].start + 1);
+            : n[h] +
+              Math.min(
+                c - hiddenIntervals[h].start,
+                hiddenIntervals[h].end - hiddenIntervals[h].start + 1,
+              );
       return c - f;
     },
-    d = (l) => {
+    isHidden = (l) => {
       const c = a(l);
-      return c >= 0 && l <= t[c].end;
+      return c >= 0 && l <= hiddenIntervals[c].end;
     },
-    u = (l) => {
-      if (!Number.isInteger(l) || l < 0 || l >= o) return -1;
+    logicalIndex = (l) => {
+      if (!Number.isInteger(l) || l < 0 || l >= count) return -1;
       let c = 0,
-        h = e - 1;
+        h = logicalCount - 1;
       for (; c < h;) {
         const f = Math.floor((c + h) / 2);
-        s(f + 1) <= l ? (c = f + 1) : (h = f);
+        countBefore(f + 1) <= l ? (c = f + 1) : (h = f);
       }
       return c;
     };
   return {
-    count: o,
-    logicalCount: e,
-    logicalIndex: u,
-    countBefore: s,
-    isHidden: d,
+    count: count,
+    logicalCount: logicalCount,
+    logicalIndex: logicalIndex,
+    countBefore: countBefore,
+    isHidden: isHidden,
     viewIndex: (l) =>
-      Number.isInteger(l) && l >= 0 && l < e && !d(l) ? s(l) : null,
+      Number.isInteger(l) && l >= 0 && l < logicalCount && !isHidden(l)
+        ? countBefore(l)
+        : null,
     next: (l, c, h = false) => {
       const f = Math.trunc(l) + (h ? 0 : c);
-      if (!o || (c === 1 && f >= e) || (c === -1 && f < 0)) return null;
-      const p = c === 1 ? s(Math.max(0, f)) : s(Math.min(e, f + 1)) - 1,
-        m = u(p);
+      if (!count || (c === 1 && f >= logicalCount) || (c === -1 && f < 0))
+        return null;
+      const p =
+          c === 1
+            ? countBefore(Math.max(0, f))
+            : countBefore(Math.min(logicalCount, f + 1)) - 1,
+        m = logicalIndex(p);
       return m < 0 ? null : m;
     },
   };
@@ -1152,50 +1219,50 @@ function assertOutlineGroupNesting(e, r) {
   });
 }
 function validateOutlineGroups(
-  e,
+  sheet,
   r,
   t = { rows: r.rowCount, cols: r.colCount },
 ) {
-  if (e.outlineGroups === undefined) return;
+  if (sheet.outlineGroups === undefined) return;
   if (
-    !Array.isArray(e.outlineGroups) ||
-    e.outlineGroups.length > outlineGroupLimits.maxGroups
+    !Array.isArray(sheet.outlineGroups) ||
+    sheet.outlineGroups.length > outlineGroupLimits.maxGroups
   )
     throw Error("A worksheet supports at most 1,000 outline groups.");
   const n = new Set(),
-    o = e.outlineGroups.map((a) => {
+    o = sheet.outlineGroups.map((outlineGroup) => {
       if (
-        !a ||
-        typeof a != "object" ||
-        Array.isArray(a) ||
-        (Object.getPrototypeOf(a) !== Object.prototype &&
-          Object.getPrototypeOf(a) !== null) ||
-        Object.keys(a).some(
+        !outlineGroup ||
+        typeof outlineGroup != "object" ||
+        Array.isArray(outlineGroup) ||
+        (Object.getPrototypeOf(outlineGroup) !== Object.prototype &&
+          Object.getPrototypeOf(outlineGroup) !== null) ||
+        Object.keys(outlineGroup).some(
           (s) => !["id", "axis", "start", "end", "collapsed"].includes(s),
         ) ||
-        typeof a.id != "string" ||
-        !a.id.trim() ||
-        a.id.length > 100 ||
-        n.has(a.id) ||
-        !["row", "column"].includes(a.axis) ||
-        !Number.isSafeInteger(a.start) ||
-        !Number.isSafeInteger(a.end) ||
-        a.start < 0 ||
-        a.end < a.start ||
-        a.end >= (a.axis === "row" ? t.rows : t.cols) ||
-        typeof a.collapsed != "boolean"
+        typeof outlineGroup.id != "string" ||
+        !outlineGroup.id.trim() ||
+        outlineGroup.id.length > 100 ||
+        n.has(outlineGroup.id) ||
+        !["row", "column"].includes(outlineGroup.axis) ||
+        !Number.isSafeInteger(outlineGroup.start) ||
+        !Number.isSafeInteger(outlineGroup.end) ||
+        outlineGroup.start < 0 ||
+        outlineGroup.end < outlineGroup.start ||
+        outlineGroup.end >= (outlineGroup.axis === "row" ? t.rows : t.cols) ||
+        typeof outlineGroup.collapsed != "boolean"
       )
         throw Error(
           "Outline groups require unique IDs, valid row or column bounds, and a boolean collapsed state.",
         );
       return (
-        n.add(a.id),
+        n.add(outlineGroup.id),
         {
-          id: a.id,
-          axis: a.axis,
-          start: a.start,
-          end: a.end,
-          collapsed: a.collapsed,
+          id: outlineGroup.id,
+          axis: outlineGroup.axis,
+          start: outlineGroup.start,
+          end: outlineGroup.end,
+          collapsed: outlineGroup.collapsed,
         }
       );
     });
@@ -1227,44 +1294,62 @@ function cn(e, r) {
   }
   return normalizeHiddenIntervals(o, t);
 }
-function regenerateOutlineGroupIds(e) {
-  return e.outlineGroups?.map((t) => ({ ...t, id: crypto.randomUUID() }));
+function regenerateOutlineGroupIds(sheet) {
+  return sheet.outlineGroups?.map((outlineGroup) => ({
+    ...outlineGroup,
+    id: crypto.randomUUID(),
+  }));
 }
-function remapOutlineGroupsForEdit(e, r, t, n, o) {
-  assertWorksheetAxis(r);
-  const a = axisCountOf(e, r);
+function remapOutlineGroupsForEdit(e, axis, start, count, remove) {
+  assertWorksheetAxis(axis);
+  const a = axisCountOf(e, axis);
   if (
-    !Number.isInteger(t) ||
-    t < 0 ||
-    !Number.isInteger(n) ||
-    n < 1 ||
-    n > 1e4 ||
-    t + n > a ||
-    typeof o != "boolean"
+    !Number.isInteger(start) ||
+    start < 0 ||
+    !Number.isInteger(count) ||
+    count < 1 ||
+    count > 1e4 ||
+    start + count > a ||
+    typeof remove != "boolean"
   )
     throw Error("Choose a valid structural edit of 1–10,000 rows or columns.");
   if (!e.outlineGroups) return;
-  const s = t + n - 1,
-    d = e.outlineGroups.flatMap((u) => {
-      if (u.axis !== r || u.end < t) return [{ ...u }];
-      if (!o) {
-        if (u.end + n >= a)
+  const s = start + count - 1,
+    d = e.outlineGroups.flatMap((outlineGroup) => {
+      if (outlineGroup.axis !== axis || outlineGroup.end < start)
+        return [{ ...outlineGroup }];
+      if (!remove) {
+        if (outlineGroup.end + count >= a)
           throw Error(
             "Insertion would discard outline groups at the worksheet boundary. Ungroup those rows or columns first.",
           );
         return [
-          { ...u, start: u.start >= t ? u.start + n : u.start, end: u.end + n },
+          {
+            ...outlineGroup,
+            start:
+              outlineGroup.start >= start
+                ? outlineGroup.start + count
+                : outlineGroup.start,
+            end: outlineGroup.end + count,
+          },
         ];
       }
-      return u.start > s
-        ? [{ ...u, start: u.start - n, end: u.end - n }]
-        : u.start >= t && u.end <= s
+      return outlineGroup.start > s
+        ? [
+            {
+              ...outlineGroup,
+              start: outlineGroup.start - count,
+              end: outlineGroup.end - count,
+            },
+          ]
+        : outlineGroup.start >= start && outlineGroup.end <= s
           ? []
           : [
               {
-                ...u,
-                start: Math.min(u.start, t),
-                end: u.end > s ? u.end - n : t - 1,
+                ...outlineGroup,
+                start: Math.min(outlineGroup.start, start),
+                end:
+                  outlineGroup.end > s ? outlineGroup.end - count : start - 1,
               },
             ];
     });
@@ -1298,11 +1383,11 @@ function isValidUtcTimestamp(e) {
     throw new Error("Workbook metadata requires a valid UTC timestamp.");
   return e;
 }
-function validateWorkbookMetadata(e, r) {
-  if (e === undefined) return;
+function validateWorkbookMetadata(metadata, r) {
+  if (metadata === undefined) return;
   if (
-    !isPlainObjectValue(e) ||
-    Object.keys(e).some(
+    !isPlainObjectValue(metadata) ||
+    Object.keys(metadata).some(
       (a) =>
         ![
           "createdAt",
@@ -1314,26 +1399,26 @@ function validateWorkbookMetadata(e, r) {
     )
   )
     throw new Error("Invalid workbook metadata fields.");
-  const t = isValidUtcTimestamp(e.createdAt),
-    n = isValidUtcTimestamp(e.modifiedAt);
-  if (n < t)
+  const createdAt = isValidUtcTimestamp(metadata.createdAt),
+    modifiedAt = isValidUtcTimestamp(metadata.modifiedAt);
+  if (modifiedAt < createdAt)
     throw new Error("Workbook modified time cannot precede its creation time.");
-  const o = { createdAt: t, modifiedAt: n };
+  const o = { createdAt: createdAt, modifiedAt: modifiedAt };
   if (
-    (e.engagement !== undefined &&
+    (metadata.engagement !== undefined &&
       (o.engagement = trimRequiredMetadataText(
-        e.engagement,
+        metadata.engagement,
         "Engagement",
         200,
       )),
-    e.period !== undefined &&
-      (o.period = trimRequiredMetadataText(e.period, "Period", 100)),
-    e.template !== undefined)
+    metadata.period !== undefined &&
+      (o.period = trimRequiredMetadataText(metadata.period, "Period", 100)),
+    metadata.template !== undefined)
   ) {
-    const a = e.template;
+    const template = metadata.template;
     if (
-      !isPlainObjectValue(a) ||
-      Object.keys(a).some(
+      !isPlainObjectValue(template) ||
+      Object.keys(template).some(
         (s) =>
           ![
             "id",
@@ -1343,47 +1428,54 @@ function validateWorkbookMetadata(e, r) {
             "sourceRevision",
           ].includes(s),
       ) ||
-      !Number.isSafeInteger(a.version) ||
-      Number(a.version) < 1 ||
-      (a.sourceRevision !== undefined &&
-        (!Number.isSafeInteger(a.sourceRevision) ||
-          Number(a.sourceRevision) < 0))
+      !Number.isSafeInteger(template.version) ||
+      Number(template.version) < 1 ||
+      (template.sourceRevision !== undefined &&
+        (!Number.isSafeInteger(template.sourceRevision) ||
+          Number(template.sourceRevision) < 0))
     )
       throw new Error("Invalid template provenance.");
     o.template = {
-      id: trimRequiredMetadataText(a.id, "Template ID", 100),
-      name: trimRequiredMetadataText(a.name, "Template name", 200),
-      version: Number(a.version),
+      id: trimRequiredMetadataText(template.id, "Template ID", 100),
+      name: trimRequiredMetadataText(template.name, "Template name", 200),
+      version: Number(template.version),
       sourceWorkbookId: trimRequiredMetadataText(
-        a.sourceWorkbookId,
+        template.sourceWorkbookId,
         "Template source workbook ID",
         100,
       ),
-      ...(a.sourceRevision !== undefined
-        ? { sourceRevision: Number(a.sourceRevision) }
+      ...(template.sourceRevision !== undefined
+        ? { sourceRevision: Number(template.sourceRevision) }
         : {}),
     };
   }
   r.metadata = o;
 }
-function createWorkbookMetadata(e = {}, r = new Date().toISOString()) {
+function createWorkbookMetadata(e = {}, timestamp = new Date().toISOString()) {
   const t = {};
   return (
-    validateWorkbookMetadata({ createdAt: r, modifiedAt: r, ...e }, t),
+    validateWorkbookMetadata(
+      { createdAt: timestamp, modifiedAt: timestamp, ...e },
+      t,
+    ),
     t.metadata
   );
 }
-function touchWorkbookModifiedAt(e, r = new Date().toISOString()) {
+function touchWorkbookModifiedAt(e, timestamp = new Date().toISOString()) {
   const t = { ...e };
-  isValidUtcTimestamp(r);
-  const n = [r, e.metadata?.createdAt ?? r, e.metadata?.modifiedAt ?? r]
+  isValidUtcTimestamp(timestamp);
+  const modifiedAt = [
+    timestamp,
+    e.metadata?.createdAt ?? timestamp,
+    e.metadata?.modifiedAt ?? timestamp,
+  ]
     .sort()
     .at(-1);
   return (
     validateWorkbookMetadata(
       e.metadata
-        ? { ...e.metadata, modifiedAt: n }
-        : createWorkbookMetadata({}, r),
+        ? { ...e.metadata, modifiedAt: modifiedAt }
+        : createWorkbookMetadata({}, timestamp),
       t,
     ),
     t
@@ -1413,7 +1505,7 @@ const validationLimits = Object.freeze({
       throw Error(`Invalid validation ${t}.`);
     return e;
   };
-function validateDataValidationRule(e, r, t = defaultDatePolicy) {
+function validateDataValidationRule(e, r, datePolicy = defaultDatePolicy) {
   if (r === null || r === "") return e.allowBlank;
   if (e.kind === "custom") return false;
   if (e.kind === "list")
@@ -1423,7 +1515,7 @@ function validateDataValidationRule(e, r, t = defaultDatePolicy) {
   if (
     (["date", "time"].includes(e.kind) &&
       typeof r == "string" &&
-      (n = parseDateText(r, t) ?? NaN),
+      (n = parseDateText(r, datePolicy) ?? NaN),
     !Number.isFinite(n) ||
       (e.kind === "integer" && !Number.isInteger(n)) ||
       (e.kind === "date" &&
@@ -1455,31 +1547,33 @@ function validateDataValidationRule(e, r, t = defaultDatePolicy) {
 const MB = new WeakMap(),
   r5 = new WeakMap();
 class DataValidationError extends Error {
-  constructor(t, n) {
+  constructor(book, issues) {
     super(
-      n
+      issues
         .slice(0, 5)
         .map((o) => `${o.sheetName}!${o.address}: ${o.message} ${o.reason}`)
         .join(`
 `) +
-        (n.length > 5
+        (issues.length > 5
           ? `
-${n.length} validation violations in this batch.`
+${issues.length} validation violations in this batch.`
           : ""),
     );
     defineDataPropertyByKey(this, "issues");
     ((this.name = "DataValidationError"),
-      (this.issues = structuredClone(n)),
-      MB.set(this, JSON.stringify({ book: t, issues: n })));
+      (this.issues = structuredClone(issues)),
+      MB.set(this, JSON.stringify({ book: book, issues: issues })));
   }
 }
-function assertNoStopValidationIssues(e) {
-  const r = MB.get(e);
+function assertNoStopValidationIssues(error) {
+  const r = MB.get(error);
   if (
     !r ||
-    !e.issues.length ||
-    e.issues.some((n) => n.style === "stop" || n.evaluationError) ||
-    JSON.stringify(JSON.parse(r).issues) !== JSON.stringify(e.issues)
+    !error.issues.length ||
+    error.issues.some(
+      (issue) => issue.style === "stop" || issue.evaluationError,
+    ) ||
+    JSON.stringify(JSON.parse(r).issues) !== JSON.stringify(error.issues)
   )
     throw Error(
       "Stop errors cannot be overridden. Correct the invalid values.",
@@ -1488,14 +1582,22 @@ function assertNoStopValidationIssues(e) {
   return (r5.set(t, r), t);
 }
 const FB = new WeakMap();
-function resolveValidationInspection(e, r) {
-  const t = FB.get(r);
-  if (!t || t.source !== JSON.stringify(e) || t.content !== JSON.stringify(r))
+function resolveValidationInspection(workbook, report) {
+  const t = FB.get(report);
+  if (
+    !t ||
+    t.source !== JSON.stringify(workbook) ||
+    t.content !== JSON.stringify(report)
+  )
     throw Error(
       "Validation inspection is stale or unknown. Inspect existing values again.",
     );
   return JSON.stringify(
-    { schemaVersion: 1, kind: "local-data-validation-inspection", report: r },
+    {
+      schemaVersion: 1,
+      kind: "local-data-validation-inspection",
+      report: report,
+    },
     null,
     2,
   );
@@ -1547,7 +1649,10 @@ const isCellInsideRange = (e, r) =>
     );
 function sortConditionalRulesByPriority(e) {
   return e
-    .map((r, t) => ({ rule: r, rank: r.priority ?? 101 + e.length - t }))
+    .map((rule, t) => ({
+      rule: rule,
+      rank: rule.priority ?? 101 + e.length - t,
+    }))
     .sort((r, t) => r.rank - t.rank)
     .map((r) => r.rule);
 }
@@ -1558,22 +1663,22 @@ function assertSheetUnprotected(e) {
       "This sheet is protected. Unprotect it before changing its contents.",
     );
 }
-function applySheetSizeEdits(e, r, t, n = {}) {
+function applySheetSizeEdits(workbook, sheetId, t, n = {}) {
   if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = n.expectedSnapshot;
+  const expectedSnapshot = n.expectedSnapshot;
   if (
-    o !== undefined &&
-    (!o ||
-      o.workbookId !== e.id ||
-      o.revision !== e.revision ||
-      o.snapshotGuard !== JSON.stringify(e))
+    expectedSnapshot !== undefined &&
+    (!expectedSnapshot ||
+      expectedSnapshot.workbookId !== workbook.id ||
+      expectedSnapshot.revision !== workbook.revision ||
+      expectedSnapshot.snapshotGuard !== JSON.stringify(workbook))
   )
     throw Error(
       "The workbook changed after these sizes were opened. Close the dialog and reopen it before applying sizes.",
     );
-  const a = e.sheets.find((l) => l.id === r);
+  const a = workbook.sheets.find((sheet) => sheet.id === sheetId);
   if (!a) throw Error("Worksheet not found.");
   if (
     (assertSheetUnprotected(a),
@@ -1626,21 +1731,26 @@ function applySheetSizeEdits(e, r, t, n = {}) {
     u.defaultColumnWidth === a.defaultColumnWidth &&
     u.rowHeights === a.rowHeights &&
     u.columnWidths === a.columnWidths
-      ? e
-      : { ...e, sheets: e.sheets.map((l) => (l.id === r ? u : l)) }
+      ? workbook
+      : {
+          ...workbook,
+          sheets: workbook.sheets.map((sheet) =>
+            sheet.id === sheetId ? u : sheet,
+          ),
+        }
   );
 }
-async function hashSheetPassword(e, r) {
+async function hashSheetPassword(e, salt) {
   const t = await crypto.subtle.digest(
     "SHA-256",
-    new TextEncoder().encode(r + "\0" + e),
+    new TextEncoder().encode(salt + "\0" + e),
   );
   return [...new Uint8Array(t)]
     .map((n) => n.toString(16).padStart(2, "0"))
     .join("");
 }
-async function updateSheetProtection(e, r, t, n) {
-  const o = e.sheets.find((l) => l.id === r);
+async function updateSheetProtection(workbook, sheetId, t, n) {
+  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
   (n &&
     o.protection?.enabled &&
     failWithMessage(
@@ -1651,16 +1761,18 @@ async function updateSheetProtection(e, r, t, n) {
       o.protection?.hash &&
       (await hashSheetPassword(t, o.protection.salt)) !== o.protection.hash &&
       failWithMessage("The password does not match."));
-  const a = crypto.randomUUID(),
-    s = n
+  const salt = crypto.randomUUID(),
+    protection = n
       ? {
           enabled: true,
-          ...(t ? { salt: a, hash: await hashSheetPassword(t, a) } : {}),
+          ...(t ? { salt: salt, hash: await hashSheetPassword(t, salt) } : {}),
         }
       : { enabled: false };
   return {
-    ...e,
-    sheets: e.sheets.map((l) => (l.id === r ? { ...l, protection: s } : l)),
+    ...workbook,
+    sheets: workbook.sheets.map((sheet) =>
+      sheet.id === sheetId ? { ...sheet, protection: protection } : sheet,
+    ),
   };
 }
 const supportedNumberLocales = [
@@ -1793,39 +1905,43 @@ function summarizeNumberFormat(e) {
   if (!e) return;
   const r = BN(e);
   if (!r) return;
-  const t = parseNumberFormatCode(r[0]);
-  return t?.hasNumber ? t.maxDecimals : undefined;
+  const numberFormatCode = parseNumberFormatCode(r[0]);
+  return numberFormatCode?.hasNumber ? numberFormatCode.maxDecimals : undefined;
 }
-function numberFormatToIntlOptions(e, r) {
-  const t = BN(r);
+function numberFormatToIntlOptions(e, numFmt) {
+  const t = BN(numFmt);
   if (!t) return;
   const n = e < 0 && t.length > 1,
     o = e === 0 && t.length > 2 ? 2 : n ? 1 : 0,
-    a = parseNumberFormatCode(t[o]);
-  if (!a) return;
-  if (!a.hasNumber) return a.prefix + a.suffix;
-  const s = Math.abs(e) * (a.percent ? 100 : 1);
+    numberFormatCode = parseNumberFormatCode(t[o]);
+  if (!numberFormatCode) return;
+  if (!numberFormatCode.hasNumber)
+    return numberFormatCode.prefix + numberFormatCode.suffix;
+  const s = Math.abs(e) * (numberFormatCode.percent ? 100 : 1);
   if (!Number.isFinite(s)) return "#NUM!";
   let d = new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: a.minDecimals,
-    maximumFractionDigits: a.maxDecimals,
-    minimumIntegerDigits: Math.max(1, a.minIntegerDigits),
-    useGrouping: a.grouping,
+    minimumFractionDigits: numberFormatCode.minDecimals,
+    maximumFractionDigits: numberFormatCode.maxDecimals,
+    minimumIntegerDigits: Math.max(1, numberFormatCode.minIntegerDigits),
+    useGrouping: numberFormatCode.grouping,
   }).format(s);
   return (
-    a.minIntegerDigits === 0 &&
-      (d === "0" && a.minDecimals === 0
+    numberFormatCode.minIntegerDigits === 0 &&
+      (d === "0" && numberFormatCode.minDecimals === 0
         ? (d = "")
         : d.startsWith("0.") && (d = d.slice(1))),
-    (e < 0 && !n ? "-" : "") + a.prefix + d + a.suffix
+    (e < 0 && !n ? "-" : "") +
+      numberFormatCode.prefix +
+      d +
+      numberFormatCode.suffix
   );
 }
 const $b = new Map();
 function parseDateTimeFormatCode(e) {
   const r = e.replace(/"[^"]*"|\\./g, "");
   if (!/[ymdhs]/i.test(r)) return;
-  const t = [];
-  let n = 0;
+  const tokens = [];
+  let fraction = 0;
   for (let u = 0; u < e.length;) {
     const l = e.slice(u),
       c = l[0];
@@ -1833,25 +1949,25 @@ function parseDateTimeFormatCode(e) {
       const v = e.indexOf('"', u + 1);
       (v < 0 &&
         throwWorkbookError("The format contains an unclosed quoted literal."),
-        t.push({ kind: "literal", text: e.slice(u + 1, v) }),
+        tokens.push({ kind: "literal", text: e.slice(u + 1, v) }),
         (u = v + 1));
       continue;
     }
     if (c === "\\") {
       (l.length < 2 &&
         throwWorkbookError("A format escape must be followed by a character."),
-        t.push({ kind: "literal", text: l[1] }),
+        tokens.push({ kind: "literal", text: l[1] }),
         (u += 2));
       continue;
     }
     const h = /^(AM\/PM|A\/P)/i.exec(l);
     if (h) {
-      (t.push({ kind: "ampm", text: h[0] }), (u += h[0].length));
+      (tokens.push({ kind: "ampm", text: h[0] }), (u += h[0].length));
       continue;
     }
     const f = /^\[(h{1,2}|m{1,2}|s{1,2})\]/i.exec(l);
     if (f) {
-      (t.push({ kind: "elapsed", text: f[1].toLowerCase() }),
+      (tokens.push({ kind: "elapsed", text: f[1].toLowerCase() }),
         (u += f[0].length));
       continue;
     }
@@ -1865,7 +1981,7 @@ function parseDateTimeFormatCode(e) {
         throwWorkbookError(
           "This date pattern uses unsupported fields. Use yy/yyyy, m–mmmm, d/dd, h/hh or s/ss.",
         ),
-        t.push({
+        tokens.push({
           kind: { y: "year", m: "month", d: "day", h: "hour", s: "second" }[g],
           text: v,
         }),
@@ -1874,27 +1990,28 @@ function parseDateTimeFormatCode(e) {
     }
     const m = /^\.(0{1,3})(?!0)/.exec(l);
     if (m) {
-      ((!t.length ||
-        !["second", "elapsed"].includes(t.at(-1).kind) ||
-        (t.at(-1).kind === "elapsed" && !t.at(-1).text.startsWith("s")) ||
-        n) &&
+      ((!tokens.length ||
+        !["second", "elapsed"].includes(tokens.at(-1).kind) ||
+        (tokens.at(-1).kind === "elapsed" &&
+          !tokens.at(-1).text.startsWith("s")) ||
+        fraction) &&
         throwWorkbookError(
           "Fractional seconds must follow seconds and use 1–3 zero digits.",
         ),
-        (n = m[1].length),
-        t.push({ kind: "fraction", text: m[1] }),
+        (fraction = m[1].length),
+        tokens.push({ kind: "fraction", text: m[1] }),
         (u += m[0].length));
       continue;
     }
     if (/^[ /:,.-]$/.test(c)) {
-      (t.push({ kind: "literal", text: c }), u++);
+      (tokens.push({ kind: "literal", text: c }), u++);
       continue;
     }
     throwWorkbookError(
       "Unsupported date/time code. Quote literal words and use one supported date/time pattern.",
     );
   }
-  const o = t.filter((u) => u.kind !== "literal");
+  const o = tokens.filter((token) => token.kind !== "literal");
   o.forEach((u, l) => {
     u.kind === "month" &&
       u.text.length <= 2 &&
@@ -1935,14 +2052,14 @@ function parseDateTimeFormatCode(e) {
           : a
             ? "date"
             : "time",
-      tokens: t,
-      fraction: n,
+      tokens: tokens,
+      fraction: fraction,
     }
   );
 }
 function parseCustomNumberFormat(e) {
   let r = "",
-    t = 1,
+    divisor = 1,
     n = false;
   for (let s = 0; s < e.length;) {
     const d = e.slice(s);
@@ -1968,7 +2085,7 @@ function parseCustomNumberFormat(e) {
         throwWorkbookError(
           "Custom display scaling supports at most two trailing commas.",
         ),
-        (t = 1e3 ** l.length),
+        (divisor = 1e3 ** l.length),
         (r += u.slice(0, u.length - l.length)),
         (s += u.length),
         (n = true));
@@ -1978,15 +2095,15 @@ function parseCustomNumberFormat(e) {
     throwWorkbookError(
       "Custom colors, conditions and locale tags are not supported. Use conditional formatting or the locale selector.",
     );
-  const o = parseNumberFormatCode(r);
+  const numberFormatCode = parseNumberFormatCode(r);
   return (
-    o ||
+    numberFormatCode ||
       throwWorkbookError(
         "Unsupported custom format. Use 0/# digits, grouping, decimals, percent, quoted literals and positive/negative/zero sections.",
       ),
-    o.maxDecimals > 12 &&
+    numberFormatCode.maxDecimals > 12 &&
       throwWorkbookError("Custom formats support at most 12 decimal places."),
-    { parsed: o, divisor: t }
+    { parsed: numberFormatCode, divisor: divisor }
   );
 }
 function isTextOnlyFormatSection(e) {

@@ -134,7 +134,7 @@ import {
 
 function WorkbookSyncBoundary(e) {
   const r = ne.useMemo(() => createWorkbookDiagnosticsMonitor(), []),
-    t = e.reliability ?? r,
+    reliability = e.reliability ?? r,
     n = ne.useRef({
       propId: e.initialWorkbook?.id,
       emittedId: undefined,
@@ -143,13 +143,13 @@ function WorkbookSyncBoundary(e) {
   n.current.propId !== e.initialWorkbook?.id &&
     (n.current.emittedId !== e.initialWorkbook?.id && n.current.generation++,
     (n.current.propId = e.initialWorkbook?.id));
-  const o = ne.useCallback(
+  const onChange = ne.useCallback(
       (c) => {
         ((n.current.emittedId = c.id), e.onChange?.(c));
       },
       [e.onChange],
     ),
-    a = ne.useCallback(
+    onWorkbookLoaded = ne.useCallback(
       (c) => {
         ((n.current.emittedId = c.id), e.onWorkbookLoaded?.(c));
       },
@@ -158,10 +158,15 @@ function WorkbookSyncBoundary(e) {
   return i.jsx(WorkbookMessagesProvider, {
     options: e.localization,
     children: i.jsx(operationScopeContext.Provider, {
-      value: { ...e.fileProcessingOptions, reliability: t },
+      value: { ...e.fileProcessingOptions, reliability: reliability },
       children: i.jsx(
         MainWorksheetEditor,
-        { ...e, reliability: t, onChange: o, onWorkbookLoaded: a },
+        {
+          ...e,
+          reliability: reliability,
+          onChange: onChange,
+          onWorkbookLoaded: onWorkbookLoaded,
+        },
         (e.persistenceKey ?? "session") +
           ":" +
           n.current.generation +
@@ -215,8 +220,8 @@ function MainWorksheetEditor({
         : 15e3,
     { text, language } = useWorkbookMessages(),
     workbookMessages = useWorkbookMessages(),
-    getEditableCellText = (fe) =>
-      formatCellEntryForEdit(fe, workbookMessages.entryLocale),
+    getEditableCellText = (cell) =>
+      formatCellEntryForEdit(cell, workbookMessages.entryLocale),
     editorIdPrefix = ne.useId(),
     [workbookSnapshot, setWorkbookSnapshot] = ne.useState(() =>
       buildCanonicalWorkbookSnapshot(initialWorkbook ?? createBlankWorkbook()),
@@ -246,12 +251,12 @@ function MainWorksheetEditor({
       ? onConsolidationWorkbooksChange
       : setUncontrolledConsolidationWorkbooks,
     [activeSheetId, setActiveSheetId] = ne.useState(
-      activeWorkbook.sheets.find((fe) => !fe.hidden).id,
+      activeWorkbook.sheets.find((sheet) => !sheet.hidden).id,
     ),
     activeSheet =
       activeWorkbook.sheets.find(
-        (fe) => fe.id === activeSheetId && !fe.hidden,
-      ) ?? activeWorkbook.sheets.find((fe) => !fe.hidden),
+        (sheet) => sheet.id === activeSheetId && !sheet.hidden,
+      ) ?? activeWorkbook.sheets.find((sheet) => !sheet.hidden),
     workbookPersistence = ne.useMemo(
       () =>
         instrumentWorkbookPersistence(
@@ -323,18 +328,19 @@ function MainWorksheetEditor({
         }
         fe = requestAnimationFrame(Be);
       },
-      Ue = (gt) => {
+      Ue = (event) => {
         formulaEntryState.formulaPointerStateRef.current.dragging &&
-          ((Oe = { x: gt.clientX, y: gt.clientY }),
+          ((Oe = { x: event.clientX, y: event.clientY }),
           (fe ||= requestAnimationFrame(Be)));
       },
       Xe = () => {
-        const gt = formulaEntryState.formulaPointerStateRef.current.dragging;
+        const dragging =
+          formulaEntryState.formulaPointerStateRef.current.dragging;
         ((formulaEntryState.formulaPointerStateRef.current.dragging = false),
           cancelAnimationFrame(fe),
           (fe = 0),
           (Oe = undefined),
-          gt && cellEditActions.restoreFormulaEditorFocus());
+          dragging && cellEditActions.restoreFormulaEditorFocus());
       };
     return (
       window.addEventListener("pointermove", Ue),
@@ -420,10 +426,13 @@ function MainWorksheetEditor({
           ),
           error: "",
         };
-      } catch (fe) {
+      } catch (error) {
         return {
           result: null,
-          error: fe instanceof Error ? fe.message : "Filtering is unavailable.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Filtering is unavailable.",
         };
       }
     }, [activeWorkbook, activeSheet.id, activeFilterState, workbookCalculator]),
@@ -542,12 +551,12 @@ function MainWorksheetEditor({
     arrayDisplayResult = ne.useMemo(() => {
       try {
         return { cells: vx(activeSheet, workbookCalculator), warning: "" };
-      } catch (fe) {
+      } catch (error) {
         return {
           cells: activeSheet.cells,
           warning:
-            fe instanceof Error
-              ? fe.message
+            error instanceof Error
+              ? error.message
               : "Array display exceeds this workbook's calculation budget.",
         };
       }
@@ -601,20 +610,24 @@ function MainWorksheetEditor({
     getAllCellEntries = ne.useMemo(() => {
       let fe;
       return () =>
-        (fe ??= Object.entries(arrayDisplayResult.cells).map(([Oe, Be]) => ({
-          address: Oe,
-          cell: Be,
-          ..._t(Oe),
-        })));
+        (fe ??= Object.entries(arrayDisplayResult.cells).map(
+          ([address, cell]) => ({
+            address: address,
+            cell: cell,
+            ..._t(address),
+          }),
+        ));
     }, [arrayDisplayResult.cells]),
     selectedNumericValues = ne.useMemo(
       () =>
         (selectedCellCount <= 500
-          ? enumerateSelectionCells(selectionAreas).map((fe) => ({
-              address: fe,
+          ? enumerateSelectionCells(selectionAreas).map((address) => ({
+              address: address,
             }))
           : getAllCellEntries().filter(({ row, col }) =>
-              selectionAreaRanges.some((Be) => Tp(Be, row, col)),
+              selectionAreaRanges.some((selectionAreaRange) =>
+                Tp(selectionAreaRange, row, col),
+              ),
             )
         )
           .map(({ address }) => workbookCalculator(activeSheet.id, address))
@@ -691,7 +704,12 @@ function MainWorksheetEditor({
     filteredRowPositionMap = ne.useMemo(
       () =>
         sortedRowIndexes
-          ? new Map(sortedRowIndexes.map((fe, Oe) => [fe, Oe]))
+          ? new Map(
+              sortedRowIndexes.map((sortedRowIndex, Oe) => [
+                sortedRowIndex,
+                Oe,
+              ]),
+            )
           : null,
       [sortedRowIndexes],
     );
@@ -1062,7 +1080,7 @@ function MainWorksheetEditor({
               zoomScale,
             )
           : 0,
-        wt = Be.endsWith("right")
+        left = Be.endsWith("right")
           ? logicalToPhysicalPixels(
               scrollableColumnLayout.offset(
                 Math.max(0, (columnVisibilityIndex.viewIndex(gt) ?? 0) - yn),
@@ -1072,9 +1090,9 @@ function MainWorksheetEditor({
               zoomScale,
             )
           : 0;
-      fe[Be] = { top: Nt, left: wt };
+      fe[Be] = { top: Nt, left: left };
       const jt = splitPaneSizes.refs.current[Be];
-      jt && ((jt.scrollTop = Nt), (jt.scrollLeft = wt));
+      jt && ((jt.scrollTop = Nt), (jt.scrollLeft = left));
     }
     splitPaneSizes.patch(fe);
     const Oe = Pv(sheetSplitPanes).at(-1);
@@ -1092,12 +1110,12 @@ function MainWorksheetEditor({
         const Ue = {};
         for (const gt of Be) {
           const Nt = Number(gt.target.dataset.row),
-            wt = gt.target.offsetHeight;
+            offsetHeight = gt.target.offsetHeight;
           Number.isInteger(Nt) &&
             activeSheet.rowHeights?.[Nt] === undefined &&
             viewDisplayState.axisResizeState?.axis !== "row" &&
-            wt > defaultRowHeight &&
-            (Ue[Nt] = wt);
+            offsetHeight > defaultRowHeight &&
+            (Ue[Nt] = offsetHeight);
         }
         Object.keys(Ue).length &&
           viewDisplayState.setAutoFitRowHeights((gt) =>
@@ -1139,13 +1157,13 @@ function MainWorksheetEditor({
       if (Be !== undefined && Be >= 0) {
         const Nt = scrollableRowLayout.offset(Be),
           wt = scrollableRowLayout.offset(Be + 1);
-        let jt = rowWindow.logicalOffset;
-        (Nt < jt
-          ? (jt = Nt)
-          : wt > jt + rowViewport / zoomScale &&
-            (jt = wt - rowViewport / zoomScale),
+        let logicalOffset = rowWindow.logicalOffset;
+        (Nt < logicalOffset
+          ? (logicalOffset = Nt)
+          : wt > logicalOffset + rowViewport / zoomScale &&
+            (logicalOffset = wt - rowViewport / zoomScale),
           (Ue = logicalToPhysicalPixels(
-            jt,
+            logicalOffset,
             scrollableRowLayout.total,
             rowViewport,
             zoomScale,
@@ -1155,13 +1173,13 @@ function MainWorksheetEditor({
       if (gt >= 0) {
         const Nt = scrollableColumnLayout.offset(gt),
           wt = scrollableColumnLayout.offset(gt + 1);
-        let jt = columnWindow.logicalOffset;
-        (Nt < jt
-          ? (jt = Nt)
-          : wt > jt + columnViewport / zoomScale &&
-            (jt = wt - columnViewport / zoomScale),
+        let logicalOffset = columnWindow.logicalOffset;
+        (Nt < logicalOffset
+          ? (logicalOffset = Nt)
+          : wt > logicalOffset + columnViewport / zoomScale &&
+            (logicalOffset = wt - columnViewport / zoomScale),
           (Xe = logicalToPhysicalPixels(
-            jt,
+            logicalOffset,
             scrollableColumnLayout.total,
             columnViewport,
             zoomScale,
@@ -1247,8 +1265,8 @@ function MainWorksheetEditor({
           }
         }
         persistenceState.isWorkbookLoadedRef.current = true;
-      } catch (Oe) {
-        (persistenceActions.reportSaveError(Oe),
+      } catch (error) {
+        (persistenceActions.reportSaveError(error),
           (persistenceState.persistenceMessageRef.current =
             "The saved workbook could not be restored. Import a backup to recover it. Existing saved data will be preserved."),
           operationStatusState.setErrorNotice(
@@ -1257,27 +1275,27 @@ function MainWorksheetEditor({
       }
       return () => {
         fe.active = false;
-        for (const Ue of fe.controllers) Ue.abort();
+        for (const controller of fe.controllers) controller.abort();
         const Oe = persistenceState.persistenceSessionRef.current;
         Oe.active = false;
-        for (const Ue of Oe.controllers) Ue.abort();
+        for (const controller of Oe.controllers) controller.abort();
         persistenceState.saveAbortControllerRef.current?.abort();
       };
     }, [workbookPersistence]),
     ne.useEffect(() => {
       if (readOnly) {
-        for (const Oe of persistenceState.persistenceSessionRef.current
+        for (const controller of persistenceState.persistenceSessionRef.current
           .controllers)
-          Oe.abort();
+          controller.abort();
         persistenceState.saveAbortControllerRef.current?.abort();
       }
     }, [readOnly]),
     ne.useEffect(() => {
       if (!persistenceKey && !("coordination" in workbookPersistence)) return;
-      const fe = (Oe) => {
+      const fe = (event) => {
         const Be = persistenceState.persistedWorkbookRecordRef.current?.guard,
           Ue = persistenceKey ?? Be?.namespace;
-        if (!(!Ue || (Oe.key !== null && Oe.key !== Ue)))
+        if (!(!Ue || (event.key !== null && event.key !== Ue)))
           try {
             const gt = workbookPersistence.load();
             if (
@@ -1291,8 +1309,8 @@ function MainWorksheetEditor({
                 gt?.guard,
               ),
             );
-          } catch (gt) {
-            persistenceActions.reportSaveError(gt);
+          } catch (error) {
+            persistenceActions.reportSaveError(error);
           }
       };
       return (
@@ -1341,9 +1359,9 @@ function MainWorksheetEditor({
             return;
           const Xe = persistenceActions.persistWorkbookSnapshot(Oe.book, Be);
           isPromiseLike(Xe) && Xe.catch(() => {});
-        } catch (Oe) {
+        } catch (error) {
           operationStatusState.setErrorNotice(
-            `${Oe instanceof Error ? Oe.message : "The current selection could not be saved."} Changes remain in this editor; export JSON to keep a copy.`,
+            `${error instanceof Error ? error.message : "The current selection could not be saved."} Changes remain in this editor; export JSON to keep a copy.`,
           );
         }
       }, 400);
@@ -1423,9 +1441,9 @@ function MainWorksheetEditor({
           dialogState.setSidePanelKind("assistant"),
           operationStatusState.setErrorNotice(""),
           (fe = { accepted: true }));
-      } catch (Oe) {
+      } catch (error) {
         const Be =
-          Oe instanceof Error ? Oe.message : "Invalid external proposal.";
+          error instanceof Error ? error.message : "Invalid external proposal.";
         (operationStatusState.setErrorNotice(Be),
           (fe = { accepted: false, error: Be }));
       }
@@ -1453,7 +1471,7 @@ function MainWorksheetEditor({
 
   ne.useEffect(() => {
     if (!viewDisplayState.axisResizeState) return;
-    const fe = (Xe) =>
+    const fe = (event) =>
         viewDisplayState.setAxisResizeState(
           (gt) =>
             gt && {
@@ -1464,7 +1482,7 @@ function MainWorksheetEditor({
                   Math.min(
                     gt.axis === "column" ? maxColumnWidth : maxRowHeight,
                     gt.initial +
-                      ((gt.axis === "column" ? Xe.clientX : Xe.clientY) -
+                      ((gt.axis === "column" ? event.clientX : event.clientY) -
                         gt.start) /
                         zoomScale,
                   ),
@@ -1561,8 +1579,8 @@ function MainWorksheetEditor({
   }, [!!dragFillState.fillDragState]);
 
   const frozenColumnLeftOffsets = Object.fromEntries(
-      frozenColumnIndexes.map((fe, Oe) => [
-        fe,
+      frozenColumnIndexes.map((frozenColumnIndex, Oe) => [
+        frozenColumnIndex,
         rowHeaderWidth + columnAxisLayout.offset(Oe),
       ]),
     ),
@@ -1610,11 +1628,11 @@ function MainWorksheetEditor({
               ),
               onPointerDown: (Be) =>
                 rowColumnAndFillActions.beginAxisResize("column", fe, Be),
-              onDoubleClick: (Be) => {
-                (Be.stopPropagation(),
+              onDoubleClick: (event) => {
+                (event.stopPropagation(),
                   rowColumnAndFillActions.autoFitSelectedAxis("column", fe));
               },
-              onClick: (Be) => Be.stopPropagation(),
+              onClick: (event) => event.stopPropagation(),
               lang: language(
                 "Drag to resize; double-click to AutoFit column width",
               ),
@@ -1623,13 +1641,13 @@ function MainWorksheetEditor({
         },
         fe,
       ),
-    renderGridRow = (fe, Oe, Be, Ue) =>
+    renderGridRow = (fe, pinned, Be, Ue) =>
       i.jsx(
         WorksheetGridRow,
         {
           idPrefix: `${editorIdPrefix}-${Ue}`,
           row: fe,
-          pinned: Oe,
+          pinned: pinned,
           pinnedTop:
             (viewDisplayState.isHeadingsVisible ? 22 : 0) +
             rowAxisLayout.offset(rowVisibilityIndex.viewIndex(fe) ?? 0),
@@ -1704,13 +1722,14 @@ function MainWorksheetEditor({
           onNavigate: navigationActions.moveSelectionAfterCommit,
           onPivotDrill: (Nt) => {
             const wt = _t(Nt);
-            return activeSheet.pivots?.some((rr) => {
-              const Mr = parseRangeAddress(rr.outputRange);
+            return activeSheet.pivots?.some((pivot) => {
+              const rangeAddress = parseRangeAddress(pivot.outputRange);
               return (
-                wt.row > Mr.firstRow &&
-                wt.row <= Mr.lastRow &&
-                wt.col >= Mr.firstCol + Math.max(1, rr.rowFields.length) &&
-                wt.col <= Mr.lastCol
+                wt.row > rangeAddress.firstRow &&
+                wt.row <= rangeAddress.lastRow &&
+                wt.col >=
+                  rangeAddress.firstCol + Math.max(1, pivot.rowFields.length) &&
+                wt.col <= rangeAddress.lastCol
               );
             })
               ? (navigationActions.selectCellAddress(Nt),
@@ -1735,15 +1754,16 @@ function MainWorksheetEditor({
             selectionState.completedSelectionAreas.length > 0,
           workbook: activeWorkbook,
           mergeBounds: mergeRanges,
-          displayedRows: Oe ? frozenRowIndexes : Be.shownRows,
+          displayedRows: pinned ? frozenRowIndexes : Be.shownRows,
           filterHeader:
             filterResult &&
             fe === parseRangeAddress(filterResult.context.range).firstRow
               ? filterResult.fields
               : undefined,
           filteredColumns:
-            filterResult?.context.definition.columns.map((Nt) => Nt.column) ??
-            [],
+            filterResult?.context.definition.columns.map(
+              (column) => column.column,
+            ) ?? [],
           onColumnFilter: (Nt) => {
             (gridInteractionActions.runEditorCommand("populationFilter"),
               filterSortState.setActiveFilterColumn(Nt));
@@ -1787,15 +1807,18 @@ function MainWorksheetEditor({
         },
         fe,
       ),
-    renderVirtualSpacer = (fe, Oe, Be) =>
-      fe > 0
+    renderVirtualSpacer = (height, Oe, colSpan) =>
+      height > 0
         ? i.jsx(
             "tr",
             {
               "aria-hidden": "true",
               className: "lg-virtual-spacer",
-              style: { height: fe },
-              children: i.jsx("td", { colSpan: Be, style: { height: fe } }),
+              style: { height: height },
+              children: i.jsx("td", {
+                colSpan: colSpan,
+                style: { height: height },
+              }),
             },
             Oe,
           )
@@ -1867,8 +1890,8 @@ function MainWorksheetEditor({
   try {
     selectionState.contextMenuState &&
       viewAndSelectionActions.getSelectedCellAddresses();
-  } catch (fe) {
-    selectionReadError = fe.message;
+  } catch (error) {
+    selectionReadError = error.message;
   }
   const contextMenuActions = [
     {
@@ -1931,11 +1954,13 @@ function MainWorksheetEditor({
       run: () =>
         viewAndSelectionActions.runGuardedAction(() =>
           cellEditActions.applyCellPatches(
-            viewAndSelectionActions.getSelectedCellAddresses().map((fe) => ({
-              sheetId: activeSheet.id,
-              address: fe,
-              cell: { ...activeSheet.cells[fe], raw: null },
-            })),
+            viewAndSelectionActions
+              .getSelectedCellAddresses()
+              .map((address) => ({
+                sheetId: activeSheet.id,
+                address: address,
+                cell: { ...activeSheet.cells[address], raw: null },
+              })),
             "Clear selection",
           ),
         ),
@@ -1992,12 +2017,14 @@ function MainWorksheetEditor({
             '[data-sheet-id][aria-current="true"]',
           ),
         ].filter((jt) => !!jt),
-        Be = document.activeElement,
-        Ue = Be?.closest(".xl-ribbon")
+        activeElement = document.activeElement,
+        Ue = activeElement?.closest(".xl-ribbon")
           ? 0
-          : Be?.closest(".lg-sheet-tabs")
+          : activeElement?.closest(".lg-sheet-tabs")
             ? 3
-            : Oe.findIndex((jt) => jt === Be || jt.contains(Be)),
+            : Oe.findIndex(
+                (jt) => jt === activeElement || jt.contains(activeElement),
+              ),
         Xe = fe.shiftKey ? -1 : 1;
       Oe[
         Ue < 0
@@ -2180,7 +2207,7 @@ function MainWorksheetEditor({
               }),
               `${fe.fileName}.schema.json`,
             ),
-          onImport: (fe, Oe) => {
+          onImport: (workbook, Oe) => {
             if (
               latestEditStateRef.current.book !==
               importExportState.delimitedImportExportSource.snapshot
@@ -2188,8 +2215,8 @@ function MainWorksheetEditor({
               throw new Error("The workbook changed. Review the file again.");
             if (latestEditStateRef.current.readOnly)
               throw new Error("This workbook is read-only.");
-            (persistenceActions.commitWorkbookChange(fe),
-              navigationActions.switchActiveWorksheet(fe.sheets[0].id),
+            (persistenceActions.commitWorkbookChange(workbook),
+              navigationActions.switchActiveWorksheet(workbook.sheets[0].id),
               operationStatusState.setStatusNotice(
                 `Imported ${Oe.records} records using the reviewed schema. Formula-like source text remains literal.`,
               ),
@@ -2214,7 +2241,7 @@ function MainWorksheetEditor({
                 JSON.stringify(Be.report.population) !==
                   JSON.stringify(Oe.population) ||
                 Be.bytes.length !== fe.length ||
-                Be.bytes.some((Ue, Xe) => Ue !== fe[Xe])
+                Be.bytes.some((byte, Xe) => byte !== fe[Xe])
               )
                 throw Error(
                   "Calculated values or population membership changed. Preview the export again.",
@@ -2288,7 +2315,7 @@ function MainWorksheetEditor({
                 ),
                   navigationActions.switchActiveWorksheet(
                     importExportState.xlsxConversionReview.imported.sheets.find(
-                      (fe) => !fe.hidden,
+                      (sheet) => !sheet.hidden,
                     ).id,
                   ),
                   operationStatusState.setStatusNotice(
@@ -2316,9 +2343,9 @@ function MainWorksheetEditor({
             accept:
               ".xlsx,.xltx,.xls,.xlsb,.xlsm,.xltm,.ods,.csv,.tsv,.json,.bas,.vba,.cls,.ts,.osts,.xlam",
             hidden: true,
-            onChange: (fe) =>
+            onChange: (event) =>
               void fileAndAnalysisActions.importWorkbookFromFile(
-                fe.target.files?.[0],
+                event.target.files?.[0],
               ),
             lang: language("Import workbook file"),
             "data-ui-label": "Import workbook file",
@@ -2670,11 +2697,11 @@ function MainWorksheetEditor({
       dialogState.promptDialogState &&
         i.jsx("div", {
           className: "lg-modal-backdrop",
-          onKeyDown: (fe) => {
-            fe.key === "Escape" && dialogState.setPromptDialogState(null);
+          onKeyDown: (event) => {
+            event.key === "Escape" && dialogState.setPromptDialogState(null);
           },
-          onMouseDown: (fe) => {
-            fe.target === fe.currentTarget &&
+          onMouseDown: (event) => {
+            event.target === event.currentTarget &&
               dialogState.setPromptDialogState(null);
           },
           children: i.jsxs("section", {
@@ -2706,10 +2733,10 @@ function MainWorksheetEditor({
                     "aria-label": text("Cell note"),
                     rows: 5,
                     value: dialogState.promptDialogState.value,
-                    onChange: (fe) =>
+                    onChange: (event) =>
                       dialogState.setPromptDialogState({
                         ...dialogState.promptDialogState,
-                        value: fe.target.value,
+                        value: event.target.value,
                       }),
                     lang: language("Cell note"),
                     "data-ui-label": "Cell note",
@@ -2718,15 +2745,15 @@ function MainWorksheetEditor({
                     autoFocus: true,
                     "aria-label": text("Name"),
                     value: dialogState.promptDialogState.value,
-                    onChange: (fe) =>
+                    onChange: (event) =>
                       dialogState.setPromptDialogState({
                         ...dialogState.promptDialogState,
-                        value: fe.target.value,
+                        value: event.target.value,
                       }),
-                    onKeyDown: (fe) => {
-                      (fe.key === "Enter" &&
+                    onKeyDown: (event) => {
+                      (event.key === "Enter" &&
                         gridInteractionActions.commitDialogInput(),
-                        fe.key === "Escape" &&
+                        event.key === "Escape" &&
                           dialogState.setPromptDialogState(null));
                     },
                     lang: language("Name"),

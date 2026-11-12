@@ -39,10 +39,10 @@ function createClipboardAndFindActions({
         col: selectionRangeBounds.lastCol,
       },
       Ue = [];
-    for (let Nt = Oe.row; Nt <= Be.row; Nt++) {
+    for (let row = Oe.row; row <= Be.row; row++) {
       const wt = [];
-      for (let jt = Oe.col; jt <= Be.col; jt++) {
-        const rr = `${columnIndexToLetters(jt)}${Nt + 1}`,
+      for (let col = Oe.col; col <= Be.col; col++) {
+        const rr = `${columnIndexToLetters(col)}${row + 1}`,
           Mr = workbookCalculator(activeSheet.id, rr);
         wt.push(
           typeof Mr == "string" && /^[=+@-]/.test(Mr)
@@ -57,7 +57,7 @@ function createClipboardAndFindActions({
         newline: `
 `,
       }),
-      gt = fe
+      snapshot = fe
         ? createCutSourceSnapshot(
             activeWorkbook,
             activeSheet.id,
@@ -66,7 +66,7 @@ function createClipboardAndFindActions({
         : null;
     return (
       clipboardState.setClipboardSnapshotState(
-        gt ? { snapshot: gt, text: Xe } : null,
+        snapshot ? { snapshot: snapshot, text: Xe } : null,
       ),
       (clipboardState.internalClipboardRef.current = {
         text: Xe,
@@ -97,11 +97,11 @@ function createClipboardAndFindActions({
         );
       }
       fe || operationStatusState.setStatusNotice("Selection copied.");
-    } catch (Be) {
+    } catch (error) {
       (fe && clipboardState.setClipboardSnapshotState(null),
         operationStatusState.setErrorNotice(
-          Be instanceof Error && Be.name !== "NotAllowedError"
-            ? Be.message
+          error instanceof Error && error.name !== "NotAllowedError"
+            ? error.message
             : "Clipboard access is unavailable. Use Ctrl/⌘ C or X with the grid focused.",
         ),
         selectionState.gridContainerRef.current?.focus());
@@ -125,7 +125,7 @@ function createClipboardAndFindActions({
         return;
       }
       if (Oe) {
-        const wt = buildPastePreview(
+        const pastePreview = buildPastePreview(
           activeWorkbook,
           activeSheet.id,
           selectionState.activeSelectionRange,
@@ -136,8 +136,8 @@ function createClipboardAndFindActions({
             readOnly: latestEditStateRef.current.readOnly,
           },
         );
-        (cellEditActions.applyCellPatches(wt.patches, "Paste cells"),
-          viewAndSelectionActions.selectSingleRange(wt.targetRange));
+        (cellEditActions.applyCellPatches(pastePreview.patches, "Paste cells"),
+          viewAndSelectionActions.selectSingleRange(pastePreview.targetRange));
         return;
       }
       const Be = x7.parse(fe.replace(/\r?\n$/, ""), {
@@ -146,16 +146,16 @@ function createClipboardAndFindActions({
       });
       if (Be.errors.length)
         throw new Error("Clipboard text contains malformed quoted cells.");
-      const Ue = Be.data,
+      const data = Be.data,
         Xe = _t(selectionState.activeCellAddress),
         gt = [];
-      if (!Ue.length || Ue.some((wt) => wt.length !== Ue[0].length))
+      if (!data.length || data.some((wt) => wt.length !== data[0].length))
         throw new Error("Paste requires a rectangular range.");
-      if (Ue.length * Ue[0].length > workbookLimits.maxPatches)
+      if (data.length * data[0].length > workbookLimits.maxPatches)
         throw new Error(
           `Paste at most ${workbookLimits.maxPatches} cells at a time.`,
         );
-      (Ue.forEach((wt, jt) =>
+      (data.forEach((wt, jt) =>
         wt.forEach((rr, Mr) => {
           if (
             Xe.row + jt >= activeSheet.rowCount ||
@@ -164,20 +164,24 @@ function createClipboardAndFindActions({
             throw new Error(
               "Paste exceeds the Excel worksheet boundary (XFD1048576).",
             );
-          const Br = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
-            xr = parseDateCellEntry(
+          const address = `${columnIndexToLetters(Xe.col + Mr)}${Xe.row + jt + 1}`,
+            dateCellEntry = parseDateCellEntry(
               rr,
-              activeSheet.cells[Br],
+              activeSheet.cells[address],
               latestEditStateRef.current.book.datePolicy?.dateSystem,
             );
-          gt.push({ sheetId: activeSheet.id, address: Br, cell: xr });
+          gt.push({
+            sheetId: activeSheet.id,
+            address: address,
+            cell: dateCellEntry,
+          });
         }),
       ),
         cellEditActions.applyCellPatches(gt, "Paste cells"),
         viewAndSelectionActions.selectSingleRange(
           wy(
             selectionState.activeCellAddress,
-            `${columnIndexToLetters(Xe.col + Ue[0].length - 1)}${Xe.row + Ue.length}`,
+            `${columnIndexToLetters(Xe.col + data[0].length - 1)}${Xe.row + data.length}`,
           ),
         ));
     });
@@ -204,12 +208,12 @@ function createClipboardAndFindActions({
     viewAndSelectionActions.runGuardedAction(() => {
       if (!findReplaceState.findQuery) return;
       const fe = Object.keys(activeSheet.cells)
-        .filter((Ue) => {
-          const Xe = _t(Ue);
+        .filter((cell) => {
+          const Xe = _t(cell);
           return (
             !rowVisibilityIndex.isHidden(Xe.row) &&
             !columnVisibilityIndex.isHidden(Xe.col) &&
-            String(activeSheet.cells[Ue]?.raw ?? "")
+            String(activeSheet.cells[cell]?.raw ?? "")
               .toLowerCase()
               .includes(findReplaceState.findQuery.toLowerCase())
           );
@@ -253,12 +257,12 @@ function createClipboardAndFindActions({
                 .toLowerCase()
                 .includes(findReplaceState.findQuery.toLowerCase()),
           )
-          .map((Be) => ({
+          .map((address) => ({
             sheetId: activeSheet.id,
-            address: Be,
+            address: address,
             cell: {
-              ...activeSheet.cells[Be],
-              raw: String(activeSheet.cells[Be].raw).replace(
+              ...activeSheet.cells[address],
+              raw: String(activeSheet.cells[address].raw).replace(
                 fe,
                 () => findReplaceState.replaceWithText,
               ),

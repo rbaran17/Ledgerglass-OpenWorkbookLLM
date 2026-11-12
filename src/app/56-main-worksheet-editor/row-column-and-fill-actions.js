@@ -61,9 +61,9 @@ function createRowColumnAndFillActions({
     if (jt - wt < 500) for (let Br = wt; Br <= jt; Br++) rr.add(Br);
     return [...rr].sort((Br, xr) => Br - xr);
   }
-  function applyAxisSizes(fe, Oe, Be) {
-    const Ue = latestEditStateRef.current.book,
-      Xe = Ue.sheets.find((rr) => rr.id === activeSheet.id),
+  function applyAxisSizes(fe, Oe, action) {
+    const book = latestEditStateRef.current.book,
+      Xe = book.sheets.find((sheet) => sheet.id === activeSheet.id),
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(
@@ -81,18 +81,20 @@ function createRowColumnAndFillActions({
           frozenColumnIndexes.includes(wt.col)) &&
         (shownRows.includes(wt.row) || frozenRowIndexes.includes(wt.row));
     (persistenceActions.commitWorkbookChange({
-      ...Ue,
-      revision: Ue.revision + 1,
-      sheets: Ue.sheets.map((rr) =>
-        rr.id === activeSheet.id ? { ...rr, [gt]: { ...rr[gt], ...Oe } } : rr,
+      ...book,
+      revision: book.revision + 1,
+      sheets: book.sheets.map((sheet) =>
+        sheet.id === activeSheet.id
+          ? { ...sheet, [gt]: { ...sheet[gt], ...Oe } }
+          : sheet,
       ),
       events: [
-        ...Ue.events,
+        ...book.events,
         {
           id: createUuid(),
           timestamp: new Date().toISOString(),
           actor,
-          action: Be,
+          action: action,
           changes: [],
         },
       ],
@@ -110,25 +112,27 @@ function createRowColumnAndFillActions({
         !cellEditActions.commitCellEdit()
       )
         return;
-      const Be = resolveSelectedAxisIndexes(fe, Oe),
+      const selectedAxisIndexes = resolveSelectedAxisIndexes(fe, Oe),
         Ue = latestEditStateRef.current.book.sheets.find(
-          (jt) => jt.id === activeSheet.id,
+          (sheet) => sheet.id === activeSheet.id,
         ),
-        Xe = calculateWorkbookWithSettings(latestEditStateRef.current.book),
+        workbookWithSettings = calculateWorkbookWithSettings(
+          latestEditStateRef.current.book,
+        ),
         gt =
           fe === "column"
             ? autoFitColumnWidths(
                 Ue,
-                Be,
-                Xe,
+                selectedAxisIndexes,
+                workbookWithSettings,
                 textMeasurer,
                 viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
               )
             : autoFitRowHeights(
                 Ue,
-                Be,
-                Xe,
+                selectedAxisIndexes,
+                workbookWithSettings,
                 textMeasurer,
                 viewDisplayState.isShowingFormulas,
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
@@ -142,7 +146,7 @@ function createRowColumnAndFillActions({
         viewAndSelectionActions.focusGridSurface());
     });
   }
-  function beginAxisResize(fe, Oe, Be) {
+  function beginAxisResize(axis, Oe, Be) {
     if (
       (Be.preventDefault(),
       Be.stopPropagation(),
@@ -150,22 +154,22 @@ function createRowColumnAndFillActions({
     )
       return;
     const Ue =
-      fe === "column"
+      axis === "column"
         ? columnAxisLayout.size(columnVisibilityIndex.viewIndex(Oe) ?? 0)
         : (effectiveRowHeights[Oe] ?? defaultRowHeight);
     viewDisplayState.setAxisResizeState({
-      axis: fe,
+      axis: axis,
       index: Oe,
-      start: fe === "column" ? Be.clientX : Be.clientY,
+      start: axis === "column" ? Be.clientX : Be.clientY,
       initial: Ue,
       size: Ue,
     });
   }
-  function beginFillDrag(fe) {
-    (fe.preventDefault(),
-      fe.stopPropagation(),
+  function beginFillDrag(event) {
+    (event.preventDefault(),
+      event.stopPropagation(),
       !(
-        fe.button !== 0 ||
+        event.button !== 0 ||
         isEditingLocked ||
         !cellEditActions.commitCellEdit()
       ) &&
@@ -185,19 +189,37 @@ function createRowColumnAndFillActions({
   function extendFillDragTo(fe) {
     const Oe = fillDragStateRef.current;
     if (!Oe) return;
-    const Be = parseRangeAddress(Oe.sourceRange),
+    const rangeAddress = parseRangeAddress(Oe.sourceRange),
       Ue = _t(fe),
-      Xe = Math.max(Be.firstRow - Ue.row, Ue.row - Be.lastRow, 0),
-      gt = Math.max(Be.firstCol - Ue.col, Ue.col - Be.lastCol, 0),
-      Nt = Xe >= gt ? Math.min(Be.firstRow, Ue.row) : Be.firstRow,
-      wt = Xe >= gt ? Math.max(Be.lastRow, Ue.row) : Be.lastRow,
-      jt = gt > Xe ? Math.min(Be.firstCol, Ue.col) : Be.firstCol,
-      rr = gt > Xe ? Math.max(Be.lastCol, Ue.col) : Be.lastCol,
-      Mr = wy(
+      Xe = Math.max(
+        rangeAddress.firstRow - Ue.row,
+        Ue.row - rangeAddress.lastRow,
+        0,
+      ),
+      gt = Math.max(
+        rangeAddress.firstCol - Ue.col,
+        Ue.col - rangeAddress.lastCol,
+        0,
+      ),
+      Nt =
+        Xe >= gt
+          ? Math.min(rangeAddress.firstRow, Ue.row)
+          : rangeAddress.firstRow,
+      wt =
+        Xe >= gt
+          ? Math.max(rangeAddress.lastRow, Ue.row)
+          : rangeAddress.lastRow,
+      jt =
+        gt > Xe
+          ? Math.min(rangeAddress.firstCol, Ue.col)
+          : rangeAddress.firstCol,
+      rr =
+        gt > Xe ? Math.max(rangeAddress.lastCol, Ue.col) : rangeAddress.lastCol,
+      targetRange = wy(
         `${columnIndexToLetters(jt)}${Nt + 1}`,
         `${columnIndexToLetters(rr)}${wt + 1}`,
       ),
-      Br = { ...Oe, targetRange: Mr };
+      Br = { ...Oe, targetRange: targetRange };
     ((fillDragStateRef.current = Br), dragFillState.setFillDragState(Br));
   }
   return {

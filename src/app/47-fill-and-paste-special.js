@@ -58,38 +58,40 @@ function PasteSpecialDialog(e) {
       range: e.range,
       clipboard: e.clipboard,
     }),
-    d = findSheetOrThrow(e.workbook, e.sheetId),
-    u = parseRangeAddress(e.range),
-    l = `${columnIndexToLetters(u.firstCol)}${u.firstRow + 1}`,
+    sheetOrThrow = findSheetOrThrow(e.workbook, e.sheetId),
+    rangeAddress = parseRangeAddress(e.range),
+    l = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     [c, h] = ne.useState(""),
-    [f, p] = ne.useState("all"),
-    [m, v] = ne.useState("none"),
+    [mode, p] = ne.useState("all"),
+    [operation, v] = ne.useState("none"),
     [g, b] = ne.useState(false),
     [y, w] = ne.useState(false),
     [E, A] = ne.useState("series"),
     [k, F] = ne.useState("down"),
-    [I, O] = ne.useState(u.firstRow === u.lastRow ? "rows" : "columns"),
+    [I, O] = ne.useState(
+      rangeAddress.firstRow === rangeAddress.lastRow ? "rows" : "columns",
+    ),
     [j, z] = ne.useState(false),
     [V, D] = ne.useState("number"),
     [B, _] = ne.useState(""),
     [C, T] = ne.useState("1"),
     [N, R] = ne.useState(""),
-    [L, $] = ne.useState("day"),
-    [U, G] = ne.useState("preserveDay"),
+    [dateUnit, $] = ne.useState("day"),
+    [monthPolicy, G] = ne.useState("preserveDay"),
     [H, Q] = ne.useState("row"),
     [X$1, J] = ne.useState(0),
     [q, W] = ne.useState(0),
-    [K] = ne.useState(() => buildSnapshotGuard(e.workbook)),
-    [te, ae] = ne.useState(() => String(defaultRowHeightOf(d))),
-    [oe, de] = ne.useState(() => String(defaultColumnWidthOf(d))),
+    [expectedSnapshot] = ne.useState(() => buildSnapshotGuard(e.workbook)),
+    [te, ae] = ne.useState(() => String(defaultRowHeightOf(sheetOrThrow))),
+    [oe, de] = ne.useState(() => String(defaultColumnWidthOf(sheetOrThrow))),
     [he, Se] = ne.useState(false),
     [le, ce] = ne.useState(false),
-    ge = Object.keys(d.rowHeights ?? {}).length,
-    se = Object.keys(d.columnWidths ?? {}).length,
-    we = e.readOnly || !!d.protection?.enabled,
+    ge = Object.keys(sheetOrThrow.rowHeights ?? {}).length,
+    se = Object.keys(sheetOrThrow.columnWidths ?? {}).length,
+    we = e.readOnly || !!sheetOrThrow.protection?.enabled,
     Ee =
       (e.mode === "viewSettings" &&
-        JSON.stringify(e.workbook) !== K.snapshotGuard) ||
+        JSON.stringify(e.workbook) !== expectedSnapshot.snapshotGuard) ||
       s.current.workbookId !== e.workbook.id ||
       s.current.revision !== e.workbook.revision ||
       s.current.sheetId !== e.sheetId ||
@@ -114,8 +116,8 @@ function PasteSpecialDialog(e) {
                   e.range,
                   e.clipboard,
                   {
-                    mode: f,
-                    operation: m,
+                    mode: mode,
+                    operation: operation,
                     transpose: g,
                     skipBlanks: y,
                   },
@@ -138,13 +140,13 @@ function PasteSpecialDialog(e) {
             ...(B.trim() ? { start: Ze(B) } : {}),
             step: Number(C),
             ...(N.trim() ? { stop: Ze(N) } : {}),
-            dateUnit: L,
-            monthPolicy: U,
+            dateUnit: dateUnit,
+            monthPolicy: monthPolicy,
           }),
           error: "",
         };
-      } catch (Ze) {
-        return { plan: null, error: describeWorkbookError(Ze) };
+      } catch (error) {
+        return { plan: null, error: describeWorkbookError(error) };
       }
     }, [
       e.mode,
@@ -153,8 +155,8 @@ function PasteSpecialDialog(e) {
       e.range,
       e.clipboard,
       Ee,
-      f,
-      m,
+      mode,
+      operation,
       g,
       y,
       E,
@@ -165,10 +167,11 @@ function PasteSpecialDialog(e) {
       B,
       C,
       N,
-      L,
-      U,
+      dateUnit,
+      monthPolicy,
     ]),
-    Pe = e.mode === "viewSettings" ? readHiddenAxisIntervals(d, H) : [],
+    Pe =
+      e.mode === "viewSettings" ? readHiddenAxisIntervals(sheetOrThrow, H) : [],
     qe = Math.max(1, Math.ceil(Pe.length / 20)),
     ht = Math.max(1, Math.ceil((Te.plan?.previewPatches.length ?? 0) / 12)),
     Re = Math.min(q, ht - 1);
@@ -176,13 +179,13 @@ function PasteSpecialDialog(e) {
     W(0);
   }, [Te.plan]),
     ne.useEffect(() => {
-      const Ze = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current
           ?.querySelector("button:not(:disabled),input:not(:disabled)")
           ?.focus(),
         () => {
-          Ze?.isConnected && Ze.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []));
@@ -197,7 +200,7 @@ function PasteSpecialDialog(e) {
     if (
       Ze.workbook.id !== lt.workbookId ||
       (Ze.mode === "viewSettings" &&
-        JSON.stringify(Ze.workbook) !== K.snapshotGuard) ||
+        JSON.stringify(Ze.workbook) !== expectedSnapshot.snapshotGuard) ||
       Ze.workbook.revision !== lt.revision ||
       Ze.sheetId !== lt.sheetId ||
       Ze.range !== lt.range ||
@@ -214,35 +217,35 @@ function PasteSpecialDialog(e) {
         a.current.onWorkbookChange(Fe, lt),
         be && (ft = a.current).onSelectionChange?.call(ft, be),
         a.current.onClose());
-    } catch (Fe) {
-      h(describeWorkbookError(Fe));
+    } catch (error) {
+      h(describeWorkbookError(error));
     }
   }
-  function je() {
-    const Ze = Te.plan;
-    if (!Ze) {
+  function onClick() {
+    const plan = Te.plan;
+    if (!plan) {
       h(
         Te.error ||
           "Choose a valid source and target before applying this change.",
       );
       return;
     }
-    "sourceRange" in Ze
+    "sourceRange" in plan
       ? ke(
           () =>
-            applyCellPreview(a.current.workbook, Ze, {
+            applyCellPreview(a.current.workbook, plan, {
               readOnly: a.current.readOnly,
             }),
           "Paste Special",
-          Ze.targetRange,
+          plan.targetRange,
         )
       : ke(
           () =>
-            applyCellPreview(a.current.workbook, Ze, {
+            applyCellPreview(a.current.workbook, plan, {
               readOnly: a.current.readOnly,
             }),
           E === "series" ? "Fill series" : `Fill ${k}`,
-          Ze.targetRange,
+          plan.targetRange,
         );
   }
   const $e = (Ze, lt) =>
@@ -270,11 +273,12 @@ function PasteSpecialDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       tabIndex: -1,
-      onKeyDown: (Ze) => {
+      onKeyDown: (event) => {
         if (
-          (Ze.stopPropagation(),
-          Ze.key === "Escape" && (Ze.preventDefault(), a.current.onClose()),
-          Ze.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" &&
+            (event.preventDefault(), a.current.onClose()),
+          event.key === "Tab")
         ) {
           const be = Array.from(
               o.current?.querySelectorAll(
@@ -283,11 +287,11 @@ function PasteSpecialDialog(e) {
             ),
             ft = be[0],
             pt = be.at(-1);
-          Ze.shiftKey && document.activeElement === ft
-            ? (Ze.preventDefault(), pt == null || pt.focus())
-            : !Ze.shiftKey &&
+          event.shiftKey && document.activeElement === ft
+            ? (event.preventDefault(), pt == null || pt.focus())
+            : !event.shiftKey &&
               document.activeElement === pt &&
-              (Ze.preventDefault(), ft == null || ft.focus());
+              (event.preventDefault(), ft == null || ft.focus());
         }
       },
       children: [
@@ -313,7 +317,9 @@ function PasteSpecialDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Selection" }),
                 " ",
-                i.jsxs("strong", { children: [d.name, "!", e.range] }),
+                i.jsxs("strong", {
+                  children: [sheetOrThrow.name, "!", e.range],
+                }),
               ],
             }),
             we &&
@@ -383,7 +389,7 @@ function PasteSpecialDialog(e) {
                                 i.jsx("input", {
                                   type: "radio",
                                   name: `${n}-paste`,
-                                  checked: f === Ze,
+                                  checked: mode === Ze,
                                   onChange: () => p(Ze),
                                 }),
                                 i.jsxs("span", {
@@ -424,7 +430,7 @@ function PasteSpecialDialog(e) {
                                 i.jsx("input", {
                                   type: "radio",
                                   name: `${n}-operation`,
-                                  checked: m === Ze,
+                                  checked: operation === Ze,
                                   onChange: () => v(Ze),
                                 }),
                                 Ze[0].toUpperCase() + Ze.slice(1),
@@ -442,7 +448,7 @@ function PasteSpecialDialog(e) {
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: y,
-                                onChange: (Ze) => w(Ze.target.checked),
+                                onChange: (event) => w(event.target.checked),
                               }),
                               i.jsx(LocalizedText, { children: "Skip blanks" }),
                             ],
@@ -452,7 +458,7 @@ function PasteSpecialDialog(e) {
                               i.jsx("input", {
                                 type: "checkbox",
                                 checked: g,
-                                onChange: (Ze) => b(Ze.target.checked),
+                                onChange: (event) => b(event.target.checked),
                               }),
                               i.jsx(LocalizedText, { children: "Transpose" }),
                             ],
@@ -470,22 +476,22 @@ function PasteSpecialDialog(e) {
                     className: "et-tabs",
                     role: "tablist",
                     "aria-label": text("Fill options"),
-                    onKeyDown: (Ze) => {
+                    onKeyDown: (event) => {
                       if (
                         !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                          Ze.key,
+                          event.key,
                         )
                       )
                         return;
-                      Ze.preventDefault();
+                      event.preventDefault();
                       const lt =
-                        Ze.key === "Home"
+                        event.key === "Home"
                           ? "series"
-                          : Ze.key === "End" || E === "series"
+                          : event.key === "End" || E === "series"
                             ? "copy"
                             : "series";
                       (A(lt),
-                        Ze.currentTarget
+                        event.currentTarget
                           .querySelector(`[data-fill-tab="${lt}"]`)
                           ?.focus());
                     },
@@ -580,7 +586,8 @@ function PasteSpecialDialog(e) {
                                       i.jsxs("select", {
                                         "aria-label": text("Series in"),
                                         value: I,
-                                        onChange: (Ze) => O(Ze.target.value),
+                                        onChange: (event) =>
+                                          O(event.target.value),
                                         lang: language("Series in"),
                                         "data-ui-label": "Series in",
                                         children: [
@@ -604,8 +611,8 @@ function PasteSpecialDialog(e) {
                                       i.jsxs("select", {
                                         "aria-label": text("Series order"),
                                         value: j ? "backward" : "forward",
-                                        onChange: (Ze) =>
-                                          z(Ze.target.value === "backward"),
+                                        onChange: (event) =>
+                                          z(event.target.value === "backward"),
                                         lang: language("Series order"),
                                         "data-ui-label": "Series order",
                                         children: [
@@ -637,8 +644,8 @@ function PasteSpecialDialog(e) {
                                       i.jsxs("select", {
                                         "aria-label": text("Series type"),
                                         value: V,
-                                        onChange: (Ze) => {
-                                          (D(Ze.target.value), _(""), R(""));
+                                        onChange: (event) => {
+                                          (D(event.target.value), _(""), R(""));
                                         },
                                         lang: language("Series type"),
                                         "data-ui-label": "Series type",
@@ -666,7 +673,8 @@ function PasteSpecialDialog(e) {
                                         step: "any",
                                         value: B,
                                         placeholder: text("Use first cell"),
-                                        onChange: (Ze) => _(Ze.target.value),
+                                        onChange: (event) =>
+                                          _(event.target.value),
                                         lang: language("Start value"),
                                         "data-ui-label": "Start value",
                                       }),
@@ -697,7 +705,8 @@ function PasteSpecialDialog(e) {
                                         type: V === "date" ? "date" : "number",
                                         step: "any",
                                         value: N,
-                                        onChange: (Ze) => R(Ze.target.value),
+                                        onChange: (event) =>
+                                          R(event.target.value),
                                         lang: language("Stop value"),
                                         "data-ui-label": "Stop value",
                                       }),
@@ -716,8 +725,9 @@ function PasteSpecialDialog(e) {
                                         }),
                                         i.jsxs("select", {
                                           "aria-label": text("Date unit"),
-                                          value: L,
-                                          onChange: (Ze) => $(Ze.target.value),
+                                          value: dateUnit,
+                                          onChange: (event) =>
+                                            $(event.target.value),
                                           lang: language("Date unit"),
                                           "data-ui-label": "Date unit",
                                           children: [
@@ -741,7 +751,8 @@ function PasteSpecialDialog(e) {
                                         }),
                                       ],
                                     }),
-                                    (L === "month" || L === "year") &&
+                                    (dateUnit === "month" ||
+                                      dateUnit === "year") &&
                                       i.jsxs("label", {
                                         children: [
                                           i.jsx(LocalizedText, {
@@ -749,9 +760,9 @@ function PasteSpecialDialog(e) {
                                           }),
                                           i.jsxs("select", {
                                             "aria-label": text("Month dates"),
-                                            value: U,
-                                            onChange: (Ze) =>
-                                              G(Ze.target.value),
+                                            value: monthPolicy,
+                                            onChange: (event) =>
+                                              G(event.target.value),
                                             lang: language("Month dates"),
                                             "data-ui-label": "Month dates",
                                             children: [
@@ -841,7 +852,7 @@ function PasteSpecialDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: he,
-                            onChange: (Ze) => Se(Ze.target.checked),
+                            onChange: (event) => Se(event.target.checked),
                           }),
                           i.jsx(LocalizedText, { children: "Reset " }),
                           ge.toLocaleString(),
@@ -857,7 +868,7 @@ function PasteSpecialDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: le,
-                            onChange: (Ze) => ce(Ze.target.checked),
+                            onChange: (event) => ce(event.target.checked),
                           }),
                           i.jsx(LocalizedText, { children: "Reset " }),
                           se.toLocaleString(),
@@ -875,7 +886,9 @@ function PasteSpecialDialog(e) {
                         children: [
                           i.jsxs("p", {
                             children: [
-                              (d.rowCount - (he ? 0 : ge)).toLocaleString(),
+                              (
+                                sheetOrThrow.rowCount - (he ? 0 : ge)
+                              ).toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "rows inherit ",
@@ -893,7 +906,9 @@ function PasteSpecialDialog(e) {
                           }),
                           i.jsxs("p", {
                             children: [
-                              (d.colCount - (le ? 0 : se)).toLocaleString(),
+                              (
+                                sheetOrThrow.colCount - (le ? 0 : se)
+                              ).toLocaleString(),
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "columns inherit ",
@@ -934,7 +949,7 @@ function PasteSpecialDialog(e) {
                                 },
                                 {
                                   readOnly: a.current.readOnly,
-                                  expectedSnapshot: K,
+                                  expectedSnapshot: expectedSnapshot,
                                 },
                               ),
                             "Set default row and column sizes",
@@ -960,12 +975,12 @@ function PasteSpecialDialog(e) {
                             children:
                               "Compare separate areas of this worksheet. Lower panes start at row ",
                           }),
-                          u.firstRow + 1,
+                          rangeAddress.firstRow + 1,
                           i.jsx(LocalizedText, {
                             children: "; right panes start at column",
                           }),
                           " ",
-                          columnIndexToLetters(u.firstCol),
+                          columnIndexToLetters(rangeAddress.firstCol),
                           i.jsx(LocalizedText, {
                             children:
                               ". Split replaces frozen panes. Drag the divider to resize, or focus it and use arrow keys. F6 switches panes.",
@@ -984,8 +999,8 @@ function PasteSpecialDialog(e) {
                                   ke(
                                     () =>
                                       setSplitPanes(e.workbook, e.sheetId, {
-                                        row: u.firstRow,
-                                        col: u.firstCol,
+                                        row: rangeAddress.firstRow,
+                                        col: rangeAddress.firstCol,
                                         ...(Ze !== "vertical"
                                           ? { horizontal: 50 }
                                           : {}),
@@ -1007,7 +1022,7 @@ function PasteSpecialDialog(e) {
                           ),
                           i.jsx("button", {
                             type: "button",
-                            disabled: !d.splitPanes,
+                            disabled: !sheetOrThrow.splitPanes,
                             onClick: () =>
                               ke(
                                 () => setSplitPanes(e.workbook, e.sheetId),
@@ -1022,7 +1037,7 @@ function PasteSpecialDialog(e) {
                       i.jsxs("p", {
                         className: "et-muted",
                         children: [
-                          d.splitPanes
+                          sheetOrThrow.splitPanes
                             ? "Split is active. Panes share cells, formulas, selection, and Undo."
                             : "No split is active.",
                           " ",
@@ -1101,7 +1116,9 @@ function PasteSpecialDialog(e) {
                                   setFreezePanes(e.workbook, e.sheetId, 0, 0),
                                 "Unfreeze panes",
                               ),
-                            disabled: !d.frozenRows && !d.frozenCols,
+                            disabled:
+                              !sheetOrThrow.frozenRows &&
+                              !sheetOrThrow.frozenCols,
                             children: i.jsx(LocalizedText, {
                               children: "Unfreeze panes",
                             }),
@@ -1114,11 +1131,11 @@ function PasteSpecialDialog(e) {
                           i.jsx(LocalizedText, {
                             children: "Currently frozen: ",
                           }),
-                          d.frozenRows ?? 0,
+                          sheetOrThrow.frozenRows ?? 0,
                           " ",
                           i.jsx(LocalizedText, { children: "rows ·" }),
                           " ",
-                          d.frozenCols ?? 0,
+                          sheetOrThrow.frozenCols ?? 0,
                           " ",
                           i.jsx(LocalizedText, { children: "columns" }),
                         ],
@@ -1145,8 +1162,8 @@ function PasteSpecialDialog(e) {
                                     e.workbook,
                                     e.sheetId,
                                     "row",
-                                    u.firstRow,
-                                    u.lastRow,
+                                    rangeAddress.firstRow,
+                                    rangeAddress.lastRow,
                                     true,
                                   ),
                                 "Hide selected rows",
@@ -1164,8 +1181,8 @@ function PasteSpecialDialog(e) {
                                     e.workbook,
                                     e.sheetId,
                                     "column",
-                                    u.firstCol,
-                                    u.lastCol,
+                                    rangeAddress.firstCol,
+                                    rangeAddress.lastCol,
                                     true,
                                   ),
                                 "Hide selected columns",
@@ -1195,8 +1212,8 @@ function PasteSpecialDialog(e) {
                           i.jsxs("select", {
                             "aria-label": text("Hidden items"),
                             value: H,
-                            onChange: (Ze) => {
-                              (Q(Ze.target.value), J(0));
+                            onChange: (event) => {
+                              (Q(event.target.value), J(0));
                             },
                             lang: language("Hidden items"),
                             "data-ui-label": "Hidden items",
@@ -1341,7 +1358,9 @@ function PasteSpecialDialog(e) {
                       }),
                     ],
                   }),
-                  i.jsxs("p", { children: [d.name, "!", Te.plan.targetRange] }),
+                  i.jsxs("p", {
+                    children: [sheetOrThrow.name, "!", Te.plan.targetRange],
+                  }),
                   Te.plan.dependentCount > 0 &&
                     i.jsxs("p", {
                       className: "et-muted",
@@ -1389,10 +1408,10 @@ function PasteSpecialDialog(e) {
                                 i.jsx("tbody", {
                                   children: Te.plan.previewPatches
                                     .slice(Re * 12, (Re + 1) * 12)
-                                    .map((Ze) => {
+                                    .map((patch) => {
                                       const lt = findSheetOrThrow(
                                         e.workbook,
-                                        Ze.sheetId,
+                                        patch.sheetId,
                                       );
                                       return i.jsxs(
                                         "tr",
@@ -1400,15 +1419,18 @@ function PasteSpecialDialog(e) {
                                           children: [
                                             i.jsx("th", {
                                               children:
-                                                Ze.sheetId === e.sheetId
-                                                  ? Ze.address
-                                                  : `${lt.name}!${Ze.address}`,
+                                                patch.sheetId === e.sheetId
+                                                  ? patch.address
+                                                  : `${lt.name}!${patch.address}`,
                                             }),
                                             i.jsx("td", {
                                               children:
                                                 formatNumberWithPattern(
-                                                  ye(Ze.sheetId, Ze.address),
-                                                  lt.cells[Ze.address],
+                                                  ye(
+                                                    patch.sheetId,
+                                                    patch.address,
+                                                  ),
+                                                  lt.cells[patch.address],
                                                   e.workbook.datePolicy
                                                     ?.dateSystem,
                                                 ) || "(blank)",
@@ -1416,16 +1438,17 @@ function PasteSpecialDialog(e) {
                                             i.jsxs("td", {
                                               children: [
                                                 formatNumberWithPattern(
-                                                  Ze.cell.raw,
-                                                  Ze.cell,
+                                                  patch.cell.raw,
+                                                  patch.cell,
                                                   e.workbook.datePolicy
                                                     ?.dateSystem,
                                                 ) || "(blank)",
                                                 JSON.stringify(
-                                                  Ze.cell.style,
+                                                  patch.cell.style,
                                                 ) !==
                                                   JSON.stringify(
-                                                    lt.cells[Ze.address]?.style,
+                                                    lt.cells[patch.address]
+                                                      ?.style,
                                                   ) &&
                                                   i.jsx("small", {
                                                     children: i.jsx(
@@ -1440,7 +1463,7 @@ function PasteSpecialDialog(e) {
                                             }),
                                           ],
                                         },
-                                        `${Ze.sheetId}:${Ze.address}`,
+                                        `${patch.sheetId}:${patch.address}`,
                                       );
                                     }),
                                 }),
@@ -1514,7 +1537,7 @@ function PasteSpecialDialog(e) {
                 type: "button",
                 className: "et-primary",
                 disabled: we || Ee || !Te.plan || Te.plan.count === 0,
-                onClick: je,
+                onClick: onClick,
                 children:
                   e.mode === "pasteSpecial"
                     ? "Paste"
@@ -1535,7 +1558,7 @@ function FillPreviewDialog(e) {
     a = ne.useRef(e.workbook),
     s = ne.useRef(e);
   s.current = e;
-  const [d, u] = ne.useState("copy"),
+  const [mode, u] = ne.useState("copy"),
     [l, c] = ne.useState(""),
     [h, f] = ne.useState(0),
     p = e.workbook !== a.current,
@@ -1548,29 +1571,32 @@ function FillPreviewDialog(e) {
             e.sourceRange,
             e.targetRange,
             {
-              mode: d,
+              mode: mode,
             },
           ),
           error: "",
         };
-      } catch (y) {
+      } catch (error) {
         return {
           plan: null,
-          error: y instanceof Error ? y.message : "The fill cannot be applied.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "The fill cannot be applied.",
         };
       }
-    }, [e.workbook, e.sheetId, e.sourceRange, e.targetRange, d]),
-    v = m.plan;
+    }, [e.workbook, e.sheetId, e.sourceRange, e.targetRange, mode]),
+    plan = m.plan;
   ne.useEffect(() => {
-    const y = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.focus(),
       () => {
-        y?.isConnected && y.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const g =
+  const disabled =
     e.readOnly ||
     !!findSheetOrThrow(e.workbook, e.sheetId).protection?.enabled ||
     p;
@@ -1583,10 +1609,10 @@ function FillPreviewDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       tabIndex: -1,
-      onKeyDown: (y) => {
+      onKeyDown: (event) => {
         if (
-          (y.key === "Escape" && (y.preventDefault(), e.onClose()),
-          y.key === "Tab")
+          (event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const E = Array.from(
               o.current?.querySelectorAll(
@@ -1595,13 +1621,13 @@ function FillPreviewDialog(e) {
             ),
             A = E[0],
             k = E.at(-1);
-          y.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === A || document.activeElement === o.current)
-            ? (y.preventDefault(), k == null || k.focus())
-            : !y.shiftKey &&
+            ? (event.preventDefault(), k == null || k.focus())
+            : !event.shiftKey &&
               (document.activeElement === k ||
                 document.activeElement === o.current) &&
-              (y.preventDefault(), A == null || A.focus());
+              (event.preventDefault(), A == null || A.focus());
         }
       },
       children: [
@@ -1643,10 +1669,10 @@ function FillPreviewDialog(e) {
                 i.jsx(LocalizedText, { children: "Fill method" }),
                 i.jsxs("select", {
                   "aria-label": text("Fill method"),
-                  value: d,
-                  disabled: g,
-                  onChange: (y) => {
-                    (u(y.target.value), f(0), c(""));
+                  value: mode,
+                  disabled: disabled,
+                  onChange: (event) => {
+                    (u(event.target.value), f(0), c(""));
                   },
                   lang: language("Fill method"),
                   "data-ui-label": "Fill method",
@@ -1670,7 +1696,7 @@ function FillPreviewDialog(e) {
                   "Copy repeats the selected pattern. Number series requires two numbers in one row or column. Use Home → Fill Series for calendar dates.",
               }),
             }),
-            v &&
+            plan &&
               i.jsxs("section", {
                 className: "et-preview",
                 "aria-label": text("Fill preview"),
@@ -1679,12 +1705,12 @@ function FillPreviewDialog(e) {
                 children: [
                   i.jsxs("h3", {
                     children: [
-                      v.count,
+                      plan.count,
                       " ",
                       i.jsx(LocalizedText, { children: "cells to change" }),
                     ],
                   }),
-                  i.jsx("p", { children: v.targetRange }),
+                  i.jsx("p", { children: plan.targetRange }),
                   i.jsx("div", {
                     className: "et-preview-scroll",
                     children: i.jsxs("table", {
@@ -1706,37 +1732,37 @@ function FillPreviewDialog(e) {
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: v.previewPatches
+                          children: plan.previewPatches
                             .slice(h * 25, (h + 1) * 25)
-                            .map((y) =>
+                            .map((patch) =>
                               i.jsxs(
                                 "tr",
                                 {
                                   children: [
                                     i.jsx("th", {
                                       children:
-                                        y.sheetId === e.sheetId
-                                          ? y.address
-                                          : `${findSheetOrThrow(e.workbook, y.sheetId).name}!${y.address}`,
+                                        patch.sheetId === e.sheetId
+                                          ? patch.address
+                                          : `${findSheetOrThrow(e.workbook, patch.sheetId).name}!${patch.address}`,
                                     }),
                                     i.jsx("td", {
                                       children:
                                         formatNumberWithPattern(
-                                          y.cell.raw,
-                                          y.cell,
+                                          patch.cell.raw,
+                                          patch.cell,
                                           e.workbook.datePolicy?.dateSystem,
                                         ) || "(blank)",
                                     }),
                                   ],
                                 },
-                                `${y.sheetId}:${y.address}`,
+                                `${patch.sheetId}:${patch.address}`,
                               ),
                             ),
                         }),
                       ],
                     }),
                   }),
-                  v.count > 25 &&
+                  plan.count > 25 &&
                     i.jsxs("div", {
                       className: "et-pagination",
                       children: [
@@ -1753,11 +1779,11 @@ function FillPreviewDialog(e) {
                             h + 1,
                             " ",
                             i.jsx(LocalizedText, { children: "of " }),
-                            Math.ceil(v.count / 25),
+                            Math.ceil(plan.count / 25),
                           ],
                         }),
                         i.jsx("button", {
-                          disabled: (h + 1) * 25 >= v.count,
+                          disabled: (h + 1) * 25 >= plan.count,
                           onClick: () => f(h + 1),
                           children: i.jsx(LocalizedText, {
                             children: "Next changes",
@@ -1792,23 +1818,23 @@ function FillPreviewDialog(e) {
             }),
             i.jsx("button", {
               className: "et-primary",
-              disabled: g || !v || v.count === 0,
+              disabled: disabled || !plan || plan.count === 0,
               onClick: () => {
                 try {
                   const y = s.current;
                   if (y.workbook !== a.current)
                     throw Error("The workbook changed. Review the fill again.");
-                  if (!v) throw Error("Choose a valid fill first.");
-                  const w = applyCellPreview(y.workbook, v, {
+                  if (!plan) throw Error("Choose a valid fill first.");
+                  const w = applyCellPreview(y.workbook, plan, {
                     readOnly: y.readOnly,
                   });
                   (y.onWorkbookChange(w, "Fill handle"),
                     y.onSelectionChange(y.targetRange),
                     y.onClose());
-                } catch (y) {
+                } catch (error) {
                   c(
-                    y instanceof Error
-                      ? y.message
+                    error instanceof Error
+                      ? error.message
                       : "The fill could not be applied.",
                   );
                 }
@@ -1834,19 +1860,20 @@ const rangeContainsRange = (e, r) =>
     e.lastRow >= r.lastRow &&
     e.firstCol <= r.firstCol &&
     e.lastCol >= r.lastCol,
-  hasCellContent = (e) =>
-    !!e && (e.raw !== null || Object.keys(e).some((r) => r !== "raw"));
+  hasCellContent = (cell) =>
+    !!cell && (cell.raw !== null || Object.keys(cell).some((r) => r !== "raw"));
 
-function assertRangeWithinBoundary(e, r) {
-  const t = parseRangeAddress(r);
+function assertRangeWithinBoundary(sheetOrThrow, targetRange) {
+  const rangeAddress = parseRangeAddress(targetRange);
   return (
-    (t.lastRow >= e.rowCount || t.lastCol >= e.colCount) &&
+    (rangeAddress.lastRow >= sheetOrThrow.rowCount ||
+      rangeAddress.lastCol >= sheetOrThrow.colCount) &&
       throwWorkbookError("The range exceeds the worksheet boundary."),
-    t
+    rangeAddress
   );
 }
-function assertCutSourceWithinLimit(e, r) {
-  const t = assertRangeWithinBoundary(e, r);
+function assertCutSourceWithinLimit(sheetOrThrow, targetRange) {
+  const t = assertRangeWithinBoundary(sheetOrThrow, targetRange);
   return (
     (t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) >
       pasteOperationLimits.sourceCells &&
@@ -1854,27 +1881,34 @@ function assertCutSourceWithinLimit(e, r) {
     t
   );
 }
-function createCutSourceSnapshot(e, r, t) {
+function createCutSourceSnapshot(
+  activeWorkbook,
+  sheetId,
+  activeSelectionRange,
+) {
   return (
-    assertCutSourceWithinLimit(findSheetOrThrow(e, r), t),
+    assertCutSourceWithinLimit(
+      findSheetOrThrow(activeWorkbook, sheetId),
+      activeSelectionRange,
+    ),
     Object.freeze({
       version: 1,
-      workbookId: e.id,
-      revision: e.revision,
-      snapshotGuard: JSON.stringify(e),
-      sheetId: r,
-      range: formatSortRangeAddress(t),
+      workbookId: activeWorkbook.id,
+      revision: activeWorkbook.revision,
+      snapshotGuard: JSON.stringify(activeWorkbook),
+      sheetId: sheetId,
+      range: formatSortRangeAddress(activeSelectionRange),
     })
   );
 }
-function verifyCutSourceSnapshot(e, r, t, n) {
+function verifyCutSourceSnapshot(book, r, sourceSheetId, sourceRange) {
   (!r ||
     r.version !== 1 ||
-    r.workbookId !== e.id ||
-    r.revision !== e.revision ||
-    r.sheetId !== t ||
-    r.range !== formatSortRangeAddress(n) ||
-    r.snapshotGuard !== JSON.stringify(e)) &&
+    r.workbookId !== book.id ||
+    r.revision !== book.revision ||
+    r.sheetId !== sourceSheetId ||
+    r.range !== formatSortRangeAddress(sourceRange) ||
+    r.snapshotGuard !== JSON.stringify(book)) &&
     throwWorkbookError(
       "The workbook changed after Cut. Cut the source again before moving it.",
     );
@@ -1887,11 +1921,11 @@ const isUnsafeStructuredReference = (e) =>
     `^(${sheetNameReferencePattern}):(${sheetNameReferencePattern})!`,
   ),
   identifierCharPattern = /[A-Za-z0-9_.\\\u0080-\uffff]/;
-function assertBalancedStructuredReference(e, r) {
+function assertBalancedStructuredReference(refersTo, end) {
   let t = 0,
-    n = r;
-  do (e[n] === "[" && t++, e[n] === "]" && t--, n++);
-  while (n < e.length && t);
+    n = end;
+  do (refersTo[n] === "[" && t++, refersTo[n] === "]" && t--, n++);
+  while (n < refersTo.length && t);
   return (
     t &&
       throwWorkbookError(
@@ -1900,21 +1934,21 @@ function assertBalancedStructuredReference(e, r) {
     n
   );
 }
-function assertFormulaReferencesMovable(e) {
+function assertFormulaReferencesMovable(refersTo) {
   const r = [];
   let t = 0;
-  for (; t < e.length;) {
-    const n = t,
-      o = e[t];
+  for (; t < refersTo.length;) {
+    const start = t,
+      o = refersTo[t];
     if (o === '"') {
-      for (t++; t < e.length;)
-        if (e[t++] === '"')
-          if (e[t] === '"') t++;
+      for (t++; t < refersTo.length;)
+        if (refersTo[t++] === '"')
+          if (refersTo[t] === '"') t++;
           else break;
       continue;
     }
-    const a = e.slice(t),
-      s = t === 0 || !identifierCharPattern.test(e[t - 1]);
+    const a = refersTo.slice(t),
+      s = t === 0 || !identifierCharPattern.test(refersTo[t - 1]);
     if (
       (s &&
         sheetRangePrefixPattern.test(a) &&
@@ -1929,12 +1963,12 @@ function assertFormulaReferencesMovable(e) {
         continue;
       }
     }
-    let d,
+    let sheet,
       u = 0;
     const l = s ? sheetNamePrefixPattern.exec(a) : null;
     l &&
-      ((d = unquoteSheetName(l[1])),
-      /[\[\]:]/.test(d) &&
+      ((sheet = unquoteSheetName(l[1])),
+      /[\[\]:]/.test(sheet) &&
         throwWorkbookError(
           "External or three-dimensional references prevent a safe range move.",
         ),
@@ -1950,42 +1984,42 @@ function assertFormulaReferencesMovable(e) {
       !identifierCharPattern.test(c[h[0].length] ?? "") &&
       !/^\s*[(!]/.test(c.slice(h[0].length))
     ) {
-      const p = t + u + h[0].length;
-      (e[p] === "#" &&
+      const end = t + u + h[0].length;
+      (refersTo[end] === "#" &&
         throwWorkbookError(
           "Dynamic spill references require an explicit stable range before moving cells.",
         ),
-        e[p] === ":" &&
+        refersTo[end] === ":" &&
           throwWorkbookError(
             "Separately qualified range endpoints are not supported for a safe move.",
           ),
         r.push({
-          start: n,
-          end: p,
-          text: e.slice(n, p),
+          start: start,
+          end: end,
+          text: refersTo.slice(start, end),
           kind: "reference",
-          sheet: d,
+          sheet: sheet,
           reference: h[0],
         }),
-        (t = p));
+        (t = end));
       continue;
     }
     const f = s ? /^[A-Za-z_\\][A-Za-z0-9_.\\]*/.exec(c) : null;
     if (f) {
-      const p = t + u + f[0].length,
-        m = e.slice(p);
-      if (e[p] === "[") {
-        const v = assertBalancedStructuredReference(e, p);
-        (e[v] === "!" &&
+      const end = t + u + f[0].length,
+        m = refersTo.slice(end);
+      if (refersTo[end] === "[") {
+        const v = assertBalancedStructuredReference(refersTo, end);
+        (refersTo[v] === "!" &&
           throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
           r.push({
-            start: n,
+            start: start,
             end: v,
-            text: e.slice(n, v),
+            text: refersTo.slice(start, v),
             kind: "structured",
-            sheet: d,
+            sheet: sheet,
             name: f[0],
           }),
           (t = v));
@@ -1993,27 +2027,38 @@ function assertFormulaReferencesMovable(e) {
       }
       if (/^\s*\(/.test(m)) {
         (/^(?:_xlfn\.)?(?:INDIRECT|OFFSET|EVALUATE|HYPERLINK)$/i.test(f[0]) &&
-          r.push({ start: n, end: p, text: f[0], kind: "dynamic", name: f[0] }),
-          (t = p));
+          r.push({
+            start: start,
+            end: end,
+            text: f[0],
+            kind: "dynamic",
+            name: f[0],
+          }),
+          (t = end));
         continue;
       }
       (r.push({
-        start: n,
-        end: p,
-        text: e.slice(n, p),
+        start: start,
+        end: end,
+        text: refersTo.slice(start, end),
         kind: "name",
-        sheet: d,
+        sheet: sheet,
         name: f[0],
       }),
-        (t = p));
+        (t = end));
       continue;
     }
     if (o === "[") {
-      const p = assertBalancedStructuredReference(e, t);
-      (/^\s*(?:[^!+*/(),;]+)!/.test(e.slice(p)) &&
+      const end = assertBalancedStructuredReference(refersTo, t);
+      (/^\s*(?:[^!+*/(),;]+)!/.test(refersTo.slice(end)) &&
         throwWorkbookError("External workbook references prevent a safe move."),
-        r.push({ start: n, end: p, text: e.slice(n, p), kind: "structured" }),
-        (t = p));
+        r.push({
+          start: start,
+          end: end,
+          text: refersTo.slice(start, end),
+          kind: "structured",
+        }),
+        (t = end));
       continue;
     }
     if (
@@ -2026,7 +2071,7 @@ function assertFormulaReferencesMovable(e) {
       const p = /^'(?:[^']|'')*'/.exec(a);
       if (p) {
         (/\[[^\]]+\]/.test(p[0]) &&
-          e[t + p[0].length] === "!" &&
+          refersTo[t + p[0].length] === "!" &&
           throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
@@ -2038,9 +2083,9 @@ function assertFormulaReferencesMovable(e) {
   }
   return r;
 }
-function parseWholeColumnReference(e) {
-  if (/^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}$/.test(e)) {
-    const [r, t] = e.split(":"),
+function parseWholeColumnReference(reference) {
+  if (/^\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}$/.test(reference)) {
+    const [r, t] = reference.split(":"),
       n = _t(`${r}1`),
       o = _t(`${t}1`);
     return {
@@ -2050,8 +2095,8 @@ function parseWholeColumnReference(e) {
       lastCol: Math.max(n.col, o.col),
     };
   }
-  if (/^\$?\d+:\$?\d+$/.test(e)) {
-    const [r, t] = e.replace(/\$/g, "").split(":").map(Number);
+  if (/^\$?\d+:\$?\d+$/.test(reference)) {
+    const [r, t] = reference.replace(/\$/g, "").split(":").map(Number);
     return (
       (r > workbookLimits.maxRows || t > workbookLimits.maxRows) &&
         throwWorkbookError("A reference exceeds Excel's row boundary."),
@@ -2063,10 +2108,10 @@ function parseWholeColumnReference(e) {
       }
     );
   }
-  return parseRangeAddress(e);
+  return parseRangeAddress(reference);
 }
-function parseMovableA1Rectangle(e, r, t) {
-  return e
+function parseMovableA1Rectangle(reference, r, t) {
+  return reference
     .split(":")
     .map((n) => {
       const o = /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)$/.exec(n);

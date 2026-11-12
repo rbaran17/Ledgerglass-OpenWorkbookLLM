@@ -162,46 +162,47 @@ const analysisFormatVersion = "ledgerglass-analysis-v1",
     includeHidden: boolean(),
     applied: boolean(),
   });
-function parseAnalysisRequest(e) {
-  const r = analysisSpecSchema.safeParse(e);
+function parseAnalysisRequest(request) {
+  const r = analysisSpecSchema.safeParse(request);
   if (!r.success)
     throw Error(
       `Invalid analysis request: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
     );
-  const t = r.data;
-  if (t.kind === "solver") {
-    if (t.direction === "target" && t.target === undefined)
+  const data = r.data;
+  if (data.kind === "solver") {
+    if (data.direction === "target" && data.target === undefined)
       throw Error("Enter a finite target value.");
     if (
-      new Set(t.variables.map((a) => JSON.stringify(a.cell))).size !==
-      t.variables.length
+      new Set(data.variables.map((variable) => JSON.stringify(variable.cell)))
+        .size !== data.variables.length
     )
       throw Error("Changing cells must be unique.");
     if (
-      t.variables.some(
-        (a) =>
-          a.lower > a.upper ||
-          (a.domain === "binary" && (a.lower < 0 || a.upper > 1)),
+      data.variables.some(
+        (variable) =>
+          variable.lower > variable.upper ||
+          (variable.domain === "binary" &&
+            (variable.lower < 0 || variable.upper > 1)),
       )
     )
       throw Error(
         "Variable bounds must be ordered; binary bounds must lie within zero and one.",
       );
     if (
-      t.variables.some((a) => a.domain === "continuous") &&
-      t.variables.some((a) => a.domain !== "continuous")
+      data.variables.some((variable) => variable.domain === "continuous") &&
+      data.variables.some((variable) => variable.domain !== "continuous")
     )
       throw Error(
         "Mixed integer and continuous models are outside this selected Solver subset.",
       );
   }
-  return t;
+  return data;
 }
-function validateAnalysisReport(e, r) {
+function validateAnalysisReport(e, workbook) {
   const t = e;
   let n = 0;
-  for (const u of r.sheets) {
-    const l = t.sheets.find((m) => m.id === u.id)?.analysisReport;
+  for (const sheet of workbook.sheets) {
+    const l = t.sheets.find((m) => m.id === sheet.id)?.analysisReport;
     if (l === undefined) continue;
     if (
       ((n += JSON.stringify(l).length), n > analysisLimits.metadataCharacters)
@@ -210,18 +211,18 @@ function validateAnalysisReport(e, r) {
     const c = analysisReportRecordSchema.safeParse(l);
     if (!c.success)
       throw Error(`Invalid analysis report: ${c.error.issues[0]?.message}`);
-    const h = c.data;
+    const data = c.data;
     if (
-      ((h.request = parseAnalysisRequest(h.request)),
-      h.definitionHash !== fingerprintCanonicalValue(h.request) ||
-        !h.result.success ||
-        !["complete", "optimal"].includes(h.result.status) ||
-        h.result.rows.reduce((m, v) => m + v.length, 0) >
+      ((data.request = parseAnalysisRequest(data.request)),
+      data.definitionHash !== fingerprintCanonicalValue(data.request) ||
+        !data.result.success ||
+        !["complete", "optimal"].includes(data.result.status) ||
+        data.result.rows.reduce((m, v) => m + v.length, 0) >
           analysisLimits.outputCells)
     )
       throw Error("Analysis report metadata is inconsistent.");
     const f = /^([A-Z]{1,3})([1-9]\d{0,6}):([A-Z]{1,3})([1-9]\d{0,6})$/.exec(
-        h.outputRange,
+        data.outputRange,
       ),
       p = (m) => [...m].reduce((v, g) => v * 26 + g.charCodeAt(0) - 64, 0);
     if (
@@ -235,16 +236,16 @@ function validateAnalysisReport(e, r) {
     )
       throw Error("Invalid or oversized analysis output range.");
     if (
-      (h.request.kind === "solver" &&
-        (h.result.status !== "optimal" ||
-          h.result.solution?.length !== h.request.variables.length ||
-          h.result.baseline?.length !== h.request.variables.length ||
-          h.result.objective === undefined)) ||
-      (h.request.kind === "statistics" &&
-        (h.result.status !== "complete" || h.applied))
+      (data.request.kind === "solver" &&
+        (data.result.status !== "optimal" ||
+          data.result.solution?.length !== data.request.variables.length ||
+          data.result.baseline?.length !== data.request.variables.length ||
+          data.result.objective === undefined)) ||
+      (data.request.kind === "statistics" &&
+        (data.result.status !== "complete" || data.applied))
     )
       throw Error("Analysis result does not match its request.");
-    u.analysisReport = h;
+    sheet.analysisReport = data;
   }
 }
 const reportOutputFormatVersion = "ledgerglass-report-output-v1",
@@ -304,27 +305,27 @@ class DaxError extends Error {
 const throwDaxError = (e, r) => {
   throw new DaxError(e, `DAX: ${r}`);
 };
-function parseDaxExpression(e) {
+function parseDaxExpression(expression) {
   if (
-    typeof e != "string" ||
-    !e.trim() ||
-    e.length > daxExpressionLimits.expressionCharacters
+    typeof expression != "string" ||
+    !expression.trim() ||
+    expression.length > daxExpressionLimits.expressionCharacters
   )
     return throwDaxError(
       "DAX_LIMIT",
       "Enter an expression of 1–4,096 characters.",
     );
-  const r = e.trim().replace(/^=/, ""),
+  const r = expression.trim().replace(/^=/, ""),
     t = [];
-  let n = 0;
+  let position = 0;
   const o = (m, v, g) => {
-    const b = n++;
+    const b = position++;
     let y = "",
       w = false;
-    for (; n < r.length;) {
-      const E = r[n++];
+    for (; position < r.length;) {
+      const E = r[position++];
       if (E === v)
-        if (r[n] === v) ((y += v), n++);
+        if (r[position] === v) ((y += v), position++);
         else {
           w = true;
           break;
@@ -334,24 +335,24 @@ function parseDaxExpression(e) {
     (w || throwDaxError("DAX_SYNTAX", `Unclosed ${m} at position ${b + 1}.`),
       t.push({ kind: g, value: y, position: b }));
   };
-  for (; n < r.length;) {
-    if (/\s/.test(r[n])) {
-      n++;
+  for (; position < r.length;) {
+    if (/\s/.test(r[position])) {
+      position++;
       continue;
     }
-    if (r[n] === '"') {
+    if (r[position] === '"') {
       o('"', '"', "string");
       continue;
     }
-    if (r[n] === "'") {
+    if (r[position] === "'") {
       o("'", "'", "quoted");
       continue;
     }
-    if (r[n] === "[") {
+    if (r[position] === "[") {
       o("[", "]", "bracket");
       continue;
     }
-    const m = r.slice(n),
+    const m = r.slice(position),
       v = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(m),
       g = /^[A-Za-z_][A-Za-z0-9_]*/.exec(m),
       b = /^(?:==|<>|<=|>=|&&|\|\||[+\-*/^&=<>(),])/.exec(m),
@@ -359,18 +360,18 @@ function parseDaxExpression(e) {
     (y ||
       throwDaxError(
         "DAX_UNSUPPORTED",
-        `Unsupported syntax at position ${n + 1}. Use the documented DAX subset; worksheet and query syntax are not evaluated.`,
+        `Unsupported syntax at position ${position + 1}. Use the documented DAX subset; worksheet and query syntax are not evaluated.`,
       ),
       t.push({
         kind: v ? "number" : g ? "identifier" : "op",
         value: y[0],
-        position: n,
+        position: position,
       }),
-      (n += y[0].length),
+      (position += y[0].length),
       t.length > daxExpressionLimits.syntaxNodes * 3 &&
         throwDaxError("DAX_LIMIT", "Expression token budget exceeded."));
   }
-  t.push({ kind: "end", value: "", position: n });
+  t.push({ kind: "end", value: "", position: position });
   let a = 0,
     s = 0;
   const d = () => t[a],
@@ -404,7 +405,7 @@ function parseDaxExpression(e) {
       v > daxExpressionLimits.depth &&
         throwDaxError("DAX_LIMIT", "Expression nesting exceeds 48 levels.");
       const g = u();
-      let b;
+      let left;
       if (g.kind === "number") {
         const y = Number(g.value);
         (Number.isFinite(y) ||
@@ -412,21 +413,22 @@ function parseDaxExpression(e) {
             "DAX_NUMBER",
             "Numeric literal exceeds finite precision.",
           ),
-          (b = c({ kind: "literal", value: y })));
+          (left = c({ kind: "literal", value: y })));
       } else if (g.kind === "string")
-        b = c({ kind: "literal", value: g.value });
-      else if (g.value === "(") ((b = f(0, v + 1)), l(")"));
+        left = c({ kind: "literal", value: g.value });
+      else if (g.value === "(") ((left = f(0, v + 1)), l(")"));
       else if (
         g.value === "+" ||
         g.value === "-" ||
         (g.kind === "identifier" && g.value.toUpperCase() === "NOT")
       )
-        b = c({
+        left = c({
           kind: "unary",
           op: g.value.toUpperCase(),
           value: f(g.value.toUpperCase() === "NOT" ? 3 : 8, v + 1),
         });
-      else if (g.kind === "bracket") b = c({ kind: "measure", name: g.value });
+      else if (g.kind === "bracket")
+        left = c({ kind: "measure", name: g.value });
       else if (g.kind === "identifier" || g.kind === "quoted")
         if (d().value === "(" && g.kind === "identifier") {
           const y = g.value.toUpperCase();
@@ -436,30 +438,30 @@ function parseDaxExpression(e) {
               `Unsupported function ${g.value}. No worksheet fallback is used.`,
             ),
             u());
-          const w = [];
+          const args = [];
           if (d().value !== ")")
             do {
-              if ((w.push(f(0, v + 1)), d().value !== ",")) break;
+              if ((args.push(f(0, v + 1)), d().value !== ",")) break;
               u();
             } while (true);
           l(")");
           const E = daxFunctionNames[y];
-          ((w.length < E[0] || w.length > E[1]) &&
+          ((args.length < E[0] || args.length > E[1]) &&
             throwDaxError(
               "DAX_ARGUMENT",
               `${y} expects ${E[0] === E[1] ? E[0] : `${E[0]}–${E[1]}`} arguments in this subset.`,
             ),
-            (b = c({ kind: "call", name: y, args: w })));
+            (left = c({ kind: "call", name: y, args: args })));
         } else
           d().kind === "bracket"
-            ? (b = c({ kind: "field", table: g.value, column: u().value }))
+            ? (left = c({ kind: "field", table: g.value, column: u().value }))
             : g.kind === "identifier" &&
                 ["TRUE", "FALSE"].includes(g.value.toUpperCase())
-              ? (b = c({
+              ? (left = c({
                   kind: "literal",
                   value: g.value.toUpperCase() === "TRUE",
                 }))
-              : (b = c({ kind: "table", name: g.value }));
+              : (left = c({ kind: "table", name: g.value }));
       else
         return throwDaxError(
           "DAX_SYNTAX",
@@ -469,11 +471,16 @@ function parseDaxExpression(e) {
         ;
         d().kind === "op" && h[d().value] !== undefined && h[d().value] >= m;
       ) {
-        const y = u().value,
-          w = h[y];
-        b = c({ kind: "binary", op: y, left: b, right: f(w + 1, v + 1) });
+        const value = u().value,
+          w = h[value];
+        left = c({
+          kind: "binary",
+          op: value,
+          left: left,
+          right: f(w + 1, v + 1),
+        });
       }
-      return b;
+      return left;
     },
     p = f();
   return (
@@ -488,7 +495,7 @@ function parseDaxExpression(e) {
 function walkDaxSyntaxTree(e, r) {
   (r(e),
     e.kind === "call"
-      ? e.args.forEach((t) => walkDaxSyntaxTree(t, r))
+      ? e.args.forEach((arg) => walkDaxSyntaxTree(arg, r))
       : e.kind === "binary"
         ? (walkDaxSyntaxTree(e.left, r), walkDaxSyntaxTree(e.right, r))
         : e.kind === "unary" && walkDaxSyntaxTree(e.value, r));
@@ -613,53 +620,55 @@ function validateDataModel(e) {
     throw Error(
       `Invalid data model: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
     );
-  const t = r.data;
+  const data = r.data;
   if (
     (assertUniqueCaseInsensitive(
-      t.tables.map((s) => s.id),
+      data.tables.map((table) => table.id),
       "Model table IDs",
     ),
     assertUniqueCaseInsensitive(
-      t.tables.map((s) => s.name),
+      data.tables.map((table) => table.name),
       "Model table names",
     ),
     assertUniqueCaseInsensitive(
-      t.relationships.map((s) => s.id),
+      data.relationships.map((relationship) => relationship.id),
       "Relationship IDs",
     ),
     assertUniqueCaseInsensitive(
-      t.measures.map((s) => s.id),
+      data.measures.map((measure) => measure.id),
       "Measure IDs",
     ),
     assertUniqueCaseInsensitive(
-      t.measures.map((s) => s.name),
+      data.measures.map((measure) => measure.name),
       "Measure names",
     ),
-    t.tables.reduce(
-      (s, d) => s + d.columns.filter((u) => u.expression !== undefined).length,
+    data.tables.reduce(
+      (s, d) =>
+        s +
+        d.columns.filter((column) => column.expression !== undefined).length,
       0,
     ) > daxExpressionLimits.calculatedColumns)
   )
     throw Error("The model supports at most 16 DAX calculated columns.");
-  for (const s of t.tables) {
+  for (const table of data.tables) {
     if (
       (assertUniqueCaseInsensitive(
-        s.columns.map((d) => d.name),
-        `Columns in ${s.name}`,
+        table.columns.map((column) => column.name),
+        `Columns in ${table.name}`,
       ),
-      !s.columns.some((d) => d.expression === undefined))
+      !table.columns.some((column) => column.expression === undefined))
     )
       throw Error(
         "A model table requires at least one physical source column.",
       );
     if (
-      s.dateColumn &&
-      !s.columns.some(
-        (d) =>
-          d.name === s.dateColumn &&
-          d.type === "date" &&
-          !d.nullable &&
-          d.expression === undefined,
+      table.dateColumn &&
+      !table.columns.some(
+        (column) =>
+          column.name === table.dateColumn &&
+          column.type === "date" &&
+          !column.nullable &&
+          column.expression === undefined,
       )
     )
       throw Error(
@@ -667,71 +676,81 @@ function validateDataModel(e) {
       );
   }
   const n = (s) => {
-    const d = t.tables.find((l) => l.id === s.tableId),
-      u = d?.columns.find((l) => l.name === s.column);
+    const d = data.tables.find((table) => table.id === s.tableId),
+      u = d?.columns.find((column) => column.name === s.column);
     if (!u) throw Error(`Unknown model field ${s.tableId}.${s.column}.`);
     return u;
   };
-  for (const s of t.relationships) {
-    if (s.one.tableId === s.many.tableId)
+  for (const relationship of data.relationships) {
+    if (relationship.one.tableId === relationship.many.tableId)
       throw Error(
         "Self relationships are unsupported; use distinct role-playing tables.",
       );
-    if (n(s.one).type !== n(s.many).type)
-      throw Error(`Relationship ${s.id} requires matching key types.`);
-    if (n(s.one).expression !== undefined || n(s.many).expression !== undefined)
+    if (n(relationship.one).type !== n(relationship.many).type)
+      throw Error(
+        `Relationship ${relationship.id} requires matching key types.`,
+      );
+    if (
+      n(relationship.one).expression !== undefined ||
+      n(relationship.many).expression !== undefined
+    )
       throw Error(
         "Relationship keys must be physical source columns, not DAX calculated columns.",
       );
   }
-  for (const s of t.measures) {
-    if (!t.tables.some((d) => d.id === s.tableId))
-      throw Error(`Unknown measure table ${s.tableId}.`);
-    if (s.operation === "dax") {
-      if (!s.expression || s.column !== undefined)
+  for (const measure of data.measures) {
+    if (!data.tables.some((table) => table.id === measure.tableId))
+      throw Error(`Unknown measure table ${measure.tableId}.`);
+    if (measure.operation === "dax") {
+      if (!measure.expression || measure.column !== undefined)
         throw Error(
           "A DAX measure requires an expression and no aggregate column.",
         );
     } else {
-      if (s.expression !== undefined)
+      if (measure.expression !== undefined)
         throw Error(
           "Unrecognized expression for an aggregate measure; only DAX measures may contain it.",
         );
-      if (s.operation === "countRows") {
-        if (s.column !== undefined)
+      if (measure.operation === "countRows") {
+        if (measure.column !== undefined)
           throw Error("Count rows does not take a column.");
       } else {
-        const d = n({ tableId: s.tableId, column: s.column ?? "" });
+        const d = n({ tableId: measure.tableId, column: measure.column ?? "" });
         if (
-          ["sum", "average", "min", "max"].includes(s.operation) &&
+          ["sum", "average", "min", "max"].includes(measure.operation) &&
           d.type !== "number"
         )
-          throw Error(`Measure ${s.name} requires a number column.`);
+          throw Error(`Measure ${measure.name} requires a number column.`);
       }
     }
   }
-  return t;
+  return data;
 }
-function validateModelQuery(e, r) {
-  const t = modelQuerySchema.safeParse(e);
+function validateModelQuery(query, definition) {
+  const t = modelQuerySchema.safeParse(query);
   if (!t.success)
     throw Error(`Invalid model query: ${t.error.issues[0]?.message}`);
-  const n = t.data;
-  (assertUniqueCaseInsensitive(n.measureIds, "Selected measures"),
+  const data = t.data;
+  (assertUniqueCaseInsensitive(data.measureIds, "Selected measures"),
     assertUniqueCaseInsensitive(
-      n.groupBy.map((s) => JSON.stringify(s)),
+      data.groupBy.map((s) => JSON.stringify(s)),
       "Group fields",
     ));
-  for (const s of [...n.groupBy, ...n.filters])
+  for (const s of [...data.groupBy, ...data.filters])
     if (
-      !r.tables
-        .find((d) => d.id === s.tableId)
-        ?.columns.some((d) => d.name === s.column)
+      !definition.tables
+        .find((table) => table.id === s.tableId)
+        ?.columns.some((column) => column.name === s.column)
     )
       throw Error(`Unknown query field ${s.tableId}.${s.column}.`);
-  if (n.measureIds.some((s) => !r.measures.some((d) => d.id === s)))
+  if (
+    data.measureIds.some(
+      (measureId) =>
+        !definition.measures.some((measure) => measure.id === measureId),
+    )
+  )
     throw Error("A selected model measure is missing.");
-  return n;
+  return data;
 }
 const lk = string().regex(/^[a-f0-9]{64}$/),
   dataModelReportSchema = strictObject({
@@ -746,7 +765,7 @@ const lk = string().regex(/^[a-f0-9]{64}$/),
     includeHidden: boolean(),
     totals: array(number().finite().nullable()).max(dataModelLimits.measures),
   });
-function validateDataModelReport(e, r) {
+function validateDataModelReport(e, workbook) {
   const t = e;
   let n = 0;
   if (t.dataModel !== undefined) {
@@ -755,10 +774,10 @@ function validateDataModelReport(e, r) {
       n > dataModelLimits.metadataCharacters)
     )
       throw Error("Data model metadata exceeds 2,000,000 characters.");
-    r.dataModel = validateDataModel(t.dataModel);
+    workbook.dataModel = validateDataModel(t.dataModel);
   }
-  for (const s of r.sheets) {
-    const d = t.sheets.find((c) => c.id === s.id)?.dataModelReport;
+  for (const sheet of workbook.sheets) {
+    const d = t.sheets.find((c) => c.id === sheet.id)?.dataModelReport;
     if (d === undefined) continue;
     if (
       ((n += JSON.stringify(d).length), n > dataModelLimits.metadataCharacters)
@@ -767,17 +786,17 @@ function validateDataModelReport(e, r) {
     const u = dataModelReportSchema.safeParse(d);
     if (!u.success)
       throw Error(`Invalid model report: ${u.error.issues[0]?.message}`);
-    const l = u.data;
+    const data = u.data;
     if (
-      ((l.definition = validateDataModel(l.definition)),
-      (l.query = validateModelQuery(l.query, l.definition)),
-      l.definitionHash !== fingerprintCanonicalValue(l.definition) ||
-        l.totals.length !== l.query.measureIds.length)
+      ((data.definition = validateDataModel(data.definition)),
+      (data.query = validateModelQuery(data.query, data.definition)),
+      data.definitionHash !== fingerprintCanonicalValue(data.definition) ||
+        data.totals.length !== data.query.measureIds.length)
     )
       throw Error(
         "Model report definition or measure metadata is inconsistent.",
       );
-    s.dataModelReport = l;
+    sheet.dataModelReport = data;
   }
 }
 const sourceImportLimits = Object.freeze({
@@ -866,8 +885,9 @@ const nativeCellValueSchema = object({
   })
     .strict()
     .superRefine((e, r) => {
-      (new Set(e.columns.map((t) => t.path)).size !== e.columns.length ||
-        e.rows.some((t) => t.length !== e.columns.length)) &&
+      (new Set(e.columns.map((column) => column.path)).size !==
+        e.columns.length ||
+        e.rows.some((row) => row.length !== e.columns.length)) &&
         r.addIssue({
           code: "custom",
           message: "Table columns and rows must align with unique paths.",
@@ -921,11 +941,11 @@ const nativeCellValueSchema = object({
 function validateExtractedSourceTables(e) {
   const r = extractedDocumentSchema.parse(e);
   let t = 0;
-  if (new Set(r.tables.map((n) => n.id)).size !== r.tables.length)
+  if (new Set(r.tables.map((table) => table.id)).size !== r.tables.length)
     throw Error("Source table IDs must be unique.");
-  for (const n of r.tables)
-    for (const o of n.rows)
-      for (const a of o) {
+  for (const table of r.tables)
+    for (const row of table.rows)
+      for (const a of row) {
         if (++t > sourceImportLimits.cells)
           throw Error("Source cell budget exceeded.");
         if (
@@ -947,8 +967,8 @@ function validateExtractedSourceTables(e) {
     throw Error("Source format and extraction method disagree.");
   return r;
 }
-function validateRetainedSourceFile(e) {
-  const r = retainedSourceFileSchema.parse(e),
+function validateRetainedSourceFile(original) {
+  const r = retainedSourceFileSchema.parse(original),
     t = r.fileName.split(".").at(-1)?.toLowerCase();
   if ((t === "jpg" ? "jpeg" : t === "htm" ? "html" : t) !== r.format)
     throw Error("Source extension and format disagree.");
@@ -965,18 +985,18 @@ function validateRetainedSourceFile(e) {
     throw Error("Retained source checksum mismatch.");
   return o;
 }
-function buildRetainedSourceRecord(e, r, t) {
+function buildRetainedSourceRecord(e, fileName, format) {
   let n = "";
   for (let a = 0; a < e.length; a += 8192)
     n += String.fromCharCode(...e.subarray(a, a + 8192));
-  const o = {
-    fileName: r,
-    format: t,
+  const original = {
+    fileName: fileName,
+    format: format,
     byteLength: e.length,
     sha256: sha256HexDigest(e),
     base64: btoa(n),
   };
-  return (validateRetainedSourceFile(o), o);
+  return (validateRetainedSourceFile(original), original);
 }
 function resolveExtractedCellValue(e, r) {
   if (e.confidence < sourceImportLimits.confidence && !r)
@@ -994,30 +1014,39 @@ function MU(e) {
   Object.freeze(e);
   for (const r of Object.values(e)) r && typeof r == "object" && MU(r);
 }
-function validateSourceImports(e, r) {
-  if (e.sourceImports === undefined) return;
+function validateSourceImports(workbook, r) {
+  if (workbook.sourceImports === undefined) return;
   if (
-    !Array.isArray(e.sourceImports) ||
-    e.sourceImports.length > sourceImportLimits.imports
+    !Array.isArray(workbook.sourceImports) ||
+    workbook.sourceImports.length > sourceImportLimits.imports
   )
     throw Error("Source import count exceeded.");
   if (
-    e.sourceImports.some((o) => !o || typeof o != "object" || !uk.has(o)) &&
-    new TextEncoder().encode(JSON.stringify(e.sourceImports)).length >
+    workbook.sourceImports.some(
+      (sourceImport) =>
+        !sourceImport ||
+        typeof sourceImport != "object" ||
+        !uk.has(sourceImport),
+    ) &&
+    new TextEncoder().encode(JSON.stringify(workbook.sourceImports)).length >
       24 * 1024 * 1024
   )
     throw Error("Source provenance metadata budget exceeded.");
   let t = 0;
   const n = new Set();
   if (
-    ((r.sourceImports = e.sourceImports.map((o) => {
-      if (o && typeof o == "object" && uk.has(o)) {
-        const d = o;
+    ((r.sourceImports = workbook.sourceImports.map((sourceImport) => {
+      if (
+        sourceImport &&
+        typeof sourceImport == "object" &&
+        uk.has(sourceImport)
+      ) {
+        const d = sourceImport;
         if (((t += d.original.byteLength), n.has(d.id)))
           throw Error("Duplicate source import ID.");
         return (n.add(d.id), d);
       }
-      const a = sourceImportRecordSchema.parse(o);
+      const a = sourceImportRecordSchema.parse(sourceImport);
       if (
         (validateRetainedSourceFile(a.original),
         validateExtractedSourceTables({
@@ -1037,13 +1066,13 @@ function validateSourceImports(e, r) {
         throw Error("Ambiguous source tables require review.");
       const s = new Set();
       if (
-        (a.table.rows.forEach((d, u) =>
-          d.forEach((l, c) => {
+        (a.table.rows.forEach((row, u) =>
+          row.forEach((l, c) => {
             const h = `${u}:${c}`;
             (s.add(h), resolveExtractedCellValue(l, a.resolutions[h]));
           }),
         ),
-        Object.keys(a.resolutions).some((d) => !s.has(d)))
+        Object.keys(a.resolutions).some((resolution) => !s.has(resolution)))
       )
         throw Error("Unknown source review cell.");
       if (n.has(a.id)) throw Error("Duplicate source import ID.");
@@ -1059,69 +1088,74 @@ const xlsxInspectionLimits = Object.freeze({
     maxDetails: 1e5,
   }),
   q5 = new WeakSet();
-function validateRetainedXlsxSource(e) {
+function validateRetainedXlsxSource(xlsxSource) {
   if (
-    !e ||
-    typeof e != "object" ||
-    e.schemaVersion !== 1 ||
-    typeof e.fileName != "string" ||
-    !/\.xlsx$/i.test(e.fileName) ||
-    e.fileName.length > 255 ||
-    /[\\/\x00-\x1f\x7f]/.test(e.fileName) ||
-    !Number.isSafeInteger(e.byteLength) ||
-    e.byteLength < 22 ||
-    e.byteLength > xlsxInspectionLimits.maxBytes ||
-    typeof e.sha256 != "string" ||
-    !/^[a-f0-9]{64}$/.test(e.sha256) ||
-    typeof e.base64 != "string" ||
-    e.base64.length !== Math.ceil(e.byteLength / 3) * 4 ||
-    !/^[A-Za-z0-9+/]*={0,2}$/.test(e.base64)
+    !xlsxSource ||
+    typeof xlsxSource != "object" ||
+    xlsxSource.schemaVersion !== 1 ||
+    typeof xlsxSource.fileName != "string" ||
+    !/\.xlsx$/i.test(xlsxSource.fileName) ||
+    xlsxSource.fileName.length > 255 ||
+    /[\\/\x00-\x1f\x7f]/.test(xlsxSource.fileName) ||
+    !Number.isSafeInteger(xlsxSource.byteLength) ||
+    xlsxSource.byteLength < 22 ||
+    xlsxSource.byteLength > xlsxInspectionLimits.maxBytes ||
+    typeof xlsxSource.sha256 != "string" ||
+    !/^[a-f0-9]{64}$/.test(xlsxSource.sha256) ||
+    typeof xlsxSource.base64 != "string" ||
+    xlsxSource.base64.length !== Math.ceil(xlsxSource.byteLength / 3) * 4 ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(xlsxSource.base64)
   )
     throw Error(
       "Invalid retained XLSX source metadata or 10 MiB source limit exceeded.",
     );
   let r;
   try {
-    r = atob(e.base64);
+    r = atob(xlsxSource.base64);
   } catch {
     throw Error("Invalid retained XLSX source encoding.");
   }
-  if (btoa(r) !== e.base64 || r.length !== e.byteLength)
+  if (btoa(r) !== xlsxSource.base64 || r.length !== xlsxSource.byteLength)
     throw Error("Retained XLSX source byte length or encoding changed.");
   const t = Uint8Array.from(r, (n) => n.charCodeAt(0));
-  if (sha256HexDigest(t) !== e.sha256)
+  if (sha256HexDigest(t) !== xlsxSource.sha256)
     throw Error("Retained XLSX source checksum does not match its bytes.");
   return t;
 }
-function retainOriginalXlsx(e, r) {
+function retainOriginalXlsx(e, fileName) {
   if (e.byteLength > xlsxInspectionLimits.maxBytes)
     throw Error("Original XLSX exceeds the 10 MiB retention limit.");
   let t = "";
   for (let o = 0; o < e.length; o += 8192)
     t += String.fromCharCode(...e.subarray(o, o + 8192));
-  const n = {
+  const xlsxSource = {
     schemaVersion: 1,
-    fileName: r,
+    fileName: fileName,
     byteLength: e.length,
     sha256: sha256HexDigest(e),
     base64: btoa(t),
   };
-  return (validateRetainedXlsxSource(n), Object.freeze(n), q5.add(n), n);
+  return (
+    validateRetainedXlsxSource(xlsxSource),
+    Object.freeze(xlsxSource),
+    q5.add(xlsxSource),
+    xlsxSource
+  );
 }
-function readRetainedXlsxSource(e, r) {
-  if (e.xlsxSource === undefined) return;
-  const t = e.xlsxSource;
-  if (t && typeof t == "object" && q5.has(t)) {
-    r.xlsxSource = t;
+function readRetainedXlsxSource(workbook, r) {
+  if (workbook.xlsxSource === undefined) return;
+  const xlsxSource = workbook.xlsxSource;
+  if (xlsxSource && typeof xlsxSource == "object" && q5.has(xlsxSource)) {
+    r.xlsxSource = xlsxSource;
     return;
   }
-  (validateRetainedXlsxSource(t),
+  (validateRetainedXlsxSource(xlsxSource),
     (r.xlsxSource = Object.freeze({
       schemaVersion: 1,
-      fileName: t.fileName,
-      byteLength: t.byteLength,
-      sha256: t.sha256,
-      base64: t.base64,
+      fileName: xlsxSource.fileName,
+      byteLength: xlsxSource.byteLength,
+      sha256: xlsxSource.sha256,
+      base64: xlsxSource.base64,
     })),
     q5.add(r.xlsxSource));
 }
@@ -1150,69 +1184,77 @@ const alternateFormatExtensions = [
     e.length <= 255 &&
     !/[\\/\x00-\x1f\x7f\u202a-\u202e\u2066-\u2069]/.test(e),
   jU = new WeakSet();
-function validateAlternateSource(e) {
+function validateAlternateSource(alternateSource) {
   if (
-    !e ||
-    typeof e != "object" ||
-    !alternateFormatExtensions.includes(e.format) ||
-    !isSafeFileName(e.fileName) ||
-    !e.fileName.toLowerCase().endsWith("." + e.format) ||
-    !e.conversion ||
+    !alternateSource ||
+    typeof alternateSource != "object" ||
+    !alternateFormatExtensions.includes(alternateSource.format) ||
+    !isSafeFileName(alternateSource.fileName) ||
+    !alternateSource.fileName
+      .toLowerCase()
+      .endsWith("." + alternateSource.format) ||
+    !alternateSource.conversion ||
     !["template-adapter", "external-conversion"].includes(
-      e.conversion.method,
+      alternateSource.conversion.method,
     ) ||
-    (e.conversion.method === "template-adapter" && e.format !== "xltx") ||
-    !isSafeFileName(e.conversion.convertedFileName) ||
-    !/\.xlsx$/i.test(e.conversion.convertedFileName) ||
-    typeof e.conversion.convertedSha256 != "string" ||
-    !/^[a-f0-9]{64}$/.test(e.conversion.convertedSha256) ||
-    typeof e.conversion.reviewedAt != "string" ||
-    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(e.conversion.reviewedAt) ||
-    !Number.isFinite(Date.parse(e.conversion.reviewedAt)) ||
-    e.conversion.equivalence !== "not-verified"
+    (alternateSource.conversion.method === "template-adapter" &&
+      alternateSource.format !== "xltx") ||
+    !isSafeFileName(alternateSource.conversion.convertedFileName) ||
+    !/\.xlsx$/i.test(alternateSource.conversion.convertedFileName) ||
+    typeof alternateSource.conversion.convertedSha256 != "string" ||
+    !/^[a-f0-9]{64}$/.test(alternateSource.conversion.convertedSha256) ||
+    typeof alternateSource.conversion.reviewedAt != "string" ||
+    !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(
+      alternateSource.conversion.reviewedAt,
+    ) ||
+    !Number.isFinite(Date.parse(alternateSource.conversion.reviewedAt)) ||
+    alternateSource.conversion.equivalence !== "not-verified"
   )
     throw Error("Invalid alternate workbook source or conversion provenance.");
-  return validateRetainedXlsxSource({ ...e, fileName: "retained.xlsx" });
+  return validateRetainedXlsxSource({
+    ...alternateSource,
+    fileName: "retained.xlsx",
+  });
 }
-function retainAlternateFormatSource(e, r, t, n) {
-  const o = {
+function retainAlternateFormatSource(e, fileName, format, n) {
+  const alternateSource = {
     ...retainOriginalXlsx(e, "retained.xlsx"),
-    fileName: r,
-    format: t,
+    fileName: fileName,
+    format: format,
     conversion: { ...n },
   };
   return (
-    validateAlternateSource(o),
-    Object.freeze(o.conversion),
-    Object.freeze(o),
-    jU.add(o),
-    o
+    validateAlternateSource(alternateSource),
+    Object.freeze(alternateSource.conversion),
+    Object.freeze(alternateSource),
+    jU.add(alternateSource),
+    alternateSource
   );
 }
-function normalizeAlternateFormatSource(e, r) {
-  if (e.alternateSource === undefined) return;
-  const t = e.alternateSource;
-  if (jU.has(t)) {
-    r.alternateSource = t;
+function normalizeAlternateFormatSource(workbook, r) {
+  if (workbook.alternateSource === undefined) return;
+  const alternateSource = workbook.alternateSource;
+  if (jU.has(alternateSource)) {
+    r.alternateSource = alternateSource;
     return;
   }
-  const n = validateAlternateSource(t);
+  const n = validateAlternateSource(alternateSource);
   r.alternateSource = retainAlternateFormatSource(
     n,
-    t.fileName,
-    t.format,
-    t.conversion,
+    alternateSource.fileName,
+    alternateSource.format,
+    alternateSource.conversion,
   );
 }
-function requireAlternateFormatOriginal(e) {
-  const r = e.alternateSource;
-  if (!r)
+function requireAlternateFormatOriginal(workbook) {
+  const alternateSource = workbook.alternateSource;
+  if (!alternateSource)
     throw Error("This workbook has no retained alternate-format original.");
   return {
-    bytes: validateAlternateSource(r),
-    fileName: r.fileName,
-    sha256: r.sha256,
-    format: r.format,
+    bytes: validateAlternateSource(alternateSource),
+    fileName: alternateSource.fileName,
+    sha256: alternateSource.sha256,
+    format: alternateSource.format,
   };
 }
 const automationLimits = Object.freeze({
@@ -1239,15 +1281,17 @@ function encodeBytesToBase64(e) {
     r += String.fromCharCode(...e.subarray(t, t + 8192));
   return btoa(r);
 }
-function decodeAutomationArtifact(e) {
+function decodeAutomationArtifact(base64) {
   if (
-    typeof e != "string" ||
-    e.length > Math.ceil(automationLimits.maxArtifactBytes / 3) * 4 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(e)
+    typeof base64 != "string" ||
+    base64.length > Math.ceil(automationLimits.maxArtifactBytes / 3) * 4 ||
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      base64,
+    )
   )
     throw Error("Invalid automation artifact encoding or size.");
-  const r = atob(e);
-  if (btoa(r) !== e)
+  const r = atob(base64);
+  if (btoa(r) !== base64)
     throw Error("Automation artifact is not canonical base64.");
   return Uint8Array.from(r, (t) => t.charCodeAt(0));
 }
@@ -1294,62 +1338,72 @@ function requireAutomationFileName(e) {
     throw Error("Invalid automation file name.");
   return r;
 }
-function validateAutomationArtifacts(e, r) {
-  if (e.automationArtifacts !== undefined) {
+function validateAutomationArtifacts(workbook, r) {
+  if (workbook.automationArtifacts !== undefined) {
     if (
-      !Array.isArray(e.automationArtifacts) ||
-      e.automationArtifacts.length > automationLimits.maxArtifacts
+      !Array.isArray(workbook.automationArtifacts) ||
+      workbook.automationArtifacts.length > automationLimits.maxArtifacts
     )
       throw Error("Keep at most 20 automation artifacts.");
     let t = 0;
     const n = new Set();
-    r.automationArtifacts = e.automationArtifacts.map((o) => {
-      if (!o || typeof o != "object" || Array.isArray(o))
-        throw Error("Invalid automation artifact.");
-      const a = o,
-        s = requireAutomationText(a.id, 100, "artifact ID");
-      if (n.has(s)) throw Error("Duplicate automation artifact ID.");
-      n.add(s);
-      const d = decodeAutomationArtifact(a.base64);
-      if (
-        ((t += d.length),
-        !d.length ||
-          d.length !== a.byteLength ||
-          d.length > automationLimits.maxArtifactBytes ||
-          t > automationLimits.maxStoredBytes)
-      )
-        throw Error(
-          "Automation artifacts exceed their 2 MB per-file or 10 MB retained-byte budget.",
-        );
-      if (sha256HexDigest(d) !== requireAutomationSourceHash(a.sha256))
-        throw Error(
-          "Automation artifact checksum does not match its preserved bytes.",
-        );
-      if (!automationArtifactKinds.includes(a.kind))
-        throw Error("Unknown automation artifact kind.");
-      return {
-        id: s,
-        fileName: requireAutomationFileName(a.fileName),
-        kind: a.kind,
-        sha256: a.sha256,
-        byteLength: d.length,
-        base64: a.base64,
-        retainedAt: requireAutomationTimestamp(a.retainedAt),
-        retainedBy: requireAutomationText(a.retainedBy, 100, "retainer"),
-      };
-    });
+    r.automationArtifacts = workbook.automationArtifacts.map(
+      (automationArtifact) => {
+        if (
+          !automationArtifact ||
+          typeof automationArtifact != "object" ||
+          Array.isArray(automationArtifact)
+        )
+          throw Error("Invalid automation artifact.");
+        const a = automationArtifact,
+          s = requireAutomationText(a.id, 100, "artifact ID");
+        if (n.has(s)) throw Error("Duplicate automation artifact ID.");
+        n.add(s);
+        const d = decodeAutomationArtifact(a.base64);
+        if (
+          ((t += d.length),
+          !d.length ||
+            d.length !== a.byteLength ||
+            d.length > automationLimits.maxArtifactBytes ||
+            t > automationLimits.maxStoredBytes)
+        )
+          throw Error(
+            "Automation artifacts exceed their 2 MB per-file or 10 MB retained-byte budget.",
+          );
+        if (sha256HexDigest(d) !== requireAutomationSourceHash(a.sha256))
+          throw Error(
+            "Automation artifact checksum does not match its preserved bytes.",
+          );
+        if (!automationArtifactKinds.includes(a.kind))
+          throw Error("Unknown automation artifact kind.");
+        return {
+          id: s,
+          fileName: requireAutomationFileName(a.fileName),
+          kind: a.kind,
+          sha256: a.sha256,
+          byteLength: d.length,
+          base64: a.base64,
+          retainedAt: requireAutomationTimestamp(a.retainedAt),
+          retainedBy: requireAutomationText(a.retainedBy, 100, "retainer"),
+        };
+      },
+    );
   }
-  if (e.automationRuns !== undefined) {
+  if (workbook.automationRuns !== undefined) {
     if (
-      !Array.isArray(e.automationRuns) ||
-      e.automationRuns.length > automationLimits.maxRuns
+      !Array.isArray(workbook.automationRuns) ||
+      workbook.automationRuns.length > automationLimits.maxRuns
     )
       throw Error("Automation run evidence is limited to 100 runs.");
     const t = new Set();
-    r.automationRuns = e.automationRuns.map((n) => {
-      if (!n || typeof n != "object" || Array.isArray(n))
+    r.automationRuns = workbook.automationRuns.map((automationRun) => {
+      if (
+        !automationRun ||
+        typeof automationRun != "object" ||
+        Array.isArray(automationRun)
+      )
         throw Error("Invalid automation run evidence.");
-      const o = n,
+      const o = automationRun,
         a = requireAutomationText(o.id, 100, "run ID");
       if (t.has(a)) throw Error("Duplicate automation run ID.");
       if (
@@ -1363,17 +1417,17 @@ function validateAutomationArtifacts(e, r) {
         o.sourceLines.length > automationLimits.maxCommands
       )
         throw Error("Invalid automation source lines.");
-      const s = requireAutomationEvidenceCount(
+      const beforeRevision = requireAutomationEvidenceCount(
           o.beforeRevision,
           0,
           Number.MAX_SAFE_INTEGER - 2,
         ),
-        d = requireAutomationEvidenceCount(
+        afterRevision = requireAutomationEvidenceCount(
           o.afterRevision,
           1,
           Number.MAX_SAFE_INTEGER - 1,
         );
-      if (d !== s + 1)
+      if (afterRevision !== beforeRevision + 1)
         throw Error("Automation run revisions are inconsistent.");
       if (o.sourceLines.length !== o.commands)
         throw Error(
@@ -1389,8 +1443,8 @@ function validateAutomationArtifacts(e, r) {
         adapter: o.adapter,
         actor: requireAutomationText(o.actor, 100, "actor"),
         timestamp: requireAutomationTimestamp(o.timestamp),
-        beforeRevision: s,
-        afterRevision: d,
+        beforeRevision: beforeRevision,
+        afterRevision: afterRevision,
         sheetId: requireAutomationText(o.sheetId, 100, "sheet ID"),
         range: validateAutomationApprovedRange(o.range),
         commands: requireAutomationEvidenceCount(
@@ -1403,9 +1457,9 @@ function validateAutomationArtifacts(e, r) {
           0,
           automationLimits.maxCells,
         ),
-        sourceLines: o.sourceLines.map((u) =>
+        sourceLines: o.sourceLines.map((sourceLine) =>
           requireAutomationEvidenceCount(
-            u,
+            sourceLine,
             1,
             automationLimits.maxSourceBytes + 1,
           ),
@@ -1414,11 +1468,15 @@ function validateAutomationArtifacts(e, r) {
     });
   }
 }
-function validateDelimitedSourceFootprint(e, r) {
-  if (e === undefined) return;
-  if (!e || typeof e != "object" || Array.isArray(e))
+function validateDelimitedSourceFootprint(delimitedSource, r) {
+  if (delimitedSource === undefined) return;
+  if (
+    !delimitedSource ||
+    typeof delimitedSource != "object" ||
+    Array.isArray(delimitedSource)
+  )
     throw Error("Invalid delimited source footprint.");
-  const t = e;
+  const t = delimitedSource;
   if (
     !Number.isInteger(t.records) ||
     Number(t.records) < 1 ||
@@ -1497,13 +1555,22 @@ function validateWhatIfValues(e, r) {
     return t;
   });
 }
-function expandWhatIfScenarios(e) {
-  return e.kind === "scenarios"
-    ? e.scenarios.map((r) => ({ name: r.name, inputs: r.values }))
-    : e.kind === "one-variable"
-      ? e.values.map((r) => ({ name: String(r), inputs: [r] }))
-      : e.columnValues.flatMap((r) =>
-          e.rowValues.map((t) => ({ name: `${t} / ${r}`, inputs: [t, r] })),
+function expandWhatIfScenarios(request) {
+  return request.kind === "scenarios"
+    ? request.scenarios.map((scenario) => ({
+        name: scenario.name,
+        inputs: scenario.values,
+      }))
+    : request.kind === "one-variable"
+      ? request.values.map((value) => ({
+          name: String(value),
+          inputs: [value],
+        }))
+      : request.columnValues.flatMap((columnValue) =>
+          request.rowValues.map((rowValue) => ({
+            name: `${rowValue} / ${columnValue}`,
+            inputs: [rowValue, columnValue],
+          })),
         );
 }
 const printRenderLimits = {
@@ -1521,36 +1588,36 @@ Engagement: &[Engagement] · Period: &[Period]`,
   },
   headerFooterTokenPattern =
     /&&|&\[(Workbook|Revision|Engagement|Period)\]|&[PNA]/g;
-function resolvePrintIdentityToken(e, r) {
+function resolvePrintIdentityToken(e, workbook) {
   return e === "Workbook"
-    ? (r?.name ?? "[Workbook not available]")
+    ? (workbook?.name ?? "[Workbook not available]")
     : e === "Revision"
-      ? r
-        ? String(r.revision)
+      ? workbook
+        ? String(workbook.revision)
         : "[Revision not available]"
       : e === "Engagement"
-        ? r?.metadata?.engagement || "[Engagement not set]"
-        : r?.metadata?.period || "[Period not set]";
+        ? workbook?.metadata?.engagement || "[Engagement not set]"
+        : workbook?.metadata?.period || "[Period not set]";
 }
-function expandHeaderFooterTemplate(e, r, t, n, o) {
+function expandHeaderFooterTemplate(e, workbook, sheet, n, total) {
   return e.replace(headerFooterTokenPattern, (a, s) =>
     s
-      ? resolvePrintIdentityToken(s, r)
+      ? resolvePrintIdentityToken(s, workbook)
       : a === "&&"
         ? "&"
         : a === "&A"
-          ? t.name
-          : String(a === "&P" ? n : o),
+          ? sheet.name
+          : String(a === "&P" ? n : total),
   );
 }
-function exportHeaderFooterTemplate(e, r) {
+function exportHeaderFooterTemplate(e, workbookInput) {
   const t = e.replace(headerFooterTokenPattern, (n, o) => {
     if (!o) return n;
-    if (!r)
+    if (!workbookInput)
       throw Error(
         "Exporting print identity fields requires the current workbook snapshot.",
       );
-    return resolvePrintIdentityToken(o, r).replace(/&/g, "&&");
+    return resolvePrintIdentityToken(o, workbookInput).replace(/&/g, "&&");
   });
   if (t.length > 255)
     throw Error(
@@ -1578,11 +1645,11 @@ function validatePrintPageBreaks(e, r) {
   }
 }
 
-function verifyPrintSnapshotGuard(e, r) {
+function verifyPrintSnapshotGuard(workbook, r) {
   if (
-    r.workbookId !== e.id ||
-    r.revision !== e.revision ||
-    r.snapshotGuard !== JSON.stringify(e)
+    r.workbookId !== workbook.id ||
+    r.revision !== workbook.revision ||
+    r.snapshotGuard !== JSON.stringify(workbook)
   )
     throw Error(
       "The workbook changed after page setup opened. Close and reopen page setup.",
@@ -1631,36 +1698,38 @@ function assertPlainObjectKeys(e, r) {
   (!isPlainObjectValue(e) || Object.keys(e).some((t) => !r.includes(t))) &&
     throwTextCleanupEvidenceError();
 }
-function WU(e) {
+function WU(arg) {
   return (
-    e === null ||
-    typeof e == "boolean" ||
-    (typeof e == "number" && Number.isFinite(e)) ||
-    (typeof e == "string" && e.length <= 32767)
+    arg === null ||
+    typeof arg == "boolean" ||
+    (typeof arg == "number" && Number.isFinite(arg)) ||
+    (typeof arg == "string" && arg.length <= 32767)
   );
 }
 function jm(e, r) {
   return typeof e == "string" && e.length > 0 && e.length <= r;
 }
-function validateTextCleanupSteps(e) {
-  if (!Array.isArray(e) || !e.length || e.length > 12)
+function validateTextCleanupSteps(steps) {
+  if (!Array.isArray(steps) || !steps.length || steps.length > 12)
     throw Error("Choose 1–12 text cleanup steps.");
-  return e.map(
-    (r) => (
-      assertPlainObjectKeys(r, ["function", "args"]),
-      (!textCleanupFunctionNames.includes(r.function) ||
-        !Array.isArray(r.args) ||
-        r.args.length > 5 ||
-        r.args.some((t) => t === null || !WU(t)) ||
-        JSON.stringify(r.args).length > 4096) &&
+  return steps.map(
+    (step) => (
+      assertPlainObjectKeys(step, ["function", "args"]),
+      (!textCleanupFunctionNames.includes(step.function) ||
+        !Array.isArray(step.args) ||
+        step.args.length > 5 ||
+        step.args.some((arg) => arg === null || !WU(arg)) ||
+        JSON.stringify(step.args).length > 4096) &&
         throwTextCleanupEvidenceError(),
-      { function: r.function, args: [...r.args] }
+      { function: step.function, args: [...step.args] }
     ),
   );
 }
-function assertTextCleanupEvidenceUnchanged(e, r) {
-  if (!e.textCleanups?.length) return r;
-  const t = new Map(e.textCleanups.map((o) => [o.id, o]));
+function assertTextCleanupEvidenceUnchanged(workbook, r) {
+  if (!workbook.textCleanups?.length) return r;
+  const t = new Map(
+    workbook.textCleanups.map((textCleanup) => [textCleanup.id, textCleanup]),
+  );
   for (const o of r.textCleanups ?? []) {
     const a = t.get(o.id);
     if (a && JSON.stringify(a) !== JSON.stringify(o))
@@ -1669,7 +1738,7 @@ function assertTextCleanupEvidenceUnchanged(e, r) {
   return {
     ...r,
     textCleanups: [
-      ...e.textCleanups,
+      ...workbook.textCleanups,
       ...(r.textCleanups ?? []).filter((o) => !t.has(o.id)),
     ],
   };
@@ -1785,57 +1854,69 @@ const textInferenceLimits = {
     outputName: string().min(1).max(31),
     steps: array(fieldTransformStepSchema).max(12),
   });
-function validateFieldTransformRecipe(e) {
-  const r = fieldTransformRecipeSchema.safeParse(e);
+function validateFieldTransformRecipe(request) {
+  const r = fieldTransformRecipeSchema.safeParse(request);
   if (!r.success)
     throw Error(
       `Invalid field transformation: ${r.error.issues[0]?.message ?? "review the recipe"}`,
     );
-  const t = r.data;
+  const data = r.data;
   if (
-    ((t.outputName = t.outputName.trim()),
-    !t.outputName ||
-      /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(t.outputName) ||
-      /^'|'$/.test(t.outputName))
+    ((data.outputName = data.outputName.trim()),
+    !data.outputName ||
+      /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(data.outputName) ||
+      /^'|'$/.test(data.outputName))
   )
     throw Error("Choose a valid output worksheet name of 1–31 characters.");
-  for (const o of t.steps) {
-    if (o.kind === "split") {
+  for (const step of data.steps) {
+    if (step.kind === "split") {
       if (
-        o.mode === "delimited" &&
-        (![...o.delimiters].length ||
-          [...o.delimiters].length > 8 ||
-          /["\r\n\0]/.test(o.delimiters))
+        step.mode === "delimited" &&
+        (![...step.delimiters].length ||
+          [...step.delimiters].length > 8 ||
+          /["\r\n\0]/.test(step.delimiters))
       )
         throw Error(
           "Choose 1–8 delimiter characters without quotes, line breaks or NUL.",
         );
       if (
-        o.mode === "fixed" &&
-        (!o.breaks.length ||
-          o.breaks.some((a, s) => s > 0 && a <= o.breaks[s - 1]))
+        step.mode === "fixed" &&
+        (!step.breaks.length ||
+          step.breaks.some((a, s) => s > 0 && a <= step.breaks[s - 1]))
       )
         throw Error(
           "Fixed-width breaks must be distinct increasing character positions.",
         );
     }
-    if (o.kind === "convert" && o.to !== "text" && o.decimal === o.group)
+    if (
+      step.kind === "convert" &&
+      step.to !== "text" &&
+      step.decimal === step.group
+    )
       throw Error("Decimal and grouping separators must differ.");
     if (
-      o.kind === "fill" &&
-      new Set(o.groupColumns).size !== o.groupColumns.length
+      step.kind === "fill" &&
+      new Set(step.groupColumns).size !== step.groupColumns.length
     )
       throw Error("Choose distinct fill group columns.");
-    if (o.kind === "fill" && o.columns.some((a) => o.groupColumns.includes(a)))
+    if (
+      step.kind === "fill" &&
+      step.columns.some((column) => step.groupColumns.includes(column))
+    )
       throw Error(
         "Fill targets must differ from the group columns. Use a separate preceding step to prepare group keys.",
       );
   }
-  return t;
+  return data;
 }
-function assertFieldTransformsUnchanged(e, r) {
-  if (!e.fieldTransforms?.length) return r;
-  const t = new Map(e.fieldTransforms.map((o) => [o.id, o]));
+function assertFieldTransformsUnchanged(workbook, r) {
+  if (!workbook.fieldTransforms?.length) return r;
+  const t = new Map(
+    workbook.fieldTransforms.map((fieldTransform) => [
+      fieldTransform.id,
+      fieldTransform,
+    ]),
+  );
   for (const o of r.fieldTransforms ?? [])
     if (t.has(o.id) && JSON.stringify(t.get(o.id)) !== JSON.stringify(o))
       throw Error(
@@ -1844,7 +1925,7 @@ function assertFieldTransformsUnchanged(e, r) {
   return {
     ...r,
     fieldTransforms: [
-      ...e.fieldTransforms,
+      ...workbook.fieldTransforms,
       ...(r.fieldTransforms ?? []).filter((o) => !t.has(o.id)),
     ],
   };

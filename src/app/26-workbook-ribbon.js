@@ -101,8 +101,8 @@ function WorkbookRibbon(e) {
     };
   (ne.useEffect(() => {
     if (!f) return;
-    const J = (q) => {
-      m.current?.contains(q.target) || p(false);
+    const J = (event) => {
+      m.current?.contains(event.target) || p(false);
     };
     return (
       document.addEventListener("pointerdown", J),
@@ -124,14 +124,15 @@ function WorkbookRibbon(e) {
           !(q.ctrlKey || q.metaKey)
         )
           return;
-        const W = q.target;
-        if (!(W instanceof Element) || W.closest('[role="dialog"]')) return;
+        const target = q.target;
+        if (!(target instanceof Element) || target.closest('[role="dialog"]'))
+          return;
         const K = m.current,
           te = K?.closest(".lg-app") ?? K;
         !te ||
           (te.classList.contains("lg-app")
-            ? W.closest(".lg-app") !== te
-            : !te.contains(W)) ||
+            ? target.closest(".lg-app") !== te
+            : !te.contains(target)) ||
           (q.preventDefault(), q.stopPropagation(), E());
       };
       return (
@@ -140,10 +141,14 @@ function WorkbookRibbon(e) {
       );
     }, []));
   const k = e.readOnly || e.busy,
-    F = resolveEffectiveCellStyle(e.cell?.style),
+    effectiveCellStyle = resolveEffectiveCellStyle(e.cell?.style),
     I = (J) => e.onFormat({ style: J }),
-    O = (J) =>
-      e.onFormat({ format: J, numFmt: undefined, numberFormat: undefined }),
+    O = (format) =>
+      e.onFormat({
+        format: format,
+        numFmt: undefined,
+        numberFormat: undefined,
+      }),
     j =
       e.cell?.numberFormat &&
       !["number", "currency", "accounting", "percent"].includes(
@@ -151,14 +156,17 @@ function WorkbookRibbon(e) {
       ),
     z = (J) => {
       if (e.cell?.numberFormat && !j) {
-        const le = validateNumberFormatSettings({
+        const numberFormat = validateNumberFormatSettings({
           ...e.cell.numberFormat,
           decimals: Math.max(
             0,
             Math.min(12, (e.cell.numberFormat.decimals ?? 2) + J),
           ),
         });
-        e.onFormat({ numberFormat: le, numFmt: buildNumberFormatCode(le) });
+        e.onFormat({
+          numberFormat: numberFormat,
+          numFmt: buildNumberFormatCode(numberFormat),
+        });
         return;
       }
       const q =
@@ -176,8 +184,8 @@ function WorkbookRibbon(e) {
     };
   ne.useEffect(() => {
     if (!u) return;
-    const J = (q) => {
-      g.current?.contains(q.target) || l(false);
+    const J = (event) => {
+      g.current?.contains(event.target) || l(false);
     };
     return (
       document.addEventListener("pointerdown", J),
@@ -191,10 +199,10 @@ function WorkbookRibbon(e) {
       "aria-label": text("Number format"),
       value: e.cell?.numberFormat ? "advanced" : (e.cell?.format ?? "general"),
       disabled: k,
-      onChange: (J) =>
-        J.target.value === "advanced"
+      onChange: (event) =>
+        event.target.value === "advanced"
           ? e.onTool("numberFormat")
-          : O(J.target.value),
+          : O(event.target.value),
       lang: language("Number format"),
       "data-ui-label": "Number format",
       children: [
@@ -220,7 +228,7 @@ function WorkbookRibbon(e) {
     B = i.jsx("select", {
       "aria-label": text("Zoom"),
       value: e.zoom,
-      onChange: (J) => e.onZoom(Number(J.target.value)),
+      onChange: (event) => e.onZoom(Number(event.target.value)),
       lang: language("Zoom"),
       "data-ui-label": "Zoom",
       children: Array.from(
@@ -328,9 +336,10 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("select", {
                           "aria-label": text("Font family"),
-                          value: F.fontFamily ?? "Calibri",
+                          value: effectiveCellStyle.fontFamily ?? "Calibri",
                           disabled: k,
-                          onChange: (q) => I({ fontFamily: q.target.value }),
+                          onChange: (event) =>
+                            I({ fontFamily: event.target.value }),
                           lang: language("Font family"),
                           "data-ui-label": "Font family",
                           children: [
@@ -343,10 +352,10 @@ function WorkbookRibbon(e) {
                         }),
                         i.jsx("select", {
                           "aria-label": text("Font size"),
-                          value: F.fontSize ?? 11,
+                          value: effectiveCellStyle.fontSize ?? 11,
                           disabled: k,
-                          onChange: (q) =>
-                            I({ fontSize: Number(q.target.value) }),
+                          onChange: (event) =>
+                            I({ fontSize: Number(event.target.value) }),
                           lang: language("Font size"),
                           "data-ui-label": "Font size",
                           children: Array.from(
@@ -366,7 +375,7 @@ function WorkbookRibbon(e) {
                               36,
                               48,
                               72,
-                              F.fontSize ?? 11,
+                              effectiveCellStyle.fontSize ?? 11,
                             ]),
                           )
                             .sort((q, W) => q - W)
@@ -384,7 +393,10 @@ function WorkbookRibbon(e) {
                           disabled: k,
                           onClick: () =>
                             I({
-                              fontSize: Math.min(72, (F.fontSize ?? 11) + 1),
+                              fontSize: Math.min(
+                                72,
+                                (effectiveCellStyle.fontSize ?? 11) + 1,
+                              ),
                             }),
                         }),
                       ],
@@ -395,22 +407,24 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Bold, { size: 15 }),
                           label: text("Bold (Ctrl+B)"),
-                          active: !!F.bold,
-                          onClick: () => I({ bold: !F.bold }),
+                          active: !!effectiveCellStyle.bold,
+                          onClick: () => I({ bold: !effectiveCellStyle.bold }),
                           disabled: k,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Italic, { size: 15 }),
                           label: text("Italic (Ctrl+I)"),
-                          active: !!F.italic,
-                          onClick: () => I({ italic: !F.italic }),
+                          active: !!effectiveCellStyle.italic,
+                          onClick: () =>
+                            I({ italic: !effectiveCellStyle.italic }),
                           disabled: k,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Underline, { size: 15 }),
                           label: text("Underline (Ctrl+U)"),
-                          active: !!F.underline,
-                          onClick: () => I({ underline: !F.underline }),
+                          active: !!effectiveCellStyle.underline,
+                          onClick: () =>
+                            I({ underline: !effectiveCellStyle.underline }),
                           disabled: k,
                         }),
                         i.jsx("span", { className: "xl-control-divider" }),
@@ -418,10 +432,13 @@ function WorkbookRibbon(e) {
                           className: "xl-border-select",
                           "aria-label": text("Borders"),
                           title: text("Borders"),
-                          value: F.border ?? "none",
+                          value: effectiveCellStyle.border ?? "none",
                           disabled: k,
-                          onChange: (q) =>
-                            I({ border: q.target.value, borders: undefined }),
+                          onChange: (event) =>
+                            I({
+                              border: event.target.value,
+                              borders: undefined,
+                            }),
                           lang: language("Borders"),
                           "data-ui-label": "Borders",
                           children: [
@@ -438,14 +455,14 @@ function WorkbookRibbon(e) {
                         }),
                         i.jsx(ColorPickerButton, {
                           kind: "fill",
-                          value: F.fill ?? "#FFFF00",
-                          onChange: (q) => I({ fill: q }),
+                          value: effectiveCellStyle.fill ?? "#FFFF00",
+                          onChange: (fill) => I({ fill: fill }),
                           disabled: k,
                         }),
                         i.jsx(ColorPickerButton, {
                           kind: "color",
-                          value: F.color ?? "#C00000",
-                          onChange: (q) => I({ color: q }),
+                          value: effectiveCellStyle.color ?? "#C00000",
+                          onChange: (color) => I({ color: color }),
                           disabled: k,
                         }),
                       ],
@@ -462,29 +479,29 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignLeft, { size: 16 }),
                           label: text("Align Left"),
-                          active: F.align === "left",
+                          active: effectiveCellStyle.align === "left",
                           onClick: () => I({ align: "left" }),
                           disabled: k,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignCenter, { size: 16 }),
                           label: text("Center"),
-                          active: F.align === "center",
+                          active: effectiveCellStyle.align === "center",
                           onClick: () => I({ align: "center" }),
                           disabled: k,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignRight, { size: 16 }),
                           label: text("Align Right"),
-                          active: F.align === "right",
+                          active: effectiveCellStyle.align === "right",
                           onClick: () => I({ align: "right" }),
                           disabled: k,
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(WrapText, {}),
                           label: text("Wrap Text"),
-                          active: !!F.wrap,
-                          onClick: () => I({ wrap: !F.wrap }),
+                          active: !!effectiveCellStyle.wrap,
+                          onClick: () => I({ wrap: !effectiveCellStyle.wrap }),
                           disabled: k,
                         }),
                       ],
@@ -1700,7 +1717,7 @@ function WorkbookRibbon(e) {
     N = Object.fromEntries(
       Uh.map((J) => [J, collectRibbonCommands(T(J), J, C, _)]),
     ),
-    R = collectRibbonCommands(
+    ribbonCommands = collectRibbonCommands(
       i.jsxs("div", {
         className: "xl-file-menu",
         role: "menu",
@@ -2012,7 +2029,7 @@ function WorkbookRibbon(e) {
         reason: k || !e.canRedo ? _("Redo") : undefined,
       },
     ],
-    $ = (J) => {
+    onLocate = (J) => {
       J.reason ||
         (s(false),
         (d.current = J.id),
@@ -2041,14 +2058,18 @@ function WorkbookRibbon(e) {
           q.shiftKey
         )
           return;
-        const W = q.target,
+        const target = q.target,
           K = m.current;
-        if (!(W instanceof Element) || !K || W.closest('[role="dialog"]'))
+        if (
+          !(target instanceof Element) ||
+          !K ||
+          target.closest('[role="dialog"]')
+        )
           return;
         const te = K.closest(".lg-app") ?? K;
         (te.classList.contains("lg-app")
-          ? W.closest(".lg-app") !== te
-          : !te.contains(W)) ||
+          ? target.closest(".lg-app") !== te
+          : !te.contains(target)) ||
           (q.preventDefault(), q.stopPropagation(), s(true));
       };
       return (
@@ -2062,11 +2083,11 @@ function WorkbookRibbon(e) {
           i.jsx(CommandReferenceDialog, {
             commands: [
               ...L,
-              ...R.commands,
+              ...ribbonCommands.commands,
               ...Uh.flatMap((J) => N[J].commands),
             ],
             onClose: () => s(false),
-            onLocate: $,
+            onLocate: onLocate,
           }),
         i.jsxs("div", {
           ref: m,
@@ -2100,7 +2121,9 @@ function WorkbookRibbon(e) {
                       ) {
                         if ((J.preventDefault(), !u)) {
                           l(true);
-                          const he = R.commands.find((Se) => !Se.reason);
+                          const he = ribbonCommands.commands.find(
+                            (command) => !command.reason,
+                          );
                           he && (d.current = he.id);
                           return;
                         }
@@ -2139,7 +2162,7 @@ function WorkbookRibbon(e) {
                       },
                       children: i.jsx(LocalizedText, { children: "File" }),
                     }),
-                    u && R.content,
+                    u && ribbonCommands.content,
                   ],
                 }),
                 i.jsx("div", {
@@ -2192,7 +2215,9 @@ function WorkbookRibbon(e) {
                                 document.getElementById(`${b}-${ae}`)?.focus());
                             } else if (W.key === "ArrowDown") {
                               (W.preventDefault(), A(J));
-                              const ae = N[J].commands.find((oe) => !oe.reason);
+                              const ae = N[J].commands.find(
+                                (command) => !command.reason,
+                              );
                               ae && (d.current = ae.id);
                             }
                           }

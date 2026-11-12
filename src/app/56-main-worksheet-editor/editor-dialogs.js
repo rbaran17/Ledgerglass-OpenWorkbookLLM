@@ -146,13 +146,13 @@ function EditorDialogs({
             readOnly: isEditingLocked,
             initialInspection: dialogState.automationInspection,
             onClose: fe.onClose,
-            onPreserve: (Ue) => {
-              const Xe = latestEditStateRef.current.book,
-                gt = preserveAutomationArtifact(Xe, Ue, {
+            onPreserve: (inspection) => {
+              const book = latestEditStateRef.current.book,
+                gt = preserveAutomationArtifact(book, inspection, {
                   actor,
                   readOnly: latestEditStateRef.current.readOnly,
                 });
-              (gt !== Xe && persistenceActions.commitWorkbookChange(gt),
+              (gt !== book && persistenceActions.commitWorkbookChange(gt),
                 operationStatusState.setStatusNotice(
                   "Original automation bytes preserved in native JSON. No source code was executed.",
                 ));
@@ -164,15 +164,15 @@ function EditorDialogs({
                   readOnly: latestEditStateRef.current.readOnly,
                 }),
               ),
-            onApply: (Ue, Xe, gt) => {
+            onApply: (Ue, scope, retainSource) => {
               const Nt = runApprovedMigration(
                 latestEditStateRef.current.book,
                 Ue,
                 {
                   actor,
-                  scope: Xe,
+                  scope: scope,
                   readOnly: latestEditStateRef.current.readOnly,
-                  retainSource: gt,
+                  retainSource: retainSource,
                 },
               );
               (persistenceActions.commitWorkbookChange(Nt),
@@ -294,13 +294,13 @@ function EditorDialogs({
           ).filter((Ue) => Ue.workbookId === activeWorkbook.id),
           onClose: fe.onClose,
           onWorkbookChange: navigationActions.replaceWorkbookSnapshot,
-          onCreateWorkbook: (Ue) => {
+          onCreateWorkbook: (workbook) => {
             if (readOnly) throw new Error("This workbook is read-only.");
             (saveBlobToFile(
-              new Blob([encodeNativeWorkbook(Ue)], {
+              new Blob([encodeNativeWorkbook(workbook)], {
                 type: "application/json",
               }),
-              `${Ue.name.replace(/[^a-zA-Z0-9 _.-]/g, "_")}.json`,
+              `${workbook.name.replace(/[^a-zA-Z0-9 _.-]/g, "_")}.json`,
             ),
               operationStatusState.setStatusNotice(
                 "Created an independent workbook download. The template remains open.",
@@ -309,12 +309,12 @@ function EditorDialogs({
           onCheckpoint: (Ue) => {
             if (readOnly) throw new Error("This workbook is read-only.");
             const Xe = persistenceState.persistenceSessionRef.current,
-              gt = latestEditStateRef.current.book;
+              book = latestEditStateRef.current.book;
             return chainMaybePromise(
-              persistenceActions.persistWorkbookSnapshot(gt),
+              persistenceActions.persistWorkbookSnapshot(book),
               () =>
-                persistenceActions.enqueueSaveOperation((Nt) => {
-                  if (latestEditStateRef.current.book !== gt)
+                persistenceActions.enqueueSaveOperation((signal) => {
+                  if (latestEditStateRef.current.book !== book)
                     throw new Error(
                       "The workbook changed. Save the checkpoint again for the current revision.",
                     );
@@ -322,7 +322,7 @@ function EditorDialogs({
                     workbookPersistence.checkpoint(
                       Ue,
                       persistenceState.persistedWorkbookRecordRef.current.guard,
-                      { signal: Nt },
+                      { signal: signal },
                     ),
                     (wt) => {
                       persistenceActions.acknowledgeSavedWorkbook(wt, Xe);
@@ -342,14 +342,17 @@ function EditorDialogs({
               throw new Error(
                 "Save this workbook before restoring a checkpoint.",
               );
-            const Xe = latestEditStateRef.current.book,
+            const book = latestEditStateRef.current.book,
               gt = persistenceState.persistenceSessionRef.current;
             persistenceState.saveAbortControllerRef.current?.abort();
             const Nt = new AbortController();
             return (
               (persistenceState.saveAbortControllerRef.current = Nt),
               persistenceActions.enqueueSaveOperation((jt) => {
-                if (latestEditStateRef.current.book !== Xe || Nt.signal.aborted)
+                if (
+                  latestEditStateRef.current.book !== book ||
+                  Nt.signal.aborted
+                )
                   throw new Error(
                     "The workbook changed. Compare the checkpoint again before restoring.",
                   );
@@ -362,7 +365,7 @@ function EditorDialogs({
                       !gt.active ||
                       gt !== persistenceState.persistenceSessionRef.current ||
                       Nt.signal.aborted ||
-                      latestEditStateRef.current.book !== Xe ||
+                      latestEditStateRef.current.book !== book ||
                       formulaEntryState.activeCellEditRef.current ||
                       latestEditStateRef.current.readOnly
                     )
@@ -386,7 +389,7 @@ function EditorDialogs({
                   },
                   Br = workbookPersistence.restoreCheckpoint(
                     Ue,
-                    Xe,
+                    book,
                     persistenceState.persistedWorkbookRecordRef.current.guard,
                     actor,
                     {
@@ -473,19 +476,19 @@ function EditorDialogs({
             navigationActions.replaceWorkbookSnapshot(Ue, Xe);
           },
           onClose: fe.onClose,
-          onApply: (Ue) => {
+          onApply: (definition) => {
             try {
               (applyFilterConditions(
                 activeWorkbook,
                 activeSheet.id,
-                Ue,
+                definition,
                 workbookCalculator,
               ),
                 filterSortState.setFilterStateByScope((Xe) => ({
                   ...Xe,
                   [filterStateKey]: {
                     snapshot: activeWorkbook,
-                    definition: Ue,
+                    definition: definition,
                   },
                 })),
                 filterSortState.setFilterValueSearch(""),
@@ -496,10 +499,10 @@ function EditorDialogs({
                 operationStatusState.setStatusNotice(
                   "Filter view applied. Source rows, formulas and history are unchanged.",
                 ));
-            } catch (Xe) {
+            } catch (error) {
               operationStatusState.setErrorNotice(
-                Xe instanceof Error
-                  ? Xe.message
+                error instanceof Error
+                  ? error.message
                   : "Recalculate before filtering.",
               );
             }
@@ -598,7 +601,7 @@ function EditorDialogs({
           onClose: () => {
             (importExportState.setPendingImportFile(undefined), fe.onClose());
           },
-          onWorkbookChange: (Ue) => {
+          onWorkbookChange: (workbook) => {
             if (
               latestEditStateRef.current.book !== activeWorkbook ||
               latestEditStateRef.current.readOnly
@@ -606,9 +609,9 @@ function EditorDialogs({
               throw Error(
                 "The workbook or permissions changed. Review the conversion again.",
               );
-            (persistenceActions.commitWorkbookChange(Ue),
+            (persistenceActions.commitWorkbookChange(workbook),
               navigationActions.switchActiveWorksheet(
-                Ue.sheets.find((Xe) => !Xe.hidden).id,
+                workbook.sheets.find((sheet) => !sheet.hidden).id,
               ));
           },
           onAutomation: async (Ue) => {

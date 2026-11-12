@@ -93,8 +93,8 @@ function EditorWorkbookGrid({
                 "Editing",
                 " ",
                 activeWorkbook.sheets.find(
-                  (fe) =>
-                    fe.id ===
+                  (sheet) =>
+                    sheet.id ===
                     formulaEntryState.activeCellEditRef.current?.sheetId,
                 )?.name,
                 "!",
@@ -113,7 +113,7 @@ function EditorWorkbookGrid({
               "aria-atomic": "true",
               "aria-label": "Formula reference",
               children: formulaEntryState.activeFormulaReference
-                ? `Reference: ${activeWorkbook.sheets.find((fe) => fe.id === formulaEntryState.activeFormulaReference.sheetId)?.name}!${formulaEntryState.activeFormulaReference.range}`
+                ? `Reference: ${activeWorkbook.sheets.find((sheet) => sheet.id === formulaEntryState.activeFormulaReference.sheetId)?.name}!${formulaEntryState.activeFormulaReference.range}`
                 : "Formula not yet applied",
             }),
           ],
@@ -154,9 +154,9 @@ function EditorWorkbookGrid({
                       "aria-label": `Validation dropdown for ${selectionState.activeCellAddress}`,
                       disabled: isEditingLocked,
                       value: "",
-                      onChange: (Oe) => {
-                        const Be = fe.list[Number(Oe.target.value)];
-                        Be !== undefined &&
+                      onChange: (event) => {
+                        const raw = fe.list[Number(event.target.value)];
+                        raw !== undefined &&
                           viewAndSelectionActions.runGuardedAction(() => {
                             (cellEditActions.cancelCellEdit(),
                               cellEditActions.applyCellPatches(
@@ -168,7 +168,7 @@ function EditorWorkbookGrid({
                                       ...activeSheet.cells[
                                         selectionState.activeCellAddress
                                       ],
-                                      raw: Be,
+                                      raw: raw,
                                       literal: true,
                                     },
                                   },
@@ -258,7 +258,12 @@ function EditorWorkbookGrid({
             selectionState.activeCellAddress,
             ":",
             " ",
-            activeCellNamedFormulaDiagnostics.map((fe) => fe.message).join(" "),
+            activeCellNamedFormulaDiagnostics
+              .map(
+                (activeCellNamedFormulaDiagnostic) =>
+                  activeCellNamedFormulaDiagnostic.message,
+              )
+              .join(" "),
           ],
         }),
       activeCellReferenceDiagnostics.length > 0 &&
@@ -272,7 +277,12 @@ function EditorWorkbookGrid({
             selectionState.activeCellAddress,
             ":",
             " ",
-            activeCellReferenceDiagnostics.map((fe) => fe.message).join(" "),
+            activeCellReferenceDiagnostics
+              .map(
+                (activeCellReferenceDiagnostic) =>
+                  activeCellReferenceDiagnostic.message,
+              )
+              .join(" "),
           ],
         }),
       activeCellFormulaErrors.length > 0 &&
@@ -283,7 +293,9 @@ function EditorWorkbookGrid({
             selectionState.activeCellAddress,
             ":",
             " ",
-            activeCellFormulaErrors.map((fe) => fe.message).join(" "),
+            activeCellFormulaErrors
+              .map((activeCellFormulaError) => activeCellFormulaError.message)
+              .join(" "),
             " ",
             i.jsx("button", {
               type: "button",
@@ -438,8 +450,8 @@ function EditorWorkbookGrid({
               "aria-label": text("Filter rows"),
               placeholder: text("Filter rows (first row is a header)"),
               value: filterSortState.filterValueSearch,
-              onChange: (fe) => {
-                (filterSortState.setFilterValueSearch(fe.target.value),
+              onChange: (event) => {
+                (filterSortState.setFilterValueSearch(event.target.value),
                   filterSortState.setFilterStateByScope((Oe) => {
                     const Be = { ...Oe };
                     return (delete Be[filterStateKey], Be);
@@ -481,9 +493,10 @@ function EditorWorkbookGrid({
               "aria-label": text("Find text"),
               placeholder: text("Find"),
               value: findReplaceState.findQuery,
-              onChange: (fe) => findReplaceState.setFindQuery(fe.target.value),
-              onKeyDown: (fe) => {
-                fe.key === "Enter" &&
+              onChange: (event) =>
+                findReplaceState.setFindQuery(event.target.value),
+              onKeyDown: (event) => {
+                event.key === "Enter" &&
                   clipboardAndFindActions.findNextTextMatch();
               },
               lang: language("Find text"),
@@ -499,8 +512,8 @@ function EditorWorkbookGrid({
               "aria-label": text("Replace text"),
               placeholder: text("Replace with"),
               value: findReplaceState.replaceWithText,
-              onChange: (fe) =>
-                findReplaceState.setReplaceWithText(fe.target.value),
+              onChange: (event) =>
+                findReplaceState.setReplaceWithText(event.target.value),
               lang: language("Replace text"),
               "data-ui-label": "Replace text",
             }),
@@ -568,8 +581,8 @@ function EditorWorkbookGrid({
             i.jsx(LocalizedText, { children: "Cut ready:" }),
             " ",
             activeWorkbook.sheets.find(
-              (fe) =>
-                fe.id ===
+              (sheet) =>
+                sheet.id ===
                 clipboardState.clipboardSnapshotState.snapshot.sheetId,
             )?.name ?? "Deleted worksheet",
             "!",
@@ -593,13 +606,13 @@ function EditorWorkbookGrid({
         snapshot: activeWorkbook,
         readOnly: isEditingLocked,
         active: splitPaneSizes.activeId,
-        onResize: (fe) =>
+        onResize: (splitPanes) =>
           viewAndSelectionActions.runGuardedAction(() =>
             navigationActions.commitWorkbookEdit(
               setSplitPanes(
                 latestEditStateRef.current.book,
                 activeSheet.id,
-                fe,
+                splitPanes,
               ),
               "Resize split panes",
             ),

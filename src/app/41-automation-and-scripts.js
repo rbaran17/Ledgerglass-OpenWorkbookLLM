@@ -32,14 +32,14 @@ import {
 } from "./40-what-if-and-delimited-dialogs.js";
 
 function parseVbaCommands(e) {
-  const r = [],
-    t = [],
+  const commands = [],
+    issues = [],
     n = new Map(),
     o = new Map();
   let a = false,
     s = false,
     d = false,
-    u = "";
+    entryPoint = "";
   const l = (c) => {
     let h = new RegExp(
       `^(?:ThisWorkbook\\.)?(?:Worksheets|Sheets)\\((${vbaStringLiteralPattern})\\)$`,
@@ -71,7 +71,7 @@ function parseVbaCommands(e) {
     );
   };
   for (const [c, h] of e.split(/\r\n|\n|\r/).entries()) {
-    const f = c + 1;
+    const line = c + 1;
     try {
       if (/^\s*Rem(?:\s|$)/i.test(h)) continue;
       const p = splitVbaStatements(h);
@@ -92,7 +92,7 @@ function parseVbaCommands(e) {
       if (m) {
         if (s || d)
           throw Error("Only one parameterless VBA Sub may be migrated.");
-        ((s = true), (u = m[1]));
+        ((s = true), (entryPoint = m[1]));
         continue;
       }
       if (/^End Sub$/i.test(p)) {
@@ -127,8 +127,8 @@ function parseVbaCommands(e) {
         const v = l(m[1]);
         if (v.kind !== "range")
           throw Error("Assignment requires a literal range.");
-        r.push({
-          line: f,
+        commands.push({
+          line: line,
           kind:
             m[2].toLowerCase() === "formula" ? "set-formulas" : "set-values",
           sheet: v.sheet,
@@ -140,8 +140,8 @@ function parseVbaCommands(e) {
       if (((m = /^(.+)\.ClearContents$/i.exec(p)), m)) {
         const v = l(m[1]);
         if (v.kind !== "range") throw Error("ClearContents requires a range.");
-        r.push({
-          line: f,
+        commands.push({
+          line: line,
           kind: "clear-contents",
           sheet: v.sheet,
           range: v.range,
@@ -151,23 +151,24 @@ function parseVbaCommands(e) {
       throw Error(
         "Unsupported VBA statement/API. Loops, expressions, calls, events, files, COM and external operations are not migrated.",
       );
-    } catch (p) {
-      t.push({
-        line: f,
-        message: p instanceof Error ? p.message : "Unsupported VBA source.",
+    } catch (error) {
+      issues.push({
+        line: line,
+        message:
+          error instanceof Error ? error.message : "Unsupported VBA source.",
       });
     }
   }
   return (
     (s || !d) &&
-      t.push({
+      issues.push({
         line: 1,
         message: "A complete single parameterless Sub / End Sub is required.",
       }),
-    { commands: r, issues: t, entryPoint: u }
+    { commands: commands, issues: issues, entryPoint: entryPoint }
   );
 }
-function migrateAutomationSource(e, r) {
+function migrateAutomationSource(e, language) {
   if (
     typeof e != "string" ||
     new TextEncoder().encode(e).length > automationLimits.maxSourceBytes ||
@@ -176,34 +177,44 @@ function migrateAutomationSource(e, r) {
     throw Error(
       "Migration source must be UTF-8 text of at most 256 KiB without nulls.",
     );
-  if (!["vba", "office-script"].includes(r))
+  if (!["vba", "office-script"].includes(language))
     throw Error("Unsupported automation language.");
-  let t = [],
-    n = [],
-    o = r === "office-script" ? "main" : "";
+  let commands = [],
+    issues = [],
+    entryPoint = language === "office-script" ? "main" : "";
   try {
-    if (r === "vba")
-      ({ commands: t, issues: n, entryPoint: o } = parseVbaCommands(e));
+    if (language === "vba")
+      ({
+        commands: commands,
+        issues: issues,
+        entryPoint: entryPoint,
+      } = parseVbaCommands(e));
     else {
       const a = new VbaAssignmentParser(tokenizeVbaSource(e));
-      (a.parse(), (t = a.commands), (n = a.issues));
+      (a.parse(), (commands = a.commands), (issues = a.issues));
     }
-  } catch (a) {
-    n.push(createVbaSyntaxError(a));
+  } catch (error) {
+    issues.push(createVbaSyntaxError(error));
   }
   return (
-    t.length > automationLimits.maxCommands &&
-      n.push({ line: 1, message: "Migration is limited to 100 commands." }),
-    t.length ||
-      n.push({ line: 1, message: "No supported range commands were found." }),
+    commands.length > automationLimits.maxCommands &&
+      issues.push({
+        line: 1,
+        message: "Migration is limited to 100 commands.",
+      }),
+    commands.length ||
+      issues.push({
+        line: 1,
+        message: "No supported range commands were found.",
+      }),
     {
       adapter: "literal-ranges-v1",
-      language: r,
+      language: language,
       codeSha256: sha256HexDigest(new TextEncoder().encode(e)),
-      supported: !n.length,
-      entryPoint: o,
-      commands: t,
-      issues: n,
+      supported: !issues.length,
+      entryPoint: entryPoint,
+      commands: commands,
+      issues: issues,
       warnings: [
         "This is a strict migration adapter, not a VBA/JavaScript runtime. Unsupported statements block the entire script; no partial execution occurs.",
         "Only literal range values, explicit formulas and ClearContents are supported. One approved worksheet/range is the read/write scope, up to 100 commands and 500 touched cells. Source events never become automatic triggers.",
@@ -214,20 +225,21 @@ function migrateAutomationSource(e, r) {
 }
 const compiledMigrationCache = new WeakMap(),
   validateAutomationScope = (e) => {
-    const r = parseRangeAddress(e.range);
+    const rangeAddress = parseRangeAddress(e.range);
     if (
-      (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1) >
+      (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+        (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       automationLimits.maxCells
     )
       throw Error("Approve one rectangular scope of at most 500 cells.");
     return {
       sheetId: e.sheetId,
-      range: `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`,
+      range: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`,
     };
   };
-function assertAutomationSheetAllowed(e, r, t = false) {
-  if (t) throw Error("This workbook is read-only.");
-  const n = e.sheets.find((a) => a.id === r.sheetId);
+function assertAutomationSheetAllowed(workbookInput, scope, readOnly = false) {
+  if (readOnly) throw Error("This workbook is read-only.");
+  const n = workbookInput.sheets.find((sheet) => sheet.id === scope.sheetId);
   if (!n) throw Error("The approved worksheet does not exist.");
   if (n.hidden || n.veryHidden)
     throw Error("Hidden worksheets are outside the automation scope.");
@@ -236,33 +248,46 @@ function assertAutomationSheetAllowed(e, r, t = false) {
   return n;
 }
 const toApprovedRectangle = (e) => {
-  const r = parseRangeAddress(e.range),
+  const rangeAddress = parseRangeAddress(e.range),
     t = new Set();
-  for (let n = r.firstRow; n <= r.lastRow; n++)
-    for (let o = r.firstCol; o <= r.lastCol; o++)
-      t.add(`${columnIndexToLetters(o)}${n + 1}`);
+  for (
+    let firstRow = rangeAddress.firstRow;
+    firstRow <= rangeAddress.lastRow;
+    firstRow++
+  )
+    for (
+      let firstCol = rangeAddress.firstCol;
+      firstCol <= rangeAddress.lastCol;
+      firstCol++
+    )
+      t.add(`${columnIndexToLetters(firstCol)}${firstRow + 1}`);
   return t;
 };
-function buildAutomationChanges(e, r, t, n = {}) {
-  if ((verifyAutomationInspection(r), !r.script))
+function buildAutomationChanges(workbook, inspection, t, n = {}) {
+  if ((verifyAutomationInspection(inspection), !inspection.script))
     throw Error(
       "This artifact supports inventory only. Export/import UTF-8 VBA or Office Scripts source for migration.",
     );
-  const o = normalizeWorkbookInput(e),
-    a = validateAutomationScope(t),
-    s = assertAutomationSheetAllowed(o, a, n.readOnly),
-    d = toApprovedRectangle(a),
-    u = migrateAutomationSource(r.script.text, r.script.language),
+  const workbookInput = normalizeWorkbookInput(workbook),
+    scope = validateAutomationScope(t),
+    s = assertAutomationSheetAllowed(workbookInput, scope, n.readOnly),
+    approvedRectangle = toApprovedRectangle(scope),
+    compatibility = migrateAutomationSource(
+      inspection.script.text,
+      inspection.script.language,
+    ),
     l = {
       schemaVersion: 1,
-      workbookId: o.id,
-      revision: o.revision,
-      sourceName: r.fileName,
-      sourceSha256: r.sha256,
-      compatibility: u,
-      scope: a,
+      workbookId: workbookInput.id,
+      revision: workbookInput.revision,
+      sourceName: inspection.fileName,
+      sourceSha256: inspection.sha256,
+      compatibility: compatibility,
+      scope: scope,
       valid: false,
-      issues: u.issues.map((m) => `Line ${m.line}: ${m.message}`),
+      issues: compatibility.issues.map(
+        (issue) => `Line ${issue.line}: ${issue.message}`,
+      ),
       touchedCells: 0,
       changes: [],
       capabilities: [
@@ -274,25 +299,25 @@ function buildAutomationChanges(e, r, t, n = {}) {
       ],
     },
     c = new Map();
-  if (u.supported)
-    for (const m of u.commands)
+  if (compatibility.supported)
+    for (const command of compatibility.commands)
       try {
         if (
-          m.sheet !== undefined &&
-          m.sheet.toLowerCase() !== s.name.toLowerCase()
+          command.sheet !== undefined &&
+          command.sheet.toLowerCase() !== s.name.toLowerCase()
         )
           throw Error(
-            `Worksheet ${m.sheet} is outside the approved sheet ${s.name}.`,
+            `Worksheet ${command.sheet} is outside the approved sheet ${s.name}.`,
           );
-        const v = parseRangeAddress(m.range),
-          g = v.lastRow - v.firstRow + 1,
-          b = v.lastCol - v.firstCol + 1,
+        const rangeAddress = parseRangeAddress(command.range),
+          g = rangeAddress.lastRow - rangeAddress.firstRow + 1,
+          b = rangeAddress.lastCol - rangeAddress.firstCol + 1,
           y = g * b;
         if (((l.touchedCells += y), l.touchedCells > automationLimits.maxCells))
           throw Error(
             "Migration exceeds 500 touched cells across all commands.",
           );
-        const w = Array.isArray(m.values) ? m.values : undefined;
+        const w = Array.isArray(command.values) ? command.values : undefined;
         if (
           w &&
           (w.length !== g || w.some((E) => !Array.isArray(E) || E.length !== b))
@@ -300,82 +325,101 @@ function buildAutomationChanges(e, r, t, n = {}) {
           throw Error(
             "The literal matrix dimensions do not match the target range.",
           );
-        if (m.kind === "set-formulas" && !w && y !== 1)
+        if (command.kind === "set-formulas" && !w && y !== 1)
           throw Error(
             "Scalar formula migration requires one cell; use explicit setFormulas matrices for multiple cells.",
           );
-        for (let E = v.firstRow; E <= v.lastRow; E++)
-          for (let A = v.firstCol; A <= v.lastCol; A++) {
-            const k = `${columnIndexToLetters(A)}${E + 1}`;
-            if (!d.has(k))
+        for (
+          let firstRow = rangeAddress.firstRow;
+          firstRow <= rangeAddress.lastRow;
+          firstRow++
+        )
+          for (
+            let firstCol = rangeAddress.firstCol;
+            firstCol <= rangeAddress.lastCol;
+            firstCol++
+          ) {
+            const address = `${columnIndexToLetters(firstCol)}${firstRow + 1}`;
+            if (!approvedRectangle.has(address))
               throw Error(
-                `Target ${k} is outside the approved range ${a.range}.`,
+                `Target ${address} is outside the approved range ${scope.range}.`,
               );
-            const F =
-              m.kind === "clear-contents"
+            const raw =
+              command.kind === "clear-contents"
                 ? null
                 : w
-                  ? w[E - v.firstRow][A - v.firstCol]
-                  : m.values;
-            if (m.kind === "set-values" && F === null)
+                  ? w[firstRow - rangeAddress.firstRow][
+                      firstCol - rangeAddress.firstCol
+                    ]
+                  : command.values;
+            if (command.kind === "set-values" && raw === null)
               throw Error(
                 "Null setValue semantics are not migrated. Use an explicit ClearContents command.",
               );
             if (
-              m.kind === "set-values" &&
-              typeof F == "string" &&
-              /^[\s\u0000-\u001f]*[=+\-@＝＋－＠]/u.test(F)
+              command.kind === "set-values" &&
+              typeof raw == "string" &&
+              /^[\s\u0000-\u001f]*[=+\-@＝＋－＠]/u.test(raw)
             )
               throw Error(
                 "Formula-like value assignment has different Excel semantics. Use an explicit setFormula / .Formula statement or change the reviewed source.",
               );
-            const I = c.get(k)?.cell ?? s.cells[k],
-              O = { ...I, raw: F };
-            if ((delete O.literal, m.kind === "set-formulas")) {
-              if (typeof F != "string" || !F.startsWith("="))
+            const I = c.get(address)?.cell ?? s.cells[address],
+              cell = { ...I, raw: raw };
+            if ((delete cell.literal, command.kind === "set-formulas")) {
+              if (typeof raw != "string" || !raw.startsWith("="))
                 throw Error(
                   "Formula commands require explicit A1 formulas beginning with =.",
                 );
-              validateAssistantFormula(F, d);
+              validateAssistantFormula(raw, approvedRectangle);
             }
-            c.set(k, { sheetId: s.id, address: k, cell: O });
+            c.set(address, { sheetId: s.id, address: address, cell: cell });
           }
-      } catch (v) {
+      } catch (error) {
         l.issues.push(
-          `Line ${m.line}: ${v instanceof Error ? v.message : "Migration validation failed."}`,
+          `Line ${command.line}: ${error instanceof Error ? error.message : "Migration validation failed."}`,
         );
       }
-  const h = [...c.values()];
+  const patches = [...c.values()];
   if (!l.issues.length)
     try {
       const m = applyCellPatchTransaction(
-          o,
-          h,
+          workbookInput,
+          patches,
           "Migration preview",
           "Preview migrated automation",
         ),
         v = m.events.at(-1)?.changes ?? [],
-        g = calculateWorkbookWithSettings(m);
-      for (const b of h) {
-        if (typeof b.cell.raw != "string" || !b.cell.raw.startsWith("="))
+        workbookWithSettings = calculateWorkbookWithSettings(m);
+      for (const patch of patches) {
+        if (
+          typeof patch.cell.raw != "string" ||
+          !patch.cell.raw.startsWith("=")
+        )
           continue;
         if (
-          (g(s.id, b.address),
-          g.getOperationalErrors().length || g.getReferenceDiagnostics().length)
+          (workbookWithSettings(s.id, patch.address),
+          workbookWithSettings.getOperationalErrors().length ||
+            workbookWithSettings.getReferenceDiagnostics().length)
         )
           throw Error(
             "A migrated formula has invalid syntax, a circular reference, an unsupported reference or a calculation-limit failure.",
           );
-        const y = g.getSpillRange(s.id, b.address);
+        const y = workbookWithSettings.getSpillRange(s.id, patch.address);
         if (
-          g.getSpillDiagnostic(s.id, b.address) ||
-          (y && y !== `${b.address}:${b.address}`)
+          workbookWithSettings.getSpillDiagnostic(s.id, patch.address) ||
+          (y && y !== `${patch.address}:${patch.address}`)
         )
           throw Error(
             "Array-spilling formula migration is unsupported. Use explicit scalar formulas so every write is reviewable.",
           );
       }
-      if (v.some((b) => b.sheetId !== a.sheetId || !d.has(b.address)))
+      if (
+        v.some(
+          (b) =>
+            b.sheetId !== scope.sheetId || !approvedRectangle.has(b.address),
+        )
+      )
         throw Error(
           "A dependent table/header rewrite would leave the approved scope. Migrate a separate range instead.",
         );
@@ -386,79 +430,90 @@ function buildAutomationChanges(e, r, t, n = {}) {
         after: b.after,
       }))),
         (l.valid = true));
-    } catch (m) {
+    } catch (error) {
       l.issues.push(
-        m instanceof Error ? m.message : "Workbook validation failed.",
+        error instanceof Error ? error.message : "Workbook validation failed.",
       );
     }
   return (
     compiledMigrationCache.set(l, {
       signature: JSON.stringify(l),
-      snapshot: JSON.stringify(e),
-      inspection: r,
-      patches: h,
+      snapshot: JSON.stringify(workbook),
+      inspection: inspection,
+      patches: patches,
     }),
     l
   );
 }
-function findAutomationArtifact(e, r) {
-  return e.automationArtifacts?.some(
-    (n) => n.sha256 === r.sha256 && n.fileName === r.fileName,
+function findAutomationArtifact(book, r) {
+  return book.automationArtifacts?.some(
+    (automationArtifact) =>
+      automationArtifact.sha256 === r.sha256 &&
+      automationArtifact.fileName === r.fileName,
   )
-    ? e
+    ? book
     : normalizeWorkbookInput({
-        ...e,
-        automationArtifacts: [...(e.automationArtifacts ?? []), r],
+        ...book,
+        automationArtifacts: [...(book.automationArtifacts ?? []), r],
       });
 }
-function preserveAutomationArtifact(e, r, t) {
+function preserveAutomationArtifact(book, inspection, t) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  const n = findAutomationArtifact(e, retainSourceArtifact(r, t.actor));
-  return n === e
-    ? e
+  const automationArtifact = findAutomationArtifact(
+    book,
+    retainSourceArtifact(inspection, t.actor),
+  );
+  return automationArtifact === book
+    ? book
     : applyWorkbookChange(
-        e,
-        n,
+        book,
+        automationArtifact,
         t.actor,
-        `Preserve automation source: ${r.fileName.slice(0, 100)}`,
+        `Preserve automation source: ${inspection.fileName.slice(0, 100)}`,
       );
 }
-function removeAutomationArtifact(e, r, t) {
+function removeAutomationArtifact(book, r, t) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (!e.automationArtifacts?.some((o) => o.id === r))
+  if (
+    !book.automationArtifacts?.some(
+      (automationArtifact) => automationArtifact.id === r,
+    )
+  )
     throw Error("Automation artifact was not found.");
   return applyWorkbookChange(
-    e,
+    book,
     {
-      ...e,
-      automationArtifacts: e.automationArtifacts.filter((o) => o.id !== r),
+      ...book,
+      automationArtifacts: book.automationArtifacts.filter(
+        (automationArtifact) => automationArtifact.id !== r,
+      ),
     },
     t.actor,
     "Remove preserved automation artifact",
   );
 }
-function runApprovedMigration(e, r, t) {
+function runApprovedMigration(book, r, t) {
   const n = compiledMigrationCache.get(r);
   if (!n || n.signature !== JSON.stringify(r) || !r.valid)
     throw Error(
       "The migration plan is invalid, modified or untrusted. Create and review a fresh plan.",
     );
-  if (JSON.stringify(e) !== n.snapshot)
+  if (JSON.stringify(book) !== n.snapshot)
     throw Error("The workbook changed. Review a fresh migration plan.");
   if (
     JSON.stringify(validateAutomationScope(t.scope)) !== JSON.stringify(r.scope)
   )
     throw Error("The approved automation scope changed. Review again.");
   if (
-    (assertAutomationSheetAllowed(e, r.scope, t.readOnly),
+    (assertAutomationSheetAllowed(book, r.scope, t.readOnly),
     verifyAutomationInspection(n.inspection),
-    (e.automationRuns?.length ?? 0) >= automationLimits.maxRuns)
+    (book.automationRuns?.length ?? 0) >= automationLimits.maxRuns)
   )
     throw Error(
       "Automation run evidence is full (100 runs). Export native JSON before continuing.",
     );
   let o = applyCellPatchTransaction(
-    e,
+    book,
     n.patches,
     t.actor,
     `Run migrated ${r.compatibility.language}: ${r.sourceName.slice(0, 90)} · ${r.sourceSha256.slice(0, 12)}`,
@@ -479,18 +534,18 @@ function runApprovedMigration(e, r, t) {
       adapter: "literal-ranges-v1",
       actor: a.actor,
       timestamp: a.timestamp,
-      beforeRevision: e.revision,
+      beforeRevision: book.revision,
       afterRevision: o.revision,
       sheetId: r.scope.sheetId,
       range: r.scope.range,
       commands: r.compatibility.commands.length,
       changedCells: r.changes.length,
-      sourceLines: r.compatibility.commands.map((u) => u.line),
+      sourceLines: r.compatibility.commands.map((command) => command.line),
     };
   return (
     (o = normalizeWorkbookInput({
       ...o,
-      automationRuns: [...(e.automationRuns ?? []), s],
+      automationRuns: [...(book.automationRuns ?? []), s],
     })),
     compiledMigrationCache.delete(r),
     o
@@ -498,7 +553,7 @@ function runApprovedMigration(e, r, t) {
 }
 function AutomationScriptsDialog(e) {
   const { text, language } = useWorkbookMessages(),
-    n = useOperationScope(),
+    operationScope = useOperationScope(),
     o = ne.useRef(null),
     a = ne.useId(),
     s = ne.useRef(null),
@@ -506,8 +561,8 @@ function AutomationScriptsDialog(e) {
     u = ne.useRef(0),
     l = ne.useRef(e);
   l.current = e;
-  const [c, h] = ne.useState(e.initialInspection ?? null),
-    [f, p] = ne.useState(null),
+  const [inspection, h] = ne.useState(e.initialInspection ?? null),
+    [plan, p] = ne.useState(null),
     [m, v] = ne.useState(`function main(workbook: ExcelScript.Workbook) {
   const sheet = workbook.getActiveWorksheet();
   sheet.getRange("B2").setValue(125);
@@ -515,21 +570,24 @@ function AutomationScriptsDialog(e) {
 }`),
     [g, b] = ne.useState("office-script"),
     [y, w] = ne.useState("Reviewed-script.ts"),
-    [E, A] = ne.useState(e.sheetId),
-    [k, F] = ne.useState(e.range),
+    [sheetId, A] = ne.useState(e.sheetId),
+    [range, F] = ne.useState(e.range),
     [I, O] = ne.useState(""),
-    [j, z] = ne.useState(false),
-    [V, D] = ne.useState(false),
+    [disabled, z] = ne.useState(false),
+    [checked, D] = ne.useState(false),
     [B, _] = ne.useState(true),
     [C, T] = ne.useState(""),
-    N = ne.useMemo(
+    compatibility = ne.useMemo(
       () =>
-        c?.script
-          ? migrateAutomationSource(c.script.text, c.script.language)
+        inspection?.script
+          ? migrateAutomationSource(
+              inspection.script.text,
+              inspection.script.language,
+            )
           : null,
-      [c],
+      [inspection],
     ),
-    R = { sheetId: E, range: k },
+    R = { sheetId: sheetId, range: range },
     L = () => {
       (p(null), D(false), O(""));
     },
@@ -537,11 +595,13 @@ function AutomationScriptsDialog(e) {
       (o.current?.abort(), u.current++, z(false));
     };
   (ne.useEffect(() => {
-    const q = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       s.current?.focus(),
       () => {
-        (o.current?.abort(), u.current++, q?.isConnected && q.focus());
+        (o.current?.abort(),
+          u.current++,
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -551,8 +611,8 @@ function AutomationScriptsDialog(e) {
   const U = (q) => {
     try {
       (O(""), q());
-    } catch (W) {
-      O(W instanceof Error ? W.message : "Automation review failed.");
+    } catch (error) {
+      O(error instanceof Error ? error.message : "Automation review failed.");
     }
   };
   async function G(q) {
@@ -566,21 +626,31 @@ function AutomationScriptsDialog(e) {
       if (q.size > 10 * 1024 * 1024)
         throw Error("Automation files must be 10 MB or smaller.");
       const ae = await importAutomationFile(q, {
-        ...n,
-        signal: n.signal ? AbortSignal.any([W.signal, n.signal]) : W.signal,
+        ...operationScope,
+        signal: operationScope.signal
+          ? AbortSignal.any([W.signal, operationScope.signal])
+          : W.signal,
       });
       if (K !== u.current) return;
       (h(ae), T(""), p(null), D(false));
-    } catch (ae) {
+    } catch (error) {
       if (K !== u.current) return;
-      O(ae instanceof Error ? ae.message : "Unable to inspect automation.");
+      O(
+        error instanceof Error
+          ? error.message
+          : "Unable to inspect automation.",
+      );
     } finally {
       K === u.current && (z(false), d.current && (d.current.value = ""));
     }
   }
   const H = () =>
     new TextEncoder().encode(
-      JSON.stringify({ inspection: c, compatibility: N, plan: f }, null, 2),
+      JSON.stringify(
+        { inspection: inspection, compatibility: compatibility, plan: plan },
+        null,
+        2,
+      ),
     );
   return i.jsx("div", {
     className: "lg-automation-overlay",
@@ -591,11 +661,11 @@ function AutomationScriptsDialog(e) {
       "aria-labelledby": a,
       tabIndex: -1,
       ref: s,
-      onKeyDown: (q) => {
+      onKeyDown: (event) => {
         if (
-          (q.stopPropagation(),
-          q.key === "Escape" && (q.preventDefault(), e.onClose()),
-          q.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const K = [
               ...(s.current?.querySelectorAll(
@@ -604,13 +674,13 @@ function AutomationScriptsDialog(e) {
             ],
             te = K[0],
             ae = K.at(-1);
-          q.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === te ||
             document.activeElement === s.current)
-            ? (q.preventDefault(), ae == null || ae.focus())
-            : !q.shiftKey &&
+            ? (event.preventDefault(), ae == null || ae.focus())
+            : !event.shiftKey &&
               document.activeElement === ae &&
-              (q.preventDefault(), te == null || te.focus());
+              (event.preventDefault(), te == null || te.focus());
         }
       },
       children: [
@@ -650,7 +720,7 @@ function AutomationScriptsDialog(e) {
               className: "lg-automation-actions",
               children: [
                 i.jsx("button", {
-                  disabled: j,
+                  disabled: disabled,
                   onClick: () => d.current?.click(),
                   children: i.jsx(LocalizedText, {
                     children: "Inspect automation file",
@@ -663,7 +733,7 @@ function AutomationScriptsDialog(e) {
                   "aria-label": text("Automation source file"),
                   accept:
                     ".bas,.vba,.cls,.ts,.osts,.xlsm,.xlam,.xltm,.xlsx,.xltx,.xls,.xlsb",
-                  onChange: (q) => void G(q.target.files?.[0]),
+                  onChange: (event) => void G(event.target.files?.[0]),
                   lang: language("Automation source file"),
                   "data-ui-label": "Automation source file",
                 }),
@@ -672,11 +742,12 @@ function AutomationScriptsDialog(e) {
                     i.jsx(LocalizedText, { children: "Preserved source" }),
                     i.jsxs("select", {
                       value: C,
-                      onChange: (q) =>
+                      onChange: (event) =>
                         U(() => {
-                          ($(), T(q.target.value));
+                          ($(), T(event.target.value));
                           const W = e.workbook.automationArtifacts?.find(
-                            (te) => te.id === q.target.value,
+                            (automationArtifact) =>
+                              automationArtifact.id === event.target.value,
                           );
                           W &&
                             (G(
@@ -692,19 +763,20 @@ function AutomationScriptsDialog(e) {
                           value: "",
                           children: "Select an artifact",
                         }),
-                        e.workbook.automationArtifacts?.map((q) =>
-                          i.jsxs(
-                            "option",
-                            {
-                              value: q.id,
-                              children: [
-                                q.fileName,
-                                " · ",
-                                q.sha256.slice(0, 12),
-                              ],
-                            },
-                            q.id,
-                          ),
+                        e.workbook.automationArtifacts?.map(
+                          (automationArtifact) =>
+                            i.jsxs(
+                              "option",
+                              {
+                                value: automationArtifact.id,
+                                children: [
+                                  automationArtifact.fileName,
+                                  " · ",
+                                  automationArtifact.sha256.slice(0, 12),
+                                ],
+                              },
+                              automationArtifact.id,
+                            ),
                         ),
                       ],
                     }),
@@ -737,11 +809,11 @@ function AutomationScriptsDialog(e) {
                         i.jsx(LocalizedText, { children: "Source language" }),
                         i.jsxs("select", {
                           value: g,
-                          onChange: (q) => {
+                          onChange: (event) => {
                             ($(),
-                              b(q.target.value),
+                              b(event.target.value),
                               w(
-                                q.target.value === "vba"
+                                event.target.value === "vba"
                                   ? "Reviewed-module.bas"
                                   : "Reviewed-script.ts",
                               ),
@@ -766,8 +838,8 @@ function AutomationScriptsDialog(e) {
                         i.jsx(LocalizedText, { children: "Source file name" }),
                         i.jsx("input", {
                           value: y,
-                          onChange: (q) => {
-                            ($(), w(q.target.value), L(), h(null));
+                          onChange: (event) => {
+                            ($(), w(event.target.value), L(), h(null));
                           },
                         }),
                       ],
@@ -781,8 +853,8 @@ function AutomationScriptsDialog(e) {
                       spellCheck: false,
                       rows: 8,
                       value: m,
-                      onChange: (q) => {
-                        ($(), v(q.target.value), L(), h(null));
+                      onChange: (event) => {
+                        ($(), v(event.target.value), L(), h(null));
                       },
                     }),
                   ],
@@ -806,14 +878,14 @@ function AutomationScriptsDialog(e) {
                 }),
               ],
             }),
-            j &&
+            disabled &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
                   children: "Inspecting source bytes…",
                 }),
               }),
-            c &&
+            inspection &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
@@ -823,14 +895,14 @@ function AutomationScriptsDialog(e) {
                   }),
                   i.jsxs("p", {
                     children: [
-                      i.jsx("strong", { children: c.fileName }),
+                      i.jsx("strong", { children: inspection.fileName }),
                       " ·",
                       " ",
-                      (c.fileBytes / 1024).toFixed(1),
+                      (inspection.fileBytes / 1024).toFixed(1),
                       " ",
                       i.jsx(LocalizedText, { children: "KiB ·" }),
                       " ",
-                      c.execution === "inventory-only"
+                      inspection.execution === "inventory-only"
                         ? "Inventory only — execution unsupported"
                         : "Migration candidate — compatibility and approval required",
                     ],
@@ -839,7 +911,7 @@ function AutomationScriptsDialog(e) {
                     className: "lg-automation-hash",
                     children: [
                       i.jsx(LocalizedText, { children: "SHA-256: " }),
-                      c.sha256,
+                      inspection.sha256,
                     ],
                   }),
                   i.jsxs("table", {
@@ -874,15 +946,15 @@ function AutomationScriptsDialog(e) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: c.items.map((q, W) =>
+                        children: inspection.items.map((item, W) =>
                           i.jsxs(
                             "tr",
                             {
                               children: [
-                                i.jsx("td", { children: q.path }),
-                                i.jsx("td", { children: q.kind }),
-                                i.jsx("td", { children: q.execution }),
-                                i.jsx("td", { children: q.note }),
+                                i.jsx("td", { children: item.path }),
+                                i.jsx("td", { children: item.kind }),
+                                i.jsx("td", { children: item.execution }),
+                                i.jsx("td", { children: item.note }),
                               ],
                             },
                             W,
@@ -891,7 +963,7 @@ function AutomationScriptsDialog(e) {
                       }),
                     ],
                   }),
-                  !c.items.length &&
+                  !inspection.items.length &&
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
                         children:
@@ -899,18 +971,18 @@ function AutomationScriptsDialog(e) {
                       }),
                     }),
                   i.jsx("ul", {
-                    children: c.warnings.map((q, W) =>
-                      i.jsx("li", { children: q }, W),
+                    children: inspection.warnings.map((warning, W) =>
+                      i.jsx("li", { children: warning }, W),
                     ),
                   }),
                   i.jsxs("div", {
                     className: "lg-automation-actions",
                     children: [
                       i.jsx("button", {
-                        disabled: e.readOnly || !c.retainedEligible,
+                        disabled: e.readOnly || !inspection.retainedEligible,
                         onClick: () =>
                           U(() => {
-                            (e.onPreserve(c), p(null), D(false));
+                            (e.onPreserve(inspection), p(null), D(false));
                           }),
                         children: i.jsx(LocalizedText, {
                           children: "Preserve original source",
@@ -921,9 +993,11 @@ function AutomationScriptsDialog(e) {
                           U(() => {
                             const q =
                               l.current.workbook.automationArtifacts?.find(
-                                (K) =>
-                                  K.sha256 === c.sha256 &&
-                                  K.fileName === c.fileName,
+                                (automationArtifact) =>
+                                  automationArtifact.sha256 ===
+                                    inspection.sha256 &&
+                                  automationArtifact.fileName ===
+                                    inspection.fileName,
                               );
                             if (!q)
                               throw Error(
@@ -940,7 +1014,7 @@ function AutomationScriptsDialog(e) {
                       }),
                     ],
                   }),
-                  N &&
+                  compatibility &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("h3", {
@@ -950,16 +1024,16 @@ function AutomationScriptsDialog(e) {
                         }),
                         i.jsxs("p", {
                           children: [
-                            N.supported
+                            compatibility.supported
                               ? "Supported source grammar; workbook scope checks still required."
                               : "Unsupported source — migration blocked.",
                             " ",
                             i.jsx(LocalizedText, { children: "Entry point:" }),
                             " ",
-                            N.entryPoint || "(not identified)",
+                            compatibility.entryPoint || "(not identified)",
                             ".",
                             " ",
-                            N.commands.length,
+                            compatibility.commands.length,
                             " ",
                             i.jsx(LocalizedText, {
                               children: "recognized commands.",
@@ -970,15 +1044,15 @@ function AutomationScriptsDialog(e) {
                           "aria-label": text("Source compatibility issues"),
                           lang: language("Source compatibility issues"),
                           "data-ui-label": "Source compatibility issues",
-                          children: N.issues.map((q, W) =>
+                          children: compatibility.issues.map((issue, W) =>
                             i.jsxs(
                               "li",
                               {
                                 children: [
                                   i.jsx(LocalizedText, { children: "Line " }),
-                                  q.line,
+                                  issue.line,
                                   ": ",
-                                  q.message,
+                                  issue.message,
                                 ],
                               },
                               W,
@@ -986,8 +1060,8 @@ function AutomationScriptsDialog(e) {
                           ),
                         }),
                         i.jsx("ul", {
-                          children: N.warnings.map((q, W) =>
-                            i.jsx("li", { children: q }, W),
+                          children: compatibility.warnings.map((warning, W) =>
+                            i.jsx("li", { children: warning }, W),
                           ),
                         }),
                         i.jsxs("details", {
@@ -998,7 +1072,7 @@ function AutomationScriptsDialog(e) {
                               }),
                             }),
                             i.jsx("pre", {
-                              children: c.script?.text,
+                              children: inspection.script?.text,
                             }),
                           ],
                         }),
@@ -1011,12 +1085,15 @@ function AutomationScriptsDialog(e) {
                                   children: "Approved worksheet",
                                 }),
                                 i.jsx("select", {
-                                  value: E,
-                                  onChange: (q) => {
-                                    (A(q.target.value), L());
+                                  value: sheetId,
+                                  onChange: (event) => {
+                                    (A(event.target.value), L());
                                   },
                                   children: e.workbook.sheets
-                                    .filter((q) => !q.hidden && !q.veryHidden)
+                                    .filter(
+                                      (sheet) =>
+                                        !sheet.hidden && !sheet.veryHidden,
+                                    )
                                     .map((q) =>
                                       i.jsx(
                                         "option",
@@ -1034,9 +1111,9 @@ function AutomationScriptsDialog(e) {
                                     "Approved range (maximum 500 cells)",
                                 }),
                                 i.jsx("input", {
-                                  value: k,
-                                  onChange: (q) => {
-                                    (F(q.target.value), L());
+                                  value: range,
+                                  onChange: (event) => {
+                                    (F(event.target.value), L());
                                   },
                                 }),
                               ],
@@ -1044,14 +1121,19 @@ function AutomationScriptsDialog(e) {
                           ],
                         }),
                         i.jsx("button", {
-                          disabled: e.readOnly || !N.supported,
+                          disabled: e.readOnly || !compatibility.supported,
                           onClick: () =>
                             U(() => {
                               (D(false),
                                 p(
-                                  buildAutomationChanges(e.workbook, c, R, {
-                                    readOnly: e.readOnly,
-                                  }),
+                                  buildAutomationChanges(
+                                    e.workbook,
+                                    inspection,
+                                    R,
+                                    {
+                                      readOnly: e.readOnly,
+                                    },
+                                  ),
                                 ));
                             }),
                           children: i.jsx(LocalizedText, {
@@ -1062,7 +1144,7 @@ function AutomationScriptsDialog(e) {
                     }),
                 ],
               }),
-            f &&
+            plan &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
@@ -1072,33 +1154,33 @@ function AutomationScriptsDialog(e) {
                   }),
                   i.jsxs("p", {
                     children: [
-                      f.compatibility.commands.length,
+                      plan.compatibility.commands.length,
                       " ",
                       i.jsx(LocalizedText, { children: "commands ·" }),
                       " ",
-                      f.touchedCells,
+                      plan.touchedCells,
                       " ",
                       i.jsx(LocalizedText, { children: "touched cells · " }),
-                      f.changes.length,
+                      plan.changes.length,
                       " ",
                       i.jsx(LocalizedText, {
                         children: "final cell writes · revision ",
                       }),
-                      f.revision,
+                      plan.revision,
                       ".",
                     ],
                   }),
                   i.jsx("ul", {
-                    children: f.capabilities.map((q) =>
-                      i.jsx("li", { children: q }, q),
+                    children: plan.capabilities.map((capability) =>
+                      i.jsx("li", { children: capability }, capability),
                     ),
                   }),
-                  !!f.issues.length &&
+                  !!plan.issues.length &&
                     i.jsx("div", {
                       role: "alert",
                       children: i.jsx("ul", {
-                        children: f.issues.map((q, W) =>
-                          i.jsx("li", { children: q }, W),
+                        children: plan.issues.map((issue, W) =>
+                          i.jsx("li", { children: issue }, W),
                         ),
                       }),
                     }),
@@ -1129,24 +1211,25 @@ function AutomationScriptsDialog(e) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: f.compatibility.commands.map((q, W) =>
-                          i.jsxs(
-                            "tr",
-                            {
-                              children: [
-                                i.jsx("td", { children: q.line }),
-                                i.jsx("td", { children: q.kind }),
-                                i.jsxs("td", {
-                                  children: [
-                                    q.sheet ?? "(approved worksheet)",
-                                    "!",
-                                    q.range,
-                                  ],
-                                }),
-                              ],
-                            },
-                            W,
-                          ),
+                        children: plan.compatibility.commands.map(
+                          (command, W) =>
+                            i.jsxs(
+                              "tr",
+                              {
+                                children: [
+                                  i.jsx("td", { children: command.line }),
+                                  i.jsx("td", { children: command.kind }),
+                                  i.jsxs("td", {
+                                    children: [
+                                      command.sheet ?? "(approved worksheet)",
+                                      "!",
+                                      command.range,
+                                    ],
+                                  }),
+                                ],
+                              },
+                              W,
+                            ),
                         ),
                       }),
                     ],
@@ -1178,21 +1261,25 @@ function AutomationScriptsDialog(e) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: f.changes.map((q) =>
+                        children: plan.changes.map((change) =>
                           i.jsxs(
                             "tr",
                             {
                               children: [
-                                i.jsx("td", { children: q.address }),
+                                i.jsx("td", { children: change.address }),
                                 i.jsx("td", {
-                                  children: String(q.before?.raw ?? "(blank)"),
+                                  children: String(
+                                    change.before?.raw ?? "(blank)",
+                                  ),
                                 }),
                                 i.jsx("td", {
-                                  children: String(q.after.raw ?? "(blank)"),
+                                  children: String(
+                                    change.after.raw ?? "(blank)",
+                                  ),
                                 }),
                               ],
                             },
-                            q.address,
+                            change.address,
                           ),
                         ),
                       }),
@@ -1204,8 +1291,8 @@ function AutomationScriptsDialog(e) {
                       i.jsx("input", {
                         type: "checkbox",
                         checked: B,
-                        onChange: (q) => {
-                          (_(q.target.checked), D(false));
+                        onChange: (event) => {
+                          (_(event.target.checked), D(false));
                         },
                       }),
                       i.jsx(LocalizedText, {
@@ -1219,9 +1306,9 @@ function AutomationScriptsDialog(e) {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: V,
-                        disabled: !f.valid || e.readOnly,
-                        onChange: (q) => D(q.target.checked),
+                        checked: checked,
+                        disabled: !plan.valid || e.readOnly,
+                        onChange: (event) => D(event.target.checked),
                       }),
                       i.jsx(LocalizedText, {
                         children:
@@ -1299,21 +1386,23 @@ function AutomationScriptsDialog(e) {
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
-              disabled: !c,
+              disabled: !inspection,
               onClick: () =>
                 e.onDownload(
                   H(),
-                  `${c?.fileName ?? "automation"}.compatibility.json`,
+                  `${inspection?.fileName ?? "automation"}.compatibility.json`,
                 ),
               children: i.jsx(LocalizedText, {
                 children: "Save automation report",
               }),
             }),
             i.jsx("button", {
-              disabled: !V || !f?.valid || e.readOnly,
+              disabled: !checked || !plan?.valid || e.readOnly,
               onClick: () =>
                 U(() => {
-                  !f || !V || (e.onApply(f, R, B), p(null), D(false));
+                  !plan ||
+                    !checked ||
+                    (e.onApply(plan, R, B), p(null), D(false));
                 }),
               children: i.jsx(LocalizedText, {
                 children: "Run approved migration",

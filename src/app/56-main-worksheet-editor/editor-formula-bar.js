@@ -31,10 +31,11 @@ function EditorFormulaBar({
         className: "lg-name-box",
         "aria-label": text("Selected range"),
         value: navigationState.goToReferenceText,
-        onChange: (fe) => navigationState.setGoToReferenceText(fe.target.value),
+        onChange: (event) =>
+          navigationState.setGoToReferenceText(event.target.value),
         onBlur: navigationActions.commitNameBoxReference,
-        onKeyDown: (fe) => {
-          fe.key === "Enter" &&
+        onKeyDown: (event) => {
+          event.key === "Enter" &&
             (navigationActions.commitNameBoxReference(),
             selectionState.gridContainerRef.current?.focus());
         },
@@ -44,8 +45,8 @@ function EditorFormulaBar({
       i.jsx("button", {
         className: "lg-formula-cancel",
         "aria-label": text("Cancel cell edit"),
-        onPointerDown: (fe) => fe.preventDefault(),
-        onMouseDown: (fe) => fe.preventDefault(),
+        onPointerDown: (event) => event.preventDefault(),
+        onMouseDown: (event) => event.preventDefault(),
         onClick: cellEditActions.cancelCellEdit,
         lang: language("Cancel cell edit"),
         "data-ui-label": "Cancel cell edit",
@@ -54,8 +55,8 @@ function EditorFormulaBar({
       i.jsx("button", {
         "aria-label": text("Apply cell value"),
         disabled: cellEditActions.isFormulaEditingLocked(),
-        onPointerDown: (fe) => fe.preventDefault(),
-        onMouseDown: (fe) => fe.preventDefault(),
+        onPointerDown: (event) => event.preventDefault(),
+        onMouseDown: (event) => event.preventDefault(),
         onClick: () => {
           cellEditActions.commitCellEdit() &&
             viewAndSelectionActions.focusGridSurface();
@@ -77,53 +78,59 @@ function EditorFormulaBar({
           formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
             ? `${editorIdPrefix}-formula-help`
             : undefined,
-        onFocus: (fe) => {
+        onFocus: (event) => {
           (!formulaEntryState.activeCellEditRef.current &&
             formulaEntryState.cellEditText.startsWith("=") &&
             !isEditingLocked &&
             cellEditActions.beginCellEdit(formulaEntryState.cellEditText),
             formulaEntryState.setIsFormulaBarFocused(true),
-            cellEditActions.syncFormulaEditorSelection(fe.currentTarget));
+            cellEditActions.syncFormulaEditorSelection(event.currentTarget));
         },
-        onSelect: (fe) => {
-          (cellEditActions.syncFormulaEditorSelection(fe.currentTarget),
+        onSelect: (event) => {
+          (cellEditActions.syncFormulaEditorSelection(event.currentTarget),
             formulaEntryState.setFormulaCaretPosition(
-              fe.currentTarget.selectionStart ??
+              event.currentTarget.selectionStart ??
                 formulaEntryState.cellEditText.length,
             ));
         },
-        onChange: (fe) => {
-          (cellEditActions.beginCellEdit(fe.target.value),
-            cellEditActions.syncFormulaEditorSelection(fe.currentTarget, true),
+        onChange: (event) => {
+          (cellEditActions.beginCellEdit(event.target.value),
+            cellEditActions.syncFormulaEditorSelection(
+              event.currentTarget,
+              true,
+            ),
             formulaEntryState.setFormulaCaretPosition(
-              fe.target.selectionStart ?? fe.target.value.length,
+              event.target.selectionStart ?? event.target.value.length,
             ));
         },
-        onBlur: (fe) => {
-          isWithinFormulaSuggestions(fe.currentTarget, fe.relatedTarget) ||
+        onBlur: (event) => {
+          isWithinFormulaSuggestions(
+            event.currentTarget,
+            event.relatedTarget,
+          ) ||
             (formulaEntryState.setIsFormulaBarFocused(false),
             cellEditActions.commitCellEdit());
         },
-        onKeyDown: (fe) => {
-          if (!fe.nativeEvent.isComposing) {
-            if (fe.key === "Escape") {
+        onKeyDown: (event) => {
+          if (!event.nativeEvent.isComposing) {
+            if (event.key === "Escape") {
               if (
                 !formulaEntryState.formulaPointerStateRef.current.span &&
                 formulaEntryState.cellEditText.length > 1 &&
-                formulaSuggestionListRef.current?.handleKeyDown(fe)
+                formulaSuggestionListRef.current?.handleKeyDown(event)
               )
                 return;
-              (fe.preventDefault(), cellEditActions.cancelCellEdit());
+              (event.preventDefault(), cellEditActions.cancelCellEdit());
               return;
             }
-            formulaEntryActions.handleFormulaKeyDown(fe) ||
-              formulaSuggestionListRef.current?.handleKeyDown(fe) ||
-              ((fe.key === "Enter" || fe.key === "Tab") &&
-                (fe.preventDefault(),
+            formulaEntryActions.handleFormulaKeyDown(event) ||
+              formulaSuggestionListRef.current?.handleKeyDown(event) ||
+              ((event.key === "Enter" || event.key === "Tab") &&
+                (event.preventDefault(),
                 cellEditActions.commitCellEdit() &&
                   navigationActions.moveSelectionAfterCommit(
-                    fe.key,
-                    fe.shiftKey,
+                    event.key,
+                    event.shiftKey,
                   )));
           }
         },

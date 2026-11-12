@@ -186,7 +186,7 @@ function EditorSidePanel({
                                       {
                                         children: [
                                           activeWorkbook.sheets.find(
-                                            (Nt) => Nt.id === Oe.sheetId,
+                                            (sheet) => sheet.id === Oe.sheetId,
                                           )?.name ?? "Sheet",
                                           "!",
                                           Oe.address,

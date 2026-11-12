@@ -55,20 +55,20 @@ function isSafeAttachmentFilename(e) {
     !/[\x00-\x1f\x7f/\\]/.test(e)
   );
 }
-function matchesFileSignature(e, r) {
-  const t = (...n) => n.every((o, a) => e[a] === o);
-  return r === "pdf"
+function matchesFileSignature(attachmentBytes, fileExtension) {
+  const t = (...n) => n.every((o, a) => attachmentBytes[a] === o);
+  return fileExtension === "pdf"
     ? t(37, 80, 68, 70, 45)
-    : r === "png"
+    : fileExtension === "png"
       ? t(137, 80, 78, 71, 13, 10, 26, 10)
-      : r === "jpg" || r === "jpeg"
+      : fileExtension === "jpg" || fileExtension === "jpeg"
         ? t(255, 216, 255)
-        : r === "webp"
+        : fileExtension === "webp"
           ? t(82, 73, 70, 70) &&
-            String.fromCharCode(...e.slice(8, 12)) === "WEBP"
-          : r === "xlsx" || r === "docx"
+            String.fromCharCode(...attachmentBytes.slice(8, 12)) === "WEBP"
+          : fileExtension === "xlsx" || fileExtension === "docx"
             ? t(80, 75, 3, 4)
-            : textAttachmentExtensions.has(r);
+            : textAttachmentExtensions.has(fileExtension);
 }
 function parseAssistantChatRequest(e) {
   (assertCondition(
@@ -127,22 +127,24 @@ function parseAssistantChatRequest(e) {
         d.encoding === (u ? "utf8" : "base64"),
         "Invalid attachment encoding.",
       );
-      let l;
+      let attachmentBytes;
       return (
         u
           ? (assertCondition(
               !d.data.includes("\0"),
               "Invalid text attachment.",
             ),
-            (l = new TextEncoder().encode(d.data)))
+            (attachmentBytes = new TextEncoder().encode(d.data)))
           : (assertCondition(
               d.data.length % 4 === 0 && /^[A-Za-z0-9+/]*={0,2}$/.test(d.data),
               "Invalid attachment encoding.",
             ),
-            (l = Uint8Array.from(atob(d.data), (c) => c.charCodeAt(0)))),
+            (attachmentBytes = Uint8Array.from(atob(d.data), (c) =>
+              c.charCodeAt(0),
+            ))),
         assertCondition(
-          l.length === d.size &&
-            matchesFileSignature(l, getFileExtension(d.name)),
+          attachmentBytes.length === d.size &&
+            matchesFileSignature(attachmentBytes, getFileExtension(d.name)),
           "Attachment content or size is invalid.",
         ),
         (r += Number(d.size)),
@@ -164,27 +166,29 @@ function parseAssistantChatRequest(e) {
   return {
     version: 1,
     messages: e.messages.map(
-      (a) => (
+      (message) => (
         assertCondition(
-          hasOnlyAllowedKeys(a, ["role", "text", "attachments"]) &&
-            (a.role === "user" || a.role === "assistant") &&
-            typeof a.text == "string" &&
-            a.text.length <= 1e4,
+          hasOnlyAllowedKeys(message, ["role", "text", "attachments"]) &&
+            (message.role === "user" || message.role === "assistant") &&
+            typeof message.text == "string" &&
+            message.text.length <= 1e4,
           "Invalid chat history message.",
         ),
         assertCondition(
-          a.role === "user" || a.attachments === undefined,
+          message.role === "user" || message.attachments === undefined,
           "Assistant messages cannot attach files.",
         ),
-        (t += a.text.length),
+        (t += message.text.length),
         assertCondition(
           t <= assistantRequestLimits.historyCharacters,
           "This conversation has reached its context limit. Start a new chat to continue.",
         ),
         {
-          role: a.role,
-          text: a.text,
-          ...(a.attachments ? { attachments: n(a.attachments) } : {}),
+          role: message.role,
+          text: message.text,
+          ...(message.attachments
+            ? { attachments: n(message.attachments) }
+            : {}),
         }
       ),
     ),
@@ -263,34 +267,50 @@ const answerGroundingSchema = object({
     }).strict(),
   ).max(answerGroundingLimits.sources),
 }).strict();
-function validateCitationRange(e) {
-  if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(e))
+function validateCitationRange(range) {
+  if (!/^[A-Z]{1,3}[1-9]\d*(?::[A-Z]{1,3}[1-9]\d*)?$/.test(range))
     throw Error("Citation requires an explicit A1 cell or rectangle.");
-  const r = parseRangeAddress(e),
-    t = e.split(":");
-  if (t[1] && `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}` !== t[0])
+  const rangeAddress = parseRangeAddress(range),
+    t = range.split(":");
+  if (
+    t[1] &&
+    `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}` !==
+      t[0]
+  )
     throw Error("Citation range must run top left to bottom right.");
-  if ((r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1) > 500)
+  if (
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+    500
+  )
     throw Error("Citations support at most 500 cells per range.");
   const n = [];
-  for (let o = r.firstRow; o <= r.lastRow; o++)
-    for (let a = r.firstCol; a <= r.lastCol; a++)
-      n.push(`${columnIndexToLetters(a)}${o + 1}`);
+  for (
+    let firstRow = rangeAddress.firstRow;
+    firstRow <= rangeAddress.lastRow;
+    firstRow++
+  )
+    for (
+      let firstCol = rangeAddress.firstCol;
+      firstCol <= rangeAddress.lastCol;
+      firstCol++
+    )
+      n.push(`${columnIndexToLetters(firstCol)}${firstRow + 1}`);
   return n;
 }
-function validateExternalSourceUrl(e) {
+function validateExternalSourceUrl(url) {
   if (
-    typeof e != "string" ||
-    e.length > 2048 ||
-    e !== e.trim() ||
-    /[\u0000-\u0020\u007f]/.test(e)
+    typeof url != "string" ||
+    url.length > 2048 ||
+    url !== url.trim() ||
+    /[\u0000-\u0020\u007f]/.test(url)
   )
     throw Error(
       "External sources require a valid HTTPS URL without credentials.",
     );
   let r;
   try {
-    r = new URL(e);
+    r = new URL(url);
   } catch {
     throw Error(
       "External sources require a valid HTTPS URL without credentials.",
@@ -302,31 +322,33 @@ function validateExternalSourceUrl(e) {
     );
   return r.href;
 }
-function validateAnswerGrounding(e, r) {
-  const t = answerGroundingSchema.safeParse(e);
+function validateAnswerGrounding(grounding, r) {
+  const t = answerGroundingSchema.safeParse(grounding);
   if (!t.success)
     throw Error(
       "Invalid answer grounding: provide typed claims and separate external sources.",
     );
-  const n = t.data,
-    o = new Set(r.cells.map((l) => l.address)),
+  const data = t.data,
+    o = new Set(r.cells.map((cell) => cell.address)),
     a = new Set(),
     s = new Set(),
     d = new Set();
   let u = 0;
-  for (const l of n.externalSources) {
-    if (s.has(l.id)) throw Error("External source IDs must be unique.");
-    (s.add(l.id), (l.url = validateExternalSourceUrl(l.url)));
+  for (const externalSource of data.externalSources) {
+    if (s.has(externalSource.id))
+      throw Error("External source IDs must be unique.");
+    (s.add(externalSource.id),
+      (externalSource.url = validateExternalSourceUrl(externalSource.url)));
   }
-  if (n.claims.reduce((l, c) => l + c.text.length, 0) > 2e4)
+  if (data.claims.reduce((l, c) => l + c.text.length, 0) > 2e4)
     throw Error("Answer claims exceed the 20,000 character evidence limit.");
-  for (const l of n.claims) {
-    if (a.has(l.id)) throw Error("Answer claim IDs must be unique.");
-    if ((a.add(l.id), l.kind === "workbook")) {
-      if (new Set(l.ranges).size !== l.ranges.length)
+  for (const claim of data.claims) {
+    if (a.has(claim.id)) throw Error("Answer claim IDs must be unique.");
+    if ((a.add(claim.id), claim.kind === "workbook")) {
+      if (new Set(claim.ranges).size !== claim.ranges.length)
         throw Error("Duplicate citation ranges in a claim.");
-      for (const c of l.ranges) {
-        const h = validateCitationRange(c);
+      for (const range of claim.ranges) {
+        const h = validateCitationRange(range);
         if (((u += h.length), u > answerGroundingLimits.referencedCells))
           throw Error(
             "Answer citations exceed the 1,000 cell-reference budget.",
@@ -336,23 +358,23 @@ function validateAnswerGrounding(e, r) {
             "Answer citations must stay inside the approved selection.",
           );
       }
-    } else if (l.kind === "external") {
+    } else if (claim.kind === "external") {
       if (
-        new Set(l.sourceIds).size !== l.sourceIds.length ||
-        l.sourceIds.some((c) => !s.has(c))
+        new Set(claim.sourceIds).size !== claim.sourceIds.length ||
+        claim.sourceIds.some((sourceId) => !s.has(sourceId))
       )
         throw Error(
           "External claims require distinct references to declared external sources.",
         );
-      l.sourceIds.forEach((c) => d.add(c));
+      claim.sourceIds.forEach((sourceId) => d.add(sourceId));
     }
   }
-  if (n.externalSources.some((l) => !d.has(l.id)))
+  if (data.externalSources.some((externalSource) => !d.has(externalSource.id)))
     throw Error("Unused external sources are not accepted as grounding.");
-  return n;
+  return data;
 }
 const nonVolatileFunctionNames = builtinFunctionNames.filter(
-  (e) =>
+  (builtinFunctionName) =>
     ![
       "RAND",
       "RANDBETWEEN",
@@ -364,7 +386,7 @@ const nonVolatileFunctionNames = builtinFunctionNames.filter(
       "RTD",
       "HYPERLINK",
       "CALL",
-    ].includes(e),
+    ].includes(builtinFunctionName),
 );
 const nonVolatileFunctionNameSet = new Set(nonVolatileFunctionNames);
 const assertNoUnexpectedFields = (e, r) =>
@@ -375,38 +397,38 @@ const assertNoUnexpectedFields = (e, r) =>
 function parseCellAddress(e) {
   const r = /^([A-Z]{1,3})([1-9]\d*)$/.exec(e);
   assertCondition(r, `Invalid cell address: ${e}`);
-  const t = [...r[1]].reduce((o, a) => o * 26 + a.charCodeAt(0) - 64, 0),
-    n = Number(r[2]);
+  const col = [...r[1]].reduce((o, a) => o * 26 + a.charCodeAt(0) - 64, 0),
+    row = Number(r[2]);
   return (
     assertCondition(
-      n <= workbookLimits.maxRows && t <= workbookLimits.maxCols,
+      row <= workbookLimits.maxRows && col <= workbookLimits.maxCols,
       "Cell address exceeds supported dimensions.",
     ),
-    { row: n, col: t }
+    { row: row, col: col }
   );
 }
-function columnNumberToLetters(e) {
+function columnNumberToLetters(col) {
   let r = "";
-  for (; e > 0; e = Math.floor((e - 1) / 26))
-    r = String.fromCharCode(65 + ((e - 1) % 26)) + r;
+  for (; col > 0; col = Math.floor((col - 1) / 26))
+    r = String.fromCharCode(65 + ((col - 1) % 26)) + r;
   return r;
 }
-function resolveAssistantSelection(e, r) {
+function resolveAssistantSelection(workbook, r) {
   assertCondition(
     !r.ranges || (r.ranges.length === 1 && r.ranges[0] === r.range),
     "Select one rectangular range before using an assistant.",
   );
-  const t = e.sheets.find((d) => d.id === r.sheetId);
+  const t = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
   assertCondition(
     t && !t.hidden,
     "Select a visible worksheet before using an assistant.",
   );
   const n = r.range.toUpperCase().split(":");
   assertCondition(n.length <= 2, "Select one rectangular range.");
-  const o = parseCellAddress(n[0]),
+  const cellAddress = parseCellAddress(n[0]),
     a = parseCellAddress(n[1] || n[0]);
   (assertCondition(
-    o.row <= a.row && o.col <= a.col,
+    cellAddress.row <= a.row && cellAddress.col <= a.col,
     "Selection range must run from top left to bottom right.",
   ),
     assertCondition(
@@ -414,21 +436,22 @@ function resolveAssistantSelection(e, r) {
       "Selection exceeds worksheet dimensions.",
     ),
     assertCondition(
-      (a.row - o.row + 1) * (a.col - o.col + 1) <= workbookLimits.maxLLMCells,
+      (a.row - cellAddress.row + 1) * (a.col - cellAddress.col + 1) <=
+        workbookLimits.maxLLMCells,
       `Select at most ${workbookLimits.maxLLMCells} cells for the assistant.`,
     ));
   const s = [];
-  for (let d = o.row; d <= a.row; d++)
-    for (let u = o.col; u <= a.col; u++)
-      s.push(`${columnNumberToLetters(u)}${d}`);
+  for (let row = cellAddress.row; row <= a.row; row++)
+    for (let col = cellAddress.col; col <= a.col; col++)
+      s.push(`${columnNumberToLetters(col)}${row}`);
   return s;
 }
-function buildAssistantSelectionContext(e, r) {
-  const t = resolveAssistantSelection(e, r),
-    n = e.sheets.find((a) => a.id === r.sheetId),
-    o = calculateWorkbookWithSettings(e);
-  for (const a of t) {
-    const s = o.getTypedValue(n.id, a);
+function buildAssistantSelectionContext(workbook, r) {
+  const assistantSelection = resolveAssistantSelection(workbook, r),
+    n = workbook.sheets.find((sheet) => sheet.id === r.sheetId),
+    workbookWithSettings = calculateWorkbookWithSettings(workbook);
+  for (const a of assistantSelection) {
+    const s = workbookWithSettings.getTypedValue(n.id, a);
     (assertCondition(
       !(s.type === "error" && s.value === "#PENDING!"),
       "Calculation is pending in the approved selection. Choose Calculate Now before sharing current values with an assistant.",
@@ -442,19 +465,21 @@ function buildAssistantSelectionContext(e, r) {
       ));
   }
   return {
-    workbookId: e.id,
-    ...(e.datePolicy ? { datePolicy: normalizeDatePolicy(e.datePolicy) } : {}),
-    ...(workbookUsesNowOrToday(e)
-      ? { calculationClock: o.getDateContext() }
+    workbookId: workbook.id,
+    ...(workbook.datePolicy
+      ? { datePolicy: normalizeDatePolicy(workbook.datePolicy) }
       : {}),
-    revision: e.revision,
+    ...(workbookUsesNowOrToday(workbook)
+      ? { calculationClock: workbookWithSettings.getDateContext() }
+      : {}),
+    revision: workbook.revision,
     sheetId: n.id,
     sheetName: n.name,
     range: r.range.toUpperCase(),
-    cells: t.map((a) => ({
-      address: a,
-      raw: n.cells[a]?.raw ?? null,
-      value: o(n.id, a),
+    cells: assistantSelection.map((address) => ({
+      address: address,
+      raw: n.cells[address]?.raw ?? null,
+      value: workbookWithSettings(n.id, address),
     })),
   };
 }
@@ -506,9 +531,12 @@ function validateAssistantFormula(e, r) {
     "Named ranges and unsupported formula tokens are not allowed in assistant changes.",
   );
 }
-function validateProposedCell(e, r) {
-  (assertCondition(isPlainRecord(e), "Each proposed cell must be an object."),
-    assertNoUnexpectedFields(e, [
+function validateProposedCell(cell, r) {
+  (assertCondition(
+    isPlainRecord(cell),
+    "Each proposed cell must be an object.",
+  ),
+    assertNoUnexpectedFields(cell, [
       "raw",
       "literal",
       "numFmt",
@@ -518,45 +546,48 @@ function validateProposedCell(e, r) {
       "tickmark",
     ]),
     assertCondition(
-      Object.hasOwn(e, "raw") &&
-        (e.raw === null ||
-          typeof e.raw == "string" ||
-          typeof e.raw == "boolean" ||
-          (typeof e.raw == "number" && Number.isFinite(e.raw))),
+      Object.hasOwn(cell, "raw") &&
+        (cell.raw === null ||
+          typeof cell.raw == "string" ||
+          typeof cell.raw == "boolean" ||
+          (typeof cell.raw == "number" && Number.isFinite(cell.raw))),
       "Unsupported proposed cell value.",
     ),
-    typeof e.raw == "string" &&
+    typeof cell.raw == "string" &&
       assertCondition(
-        e.raw.length <= (e.raw.startsWith("=") ? 4096 : 32767),
+        cell.raw.length <= (cell.raw.startsWith("=") ? 4096 : 32767),
         "Proposed cell text is too long.",
       ),
-    e.literal !== undefined &&
+    cell.literal !== undefined &&
       assertCondition(
-        typeof e.literal == "boolean",
+        typeof cell.literal == "boolean",
         "Cell literal must be boolean.",
       ),
-    e.numFmt !== undefined &&
+    cell.numFmt !== undefined &&
       assertCondition(
-        typeof e.numFmt == "string" && e.numFmt.length <= 200,
+        typeof cell.numFmt == "string" && cell.numFmt.length <= 200,
         "Invalid number format.",
       ),
-    e.format !== undefined &&
+    cell.format !== undefined &&
       assertCondition(
         ["general", "number", "currency", "percent", "date"].includes(
-          String(e.format),
+          String(cell.format),
         ),
         "Unsupported cell format.",
       ));
   for (const t of ["note", "tickmark"])
-    e[t] !== undefined &&
+    cell[t] !== undefined &&
       assertCondition(
-        typeof e[t] == "string" &&
-          String(e[t]).length <= (t === "note" ? 1e4 : 40),
+        typeof cell[t] == "string" &&
+          String(cell[t]).length <= (t === "note" ? 1e4 : 40),
         `Invalid cell ${t}.`,
       );
-  if (e.style !== undefined) {
-    (assertCondition(isPlainRecord(e.style), "Cell style must be an object."),
-      assertNoUnexpectedFields(e.style, [
+  if (cell.style !== undefined) {
+    (assertCondition(
+      isPlainRecord(cell.style),
+      "Cell style must be an object.",
+    ),
+      assertNoUnexpectedFields(cell.style, [
         "bold",
         "italic",
         "underline",
@@ -569,45 +600,48 @@ function validateProposedCell(e, r) {
         "align",
       ]));
     for (const t of ["bold", "italic", "underline", "wrap"])
-      e.style[t] !== undefined &&
-        assertCondition(typeof e.style[t] == "boolean", "Invalid font style.");
-    (e.style.fontFamily !== undefined &&
+      cell.style[t] !== undefined &&
+        assertCondition(
+          typeof cell.style[t] == "boolean",
+          "Invalid font style.",
+        );
+    (cell.style.fontFamily !== undefined &&
       assertCondition(
-        supportedFontFamilies.includes(e.style.fontFamily),
+        supportedFontFamilies.includes(cell.style.fontFamily),
         "Unsupported font family.",
       ),
-      e.style.fontSize !== undefined &&
+      cell.style.fontSize !== undefined &&
         assertCondition(
-          typeof e.style.fontSize == "number" &&
-            Number.isInteger(e.style.fontSize) &&
-            e.style.fontSize >= 8 &&
-            e.style.fontSize <= 72,
+          typeof cell.style.fontSize == "number" &&
+            Number.isInteger(cell.style.fontSize) &&
+            cell.style.fontSize >= 8 &&
+            cell.style.fontSize <= 72,
           "Font size must be an integer between 8 and 72.",
         ),
-      e.style.border !== undefined &&
+      cell.style.border !== undefined &&
         assertCondition(
-          ["all", "bottom", "none"].includes(String(e.style.border)),
+          ["all", "bottom", "none"].includes(String(cell.style.border)),
           "Unsupported cell border.",
         ));
     for (const t of ["fill", "color"])
-      e.style[t] !== undefined &&
+      cell.style[t] !== undefined &&
         assertCondition(
-          typeof e.style[t] == "string" &&
-            /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(e.style[t])),
+          typeof cell.style[t] == "string" &&
+            /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(cell.style[t])),
           "Use hexadecimal colors.",
         );
-    e.style.align !== undefined &&
+    cell.style.align !== undefined &&
       assertCondition(
-        ["left", "center", "right"].includes(String(e.style.align)),
+        ["left", "center", "right"].includes(String(cell.style.align)),
         "Invalid alignment.",
       );
   }
   return (
-    typeof e.raw == "string" &&
-      e.raw.startsWith("=") &&
-      !e.literal &&
-      validateAssistantFormula(e.raw, r),
-    structuredClone(e)
+    typeof cell.raw == "string" &&
+      cell.raw.startsWith("=") &&
+      !cell.literal &&
+      validateAssistantFormula(cell.raw, r),
+    structuredClone(cell)
   );
 }
 function validateAssistantProposal(e, r) {
@@ -638,14 +672,16 @@ function validateAssistantProposal(e, r) {
         e.explanation.length <= 1e4,
       "Invalid proposal explanation.",
     ));
-  const t = new Set(r.cells.map((a) => a.address));
+  const t = new Set(r.cells.map((cell) => cell.address));
   (assertCondition(
     Array.isArray(e.citations) &&
       e.citations.length <= workbookLimits.maxLLMCells,
     "Invalid proposal citations.",
   ),
     assertCondition(
-      e.citations.every((a) => typeof a == "string" && t.has(a)),
+      e.citations.every(
+        (citation) => typeof citation == "string" && t.has(citation),
+      ),
       "Citations must reference the approved selection.",
     ),
     assertCondition(
@@ -653,25 +689,25 @@ function validateAssistantProposal(e, r) {
       "Too many proposed edits.",
     ));
   const n = new Set(),
-    o = e.patches.map(
-      (a) => (
-        assertCondition(isPlainRecord(a), "Each patch must be an object."),
-        assertNoUnexpectedFields(a, ["sheetId", "address", "cell"]),
+    patches = e.patches.map(
+      (patch) => (
+        assertCondition(isPlainRecord(patch), "Each patch must be an object."),
+        assertNoUnexpectedFields(patch, ["sheetId", "address", "cell"]),
         assertCondition(
-          a.sheetId === r.sheetId &&
-            typeof a.address == "string" &&
-            t.has(a.address),
+          patch.sheetId === r.sheetId &&
+            typeof patch.address == "string" &&
+            t.has(patch.address),
           "Assistant changes must stay inside the approved selection.",
         ),
         assertCondition(
-          !n.has(a.address),
+          !n.has(patch.address),
           "The proposal contains duplicate cell edits.",
         ),
-        n.add(a.address),
+        n.add(patch.address),
         {
           sheetId: r.sheetId,
-          address: a.address,
-          cell: validateProposedCell(a.cell, t),
+          address: patch.address,
+          cell: validateProposedCell(patch.cell, t),
         }
       ),
     );
@@ -681,76 +717,84 @@ function validateAssistantProposal(e, r) {
     revision: r.revision,
     explanation: e.explanation,
     citations: [...e.citations],
-    patches: o,
+    patches: patches,
     ...(e.grounding !== undefined
       ? { grounding: validateAnswerGrounding(e.grounding, r) }
       : {}),
   };
 }
-function validateProposedCalculation(e, r, t) {
-  const n = resolveAssistantSelection(e, r).map((c) => ({
-      address: c,
-      raw: null,
-      value: null,
-    })),
+function validateProposedCalculation(workbook, assistantSelection, t) {
+  const cells = resolveAssistantSelection(workbook, assistantSelection).map(
+      (address) => ({
+        address: address,
+        raw: null,
+        value: null,
+      }),
+    ),
     o = validateAssistantProposal(t, {
-      workbookId: e.id,
-      revision: e.revision,
-      sheetId: r.sheetId,
-      cells: n,
+      workbookId: workbook.id,
+      revision: workbook.revision,
+      sheetId: assistantSelection.sheetId,
+      cells: cells,
     }),
-    a = e.sheets.find((c) => c.id === r.sheetId),
+    a = workbook.sheets.find(
+      (sheet) => sheet.id === assistantSelection.sheetId,
+    ),
     s = {
       ...o,
-      patches: o.patches.map((c) => {
-        const h = a.cells[c.address],
+      patches: o.patches.map((patch) => {
+        const cell = a.cells[patch.address],
           f = {
-            ...h,
-            ...c.cell,
-            ...(h?.style || c.cell.style
+            ...cell,
+            ...patch.cell,
+            ...(cell?.style || patch.cell.style
               ? {
-                  style: { ...h?.style, ...c.cell.style },
+                  style: { ...cell?.style, ...patch.cell.style },
                 }
               : {}),
           };
-        (h?.raw !== c.cell.raw &&
-          c.cell.literal === undefined &&
+        (cell?.raw !== patch.cell.raw &&
+          patch.cell.literal === undefined &&
           delete f.literal,
-          c.cell.format &&
-            c.cell.format !== h?.format &&
-            c.cell.numFmt === undefined &&
+          patch.cell.format &&
+            patch.cell.format !== cell?.format &&
+            patch.cell.numFmt === undefined &&
             delete f.numFmt);
-        const p = parseCellAddress(c.address),
+        const cellAddress = parseCellAddress(patch.address),
           m = (a.tables ?? []).some((v) => {
             const [g, b] = v.range.split(":"),
               y = parseCellAddress(g),
               w = parseCellAddress(b ?? g);
-            return p.row === y.row && p.col >= y.col && p.col <= w.col;
+            return (
+              cellAddress.row === y.row &&
+              cellAddress.col >= y.col &&
+              cellAddress.col <= w.col
+            );
           });
         return (
           assertCondition(
-            !m || (h?.raw === f.raw && !!h?.literal == !!f.literal),
+            !m || (cell?.raw === f.raw && !!cell?.literal == !!f.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
           ),
-          { ...c, cell: f }
+          { ...patch, cell: f }
         );
       }),
     },
-    d = new Set(n.map((c) => c.address)),
+    d = new Set(cells.map((cell) => cell.address)),
     u = {
-      ...e,
-      sheets: e.sheets.map((c) =>
-        c.id === a.id
+      ...workbook,
+      sheets: workbook.sheets.map((sheet) =>
+        sheet.id === a.id
           ? {
-              ...c,
+              ...sheet,
               cells: {
-                ...c.cells,
+                ...sheet.cells,
                 ...Object.fromEntries(
-                  s.patches.map((h) => [h.address, h.cell]),
+                  s.patches.map((patch) => [patch.address, patch.cell]),
                 ),
               },
             }
-          : c,
+          : sheet,
       ),
     },
     l = evaluateWorkbookFormulas(
@@ -769,14 +813,14 @@ function validateProposedCalculation(e, r, t) {
         step: () => {},
       },
     );
-  for (const c of s.patches) {
+  for (const patch of s.patches) {
     if (
-      typeof c.cell.raw != "string" ||
-      !c.cell.raw.startsWith("=") ||
-      c.cell.literal
+      typeof patch.cell.raw != "string" ||
+      !patch.cell.raw.startsWith("=") ||
+      patch.cell.literal
     )
       continue;
-    const h = l(a.id, c.address);
+    const h = l(a.id, patch.address);
     (assertCondition(
       h !== "#LIMIT!",
       "The proposed formula exceeds calculation limits.",
@@ -785,25 +829,26 @@ function validateProposedCalculation(e, r, t) {
         l.getOperationalErrors().length === 0,
         "The proposed formula has invalid syntax, a circular reference or an operational calculation failure. Correct the formula before review; error handlers cannot suppress this rejection.",
       ));
-    const f = l.getSpillRange(a.id, c.address);
+    const f = l.getSpillRange(a.id, patch.address);
     if (
       (assertCondition(
-        !l.getSpillDiagnostic(a.id, c.address),
+        !l.getSpillDiagnostic(a.id, patch.address),
         "The proposed array is blocked. Review the spill obstruction before requesting approval.",
       ),
       f)
     ) {
       const [p, m] = f.split(":"),
-        v = parseCellAddress(p),
+        cellAddress = parseCellAddress(p),
         g = parseCellAddress(m ?? p);
       assertCondition(
-        (g.row - v.row + 1) * (g.col - v.col + 1) <= workbookLimits.maxLLMCells,
+        (g.row - cellAddress.row + 1) * (g.col - cellAddress.col + 1) <=
+          workbookLimits.maxLLMCells,
         "Assistant spill outputs must stay inside the approved selection.",
       );
-      for (let b = v.row; b <= g.row; b++)
-        for (let y = v.col; y <= g.col; y++)
+      for (let row = cellAddress.row; row <= g.row; row++)
+        for (let col = cellAddress.col; col <= g.col; col++)
           assertCondition(
-            d.has(`${columnNumberToLetters(y)}${b}`),
+            d.has(`${columnNumberToLetters(col)}${row}`),
             "Assistant spill outputs must stay inside the approved selection.",
           );
     }
@@ -833,7 +878,8 @@ function buildLocalDemoProposal() {
           patches: [],
         },
         a = r.cells.filter(
-          (d) => typeof d.value == "number" && Number.isFinite(d.value),
+          (cell) =>
+            typeof cell.value == "number" && Number.isFinite(cell.value),
         ),
         s = a.reduce((d, u) => d + Number(u.value), 0);
       if (/highlight|high values|outlier/i.test(e)) {
@@ -851,22 +897,22 @@ function buildLocalDemoProposal() {
           );
         ((o.explanation = `Local deterministic demo: ${l.length} values exceed ${d ? `the requested threshold of ${u.toLocaleString()}` : `1.5 times the absolute arithmetic mean (${u.toLocaleString()})`}. This is a simple illustration, not a statistical audit conclusion. The listed cells receive an amber fill; existing annotations are retained.`),
           (o.citations = l.map((c) => c.address)),
-          (o.patches = l.map((c) => ({
+          (o.patches = l.map((cell) => ({
             sheetId: r.sheetId,
-            address: c.address,
-            cell: { raw: c.raw, style: { fill: "#fff0b3" } },
+            address: cell.address,
+            cell: { raw: cell.raw, style: { fill: "#fff0b3" } },
           }))));
       } else if (/\b(?:total|sum)\b/i.test(e)) {
         const d = [...r.cells]
           .reverse()
-          .find((u) => u.raw === null || u.raw === "");
+          .find((cell) => cell.raw === null || cell.raw === "");
         if (d && a.length) {
-          const u = `=SUM(${a.map((l) => l.address).join(",")})`;
+          const raw = `=SUM(${a.map((l) => l.address).join(",")})`;
           ((o.patches = [
             {
               sheetId: r.sheetId,
               address: d.address,
-              cell: { raw: u, format: "number", style: { bold: true } },
+              cell: { raw: raw, format: "number", style: { bold: true } },
             },
           ]),
             (o.citations = a.map((l) => l.address)),
@@ -876,14 +922,14 @@ function buildLocalDemoProposal() {
             "Local deterministic demo: select numeric cells and at least one empty destination cell to propose a total.";
       } else if (/explain/i.test(e)) {
         const d = r.cells.filter(
-          (u) => typeof u.raw == "string" && u.raw.startsWith("="),
+          (cell) => typeof cell.raw == "string" && cell.raw.startsWith("="),
         );
         ((o.explanation = d.length
-          ? `Local deterministic demo: ${d.map((u) => `${u.address} contains ${u.raw} and currently returns ${String(u.value)}`).join("; ")}. This lists formulas and results; no language model interpretation is used.`
+          ? `Local deterministic demo: ${d.map((cell) => `${cell.address} contains ${cell.raw} and currently returns ${String(cell.value)}`).join("; ")}. This lists formulas and results; no language model interpretation is used.`
           : "Local deterministic demo: the selection contains no formula expressions. Values and formulas are worksheet data, never instructions."),
           (o.citations = d.map((u) => u.address)));
       } else
-        ((o.explanation = `Local deterministic demo: ${r.cells.length} selected cells; ${a.length} numeric values; sum ${s.toLocaleString()}; ${r.cells.filter((d) => d.raw === null || d.raw === "").length} empty cells. Workbook content is treated only as data.`),
+        ((o.explanation = `Local deterministic demo: ${r.cells.length} selected cells; ${a.length} numeric values; sum ${s.toLocaleString()}; ${r.cells.filter((cell) => cell.raw === null || cell.raw === "").length} empty cells. Workbook content is treated only as data.`),
           (o.citations = a.slice(0, 20).map((d) => d.address)));
       if (
         ((o.grounding = {
@@ -899,8 +945,8 @@ function buildLocalDemoProposal() {
         }),
         n?.attachments.length)
       ) {
-        const d = parseAssistantChatRequest(n).attachments,
-          u = `Received ${d.length} attachment${d.length === 1 ? "" : "s"}: ${d.map((l) => `${l.name} (${l.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;
+        const attachments = parseAssistantChatRequest(n).attachments,
+          u = `Received ${attachments.length} attachment${attachments.length === 1 ? "" : "s"}: ${attachments.map((attachment) => `${attachment.name} (${attachment.size.toLocaleString()} bytes)`).join(", ")}. Files remain in this browser in local demo mode. Preview text and images in the attachment cards; document interpretation requires a connected model.`;
         ((o.explanation += `
 
 ${u}`),

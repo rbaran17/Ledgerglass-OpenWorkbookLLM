@@ -30,29 +30,31 @@ import {
   classifyWatchedCell,
 } from "./35-formula-inspection-and-compatibility.js";
 
-function applyFormulaWatchAction(e, r, t = {}) {
+function applyFormulaWatchAction(workbook, request, t = {}) {
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Watch inspection remains available.",
     );
-  const n = normalizeFormulaWatchContext(e, t),
-    o = validateFormulaWatches(e.formulaWatches, e);
+  const formulaWatchContext = normalizeFormulaWatchContext(workbook, t),
+    o = validateFormulaWatches(workbook.formulaWatches, workbook);
   let a = o,
-    s = [],
-    d = [];
-  if (r.kind === "add") {
-    const l = e.sheets.find((f) => f.id === r.sheetId);
+    added = [],
+    removed = [];
+  if (request.kind === "add") {
+    const l = workbook.sheets.find((sheet) => sheet.id === request.sheetId);
     if (!l)
       throw Error("The worksheet selected for watching no longer exists.");
-    if (!Array.isArray(r.ranges))
+    if (!Array.isArray(request.ranges))
       throw Error("Provide a list of selected ranges to watch.");
-    const c = enumerateSelectionCells(r.ranges, B2),
+    const c = enumerateSelectionCells(request.ranges, B2),
       h = new Set(o.map((f) => f.id));
-    for (const f of c) {
+    for (const address of c) {
       if (
         o.some(
           (v) =>
-            !v.orphaned && v.anchor.sheetId === l.id && v.anchor.address === f,
+            !v.orphaned &&
+            v.anchor.sheetId === l.id &&
+            v.anchor.address === address,
         )
       )
         continue;
@@ -60,66 +62,71 @@ function applyFormulaWatchAction(e, r, t = {}) {
       for (; h.has(`watch-${p}`);) p++;
       const m = {
         id: `watch-${p}`,
-        anchor: { sheetId: l.id, sheetName: l.name, address: f },
+        anchor: { sheetId: l.id, sheetName: l.name, address: address },
       };
-      if (classifyWatchedCell(e, m, n) !== "ready")
+      if (classifyWatchedCell(workbook, m, formulaWatchContext) !== "ready")
         throw Error(
           "A selected watch source is outside the visible, authorized context. Review visibility or host access before adding it.",
         );
-      (h.add(m.id), s.push(m));
+      (h.add(m.id), added.push(m));
     }
-    if (o.length + s.length > B2)
+    if (o.length + added.length > B2)
       throw Error(
         "A workbook may contain at most 100 formula watches, including orphaned entries. Remove a watch before adding another.",
       );
-    a = [...o, ...s];
-  } else if (r.kind === "remove") {
+    a = [...o, ...added];
+  } else if (request.kind === "remove") {
     if (
-      !Array.isArray(r.ids) ||
-      r.ids.length > B2 ||
-      r.ids.some((c) => typeof c != "string" || !o.some((h) => h.id === c))
+      !Array.isArray(request.ids) ||
+      request.ids.length > B2 ||
+      request.ids.some(
+        (c) => typeof c != "string" || !o.some((h) => h.id === c),
+      )
     )
       throw Error(
         "A selected watch no longer exists. Review the current watch list.",
       );
-    const l = new Set(r.ids);
-    ((d = o.filter((c) => l.has(c.id))), (a = o.filter((c) => !l.has(c.id))));
-  } else if (r.kind === "clear") ((d = o), (a = []));
+    const l = new Set(request.ids);
+    ((removed = o.filter((c) => l.has(c.id))),
+      (a = o.filter((c) => !l.has(c.id))));
+  } else if (request.kind === "clear") ((removed = o), (a = []));
   else throw Error("Unknown formula watch action.");
-  const u =
-    s.length || d.length ? { ...e, formulaWatches: structuredClone(a) } : e;
+  const next =
+    added.length || removed.length
+      ? { ...workbook, formulaWatches: structuredClone(a) }
+      : workbook;
   return {
-    snapshot: JSON.stringify(e),
-    request: structuredClone(r),
-    context: n,
-    added: s,
-    removed: d,
-    next: u,
+    snapshot: JSON.stringify(workbook),
+    request: structuredClone(request),
+    context: formulaWatchContext,
+    added: added,
+    removed: removed,
+    next: next,
   };
 }
-function assertWatchPreviewCurrent(e, r, t = {}) {
-  if (JSON.stringify(e) !== r.snapshot)
+function assertWatchPreviewCurrent(workbook, r, t = {}) {
+  if (JSON.stringify(workbook) !== r.snapshot)
     throw Error(
       "The workbook changed after the watch preview. Review the action again.",
     );
-  const n = applyFormulaWatchAction(e, r.request, t);
+  const n = applyFormulaWatchAction(workbook, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error(
       "The watch preview or host context changed. Review the action again.",
     );
   return n.next;
 }
-function inspectFormulaWatches(e, r = {}) {
-  const t = normalizeFormulaWatchContext(e, r),
-    n = validateFormulaWatches(e.formulaWatches, e),
+function inspectFormulaWatches(workbook, r = {}) {
+  const formulaWatchContext = normalizeFormulaWatchContext(workbook, r),
+    n = validateFormulaWatches(workbook.formulaWatches, workbook),
     o = [],
-    a = n.map((w) => {
-      const E = classifyWatchedCell(e, w, t);
+    rows = n.map((w) => {
+      const E = classifyWatchedCell(workbook, w, formulaWatchContext);
       return E === "ready"
         ? (o.push(w), { id: w.id, status: "unavailable", anchor: w.anchor })
         : E === "orphaned"
           ? r.allowedSheetIds !== undefined &&
-            !t.allowedSheetIds.includes(w.anchor.sheetId)
+            !formulaWatchContext.allowedSheetIds.includes(w.anchor.sheetId)
             ? {
                 id: w.id,
                 status: "excluded",
@@ -141,9 +148,9 @@ function inspectFormulaWatches(e, r = {}) {
             };
     }),
     s = {
-      workbookId: e.id,
-      revision: e.revision,
-      rows: a,
+      workbookId: workbook.id,
+      revision: workbook.revision,
+      rows: rows,
       formulaCellsScanned: 0,
       inspectionPasses: 0,
       notes: [
@@ -159,15 +166,18 @@ function inspectFormulaWatches(e, r = {}) {
       (u = `watch-inspection-${crypto.randomUUID()}`));
     const E = d.toLowerCase();
     if (
-      !e.sheets.some(
-        (A) =>
-          A.id === u ||
-          A.name.toLowerCase() === E ||
-          Object.values(A.cells).some(
-            (k) => typeof k.raw == "string" && k.raw.toLowerCase().includes(E),
+      !workbook.sheets.some(
+        (sheet) =>
+          sheet.id === u ||
+          sheet.name.toLowerCase() === E ||
+          Object.values(sheet.cells).some(
+            (cell) =>
+              typeof cell.raw == "string" && cell.raw.toLowerCase().includes(E),
           ),
       ) &&
-      !e.definedNames?.some((A) => A.refersTo.toLowerCase().includes(E))
+      !workbook.definedNames?.some((definedName) =>
+        definedName.refersTo.toLowerCase().includes(E),
+      )
     )
       break;
     if (w === 3)
@@ -192,10 +202,12 @@ function inspectFormulaWatches(e, r = {}) {
   l.cells.B1 = { raw: `=SUM(A1:A${o.length})` };
   const c = inspectFormulaDependencies(
     {
-      ...e,
+      ...workbook,
       sheets: [
         l,
-        ...e.sheets.map((w) => (w.veryHidden ? { ...w, hidden: true } : w)),
+        ...workbook.sheets.map((sheet) =>
+          sheet.veryHidden ? { ...sheet, hidden: true } : sheet,
+        ),
       ],
     },
     {
@@ -203,8 +215,8 @@ function inspectFormulaWatches(e, r = {}) {
       address: "B1",
       direction: "precedents",
       depth: 8,
-      includeHidden: t.includeHidden,
-      allowedSheetIds: [...t.allowedSheetIds, l.id],
+      includeHidden: formulaWatchContext.includeHidden,
+      allowedSheetIds: [...formulaWatchContext.allowedSheetIds, l.id],
       limits: {
         maxFormulaCells: 5e3 + o.length + 1,
         maxNodes: 1e3,
@@ -218,15 +230,20 @@ function inspectFormulaWatches(e, r = {}) {
       c.coverage.formulaCellsScanned - o.length - 1,
     )));
   const h = new Map(
-      c.nodes.map((w) => [JSON.stringify([w.sheetId, w.address]), w]),
+      c.nodes.map((node) => [
+        JSON.stringify([node.sheetId, node.address]),
+        node,
+      ]),
     ),
     f = new Map(
-      e.sheets.map((w) => [
-        w.id,
-        Object.entries(w.cells)
+      workbook.sheets.map((sheet) => [
+        sheet.id,
+        Object.entries(sheet.cells)
           .filter(
-            ([, E]) =>
-              !E.literal && typeof E.raw == "string" && E.raw.startsWith("="),
+            ([, cell]) =>
+              !cell.literal &&
+              typeof cell.raw == "string" &&
+              cell.raw.startsWith("="),
           )
           .map(([E]) => _t(E)),
       ]),
@@ -234,10 +251,10 @@ function inspectFormulaWatches(e, r = {}) {
     p = new Set();
   let m = 0,
     v = false;
-  for (const [w, E] of h) {
-    if (E.raw !== null) continue;
-    const A = _t(E.address);
-    for (const k of f.get(E.sheetId) ?? []) {
+  for (const [w, cell] of h) {
+    if (cell.raw !== null) continue;
+    const A = _t(cell.address);
+    for (const k of f.get(cell.sheetId) ?? []) {
       if (++m > 1e5) {
         v = true;
         break;
@@ -254,43 +271,46 @@ function inspectFormulaWatches(e, r = {}) {
     if (v) break;
   }
   const g = new Map();
-  for (const w of c.edges) g.set(w.from, [...(g.get(w.from) ?? []), w.to]);
+  for (const edge of c.edges)
+    g.set(edge.from, [...(g.get(edge.from) ?? []), edge.to]);
   const b = (w, E = new Set()) =>
     p.has(w)
       ? true
       : E.has(w)
         ? false
         : (E.add(w), (g.get(w) ?? []).some((A) => b(A, E)));
-  for (const w of s.rows) {
-    if (w.status !== "unavailable" || !w.anchor) continue;
-    const E = h.get(JSON.stringify([w.anchor.sheetId, w.anchor.address]));
-    if (!E) {
-      w.note =
+  for (const row of s.rows) {
+    if (row.status !== "unavailable" || !row.anchor) continue;
+    const cell = h.get(
+      JSON.stringify([row.anchor.sheetId, row.anchor.address]),
+    );
+    if (!cell) {
+      row.note =
         "Result withheld: this source is beyond the safe inspection budget.";
       continue;
     }
     if (
-      ((w.raw = E.raw),
-      E.resultStatus !== "unavailable" &&
-        (b(JSON.stringify([w.anchor.sheetId, w.anchor.address])) ||
+      ((row.raw = cell.raw),
+      cell.resultStatus !== "unavailable" &&
+        (b(JSON.stringify([row.anchor.sheetId, row.anchor.address])) ||
           ((v || c.coverage.truncated || c.coverage.depthLimited) &&
-            (E.raw === null ||
-              (typeof E.raw == "string" &&
-                E.raw.startsWith("=") &&
-                E.resultStatus === "calculated")))))
+            (cell.raw === null ||
+              (typeof cell.raw == "string" &&
+                cell.raw.startsWith("=") &&
+                cell.resultStatus === "calculated")))))
     ) {
-      ((w.result = null),
-        (w.resultStatus = "unavailable"),
-        (w.status = "unavailable"),
-        (w.note =
+      ((row.result = null),
+        (row.resultStatus = "unavailable"),
+        (row.status = "unavailable"),
+        (row.note =
           "Result withheld: possible runtime spill output or an incomplete dependency inspection. Watch the stored source formula or narrow the workbook context."));
       continue;
     }
-    ((w.result = E.result),
-      (w.resultStatus = E.resultStatus),
-      (w.status =
-        E.resultStatus === "unavailable" ? "unavailable" : "available"),
-      E.resultNote && (w.note = E.resultNote));
+    ((row.result = cell.result),
+      (row.resultStatus = cell.resultStatus),
+      (row.status =
+        cell.resultStatus === "unavailable" ? "unavailable" : "available"),
+      cell.resultNote && (row.note = cell.resultNote));
   }
   return (
     (p.size || v) &&
@@ -304,11 +324,17 @@ function inspectFormulaWatches(e, r = {}) {
     s
   );
 }
-function navigateToFormulaWatch(e, r, t = {}) {
-  const n = validateFormulaWatches(e.formulaWatches, e).find((o) => o.id === r);
+function navigateToFormulaWatch(workbook, r, t = {}) {
+  const n = validateFormulaWatches(workbook.formulaWatches, workbook).find(
+    (o) => o.id === r,
+  );
   if (
     !n ||
-    classifyWatchedCell(e, n, normalizeFormulaWatchContext(e, t)) !== "ready"
+    classifyWatchedCell(
+      workbook,
+      n,
+      normalizeFormulaWatchContext(workbook, t),
+    ) !== "ready"
   )
     throw Error(
       "This watch cannot be navigated in the current visible, authorized context.",
@@ -329,13 +355,13 @@ function FormulaWatchWindow(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const [s, d] = ne.useState(false),
-    [u, l] = ne.useState([]),
+  const [checked, d] = ne.useState(false),
+    [ids, l] = ne.useState([]),
     [c, h] = ne.useState(null),
     [f, p] = ne.useState(""),
     [m, v] = ne.useState(""),
     g = {
-      includeHidden: !!e.allowHidden && s,
+      includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
     b = JSON.stringify([e.sheetId, e.ranges ?? [e.range]]),
@@ -343,25 +369,25 @@ function FormulaWatchWindow(e) {
       try {
         return {
           result: inspectFormulaWatches(e.workbook, {
-            includeHidden: !!e.allowHidden && s,
+            includeHidden: !!e.allowHidden && checked,
             allowedSheetIds: e.allowedSheetIds,
           }),
         };
-      } catch (z) {
+      } catch (error) {
         return {
           error:
-            z instanceof Error
-              ? z.message
+            error instanceof Error
+              ? error.message
               : "The watch list could not be read.",
         };
       }
-    }, [e.workbook, e.allowHidden, e.allowedSheetIds, s]);
+    }, [e.workbook, e.allowHidden, e.allowedSheetIds, checked]);
   ne.useEffect(() => {
-    const z = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector('[data-ui-label="Close Watch Window"]')?.focus(),
       () => {
-        z?.isConnected && z.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -371,18 +397,18 @@ function FormulaWatchWindow(e) {
           ? z.message
           : "The watch action could not be completed.",
       ),
-    E = (z) => {
+    E = (request) => {
       try {
-        const V = applyFormulaWatchAction(e.workbook, z, {
+        const V = applyFormulaWatchAction(e.workbook, request, {
           ...g,
           readOnly: e.readOnly,
         });
         (h(V), v(b), p(""));
-      } catch (V) {
-        (h(null), w(V));
+      } catch (error) {
+        (h(null), w(error));
       }
     },
-    A = () => {
+    onClick = () => {
       if (c)
         try {
           if (c.request.kind === "add" && m !== b)
@@ -405,16 +431,16 @@ function FormulaWatchWindow(e) {
             h(null),
             l([]),
             p(""));
-        } catch (z) {
-          w(z);
+        } catch (error) {
+          w(error);
         }
     },
     k = (z) => {
       try {
         const V = navigateToFormulaWatch(e.workbook, z, g);
         (e.onNavigate(V.sheetId, V.address), p(""));
-      } catch (V) {
-        w(V);
+      } catch (error) {
+        w(error);
       }
     },
     F = y.result?.rows ?? [],
@@ -425,14 +451,16 @@ function FormulaWatchWindow(e) {
       JSON.stringify(c.context.allowedSheetIds) ===
         JSON.stringify(
           [
-            ...new Set(g.allowedSheetIds ?? e.workbook.sheets.map((z) => z.id)),
+            ...new Set(
+              g.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+            ),
           ].sort(),
         ) &&
       (c.request.kind !== "add" || m === b);
   return i.jsx("div", {
     className: "fw-backdrop",
-    onMouseDown: (z) => {
-      z.target === z.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       ref: o,
@@ -440,23 +468,23 @@ function FormulaWatchWindow(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (z) => {
+      onKeyDown: (event) => {
         var D, B;
         if (
-          (z.stopPropagation(),
-          z.key === "Escape" && (z.preventDefault(), a.current()),
-          z.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const _ = [
             ...(o.current?.querySelectorAll(
               'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
             ) ?? []),
           ].filter((C) => !C.hidden);
-          z.shiftKey && document.activeElement === _[0]
-            ? (z.preventDefault(), (D = _.at(-1)) == null || D.focus())
-            : !z.shiftKey &&
+          event.shiftKey && document.activeElement === _[0]
+            ? (event.preventDefault(), (D = _.at(-1)) == null || D.focus())
+            : !event.shiftKey &&
               document.activeElement === _.at(-1) &&
-              (z.preventDefault(), (B = _[0]) == null || B.focus());
+              (event.preventDefault(), (B = _[0]) == null || B.focus());
         }
       },
       children: [
@@ -491,7 +519,7 @@ function FormulaWatchWindow(e) {
             i.jsx("button", {
               disabled:
                 e.readOnly ||
-                !e.workbook.sheets.some((z) => z.id === e.sheetId),
+                !e.workbook.sheets.some((sheet) => sheet.id === e.sheetId),
               onClick: () =>
                 E({
                   kind: "add",
@@ -501,8 +529,8 @@ function FormulaWatchWindow(e) {
               children: i.jsx(LocalizedText, { children: "Add selection" }),
             }),
             i.jsx("button", {
-              disabled: e.readOnly || !u.length,
-              onClick: () => E({ kind: "remove", ids: u }),
+              disabled: e.readOnly || !ids.length,
+              onClick: () => E({ kind: "remove", ids: ids }),
               children: i.jsx(LocalizedText, { children: "Remove selected" }),
             }),
             i.jsx("button", {
@@ -515,9 +543,9 @@ function FormulaWatchWindow(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: s,
-                    onChange: (z) => {
-                      (d(z.target.checked), h(null), p(""));
+                    checked: checked,
+                    onChange: (event) => {
+                      (d(event.target.checked), h(null), p(""));
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden" }),
@@ -577,7 +605,7 @@ function FormulaWatchWindow(e) {
                   }),
                 }),
                 i.jsx("tbody", {
-                  children: F.map((z, V) =>
+                  children: F.map((cell, V) =>
                     i.jsxs(
                       "tr",
                       {
@@ -586,27 +614,27 @@ function FormulaWatchWindow(e) {
                             children: i.jsx("input", {
                               type: "checkbox",
                               "aria-label": `Select watch ${V + 1}`,
-                              checked: u.includes(z.id),
+                              checked: ids.includes(cell.id),
                               disabled: e.readOnly,
-                              onChange: (D) =>
+                              onChange: (event) =>
                                 l((B) =>
-                                  D.target.checked
-                                    ? [...B, z.id]
-                                    : B.filter((_) => _ !== z.id),
+                                  event.target.checked
+                                    ? [...B, cell.id]
+                                    : B.filter((_) => _ !== cell.id),
                                 ),
                             }),
                           }),
                           i.jsx("td", {
-                            children: z.anchor
+                            children: cell.anchor
                               ? i.jsxs("button", {
                                   className: "fw-link",
-                                  disabled: z.status === "orphaned",
-                                  onClick: () => k(z.id),
-                                  "aria-label": `Go to ${z.anchor.sheetName}!${z.anchor.address}`,
+                                  disabled: cell.status === "orphaned",
+                                  onClick: () => k(cell.id),
+                                  "aria-label": `Go to ${cell.anchor.sheetName}!${cell.anchor.address}`,
                                   children: [
-                                    z.anchor.sheetName,
+                                    cell.anchor.sheetName,
                                     "!",
-                                    z.anchor.address,
+                                    cell.anchor.address,
                                   ],
                                 })
                               : i.jsxs("span", {
@@ -619,33 +647,34 @@ function FormulaWatchWindow(e) {
                                 }),
                           }),
                           i.jsx("td", {
-                            children: i.jsx("code", { children: rj(z.raw) }),
+                            children: i.jsx("code", { children: rj(cell.raw) }),
                           }),
                           i.jsx("td", {
                             children:
-                              z.status === "available"
-                                ? rj(z.result)
+                              cell.status === "available"
+                                ? rj(cell.result)
                                 : "Unavailable",
                           }),
                           i.jsxs("td", {
                             children: [
                               i.jsx("strong", {
                                 children:
-                                  z.status === "available"
-                                    ? z.resultStatus === "literal"
+                                  cell.status === "available"
+                                    ? cell.resultStatus === "literal"
                                       ? "Value"
                                       : "Calculated"
-                                    : z.status === "unavailable"
+                                    : cell.status === "unavailable"
                                       ? "Result withheld"
-                                      : z.status[0].toUpperCase() +
-                                        z.status.slice(1),
+                                      : cell.status[0].toUpperCase() +
+                                        cell.status.slice(1),
                               }),
-                              z.note && i.jsx("small", { children: z.note }),
+                              cell.note &&
+                                i.jsx("small", { children: cell.note }),
                             ],
                           }),
                         ],
                       },
-                      z.id,
+                      cell.id,
                     ),
                   ),
                 }),
@@ -699,8 +728,11 @@ function FormulaWatchWindow(e) {
                 }),
               i.jsx("ul", {
                 children: [
-                  ...c.added.map((z) => ({ watch: z, action: "Add" })),
-                  ...c.removed.map((z) => ({ watch: z, action: "Remove" })),
+                  ...c.added.map((watch) => ({ watch: watch, action: "Add" })),
+                  ...c.removed.map((watch) => ({
+                    watch: watch,
+                    action: "Remove",
+                  })),
                 ].map(({ watch, action }) => {
                   const D = F.find((_) => _.id === watch.id),
                     B =
@@ -738,7 +770,7 @@ function FormulaWatchWindow(e) {
               i.jsx("button", {
                 className: "fw-primary",
                 disabled: e.readOnly,
-                onClick: A,
+                onClick: onClick,
                 children: i.jsx(LocalizedText, {
                   children: "Apply watch action",
                 }),
@@ -752,7 +784,7 @@ function FormulaWatchWindow(e) {
                 children: "Calculation scope and limits",
               }),
             }),
-            y.result?.notes.map((z) => i.jsx("p", { children: z }, z)),
+            y.result?.notes.map((note) => i.jsx("p", { children: note }, note)),
             i.jsx("p", {
               children: i.jsx(LocalizedText, {
                 children:
@@ -780,13 +812,13 @@ const goalSeekLimits = {
     maxFormulaCells: 5e3,
   },
   isCellInRange = (e, r) => {
-    const t = parseRangeAddress(e),
+    const rangeAddress = parseRangeAddress(e),
       n = _t(r);
     return (
-      n.row >= t.firstRow &&
-      n.row <= t.lastRow &&
-      n.col >= t.firstCol &&
-      n.col <= t.lastCol
+      n.row >= rangeAddress.firstRow &&
+      n.row <= rangeAddress.lastRow &&
+      n.col >= rangeAddress.firstCol &&
+      n.col <= rangeAddress.lastCol
     );
   };
 function parseGoalSeekAddress(e) {
@@ -799,11 +831,11 @@ function parseGoalSeekAddress(e) {
     throw Error("A Goal Seek cell is outside Excel's address bounds.");
   return `${columnIndexToLetters(r.col)}${r.row + 1}`;
 }
-function normalizeGoalSeekRequest(e) {
+function normalizeGoalSeekRequest(request) {
   if (
-    !e ||
-    typeof e != "object" ||
-    Object.keys(e).some(
+    !request ||
+    typeof request != "object" ||
+    Object.keys(request).some(
       (t) =>
         ![
           "formulaSheetId",
@@ -820,16 +852,16 @@ function normalizeGoalSeekRequest(e) {
   )
     throw Error("Invalid Goal Seek request.");
   if (
-    typeof e.formulaSheetId != "string" ||
-    typeof e.variableSheetId != "string"
+    typeof request.formulaSheetId != "string" ||
+    typeof request.variableSheetId != "string"
   )
     throw Error("Choose a formula worksheet and variable worksheet.");
   const r = {
-    ...e,
-    formulaAddress: parseGoalSeekAddress(e.formulaAddress),
-    variableAddress: parseGoalSeekAddress(e.variableAddress),
-    tolerance: e.tolerance ?? 1e-6,
-    maxIterations: e.maxIterations ?? 64,
+    ...request,
+    formulaAddress: parseGoalSeekAddress(request.formulaAddress),
+    variableAddress: parseGoalSeekAddress(request.variableAddress),
+    tolerance: request.tolerance ?? 1e-6,
+    maxIterations: request.maxIterations ?? 64,
   };
   if (
     !isFiniteNumber(r.target) ||
@@ -850,14 +882,18 @@ function normalizeGoalSeekRequest(e) {
     throw Error("Goal Seek supports from 1 to 100 iterations.");
   return r;
 }
-function solveGoalSeek(e, r, t = {}) {
+function solveGoalSeek(workbook, request, t = {}) {
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Goal Seek cannot propose a writable input.",
     );
-  const n = normalizeGoalSeekRequest(r),
-    o = e.sheets.find((z) => z.id === n.formulaSheetId),
-    a = e.sheets.find((z) => z.id === n.variableSheetId);
+  const goalSeekRequest = normalizeGoalSeekRequest(request),
+    o = workbook.sheets.find(
+      (sheet) => sheet.id === goalSeekRequest.formulaSheetId,
+    ),
+    a = workbook.sheets.find(
+      (sheet) => sheet.id === goalSeekRequest.variableSheetId,
+    );
   if (!o || !a) throw Error("A selected Goal Seek worksheet no longer exists.");
   if (t.includeHidden !== undefined && typeof t.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
@@ -865,24 +901,26 @@ function solveGoalSeek(e, r, t = {}) {
     t.allowedSheetIds !== undefined &&
     (!Array.isArray(t.allowedSheetIds) ||
       t.allowedSheetIds.some(
-        (z) => typeof z != "string" || !e.sheets.some((V) => V.id === z),
+        (allowedSheetId) =>
+          typeof allowedSheetId != "string" ||
+          !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
       ))
   )
     throw Error("Goal Seek host scope contains an unknown worksheet.");
-  const s = {
+  const context = {
     includeHidden: !!t.includeHidden,
     allowedSheetIds: [
-      ...new Set(t.allowedSheetIds ?? e.sheets.map((z) => z.id)),
+      ...new Set(t.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
     ].sort(),
   };
   for (const [z, V] of [
-    [o, n.formulaAddress],
-    [a, n.variableAddress],
+    [o, goalSeekRequest.formulaAddress],
+    [a, goalSeekRequest.variableAddress],
   ]) {
     const D = _t(V);
     if (
-      !s.allowedSheetIds.includes(z.id) ||
-      (!s.includeHidden &&
+      !context.allowedSheetIds.includes(z.id) ||
+      (!context.includeHidden &&
         (z.hidden ||
           z.veryHidden ||
           cn(z, "row").some((B) => B.start <= D.row && B.end >= D.row) ||
@@ -892,9 +930,14 @@ function solveGoalSeek(e, r, t = {}) {
         "A Goal Seek source is outside the visible, authorized host context.",
       );
   }
-  const d = o.cells[n.formulaAddress],
-    u = a.cells[n.variableAddress];
-  if (!d || d.literal || typeof d.raw != "string" || !d.raw.startsWith("="))
+  const cell = o.cells[goalSeekRequest.formulaAddress],
+    u = a.cells[goalSeekRequest.variableAddress];
+  if (
+    !cell ||
+    cell.literal ||
+    typeof cell.raw != "string" ||
+    !cell.raw.startsWith("=")
+  )
     throw Error("Set cell must contain an actual calculation formula.");
   if (!u || !isFiniteNumber(u.raw))
     throw Error(
@@ -904,24 +947,28 @@ function solveGoalSeek(e, r, t = {}) {
     throw Error(
       "The changing worksheet is protected. Unprotect it before Goal Seek.",
     );
-  if (a.merges?.some((z) => isCellInRange(z, n.variableAddress)))
+  if (
+    a.merges?.some((merge) =>
+      isCellInRange(merge, goalSeekRequest.variableAddress),
+    )
+  )
     throw Error("A merged cell cannot be the Goal Seek variable.");
   for (const z of a.tables ?? []) {
-    if (!isCellInRange(z.range, n.variableAddress)) continue;
-    const V = parseRangeAddress(z.range),
-      D = _t(n.variableAddress),
-      B = z.columns[D.col - V.firstCol],
+    if (!isCellInRange(z.range, goalSeekRequest.variableAddress)) continue;
+    const rangeAddress = parseRangeAddress(z.range),
+      D = _t(goalSeekRequest.variableAddress),
+      B = z.columns[D.col - rangeAddress.firstCol],
       _ = B?.calculatedFormula;
     if (
-      D.row === V.firstRow ||
-      (z.showTotals && D.row === V.lastRow) ||
+      D.row === rangeAddress.firstRow ||
+      (z.showTotals && D.row === rangeAddress.lastRow) ||
       _ ||
       Object.entries(a.cells).some(([C, T]) => {
         const N = _t(C);
         return (
           N.col === D.col &&
-          N.row > V.firstRow &&
-          N.row <= V.lastRow - (z.showTotals ? 1 : 0) &&
+          N.row > rangeAddress.firstRow &&
+          N.row <= rangeAddress.lastRow - (z.showTotals ? 1 : 0) &&
           !T.literal &&
           typeof T.raw == "string" &&
           T.raw.startsWith("=")
@@ -934,16 +981,16 @@ function solveGoalSeek(e, r, t = {}) {
   }
   if (
     [...(a.pivots ?? []), ...(a.queries ?? [])].some((z) =>
-      isCellInRange(z.outputRange, n.variableAddress),
+      isCellInRange(z.outputRange, goalSeekRequest.variableAddress),
     )
   )
     throw Error(
       "A generated pivot/query output cannot be the Goal Seek variable.",
     );
-  if (u.raw < n.lowerBound || u.raw > n.upperBound)
+  if (u.raw < goalSeekRequest.lowerBound || u.raw > goalSeekRequest.upperBound)
     throw Error("The starting input must be inside the supplied bounds.");
   const l = (a.validations ?? []).filter((z) =>
-    isCellInRange(z.range, n.variableAddress),
+    isCellInRange(z.range, goalSeekRequest.variableAddress),
   );
   if (l.some((z) => !["number", "date"].includes(z.kind)))
     throw Error(
@@ -952,8 +999,8 @@ function solveGoalSeek(e, r, t = {}) {
   if (
     l.some(
       (z) =>
-        ![u.raw, n.lowerBound, n.upperBound].every((V) =>
-          validateDataValidationRule(z, V),
+        ![u.raw, goalSeekRequest.lowerBound, goalSeekRequest.upperBound].every(
+          (V) => validateDataValidationRule(z, V),
         ),
     )
   )
@@ -962,18 +1009,18 @@ function solveGoalSeek(e, r, t = {}) {
     );
   const c = inspectFormulaDependencies(
       {
-        ...e,
-        sheets: e.sheets.map((z) =>
-          z.veryHidden ? { ...z, hidden: true } : z,
+        ...workbook,
+        sheets: workbook.sheets.map((sheet) =>
+          sheet.veryHidden ? { ...sheet, hidden: true } : sheet,
         ),
       },
       {
         sheetId: o.id,
-        address: n.formulaAddress,
+        address: goalSeekRequest.formulaAddress,
         direction: "precedents",
         depth: goalSeekLimits.maxDepth,
-        includeHidden: s.includeHidden,
-        allowedSheetIds: s.allowedSheetIds,
+        includeHidden: context.includeHidden,
+        allowedSheetIds: context.allowedSheetIds,
         limits: {
           maxFormulaCells: goalSeekLimits.maxFormulaCells,
           maxNodes: goalSeekLimits.maxDependencyCells,
@@ -982,7 +1029,7 @@ function solveGoalSeek(e, r, t = {}) {
       },
     ),
     h = [c.target, ...c.nodes],
-    f = new Set(h.map((z) => z.key));
+    f = new Set(h.map((event) => event.key));
   if (
     h.length > goalSeekLimits.maxDependencyCells ||
     c.coverage.truncated ||
@@ -991,12 +1038,12 @@ function solveGoalSeek(e, r, t = {}) {
     throw Error(
       "Goal Seek requires a complete dependency closure within 500 cells, 5,000 scanned formulas and depth 8.",
     );
-  const p = c.issues.find((z) => f.has(z.from));
+  const p = c.issues.find((issue) => f.has(issue.from));
   if (p || c.cycles.length)
     throw Error(
       `Goal Seek requires supported static dependencies: ${p?.message ?? "the dependency graph contains a cycle."}`,
     );
-  if (!f.has(buildCompositeKey(a.id, n.variableAddress)))
+  if (!f.has(buildCompositeKey(a.id, goalSeekRequest.variableAddress)))
     throw Error(
       "The Set cell formula does not depend on the selected changing cell.",
     );
@@ -1023,14 +1070,14 @@ function solveGoalSeek(e, r, t = {}) {
     "GET.CELL",
   ]);
   for (const z of h) {
-    const V = e.sheets.find((B) => B.id === z.sheetId),
+    const V = workbook.sheets.find((sheet) => sheet.id === z.sheetId),
       D = V.cells[z.address];
     if (D?.raw === null || !D)
       throw Error(
         "Goal Seek requires populated static dependency cells; blank or possible spill-child dependencies are not supported.",
       );
     if (!D.literal && typeof D.raw == "string" && D.raw.startsWith("=")) {
-      const B = resolveDefinedNameValue(D.raw, e, V.id).replace(
+      const B = resolveDefinedNameValue(D.raw, workbook, V.id).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
         "",
       );
@@ -1051,9 +1098,9 @@ function solveGoalSeek(e, r, t = {}) {
     }
   }
   const v = {
-    ...e,
-    sheets: e.sheets
-      .filter((z) => s.allowedSheetIds.includes(z.id))
+    ...workbook,
+    sheets: workbook.sheets
+      .filter((sheet) => context.allowedSheetIds.includes(sheet.id))
       .map((z) => ({
         ...z,
         cells: Object.fromEntries(
@@ -1063,10 +1110,10 @@ function solveGoalSeek(e, r, t = {}) {
         ),
       })),
   };
-  let g = 0,
-    b = 0,
-    y = 0;
-  const w = { input: u.raw, output: null };
+  let evaluations = 0,
+    iterations = 0,
+    workUnits = 0;
+  const baseline = { input: u.raw, output: null };
   let E = { input: u.raw, value: null, residual: null };
   const A = new Map();
   class k extends Error {
@@ -1078,31 +1125,34 @@ function solveGoalSeek(e, r, t = {}) {
       const V = A.get(z);
       if (V) return V;
       if (
-        g >= goalSeekLimits.maxEvaluations ||
-        y + h.length > goalSeekLimits.maxWorkUnits
+        evaluations >= goalSeekLimits.maxEvaluations ||
+        workUnits + h.length > goalSeekLimits.maxWorkUnits
       )
         throw new k(
           "work-limit",
           "The Goal Seek evaluation/work budget was reached.",
         );
-      (g++, (y += h.length));
+      (evaluations++, (workUnits += h.length));
       const D = {
           ...v,
-          sheets: v.sheets.map((N) =>
-            N.id === a.id
+          sheets: v.sheets.map((sheet) =>
+            sheet.id === a.id
               ? {
-                  ...N,
-                  cells: { ...N.cells, [n.variableAddress]: { ...u, raw: z } },
+                  ...sheet,
+                  cells: {
+                    ...sheet.cells,
+                    [goalSeekRequest.variableAddress]: { ...u, raw: z },
+                  },
                 }
-              : N,
+              : sheet,
           ),
         },
-        B = calculateWorkbookWithSettings(D),
-        _ = B(o.id, n.formulaAddress);
-      if (B.getOperationalErrors().length)
+        workbookWithSettings = calculateWorkbookWithSettings(D),
+        _ = workbookWithSettings(o.id, goalSeekRequest.formulaAddress);
+      if (workbookWithSettings.getOperationalErrors().length)
         throw new k(
           "calculation-error",
-          `A trial encountered an operational calculation error (${B.getOperationalErrors().join(", ")}), even if a formula error handler concealed it. The baseline is unchanged.`,
+          `A trial encountered an operational calculation error (${workbookWithSettings.getOperationalErrors().join(", ")}), even if a formula error handler concealed it. The baseline is unchanged.`,
         );
       if (!isFiniteNumber(_))
         throw new k(
@@ -1110,101 +1160,112 @@ function solveGoalSeek(e, r, t = {}) {
           `The formula returned ${String(_)} at input ${z}; a finite numeric result is required.`,
         );
       for (const N of h)
-        if (B.getSpillRange(N.sheetId, N.address))
+        if (workbookWithSettings.getSpillRange(N.sheetId, N.address))
           throw new k(
             "calculation-error",
             "A trial produced an array/spill result. Goal Seek requires scalar dependencies.",
           );
-      if (B.getOperationalErrors().length)
+      if (workbookWithSettings.getOperationalErrors().length)
         throw new k(
           "calculation-error",
           "Dependency inspection encountered an operational calculation error; the baseline is unchanged.",
         );
-      const C = _ - n.target;
-      if (!isFiniteNumber(C))
+      const residual = _ - goalSeekRequest.target;
+      if (!isFiniteNumber(residual))
         throw new k(
           "calculation-error",
           "The residual exceeded finite numeric precision.",
         );
-      const T = { input: z, value: _, residual: C };
+      const T = { input: z, value: _, residual: residual };
       return (
         A.set(z, T),
-        (E.residual === null || Math.abs(C) < Math.abs(E.residual)) && (E = T),
+        (E.residual === null || Math.abs(residual) < Math.abs(E.residual)) &&
+          (E = T),
         T
       );
     },
     I = (z, V) => {
-      const D = z === "converged" || z === "already-satisfied";
-      if (D && l.some((C) => !validateDataValidationRule(C, E.input)))
+      const converged = z === "converged" || z === "already-satisfied";
+      if (converged && l.some((C) => !validateDataValidationRule(C, E.input)))
         return I(
           "validation-error",
           "The candidate violates the variable's data validation rule.",
         );
-      const B =
-          D && E.input !== u.raw
+      const patches =
+          converged && E.input !== u.raw
             ? [
                 {
                   sheetId: a.id,
-                  address: n.variableAddress,
+                  address: goalSeekRequest.variableAddress,
                   cell: { ...u, raw: E.input },
                 },
               ]
             : [],
-        _ = B.length
+        next = patches.length
           ? {
-              ...e,
-              sheets: e.sheets.map((C) =>
-                C.id === a.id
+              ...workbook,
+              sheets: workbook.sheets.map((sheet) =>
+                sheet.id === a.id
                   ? {
-                      ...C,
-                      cells: { ...C.cells, [n.variableAddress]: B[0].cell },
+                      ...sheet,
+                      cells: {
+                        ...sheet.cells,
+                        [goalSeekRequest.variableAddress]: patches[0].cell,
+                      },
                     }
-                  : C,
+                  : sheet,
               ),
             }
-          : e;
+          : workbook;
       return {
-        snapshot: JSON.stringify(e),
-        request: n,
-        context: s,
-        baseline: w,
+        snapshot: JSON.stringify(workbook),
+        request: goalSeekRequest,
+        context: context,
+        baseline: baseline,
         dependencyCells: h.length,
         result: {
           status: z,
-          converged: D,
+          converged: converged,
           input: E.input,
           achievedValue: E.value,
           residual: E.residual,
           absoluteResidual: E.residual === null ? null : Math.abs(E.residual),
-          iterations: b,
-          evaluations: g,
-          workUnits: y,
+          iterations: iterations,
+          evaluations: evaluations,
+          workUnits: workUnits,
           algorithm: "Bracketed bisection",
           message: V,
         },
-        patches: B,
-        next: _,
+        patches: patches,
+        next: next,
       };
     };
   try {
     const z = F(u.raw);
-    if (((w.output = z.value), Math.abs(z.residual) <= n.tolerance))
+    if (
+      ((baseline.output = z.value),
+      Math.abs(z.residual) <= goalSeekRequest.tolerance)
+    )
       return I(
         "already-satisfied",
         "The baseline already meets the requested tolerance. No input change is needed.",
       );
-    let V = F(n.lowerBound);
-    if (Math.abs(V.residual) <= n.tolerance)
+    let V = F(goalSeekRequest.lowerBound);
+    if (Math.abs(V.residual) <= goalSeekRequest.tolerance)
       return I("converged", "The lower bound meets the requested tolerance.");
-    let D = F(n.upperBound);
-    if (Math.abs(D.residual) <= n.tolerance)
+    let D = F(goalSeekRequest.upperBound);
+    if (Math.abs(D.residual) <= goalSeekRequest.tolerance)
       return I("converged", "The upper bound meets the requested tolerance.");
     if (Math.sign(V.residual) === Math.sign(D.residual))
       return I(
         "not-bracketed",
         "The supplied bounds do not bracket a target crossing. A solution may exist elsewhere or inside a non-monotonic interval; choose a narrower valid bracket.",
       );
-    for (b = 1; b <= n.maxIterations; b++) {
+    for (
+      iterations = 1;
+      iterations <= goalSeekRequest.maxIterations;
+      iterations++
+    ) {
       const B = V.input / 2 + D.input / 2;
       if (B === V.input || B === D.input)
         return I(
@@ -1212,7 +1273,7 @@ function solveGoalSeek(e, r, t = {}) {
           "The bracket cannot be refined further at numeric precision; the residual still exceeds tolerance.",
         );
       const _ = F(B);
-      if (Math.abs(_.residual) <= n.tolerance)
+      if (Math.abs(_.residual) <= goalSeekRequest.tolerance)
         return I(
           "converged",
           "The candidate meets the requested absolute residual tolerance.",
@@ -1220,24 +1281,24 @@ function solveGoalSeek(e, r, t = {}) {
       Math.sign(_.residual) === Math.sign(V.residual) ? (V = _) : (D = _);
     }
     return (
-      (b = n.maxIterations),
+      (iterations = goalSeekRequest.maxIterations),
       I(
         "iteration-limit",
         "The iteration limit was reached without meeting the residual tolerance. The baseline is unchanged.",
       )
     );
-  } catch (z) {
+  } catch (error) {
     return I(
-      z instanceof k ? z.status : "calculation-error",
-      z instanceof Error
-        ? z.message
+      error instanceof k ? error.status : "calculation-error",
+      error instanceof Error
+        ? error.message
         : "The trial calculation failed; the baseline is unchanged.",
     );
   }
 }
-function applyGoalSeekResult(e, r, t = {}) {
+function applyGoalSeekResult(workbook, r, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  if (JSON.stringify(e) !== r.snapshot)
+  if (JSON.stringify(workbook) !== r.snapshot)
     throw Error(
       "The workbook changed after the Goal Seek preview. Solve and review again.",
     );
@@ -1245,7 +1306,7 @@ function applyGoalSeekResult(e, r, t = {}) {
     throw Error(
       "Only a candidate that meets the residual tolerance can be applied.",
     );
-  const n = solveGoalSeek(e, r.request, t);
+  const n = solveGoalSeek(workbook, r.request, t);
   if (JSON.stringify(n) !== JSON.stringify(r))
     throw Error(
       "The Goal Seek preview or host context changed. Solve and review again.",
@@ -1253,50 +1314,55 @@ function applyGoalSeekResult(e, r, t = {}) {
   return n.next;
 }
 function GoalSeekDialog(e) {
-  const r = useWorkbookMessages(),
-    [t] = ne.useState(r.entryLocale),
-    n = (W, K) => validateLocalizedNumberEntry(W, K, t),
+  const workbookMessages = useWorkbookMessages(),
+    [entryLocale] = ne.useState(workbookMessages.entryLocale),
+    n = (W, K) => validateLocalizedNumberEntry(W, K, entryLocale),
     { text, language } = useWorkbookMessages(),
     s = ne.useId(),
     d = ne.useRef(null),
     u = ne.useRef(e.onClose);
   u.current = e.onClose;
-  const [l, c] = ne.useState(e.sheetId),
-    [h, f] = ne.useState(e.address),
-    [p, m] = ne.useState(e.sheetId),
-    [v, g] = ne.useState(""),
+  const [formulaSheetId, c] = ne.useState(e.sheetId),
+    [formulaAddress, f] = ne.useState(e.address),
+    [variableSheetId, m] = ne.useState(e.sheetId),
+    [variableAddress, g] = ne.useState(""),
     [b, y] = ne.useState(""),
     [w, E] = ne.useState("0"),
     [A, k] = ne.useState("100"),
-    [F, I] = ne.useState(() => formatCellEntryForEdit({ raw: 1e-6 }, t)),
+    [F, I] = ne.useState(() =>
+      formatCellEntryForEdit({ raw: 1e-6 }, entryLocale),
+    ),
     [O, j] = ne.useState("64"),
-    [z, V] = ne.useState(false),
+    [checked, V] = ne.useState(false),
     [D, B] = ne.useState(null),
     [_, C] = ne.useState(""),
     T = {
-      includeHidden: !!e.allowHidden && z,
+      includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
     N = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((W) => W.id)),
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     R = e.workbook.sheets.filter(
-      (W) =>
-        N.includes(W.id) && (T.includeHidden || (!W.hidden && !W.veryHidden)),
+      (sheet) =>
+        N.includes(sheet.id) &&
+        (T.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
-    L = R.some((W) => W.id === l),
-    $ = R.some((W) => W.id === p),
+    L = R.some((W) => W.id === formulaSheetId),
+    $ = R.some((W) => W.id === variableSheetId),
     U =
       !!D &&
       D.snapshot === JSON.stringify(e.workbook) &&
       D.context.includeHidden === T.includeHidden &&
       JSON.stringify(D.context.allowedSheetIds) === JSON.stringify(N);
   ne.useEffect(() => {
-    const W = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       d.current?.querySelector('[data-ui-label="Set cell"]')?.focus(),
       () => {
-        W?.isConnected && W.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
@@ -1309,23 +1375,23 @@ function GoalSeekDialog(e) {
           ? W.message
           : "Goal Seek could not complete the operation.",
       ),
-    Q = () => {
+    onClick = () => {
       try {
-        const W = {
-          formulaSheetId: l,
-          formulaAddress: h,
-          variableSheetId: p,
-          variableAddress: v,
+        const request = {
+          formulaSheetId: formulaSheetId,
+          formulaAddress: formulaAddress,
+          variableSheetId: variableSheetId,
+          variableAddress: variableAddress,
           target: n(b, "Target value"),
           lowerBound: n(w, "Lower bound"),
           upperBound: n(A, "Upper bound"),
           tolerance: n(F, "Tolerance"),
           maxIterations: n(O, "Maximum iterations"),
         };
-        (B(solveGoalSeek(e.workbook, W, { ...T, readOnly: e.readOnly })),
+        (B(solveGoalSeek(e.workbook, request, { ...T, readOnly: e.readOnly })),
           C(""));
-      } catch (W) {
-        (B(null), H(W));
+      } catch (error) {
+        (B(null), H(error));
       }
     },
     X$1 = () => {
@@ -1342,14 +1408,14 @@ function GoalSeekDialog(e) {
             ),
             B(null),
             C(""));
-        } catch (W) {
-          H(W);
+        } catch (error) {
+          H(error);
         }
     };
   return i.jsx("div", {
     className: "gs-backdrop",
-    onMouseDown: (W) => {
-      W.target === W.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       ref: d,
@@ -1357,23 +1423,23 @@ function GoalSeekDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${s}-title`,
-      onKeyDown: (W) => {
+      onKeyDown: (event) => {
         var te, ae;
         if (
-          (W.stopPropagation(),
-          W.key === "Escape" && (W.preventDefault(), u.current()),
-          W.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), u.current()),
+          event.key === "Tab")
         ) {
           const oe = [
             ...(d.current?.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
             ) ?? []),
           ].filter((de) => !de.hidden);
-          W.shiftKey && document.activeElement === oe[0]
-            ? (W.preventDefault(), (te = oe.at(-1)) == null || te.focus())
-            : !W.shiftKey &&
+          event.shiftKey && document.activeElement === oe[0]
+            ? (event.preventDefault(), (te = oe.at(-1)) == null || te.focus())
+            : !event.shiftKey &&
               document.activeElement === oe.at(-1) &&
-              (W.preventDefault(), (ae = oe[0]) == null || ae.focus());
+              (event.preventDefault(), (ae = oe[0]) == null || ae.focus());
         }
       },
       children: [
@@ -1416,9 +1482,9 @@ function GoalSeekDialog(e) {
                 i.jsx(LocalizedText, { children: "Formula worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Formula worksheet"),
-                  value: L ? l : "",
+                  value: L ? formulaSheetId : "",
                   disabled: e.readOnly,
-                  onChange: (W) => G(c, W.target.value),
+                  onChange: (event) => G(c, event.target.value),
                   lang: language("Formula worksheet"),
                   "data-ui-label": "Formula worksheet",
                   children: [
@@ -1439,10 +1505,10 @@ function GoalSeekDialog(e) {
                 i.jsx(LocalizedText, { children: "Set cell" }),
                 i.jsx("input", {
                   "aria-label": text("Set cell"),
-                  value: L ? h : "",
+                  value: L ? formulaAddress : "",
                   placeholder: text("B1"),
                   readOnly: e.readOnly,
-                  onChange: (W) => G(f, W.target.value),
+                  onChange: (event) => G(f, event.target.value),
                   lang: language("Set cell"),
                   "data-ui-label": "Set cell",
                 }),
@@ -1453,9 +1519,9 @@ function GoalSeekDialog(e) {
                 i.jsx(LocalizedText, { children: "Changing worksheet" }),
                 i.jsxs("select", {
                   "aria-label": text("Changing worksheet"),
-                  value: $ ? p : "",
+                  value: $ ? variableSheetId : "",
                   disabled: e.readOnly,
-                  onChange: (W) => G(m, W.target.value),
+                  onChange: (event) => G(m, event.target.value),
                   lang: language("Changing worksheet"),
                   "data-ui-label": "Changing worksheet",
                   children: [
@@ -1476,10 +1542,10 @@ function GoalSeekDialog(e) {
                 i.jsx(LocalizedText, { children: "By changing cell" }),
                 i.jsx("input", {
                   "aria-label": text("By changing cell"),
-                  value: $ ? v : "",
+                  value: $ ? variableAddress : "",
                   placeholder: text("A1"),
                   readOnly: e.readOnly,
-                  onChange: (W) => G(g, W.target.value),
+                  onChange: (event) => G(g, event.target.value),
                   lang: language("By changing cell"),
                   "data-ui-label": "By changing cell",
                 }),
@@ -1493,7 +1559,7 @@ function GoalSeekDialog(e) {
                   value: b,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
-                  onChange: (W) => G(y, W.target.value),
+                  onChange: (event) => G(y, event.target.value),
                   lang: language("Target value"),
                   "data-ui-label": "Target value",
                 }),
@@ -1507,7 +1573,7 @@ function GoalSeekDialog(e) {
                   value: F,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
-                  onChange: (W) => G(I, W.target.value),
+                  onChange: (event) => G(I, event.target.value),
                   lang: language("Absolute tolerance"),
                   "data-ui-label": "Absolute tolerance",
                 }),
@@ -1521,7 +1587,7 @@ function GoalSeekDialog(e) {
                   value: w,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
-                  onChange: (W) => G(E, W.target.value),
+                  onChange: (event) => G(E, event.target.value),
                   lang: language("Lower bound"),
                   "data-ui-label": "Lower bound",
                 }),
@@ -1535,7 +1601,7 @@ function GoalSeekDialog(e) {
                   value: A,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
-                  onChange: (W) => G(k, W.target.value),
+                  onChange: (event) => G(k, event.target.value),
                   lang: language("Upper bound"),
                   "data-ui-label": "Upper bound",
                 }),
@@ -1549,7 +1615,7 @@ function GoalSeekDialog(e) {
                   value: O,
                   inputMode: "numeric",
                   readOnly: e.readOnly,
-                  onChange: (W) => G(j, W.target.value),
+                  onChange: (event) => G(j, event.target.value),
                   lang: language("Maximum iterations"),
                   "data-ui-label": "Maximum iterations",
                 }),
@@ -1561,9 +1627,9 @@ function GoalSeekDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: z,
-                    onChange: (W) => {
-                      (V(W.target.checked), B(null), C(""));
+                    checked: checked,
+                    onChange: (event) => {
+                      (V(event.target.checked), B(null), C(""));
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
@@ -1575,7 +1641,7 @@ function GoalSeekDialog(e) {
         i.jsx("button", {
           className: "gs-primary",
           disabled: e.readOnly || !L || !$,
-          onClick: Q,
+          onClick: onClick,
           children: i.jsx(LocalizedText, { children: "Solve" }),
         }),
         D &&
@@ -1609,7 +1675,8 @@ function GoalSeekDialog(e) {
                           i.jsxs("dd", {
                             children: [
                               e.workbook.sheets.find(
-                                (W) => W.id === D.request.formulaSheetId,
+                                (sheet) =>
+                                  sheet.id === D.request.formulaSheetId,
                               )?.name,
                               "!",
                               D.request.formulaAddress,
@@ -1623,7 +1690,8 @@ function GoalSeekDialog(e) {
                           i.jsxs("dd", {
                             children: [
                               e.workbook.sheets.find(
-                                (W) => W.id === D.request.variableSheetId,
+                                (sheet) =>
+                                  sheet.id === D.request.variableSheetId,
                               )?.name,
                               "!",
                               D.request.variableAddress,
@@ -1789,7 +1857,7 @@ function GoalSeekDialog(e) {
     }),
   });
 }
-function normalizeAnalysisPermissions(e, r = {}) {
+function normalizeAnalysisPermissions(workbook, r = {}) {
   if (
     (r.readOnly !== undefined && typeof r.readOnly != "boolean") ||
     (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
@@ -1799,7 +1867,9 @@ function normalizeAnalysisPermissions(e, r = {}) {
     r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
-        (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
+        (allowedSheetId) =>
+          typeof allowedSheetId != "string" ||
+          !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
       ))
   )
     throw Error("The host scope contains an unknown worksheet.");
@@ -1807,14 +1877,14 @@ function normalizeAnalysisPermissions(e, r = {}) {
     readOnly: !!r.readOnly,
     includeHidden: !!r.includeHidden,
     allowedSheetIds: [
-      ...new Set(r.allowedSheetIds ?? e.sheets.map((t) => t.id)),
+      ...new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
     ].sort(),
   };
 }
-function validateAnalysisSource(e, r, t) {
-  const n = normalizeAnalysisPermissions(e, t),
-    o = e.sheets.find((d) => d.id === r.sheetId);
-  if (!o || !n.allowedSheetIds.includes(o.id))
+function validateAnalysisSource(workbook, r, t) {
+  const analysisPermissions = normalizeAnalysisPermissions(workbook, t),
+    o = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  if (!o || !analysisPermissions.allowedSheetIds.includes(o.id))
     throw Error("A source is outside the authorized host context.");
   if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(r.address))
     throw Error("Use a canonical cell address.");
@@ -1822,7 +1892,7 @@ function validateAnalysisSource(e, r, t) {
   if (a.row >= 1048576 || a.col >= 16384)
     throw Error("The cell address exceeds Excel dimensions.");
   if (
-    !n.includeHidden &&
+    !analysisPermissions.includeHidden &&
     (o.hidden ||
       o.veryHidden ||
       cn(o, "row").some((d) => d.start <= a.row && a.row <= d.end) ||
@@ -1835,30 +1905,35 @@ function validateAnalysisSource(e, r, t) {
     throw Error(
       "Analysis and model report snapshots cannot be analysis inputs. Use the original source cells.",
     );
-  if (o.merges?.some((d) => parseRangeBounds(d, r.address)))
+  if (o.merges?.some((merge) => parseRangeBounds(merge, r.address)))
     throw Error("Merged analysis sources are ambiguous.");
   return o;
 }
-function parseRangeBounds(e, r) {
-  const t = parseRangeAddress(e),
-    n = _t(r);
+function parseRangeBounds(e, address) {
+  const rangeAddress = parseRangeAddress(e),
+    n = _t(address);
   return (
-    n.row >= t.firstRow &&
-    n.row <= t.lastRow &&
-    n.col >= t.firstCol &&
-    n.col <= t.lastCol
+    n.row >= rangeAddress.firstRow &&
+    n.row <= rangeAddress.lastRow &&
+    n.col >= rangeAddress.firstCol &&
+    n.col <= rangeAddress.lastCol
   );
 }
-function p_(e) {
+function p_(workbook) {
   return fingerprintCanonicalValue({
-    sheets: e.sheets.filter((r) => !r.analysisReport).map((r) => ({ ...r })),
-    calculation: e.calculation ?? null,
-    datePolicy: e.datePolicy ?? null,
-    definedNames: e.definedNames ?? null,
+    sheets: workbook.sheets
+      .filter((sheet) => !sheet.analysisReport)
+      .map((r) => ({ ...r })),
+    calculation: workbook.calculation ?? null,
+    datePolicy: workbook.datePolicy ?? null,
+    definedNames: workbook.definedNames ?? null,
   });
 }
-function assertAutomaticCalculation(e) {
-  if (e.calculation?.mode === "manual" || e.calculation?.iterative)
+function assertAutomaticCalculation(workbook) {
+  if (
+    workbook.calculation?.mode === "manual" ||
+    workbook.calculation?.iterative
+  )
     throw Error(
       "Analysis formulas require automatic, non-iterative calculation.",
     );

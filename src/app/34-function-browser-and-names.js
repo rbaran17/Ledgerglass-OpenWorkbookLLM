@@ -1474,17 +1474,17 @@ const familyResultContracts = {
     tests: "tests/formula-extended.test.ts;tests/core.test.ts",
   },
 };
-function buildFunctionCatalogEntry(e) {
-  const r = e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
-    t = classifyFunctionFamily(r),
-    n = familyResultContracts[t],
+function buildFunctionCatalogEntry(functionName) {
+  const r = functionName.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
+    family = classifyFunctionFamily(r),
+    n = familyResultContracts[family],
     o = localFunctionNameSet.has(r);
   return {
     name: r,
-    family: t,
+    family: family,
     status: o
       ? "local"
-      : t === "cube" || t === "network"
+      : family === "cube" || family === "network"
         ? "connector-required"
         : "unimplemented",
     inputs:
@@ -1540,14 +1540,18 @@ function buildFunctionCatalog() {
     .map(buildFunctionCatalogEntry);
 }
 function buildFunctionBrowserGroups() {
-  const e = buildFunctionCatalog();
-  return functionBrowserCategories.map((r) => ({
-    ...r,
-    adopted: e
-      .filter((t) => t.family === r.id && t.status === "local")
+  const functionCatalog = buildFunctionCatalog();
+  return functionBrowserCategories.map((functionBrowserCategory) => ({
+    ...functionBrowserCategory,
+    adopted: functionCatalog
+      .filter(
+        (t) => t.family === functionBrowserCategory.id && t.status === "local",
+      )
       .map((t) => t.name),
-    unavailable: e
-      .filter((t) => t.family === r.id && t.status !== "local")
+    unavailable: functionCatalog
+      .filter(
+        (t) => t.family === functionBrowserCategory.id && t.status !== "local",
+      )
       .map((t) => t.name),
     excelVersionVerified: false,
   }));
@@ -1563,16 +1567,16 @@ function FunctionAndNameDialog({
   onInsertFormula,
 }) {
   const { text, language } = useWorkbookMessages(),
-    c = workbook.sheets.find((se) => se.id === sheetId),
+    c = workbook.sheets.find((sheet) => sheet.id === sheetId),
     [h, f] = ne.useState(""),
-    [p, m] = ne.useState("SUM"),
+    [functionName, m] = ne.useState("SUM"),
     [v, g] = ne.useState(range),
     [b, y] = ne.useState(""),
-    [w, E] = ne.useState(
+    [refersTo, E] = ne.useState(
       `='${(c?.name ?? "Sheet1").replace(/'/g, "''")}'!${range}`,
     ),
-    [A, k] = ne.useState(""),
-    [F, I] = ne.useState(""),
+    [scopeSheetId, k] = ne.useState(""),
+    [comment, I] = ne.useState(""),
     [O, j] = ne.useState(null),
     [z, V] = ne.useState(""),
     [D, B] = ne.useState(JSON.stringify(workbook)),
@@ -1580,7 +1584,7 @@ function FunctionAndNameDialog({
     [T, N] = ne.useState(null),
     [R, L] = ne.useState("100,0.2"),
     [$, U] = ne.useState(""),
-    G = parseFormulaTree(w),
+    formulaTree = parseFormulaTree(refersTo),
     H = (se, we) => {
       (_ || B(JSON.stringify(workbook)), C(true), N(null), U(""), se(we));
     },
@@ -1589,22 +1593,22 @@ function FunctionAndNameDialog({
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
       () =>
-        builtinFunctionNames.filter((se) =>
-          se.toLowerCase().includes(h.toLowerCase()),
+        builtinFunctionNames.filter((builtinFunctionName) =>
+          builtinFunctionName.toLowerCase().includes(h.toLowerCase()),
         ),
       [h],
     ),
-    q = `=${p}(${v})`,
-    W = buildFunctionCatalogEntry(p),
+    raw = `=${functionName}(${v})`,
+    functionCatalogEntry = buildFunctionCatalogEntry(functionName),
     K = ne.useMemo(() => {
       if (mode !== "function") return "";
       const se = range.split(":")[0].replace(/\$/g, "").toUpperCase(),
         we = {
           ...workbook,
-          sheets: workbook.sheets.map((Ee) =>
-            Ee.id === sheetId
-              ? { ...Ee, cells: { ...Ee.cells, [se]: { raw: q } } }
-              : Ee,
+          sheets: workbook.sheets.map((sheet) =>
+            sheet.id === sheetId
+              ? { ...sheet, cells: { ...sheet.cells, [se]: { raw: raw } } }
+              : sheet,
           ),
         };
       try {
@@ -1612,8 +1616,8 @@ function FunctionAndNameDialog({
       } catch {
         return "Check the function arguments.";
       }
-    }, [q, mode, workbook, sheetId, range]),
-    te = () => {
+    }, [raw, mode, workbook, sheetId, range]),
+    onClick = () => {
       (y(""),
         I(""),
         j(null),
@@ -1632,11 +1636,11 @@ function FunctionAndNameDialog({
           throw Error(
             "The workbook changed while this name was being edited. Choose New name or reopen Edit to review current content.",
           );
-        const we = {
+        const definition = {
             name: b.trim(),
-            refersTo: w.trim(),
-            ...(A ? { scopeSheetId: A } : {}),
-            ...(F ? { comment: F } : {}),
+            refersTo: refersTo.trim(),
+            ...(scopeSheetId ? { scopeSheetId: scopeSheetId } : {}),
+            ...(comment ? { comment: comment } : {}),
           },
           Ee =
             O === null || (se = workbook.definedNames) == null
@@ -1644,11 +1648,11 @@ function FunctionAndNameDialog({
               : se[O];
         if (O !== null && !Ee)
           throw Error("The defined name no longer exists.");
-        if (Ee && Ee.name !== we.name) {
+        if (Ee && Ee.name !== definition.name) {
           if (
-            Ee.scopeSheetId !== we.scopeSheetId ||
-            Ee.refersTo !== we.refersTo ||
-            (Ee.comment ?? "") !== (we.comment ?? "")
+            Ee.scopeSheetId !== definition.scopeSheetId ||
+            Ee.refersTo !== definition.refersTo ||
+            (Ee.comment ?? "") !== (definition.comment ?? "")
           )
             throw Error(
               "Rename separately from changing the definition or comment. Existing scope cannot be changed.",
@@ -1660,7 +1664,7 @@ function FunctionAndNameDialog({
                 kind: "rename",
                 name: Ee.name,
                 ...(Ee.scopeSheetId ? { scopeSheetId: Ee.scopeSheetId } : {}),
-                newName: we.name,
+                newName: definition.name,
               },
               { readOnly },
             ),
@@ -1675,63 +1679,66 @@ function FunctionAndNameDialog({
                   kind: "update",
                   name: Ee.name,
                   ...(Ee.scopeSheetId ? { scopeSheetId: Ee.scopeSheetId } : {}),
-                  definition: we,
+                  definition: definition,
                 }
-              : { kind: "create", definition: we },
+              : { kind: "create", definition: definition },
             { readOnly },
           ),
           ye = assertNamePreviewCurrent(workbook, Ae, { readOnly });
         (ye !== workbook &&
-          onWorkbookChange(ye, `${Ee ? "Edit" : "Define"} name: ${we.name}`),
-          te());
-      } catch (we) {
-        X$1(we);
+          onWorkbookChange(
+            ye,
+            `${Ee ? "Edit" : "Define"} name: ${definition.name}`,
+          ),
+          onClick());
+      } catch (error) {
+        X$1(error);
       }
     },
     oe = () => {
       try {
         const se = range.split(":")[0].replace(/\$/g, "").toUpperCase(),
           we = structuredClone(workbook),
-          Ee = {
+          definition = {
             name: b.trim(),
-            refersTo: w.trim(),
-            ...(A ? { scopeSheetId: A } : {}),
+            refersTo: refersTo.trim(),
+            ...(scopeSheetId ? { scopeSheetId: scopeSheetId } : {}),
           };
         we.definedNames = (we.definedNames ?? []).filter(
           (Me) =>
             !(
-              Me.name.toLowerCase() === Ee.name.toLowerCase() &&
-              Me.scopeSheetId === Ee.scopeSheetId
+              Me.name.toLowerCase() === definition.name.toLowerCase() &&
+              Me.scopeSheetId === definition.scopeSheetId
             ),
         );
-        const Ae = applyDefinedNameOperation(we, {
+        const next = applyDefinedNameOperation(we, {
             kind: "create",
-            definition: Ee,
+            definition: definition,
           }).next,
-          ye = A || sheetId,
-          Te = Ae.sheets.find((Me) => Me.id === ye);
-        Te.cells[se] = { raw: `=${b.trim()}${G ? `(${R})` : ""}` };
-        const Pe = calculateWorkbookWithSettings(Ae),
-          qe = Pe(ye, se),
-          ht = Pe.getNamedFormulaDiagnostics().find(
-            (Me) => Me.sheetId === ye && Me.address === se,
-          ),
-          Re = Pe.getSpillRange(ye, se);
+          ye = scopeSheetId || sheetId,
+          Te = next.sheets.find((sheet) => sheet.id === ye);
+        Te.cells[se] = { raw: `=${b.trim()}${formulaTree ? `(${R})` : ""}` };
+        const workbookWithSettings = calculateWorkbookWithSettings(next),
+          qe = workbookWithSettings(ye, se),
+          ht = workbookWithSettings
+            .getNamedFormulaDiagnostics()
+            .find((Me) => Me.sheetId === ye && Me.address === se),
+          Re = workbookWithSettings.getSpillRange(ye, se);
         (U(
           `Test result: ${String(qe ?? "")}${Re ? ` · Array ${Re}` : ""}${ht ? ` · ${ht.message}` : ""}`,
         ),
           V(""));
-      } catch (se) {
-        (X$1(se), U(""));
+      } catch (error) {
+        (X$1(error), U(""));
       }
     };
   return i.jsx("div", {
     className: "formula-tool-backdrop",
-    onMouseDown: (se) => {
-      se.target === se.currentTarget && onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && onClose();
     },
-    onKeyDown: (se) => {
-      se.key === "Escape" && onClose();
+    onKeyDown: (event) => {
+      event.key === "Escape" && onClose();
     },
     children: i.jsxs("section", {
       className: "formula-tools",
@@ -1764,7 +1771,7 @@ function FunctionAndNameDialog({
                       autoFocus: true,
                       "aria-label": text("Search functions"),
                       value: h,
-                      onChange: (se) => f(se.target.value),
+                      onChange: (event) => f(event.target.value),
                       placeholder: text("SUM, lookup, text…"),
                       lang: language("Search functions"),
                       "data-ui-label": "Search functions",
@@ -1777,11 +1784,11 @@ function FunctionAndNameDialog({
                     i.jsx("select", {
                       "aria-label": text("Available functions"),
                       size: 11,
-                      value: p,
-                      onChange: (se) => {
-                        (m(se.target.value),
-                          functionArgumentSignatures[se.target.value] === "" &&
-                            g(""));
+                      value: functionName,
+                      onChange: (event) => {
+                        (m(event.target.value),
+                          functionArgumentSignatures[event.target.value] ===
+                            "" && g(""));
                       },
                       lang: language("Available functions"),
                       "data-ui-label": "Available functions",
@@ -1791,10 +1798,15 @@ function FunctionAndNameDialog({
                     }),
                     i.jsxs("div", {
                       children: [
-                        i.jsx("h3", { children: p }),
+                        i.jsx("h3", { children: functionName }),
                         i.jsxs("p", {
                           className: "formula-signature",
-                          children: [p, "(", W.inputs, ")"],
+                          children: [
+                            functionName,
+                            "(",
+                            functionCatalogEntry.inputs,
+                            ")",
+                          ],
                         }),
                         i.jsxs("label", {
                           children: [
@@ -1802,7 +1814,7 @@ function FunctionAndNameDialog({
                             i.jsx("input", {
                               "aria-label": text("Function arguments"),
                               value: v,
-                              onChange: (se) => g(se.target.value),
+                              onChange: (event) => g(event.target.value),
                               readOnly: Q,
                               lang: language("Function arguments"),
                               "data-ui-label": "Function arguments",
@@ -1815,7 +1827,7 @@ function FunctionAndNameDialog({
                               "Separate arguments with commas. Put text inside double quotes. Use cell ranges, defined names or table columns.",
                           }),
                         }),
-                        p === "SUBTOTAL" &&
+                        functionName === "SUBTOTAL" &&
                           i.jsx("p", {
                             children: i.jsx(LocalizedText, {
                               children:
@@ -1827,7 +1839,7 @@ function FunctionAndNameDialog({
                           lang: language("Formula preview"),
                           "data-ui-label": "Formula preview",
                           children: [
-                            i.jsx("code", { children: q }),
+                            i.jsx("code", { children: raw }),
                             i.jsx("strong", { children: K }),
                           ],
                         }),
@@ -1848,14 +1860,18 @@ function FunctionAndNameDialog({
                                 children: "Function support and limits",
                               }),
                             }),
-                            i.jsx("p", { children: W.outputs }),
+                            i.jsx("p", {
+                              children: functionCatalogEntry.outputs,
+                            }),
                             i.jsxs("p", {
                               children: [
                                 i.jsx(LocalizedText, { children: "Errors: " }),
-                                W.errors.join(", "),
+                                functionCatalogEntry.errors.join(", "),
                               ],
                             }),
-                            i.jsx("p", { children: W.limits }),
+                            i.jsx("p", {
+                              children: functionCatalogEntry.limits,
+                            }),
                             i.jsx("p", {
                               children: i.jsx(LocalizedText, {
                                 children:
@@ -1878,7 +1894,7 @@ function FunctionAndNameDialog({
                       className: "formula-primary",
                       disabled: Q,
                       onClick: () => {
-                        Q || (onInsertFormula(q), onClose());
+                        Q || (onInsertFormula(raw), onClose());
                       },
                       children: i.jsx(LocalizedText, {
                         children: "Insert formula",
@@ -1950,7 +1966,8 @@ function FunctionAndNameDialog({
                                     i.jsx("td", {
                                       children: se.scopeSheetId
                                         ? workbook.sheets.find(
-                                            (Ae) => Ae.id === se.scopeSheetId,
+                                            (sheet) =>
+                                              sheet.id === se.scopeSheetId,
                                           )?.name
                                         : "Workbook",
                                     }),
@@ -2006,9 +2023,9 @@ function FunctionAndNameDialog({
                                                   ye,
                                                   `Delete name: ${se.name}`,
                                                 ),
-                                                te());
-                                            } catch (Ae) {
-                                              X$1(Ae);
+                                                onClick());
+                                            } catch (error) {
+                                              X$1(error);
                                             }
                                           },
                                           children: i.jsx(LocalizedText, {
@@ -2044,7 +2061,7 @@ function FunctionAndNameDialog({
                           autoFocus: true,
                           "aria-label": text("Defined name"),
                           value: b,
-                          onChange: (se) => H(y, se.target.value),
+                          onChange: (event) => H(y, event.target.value),
                           readOnly: Q,
                           lang: language("Defined name"),
                           "data-ui-label": "Defined name",
@@ -2056,8 +2073,8 @@ function FunctionAndNameDialog({
                         i.jsx(LocalizedText, { children: "Scope" }),
                         i.jsxs("select", {
                           "aria-label": text("Name scope"),
-                          value: A,
-                          onChange: (se) => H(k, se.target.value),
+                          value: scopeSheetId,
+                          onChange: (event) => H(k, event.target.value),
                           disabled: Q || O !== null,
                           lang: language("Name scope"),
                           "data-ui-label": "Name scope",
@@ -2066,11 +2083,11 @@ function FunctionAndNameDialog({
                               value: "",
                               children: "Workbook",
                             }),
-                            workbook.sheets.map((se) =>
+                            workbook.sheets.map((sheet) =>
                               i.jsx(
                                 "option",
-                                { value: se.id, children: se.name },
-                                se.id,
+                                { value: sheet.id, children: sheet.name },
+                                sheet.id,
                               ),
                             ),
                           ],
@@ -2083,8 +2100,8 @@ function FunctionAndNameDialog({
                         i.jsx(LocalizedText, { children: "Refers to" }),
                         i.jsx("input", {
                           "aria-label": text("Name refers to"),
-                          value: w,
-                          onChange: (se) => H(E, se.target.value),
+                          value: refersTo,
+                          onChange: (event) => H(E, event.target.value),
                           readOnly: Q,
                           lang: language("Name refers to"),
                           "data-ui-label": "Name refers to",
@@ -2097,8 +2114,8 @@ function FunctionAndNameDialog({
                         i.jsx(LocalizedText, { children: "Comment" }),
                         i.jsx("input", {
                           "aria-label": text("Name comment"),
-                          value: F,
-                          onChange: (se) => H(I, se.target.value),
+                          value: comment,
+                          onChange: (event) => H(I, event.target.value),
                           readOnly: Q,
                           lang: language("Name comment"),
                           "data-ui-label": "Name comment",
@@ -2109,8 +2126,8 @@ function FunctionAndNameDialog({
                 }),
                 i.jsx("p", {
                   className: "formula-signature",
-                  children: G
-                    ? `Reusable formula: ${b || "Name"}(${G.join(", ")}). Parameters are local to each call.`
+                  children: formulaTree
+                    ? `Reusable formula: ${b || "Name"}(${formulaTree.join(", ")}). Parameters are local to each call.`
                     : "Define a range, constant or calculated formula. Use LET for local variables, or LAMBDA to create a reusable function.",
                 }),
                 i.jsxs("div", {
@@ -2126,15 +2143,15 @@ function FunctionAndNameDialog({
                         children: "Use LAMBDA template",
                       }),
                     }),
-                    G &&
+                    formulaTree &&
                       i.jsxs("label", {
                         children: [
                           i.jsx(LocalizedText, { children: "Test arguments" }),
                           i.jsx("input", {
                             "aria-label": text("Name test arguments"),
                             value: R,
-                            onChange: (se) => {
-                              (L(se.target.value), U(""));
+                            onChange: (event) => {
+                              (L(event.target.value), U(""));
                             },
                             lang: language("Name test arguments"),
                             "data-ui-label": "Name test arguments",
@@ -2240,20 +2257,20 @@ function FunctionAndNameDialog({
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: T.changes.map((se, we) =>
+                              children: T.changes.map((change, we) =>
                                 i.jsxs(
                                   "tr",
                                   {
                                     children: [
-                                      i.jsx("td", { children: se.label }),
+                                      i.jsx("td", { children: change.label }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
-                                          children: se.before,
+                                          children: change.before,
                                         }),
                                       }),
                                       i.jsx("td", {
                                         children: i.jsx("code", {
-                                          children: se.after,
+                                          children: change.after,
                                         }),
                                       }),
                                     ],
@@ -2273,8 +2290,8 @@ function FunctionAndNameDialog({
                             }),
                           }),
                           i.jsx("ul", {
-                            children: T.dependencies.map((se, we) =>
-                              i.jsx("li", { children: se.label }, we),
+                            children: T.dependencies.map((dependency, we) =>
+                              i.jsx("li", { children: dependency.label }, we),
                             ),
                           }),
                         ],
@@ -2297,9 +2314,9 @@ function FunctionAndNameDialog({
                                 Ee,
                                 `Rename name: ${T.before?.name} → ${T.after?.name}`,
                               ),
-                              te());
-                          } catch (Ee) {
-                            X$1(Ee);
+                              onClick());
+                          } catch (error) {
+                            X$1(error);
                           }
                         },
                         children: i.jsx(LocalizedText, {
@@ -2318,7 +2335,7 @@ function FunctionAndNameDialog({
                   children: [
                     O !== null &&
                       i.jsx("button", {
-                        onClick: te,
+                        onClick: onClick,
                         children: i.jsx(LocalizedText, {
                           children: "New name",
                         }),

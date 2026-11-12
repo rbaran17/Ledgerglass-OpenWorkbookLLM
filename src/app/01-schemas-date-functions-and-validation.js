@@ -62,17 +62,17 @@ function deepFreezeValue(e) {
   return (Object.freeze(e), deepFrozenValueSet.add(e), e);
 }
 const linkedOrBoundCellCache = new WeakMap();
-function hasLinkedOrBoundCells(e) {
-  if (!isDeepFrozenValue(e)) return true;
-  let r = linkedOrBoundCellCache.get(e);
+function hasLinkedOrBoundCells(cells) {
+  if (!isDeepFrozenValue(cells)) return true;
+  let r = linkedOrBoundCellCache.get(cells);
   if (r === undefined) {
     r = false;
-    for (const n in e)
-      if (e[n].hyperlink || e[n].style?.binding) {
+    for (const n in cells)
+      if (cells[n].hyperlink || cells[n].style?.binding) {
         r = true;
         break;
       }
-    linkedOrBoundCellCache.set(e, r);
+    linkedOrBoundCellCache.set(cells, r);
   }
   return r;
 }
@@ -354,13 +354,15 @@ const transformationRecipeLimits = Object.freeze({
       transformationRecipeLimits.steps,
     ),
   }).superRefine((e, r) => {
-    (new Set(e.steps.map((t) => t.id)).size !== e.steps.length &&
+    (new Set(e.steps.map((step) => step.id)).size !== e.steps.length &&
       r.addIssue({ code: "custom", message: "Step IDs must be unique." }),
       new Set(
         [
           e.source,
-          ...e.steps.flatMap((t) =>
-            t.kind === "append" || t.kind === "merge" ? [t.source] : [],
+          ...e.steps.flatMap((step) =>
+            step.kind === "append" || step.kind === "merge"
+              ? [step.source]
+              : [],
           ),
         ].map((t) => JSON.stringify(t)),
       ).size > transformationRecipeLimits.sources &&
@@ -388,8 +390,8 @@ function fingerprintCanonicalValue(e) {
     );
   return sha256HexDigest(new Uint8Array(new TextEncoder().encode(r)));
 }
-function parseTransformationRecipe(e) {
-  const r = transformationRecipeSchema.safeParse(e);
+function parseTransformationRecipe(definition) {
+  const r = transformationRecipeSchema.safeParse(definition);
   if (!r.success) throw Error(`Invalid recipe: ${r.error.issues[0]?.message}`);
   return r.data;
 }
@@ -463,7 +465,7 @@ const sha256HexSchema = string().regex(/^[0-9a-f]{64}$/),
       array(string().min(1).max(200)).max(4e3),
     ),
   });
-function validateSavedRecipeMetadata(e, r) {
+function validateSavedRecipeMetadata(e, workbook) {
   const t = e;
   if (t.transformationRecipes !== undefined) {
     if (
@@ -488,11 +490,11 @@ function validateSavedRecipeMetadata(e, r) {
           throw Error(
             "Saved recipe versions or definition hashes are inconsistent.",
           );
-    r.transformationRecipes = d.data;
+    workbook.transformationRecipes = d.data;
   }
   let n = 0;
-  for (const d of r.sheets) {
-    const u = t.sheets?.find((h) => h.id === d.id);
+  for (const sheet of workbook.sheets) {
+    const u = t.sheets?.find((h) => h.id === sheet.id);
     if (u?.transformationRun === undefined) continue;
     if (
       ((n += JSON.stringify(u.transformationRun).length),
@@ -506,26 +508,26 @@ function validateSavedRecipeMetadata(e, r) {
       throw Error(
         `Invalid recipe execution evidence: ${l.error.issues[0]?.message}`,
       );
-    const c = l.data;
+    const data = l.data;
     if (
-      c.definitionHash !== fingerprintCanonicalValue(c.definition) ||
-      c.steps.length !== c.definition.steps.length ||
-      c.steps.some(
-        (h, f) =>
-          h.status !== "complete" ||
-          h.index !== f + 1 ||
-          h.id !== c.definition.steps[f].id ||
-          h.kind !== c.definition.steps[f].kind,
+      data.definitionHash !== fingerprintCanonicalValue(data.definition) ||
+      data.steps.length !== data.definition.steps.length ||
+      data.steps.some(
+        (step, f) =>
+          step.status !== "complete" ||
+          step.index !== f + 1 ||
+          step.id !== data.definition.steps[f].id ||
+          step.kind !== data.definition.steps[f].kind,
       ) ||
-      Object.values(c.lineage).reduce((h, f) => h + f.length, 0) >
+      Object.values(data.lineage).reduce((h, f) => h + f.length, 0) >
         transformationRecipeLimits.lineageLinks ||
-      Object.keys(c.lineage).some(
-        (h) => Number(h) < 2 || Number(h) > c.outputRows + 1,
+      Object.keys(data.lineage).some(
+        (h) => Number(h) < 2 || Number(h) > data.outputRows + 1,
       ) ||
-      Object.keys(c.lineage).length !== c.outputRows
+      Object.keys(data.lineage).length !== data.outputRows
     )
       throw Error("Recipe execution metadata is inconsistent.");
-    d.transformationRun = c;
+    sheet.transformationRun = data;
   }
 }
 const normalizeFunctionName = (e) =>
@@ -541,91 +543,105 @@ function isValidFormulaName(e, r = false) {
   );
 }
 function tokenizeFormulaText(e) {
-  let r = e.startsWith("=") ? 1 : 0;
+  let end = e.startsWith("=") ? 1 : 0;
   const t = () => {
       throw Error("Unbalanced or malformed formula syntax.");
     },
     n = (d) => {
-      for (r++; r < e.length;)
-        if (e[r++] === d)
-          if (e[r] === d) r++;
+      for (end++; end < e.length;)
+        if (e[end++] === d)
+          if (e[end] === d) end++;
           else return;
       t();
     },
     o = (d, u) => {
       let l = 0;
       do {
-        const c = e[r];
+        const c = e[end];
         if (c === '"' || (c === "'" && d !== "[")) {
           n(c);
           continue;
         }
-        (c === d && l++, c === u && l--, r++);
-      } while (r < e.length && l);
+        (c === d && l++, c === u && l--, end++);
+      } while (end < e.length && l);
       l && t();
     },
     a = (d) => {
       if (d > 128) throw Error("#LIMIT!");
       const u = [];
-      for (; r < e.length && ![",", ")"].includes(e[r]);) {
-        const c = r;
-        let h;
-        const f = e[r];
+      for (; end < e.length && ![",", ")"].includes(e[end]);) {
+        const start = end;
+        let callee;
+        const f = e[end];
         if (f === '"') n(f);
         else if (f === "{") o("{", "}");
         else if (f === "[") o("[", "]");
         else if (f === "(") {
-          r++;
-          const p = a(d + 1);
-          (e[r++] !== ")" && t(),
-            (h = { kind: "group", body: p, start: c, end: r }));
+          end++;
+          const body = a(d + 1);
+          (e[end++] !== ")" && t(),
+            (callee = { kind: "group", body: body, start: start, end: end }));
         } else {
-          let p;
+          let qualifier;
           const m =
             /^(?:'((?:[^']|'')+)'|([A-Za-z0-9_\\][A-Za-z0-9_.\\]*))!/.exec(
-              e.slice(r),
+              e.slice(end),
             );
-          m && ((p = m[1]?.replace(/''/g, "'") ?? m[2]), (r += m[0].length));
+          m &&
+            ((qualifier = m[1]?.replace(/''/g, "'") ?? m[2]),
+            (end += m[0].length));
           const v =
             /^(?:#(?:REF!|NAME\?|VALUE!|DIV\/0!|N\/A|NUM!|NULL!|SPILL!|CALC!|CYCLE!|LIMIT!|BLOCKED!|ERROR!)|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}(?![\w.])|\$?[1-9]\d*:\$?[1-9]\d*(?![\w.])|\$?[A-Za-z]{1,3}\$?[1-9]\d*(?![\w.\\])|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/i.exec(
-              e.slice(r),
+              e.slice(end),
             );
-          if (v) r += v[0].length;
+          if (v) end += v[0].length;
           else {
-            const g = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/.exec(e.slice(r));
+            const g = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/.exec(e.slice(end));
             g
-              ? ((r += g[0].length),
-                e[r] === "["
+              ? ((end += g[0].length),
+                e[end] === "["
                   ? o("[", "]")
-                  : (h = {
+                  : (callee = {
                       kind: "symbol",
                       name: g[0],
-                      qualifier: p,
-                      start: c,
-                      end: r,
+                      qualifier: qualifier,
+                      start: start,
+                      end: end,
                     }))
-              : ((p || f === "'" || f === "}") && t(), r++);
+              : ((qualifier || f === "'" || f === "}") && t(), end++);
           }
         }
         if (
-          ((h ??= { kind: "text", text: e.slice(c, r), start: c, end: r }),
-          h.kind !== "text")
+          ((callee ??= {
+            kind: "text",
+            text: e.slice(start, end),
+            start: start,
+            end: end,
+          }),
+          callee.kind !== "text")
         )
           for (;;) {
-            const p = /^\s*\(/.exec(e.slice(r));
+            const p = /^\s*\(/.exec(e.slice(end));
             if (!p) break;
-            r += p[0].length;
-            const m = [];
-            if (e[r] !== ")") for (; m.push(a(d + 1)), e[r] === ",";) r++;
-            (e[r++] !== ")" && t(),
-              (h = { kind: "call", callee: h, args: m, start: c, end: r }));
+            end += p[0].length;
+            const args = [];
+            if (e[end] !== ")")
+              for (; args.push(a(d + 1)), e[end] === ",";) end++;
+            (e[end++] !== ")" && t(),
+              (callee = {
+                kind: "call",
+                callee: callee,
+                args: args,
+                start: start,
+                end: end,
+              }));
           }
-        u.push(h);
+        u.push(callee);
       }
       return u;
     },
     s = a(0);
-  return (r !== e.length && t(), s);
+  return (end !== e.length && t(), s);
 }
 const dropBlankTextTokens = (e) =>
   e.filter((r) => r.kind !== "text" || r.text.trim());
@@ -645,26 +661,27 @@ function validateBindingName(e, r = false) {
 }
 function validateLetLambdaCall(e) {
   if (e.callee.kind !== "symbol" || e.callee.qualifier) return;
-  const r = normalizeFunctionName(e.callee.name);
-  if (r !== "LET" && r !== "LAMBDA") return;
+  const functionName = normalizeFunctionName(e.callee.name);
+  if (functionName !== "LET" && functionName !== "LAMBDA") return;
   if (
-    r === "LET" &&
+    functionName === "LET" &&
     (e.args.length < 3 || e.args.length > 253 || e.args.length % 2 !== 1)
   )
     throw Error("LET requires 1–126 name/value pairs and a final calculation.");
-  if (r === "LAMBDA" && (e.args.length < 1 || e.args.length > 254))
+  if (functionName === "LAMBDA" && (e.args.length < 1 || e.args.length > 254))
     throw Error("LAMBDA requires a calculation and at most 253 parameters.");
-  if (e.args.some((n) => !dropBlankTextTokens(n).length))
-    throw Error(`${r} arguments cannot be empty.`);
+  if (e.args.some((arg) => !dropBlankTextTokens(arg).length))
+    throw Error(`${functionName} arguments cannot be empty.`);
   const t = new Set();
-  for (let n = 0; n < e.args.length - 1; n += r === "LET" ? 2 : 1) {
-    const o = normalizeBindingName(
-      validateBindingName(e.args[n], r === "LAMBDA").name,
+  for (let n = 0; n < e.args.length - 1; n += functionName === "LET" ? 2 : 1) {
+    const bindingName = normalizeBindingName(
+      validateBindingName(e.args[n], functionName === "LAMBDA").name,
     );
-    if (t.has(o)) throw Error(`Duplicate ${r} binding: ${o}.`);
-    t.add(o);
+    if (t.has(bindingName))
+      throw Error(`Duplicate ${functionName} binding: ${bindingName}.`);
+    t.add(bindingName);
   }
-  return r;
+  return functionName;
 }
 function walkFormulaNodes(e, r, t = new Set()) {
   for (const n of e) {
@@ -681,7 +698,7 @@ function walkFormulaNodes(e, r, t = new Set()) {
         : walkFormulaNodes([n.callee], r, t),
       !o)
     ) {
-      n.args.forEach((s) => walkFormulaNodes(s, r, t));
+      n.args.forEach((arg) => walkFormulaNodes(arg, r, t));
       continue;
     }
     const a = new Set(t);
@@ -694,9 +711,9 @@ function walkFormulaNodes(e, r, t = new Set()) {
     walkFormulaNodes(n.args.at(-1), r, a);
   }
 }
-function parseFormulaTree(e) {
+function parseFormulaTree(refersTo) {
   try {
-    const r = dropBlankTextTokens(tokenizeFormulaText(e)),
+    const r = dropBlankTextTokens(tokenizeFormulaText(refersTo)),
       t = r[0];
     return r.length !== 1 ||
       t.kind !== "call" ||
@@ -1093,14 +1110,17 @@ function validateExtensionManifest(e) {
   for (const t of r.functions) {
     if (supportedFunctionNames.includes(`${r.namespace}.${t.id}`))
       throw Error("An extension cannot shadow a built-in function.");
-    if (new Set(t.parameters.map((n) => n.name)).size !== t.parameters.length)
+    if (
+      new Set(t.parameters.map((parameter) => parameter.name)).size !==
+      t.parameters.length
+    )
       throw Error("Duplicate extension parameter names.");
     if (t.result.type === "entity" && !r.permissions.includes("linked-data"))
       throw Error("Entity results require the linked-data permission.");
   }
   return r;
 }
-function validateExtensionValue(e, r) {
+function validateExtensionValue(e, schema) {
   const t = (n, o) => {
     if (n === null && o.nullable) return null;
     if (
@@ -1115,14 +1135,14 @@ function validateExtensionValue(e, r) {
       return n;
     throw Error("Extension value does not match its declared schema.");
   };
-  if (r.type === "matrix") {
+  if (schema.type === "matrix") {
     if (
       !Array.isArray(e) ||
       !e.length ||
-      e.length > r.maxRows ||
+      e.length > schema.maxRows ||
       !Array.isArray(e[0]) ||
       !e[0].length ||
-      e[0].length > r.maxColumns ||
+      e[0].length > schema.maxColumns ||
       e.length * e[0].length > extensionRuntimeLimits.outputCells
     )
       throw Error("Extension matrix exceeds its declared shape or cell limit.");
@@ -1130,10 +1150,10 @@ function validateExtensionValue(e, r) {
     return e.map((o) => {
       if (!Array.isArray(o) || o.length !== n)
         throw Error("Extension matrix must be rectangular.");
-      return o.map((a) => t(a, r.items));
+      return o.map((a) => t(a, schema.items));
     });
   }
-  if (r.type === "entity") {
+  if (schema.type === "entity") {
     const n = strictObject({
       kind: literal("entity"),
       id: boundedTextSchema(200),
@@ -1144,7 +1164,7 @@ function validateExtensionValue(e, r) {
     }).parse(e);
     if (
       Object.keys(n.fields).sort().join("|") !==
-      Object.keys(r.fields).sort().join("|")
+      Object.keys(schema.fields).sort().join("|")
     )
       throw Error(
         "Linked entity fields must match the declared schema exactly.",
@@ -1152,32 +1172,32 @@ function validateExtensionValue(e, r) {
     return {
       ...n,
       fields: Object.fromEntries(
-        Object.entries(r.fields).map(([o, a]) => [o, t(n.fields[o], a)]),
+        Object.entries(schema.fields).map(([o, a]) => [o, t(n.fields[o], a)]),
       ),
     };
   }
-  return t(e, r);
+  return t(e, schema);
 }
 const tD = new WeakSet();
-function validateExtensionState(e, r) {
-  if (e.extensions === undefined) return;
+function validateExtensionState(workbook, r) {
+  if (workbook.extensions === undefined) return;
   const t = new Set((r.definedNames ?? []).map((u) => u.name.toUpperCase())),
-    n = e.extensions;
+    extensions = workbook.extensions;
   if (
-    Array.isArray(n?.installed) &&
-    n.installed.some((u) =>
+    Array.isArray(extensions?.installed) &&
+    extensions.installed.some((u) =>
       u?.manifest?.functions?.some((h) =>
         t.has(`${u.manifest.namespace}.${h.id}`),
       ),
     )
   )
     throw Error("Extension functions cannot shadow defined names.");
-  if (tD.has(e.extensions)) {
-    r.extensions = e.extensions;
+  if (tD.has(workbook.extensions)) {
+    r.extensions = workbook.extensions;
     return;
   }
   if (
-    JSON.stringify(e.extensions).length >
+    JSON.stringify(workbook.extensions).length >
     extensionRuntimeLimits.metadataCharacters
   )
     throw Error("Extension metadata exceeds its limit.");
@@ -1210,64 +1230,65 @@ function validateExtensionState(e, r) {
           providerRevision: boundedTextSchema(200),
         }),
       ).max(extensionRuntimeLimits.calls),
-    }).parse(e.extensions),
-    a = o.installed.map((u) => ({
+    }).parse(workbook.extensions),
+    installed = o.installed.map((u) => ({
       ...u,
       manifest: validateExtensionManifest(u.manifest),
     }));
   if (
-    new Set(a.map((u) => u.manifest.id)).size !== a.length ||
-    new Set(a.map((u) => u.manifest.namespace)).size !== a.length ||
-    a.reduce((u, l) => u + l.manifest.functions.length, 0) >
+    new Set(installed.map((u) => u.manifest.id)).size !== installed.length ||
+    new Set(installed.map((u) => u.manifest.namespace)).size !==
+      installed.length ||
+    installed.reduce((u, l) => u + l.manifest.functions.length, 0) >
       extensionRuntimeLimits.functions
   )
     throw Error(
       "Extension identities/namespaces must be unique within the function limit.",
     );
-  const s = o.caches.map((u) => {
-    const l = a.find((h) =>
-        u.functionName.startsWith(h.manifest.namespace + "."),
+  const caches = o.caches.map((cach) => {
+    const l = installed.find((h) =>
+        cach.functionName.startsWith(h.manifest.namespace + "."),
       ),
       c = l?.manifest.functions.find(
-        (h) => `${l.manifest.namespace}.${h.id}` === u.functionName,
+        (h) => `${l.manifest.namespace}.${h.id}` === cach.functionName,
       );
-    if (!c || !l || u.arguments.length !== c.parameters.length)
+    if (!c || !l || cach.arguments.length !== c.parameters.length)
       throw Error("Extension cache does not match an installed function.");
     if (
-      u.key !==
+      cach.key !==
       fingerprintExtensionCall(
-        u.sheetId,
-        u.address,
-        u.formula,
-        u.functionName,
-        u.arguments,
-        u.manifestHash,
+        cach.sheetId,
+        cach.address,
+        cach.formula,
+        cach.functionName,
+        cach.arguments,
+        cach.manifestHash,
       )
     )
       throw Error("Extension cache identity does not match its arguments.");
     return {
-      ...u,
-      arguments: u.arguments.map((h, f) =>
-        validateExtensionValue(h, c.parameters[f].schema),
+      ...cach,
+      arguments: cach.arguments.map((argument, f) =>
+        validateExtensionValue(argument, c.parameters[f].schema),
       ),
-      result: validateExtensionValue(u.result, c.result),
+      result: validateExtensionValue(cach.result, c.result),
     };
   });
-  if (new Set(s.map((u) => u.key)).size !== s.length)
+  if (new Set(caches.map((event) => event.key)).size !== caches.length)
     throw Error("Duplicate extension cache entries.");
-  const d = { schemaVersion: 1, installed: a, caches: s };
+  const d = { schemaVersion: 1, installed: installed, caches: caches };
   (deepFreezeValue(d), tD.add(d), (r.extensions = d));
 }
 const hashExtensionManifest = (e) =>
     fingerprintCanonicalValue(validateExtensionManifest(e)),
   fingerprintExtensionCall = (e, r, t, n, o, a) =>
     fingerprintCanonicalValue([e, r, t, n, o, a]);
-function listInstalledExtensionFunctions(e) {
-  return (e.extensions?.installed ?? []).flatMap((t) =>
-    t.manifest.functions.map((n) => ({
-      entry: t,
+function listInstalledExtensionFunctions(workbook) {
+  return (workbook.extensions?.installed ?? []).flatMap((entry) =>
+    entry.manifest.functions.map((n) => ({
+      entry: entry,
       fn: n,
-      name: `${t.manifest.namespace}.${n.id}`,
+      name: `${entry.manifest.namespace}.${n.id}`,
     })),
   );
 }
@@ -1275,45 +1296,47 @@ const extensionCacheEntriesByWorkbook = new WeakMap();
 function setExtensionCacheEntries(e, r) {
   extensionCacheEntriesByWorkbook.set(e, structuredClone(r));
 }
-function getExtensionCacheEntries(e) {
-  return extensionCacheEntriesByWorkbook.get(e) ?? [];
+function getExtensionCacheEntries(workbook) {
+  return extensionCacheEntriesByWorkbook.get(workbook) ?? [];
 }
-function copyExtensionCacheEntries(e, r) {
-  const t = extensionCacheEntriesByWorkbook.get(e);
+function copyExtensionCacheEntries(workbook, r) {
+  const t = extensionCacheEntriesByWorkbook.get(workbook);
   t && extensionCacheEntriesByWorkbook.set(r, t);
 }
-function hasExtensionCacheForSheet(e, r, t, n) {
-  return getExtensionCacheEntries(e).some(
+function hasExtensionCacheForSheet(workbook, r, t, n) {
+  return getExtensionCacheEntries(workbook).some(
     (o) => o.id === r && o.manifestHash === t && o.sheetIds.includes(n),
   );
 }
-function resolveExtensionFunctionCall(e, r, t, n, o) {
-  const a = listInstalledExtensionFunctions(e).find((m) => m.name === r);
+function resolveExtensionFunctionCall(workbook, r, t, n, o) {
+  const a = listInstalledExtensionFunctions(workbook).find((m) => m.name === r);
   if (!a) return { error: "#NAME?" };
   const s = hashExtensionManifest(a.entry.manifest);
   if (
     !a.entry.enabled ||
-    !hasExtensionCacheForSheet(e, a.entry.manifest.id, s, n)
+    !hasExtensionCacheForSheet(workbook, a.entry.manifest.id, s, n)
   )
     return { error: "#NAME?" };
   if (t.length !== a.fn.parameters.length) return { error: "#VALUE!" };
   let d;
   try {
     d = t.map((m, v) => {
-      const g = a.fn.parameters[v].schema;
+      const schema = a.fn.parameters[v].schema;
       return validateExtensionValue(
-        g.type === "matrix" && !Array.isArray(m) ? [[m]] : m,
-        g,
+        schema.type === "matrix" && !Array.isArray(m) ? [[m]] : m,
+        schema,
       );
     });
   } catch {
     return { error: "#VALUE!" };
   }
-  const u = String(e.sheets.find((m) => m.id === n)?.cells[o]?.raw ?? ""),
+  const u = String(
+      workbook.sheets.find((sheet) => sheet.id === n)?.cells[o]?.raw ?? "",
+    ),
     l = fingerprintExtensionCall(n, o, u, r, d, s),
-    c = e.extensions?.caches.find((m) => m.key === l);
+    c = workbook.extensions?.caches.find((cach) => cach.key === l);
   return c &&
-    !getExtensionCacheEntries(e).some(
+    !getExtensionCacheEntries(workbook).some(
       (m) => m.id === a.entry.manifest.id && m.scopeHash === c.scopeHash,
     )
     ? { error: "#NAME?" }
@@ -1337,28 +1360,30 @@ const calculationBudgetDefaults = Object.freeze({
 function readMonotonicClockMs() {
   return typeof performance < "u" ? performance.now() : Date.now();
 }
-function resolveCalculationBudget(e) {
+function resolveCalculationBudget(calculation) {
   return {
     memoryBudgetBytes:
-      (e?.memoryBudgetMiB ?? calculationBudgetDefaults.defaultMemoryBudgetMiB) *
+      (calculation?.memoryBudgetMiB ??
+        calculationBudgetDefaults.defaultMemoryBudgetMiB) *
       1024 *
       1024,
-    workBudget: e?.workBudget ?? calculationBudgetDefaults.defaultWorkBudget,
+    workBudget:
+      calculation?.workBudget ?? calculationBudgetDefaults.defaultWorkBudget,
   };
 }
-function estimateValueFootprintBytes(e, r) {
+function estimateValueFootprintBytes(e, memoryBudgetBytes) {
   let t = 0;
   const n = (o, a) => {
-    if (!(t > r)) {
+    if (!(t > memoryBudgetBytes)) {
       if (a > 80) {
-        t = r + 1;
+        t = memoryBudgetBytes + 1;
         return;
       }
       if (typeof o == "string") t += 24 + o.length * 2;
       else if (!o || typeof o != "object") t += 8;
       else if (Array.isArray(o)) {
         t += 32 + o.length * 8;
-        for (const s of o) if ((n(s, a + 1), t > r)) break;
+        for (const s of o) if ((n(s, a + 1), t > memoryBudgetBytes)) break;
       } else {
         t += 64;
         for (const s in o) {
@@ -1366,10 +1391,10 @@ function estimateValueFootprintBytes(e, r) {
           t += 32 + s.length * 2;
           const d = Object.getOwnPropertyDescriptor(o, s);
           if (!("value" in d)) {
-            t = r + 1;
+            t = memoryBudgetBytes + 1;
             break;
           }
-          if ((n(d.value, a + 1), t > r)) break;
+          if ((n(d.value, a + 1), t > memoryBudgetBytes)) break;
         }
       }
     }
@@ -1377,60 +1402,69 @@ function estimateValueFootprintBytes(e, r) {
   return (n(e, 0), t);
 }
 const rD = new WeakMap();
-function estimateWorkbookMemoryBytes(e, r) {
+function estimateWorkbookMemoryBytes(workbook, memoryBudgetBytes) {
   let t = 1024;
   const n = (o) => {
-    t += estimateValueFootprintBytes(o, Math.max(0, r - t));
+    t += estimateValueFootprintBytes(o, Math.max(0, memoryBudgetBytes - t));
   };
-  (n(e.definedNames),
-    n(e.workbookLinks),
-    n(e.extensions),
-    n(e.calculation),
-    n(e.datePolicy));
-  for (const o of e.sheets) {
+  (n(workbook.definedNames),
+    n(workbook.workbookLinks),
+    n(workbook.extensions),
+    n(workbook.calculation),
+    n(workbook.datePolicy));
+  for (const sheet of workbook.sheets) {
     n([
-      o.id,
-      o.name,
-      o.tables,
-      o.merges,
-      o.hiddenRows,
-      o.hiddenCols,
-      o.outlineGroups,
+      sheet.id,
+      sheet.name,
+      sheet.tables,
+      sheet.merges,
+      sheet.hiddenRows,
+      sheet.hiddenCols,
+      sheet.outlineGroups,
     ]);
-    const a = isDeepFrozenValue(o.cells),
-      s = a ? rD.get(o.cells) : undefined;
+    const a = isDeepFrozenValue(sheet.cells),
+      s = a ? rD.get(sheet.cells) : undefined;
     if (s !== undefined) t += s;
     else {
       const d = t;
-      for (const u in o.cells)
-        if (((t += 128 + 2 * u.length), n(o.cells[u].raw), t > r)) return t;
-      a && rD.set(o.cells, t - d);
+      for (const u in sheet.cells)
+        if (
+          ((t += 128 + 2 * u.length),
+          n(sheet.cells[u].raw),
+          t > memoryBudgetBytes)
+        )
+          return t;
+      a && rD.set(sheet.cells, t - d);
     }
-    if (t > r) return t;
+    if (t > memoryBudgetBytes) return t;
   }
   return t;
 }
-function createCalculationBudgetTracker(e) {
-  const r = resolveCalculationBudget(e.calculation);
-  let t = estimateWorkbookMemoryBytes(e, r.memoryBudgetBytes),
-    n = 0,
-    o,
-    a,
+function createCalculationBudgetTracker(workbook) {
+  const calculationBudget = resolveCalculationBudget(workbook.calculation);
+  let accountedBytes = estimateWorkbookMemoryBytes(
+      workbook,
+      calculationBudget.memoryBudgetBytes,
+    ),
+    workUnits = 0,
+    stopped,
+    reason,
     s = 0,
     d = 0,
     u = 0;
-  const l = () => (
-    !o &&
-      t > r.memoryBudgetBytes &&
-      ((o = "#LIMIT!"), (a = "Working-data memory budget exceeded")),
-    !o &&
-      n > r.workBudget &&
-      ((o = "#LIMIT!"), (a = "Calculation work budget exceeded")),
-    !o &&
+  const check = () => (
+    !stopped &&
+      accountedBytes > calculationBudget.memoryBudgetBytes &&
+      ((stopped = "#LIMIT!"), (reason = "Working-data memory budget exceeded")),
+    !stopped &&
+      workUnits > calculationBudget.workBudget &&
+      ((stopped = "#LIMIT!"), (reason = "Calculation work budget exceeded")),
+    !stopped &&
       d + (u ? readMonotonicClockMs() - s : 0) >
-        (e.calculation?.timeBudgetMs ?? 2500) &&
-      ((o = "#TIMEOUT!"), (a = "Cooperative calculation time budget exceeded")),
-    o
+        (workbook.calculation?.timeBudgetMs ?? 2500) &&
+      ((stopped = "#TIMEOUT!"),
+      (reason = "Cooperative calculation time budget exceeded")),
+    stopped
   );
   return {
     begin() {
@@ -1439,33 +1473,35 @@ function createCalculationBudgetTracker(e) {
     end() {
       u > 0 && --u === 0 && (d += readMonotonicClockMs() - s);
     },
-    check: l,
+    check: check,
     work(c = 1) {
       return (
-        o ||
-        (n + Math.max(0, c) > r.workBudget
-          ? ((o = "#LIMIT!"), (a = "Calculation work budget exceeded"), o)
-          : ((n += Math.max(0, c)), l()))
+        stopped ||
+        (workUnits + Math.max(0, c) > calculationBudget.workBudget
+          ? ((stopped = "#LIMIT!"),
+            (reason = "Calculation work budget exceeded"),
+            stopped)
+          : ((workUnits += Math.max(0, c)), check()))
       );
     },
     reserve(c) {
-      return o || ((t += Math.max(0, c)), l());
+      return stopped || ((accountedBytes += Math.max(0, c)), check());
     },
     value(c) {
       return (
-        o ||
-        ((t += estimateValueFootprintBytes(
+        stopped ||
+        ((accountedBytes += estimateValueFootprintBytes(
           c,
-          Math.max(0, r.memoryBudgetBytes - t),
+          Math.max(0, calculationBudget.memoryBudgetBytes - accountedBytes),
         )),
-        l())
+        check())
       );
     },
     report: () => ({
-      ...r,
-      accountedBytes: t,
-      workUnits: n,
-      ...(o ? { stopped: o, reason: a } : {}),
+      ...calculationBudget,
+      accountedBytes: accountedBytes,
+      workUnits: workUnits,
+      ...(stopped ? { stopped: stopped, reason: reason } : {}),
     }),
   };
 }
@@ -1495,56 +1531,56 @@ const dateSystemSerialOffset = (e = "1900") => (e === "1904" ? 1462 : 0),
     holidays: 1e3,
     businessDays: 366e3,
   });
-function buildCalculationClock(e) {
-  const r = e.datePolicy,
-    t = e.calculationClock;
+function buildCalculationClock(assistantSelectionContext) {
+  const datePolicy = assistantSelectionContext.datePolicy,
+    calculationClock = assistantSelectionContext.calculationClock;
   return {
-    ...(r
+    ...(datePolicy
       ? {
           datePolicy: {
-            calendar: r.calendar,
-            dateSystem: r.dateSystem,
-            textDateOrder: r.textDateOrder,
-            timeZone: r.timeZone,
+            calendar: datePolicy.calendar,
+            dateSystem: datePolicy.dateSystem,
+            textDateOrder: datePolicy.textDateOrder,
+            timeZone: datePolicy.timeZone,
           },
         }
       : {}),
-    ...(t
+    ...(calculationClock
       ? {
           calculationClock: {
-            calendar: t.calendar,
-            dateSystem: t.dateSystem,
-            textDateOrder: t.textDateOrder,
-            timeZone: t.timeZone,
-            calculatedAt: t.calculatedAt,
-            localDateTime: t.localDateTime,
-            utcOffsetMinutes: t.utcOffsetMinutes,
-            nowSerial: t.nowSerial,
-            todaySerial: t.todaySerial,
+            calendar: calculationClock.calendar,
+            dateSystem: calculationClock.dateSystem,
+            textDateOrder: calculationClock.textDateOrder,
+            timeZone: calculationClock.timeZone,
+            calculatedAt: calculationClock.calculatedAt,
+            localDateTime: calculationClock.localDateTime,
+            utcOffsetMinutes: calculationClock.utcOffsetMinutes,
+            nowSerial: calculationClock.nowSerial,
+            todaySerial: calculationClock.todaySerial,
           },
         }
       : {}),
   };
 }
-function workbookUsesNowOrToday(e) {
+function workbookUsesNowOrToday(workbook) {
   const r = (n) =>
     /\b(?:NOW|TODAY)\s*\(/i.test(n.replace(/"(?:[^"]|"")*"/g, '""'));
   return (
-    e.sheets.some((n) =>
-      Object.values(n.cells).some(
-        (o) =>
-          !o.literal &&
-          typeof o.raw == "string" &&
-          o.raw.startsWith("=") &&
-          r(o.raw),
+    workbook.sheets.some((sheet) =>
+      Object.values(sheet.cells).some(
+        (cell) =>
+          !cell.literal &&
+          typeof cell.raw == "string" &&
+          cell.raw.startsWith("=") &&
+          r(cell.raw),
       ),
-    ) || !!e.definedNames?.some((n) => r(n.refersTo))
+    ) || !!workbook.definedNames?.some((definedName) => r(definedName.refersTo))
   );
 }
 const millisecondsPerDay = 864e5,
   serialZeroUtcMs = Date.UTC(1899, 11, 31);
-function normalizeDatePolicy(e = defaultDatePolicy) {
-  const r = e;
+function normalizeDatePolicy(datePolicy = defaultDatePolicy) {
+  const r = datePolicy;
   if (
     !r ||
     typeof r != "object" ||
@@ -1564,14 +1600,14 @@ function normalizeDatePolicy(e = defaultDatePolicy) {
       "Unsupported date policy. Use the Gregorian calendar, 1900 or 1904 serial system, MDY or DMY text dates, and a valid IANA time zone (or UTC).",
     );
   try {
-    const t = new Intl.DateTimeFormat("en-US", {
+    const timeZone = new Intl.DateTimeFormat("en-US", {
       timeZone: r.timeZone,
     }).resolvedOptions().timeZone;
     return {
       calendar: "gregorian",
       dateSystem: r.dateSystem,
       textDateOrder: r.textDateOrder,
-      timeZone: t,
+      timeZone: timeZone,
     };
   } catch {
     throw Error(
@@ -1589,8 +1625,8 @@ const isExcelLeapYear = (e) =>
       : [4, 6, 9, 11].includes(r)
         ? 30
         : 31;
-function dateToSerial(e, r, t, n = "1900") {
-  if (n === "1904")
+function dateToSerial(e, r, t, dateSystem = "1900") {
+  if (dateSystem === "1904")
     return (Date.UTC(e, r - 1, t) - Date.UTC(1904, 0, 1)) / millisecondsPerDay;
   if (e === 1900 && r === 2 && t === 29) return 60;
   const o = Date.UTC(e, r - 1, t);
@@ -1599,12 +1635,13 @@ function dateToSerial(e, r, t, n = "1900") {
     (o >= Date.UTC(1900, 2, 1) ? 1 : 0)
   );
 }
-function serialToDateParts(e, r = "1900") {
+function serialToDateParts(e, dateSystem = "1900") {
   const t = Math.floor(e);
-  if (r === "1900" && t === 0) return { year: 1900, month: 1, day: 0 };
-  if (r === "1900" && t === 60) return { year: 1900, month: 2, day: 29 };
+  if (dateSystem === "1900" && t === 0) return { year: 1900, month: 1, day: 0 };
+  if (dateSystem === "1900" && t === 60)
+    return { year: 1900, month: 2, day: 29 };
   const n = new Date(
-    r === "1904"
+    dateSystem === "1904"
       ? Date.UTC(1904, 0, 1) + t * millisecondsPerDay
       : serialZeroUtcMs + (t - (t > 60 ? 1 : 0)) * millisecondsPerDay,
   );
@@ -1652,10 +1689,10 @@ function parseDateText(e, r = defaultDatePolicy) {
   return d === undefined ? undefined : dateToSerial(o, a, s, r.dateSystem) + d;
 }
 function resolveLocalDateTime(e, r = new Date()) {
-  const t = normalizeDatePolicy(e),
-    n = r.toISOString(),
+  const datePolicy = normalizeDatePolicy(e),
+    calculatedAt = r.toISOString(),
     o = new Intl.DateTimeFormat("en-US-u-ca-gregory-nu-latn", {
-      timeZone: t.timeZone,
+      timeZone: datePolicy.timeZone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -1672,19 +1709,22 @@ function resolveLocalDateTime(e, r = new Date()) {
     c = a("minute"),
     h = a("second"),
     f = r.getUTCMilliseconds(),
-    p = dateToSerial(s, d, u, t.dateSystem);
-  if (p < 0 || p > dateSystemMaxSerial(t.dateSystem))
+    todaySerial = dateToSerial(s, d, u, datePolicy.dateSystem);
+  if (
+    todaySerial < 0 ||
+    todaySerial > dateSystemMaxSerial(datePolicy.dateSystem)
+  )
     throw Error(
       "Calculation clock is outside the supported 1900–9999 date range.",
     );
-  const m = `${s}-${String(d).padStart(2, "0")}-${String(u).padStart(2, "0")}T${String(l).padStart(2, "0")}:${String(c).padStart(2, "0")}:${String(h).padStart(2, "0")}.${String(f).padStart(3, "0")}`;
+  const localDateTime = `${s}-${String(d).padStart(2, "0")}-${String(u).padStart(2, "0")}T${String(l).padStart(2, "0")}:${String(c).padStart(2, "0")}:${String(h).padStart(2, "0")}.${String(f).padStart(3, "0")}`;
   return Object.freeze({
-    ...t,
-    calculatedAt: n,
-    localDateTime: m,
+    ...datePolicy,
+    calculatedAt: calculatedAt,
+    localDateTime: localDateTime,
     utcOffsetMinutes: (Date.UTC(s, d - 1, u, l, c, h, f) - r.getTime()) / 6e4,
-    todaySerial: p,
-    nowSerial: p + (l * 3600 + c * 60 + h + f / 1e3) / 86400,
+    todaySerial: todaySerial,
+    nowSerial: todaySerial + (l * 3600 + c * 60 + h + f / 1e3) / 86400,
   });
 }
 const calculationFeatureSupport = Object.freeze({
@@ -1709,18 +1749,18 @@ function findVolatileFunctionNames(e) {
     ),
   ];
 }
-function workbookHasVolatileFunctions(e) {
+function workbookHasVolatileFunctions(workbook) {
   return (
-    !!e.definedNames?.some(
-      (t) => findVolatileFunctionNames(t.refersTo).length,
+    !!workbook.definedNames?.some(
+      (definedName) => findVolatileFunctionNames(definedName.refersTo).length,
     ) ||
-    e.sheets.some((t) =>
-      Object.values(t.cells).some(
-        (n) =>
-          !n.literal &&
-          typeof n.raw == "string" &&
-          n.raw.startsWith("=") &&
-          findVolatileFunctionNames(n.raw).length,
+    workbook.sheets.some((sheet) =>
+      Object.values(sheet.cells).some(
+        (cell) =>
+          !cell.literal &&
+          typeof cell.raw == "string" &&
+          cell.raw.startsWith("=") &&
+          findVolatileFunctionNames(cell.raw).length,
       ),
     )
   );
@@ -1782,11 +1822,11 @@ const dateFunctionNames = [
   };
 function evaluateDateFunction(e, r, t) {
   if (!dateFunctionNames.includes(e)) return notDateFunctionSentinel;
-  const n = t.clock.dateSystem,
-    o = dateSystemMaxSerial(n),
-    a = (w, E, A) => dateToSerial(w, E, A, n),
-    s = (w) => serialToDateParts(w, n),
-    d = (w) => (((w + dateSystemSerialOffset(n) + 5) % 7) + 7) % 7,
+  const dateSystem = t.clock.dateSystem,
+    o = dateSystemMaxSerial(dateSystem),
+    a = (w, E, A) => dateToSerial(w, E, A, dateSystem),
+    s = (w) => serialToDateParts(w, dateSystem),
+    d = (w) => (((w + dateSystemSerialOffset(dateSystem) + 5) % 7) + 7) % 7,
     u = (w = "#VALUE!") => {
       throw t.issue(w);
     },
@@ -1824,7 +1864,7 @@ function evaluateDateFunction(e, r, t) {
         I = Math.floor(F / 12),
         O = (((F % 12) + 12) % 12) + 1;
       return (
-        (I < (n === "1904" ? 1904 : 1900) || I > 9999) && u("#NUM!"),
+        (I < (dateSystem === "1904" ? 1904 : 1900) || I > 9999) && u("#NUM!"),
         m(
           a(
             I,
@@ -1855,15 +1895,15 @@ function evaluateDateFunction(e, r, t) {
   if (e === "DATEVALUE" || e === "TIMEVALUE") {
     const w = f(h[0]);
     typeof w != "string" && u();
-    const E = parseDateText(w, t.clock);
+    const dateText = parseDateText(w, t.clock);
     return (
-      E === undefined && u(),
+      dateText === undefined && u(),
       e === "DATEVALUE" &&
         !/^(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})(?:[ T]|$)/.test(
           w.trim(),
         ) &&
         u(),
-      e === "DATEVALUE" ? Math.floor(E) : E - Math.floor(E)
+      e === "DATEVALUE" ? Math.floor(dateText) : dateText - Math.floor(dateText)
     );
   }
   if (e === "TIME") {
@@ -1907,8 +1947,8 @@ function evaluateDateFunction(e, r, t) {
       E = e === "ISOWEEKNUM" ? 21 : h[1] == null ? 1 : Math.trunc(p(h[1]));
     if (E === 21) {
       const F = w + 3 - d(w),
-        I = s(F).year;
-      return Math.floor((F - a(I, 1, 1)) / 7) + 1;
+        year = s(F).year;
+      return Math.floor((F - a(year, 1, 1)) / 7) + 1;
     }
     const A =
         E === 1 || E === 17
@@ -1945,19 +1985,19 @@ function evaluateDateFunction(e, r, t) {
   const y = (w, E, A) => {
     const k = s(w),
       F = s(E);
-    let I = k.day,
+    let day = k.day,
       O = F.day;
     return (
       A
-        ? ((I = Math.min(I, 30)), (O = Math.min(O, 30)))
-        : (I === daysInExcelMonth(k.year, k.month) && (I = 30),
-          O === 31 && I >= 30 && (O = 30),
+        ? ((day = Math.min(day, 30)), (O = Math.min(O, 30)))
+        : (day === daysInExcelMonth(k.year, k.month) && (day = 30),
+          O === 31 && day >= 30 && (O = 30),
           k.month === 2 &&
             k.day === daysInExcelMonth(k.year, 2) &&
             F.month === 2 &&
             O === daysInExcelMonth(F.year, 2) &&
             (O = 30)),
-      (F.year - k.year) * 360 + (F.month - k.month) * 30 + O - I
+      (F.year - k.year) * 360 + (F.month - k.month) * 30 + O - day
     );
   };
   if (e === "DAYS360") {
@@ -1985,8 +2025,11 @@ function evaluateDateFunction(e, r, t) {
     );
     if (k.year === F.year) I = isExcelLeapYear(k.year) ? 366 : 365;
     else if (E <= O)
-      for (let j = k.year; j <= F.year; j++)
-        isExcelLeapYear(j) && a(j, 2, 29) >= w && a(j, 2, 29) <= E && (I = 366);
+      for (let year = k.year; year <= F.year; year++)
+        isExcelLeapYear(year) &&
+          a(year, 2, 29) >= w &&
+          a(year, 2, 29) <= E &&
+          (I = 366);
     else I = (a(F.year + 1, 1, 1) - a(k.year, 1, 1)) / (F.year - k.year + 1);
     return (E - w) / I;
   }

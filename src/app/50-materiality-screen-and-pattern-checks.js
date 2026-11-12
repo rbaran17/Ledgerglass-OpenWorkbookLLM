@@ -46,25 +46,25 @@ import {
 
 function MaterialityRiskScreen(e) {
   const { text, language } = useWorkbookMessages(),
-    n = useCancellableOperation(),
+    cancellableOperation = useCancellableOperation(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(""),
     d = ne.useRef(0),
     u = ne.useRef(true),
-    l = listRangeColumnIndexes(e.range),
-    [c, h] = ne.useState(e.range),
+    rangeColumnIndexes = listRangeColumnIndexes(e.range),
+    [range, h] = ne.useState(e.range),
     [f, p] = ne.useState(true),
-    [m, v] = ne.useState(l[0] ?? 0),
-    [g, b] = ne.useState(l[1] ?? 1),
-    [y, w] = ne.useState(l[2] ?? 2),
-    [E, A] = ne.useState("USD"),
+    [amountColumn, v] = ne.useState(rangeColumnIndexes[0] ?? 0),
+    [currencyColumn, b] = ne.useState(rangeColumnIndexes[1] ?? 1),
+    [dateColumn, w] = ne.useState(rangeColumnIndexes[2] ?? 2),
+    [currency, A] = ne.useState("USD"),
     [k, F] = ne.useState("50000"),
-    [I, O] = ne.useState("absolute"),
-    [j, z] = ne.useState("gte"),
-    [V, D] = ne.useState("1900-01-01"),
-    [B, _] = ne.useState("9999-12-31"),
-    [C, T] = ne.useState(false),
+    [amountMode, O] = ne.useState("absolute"),
+    [comparator, z] = ne.useState("gte"),
+    [effectiveFrom, D] = ne.useState("1900-01-01"),
+    [effectiveTo, _] = ne.useState("9999-12-31"),
+    [checked, T] = ne.useState(false),
     [N, R] = ne.useState(null),
     [L, $] = ne.useState(""),
     [U, G] = ne.useState(""),
@@ -74,26 +74,28 @@ function MaterialityRiskScreen(e) {
     [K, te] = ne.useState("all"),
     ae = {
       sheetId: e.sheetId,
-      range: c,
+      range: range,
       headers: f,
-      amountColumn: m,
-      currencyColumn: g,
-      dateColumn: y,
-      currency: E,
+      amountColumn: amountColumn,
+      currencyColumn: currencyColumn,
+      dateColumn: dateColumn,
+      currency: currency,
       threshold: k.trim() === "" ? NaN : Number(k),
-      amountMode: I,
-      comparator: j,
-      effectiveFrom: V,
-      effectiveTo: B,
+      amountMode: amountMode,
+      comparator: comparator,
+      effectiveFrom: effectiveFrom,
+      effectiveTo: effectiveTo,
     },
     oe = {
       readOnly: e.readOnly,
-      includeHidden: !!e.allowHidden && C,
+      includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
-    de = e.workbook.sheets.find((Me) => Me.id === e.sheetId),
+    de = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     he = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((Me) => Me.id)),
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     Se =
       !!de &&
@@ -112,9 +114,9 @@ function MaterialityRiskScreen(e) {
           }
         : checkMaterialityReportFreshness(e.workbook, N, ae, oe)
       : null,
-    we = listRangeColumnIndexes(c),
+    we = listRangeColumnIndexes(range),
     Ee = se?.disclose ? N : null,
-    Ae = Ee?.rows.filter((Me) => K === "all" || Me.disposition === K) ?? [],
+    Ae = Ee?.rows.filter((row) => K === "all" || row.disposition === K) ?? [],
     ye = Math.max(1, Math.ceil(Ae.length / materialityScreenLimits.pageSize)),
     Te = Math.min(q, ye - 1),
     Pe = (Me) => {
@@ -128,21 +130,23 @@ function MaterialityRiskScreen(e) {
     };
   ne.useEffect(() => {
     u.current = true;
-    const Me = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       a.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
       () => {
-        ((u.current = false), d.current++, Me?.isConnected && Me.focus());
+        ((u.current = false),
+          d.current++,
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []);
-  const qe = () => {
+  const onClick = () => {
       d.current++;
       try {
         const Me = runMaterialityScreen(e.workbook, ae, oe);
         (R(Me), $(le), G(""), J(""), W(0), te("all"));
-      } catch (Me) {
-        (R(null), Pe(Me));
+      } catch (error) {
+        (R(null), Pe(error));
       }
     },
     ht = () => {
@@ -162,8 +166,8 @@ function MaterialityRiskScreen(e) {
             "Report downloaded with settings, source rows, exclusions and control totals.",
           ),
           G(""));
-      } catch (Me) {
-        Pe(Me);
+      } catch (error) {
+        Pe(error);
       }
     },
     Re = async (Me) => {
@@ -176,37 +180,41 @@ function MaterialityRiskScreen(e) {
           throw Error(
             "Choose a configuration/report no larger than 2,000,000 bytes.",
           );
-        const Je = await importNativeJsonFile(Me, n.begin());
+        const Je = await importNativeJsonFile(Me, cancellableOperation.begin());
         if (!$e()) return;
-        const ze = loadMaterialityConfiguration(e.workbook, Je, oe);
-        if (ze.sheetId !== e.sheetId)
+        const materialityConfiguration = loadMaterialityConfiguration(
+          e.workbook,
+          Je,
+          oe,
+        );
+        if (materialityConfiguration.sheetId !== e.sheetId)
           throw Error(
             "Open the saved configuration's source worksheet before loading it.",
           );
-        (h(ze.range),
-          p(ze.headers),
-          v(ze.amountColumn),
-          b(ze.currencyColumn),
-          w(ze.dateColumn),
-          A(ze.currency),
-          F(String(ze.threshold)),
-          O(ze.amountMode),
-          z(ze.comparator),
-          D(ze.effectiveFrom),
-          _(ze.effectiveTo),
+        (h(materialityConfiguration.range),
+          p(materialityConfiguration.headers),
+          v(materialityConfiguration.amountColumn),
+          b(materialityConfiguration.currencyColumn),
+          w(materialityConfiguration.dateColumn),
+          A(materialityConfiguration.currency),
+          F(String(materialityConfiguration.threshold)),
+          O(materialityConfiguration.amountMode),
+          z(materialityConfiguration.comparator),
+          D(materialityConfiguration.effectiveFrom),
+          _(materialityConfiguration.effectiveTo),
           R(null),
           G(""),
           J(
             "Configuration loaded. Run the screen against the current source; saved conclusions are not reused.",
           ));
-      } catch (Je) {
-        $e() && Pe(toFileProcessingError(Je));
+      } catch (error) {
+        $e() && Pe(toFileProcessingError(error));
       }
     };
   return i.jsx("div", {
     className: "materiality-backdrop",
-    onMouseDown: (Me) => {
-      Me.target === Me.currentTarget && e.onClose();
+    onMouseDown: (event) => {
+      event.target === event.currentTarget && e.onClose();
     },
     children: i.jsxs("section", {
       className: "materiality-dialog",
@@ -214,12 +222,12 @@ function MaterialityRiskScreen(e) {
       "aria-modal": "true",
       "aria-labelledby": `${o}-title`,
       ref: a,
-      onKeyDown: (Me) => {
+      onKeyDown: (event) => {
         var je, $e;
         if (
-          (Me.stopPropagation(),
-          Me.key === "Escape" && (Me.preventDefault(), e.onClose()),
-          Me.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const Je = Array.from(
             a.current?.querySelectorAll(
@@ -229,11 +237,11 @@ function MaterialityRiskScreen(e) {
             (ze) =>
               !ze.closest("details:not([open])") || ze.tagName === "SUMMARY",
           );
-          Me.shiftKey && document.activeElement === Je[0]
-            ? (Me.preventDefault(), (je = Je.at(-1)) == null || je.focus())
-            : !Me.shiftKey &&
+          event.shiftKey && document.activeElement === Je[0]
+            ? (event.preventDefault(), (je = Je.at(-1)) == null || je.focus())
+            : !event.shiftKey &&
               document.activeElement === Je.at(-1) &&
-              (Me.preventDefault(), ($e = Je[0]) == null || $e.focus());
+              (event.preventDefault(), ($e = Je[0]) == null || $e.focus());
         }
       },
       children: [
@@ -286,8 +294,8 @@ function MaterialityRiskScreen(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
-                  value: Se ? c : "",
-                  onChange: (Me) => h(Me.target.value),
+                  value: Se ? range : "",
+                  onChange: (event) => h(event.target.value),
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
@@ -299,7 +307,7 @@ function MaterialityRiskScreen(e) {
                 i.jsx("input", {
                   type: "checkbox",
                   checked: f,
-                  onChange: (Me) => p(Me.target.checked),
+                  onChange: (event) => p(event.target.checked),
                 }),
                 i.jsx(LocalizedText, {
                   children: "First row contains headers",
@@ -307,9 +315,9 @@ function MaterialityRiskScreen(e) {
               ],
             }),
             [
-              ["Amount column", m, v],
-              ["Currency column", g, b],
-              ["Date column", y, w],
+              ["Amount column", amountColumn, v],
+              ["Currency column", currencyColumn, b],
+              ["Date column", dateColumn, w],
             ].map(([Me, ke, je]) =>
               i.jsxs(
                 "label",
@@ -319,7 +327,7 @@ function MaterialityRiskScreen(e) {
                     i.jsx("select", {
                       "aria-label": Me,
                       value: ke,
-                      onChange: ($e) => je(Number($e.target.value)),
+                      onChange: (event) => je(Number(event.target.value)),
                       children: we.map(($e) =>
                         i.jsx(
                           "option",
@@ -338,9 +346,9 @@ function MaterialityRiskScreen(e) {
                 i.jsx(LocalizedText, { children: "Declared currency" }),
                 i.jsx("input", {
                   "aria-label": text("Declared currency"),
-                  value: E,
+                  value: currency,
                   maxLength: 3,
-                  onChange: (Me) => A(Me.target.value),
+                  onChange: (event) => A(event.target.value),
                   lang: language("Declared currency"),
                   "data-ui-label": "Declared currency",
                 }),
@@ -365,8 +373,8 @@ function MaterialityRiskScreen(e) {
                 i.jsx(LocalizedText, { children: "Amount comparison" }),
                 i.jsxs("select", {
                   "aria-label": text("Amount comparison"),
-                  value: I,
-                  onChange: (Me) => O(Me.target.value),
+                  value: amountMode,
+                  onChange: (event) => O(event.target.value),
                   lang: language("Amount comparison"),
                   "data-ui-label": "Amount comparison",
                   children: [
@@ -387,8 +395,8 @@ function MaterialityRiskScreen(e) {
                 i.jsx(LocalizedText, { children: "Comparison rule" }),
                 i.jsxs("select", {
                   "aria-label": text("Comparison rule"),
-                  value: j,
-                  onChange: (Me) => z(Me.target.value),
+                  value: comparator,
+                  onChange: (event) => z(event.target.value),
                   lang: language("Comparison rule"),
                   "data-ui-label": "Comparison rule",
                   children: [
@@ -421,8 +429,8 @@ function MaterialityRiskScreen(e) {
                 i.jsx("input", {
                   "aria-label": text("Effective from"),
                   type: "date",
-                  value: V,
-                  onChange: (Me) => D(Me.target.value),
+                  value: effectiveFrom,
+                  onChange: (event) => D(event.target.value),
                   lang: language("Effective from"),
                   "data-ui-label": "Effective from",
                 }),
@@ -434,8 +442,8 @@ function MaterialityRiskScreen(e) {
                 i.jsx("input", {
                   "aria-label": text("Effective to"),
                   type: "date",
-                  value: B,
-                  onChange: (Me) => _(Me.target.value),
+                  value: effectiveTo,
+                  onChange: (event) => _(event.target.value),
                   lang: language("Effective to"),
                   "data-ui-label": "Effective to",
                 }),
@@ -450,8 +458,8 @@ function MaterialityRiskScreen(e) {
               i.jsx("input", {
                 "aria-label": text("Include hidden content"),
                 type: "checkbox",
-                checked: C,
-                onChange: (Me) => T(Me.target.checked),
+                checked: checked,
+                onChange: (event) => T(event.target.checked),
                 lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
@@ -473,7 +481,7 @@ function MaterialityRiskScreen(e) {
             i.jsx("button", {
               className: "materiality-primary",
               disabled: !Se,
-              onClick: qe,
+              onClick: onClick,
               children: i.jsx(LocalizedText, {
                 children: "Run materiality screen",
               }),
@@ -487,9 +495,9 @@ function MaterialityRiskScreen(e) {
                   "aria-label": text("Load saved configuration"),
                   type: "file",
                   accept: "application/json,.json",
-                  onChange: (Me) => {
-                    const ke = Me.target.files?.[0];
-                    ((Me.target.value = ""), Re(ke));
+                  onChange: (event) => {
+                    const ke = event.target.files?.[0];
+                    ((event.target.value = ""), Re(ke));
                   },
                   lang: language("Load saved configuration"),
                   "data-ui-label": "Load saved configuration",
@@ -656,8 +664,8 @@ function MaterialityRiskScreen(e) {
                   i.jsxs("select", {
                     "aria-label": text("Rows to review"),
                     value: K,
-                    onChange: (Me) => {
-                      (te(Me.target.value), W(0));
+                    onChange: (event) => {
+                      (te(event.target.value), W(0));
                     },
                     lang: language("Rows to review"),
                     "data-ui-label": "Rows to review",
@@ -723,13 +731,13 @@ function MaterialityRiskScreen(e) {
                               children: "Reasons",
                             }),
                           }),
-                          Ee.headers.map((Me, ke) =>
+                          Ee.headers.map((header, ke) =>
                             i.jsxs(
                               "th",
                               {
                                 scope: "col",
                                 children: [
-                                  Me,
+                                  header,
                                   " (",
                                   columnIndexToLetters(
                                     parseRangeAddress(Ee.request.range)
@@ -777,7 +785,7 @@ function MaterialityRiskScreen(e) {
                                     ? "Matches the configured comparison."
                                     : "Does not match the configured comparison."),
                               }),
-                              Me.cells.map((ke, je) =>
+                              Me.cells.map((cell, je) =>
                                 i.jsx(
                                   "td",
                                   {
@@ -793,7 +801,7 @@ function MaterialityRiskScreen(e) {
                                             i.jsx(LocalizedText, {
                                               children: "Stored: ",
                                             }),
-                                            formatCellValueLabel(ke.raw),
+                                            formatCellValueLabel(cell.raw),
                                           ],
                                         }),
                                         i.jsxs("p", {
@@ -801,13 +809,13 @@ function MaterialityRiskScreen(e) {
                                             i.jsx(LocalizedText, {
                                               children: "Literal: ",
                                             }),
-                                            ke.literal ? "Yes" : "No",
+                                            cell.literal ? "Yes" : "No",
                                           ],
                                         }),
                                         i.jsx("pre", {
                                           children: JSON.stringify(
                                             Object.fromEntries(
-                                              Object.entries(ke).filter(
+                                              Object.entries(cell).filter(
                                                 ([$e]) =>
                                                   !["raw", "literal"].includes(
                                                     $e,
@@ -872,7 +880,7 @@ function MaterialityRiskScreen(e) {
                       children: "Screening rules and limitations",
                     }),
                   }),
-                  Ee.notes.map((Me) => i.jsx("p", { children: Me }, Me)),
+                  Ee.notes.map((note) => i.jsx("p", { children: note }, note)),
                 ],
               }),
             ],
@@ -984,118 +992,137 @@ function parseIsoCalendarDate(e) {
     ? r / 864e5
     : null;
 }
-function convertSerialToIsoDate(e, r) {
+function convertSerialToIsoDate(e, dateSystem) {
   if (typeof e == "string") return parseIsoCalendarDate(e) === null ? null : e;
   if (typeof e != "number" || !Number.isFinite(e)) return null;
   const t = Math.floor(e),
-    n = r === "1900" ? 2958465 : 2957003;
-  return t < (r === "1900" ? 1 : 0) || t > n || (r === "1900" && t === 60)
+    n = dateSystem === "1900" ? 2958465 : 2957003;
+  return t < (dateSystem === "1900" ? 1 : 0) ||
+    t > n ||
+    (dateSystem === "1900" && t === 60)
     ? null
     : new Date(
-        (r === "1900" ? Date.UTC(1899, 11, 31) : Date.UTC(1904, 0, 1)) +
-          (r === "1900" && t > 60 ? t - 1 : t) * 864e5,
+        (dateSystem === "1900"
+          ? Date.UTC(1899, 11, 31)
+          : Date.UTC(1904, 0, 1)) +
+          (dateSystem === "1900" && t > 60 ? t - 1 : t) * 864e5,
       )
         .toISOString()
         .slice(0, 10);
 }
-function toScaledIntegerAmount(e, r) {
+function toScaledIntegerAmount(e, precision) {
   if (!Number.isFinite(e) || Math.abs(e) > 1e15) return null;
   const [t, n = "0"] = Math.abs(e).toString().split("e"),
     o = t.split("."),
     a = BigInt(o.join("")),
-    s = r - (o[1]?.length ?? 0) + Number(n);
+    s = precision - (o[1]?.length ?? 0) + Number(n);
   if (s >= 0) return a * 10n ** BigInt(s);
   const d = 10n ** BigInt(-s);
   return a % d === 0n ? a / d : null;
 }
-function ruleKeyColumns(e) {
-  return e.kind === "duplicates"
-    ? e.keyColumns
-    : e.kind === "sequence"
-      ? [...(e.column === null ? [] : [e.column]), ...e.groupColumns]
-      : e.column === null
+function ruleKeyColumns(rule) {
+  return rule.kind === "duplicates"
+    ? rule.keyColumns
+    : rule.kind === "sequence"
+      ? [...(rule.column === null ? [] : [rule.column]), ...rule.groupColumns]
+      : rule.column === null
         ? []
-        : [e.column];
+        : [rule.column];
 }
-function normalizePatternCheckSettings(e, r) {
+function normalizePatternCheckSettings(workbook, r) {
   const t = sourceRangeSchema.safeParse(r);
   if (!t.success)
     throw Error(
       `Invalid pattern-check settings: ${t.error.issues
-        .map((s) => `${s.path.join(".")}: ${s.message}`)
+        .map((issue) => `${issue.path.join(".")}: ${issue.message}`)
         .join("; ")
         .slice(0, 1500)}`,
     );
-  const n = t.data,
-    o = parseRangeAddress(n.range),
-    a = e.sheets.find((s) => s.id === n.sheetId);
-  ((!a || o.lastRow >= a.rowCount || o.lastCol >= a.colCount) &&
+  const data = t.data,
+    rangeAddress = parseRangeAddress(data.range),
+    a = workbook.sheets.find((sheet) => sheet.id === data.sheetId);
+  ((!a ||
+    rangeAddress.lastRow >= a.rowCount ||
+    rangeAddress.lastCol >= a.colCount) &&
     throwErrorMessage(
       "Pattern source is outside current worksheet dimensions.",
     ),
-    (o.lastRow - o.firstRow + 1) * (o.lastCol - o.firstCol + 1) >
+    (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+      (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       gf.sourceCells &&
       throwErrorMessage(
         "Pattern checks support at most 500 selected source cells.",
       ),
-    new Set(n.rules.map((s) => s.id)).size !== n.rules.length &&
+    new Set(data.rules.map((rule) => rule.id)).size !== data.rules.length &&
       throwErrorMessage("Every rule needs a unique ID."),
-    (new Set(n.excludedRows).size !== n.excludedRows.length ||
-      n.excludedRows.some(
-        (s) => s <= o.firstRow + Number(n.headers) || s > o.lastRow + 1,
+    (new Set(data.excludedRows).size !== data.excludedRows.length ||
+      data.excludedRows.some(
+        (excludedRow) =>
+          excludedRow <= rangeAddress.firstRow + Number(data.headers) ||
+          excludedRow > rangeAddress.lastRow + 1,
       )) &&
       throwErrorMessage(
         "Explicit exclusions must be distinct data-row numbers inside the selected range.",
       ));
-  for (const s of n.rules) {
-    const d = ruleKeyColumns(s);
+  for (const rule of data.rules) {
+    const d = ruleKeyColumns(rule);
     if (
       (new Set(d).size !== d.length &&
-        throwErrorMessage(`Rule ${s.id} has duplicate field mappings.`),
-      s.kind === "sequence" &&
-        s.start !== null &&
-        s.end !== null &&
-        (s.start > s.end || (s.end - s.start) % s.step !== 0) &&
+        throwErrorMessage(`Rule ${rule.id} has duplicate field mappings.`),
+      rule.kind === "sequence" &&
+        rule.start !== null &&
+        rule.end !== null &&
+        (rule.start > rule.end || (rule.end - rule.start) % rule.step !== 0) &&
         throwErrorMessage(
           "Sequence bounds must be chronological integers on the declared step.",
         ),
-      s.kind === "round-amount")
+      rule.kind === "round-amount")
     ) {
-      const u = toScaledIntegerAmount(s.increment, s.precision),
-        l = toScaledIntegerAmount(s.tolerance, s.precision);
-      (u === null || u === 0n || l === null || l * 2n >= u) &&
+      const scaledIntegerAmount = toScaledIntegerAmount(
+          rule.increment,
+          rule.precision,
+        ),
+        l = toScaledIntegerAmount(rule.tolerance, rule.precision);
+      (scaledIntegerAmount === null ||
+        scaledIntegerAmount === 0n ||
+        l === null ||
+        l * 2n >= scaledIntegerAmount) &&
         throwErrorMessage(
           "Round-amount increment/tolerance must fit the declared precision; tolerance must be less than half the increment.",
         );
     }
-    (s.kind === "weekend" &&
-      new Set(s.days).size !== s.days.length &&
+    (rule.kind === "weekend" &&
+      new Set(rule.days).size !== rule.days.length &&
       throwErrorMessage(
         "Weekend weekdays must be distinct (0=Sunday through 6=Saturday).",
       ),
-      s.kind === "holiday" &&
-        (new Set(s.dates).size !== s.dates.length ||
-          s.dates.some((u) => parseIsoCalendarDate(u) === null)) &&
+      rule.kind === "holiday" &&
+        (new Set(rule.dates).size !== rule.dates.length ||
+          rule.dates.some((date) => parseIsoCalendarDate(date) === null)) &&
         throwErrorMessage(
           "Holiday dates must be distinct valid ISO calendar dates.",
         ));
   }
   return (
-    (new Set(n.combination.ruleIds).size !== n.combination.ruleIds.length ||
-      n.combination.ruleIds.some(
-        (s) => !n.rules.some((d) => d.id === s && d.kind !== "sequence"),
+    (new Set(data.combination.ruleIds).size !==
+      data.combination.ruleIds.length ||
+      data.combination.ruleIds.some(
+        (ruleId) =>
+          !data.rules.some(
+            (rule) => rule.id === ruleId && rule.kind !== "sequence",
+          ),
       )) &&
       throwErrorMessage(
         "Row combinations require distinct existing row rules. Sequence gaps are separate interval findings, not missing source rows.",
       ),
     {
-      ...n,
-      range: `${rN(o.firstRow + 1, o.firstCol)}:${rN(o.lastRow + 1, o.lastCol)}`,
+      ...data,
+      range: `${rN(rangeAddress.firstRow + 1, rangeAddress.firstCol)}:${rN(rangeAddress.lastRow + 1, rangeAddress.lastCol)}`,
     }
   );
 }
-const createEmptyCounts = (e) => ({
-  population: e,
+const createEmptyCounts = (population) => ({
+  population: population,
   excluded: 0,
   invalid: 0,
   tested: 0,
@@ -1106,136 +1133,166 @@ const createEmptyCounts = (e) => ({
   findings: 0,
   gapValues: 0,
 });
-function summarizeRuleOutcome(e, r) {
-  const t = createEmptyCounts(e.length);
-  for (const o of e)
-    o.disposition === "excluded"
-      ? t.excluded++
-      : o.disposition === "invalid"
-        ? t.invalid++
-        : o.disposition === "matched"
-          ? t.matched++
-          : o.disposition === "not-matched"
-            ? t.notMatched++
-            : t.notTested++;
-  ((t.tested = t.matched + t.notMatched),
-    (t.groups = new Set(r.map((o) => o.group.id)).size),
-    (t.findings = r.length));
-  const n = r.reduce((o, a) => o + BigInt(a.missing?.count ?? 0), 0n);
+function summarizeRuleOutcome(rows, findings) {
+  const emptyCounts = createEmptyCounts(rows.length);
+  for (const row of rows)
+    row.disposition === "excluded"
+      ? emptyCounts.excluded++
+      : row.disposition === "invalid"
+        ? emptyCounts.invalid++
+        : row.disposition === "matched"
+          ? emptyCounts.matched++
+          : row.disposition === "not-matched"
+            ? emptyCounts.notMatched++
+            : emptyCounts.notTested++;
+  ((emptyCounts.tested = emptyCounts.matched + emptyCounts.notMatched),
+    (emptyCounts.groups = new Set(
+      findings.map((finding) => finding.group.id),
+    ).size),
+    (emptyCounts.findings = findings.length));
+  const n = findings.reduce((o, a) => o + BigInt(a.missing?.count ?? 0), 0n);
   return (
     n > BigInt(Number.MAX_SAFE_INTEGER) &&
       throwErrorMessage(
         "The total missing-value count exceeds the exact integer reporting limit. Split sequence groups into smaller checks.",
       ),
-    (t.gapValues = Number(n)),
-    t
+    (emptyCounts.gapValues = Number(n)),
+    emptyCounts
   );
 }
-function buildRowMatchKey(e, r) {
-  const t = e.map((n) =>
+function buildRowMatchKey(e, rule) {
+  const values = e.map((n) =>
     typeof n == "string"
-      ? r.caseSensitive
-        ? r.trimText
+      ? rule.caseSensitive
+        ? rule.trimText
           ? n.trim()
           : n
-        : (r.trimText ? n.trim() : n).toLowerCase()
+        : (rule.trimText ? n.trim() : n).toLowerCase()
       : n,
   );
-  return t.some(
-    (n) =>
-      isNullOrEmptyValue(n) || (typeof n == "number" && !Number.isFinite(n)),
+  return values.some(
+    (value) =>
+      isNullOrEmptyValue(value) ||
+      (typeof value == "number" && !Number.isFinite(value)),
   )
     ? null
-    : { key: JSON.stringify(t.map((n) => [typeof n, n])), values: t };
+    : {
+        key: JSON.stringify(values.map((value) => [typeof value, value])),
+        values: values,
+      };
 }
-function runPatternChecks(e, r, t = {}) {
-  const n = normalizePatternCheckSettings(e, r),
-    o = parseRangeAddress(n.range),
-    a = { sheetId: n.sheetId, range: n.range, headers: n.headers, columns: [] };
-  let s = buildMaterialitySourceEvidence(e, a, t),
+function runPatternChecks(workbook, r, t = {}) {
+  const patternCheckSettings = normalizePatternCheckSettings(workbook, r),
+    rangeAddress = parseRangeAddress(patternCheckSettings.range),
+    a = {
+      sheetId: patternCheckSettings.sheetId,
+      range: patternCheckSettings.range,
+      headers: patternCheckSettings.headers,
+      columns: [],
+    };
+  let materialitySourceEvidence = buildMaterialitySourceEvidence(
+      workbook,
+      a,
+      t,
+    ),
     d = "";
-  if (n.comparison === "calculated") {
-    const y = [...new Set(n.rules.flatMap(ruleKeyColumns))].filter(
-      (w) => w >= o.firstCol && w <= o.lastCol,
-    );
+  if (patternCheckSettings.comparison === "calculated") {
+    const columns = [
+      ...new Set(patternCheckSettings.rules.flatMap(ruleKeyColumns)),
+    ].filter((w) => w >= rangeAddress.firstCol && w <= rangeAddress.lastCol);
     try {
-      s = buildMaterialitySourceEvidence(e, { ...a, columns: y }, t);
-    } catch (w) {
+      materialitySourceEvidence = buildMaterialitySourceEvidence(
+        workbook,
+        { ...a, columns: columns },
+        t,
+      );
+    } catch (error) {
       d =
-        w instanceof Error
-          ? w.message
+        error instanceof Error
+          ? error.message
           : "Selected fields could not be calculated.";
     }
   }
-  const u = s.rows.map((y) => ({
-      ...y,
-      origin: findRowOrigin(e, s.sheetId, y.sourceRow - 1),
-      exclusionReason: n.excludedRows.includes(y.sourceRow)
+  const rows = materialitySourceEvidence.rows.map((row) => ({
+      ...row,
+      origin: findRowOrigin(
+        workbook,
+        materialitySourceEvidence.sheetId,
+        row.sourceRow - 1,
+      ),
+      exclusionReason: patternCheckSettings.excludedRows.includes(row.sourceRow)
         ? "Explicitly excluded source row."
-        : n.excludeBlankRows && y.values.every(isNullOrEmptyValue)
+        : patternCheckSettings.excludeBlankRows &&
+            row.values.every(isNullOrEmptyValue)
           ? "Entire selected row is blank; excluded under the visible blank-row policy."
           : null,
     })),
-    l = {
-      workbookId: e.id,
-      revision: e.revision,
-      sheetId: s.sheetId,
-      sheetName: s.sheetName,
-      range: n.range,
+    source = {
+      workbookId: workbook.id,
+      revision: workbook.revision,
+      sheetId: materialitySourceEvidence.sheetId,
+      sheetName: materialitySourceEvidence.sheetName,
+      range: patternCheckSettings.range,
       sha256: sha256HexDigest(
         new TextEncoder().encode(
-          JSON.stringify({ headers: s.headers, rows: u }),
+          JSON.stringify({
+            headers: materialitySourceEvidence.headers,
+            rows: rows,
+          }),
         ),
       ),
     },
-    c = new Map(u.map((y) => [y.sourceRow, y])),
+    c = new Map(rows.map((row) => [row.sourceRow, row])),
     h = (y, w) =>
       y.flatMap((E) =>
         w.map((A) => {
           const k = c.get(E);
           return {
             address: rN(E, A),
-            raw: k.cells[A - o.firstCol].raw,
-            value: k.values[A - o.firstCol],
+            raw: k.cells[A - rangeAddress.firstCol].raw,
+            value: k.values[A - rangeAddress.firstCol],
             origin: k.origin,
           };
         }),
       ),
     f = () =>
-      u.map((y) => ({
-        sourceRow: y.sourceRow,
-        disposition: y.exclusionReason ? "excluded" : "not-tested",
-        reasons: y.exclusionReason ? [y.exclusionReason] : [],
+      rows.map((row) => ({
+        sourceRow: row.sourceRow,
+        disposition: row.exclusionReason ? "excluded" : "not-tested",
+        reasons: row.exclusionReason ? [row.exclusionReason] : [],
         findingIds: [],
       })),
-    p = n.rules.map((y) => {
+    results = patternCheckSettings.rules.map((rule) => {
       const w = {
-          rule: cloneStructuredValue(y),
+          rule: cloneStructuredValue(rule),
           version: "1.0.0",
           status: "complete",
           messages: [],
-          counts: createEmptyCounts(u.length),
+          counts: createEmptyCounts(rows.length),
           rows: f(),
           findings: [],
         },
-        E = new Map(w.rows.map((C) => [C.sourceRow, C])),
-        A = ruleKeyColumns(y),
-        k = A.every((C) => C >= o.firstCol && C <= o.lastCol),
-        F = y.kind === "duplicates" ? !A.length : y.column === null,
+        E = new Map(w.rows.map((row) => [row.sourceRow, row])),
+        A = ruleKeyColumns(rule),
+        k = A.every(
+          (C) => C >= rangeAddress.firstCol && C <= rangeAddress.lastCol,
+        ),
+        F = rule.kind === "duplicates" ? !A.length : rule.column === null,
         I = () => {
           if (w.status === "failed") {
             w.findings = [];
-            for (const C of w.rows)
-              C.disposition !== "excluded" &&
-                C.disposition !== "invalid" &&
-                ((C.disposition = "not-tested"),
-                (C.findingIds = []),
-                C.reasons.push(
+            for (const row of w.rows)
+              row.disposition !== "excluded" &&
+                row.disposition !== "invalid" &&
+                ((row.disposition = "not-tested"),
+                (row.findingIds = []),
+                row.reasons.push(
                   "Rule failed; no clean or exception conclusion is available.",
                 ));
           }
           w.counts = summarizeRuleOutcome(w.rows, w.findings);
-          for (const C of w.findings) C.counts = cloneStructuredValue(w.counts);
+          for (const finding of w.findings)
+            finding.counts = cloneStructuredValue(w.counts);
           return (
             w.status === "complete" &&
               !w.counts.tested &&
@@ -1255,7 +1312,7 @@ function runPatternChecks(e, r, t = {}) {
           ),
           I()
         );
-      if (y.kind === "holiday" && !y.dates.length)
+      if (rule.kind === "holiday" && !rule.dates.length)
         return (
           (w.status = "not-applicable"),
           w.messages.push(
@@ -1269,7 +1326,7 @@ function runPatternChecks(e, r, t = {}) {
             N.reasons.push(T),
             (w.status = "failed"));
         },
-        j = u.filter((C) => !C.exclusionReason),
+        j = rows.filter((row) => !row.exclusionReason),
         z = new Map(),
         V = (C, T, N) => {
           let R = z.get(C);
@@ -1277,19 +1334,19 @@ function runPatternChecks(e, r, t = {}) {
             R.members.push(N));
         },
         D = new Map(),
-        B = new Set(y.kind === "holiday" ? y.dates : []);
+        B = new Set(rule.kind === "holiday" ? rule.dates : []);
       for (const C of j) {
         const T = E.get(C.sourceRow),
-          N = (R) => C.values[R - o.firstCol];
-        if (y.kind === "duplicates") {
-          const R = y.keyColumns.map(N),
-            L = buildRowMatchKey(R, y);
-          if (!L) {
-            y.blankKeys === "exclude" &&
+          N = (R) => C.values[R - rangeAddress.firstCol];
+        if (rule.kind === "duplicates") {
+          const R = rule.keyColumns.map(N),
+            rowMatchKey = buildRowMatchKey(R, rule);
+          if (!rowMatchKey) {
+            rule.blankKeys === "exclude" &&
             R.some(
               ($) =>
                 isNullOrEmptyValue($) ||
-                (typeof $ == "string" && y.trimText && !$.trim()),
+                (typeof $ == "string" && rule.trimText && !$.trim()),
             )
               ? ((T.disposition = "excluded"),
                 T.reasons.push(
@@ -1301,11 +1358,12 @@ function runPatternChecks(e, r, t = {}) {
                 );
             continue;
           }
-          ((T.disposition = "not-matched"), V(L.key, L.values, C.sourceRow));
-        } else if (y.kind === "sequence") {
-          const R = N(y.column),
-            L = y.groupColumns.length
-              ? buildRowMatchKey(y.groupColumns.map(N), y)
+          ((T.disposition = "not-matched"),
+            V(rowMatchKey.key, rowMatchKey.values, C.sourceRow));
+        } else if (rule.kind === "sequence") {
+          const R = N(rule.column),
+            L = rule.groupColumns.length
+              ? buildRowMatchKey(rule.groupColumns.map(N), rule)
               : { key: "[]", values: [] };
           let $ = null;
           if (
@@ -1313,16 +1371,16 @@ function runPatternChecks(e, r, t = {}) {
               Number.isSafeInteger(R) &&
               R >= 0 &&
               R <= gf.sequenceMaximum &&
-              !y.prefix &&
-              !y.suffix &&
+              !rule.prefix &&
+              !rule.suffix &&
               ($ = R),
             typeof R == "string" &&
-              R.startsWith(y.prefix) &&
-              R.endsWith(y.suffix))
+              R.startsWith(rule.prefix) &&
+              R.endsWith(rule.suffix))
           ) {
             const U = R.slice(
-              y.prefix.length,
-              y.suffix ? R.length - y.suffix.length : undefined,
+              rule.prefix.length,
+              rule.suffix ? R.length - rule.suffix.length : undefined,
             );
             /^\d{1,15}$/.test(U) && ($ = Number(U));
           }
@@ -1334,8 +1392,8 @@ function runPatternChecks(e, r, t = {}) {
             continue;
           }
           if (
-            (y.start !== null && $ < y.start) ||
-            (y.end !== null && $ > y.end)
+            (rule.start !== null && $ < rule.start) ||
+            (rule.end !== null && $ > rule.end)
           ) {
             O(
               C.sourceRow,
@@ -1344,11 +1402,11 @@ function runPatternChecks(e, r, t = {}) {
             continue;
           }
           (D.set(C.sourceRow, $), V(L.key, L.values, C.sourceRow));
-        } else if (y.kind === "round-amount") {
-          const R = N(y.column),
+        } else if (rule.kind === "round-amount") {
+          const R = N(rule.column),
             L =
               typeof R == "number"
-                ? toScaledIntegerAmount(R, y.precision)
+                ? toScaledIntegerAmount(R, rule.precision)
                 : null;
           if (L === null) {
             O(
@@ -1357,15 +1415,18 @@ function runPatternChecks(e, r, t = {}) {
             );
             continue;
           }
-          if (((T.disposition = "not-matched"), L === 0n && !y.includeZero))
+          if (((T.disposition = "not-matched"), L === 0n && !rule.includeZero))
             continue;
-          const $ = toScaledIntegerAmount(y.increment, y.precision),
-            U = toScaledIntegerAmount(y.tolerance, y.precision),
-            G = L % $;
-          (G < $ - G ? G : $ - G) <= U &&
+          const scaledIntegerAmount = toScaledIntegerAmount(
+              rule.increment,
+              rule.precision,
+            ),
+            U = toScaledIntegerAmount(rule.tolerance, rule.precision),
+            G = L % scaledIntegerAmount;
+          (G < scaledIntegerAmount - G ? G : scaledIntegerAmount - G) <= U &&
             V(JSON.stringify(R), [R], C.sourceRow);
         } else {
-          const R = convertSerialToIsoDate(N(y.column), y.dateSystem);
+          const R = convertSerialToIsoDate(N(rule.column), rule.dateSystem);
           if (!R) {
             O(
               C.sourceRow,
@@ -1375,7 +1436,7 @@ function runPatternChecks(e, r, t = {}) {
           }
           T.disposition = "not-matched";
           const L = new Date(parseIsoCalendarDate(R) * 864e5).getUTCDay();
-          (y.kind === "weekend" ? y.days.includes(L) : B.has(R)) &&
+          (rule.kind === "weekend" ? rule.days.includes(L) : B.has(R)) &&
             V(R, [R], C.sourceRow);
         }
       }
@@ -1386,8 +1447,8 @@ function runPatternChecks(e, r, t = {}) {
           ),
           I()
         );
-      const _ = (C, T, N, R, L, $) => {
-        const U = `${y.id}-G${w.findings.length + 1}`,
+      const _ = (C, T, N, R, L, missing) => {
+        const U = `${rule.id}-G${w.findings.length + 1}`,
           G = {
             id: U,
             classification: "review-candidate",
@@ -1395,78 +1456,83 @@ function runPatternChecks(e, r, t = {}) {
             detail:
               L +
               " Review candidate only; this is not proof of error or fraud.",
-            rule: { id: y.id, kind: y.kind, version: "1.0.0" },
-            parameters: cloneStructuredValue(y),
-            source: cloneStructuredValue(l),
+            rule: { id: rule.id, kind: rule.kind, version: "1.0.0" },
+            parameters: cloneStructuredValue(rule),
+            source: cloneStructuredValue(source),
             sourceCells: h(N, A),
             group: { id: U, key: C, memberRows: [...T] },
-            counts: createEmptyCounts(u.length),
-            ...($ ? { missing: $ } : {}),
+            counts: createEmptyCounts(rows.length),
+            ...(missing ? { missing: missing } : {}),
           };
-        if ((w.findings.push(G), y.kind !== "sequence"))
+        if ((w.findings.push(G), rule.kind !== "sequence"))
           for (const H of T)
             ((E.get(H).disposition = "matched"), E.get(H).findingIds.push(U));
         else for (const H of N) E.get(H).findingIds.push(U);
       };
-      if (y.kind === "sequence") {
+      if (rule.kind === "sequence") {
         let C = 0;
         for (const T of z.values()) {
           const N = new Map();
-          for (const Q of T.members) {
-            const X = D.get(Q);
-            N.set(X, [...(N.get(X) ?? []), Q]);
+          for (const member of T.members) {
+            const X = D.get(member);
+            N.set(X, [...(N.get(X) ?? []), member]);
           }
           const R = [...N.keys()].sort((Q, X) => Q - X),
-            L = y.start ?? R[0],
-            $ = y.end ?? R.at(-1);
-          if (R.some((Q) => (Q - L) % y.step !== 0) || ($ - L) % y.step !== 0) {
-            for (const Q of T.members)
+            L = rule.start ?? R[0],
+            $ = rule.end ?? R.at(-1);
+          if (
+            R.some((Q) => (Q - L) % rule.step !== 0) ||
+            ($ - L) % rule.step !== 0
+          ) {
+            for (const member of T.members)
               O(
-                Q,
+                member,
                 "Sequence values or bounds do not align with the declared step.",
               );
             continue;
           }
-          if (R.length < 2 && (y.start === null || y.end === null)) {
+          if (R.length < 2 && (rule.start === null || rule.end === null)) {
             C++;
-            for (const Q of T.members)
-              E.get(Q).reasons.push(
+            for (const member of T.members)
+              E.get(member).reasons.push(
                 "One distinct sequence value without both bounds cannot establish missing values.",
               );
             continue;
           }
-          for (const Q of T.members) E.get(Q).disposition = "not-matched";
+          for (const member of T.members)
+            E.get(member).disposition = "not-matched";
           let U = null,
             G = L;
-          const H = (Q, X, J, q) => {
-            if (Q > X) return;
-            const W = (X - Q) / y.step + 1,
+          const H = (first, last, J, q) => {
+            if (first > last) return;
+            const count = (last - first) / rule.step + 1,
               K = [
                 ...(J === null ? [] : (N.get(J) ?? [])),
                 ...(q === null ? [] : (N.get(q) ?? [])),
               ],
-              te = Array.from(
-                { length: Math.min(20, W) },
-                (ae, oe) => y.prefix + String(Q + oe * y.step) + y.suffix,
+              examples = Array.from(
+                { length: Math.min(20, count) },
+                (ae, oe) =>
+                  rule.prefix + String(first + oe * rule.step) + rule.suffix,
               );
             _(
               T.key,
               T.members,
               K,
-              `Missing sequence ${Q === X ? Q : `${Q}–${X}`} (${W})`,
+              `Missing sequence ${first === last ? first : `${first}–${last}`} (${count})`,
               "Missing interval under the declared bounds/step. Cited existing cells are boundary evidence, not erroneous rows.",
               {
-                first: Q,
-                last: X,
-                step: y.step,
-                count: W,
-                examples: te,
-                examplesTruncated: W > 20,
+                first: first,
+                last: last,
+                step: rule.step,
+                count: count,
+                examples: examples,
+                examplesTruncated: count > 20,
               },
             );
           };
           for (const Q of R)
-            (H(G, Q - y.step, U, Q), (U = Q), (G = Q + y.step));
+            (H(G, Q - rule.step, U, Q), (U = Q), (G = Q + rule.step));
           H(G, $, U, null);
         }
         (C &&
@@ -1478,95 +1544,113 @@ function runPatternChecks(e, r, t = {}) {
           ));
       } else
         for (const C of z.values())
-          (y.kind === "duplicates" && C.members.length < 2) ||
+          (rule.kind === "duplicates" && C.members.length < 2) ||
             _(
               C.key,
               C.members,
               C.members,
-              `${y.label}: ${C.members.length} row(s)`,
-              y.kind === "duplicates"
+              `${rule.label}: ${C.members.length} row(s)`,
+              rule.kind === "duplicates"
                 ? "All members of the typed matching-key group are included."
-                : y.kind === "round-amount"
+                : rule.kind === "round-amount"
                   ? "Amount meets the declared increment, decimal precision, tolerance and zero policy."
-                  : `Posting calendar date ${C.key[0]} matches the supplied ${y.kind === "holiday" ? "holiday calendar" : "weekend weekdays"}.`,
+                  : `Posting calendar date ${C.key[0]} matches the supplied ${rule.kind === "holiday" ? "holiday calendar" : "weekend weekdays"}.`,
             );
       return I();
     }),
-    m = {
+    combination = {
       status: "complete",
       messages: [],
-      counts: createEmptyCounts(u.length),
+      counts: createEmptyCounts(rows.length),
       rows: f(),
       findings: [],
     },
-    v = p.filter((y) => n.combination.ruleIds.includes(y.rule.id));
+    v = results.filter((result) =>
+      patternCheckSettings.combination.ruleIds.includes(result.rule.id),
+    );
   if (!v.length)
-    ((m.status = "not-applicable"),
-      m.messages.push(
+    ((combination.status = "not-applicable"),
+      combination.messages.push(
         "No row combination configured. Sequence gaps remain independent interval findings.",
       ));
   else if (v.some((y) => y.status !== "complete"))
-    ((m.status = v.some((y) => y.status === "failed")
+    ((combination.status = v.some((y) => y.status === "failed")
       ? "failed"
       : "not-applicable"),
-      m.messages.push(
+      combination.messages.push(
         "Every selected rule must complete before a combined result is available.",
       ));
   else
-    for (const y of m.rows) {
-      if (y.disposition === "excluded") continue;
+    for (const row of combination.rows) {
+      if (row.disposition === "excluded") continue;
       const w = v.map((I) => ({
         result: I,
-        row: I.rows.find((O) => O.sourceRow === y.sourceRow),
+        row: I.rows.find((O) => O.sourceRow === row.sourceRow),
       }));
       if (
         w.some((I) => !["matched", "not-matched"].includes(I.row.disposition))
       ) {
-        y.reasons.push(
+        row.reasons.push(
           "Combination uses only rows tested by every selected rule (complete cases).",
         );
         continue;
       }
       const E = w.filter((I) => I.row.disposition === "matched"),
-        A = n.combination.mode === "any" ? E.length > 0 : E.length === v.length;
-      if (((y.disposition = A ? "matched" : "not-matched"), !A)) continue;
-      const k = `combined-R${y.sourceRow}`;
-      y.findingIds.push(k);
+        A =
+          patternCheckSettings.combination.mode === "any"
+            ? E.length > 0
+            : E.length === v.length;
+      if (((row.disposition = A ? "matched" : "not-matched"), !A)) continue;
+      const k = `combined-R${row.sourceRow}`;
+      row.findingIds.push(k);
       const F = [...new Set(v.flatMap((I) => ruleKeyColumns(I.rule)))];
-      m.findings.push({
+      combination.findings.push({
         id: k,
         classification: "review-candidate",
-        title: `Combined review candidate — row ${y.sourceRow}`,
-        detail: `${n.combination.mode === "all" ? "All" : "At least one"} selected row rule matched. Review candidate only; not proof of error or fraud.`,
-        rule: { id: "combined", kind: n.combination.mode, version: "1.0.0" },
-        parameters: cloneStructuredValue(n.combination),
-        source: cloneStructuredValue(l),
-        sourceCells: h([y.sourceRow], F),
-        group: { id: k, key: [y.sourceRow], memberRows: [y.sourceRow] },
-        counts: createEmptyCounts(u.length),
+        title: `Combined review candidate — row ${row.sourceRow}`,
+        detail: `${patternCheckSettings.combination.mode === "all" ? "All" : "At least one"} selected row rule matched. Review candidate only; not proof of error or fraud.`,
+        rule: {
+          id: "combined",
+          kind: patternCheckSettings.combination.mode,
+          version: "1.0.0",
+        },
+        parameters: cloneStructuredValue(patternCheckSettings.combination),
+        source: cloneStructuredValue(source),
+        sourceCells: h([row.sourceRow], F),
+        group: { id: k, key: [row.sourceRow], memberRows: [row.sourceRow] },
+        counts: createEmptyCounts(rows.length),
         matchedRules: E.map((I) => ({
           ruleId: I.result.rule.id,
           findingIds: [...I.row.findingIds],
         })),
       });
     }
-  ((m.counts = summarizeRuleOutcome(m.rows, m.findings)),
-    m.status === "complete" &&
-      !m.counts.tested &&
-      ((m.status = "not-applicable"),
-      m.messages.push("No row was eligible for every selected check.")));
-  for (const y of m.findings) y.counts = cloneStructuredValue(m.counts);
-  const g = {
-    population: u.length,
-    excluded: u.filter((y) => y.exclusionReason).length,
-    eligible: u.filter((y) => !y.exclusionReason).length,
-    rulesComplete: p.filter((y) => y.status === "complete").length,
-    rulesFailed: p.filter((y) => y.status === "failed").length,
-    rulesNotApplicable: p.filter((y) => y.status === "not-applicable").length,
-    findings: p.reduce((y, w) => y + w.findings.length, 0),
-    gapValues: p.reduce((y, w) => y + w.counts.gapValues, 0),
+  ((combination.counts = summarizeRuleOutcome(
+    combination.rows,
+    combination.findings,
+  )),
+    combination.status === "complete" &&
+      !combination.counts.tested &&
+      ((combination.status = "not-applicable"),
+      combination.messages.push(
+        "No row was eligible for every selected check.",
+      )));
+  for (const finding of combination.findings)
+    finding.counts = cloneStructuredValue(combination.counts);
+  const counts = {
+    population: rows.length,
+    excluded: rows.filter((row) => row.exclusionReason).length,
+    eligible: rows.filter((row) => !row.exclusionReason).length,
+    rulesComplete: results.filter((result) => result.status === "complete")
+      .length,
+    rulesFailed: results.filter((result) => result.status === "failed").length,
+    rulesNotApplicable: results.filter(
+      (result) => result.status === "not-applicable",
+    ).length,
+    findings: results.reduce((y, w) => y + w.findings.length, 0),
+    gapValues: results.reduce((y, w) => y + w.counts.gapValues, 0),
   };
-  Number.isSafeInteger(g.gapValues) ||
+  Number.isSafeInteger(counts.gapValues) ||
     throwErrorMessage(
       "The aggregate missing-value count exceeds the exact integer reporting limit. Run fewer sequence rules.",
     );
@@ -1575,12 +1659,12 @@ function runPatternChecks(e, r, t = {}) {
     kind: "pattern-audit",
     algorithm: "ledgerglass-patterns-1",
     generatedAt: new Date().toISOString(),
-    request: n,
-    context: s.context,
-    source: l,
-    status: g.rulesFailed
+    request: patternCheckSettings,
+    context: materialitySourceEvidence.context,
+    source: source,
+    status: counts.rulesFailed
       ? "failed"
-      : g.rulesComplete
+      : counts.rulesComplete
         ? "complete"
         : "not-applicable",
     messages: d
@@ -1589,11 +1673,11 @@ function runPatternChecks(e, r, t = {}) {
           d,
         ]
       : [],
-    headers: s.headers,
-    rows: u,
-    counts: g,
-    results: p,
-    combination: m,
+    headers: materialitySourceEvidence.headers,
+    rows: rows,
+    counts: counts,
+    results: results,
+    combination: combination,
     notes: [
       "Review candidates are not proof of error or fraud. No cells are edited, records removed or automatic totals excluded.",
       "Population includes every selected data-row position. Only the visible blank-row/explicit-row and rule blank-key policies exclude records. Hidden/filter content is included only when explicitly authorized; it is never silently skipped.",
@@ -1611,36 +1695,41 @@ function runPatternChecks(e, r, t = {}) {
         "The complete pattern report exceeds 2,000,000 bytes. Select fewer cells/rules; results are never silently truncated.",
       ),
     KW.set(b, {
-      snapshot: JSON.stringify(e),
-      request: JSON.stringify(n),
-      context: JSON.stringify(s.context),
+      snapshot: JSON.stringify(workbook),
+      request: JSON.stringify(patternCheckSettings),
+      context: JSON.stringify(materialitySourceEvidence.context),
       content: JSON.stringify(b),
     }),
     b
   );
 }
-function checkReportCurrency(e, r, t, n = {}) {
+function checkReportCurrency(workbook, r, t, n = {}) {
   const o = KW.get(r),
-    a = (s) => ({ current: false, disclose: false, reason: s });
+    a = (reason) => ({ current: false, disclose: false, reason: reason });
   if (!o || o.content !== JSON.stringify(r))
     return a(
       "This report is untrusted or changed. Run the pattern checks again.",
     );
   try {
-    const s = normalizePatternCheckSettings(e, t),
-      d = buildMaterialitySourceEvidence(
-        e,
-        { sheetId: s.sheetId, range: s.range, headers: s.headers, columns: [] },
+    const patternCheckSettings = normalizePatternCheckSettings(workbook, t),
+      materialitySourceEvidence = buildMaterialitySourceEvidence(
+        workbook,
+        {
+          sheetId: patternCheckSettings.sheetId,
+          range: patternCheckSettings.range,
+          headers: patternCheckSettings.headers,
+          columns: [],
+        },
         n,
       );
-    return o.snapshot !== JSON.stringify(e) ||
-      o.context !== JSON.stringify(d.context) ||
-      s.sheetId !== r.request.sheetId ||
-      s.range !== r.request.range
+    return o.snapshot !== JSON.stringify(workbook) ||
+      o.context !== JSON.stringify(materialitySourceEvidence.context) ||
+      patternCheckSettings.sheetId !== r.request.sheetId ||
+      patternCheckSettings.range !== r.request.range
       ? a(
           "Source or authorized scope changed. Previous evidence is hidden; run checks again.",
         )
-      : o.request !== JSON.stringify(s)
+      : o.request !== JSON.stringify(patternCheckSettings)
         ? {
             current: false,
             disclose: true,
@@ -1658,16 +1747,16 @@ function checkReportCurrency(e, r, t, n = {}) {
     );
   }
 }
-function exportScreenReportJson(e, r, t, n = {}) {
-  const o = checkReportCurrency(e, r, t, n);
+function exportScreenReportJson(workbook, r, t, n = {}) {
+  const o = checkReportCurrency(workbook, r, t, n);
   return (o.current || throwErrorMessage(o.reason), JSON.stringify(r, null, 2));
 }
-function parseScreenReportRequest(e, r) {
+function parseScreenReportRequest(workbook, r) {
   const t = r;
   return (
     (!t || t.schemaVersion !== 1 || t.kind !== "pattern-audit") &&
       throwErrorMessage("Choose a pattern-audit configuration or report."),
-    normalizePatternCheckSettings(e, t.request)
+    normalizePatternCheckSettings(workbook, t.request)
   );
 }
 const screenRuleLabels = {

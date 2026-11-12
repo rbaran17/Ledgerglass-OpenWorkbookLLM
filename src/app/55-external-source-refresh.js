@@ -27,23 +27,23 @@ import {
 } from "./54-workbook-save-conflicts.js";
 
 function ExternalSourceBatchRefreshPanel(e) {
-  const r = useWorkbookMessages(),
+  const workbookMessages = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = ne.useRef(e);
   o.current = e;
   const a = e.workbook.sheets.filter(
-      (T) =>
-        T.externalConnection &&
-        !T.hidden &&
-        !T.veryHidden &&
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(T.id)),
+      (sheet) =>
+        sheet.externalConnection &&
+        !sheet.hidden &&
+        !sheet.veryHidden &&
+        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)),
     ),
     [s, d] = ne.useState(
       a.filter((T) => !T.protection?.enabled).map((T) => T.id),
     ),
     [u, l] = ne.useState(null),
-    [c, h] = ne.useState(false),
+    [disabled, h] = ne.useState(false),
     [f, p] = ne.useState(""),
     [m, v] = ne.useState(""),
     [g, b] = ne.useState(""),
@@ -55,7 +55,7 @@ function ExternalSourceBatchRefreshPanel(e) {
   }, [y]);
   const F = ne.useRef(true),
     I = ne.useRef(null),
-    O = JSON.stringify([e.readOnly, e.allowedSheetIds]),
+    scope = JSON.stringify([e.readOnly, e.allowedSheetIds]),
     j = ne.useMemo(
       () => fingerprintCanonicalValue([e.workbook.id, e.workbook.sheets]),
       [e.workbook],
@@ -64,16 +64,18 @@ function ExternalSourceBatchRefreshPanel(e) {
       u &&
       (u.book === e.workbook || (!u.result.plan && u.contentHash === j)) &&
       u.adapter === e.adapter &&
-      u.scope === O
+      u.scope === scope
         ? u.result
         : undefined;
   (ne.useEffect(() => {
     F.current = true;
-    const T = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       n.current?.querySelector("button")?.focus(),
       () => {
-        ((F.current = false), I.current?.abort(), T?.isConnected && T.focus());
+        ((F.current = false),
+          I.current?.abort(),
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -86,32 +88,33 @@ function ExternalSourceBatchRefreshPanel(e) {
           N &&
           (N.book === e.workbook || (!N.result.plan && N.contentHash === j)) &&
           N.adapter === e.adapter &&
-          N.scope === O
+          N.scope === scope
             ? N
             : null,
         ));
-    }, [e.workbook, e.adapter, O]));
-  function V() {
+    }, [e.workbook, e.adapter, scope]));
+  function onClick() {
     (I.current?.abort(), e.onClose());
   }
   async function D(T = false) {
     if (I.current || !e.adapter || e.readOnly || !s.length || (T && !z?.plan))
       return;
     const N = e,
-      R = e.adapter,
+      adapter = e.adapter,
       L = new AbortController(),
       $ = () =>
         F.current &&
         o.current.workbook === N.workbook &&
-        o.current.adapter === R &&
-        JSON.stringify([o.current.readOnly, o.current.allowedSheetIds]) === O;
+        o.current.adapter === adapter &&
+        JSON.stringify([o.current.readOnly, o.current.allowedSheetIds]) ===
+          scope;
     ((I.current = L),
       h(true),
       v(""),
       p(""),
       w(""),
       b(
-        r.text(
+        workbookMessages.text(
           T
             ? "Checking access for every source…"
             : "Preparing refresh previews…",
@@ -125,70 +128,83 @@ function ExternalSourceBatchRefreshPanel(e) {
     };
     try {
       if (T) {
-        const Q = await G2e(R, z.plan, U);
+        const Q = await G2e(adapter, z.plan, U);
         if (!$()) return;
         if (L.signal.aborted) throw new ExternalSourceError("cancelled");
         const X = applySourceGrantPlans(N.workbook, z.plan, Q, U);
         (N.onWorkbookChange(X, "Refresh all external sources"),
           l(null),
           p(
-            r.text(
+            workbookMessages.text(
               "All reviewed connections were refreshed together. Undo restores the complete previous batch.",
             ),
           ));
       } else {
-        const Q = await runSourceRefreshBatch(N.workbook, R, s, {
+        const Q = await runSourceRefreshBatch(N.workbook, adapter, s, {
           ...U,
-          onProgress: (J, q) => {
+          onProgress: (completed, total) => {
             $() &&
               b(
-                r.message("Reviewed {completed} of {total} connections.", {
-                  completed: J,
-                  total: q,
-                }),
+                workbookMessages.message(
+                  "Reviewed {completed} of {total} connections.",
+                  {
+                    completed: completed,
+                    total: total,
+                  },
+                ),
               );
           },
         });
         if (!$()) return;
-        let X = N.workbook;
-        for (const J of Q.entries) {
-          const q = J.error ?? Q.error;
-          q &&
-            (X = normalizeExternalSourceState(X, J.sheetId, J.sourceId, q, U));
+        let workbook = N.workbook;
+        for (const entry of Q.entries) {
+          const code = entry.error ?? Q.error;
+          code &&
+            (workbook = normalizeExternalSourceState(
+              workbook,
+              entry.sheetId,
+              entry.sourceId,
+              code,
+              U,
+            ));
         }
-        (X !== N.workbook &&
+        (workbook !== N.workbook &&
           N.onWorkbookChange(
-            X,
+            workbook,
             "External source batch failed; previous data retained",
           ),
           l({
             result: Q,
-            book: X,
-            contentHash: fingerprintCanonicalValue([X.id, X.sheets]),
-            adapter: R,
-            scope: O,
+            book: workbook,
+            contentHash: fingerprintCanonicalValue([
+              workbook.id,
+              workbook.sheets,
+            ]),
+            adapter: adapter,
+            scope: scope,
           }),
           Q.plan ||
             v(
-              r.text(
+              workbookMessages.text(
                 "The batch is not ready. No source values were replaced. Resolve the failed connections, or select fewer connections and preview again.",
               ),
             ));
       }
-    } catch (Q) {
+    } catch (error) {
       if (!$()) return;
-      const X = isExternalSourceError(Q);
+      const X = isExternalSourceError(error);
       (v(X.message), l(null));
-      let J = N.workbook;
+      let workbook = N.workbook;
       for (const q of s) {
-        const W = N.workbook.sheets.find((K) => K.id === q)?.externalConnection
-          ?.source.id;
-        W && (J = normalizeExternalSourceState(J, q, W, X.code, U));
+        const W = N.workbook.sheets.find((sheet) => sheet.id === q)
+          ?.externalConnection?.source.id;
+        W &&
+          (workbook = normalizeExternalSourceState(workbook, q, W, X.code, U));
       }
-      if (J !== N.workbook)
+      if (workbook !== N.workbook)
         try {
           N.onWorkbookChange(
-            J,
+            workbook,
             "External source batch failed; previous data retained",
           );
         } catch {}
@@ -196,7 +212,7 @@ function ExternalSourceBatchRefreshPanel(e) {
       I.current === L && ((I.current = null), F.current && h(false));
     }
   }
-  const B = z?.entries.find((T) => T.sheetId === y)?.snapshot;
+  const B = z?.entries.find((entry) => entry.sheetId === y)?.snapshot;
   return i.jsx("div", {
     className: "lg-modal-backdrop",
     children: i.jsxs("section", {
@@ -205,21 +221,22 @@ function ExternalSourceBatchRefreshPanel(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": t,
-      onKeyDown: (T) => {
+      onKeyDown: (event) => {
         var N, R;
         if (
-          (T.key === "Escape" && (T.stopPropagation(), V()), T.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), onClick()),
+          event.key === "Tab")
         ) {
           const L = [
-            ...T.currentTarget.querySelectorAll(
+            ...event.currentTarget.querySelectorAll(
               'button:not(:disabled),input:not(:disabled),[tabindex="0"]',
             ),
           ].filter(($) => !$.closest("[hidden]"));
-          T.shiftKey && document.activeElement === L[0]
-            ? (T.preventDefault(), (N = L.at(-1)) == null || N.focus())
-            : !T.shiftKey &&
+          event.shiftKey && document.activeElement === L[0]
+            ? (event.preventDefault(), (N = L.at(-1)) == null || N.focus())
+            : !event.shiftKey &&
               document.activeElement === L.at(-1) &&
-              (T.preventDefault(), (R = L[0]) == null || R.focus());
+              (event.preventDefault(), (R = L[0]) == null || R.focus());
         }
       },
       children: [
@@ -247,7 +264,7 @@ function ExternalSourceBatchRefreshPanel(e) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: V,
+              onClick: onClick,
               children: i.jsx(LocalizedText, {
                 children: "Back to connections",
               }),
@@ -266,7 +283,7 @@ function ExternalSourceBatchRefreshPanel(e) {
             }),
             i.jsxs("fieldset", {
               className: "lg-source-batch-list",
-              disabled: c || !!e.readOnly,
+              disabled: disabled || !!e.readOnly,
               children: [
                 i.jsx("legend", {
                   children: i.jsx(LocalizedText, {
@@ -282,9 +299,9 @@ function ExternalSourceBatchRefreshPanel(e) {
                           type: "checkbox",
                           checked: s.includes(T.id),
                           disabled: !!T.protection?.enabled,
-                          onChange: (L) => {
+                          onChange: (event) => {
                             (d(($) =>
-                              L.target.checked
+                              event.target.checked
                                 ? [...$, T.id]
                                 : $.filter((U) => U !== T.id),
                             ),
@@ -301,7 +318,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                             " ",
                             T.externalConnection.source.label,
                             T.protection?.enabled
-                              ? ` · ${r.text("Protected")}`
+                              ? ` · ${workbookMessages.text("Protected")}`
                               : "",
                             i.jsxs("small", {
                               children: [
@@ -310,13 +327,13 @@ function ExternalSourceBatchRefreshPanel(e) {
                                 " ",
                                 T.externalConnection.lastSuccess.rows,
                                 " ",
-                                r.text("records"),
+                                workbookMessages.text("records"),
                                 " ·",
                                 " ",
                                 T.externalConnection.lastSuccess.at,
                                 T.externalConnection.lastAttempt.outcome !==
                                 "succeeded"
-                                  ? ` · ${r.text("Stale source data")}`
+                                  ? ` · ${workbookMessages.text("Stale source data")}`
                                   : "",
                               ],
                             }),
@@ -342,7 +359,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                 children: m,
               }),
             f && i.jsx("p", { role: "status", children: f }),
-            c &&
+            disabled &&
               i.jsxs("p", {
                 role: "status",
                 children: [
@@ -359,12 +376,14 @@ function ExternalSourceBatchRefreshPanel(e) {
               }),
             z &&
               i.jsx("section", {
-                "aria-label": r.text("Refresh All results"),
+                "aria-label": workbookMessages.text("Refresh All results"),
                 className: "lg-source-preview",
-                children: z.entries.map((T) => {
-                  const N = e.workbook.sheets.find(($) => $.id === T.sheetId),
-                    R = N.externalConnection.lastSuccess,
-                    L = T.error ?? z.error;
+                children: z.entries.map((entry) => {
+                  const N = e.workbook.sheets.find(
+                      (sheet) => sheet.id === entry.sheetId,
+                    ),
+                    lastSuccess = N.externalConnection.lastSuccess,
+                    L = entry.error ?? z.error;
                   return i.jsxs(
                     "article",
                     {
@@ -375,12 +394,14 @@ function ExternalSourceBatchRefreshPanel(e) {
                             N.name,
                             " ·",
                             " ",
-                            r.text(L ? "Not ready" : "Ready for review"),
+                            workbookMessages.text(
+                              L ? "Not ready" : "Ready for review",
+                            ),
                           ],
                         }),
                         i.jsxs("p", {
                           children: [
-                            T.sourceId,
+                            entry.sourceId,
                             " · ",
                             N.externalConnection.source.kind,
                           ],
@@ -391,40 +412,40 @@ function ExternalSourceBatchRefreshPanel(e) {
                               new ExternalSourceError(L),
                             ).message,
                           }),
-                        T.snapshot &&
+                        entry.snapshot &&
                           !L &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("p", {
                                 children: [
-                                  r.text("Source snapshot"),
+                                  workbookMessages.text("Source snapshot"),
                                   ":",
                                   " ",
-                                  T.snapshot.sourceTimestamp,
+                                  entry.snapshot.sourceTimestamp,
                                   " ·",
                                   " ",
-                                  T.snapshot.version,
+                                  entry.snapshot.version,
                                 ],
                               }),
                               i.jsxs("p", {
                                 children: [
-                                  r.text("Rows"),
+                                  workbookMessages.text("Rows"),
                                   ": ",
-                                  R.rows,
+                                  lastSuccess.rows,
                                   " →",
                                   " ",
-                                  T.snapshot.rows.length,
+                                  entry.snapshot.rows.length,
                                   " · ",
-                                  r.text("Change"),
+                                  workbookMessages.text("Change"),
                                   ":",
                                   " ",
-                                  T.snapshot.rows.length - R.rows,
+                                  entry.snapshot.rows.length - lastSuccess.rows,
                                 ],
                               }),
                               i.jsx("div", {
                                 className: "lg-source-scroll",
                                 children: i.jsxs("table", {
-                                  "aria-label": r.message(
+                                  "aria-label": workbookMessages.message(
                                     "Control changes for {sheet}",
                                     { sheet: N.name },
                                   ),
@@ -442,7 +463,8 @@ function ExternalSourceBatchRefreshPanel(e) {
                                             "th",
                                             {
                                               scope: "col",
-                                              children: r.text($),
+                                              children:
+                                                workbookMessages.text($),
                                             },
                                             $,
                                           ),
@@ -451,11 +473,12 @@ function ExternalSourceBatchRefreshPanel(e) {
                                     }),
                                     i.jsx("tbody", {
                                       children: computeSourceControlTotals(
-                                        T.snapshot,
+                                        entry.snapshot,
                                       ).map(($) => {
                                         const U =
-                                          R.controls.find(
-                                            (H) => H.field === $.field,
+                                          lastSuccess.controls.find(
+                                            (control) =>
+                                              control.field === $.field,
                                           )?.sum ?? 0;
                                         return i.jsxs(
                                           "tr",
@@ -488,19 +511,22 @@ function ExternalSourceBatchRefreshPanel(e) {
                               }),
                               i.jsx("button", {
                                 type: "button",
-                                disabled: c,
+                                disabled: disabled,
                                 onClick: () => {
-                                  (w(T.sheetId), A(0));
+                                  (w(entry.sheetId), A(0));
                                 },
-                                children: r.message("Review rows for {sheet}", {
-                                  sheet: N.name,
-                                }),
+                                children: workbookMessages.message(
+                                  "Review rows for {sheet}",
+                                  {
+                                    sheet: N.name,
+                                  },
+                                ),
                               }),
                             ],
                           }),
                       ],
                     },
-                    T.sheetId,
+                    entry.sheetId,
                   );
                 }),
               }),
@@ -508,10 +534,11 @@ function ExternalSourceBatchRefreshPanel(e) {
               i.jsxs("section", {
                 ref: k,
                 tabIndex: -1,
-                "aria-label": r.text("Batch source rows"),
+                "aria-label": workbookMessages.text("Batch source rows"),
                 children: [
                   i.jsx("h3", {
-                    children: e.workbook.sheets.find((T) => T.id === y)?.name,
+                    children: e.workbook.sheets.find((sheet) => sheet.id === y)
+                      ?.name,
                   }),
                   i.jsx("div", {
                     className: "lg-source-scroll",
@@ -520,14 +547,19 @@ function ExternalSourceBatchRefreshPanel(e) {
                       children: [
                         i.jsx("thead", {
                           children: i.jsx("tr", {
-                            children: B.source.columns.map((T) =>
+                            children: B.source.columns.map((column) =>
                               i.jsxs(
                                 "th",
                                 {
                                   scope: "col",
-                                  children: [T.name, " (", T.type, ")"],
+                                  children: [
+                                    column.name,
+                                    " (",
+                                    column.type,
+                                    ")",
+                                  ],
                                 },
-                                T.name,
+                                column.name,
                               ),
                             ),
                           }),
@@ -545,7 +577,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                                       {
                                         children:
                                           R === null
-                                            ? r.text("(blank)")
+                                            ? workbookMessages.text("(blank)")
                                             : String(R),
                                       },
                                       L,
@@ -560,7 +592,7 @@ function ExternalSourceBatchRefreshPanel(e) {
                     }),
                   }),
                   i.jsxs("nav", {
-                    "aria-label": r.text("Batch row pages"),
+                    "aria-label": workbookMessages.text("Batch row pages"),
                     children: [
                       i.jsx("button", {
                         type: "button",
@@ -571,10 +603,13 @@ function ExternalSourceBatchRefreshPanel(e) {
                         }),
                       }),
                       i.jsx("span", {
-                        children: r.message("Page {page} of {pages}", {
-                          page: E + 1,
-                          pages: Math.max(1, Math.ceil(B.rows.length / 25)),
-                        }),
+                        children: workbookMessages.message(
+                          "Page {page} of {pages}",
+                          {
+                            page: E + 1,
+                            pages: Math.max(1, Math.ceil(B.rows.length / 25)),
+                          },
+                        ),
                       }),
                       i.jsx("button", {
                         type: "button",
@@ -600,7 +635,7 @@ function ExternalSourceBatchRefreshPanel(e) {
             }),
             i.jsx("button", {
               type: "button",
-              disabled: c || !!e.readOnly || !e.adapter || !s.length,
+              disabled: disabled || !!e.readOnly || !e.adapter || !s.length,
               onClick: () => void D(),
               children: i.jsx(LocalizedText, {
                 children: "Preview selected connections",
@@ -609,7 +644,7 @@ function ExternalSourceBatchRefreshPanel(e) {
             i.jsx("button", {
               type: "button",
               className: "primary",
-              disabled: c || !!e.readOnly || !z?.plan,
+              disabled: disabled || !!e.readOnly || !z?.plan,
               onClick: () => void D(true),
               children: i.jsx(LocalizedText, {
                 children: "Apply all reviewed refreshes",
@@ -622,7 +657,7 @@ function ExternalSourceBatchRefreshPanel(e) {
   });
 }
 function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
-  const n = workbook.sheets.find((s) => s.id === sheetId),
+  const n = workbook.sheets.find((sheet) => sheet.id === sheetId),
     o = n?.externalConnection;
   if (!n || !o) return null;
   let a = true;
@@ -664,12 +699,12 @@ function ExternalSourceStatusPanel({ workbook, sheetId, onReview }) {
     ],
   });
 }
-function errorMessageOf(e) {
-  return new ExternalSourceError(e).message;
+function errorMessageOf(code) {
+  return new ExternalSourceError(code).message;
 }
 function ExternalDataRefreshDialog(e) {
   const [r, t] = ne.useState(false),
-    n = useWorkbookMessages(),
+    workbookMessages = useWorkbookMessages(),
     o = ne.useId(),
     a = ne.useRef(null),
     s = ne.useRef(e);
@@ -678,17 +713,19 @@ function ExternalDataRefreshDialog(e) {
     u = ne.useRef(null),
     l = ne.useRef(false),
     c = ne.useRef([e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)]),
-    h = e.workbook.sheets.find((W) => W.id === e.sheetId)?.externalConnection,
+    h = e.workbook.sheets.find(
+      (sheet) => sheet.id === e.sheetId,
+    )?.externalConnection,
     [f, p] = ne.useState(h ? e.sheetId : ""),
     [m, v] = ne.useState(h?.source.id ?? ""),
-    [g, b] = ne.useState("External data"),
+    [outputName, b] = ne.useState("External data"),
     [y, w] = ne.useState([]),
     [E, A] = ne.useState(""),
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(""),
     [j, z] = ne.useState(null),
     [V, D] = ne.useState(0),
-    B = e.workbook.sheets.find((W) => W.id === f),
+    B = e.workbook.sheets.find((sheet) => sheet.id === f),
     _ = B?.externalConnection,
     C =
       j?.book === e.workbook && j.adapter === e.adapter && !e.readOnly
@@ -704,11 +741,13 @@ function ExternalDataRefreshDialog(e) {
     R = !!e.readOnly || !N || !e.adapter || !!E;
   (ne.useEffect(() => {
     d.current = true;
-    const W = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       a.current?.querySelector("button")?.focus(),
       () => {
-        ((d.current = false), u.current?.abort(), W?.isConnected && W.focus());
+        ((d.current = false),
+          u.current?.abort(),
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -727,27 +766,27 @@ function ExternalDataRefreshDialog(e) {
         (l.current && u.current?.abort(), z(null)),
         (c.current = W));
     }, [e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)]));
-  function L() {
+  function onClick() {
     (u.current?.abort(), e.onClose());
   }
   function $() {
     (z(null), D(0), F(""), O(""));
   }
   async function U() {
-    const W = s.current.adapter;
-    if (!W || l.current) return;
+    const adapter = s.current.adapter;
+    if (!adapter || l.current) return;
     ((l.current = true), A("Loading approved sources…"), F(""));
     const K = new AbortController();
     u.current = K;
     try {
-      const te = await fetchSourceCatalog(W, {
+      const sourceCatalog = await fetchSourceCatalog(adapter, {
         signal: K.signal,
         reliability: s.current.reliability,
       });
-      if (!d.current || W !== s.current.adapter) return;
-      (w(te), v((ae) => ae || te[0]?.source.id || ""));
-    } catch (te) {
-      d.current && F(isExternalSourceError(te).message);
+      if (!d.current || adapter !== s.current.adapter) return;
+      (w(sourceCatalog), v((ae) => ae || sourceCatalog[0]?.source.id || ""));
+    } catch (error) {
+      d.current && F(isExternalSourceError(error).message);
     } finally {
       u.current === K &&
         ((u.current = null), (l.current = false), d.current && A(""));
@@ -756,7 +795,7 @@ function ExternalDataRefreshDialog(e) {
   async function G(W = false) {
     if (R || l.current || !e.adapter || !m || (W && !C)) return;
     const K = s.current,
-      te = e.adapter,
+      adapter = e.adapter,
       ae = m,
       oe = f;
     ((l.current = true),
@@ -767,14 +806,14 @@ function ExternalDataRefreshDialog(e) {
     u.current = de;
     try {
       if (W) {
-        const he = await authorizeSourceAccess(te, ae, {
+        const he = await authorizeSourceAccess(adapter, ae, {
           signal: de.signal,
           reliability: e.reliability,
         });
         if (!d.current || de.signal.aborted) return;
         if (
           s.current.workbook !== K.workbook ||
-          s.current.adapter !== te ||
+          s.current.adapter !== adapter ||
           s.current.readOnly
         )
           throw new ExternalSourceError("stale");
@@ -788,43 +827,51 @@ function ExternalDataRefreshDialog(e) {
             "Source data refreshed. The reviewed population and control totals were applied together.",
           ));
       } else {
-        const he = await refreshSourceSnapshot(te, ae, {
+        const he = await refreshSourceSnapshot(adapter, ae, {
           signal: de.signal,
           reliability: e.reliability,
         });
         if (!d.current || de.signal.aborted) return;
         if (
           s.current.workbook !== K.workbook ||
-          s.current.adapter !== te ||
+          s.current.adapter !== adapter ||
           s.current.readOnly
         )
           throw new ExternalSourceError("stale");
-        const Se = EH(
+        const plan = EH(
           K.workbook,
           he.snapshot,
           he.grant,
-          { outputName: g, sheetId: oe || undefined },
+          { outputName: outputName, sheetId: oe || undefined },
           T,
         );
-        (z({ plan: Se, book: K.workbook, adapter: te }), D(0));
+        (z({ plan: plan, book: K.workbook, adapter: adapter }), D(0));
       }
-    } catch (he) {
+    } catch (error) {
       if (!d.current) return;
-      const Se = isExternalSourceError(he);
+      const Se = isExternalSourceError(error);
       if (
         (F(Se.message),
         z(null),
-        oe && s.current.adapter === te && s.current.workbook === K.workbook)
+        oe &&
+          s.current.adapter === adapter &&
+          s.current.workbook === K.workbook)
       ) {
         const le = s.current,
-          ce = normalizeExternalSourceState(le.workbook, oe, ae, Se.code, {
-            readOnly: le.readOnly,
-            allowedSheetIds: le.allowedSheetIds,
-          });
-        if (ce !== le.workbook)
+          externalSourceState = normalizeExternalSourceState(
+            le.workbook,
+            oe,
+            ae,
+            Se.code,
+            {
+              readOnly: le.readOnly,
+              allowedSheetIds: le.allowedSheetIds,
+            },
+          );
+        if (externalSourceState !== le.workbook)
           try {
             le.onWorkbookChange(
-              ce,
+              externalSourceState,
               "External source refresh failed; previous data retained",
             );
           } catch {
@@ -839,11 +886,11 @@ function ExternalDataRefreshDialog(e) {
     }
   }
   const H = e.workbook.sheets.filter(
-    (W) =>
-      W.externalConnection &&
-      !W.hidden &&
-      !W.veryHidden &&
-      (!e.allowedSheetIds || e.allowedSheetIds.includes(W.id)),
+    (sheet) =>
+      sheet.externalConnection &&
+      !sheet.hidden &&
+      !sheet.veryHidden &&
+      (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)),
   );
   return r
     ? i.jsx(ExternalSourceBatchRefreshPanel, { ...e, onClose: () => t(false) })
@@ -855,22 +902,22 @@ function ExternalDataRefreshDialog(e) {
           role: "dialog",
           "aria-modal": "true",
           "aria-labelledby": o,
-          onKeyDown: (W) => {
+          onKeyDown: (event) => {
             var K, te;
             if (
-              (W.key === "Escape" && (W.stopPropagation(), L()),
-              W.key === "Tab")
+              (event.key === "Escape" && (event.stopPropagation(), onClick()),
+              event.key === "Tab")
             ) {
               const ae = [
-                ...W.currentTarget.querySelectorAll(
+                ...event.currentTarget.querySelectorAll(
                   'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
                 ),
               ];
-              W.shiftKey && document.activeElement === ae[0]
-                ? (W.preventDefault(), (K = ae.at(-1)) == null || K.focus())
-                : !W.shiftKey &&
+              event.shiftKey && document.activeElement === ae[0]
+                ? (event.preventDefault(), (K = ae.at(-1)) == null || K.focus())
+                : !event.shiftKey &&
                   document.activeElement === ae.at(-1) &&
-                  (W.preventDefault(), (te = ae[0]) == null || te.focus());
+                  (event.preventDefault(), (te = ae[0]) == null || te.focus());
             }
           },
           children: [
@@ -898,8 +945,10 @@ function ExternalDataRefreshDialog(e) {
                 }),
                 i.jsx("button", {
                   type: "button",
-                  "aria-label": n.text("Close source connections"),
-                  onClick: L,
+                  "aria-label": workbookMessages.text(
+                    "Close source connections",
+                  ),
+                  onClick: onClick,
                   children: i.jsx(LocalizedText, { children: "Close" }),
                 }),
               ],
@@ -929,10 +978,10 @@ function ExternalDataRefreshDialog(e) {
                           "aria-label": "Connection",
                           value: f,
                           disabled: !!E,
-                          onChange: (W) => {
-                            ($(), p(W.target.value));
+                          onChange: (event) => {
+                            ($(), p(event.target.value));
                             const K = e.workbook.sheets.find(
-                              (oe) => oe.id === W.target.value,
+                              (sheet) => sheet.id === event.target.value,
                             )?.externalConnection;
                             v(K?.source.id ?? y[0]?.source.id ?? "");
                           },
@@ -966,8 +1015,8 @@ function ExternalDataRefreshDialog(e) {
                           "aria-label": "Approved source",
                           disabled: !!E || !!f || !e.adapter,
                           value: m,
-                          onChange: (W) => {
-                            ($(), v(W.target.value));
+                          onChange: (event) => {
+                            ($(), v(event.target.value));
                           },
                           children: [
                             i.jsx("option", {
@@ -1009,10 +1058,10 @@ function ExternalDataRefreshDialog(e) {
                           }),
                           i.jsx("input", {
                             "aria-label": "Output worksheet",
-                            value: g,
+                            value: outputName,
                             disabled: !!E,
-                            onChange: (W) => {
-                              ($(), b(W.target.value));
+                            onChange: (event) => {
+                              ($(), b(event.target.value));
                             },
                           }),
                         ],
@@ -1081,8 +1130,8 @@ function ExternalDataRefreshDialog(e) {
                         children:
                           _.lastSuccess.controls
                             .map(
-                              (W) =>
-                                `${W.field}: ${W.sum} (${W.numeric} numbers; ${W.blanks} blanks)`,
+                              (control) =>
+                                `${control.field}: ${control.sum} (${control.numeric} numbers; ${control.blanks} blanks)`,
                             )
                             .join(" · ") ||
                           "No numeric control fields declared.",
@@ -1199,10 +1248,10 @@ function ExternalDataRefreshDialog(e) {
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: C.controls.map((W) => {
+                              children: C.controls.map((control) => {
                                 const K =
                                   C.previous?.controls.find(
-                                    (oe) => oe.field === W.field,
+                                    (oe) => oe.field === control.field,
                                   )?.sum ?? 0;
                                 return i.jsxs(
                                   "tr",
@@ -1210,17 +1259,23 @@ function ExternalDataRefreshDialog(e) {
                                     children: [
                                       i.jsx("th", {
                                         scope: "row",
-                                        children: W.field,
+                                        children: control.field,
                                       }),
                                       i.jsx("td", { children: K }),
-                                      i.jsx("td", { children: W.sum }),
-                                      i.jsx("td", { children: W.sum - K }),
+                                      i.jsx("td", { children: control.sum }),
+                                      i.jsx("td", {
+                                        children: control.sum - K,
+                                      }),
                                       i.jsxs("td", {
-                                        children: [W.numeric, " / ", W.blanks],
+                                        children: [
+                                          control.numeric,
+                                          " / ",
+                                          control.blanks,
+                                        ],
                                       }),
                                     ],
                                   },
-                                  W.field,
+                                  control.field,
                                 );
                               }),
                             }),
@@ -1238,8 +1293,8 @@ function ExternalDataRefreshDialog(e) {
                           " ",
                           C.snapshot.source.columns
                             .map(
-                              (W) =>
-                                `${W.name} (${W.type}${W.nullable ? ", nullable" : ""})`,
+                              (column) =>
+                                `${column.name} (${column.type}${column.nullable ? ", nullable" : ""})`,
                             )
                             .join(" · "),
                         ],
@@ -1257,11 +1312,11 @@ function ExternalDataRefreshDialog(e) {
                                     scope: "col",
                                     children: "Record",
                                   }),
-                                  C.snapshot.source.columns.map((W) =>
+                                  C.snapshot.source.columns.map((column) =>
                                     i.jsx(
                                       "th",
-                                      { scope: "col", children: W.name },
-                                      W.name,
+                                      { scope: "col", children: column.name },
+                                      column.name,
                                     ),
                                   ),
                                 ],

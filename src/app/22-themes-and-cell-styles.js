@@ -64,15 +64,21 @@ function ConnectionStatusNotice() {
         })
   );
 }
-function parseGoToReference(e, r, t, n = {}) {
-  if (typeof t != "string" || !t.trim() || t.length > 8192)
+function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
+  if (
+    typeof goToReferenceText != "string" ||
+    !goToReferenceText.trim() ||
+    goToReferenceText.length > 8192
+  )
     throw Error(
       "Enter an address, range, or defined range name (up to 8,192 characters).",
     );
-  const o = n.allowedSheetIds,
-    a = (c) => !o || o.includes(c),
+  const allowedSheetIds = n.allowedSheetIds,
+    a = (c) => !allowedSheetIds || allowedSheetIds.includes(c),
     s = (c) => {
-      const h = e.sheets.find((f) => f.id === c && a(f.id));
+      const h = activeWorkbook.sheets.find(
+        (sheet) => sheet.id === c && a(sheet.id),
+      );
       if (!h)
         throw Error(
           "The destination is outside the available worksheet scope.",
@@ -111,27 +117,28 @@ function parseGoToReference(e, r, t, n = {}) {
         );
       for (const g of u(c)) {
         const b = /^(?:'((?:[^']|'')+)'|([^'!,:\[\]()]+))!(.+)$/.exec(g);
-        let y = h,
+        let sheetId = h,
           w = g;
         if (b) {
           const k = b[1]?.replace(/''/g, "'") ?? b[2].trim(),
-            F = e.sheets.find(
-              (I) => a(I.id) && I.name.toLowerCase() === k.toLowerCase(),
+            F = activeWorkbook.sheets.find(
+              (sheet) =>
+                a(sheet.id) && sheet.name.toLowerCase() === k.toLowerCase(),
             );
           if (!F)
             throw Error(
               "The destination is outside the available worksheet scope.",
             );
-          ((y = F.id), (w = b[3].trim()));
+          ((sheetId = F.id), (w = b[3].trim()));
         }
         if (
-          (s(y),
+          (s(sheetId),
           /^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
             w,
           ))
         ) {
           if (
-            (d.push({ sheetId: y, range: parseSelectionAreas(w)[0] }),
+            (d.push({ sheetId: sheetId, range: parseSelectionAreas(w)[0] }),
             d.length > maxSelectionAreas)
           )
             throw Error(
@@ -144,12 +151,15 @@ function parseGoToReference(e, r, t, n = {}) {
             "The Name Box accepts cell addresses and static range names. Computed, external, or three-dimensional destinations cannot be selected.",
           );
         const E =
-          e.definedNames?.find(
-            (k) =>
-              k.scopeSheetId === y && k.name.toLowerCase() === w.toLowerCase(),
+          activeWorkbook.definedNames?.find(
+            (definedName) =>
+              definedName.scopeSheetId === sheetId &&
+              definedName.name.toLowerCase() === w.toLowerCase(),
           ) ??
-          e.definedNames?.find(
-            (k) => !k.scopeSheetId && k.name.toLowerCase() === w.toLowerCase(),
+          activeWorkbook.definedNames?.find(
+            (definedName) =>
+              !definedName.scopeSheetId &&
+              definedName.name.toLowerCase() === w.toLowerCase(),
           );
         if (!E)
           throw Error(
@@ -158,10 +168,13 @@ function parseGoToReference(e, r, t, n = {}) {
         const A = `${E.scopeSheetId ?? "global"}:${E.name.toLowerCase()}`;
         if (f.includes(A))
           throw Error("The defined range name contains a circular reference.");
-        l(E.refersTo.slice(1).trim(), E.scopeSheetId ?? y, [...f, A]);
+        l(E.refersTo.slice(1).trim(), E.scopeSheetId ?? sheetId, [...f, A]);
       }
     };
-  if ((l(t.trim(), r, []), d.some((c) => c.sheetId !== d[0].sheetId)))
+  if (
+    (l(goToReferenceText.trim(), r, []),
+    d.some((c) => c.sheetId !== d[0].sheetId))
+  )
     throw Error("Select ranges on one worksheet at a time.");
   return {
     sheetId: d[0].sheetId,
@@ -170,17 +183,21 @@ function parseGoToReference(e, r, t, n = {}) {
 }
 
 function describeStyleFormatting(e) {
-  const r = resolveEffectiveCellStyle(e);
+  const effectiveCellStyle = resolveEffectiveCellStyle(e);
   return (
     [
-      r.fontFamily,
-      r.fontSize ? `${r.fontSize} pt` : undefined,
-      r.bold ? "Bold" : undefined,
-      r.italic ? "Italic" : undefined,
-      r.fill ? `Fill ${r.fill}` : undefined,
-      r.color ? `Text ${r.color}` : undefined,
-      r.borders || r.border ? "Borders" : undefined,
-      r.wrap ? "Wrap" : undefined,
+      effectiveCellStyle.fontFamily,
+      effectiveCellStyle.fontSize
+        ? `${effectiveCellStyle.fontSize} pt`
+        : undefined,
+      effectiveCellStyle.bold ? "Bold" : undefined,
+      effectiveCellStyle.italic ? "Italic" : undefined,
+      effectiveCellStyle.fill ? `Fill ${effectiveCellStyle.fill}` : undefined,
+      effectiveCellStyle.color ? `Text ${effectiveCellStyle.color}` : undefined,
+      effectiveCellStyle.borders || effectiveCellStyle.border
+        ? "Borders"
+        : undefined,
+      effectiveCellStyle.wrap ? "Wrap" : undefined,
     ]
       .filter(Boolean)
       .join(", ") || "Default formatting"
@@ -202,7 +219,7 @@ const styleFormattingLabels = {
   border: "Legacy border",
 };
 function CellStylePreview({ style }) {
-  const r = resolveEffectiveCellStyle(style);
+  const effectiveCellStyle = resolveEffectiveCellStyle(style);
   return i.jsxs("dl", {
     className: "ts-detail-fields",
     children: [
@@ -214,40 +231,44 @@ function CellStylePreview({ style }) {
               i.jsx("dt", { children: n }),
               i.jsx("dd", {
                 children:
-                  r[t] === undefined
+                  effectiveCellStyle[t] === undefined
                     ? "Default"
-                    : typeof r[t] == "boolean"
-                      ? r[t]
+                    : typeof effectiveCellStyle[t] == "boolean"
+                      ? effectiveCellStyle[t]
                         ? "On"
                         : "Off"
-                      : String(r[t]) + (t === "fontSize" ? " pt" : ""),
+                      : String(effectiveCellStyle[t]) +
+                        (t === "fontSize" ? " pt" : ""),
               }),
             ],
           },
           t,
         ),
       ),
-      ["top", "right", "bottom", "left"].map((t) => {
-        const n = resolveBorderEdge(r, t);
+      ["top", "right", "bottom", "left"].map((cellBorderEdge) => {
+        const borderEdge = resolveBorderEdge(
+          effectiveCellStyle,
+          cellBorderEdge,
+        );
         return i.jsxs(
           "div",
           {
             children: [
               i.jsxs("dt", {
                 children: [
-                  t[0].toUpperCase() + t.slice(1),
+                  cellBorderEdge[0].toUpperCase() + cellBorderEdge.slice(1),
                   " ",
                   i.jsx(LocalizedText, { children: "border" }),
                 ],
               }),
               i.jsx("dd", {
-                children: n
-                  ? `${n.style}${n.color ? ` ${n.color}` : ""}`
+                children: borderEdge
+                  ? `${borderEdge.style}${borderEdge.color ? ` ${borderEdge.color}` : ""}`
                   : "Default gridline",
               }),
             ],
           },
-          t,
+          cellBorderEdge,
         );
       }),
     ],
@@ -400,40 +421,41 @@ function ThemeRoleBindings({ definition }) {
     : i.jsx("p", { children: i.jsx(LocalizedText, { children: "No style" }) });
 }
 function ThemeChangePreview({ plan }) {
-  const r = plan.catalogBefore,
-    t = plan.catalogAfter;
-  if (JSON.stringify(r) === JSON.stringify(t)) return null;
+  const catalogBefore = plan.catalogBefore,
+    catalogAfter = plan.catalogAfter;
+  if (JSON.stringify(catalogBefore) === JSON.stringify(catalogAfter))
+    return null;
   const n = [
       {
         name: "Theme name",
-        before: r?.theme.name,
-        after: t?.theme.name,
+        before: catalogBefore?.theme.name,
+        after: catalogAfter?.theme.name,
       },
       {
         name: "Body font",
-        before: r?.theme.fonts.body,
-        after: t?.theme.fonts.body,
+        before: catalogBefore?.theme.fonts.body,
+        after: catalogAfter?.theme.fonts.body,
       },
       {
         name: "Heading font",
-        before: r?.theme.fonts.heading,
-        after: t?.theme.fonts.heading,
+        before: catalogBefore?.theme.fonts.heading,
+        after: catalogAfter?.theme.fonts.heading,
       },
-      ...themePaletteRoles.map((a) => ({
-        name: `${a} color`,
-        before: r?.theme.palette[a],
-        after: t?.theme.palette[a],
+      ...themePaletteRoles.map((themePaletteRole) => ({
+        name: `${themePaletteRole} color`,
+        before: catalogBefore?.theme.palette[themePaletteRole],
+        after: catalogAfter?.theme.palette[themePaletteRole],
       })),
       {
         name: "Missing theme fallback",
-        before: r?.missingTheme ? "Office fallback" : "None",
-        after: t?.missingTheme ? "Office fallback" : "None",
+        before: catalogBefore?.missingTheme ? "Office fallback" : "None",
+        after: catalogAfter?.missingTheme ? "Office fallback" : "None",
       },
     ].filter((a) => a.before !== a.after),
     o = [
       ...new Set([
-        ...(r?.styles.map((a) => a.id) ?? []),
-        ...(t?.styles.map((a) => a.id) ?? []),
+        ...(catalogBefore?.styles.map((style) => style.id) ?? []),
+        ...(catalogAfter?.styles.map((style) => style.id) ?? []),
       ]),
     ];
   return i.jsxs("details", {
@@ -481,8 +503,8 @@ function ThemeChangePreview({ plan }) {
           ],
         }),
       o.map((a) => {
-        const s = r?.styles.find((u) => u.id === a),
-          d = t?.styles.find((u) => u.id === a);
+        const s = catalogBefore?.styles.find((style) => style.id === a),
+          d = catalogAfter?.styles.find((style) => style.id === a);
         return JSON.stringify(s) === JSON.stringify(d)
           ? null
           : i.jsxs(
@@ -551,24 +573,26 @@ function ThemesAndCellStylesDialog(e) {
         e.workbook.styleCatalog ?? createDefaultStyleCatalog(e.workbook.id),
       ),
     ),
-    u = parseSelectionAreas(e.ranges ?? [e.range]),
-    l = parseRangeAddress(e.range),
-    c = e.workbook.sheets.find((de) => de.id === e.sheetId),
+    selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
+    rangeAddress = parseRangeAddress(e.range),
+    c = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     h =
-      e.active && isCellAddressInRanges(u, e.active)
+      e.active && isCellAddressInRanges(selectionAreas, e.active)
         ? e.active
-        : `${columnIndexToLetters(l.firstCol)}${l.firstRow + 1}`,
+        : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     f = c?.cells[h]?.style?.binding?.styleId,
-    [p, m] = ne.useState(
-      d.styles.some((de) => de.id === f) ? f : (d.styles[0]?.id ?? ""),
+    [styleId, m] = ne.useState(
+      d.styles.some((style) => style.id === f) ? f : (d.styles[0]?.id ?? ""),
     ),
-    v = d.styles.find((de) => de.id === p),
+    v = d.styles.find((style) => style.id === styleId),
     [g, b] = ne.useState("Theme"),
-    [y, w] = ne.useState(cloneStructuredValue(d.theme)),
-    [E, A] = ne.useState(cloneStructuredValue(v?.definition ?? { base: {} })),
+    [theme, w] = ne.useState(cloneStructuredValue(d.theme)),
+    [definition, A] = ne.useState(
+      cloneStructuredValue(v?.definition ?? { base: {} }),
+    ),
     [k, F] = ne.useState("Custom style"),
     [I, O] = ne.useState(v?.name ?? ""),
-    [j, z] = ne.useState(),
+    [plan, z] = ne.useState(),
     [V, D] = ne.useState(""),
     [B, _] = ne.useState(0),
     C =
@@ -576,8 +600,11 @@ function ThemesAndCellStylesDialog(e) {
       s.sheet !== e.sheetId ||
       s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.active !== e.active,
-    T = e.readOnly || C || !c,
-    N = T || !!c?.protection?.enabled || countSelectionCells(u) > 500;
+    disabled = e.readOnly || C || !c,
+    N =
+      disabled ||
+      !!c?.protection?.enabled ||
+      countSelectionCells(selectionAreas) > 500;
   function R() {
     (z(undefined), D(""), _(0));
   }
@@ -587,61 +614,63 @@ function ThemesAndCellStylesDialog(e) {
   function $(de) {
     (A(de), R());
   }
-  function U(de) {
+  function U(request) {
     (D(""), _(0));
     try {
       if (C)
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      z(applyNamedStyleChange(e.workbook, de, { readOnly: e.readOnly }));
-    } catch (he) {
+      z(applyNamedStyleChange(e.workbook, request, { readOnly: e.readOnly }));
+    } catch (error) {
       (z(undefined),
         D(
-          he instanceof Error
-            ? he.message
+          error instanceof Error
+            ? error.message
             : "Unable to preview this style change.",
         ));
     }
   }
-  function G() {
+  function onClick() {
     try {
-      if (!j) return;
+      if (!plan) return;
       if (C)
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      const de = assertThemePreviewCurrent(e.workbook, j, {
+      const de = assertThemePreviewCurrent(e.workbook, plan, {
         readOnly: e.readOnly,
       });
-      (de !== e.workbook && e.onWorkbookChange(de, j.summary), e.onClose());
-    } catch (de) {
+      (de !== e.workbook && e.onWorkbookChange(de, plan.summary), e.onClose());
+    } catch (error) {
       D(
-        de instanceof Error ? de.message : "Unable to apply this style change.",
+        error instanceof Error
+          ? error.message
+          : "Unable to apply this style change.",
       );
     }
   }
   function H(de) {
     m(de);
-    const he = d.styles.find((Se) => Se.id === de);
+    const he = d.styles.find((style) => style.id === de);
     (A(cloneStructuredValue(he?.definition ?? { base: {} })),
       O(he?.name ?? ""),
       R());
   }
   ne.useEffect(() => {
-    const de = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
       () => {
-        de?.isConnected && de.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const Q = collectStyleFallbackWarnings(e.workbook),
-    X$1 = Math.max(1, Math.ceil((j?.count ?? 0) / 20));
+  const styleFallbackWarnings = collectStyleFallbackWarnings(e.workbook),
+    X$1 = Math.max(1, Math.ceil((plan?.count ?? 0) / 20));
   let J = {};
   try {
-    J = resolveNamedStyleAppearance(E, y);
+    J = resolveNamedStyleAppearance(definition, theme);
   } catch {}
   return i.jsx("div", {
     className: "ts-backdrop",
@@ -651,11 +680,11 @@ function ThemesAndCellStylesDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (de) => {
+      onKeyDown: (event) => {
         if (
-          (de.stopPropagation(),
-          de.key === "Escape" && (de.preventDefault(), a.current()),
-          de.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Tab")
         ) {
           const Se = Array.from(
               o.current?.querySelectorAll(
@@ -664,11 +693,11 @@ function ThemesAndCellStylesDialog(e) {
             ).filter((ge) => !ge.hidden),
             le = Se[0],
             ce = Se.at(-1);
-          de.shiftKey && document.activeElement === le
-            ? (de.preventDefault(), ce == null || ce.focus())
-            : !de.shiftKey &&
+          event.shiftKey && document.activeElement === le
+            ? (event.preventDefault(), ce == null || ce.focus())
+            : !event.shiftKey &&
               document.activeElement === ce &&
-              (de.preventDefault(), le == null || le.focus());
+              (event.preventDefault(), le == null || le.focus());
         }
       },
       children: [
@@ -695,10 +724,10 @@ function ThemesAndCellStylesDialog(e) {
           children: [
             c?.name ?? "Missing sheet",
             " · ",
-            u.join(", "),
+            selectionAreas.join(", "),
             " ·",
             " ",
-            countSelectionCells(u).toLocaleString(),
+            countSelectionCells(selectionAreas).toLocaleString(),
             " ",
             i.jsx(LocalizedText, { children: "selected cells" }),
           ],
@@ -718,15 +747,21 @@ function ThemesAndCellStylesDialog(e) {
                 "aria-controls": `${n}-panel`,
                 tabIndex: g === de ? 0 : -1,
                 onClick: () => b(de),
-                onKeyDown: (Se) => {
+                onKeyDown: (event) => {
                   if (
-                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(Se.key)
+                    ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
+                      event.key,
+                    )
                   ) {
-                    Se.preventDefault();
+                    event.preventDefault();
                     const ge =
-                      Se.key === "Home" ? 0 : Se.key === "End" ? 1 : 1 - he;
+                      event.key === "Home"
+                        ? 0
+                        : event.key === "End"
+                          ? 1
+                          : 1 - he;
                     (b(ge === 0 ? "Theme" : "Cell Styles"),
-                      Se.currentTarget.parentElement?.children[ge]?.focus());
+                      event.currentTarget.parentElement?.children[ge]?.focus());
                   }
                 },
                 children: de,
@@ -738,7 +773,7 @@ function ThemesAndCellStylesDialog(e) {
         i.jsxs("div", {
           className: "ts-body",
           children: [
-            (e.readOnly || C || Q.length > 0) &&
+            (e.readOnly || C || styleFallbackWarnings.length > 0) &&
               i.jsx("div", {
                 role: "status",
                 className: "ts-notice",
@@ -746,7 +781,7 @@ function ThemesAndCellStylesDialog(e) {
                   ? "This workbook is read-only."
                   : C
                     ? "The workbook or selection changed. Close and reopen this dialog."
-                    : Q.join(" "),
+                    : styleFallbackWarnings.join(" "),
               }),
             i.jsx("section", {
               id: `${n}-panel`,
@@ -773,15 +808,18 @@ function ThemesAndCellStylesDialog(e) {
                                 i.jsxs("select", {
                                   "aria-label": text("Theme preset"),
                                   value: builtInWorkbookThemes.some(
-                                    (de) =>
-                                      JSON.stringify(de) === JSON.stringify(y),
+                                    (builtInWorkbookTheme) =>
+                                      JSON.stringify(builtInWorkbookTheme) ===
+                                      JSON.stringify(theme),
                                   )
-                                    ? y.name
+                                    ? theme.name
                                     : "Custom",
-                                  disabled: T,
-                                  onChange: (de) => {
+                                  disabled: disabled,
+                                  onChange: (event) => {
                                     const he = builtInWorkbookThemes.find(
-                                      (Se) => Se.name === de.target.value,
+                                      (builtInWorkbookTheme) =>
+                                        builtInWorkbookTheme.name ===
+                                        event.target.value,
                                     );
                                     he && L(cloneStructuredValue(he));
                                   },
@@ -792,12 +830,15 @@ function ThemesAndCellStylesDialog(e) {
                                       value: "Custom",
                                       children: "Custom",
                                     }),
-                                    builtInWorkbookThemes.map((de) =>
-                                      i.jsx(
-                                        "option",
-                                        { children: de.name },
-                                        de.name,
-                                      ),
+                                    builtInWorkbookThemes.map(
+                                      (builtInWorkbookTheme) =>
+                                        i.jsx(
+                                          "option",
+                                          {
+                                            children: builtInWorkbookTheme.name,
+                                          },
+                                          builtInWorkbookTheme.name,
+                                        ),
                                     ),
                                   ],
                                 }),
@@ -809,11 +850,11 @@ function ThemesAndCellStylesDialog(e) {
                                   children: "Theme name",
                                 }),
                                 i.jsx("input", {
-                                  value: y.name,
+                                  value: theme.name,
                                   maxLength: 80,
-                                  disabled: T,
-                                  onChange: (de) =>
-                                    L({ ...y, name: de.target.value }),
+                                  disabled: disabled,
+                                  onChange: (event) =>
+                                    L({ ...theme, name: event.target.value }),
                                 }),
                               ],
                             }),
@@ -830,19 +871,23 @@ function ThemesAndCellStylesDialog(e) {
                                         de === "body"
                                           ? "Body font"
                                           : "Heading font",
-                                      value: y.fonts[de],
-                                      disabled: T,
-                                      onChange: (he) =>
+                                      value: theme.fonts[de],
+                                      disabled: disabled,
+                                      onChange: (event) =>
                                         L({
-                                          ...y,
+                                          ...theme,
                                           fonts: {
-                                            ...y.fonts,
-                                            [de]: he.target.value,
+                                            ...theme.fonts,
+                                            [de]: event.target.value,
                                           },
                                         }),
                                       children: supportedFontFamilies.map(
-                                        (he) =>
-                                          i.jsx("option", { children: he }, he),
+                                        (supportedFontFamily) =>
+                                          i.jsx(
+                                            "option",
+                                            { children: supportedFontFamily },
+                                            supportedFontFamily,
+                                          ),
                                       ),
                                     }),
                                   ],
@@ -854,48 +899,49 @@ function ThemesAndCellStylesDialog(e) {
                         }),
                         i.jsxs("fieldset", {
                           className: "ts-palette",
-                          disabled: T,
+                          disabled: disabled,
                           children: [
                             i.jsx("legend", {
                               children: i.jsx(LocalizedText, {
                                 children: "Theme colors",
                               }),
                             }),
-                            themePaletteRoles.map((de) =>
+                            themePaletteRoles.map((themePaletteRole) =>
                               i.jsxs(
                                 "label",
                                 {
                                   children: [
                                     i.jsx("span", {
-                                      children: de
+                                      children: themePaletteRole
                                         .replace("accent", "Accent ")
                                         .replace(/^background$/, "Background")
                                         .replace(/^text$/, "Text"),
                                     }),
                                     i.jsx("input", {
-                                      "aria-label": `Theme ${de} color`,
+                                      "aria-label": `Theme ${themePaletteRole} color`,
                                       type: "color",
-                                      value: y.palette[de],
-                                      onChange: (he) =>
+                                      value: theme.palette[themePaletteRole],
+                                      onChange: (event) =>
                                         L({
-                                          ...y,
+                                          ...theme,
                                           palette: {
-                                            ...y.palette,
-                                            [de]: he.target.value.toUpperCase(),
+                                            ...theme.palette,
+                                            [themePaletteRole]:
+                                              event.target.value.toUpperCase(),
                                           },
                                         }),
                                     }),
                                   ],
                                 },
-                                de,
+                                themePaletteRole,
                               ),
                             ),
                           ],
                         }),
                         i.jsx("button", {
                           className: "ts-command",
-                          disabled: T,
-                          onClick: () => U({ kind: "setTheme", theme: y }),
+                          disabled: disabled,
+                          onClick: () => U({ kind: "setTheme", theme: theme }),
                           children: i.jsx(LocalizedText, {
                             children: "Preview theme change",
                           }),
@@ -921,9 +967,9 @@ function ThemesAndCellStylesDialog(e) {
                                 }),
                                 i.jsxs("select", {
                                   "aria-label": text("Named style"),
-                                  value: p,
-                                  disabled: T || !d.styles.length,
-                                  onChange: (de) => H(de.target.value),
+                                  value: styleId,
+                                  disabled: disabled || !d.styles.length,
+                                  onChange: (event) => H(event.target.value),
                                   lang: language("Named style"),
                                   "data-ui-label": "Named style",
                                   children: [
@@ -932,11 +978,14 @@ function ThemesAndCellStylesDialog(e) {
                                         value: "",
                                         children: "No named styles",
                                       }),
-                                    d.styles.map((de) =>
+                                    d.styles.map((style) =>
                                       i.jsx(
                                         "option",
-                                        { value: de.id, children: de.name },
-                                        de.id,
+                                        {
+                                          value: style.id,
+                                          children: style.name,
+                                        },
+                                        style.id,
                                       ),
                                     ),
                                   ],
@@ -961,8 +1010,8 @@ function ThemesAndCellStylesDialog(e) {
                                 U({
                                   kind: "applyStyle",
                                   sheetId: e.sheetId,
-                                  ranges: u,
-                                  styleId: p,
+                                  ranges: selectionAreas,
+                                  styleId: styleId,
                                 }),
                               children: i.jsx(LocalizedText, {
                                 children: "Apply style to selection",
@@ -974,8 +1023,8 @@ function ThemesAndCellStylesDialog(e) {
                                 U({
                                   kind: "reapplyStyle",
                                   sheetId: e.sheetId,
-                                  ranges: u,
-                                  styleId: p,
+                                  ranges: selectionAreas,
+                                  styleId: styleId,
                                 }),
                               children: i.jsx(LocalizedText, {
                                 children: "Reapply and clear direct styles",
@@ -987,7 +1036,7 @@ function ThemesAndCellStylesDialog(e) {
                                 U({
                                   kind: "detachStyle",
                                   sheetId: e.sheetId,
-                                  ranges: u,
+                                  ranges: selectionAreas,
                                 }),
                               children: i.jsx(LocalizedText, {
                                 children: "Detach and keep appearance",
@@ -1011,7 +1060,7 @@ function ThemesAndCellStylesDialog(e) {
                             }),
                           }),
                         i.jsxs("fieldset", {
-                          disabled: T,
+                          disabled: disabled,
                           children: [
                             i.jsx("legend", {
                               children: i.jsx(LocalizedText, {
@@ -1029,8 +1078,8 @@ function ThemesAndCellStylesDialog(e) {
                                     i.jsx("input", {
                                       value: k,
                                       maxLength: 80,
-                                      onChange: (de) => {
-                                        (F(de.target.value), R());
+                                      onChange: (event) => {
+                                        (F(event.target.value), R());
                                       },
                                     }),
                                   ],
@@ -1042,14 +1091,14 @@ function ThemesAndCellStylesDialog(e) {
                                     }),
                                     i.jsxs("select", {
                                       "aria-label": text("Style font"),
-                                      value: E.fontRole ?? "fixed",
-                                      onChange: (de) =>
+                                      value: definition.fontRole ?? "fixed",
+                                      onChange: (event) =>
                                         $({
-                                          ...E,
+                                          ...definition,
                                           fontRole:
-                                            de.target.value === "fixed"
+                                            event.target.value === "fixed"
                                               ? undefined
-                                              : de.target.value,
+                                              : event.target.value,
                                         }),
                                       lang: language("Style font"),
                                       "data-ui-label": "Style font",
@@ -1083,26 +1132,30 @@ function ThemesAndCellStylesDialog(e) {
                                             de === "fillRole"
                                               ? "Style fill"
                                               : "Style text color",
-                                          value: E[de] ?? "fixed",
-                                          onChange: (he) =>
+                                          value: definition[de] ?? "fixed",
+                                          onChange: (event) =>
                                             $({
-                                              ...E,
+                                              ...definition,
                                               [de]:
-                                                he.target.value === "fixed"
+                                                event.target.value === "fixed"
                                                   ? undefined
-                                                  : he.target.value,
+                                                  : event.target.value,
                                             }),
                                           children: [
                                             i.jsx("option", {
                                               value: "fixed",
                                               children: "Keep stored color",
                                             }),
-                                            themePaletteRoles.map((he) =>
-                                              i.jsx(
-                                                "option",
-                                                { value: he, children: he },
-                                                he,
-                                              ),
+                                            themePaletteRoles.map(
+                                              (themePaletteRole) =>
+                                                i.jsx(
+                                                  "option",
+                                                  {
+                                                    value: themePaletteRole,
+                                                    children: themePaletteRole,
+                                                  },
+                                                  themePaletteRole,
+                                                ),
                                             ),
                                           ],
                                         }),
@@ -1116,13 +1169,13 @@ function ThemesAndCellStylesDialog(e) {
                                   children: [
                                     i.jsx("input", {
                                       type: "checkbox",
-                                      checked: E.base.bold ?? false,
-                                      onChange: (de) =>
+                                      checked: definition.base.bold ?? false,
+                                      onChange: (event) =>
                                         $({
-                                          ...E,
+                                          ...definition,
                                           base: {
-                                            ...E.base,
-                                            bold: de.target.checked,
+                                            ...definition.base,
+                                            bold: event.target.checked,
                                           },
                                         }),
                                     }),
@@ -1134,13 +1187,13 @@ function ThemesAndCellStylesDialog(e) {
                                   children: [
                                     i.jsx("input", {
                                       type: "checkbox",
-                                      checked: E.base.italic ?? false,
-                                      onChange: (de) =>
+                                      checked: definition.base.italic ?? false,
+                                      onChange: (event) =>
                                         $({
-                                          ...E,
+                                          ...definition,
                                           base: {
-                                            ...E.base,
-                                            italic: de.target.checked,
+                                            ...definition.base,
+                                            italic: event.target.checked,
                                           },
                                         }),
                                     }),
@@ -1172,7 +1225,7 @@ function ThemesAndCellStylesDialog(e) {
                                     U({
                                       kind: "createStyle",
                                       name: k,
-                                      definition: E,
+                                      definition: definition,
                                     }),
                                   children: i.jsx(LocalizedText, {
                                     children: "Preview new style",
@@ -1183,8 +1236,8 @@ function ThemesAndCellStylesDialog(e) {
                                   onClick: () =>
                                     U({
                                       kind: "updateStyle",
-                                      styleId: p,
-                                      definition: E,
+                                      styleId: styleId,
+                                      definition: definition,
                                     }),
                                   children: i.jsx(LocalizedText, {
                                     children: "Preview style update",
@@ -1202,7 +1255,7 @@ function ThemesAndCellStylesDialog(e) {
                           ],
                         }),
                         i.jsxs("fieldset", {
-                          disabled: T || !v,
+                          disabled: disabled || !v,
                           children: [
                             i.jsx("legend", {
                               children: i.jsx(LocalizedText, {
@@ -1220,8 +1273,8 @@ function ThemesAndCellStylesDialog(e) {
                                     i.jsx("input", {
                                       value: I,
                                       maxLength: 80,
-                                      onChange: (de) => {
-                                        (O(de.target.value), R());
+                                      onChange: (event) => {
+                                        (O(event.target.value), R());
                                       },
                                     }),
                                   ],
@@ -1233,7 +1286,7 @@ function ThemesAndCellStylesDialog(e) {
                                       onClick: () =>
                                         U({
                                           kind: "renameStyle",
-                                          styleId: p,
+                                          styleId: styleId,
                                           name: I,
                                         }),
                                       children: i.jsx(LocalizedText, {
@@ -1242,7 +1295,10 @@ function ThemesAndCellStylesDialog(e) {
                                     }),
                                     i.jsx("button", {
                                       onClick: () =>
-                                        U({ kind: "deleteStyle", styleId: p }),
+                                        U({
+                                          kind: "deleteStyle",
+                                          styleId: styleId,
+                                        }),
                                       children: i.jsx(LocalizedText, {
                                         children: "Preview deletion",
                                       }),
@@ -1262,34 +1318,38 @@ function ThemesAndCellStylesDialog(e) {
                 className: "ts-error",
                 children: V,
               }),
-            j &&
+            plan &&
               i.jsxs("section", {
                 className: "ts-preview",
                 "aria-label": text("Theme change preview"),
                 lang: language("Theme change preview"),
                 "data-ui-label": "Theme change preview",
                 children: [
-                  i.jsx("h3", { children: j.summary }),
+                  i.jsx("h3", { children: plan.summary }),
                   i.jsxs("p", {
                     children: [
-                      j.count,
+                      plan.count,
                       " ",
                       i.jsx(LocalizedText, { children: "cell" }),
-                      j.count === 1 ? "" : "s",
+                      plan.count === 1 ? "" : "s",
                       " ",
                       i.jsx(LocalizedText, { children: "will change" }),
-                      JSON.stringify(j.catalogBefore) !==
-                      JSON.stringify(j.catalogAfter)
+                      JSON.stringify(plan.catalogBefore) !==
+                      JSON.stringify(plan.catalogAfter)
                         ? "; workbook style settings will also change"
                         : "",
                       ".",
                     ],
                   }),
-                  i.jsx(ThemeChangePreview, { plan: j }),
-                  j.warnings.map((de) =>
-                    i.jsx("p", { className: "ts-notice", children: de }, de),
+                  i.jsx(ThemeChangePreview, { plan: plan }),
+                  plan.warnings.map((warning) =>
+                    i.jsx(
+                      "p",
+                      { className: "ts-notice", children: warning },
+                      warning,
+                    ),
                   ),
-                  j.count > 0 &&
+                  plan.count > 0 &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("div", {
@@ -1318,7 +1378,7 @@ function ThemesAndCellStylesDialog(e) {
                                 }),
                               }),
                               i.jsx("tbody", {
-                                children: j.changes
+                                children: plan.changes
                                   .slice(B * 20, B * 20 + 20)
                                   .map((de) =>
                                     i.jsxs(
@@ -1328,7 +1388,8 @@ function ThemesAndCellStylesDialog(e) {
                                           i.jsxs("th", {
                                             children: [
                                               e.workbook.sheets.find(
-                                                (ce) => ce.id === de.sheetId,
+                                                (sheet) =>
+                                                  sheet.id === de.sheetId,
                                               )?.name,
                                               "!",
                                               de.address,
@@ -1341,7 +1402,7 @@ function ThemesAndCellStylesDialog(e) {
                                               ),
                                               i.jsx(CellStyleSummary, {
                                                 style: de.before?.style,
-                                                catalog: j.catalogBefore,
+                                                catalog: plan.catalogBefore,
                                               }),
                                             ],
                                           }),
@@ -1352,7 +1413,7 @@ function ThemesAndCellStylesDialog(e) {
                                               ),
                                               i.jsx(CellStyleSummary, {
                                                 style: de.after.style,
-                                                catalog: j.catalogAfter,
+                                                catalog: plan.catalogAfter,
                                               }),
                                             ],
                                           }),
@@ -1403,7 +1464,7 @@ function ThemesAndCellStylesDialog(e) {
           className: "ts-footer",
           children: [
             i.jsx("span", {
-              children: j
+              children: plan
                 ? "Review the preview before applying."
                 : "Choose a change to preview.",
             }),
@@ -1413,8 +1474,8 @@ function ThemesAndCellStylesDialog(e) {
             }),
             i.jsx("button", {
               className: "ts-primary",
-              disabled: T || !j,
-              onClick: G,
+              disabled: disabled || !plan,
+              onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Apply changes" }),
             }),
           ],
@@ -1424,7 +1485,7 @@ function ThemesAndCellStylesDialog(e) {
   });
 }
 function CellValuePreview({ value, cell, dateSystem }) {
-  const n = useWorkbookMessages(),
+  const workbookMessages = useWorkbookMessages(),
     o = cell?.numberFormat
       ? formatCellValueWithNumberFormat(value, cell.numberFormat, dateSystem)
       : undefined,
@@ -1459,7 +1520,12 @@ function CellValuePreview({ value, cell, dateSystem }) {
     title: a || undefined,
     children:
       o?.text ??
-      formatLocalizedNumberDisplay(value, cell, dateSystem, n.entryLocale),
+      formatLocalizedNumberDisplay(
+        value,
+        cell,
+        dateSystem,
+        workbookMessages.entryLocale,
+      ),
   });
 }
 const cellFormatTabs = ["Font", "Alignment", "Border"],

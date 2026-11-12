@@ -160,55 +160,60 @@ function EditorAssistantPanel({
                           },
                           assistantState.assistantProposal.id,
                         ),
-                        assistantState.assistantProposal.patches.map((fe) =>
+                        assistantState.assistantProposal.patches.map((patch) =>
                           i.jsxs(
                             "div",
                             {
                               className: "lg-diff",
                               children: [
                                 i.jsx("b", {
-                                  children: fe.address,
+                                  children: patch.address,
                                 }),
                                 i.jsx("del", {
                                   children: String(
-                                    activeSheet.cells[fe.address]?.raw ??
+                                    activeSheet.cells[patch.address]?.raw ??
                                       "(blank)",
                                   ),
                                 }),
                                 i.jsxs("span", {
                                   children: [
-                                    String(fe.cell.raw ?? "(blank)"),
-                                    fe.cell.style?.fill ? " · highlight" : "",
+                                    String(patch.cell.raw ?? "(blank)"),
+                                    patch.cell.style?.fill
+                                      ? " · highlight"
+                                      : "",
                                   ],
                                 }),
                                 i.jsx("dl", {
                                   className: "lg-proposal-fields",
                                   "aria-label":
-                                    fe.address + " proposed field changes",
+                                    patch.address + " proposed field changes",
                                   children: [
                                     [
                                       "Value type",
-                                      activeSheet.cells[fe.address]?.raw == null
+                                      activeSheet.cells[patch.address]?.raw ==
+                                      null
                                         ? "blank"
-                                        : typeof activeSheet.cells[fe.address]
-                                            ?.raw,
-                                      fe.cell.raw === null
+                                        : typeof activeSheet.cells[
+                                            patch.address
+                                          ]?.raw,
+                                      patch.cell.raw === null
                                         ? "blank"
-                                        : typeof fe.cell.raw,
+                                        : typeof patch.cell.raw,
                                     ],
                                     ...Array.from(
                                       new Set([
                                         ...Object.keys(
-                                          activeSheet.cells[fe.address] ?? {},
+                                          activeSheet.cells[patch.address] ??
+                                            {},
                                         ),
-                                        ...Object.keys(fe.cell),
+                                        ...Object.keys(patch.cell),
                                       ]),
                                     )
                                       .filter((gt) => gt !== "raw")
                                       .map((gt) => [
                                         gt,
-                                        activeSheet.cells[fe.address]?.[gt],
-                                        fe.cell[gt],
+                                        activeSheet.cells[patch.address]?.[gt],
+                                        patch.cell[gt],
                                       ]),
                                   ]
                                     .filter(
@@ -248,7 +253,7 @@ function EditorAssistantPanel({
                                 }),
                               ],
                             },
-                            fe.address,
+                            patch.address,
                           ),
                         ),
                         assistantState.assistantProposal.patches.length > 0 &&

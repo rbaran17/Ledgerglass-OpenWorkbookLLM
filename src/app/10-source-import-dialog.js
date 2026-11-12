@@ -35,17 +35,17 @@ function SourceImportDialog(e) {
     n = ne.useRef(e),
     o = ne.useRef(0),
     a = ne.useRef(true),
-    s = useCancellableOperation();
+    cancellableOperation = useCancellableOperation();
   n.current = e;
-  const [d, u] = ne.useState(null),
-    [l, c] = ne.useState(""),
-    [h, f] = ne.useState("Imported data"),
+  const [inspection, u] = ne.useState(null),
+    [tableId, c] = ne.useState(""),
+    [sheetName, f] = ne.useState("Imported data"),
     [p, m] = ne.useState(false),
-    [v, g] = ne.useState(false),
-    [b, y] = ne.useState({}),
+    [checked, g] = ne.useState(false),
+    [resolutions, y] = ne.useState({}),
     [w, E] = ne.useState(null),
     [A, k] = ne.useState(null),
-    [F, I] = ne.useState(false),
+    [disabled, I] = ne.useState(false),
     [O, j] = ne.useState(""),
     [z, V] = ne.useState(""),
     [D, B] = ne.useState(0),
@@ -55,11 +55,13 @@ function SourceImportDialog(e) {
     [$, U] = ne.useState("0:0");
   ne.useEffect(() => {
     a.current = true;
-    const Ae = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       t.current?.focus(),
       () => {
-        ((a.current = false), o.current++, Ae?.isConnected && Ae.focus());
+        ((a.current = false),
+          o.current++,
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []);
@@ -68,12 +70,12 @@ function SourceImportDialog(e) {
       (I(true), j(""), V(""));
       try {
         await Ae(ye);
-      } catch (Te) {
+      } catch (error) {
         a.current &&
           ye === o.current &&
           j(
-            Te instanceof Error
-              ? Te.message
+            error instanceof Error
+              ? error.message
               : "The source could not be processed.",
           );
       } finally {
@@ -95,7 +97,7 @@ function SourceImportDialog(e) {
       E(null),
       g(false),
       G(async (ye) => {
-        const Te = await Rue(Ae, s.begin());
+        const Te = await Rue(Ae, cancellableOperation.begin());
         a.current && o.current === ye && H(Te);
       })
     );
@@ -104,22 +106,30 @@ function SourceImportDialog(e) {
   }, [e.initialFile]);
   const X$1 = (Ae) =>
       G(async (ye) => {
-        const Te = d,
-          Pe = await importNativeJsonFile(Ae, s.begin());
+        const Te = inspection,
+          Pe = await importNativeJsonFile(Ae, cancellableOperation.begin());
         a.current && o.current === ye && H(parseExtractionResult(Te, Pe));
       }),
     J = () =>
       G(async (Ae) => {
-        const ye = await runDocumentExtraction(d, e.extractor, v, s.begin());
+        const ye = await runDocumentExtraction(
+          inspection,
+          e.extractor,
+          checked,
+          cancellableOperation.begin(),
+        );
         a.current && o.current === Ae && H(ye);
       }),
-    q = (Ae, ye) =>
-      (n.current.onDownload ?? downloadBlobAsFile)({ filename: Ae, blob: ye }),
+    q = (filename, blob) =>
+      (n.current.onDownload ?? downloadBlobAsFile)({
+        filename: filename,
+        blob: blob,
+      }),
     W = (Ae) =>
       G(async () => {
         const ye = Ae
           ? findSourceImport(n.current.workbook, R)
-          : toSourceFileDescriptor(d);
+          : toSourceFileDescriptor(inspection);
         await q(
           ye.fileName,
           new Blob([new Uint8Array(ye.bytes)], {
@@ -128,37 +138,39 @@ function SourceImportDialog(e) {
         );
       }),
     K = () => E(null),
-    te = d?.tables.find((Ae) => Ae.id === l),
+    te = inspection?.tables.find((table) => table.id === tableId),
     ae =
       te?.rows
-        .flatMap((Ae, ye) =>
-          Ae.map((Te, Pe) => ({
-            cell: Te,
+        .flatMap((row, ye) =>
+          row.map((cell, column) => ({
+            cell: cell,
             row: ye,
-            column: Pe,
-            key: `${ye}:${Pe}`,
+            column: column,
+            key: `${ye}:${column}`,
           })),
         )
         .filter((Ae) => Ae.cell.confidence < sourceImportLimits.confidence) ??
       [],
-    oe = ae.filter((Ae) => !b[Ae.key]).length,
-    de = e.workbook.sourceImports?.find((Ae) => Ae.id === R),
+    oe = ae.filter((event) => !resolutions[event.key]).length,
+    de = e.workbook.sourceImports?.find(
+      (sourceImport) => sourceImport.id === R,
+    ),
     [he, Se] = $.split(":").map(Number),
     le = de ? resolveImportedSourceCell(e.workbook, de.id, he, Se) : null,
-    ce = () => {
+    onClick = () => {
       j("");
       try {
         if (Object.values(T).some(Boolean))
           throw Error("Finish each corrected value before previewing.");
-        const Ae = buildSourceReview(e.workbook, d, {
-          tableId: l,
-          sheetName: h,
+        const sourceReview = buildSourceReview(e.workbook, inspection, {
+          tableId: tableId,
+          sheetName: sheetName,
           ambiguityReviewed: p,
-          resolutions: b,
+          resolutions: resolutions,
         });
-        (E(Ae), k(e.workbook));
-      } catch (Ae) {
-        j(Ae.message);
+        (E(sourceReview), k(e.workbook));
+      } catch (error) {
+        j(error.message);
       }
     },
     ge = () => {
@@ -176,8 +188,8 @@ function SourceImportDialog(e) {
           V(
             "Reviewed source imported into a new worksheet. The original and cell evidence are retained in native JSON.",
           ));
-      } catch (Ae) {
-        j(Ae.message);
+      } catch (error) {
+        j(error.message);
       }
     },
     se = (Ae, ye) => {
@@ -195,24 +207,24 @@ function SourceImportDialog(e) {
       tabIndex: -1,
       ref: t,
       className: "lg-reports-dialog lg-formats-dialog lg-source-dialog",
-      onKeyDown: (Ae) => {
+      onKeyDown: (event) => {
         var ye, Te;
         if (
-          (Ae.key === "Escape" && (Ae.stopPropagation(), e.onClose()),
-          Ae.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          event.key === "Tab")
         ) {
           const Pe = [
             ...t.current.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
             ),
           ].filter((qe) => qe.getClientRects().length > 0);
-          Ae.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === Pe[0] ||
             document.activeElement === t.current)
-            ? (Ae.preventDefault(), (ye = Pe.at(-1)) == null || ye.focus())
-            : !Ae.shiftKey &&
+            ? (event.preventDefault(), (ye = Pe.at(-1)) == null || ye.focus())
+            : !event.shiftKey &&
               document.activeElement === Pe.at(-1) &&
-              (Ae.preventDefault(), (Te = Pe[0]) == null || Te.focus());
+              (event.preventDefault(), (Te = Pe[0]) == null || Te.focus());
         }
       },
       children: [
@@ -263,15 +275,15 @@ function SourceImportDialog(e) {
                       "aria-label": "Import source file",
                       type: "file",
                       accept: ".json,.xml,.pdf,.png,.jpg,.jpeg,.html,.htm",
-                      disabled: F,
-                      onChange: (Ae) => {
-                        const ye = Ae.target.files?.[0];
-                        ((Ae.target.value = ""), ye && Q(ye));
+                      disabled: disabled,
+                      onChange: (event) => {
+                        const ye = event.target.files?.[0];
+                        ((event.target.value = ""), ye && Q(ye));
                       },
                     }),
                   ],
                 }),
-                F &&
+                disabled &&
                   i.jsxs(i.Fragment, {
                     children: [
                       i.jsx("span", {
@@ -281,7 +293,7 @@ function SourceImportDialog(e) {
                       i.jsx("button", {
                         type: "button",
                         onClick: () => {
-                          (s.cancel(),
+                          (cancellableOperation.cancel(),
                             o.current++,
                             I(false),
                             V("Source processing cancelled."));
@@ -292,7 +304,7 @@ function SourceImportDialog(e) {
                   }),
               ],
             }),
-            d &&
+            inspection &&
               i.jsxs("section", {
                 className: "lg-formats-source",
                 children: [
@@ -301,16 +313,16 @@ function SourceImportDialog(e) {
                     children: [
                       i.jsxs("div", {
                         children: [
-                          i.jsx("h3", { children: d.fileName }),
+                          i.jsx("h3", { children: inspection.fileName }),
                           i.jsxs("p", {
                             children: [
-                              d.format.toUpperCase(),
+                              inspection.format.toUpperCase(),
                               " ·",
                               " ",
-                              d.byteLength.toLocaleString(),
+                              inspection.byteLength.toLocaleString(),
                               " bytes ·",
                               " ",
-                              d.tables.length,
+                              inspection.tables.length,
                               " table candidates",
                             ],
                           }),
@@ -318,7 +330,7 @@ function SourceImportDialog(e) {
                       }),
                       i.jsxs("button", {
                         type: "button",
-                        disabled: F,
+                        disabled: disabled,
                         onClick: () => void W(false),
                         children: [
                           i.jsx(Download, { size: 16 }),
@@ -329,14 +341,14 @@ function SourceImportDialog(e) {
                   }),
                   i.jsxs("p", {
                     className: "lg-formats-hash",
-                    children: ["SHA-256: ", d.sha256],
+                    children: ["SHA-256: ", inspection.sha256],
                   }),
                   i.jsx("ul", {
-                    children: d.warnings.map((Ae, ye) =>
-                      i.jsx("li", { children: Ae }, ye),
+                    children: inspection.warnings.map((warning, ye) =>
+                      i.jsx("li", { children: warning }, ye),
                     ),
                   }),
-                  d.method === "document-adapter" &&
+                  inspection.method === "document-adapter" &&
                     i.jsxs("div", {
                       className: "lg-source-extractor",
                       children: [
@@ -353,9 +365,10 @@ function SourceImportDialog(e) {
                                   children: [
                                     i.jsx("input", {
                                       type: "checkbox",
-                                      checked: v,
-                                      disabled: F,
-                                      onChange: (Ae) => g(Ae.target.checked),
+                                      checked: checked,
+                                      disabled: disabled,
+                                      onChange: (event) =>
+                                        g(event.target.checked),
                                     }),
                                     "I authorize ",
                                     e.extractor.label,
@@ -364,7 +377,7 @@ function SourceImportDialog(e) {
                                 }),
                                 i.jsx("button", {
                                   type: "button",
-                                  disabled: !v || F,
+                                  disabled: !checked || disabled,
                                   onClick: () => void J(),
                                   children: "Run host extraction",
                                 }),
@@ -380,11 +393,11 @@ function SourceImportDialog(e) {
                             i.jsx("input", {
                               type: "file",
                               accept: ".json",
-                              disabled: F,
+                              disabled: disabled,
                               "aria-label": "Load extraction JSON",
-                              onChange: (Ae) => {
-                                const ye = Ae.target.files?.[0];
-                                ((Ae.target.value = ""), ye && X$1(ye));
+                              onChange: (event) => {
+                                const ye = event.target.files?.[0];
+                                ((event.target.value = ""), ye && X$1(ye));
                               },
                             }),
                           ],
@@ -405,28 +418,28 @@ function SourceImportDialog(e) {
                           "Source table",
                           i.jsx("select", {
                             "aria-label": "Source table",
-                            value: l,
-                            disabled: F,
-                            onChange: (Ae) => {
-                              (c(Ae.target.value),
+                            value: tableId,
+                            disabled: disabled,
+                            onChange: (event) => {
+                              (c(event.target.value),
                                 E(null),
                                 y({}),
                                 m(false),
                                 B(0));
                             },
-                            children: d.tables.map((Ae) =>
+                            children: inspection.tables.map((table) =>
                               i.jsxs(
                                 "option",
                                 {
-                                  value: Ae.id,
+                                  value: table.id,
                                   children: [
-                                    Ae.name,
+                                    table.name,
                                     " · ",
-                                    Ae.rows.length,
+                                    table.rows.length,
                                     " rows",
                                   ],
                                 },
-                                Ae.id,
+                                table.id,
                               ),
                             ),
                           }),
@@ -437,25 +450,25 @@ function SourceImportDialog(e) {
                           "New worksheet name",
                           i.jsx("input", {
                             "aria-label": "New worksheet name",
-                            value: h,
+                            value: sheetName,
                             maxLength: 31,
-                            onChange: (Ae) => {
-                              (f(Ae.target.value), K());
+                            onChange: (event) => {
+                              (f(event.target.value), K());
                             },
                           }),
                         ],
                       }),
                     ],
                   }),
-                  (te.ambiguous || d.tables.length > 1) &&
+                  (te.ambiguous || inspection.tables.length > 1) &&
                     i.jsxs("label", {
                       className: "lg-formats-ack",
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
                           checked: p,
-                          onChange: (Ae) => {
-                            (m(Ae.target.checked), K());
+                          onChange: (event) => {
+                            (m(event.target.checked), K());
                           },
                         }),
                         "I reviewed the candidates and confirm this table selection.",
@@ -484,15 +497,15 @@ function SourceImportDialog(e) {
                           children: i.jsxs("tr", {
                             children: [
                               i.jsx("th", { scope: "col", children: "Row" }),
-                              te.columns.map((Ae, ye) =>
+                              te.columns.map((column, ye) =>
                                 i.jsxs(
                                   "th",
                                   {
                                     scope: "col",
                                     children: [
-                                      Ae.name,
+                                      column.name,
                                       i.jsx("small", {
-                                        children: Ae.path || "(root)",
+                                        children: column.path || "(root)",
                                       }),
                                     ],
                                   },
@@ -633,12 +646,12 @@ function SourceImportDialog(e) {
                                       key,
                                       i.jsxs("select", {
                                         "aria-label": "Review " + key,
-                                        value: b[key]?.decision ?? "",
-                                        onChange: (Re) => {
-                                          Re.target.value
+                                        value: resolutions[key]?.decision ?? "",
+                                        onChange: (event) => {
+                                          event.target.value
                                             ? se(key, {
-                                                decision: Re.target.value,
-                                                ...(Re.target.value ===
+                                                decision: event.target.value,
+                                                ...(event.target.value ===
                                                 "correct"
                                                   ? { value: cell.value }
                                                   : {}),
@@ -670,7 +683,7 @@ function SourceImportDialog(e) {
                                       }),
                                     ],
                                   }),
-                                  b[key]?.decision === "correct" &&
+                                  resolutions[key]?.decision === "correct" &&
                                     i.jsxs("label", {
                                       children: [
                                         "Corrected value (JSON scalar)",
@@ -681,10 +694,10 @@ function SourceImportDialog(e) {
                                           defaultValue: JSON.stringify(
                                             cell.value,
                                           ),
-                                          onChange: (Re) => {
+                                          onChange: (event) => {
                                             try {
                                               const Me = JSON.parse(
-                                                Re.target.value,
+                                                event.target.value,
                                               );
                                               if (
                                                 Me !== null &&
@@ -699,7 +712,7 @@ function SourceImportDialog(e) {
                                                 decision: "correct",
                                                 value: Me,
                                               }),
-                                                Re.target.setCustomValidity(
+                                                event.target.setCustomValidity(
                                                   "",
                                                 ));
                                             } catch {
@@ -708,7 +721,7 @@ function SourceImportDialog(e) {
                                                 [key]: true,
                                               })),
                                                 E(null),
-                                                Re.target.setCustomValidity(
+                                                event.target.setCustomValidity(
                                                   "Enter a JSON string, number, boolean or null.",
                                                 ));
                                             }
@@ -755,12 +768,12 @@ function SourceImportDialog(e) {
                       type: "button",
                       className: "lg-source-primary",
                       disabled:
-                        F ||
+                        disabled ||
                         e.readOnly ||
                         Object.values(T).some(Boolean) ||
                         oe > 0 ||
-                        ((te.ambiguous || d.tables.length > 1) && !p),
-                      onClick: ce,
+                        ((te.ambiguous || inspection.tables.length > 1) && !p),
+                      onClick: onClick,
                       children: "Preview import",
                     }),
                   }),
@@ -791,7 +804,7 @@ function SourceImportDialog(e) {
                         i.jsx("button", {
                           type: "button",
                           className: "lg-source-primary",
-                          disabled: e.readOnly || A !== e.workbook || F,
+                          disabled: e.readOnly || A !== e.workbook || disabled,
                           onClick: ge,
                           children: "Import reviewed table",
                         }),
@@ -815,26 +828,26 @@ function SourceImportDialog(e) {
                       i.jsxs("select", {
                         "aria-label": "Retained import",
                         value: R,
-                        onChange: (Ae) => {
-                          (L(Ae.target.value), U("0:0"));
+                        onChange: (event) => {
+                          (L(event.target.value), U("0:0"));
                         },
                         children: [
                           i.jsx("option", {
                             value: "",
                             children: "Select an imported source",
                           }),
-                          e.workbook.sourceImports.map((Ae) =>
+                          e.workbook.sourceImports.map((sourceImport) =>
                             i.jsxs(
                               "option",
                               {
-                                value: Ae.id,
+                                value: sourceImport.id,
                                 children: [
-                                  Ae.sheetName,
+                                  sourceImport.sheetName,
                                   " · ",
-                                  Ae.original.fileName,
+                                  sourceImport.original.fileName,
                                 ],
                               },
-                              Ae.id,
+                              sourceImport.id,
                             ),
                           ),
                         ],
@@ -857,13 +870,13 @@ function SourceImportDialog(e) {
                           type: "button",
                           onClick: () =>
                             void G(async () => {
-                              const { base64, ...ye } = de.original;
+                              const { base64, ...original } = de.original;
                               await q(
                                 de.original.fileName + ".import-review.json",
                                 new Blob(
                                   [
                                     JSON.stringify(
-                                      { ...de, original: ye },
+                                      { ...de, original: original },
                                       null,
                                       2,
                                     ),
@@ -901,9 +914,9 @@ function SourceImportDialog(e) {
                                 i.jsx("select", {
                                   "aria-label": "Source field",
                                   value: Se,
-                                  onChange: (Ae) =>
-                                    U(he + ":" + Ae.target.value),
-                                  children: de.table.columns.map((Ae, ye) =>
+                                  onChange: (event) =>
+                                    U(he + ":" + event.target.value),
+                                  children: de.table.columns.map((column, ye) =>
                                     i.jsxs(
                                       "option",
                                       {
@@ -911,7 +924,7 @@ function SourceImportDialog(e) {
                                         children: [
                                           columnIndexToLetters(ye),
                                           " · ",
-                                          Ae.name,
+                                          column.name,
                                         ],
                                       },
                                       ye,
@@ -986,9 +999,9 @@ function SourceImportDialog(e) {
     }),
   });
 }
-async function validateConvertedSource(e, r, t, n) {
+async function validateConvertedSource(e, r, checked, n) {
   const o = assertFormatInspectionCurrent(e);
-  if (t !== true)
+  if (checked !== true)
     throw Error(
       "Acknowledge conversion losses and compare the source before importing the converted workbook.",
     );
@@ -1046,15 +1059,15 @@ function SourcePackageInventory({ inventory }) {
     [a, s] = ne.useState("all"),
     [d, u] = ne.useState(0),
     l = inventory.parts.filter(
-      (f) =>
-        (a === "all" || f.disposition === a) &&
+      (part) =>
+        (a === "all" || part.disposition === a) &&
         [
-          f.path,
-          f.family,
-          ...f.locations.map((p) => p.sheet ?? ""),
-          ...f.features.map(
-            (p) =>
-              `${p.feature} ${p.location.range ?? ""} ${p.location.detail ?? ""}`,
+          part.path,
+          part.family,
+          ...part.locations.map((p) => p.sheet ?? ""),
+          ...part.features.map(
+            (feature) =>
+              `${feature.feature} ${feature.location.range ?? ""} ${feature.location.detail ?? ""}`,
           ),
         ]
           .join(" ")
@@ -1113,8 +1126,8 @@ function SourcePackageInventory({ inventory }) {
               }),
               i.jsx("input", {
                 value: n,
-                onChange: (f) => {
-                  (o(f.target.value), u(0));
+                onChange: (event) => {
+                  (o(event.target.value), u(0));
                 },
                 type: "search",
               }),
@@ -1125,8 +1138,8 @@ function SourcePackageInventory({ inventory }) {
               i.jsx(LocalizedText, { children: "Export outcome" }),
               i.jsxs("select", {
                 value: a,
-                onChange: (f) => {
-                  (s(f.target.value), u(0));
+                onChange: (event) => {
+                  (s(event.target.value), u(0));
                 },
                 children: [
                   i.jsx("option", { value: "all", children: "All outcomes" }),
@@ -1332,16 +1345,16 @@ function XlsxConversionReview({
     c = ne.useId(),
     h = ne.useRef(null);
   ne.useEffect(() => {
-    const v = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       h.current?.focus(),
       () => {
-        v?.isConnected && v.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
   const f = report.direction === "import",
-    p = report.caches;
+    caches = report.caches;
   return i.jsx("div", {
     className: "lg-xlsx-overlay",
     children: i.jsxs("section", {
@@ -1351,11 +1364,11 @@ function XlsxConversionReview({
       "aria-labelledby": c,
       tabIndex: -1,
       className: "lg-xlsx-review",
-      onKeyDown: (v) => {
+      onKeyDown: (event) => {
         if (
-          (v.key === "Escape" &&
-            (v.preventDefault(), v.stopPropagation(), onClose()),
-          v.key === "Tab")
+          (event.key === "Escape" &&
+            (event.preventDefault(), event.stopPropagation(), onClose()),
+          event.key === "Tab")
         ) {
           const b = [
               ...(h.current?.querySelectorAll(
@@ -1364,12 +1377,12 @@ function XlsxConversionReview({
             ],
             y = b[0],
             w = b.at(-1);
-          v.shiftKey &&
+          event.shiftKey &&
           (document.activeElement === y || document.activeElement === h.current)
-            ? (v.preventDefault(), w == null || w.focus())
-            : !v.shiftKey &&
+            ? (event.preventDefault(), w == null || w.focus())
+            : !event.shiftKey &&
               document.activeElement === w &&
-              (v.preventDefault(), y == null || y.focus());
+              (event.preventDefault(), y == null || y.focus());
         }
       },
       children: [
@@ -1506,20 +1519,20 @@ function XlsxConversionReview({
                     children: i.jsx(LocalizedText, { children: "Worksheets" }),
                   }),
                   i.jsx("ul", {
-                    children: report.sheets.map((v) =>
+                    children: report.sheets.map((sheet) =>
                       i.jsxs(
                         "li",
                         {
                           children: [
-                            v.name,
+                            sheet.name,
                             " — ",
-                            v.storedCells.toLocaleString(),
+                            sheet.storedCells.toLocaleString(),
                             " ",
                             i.jsx(LocalizedText, { children: "cells" }),
-                            v.hidden ? " · hidden" : "",
+                            sheet.hidden ? " · hidden" : "",
                           ],
                         },
-                        v.name,
+                        sheet.name,
                       ),
                     ),
                   }),
@@ -1531,20 +1544,22 @@ function XlsxConversionReview({
                   f
                     ? i.jsxs("p", {
                         children: [
-                          p.pending ? `${p.pending} pending comparisons; ` : "",
-                          p.total,
+                          caches.pending
+                            ? `${caches.pending} pending comparisons; `
+                            : "",
+                          caches.total,
                           " ",
                           i.jsx(LocalizedText, { children: "formulas: " }),
-                          p.matched,
+                          caches.matched,
                           " ",
                           i.jsx(LocalizedText, { children: "caches match, " }),
-                          p.different,
+                          caches.different,
                           " ",
                           i.jsx(LocalizedText, { children: "differ, " }),
-                          p.missing,
+                          caches.missing,
                           " ",
                           i.jsx(LocalizedText, { children: "missing, " }),
-                          p.neutralized,
+                          caches.neutralized,
                           " ",
                           i.jsx(LocalizedText, {
                             children:
@@ -1554,16 +1569,16 @@ function XlsxConversionReview({
                       })
                     : i.jsxs("p", {
                         children: [
-                          p.written,
+                          caches.written,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "formula caches written; ",
                           }),
-                          p.omitted,
+                          caches.omitted,
                           " ",
                           i.jsx(LocalizedText, { children: "omitted;" }),
                           " ",
-                          p.neutralized,
+                          caches.neutralized,
                           " ",
                           i.jsx(LocalizedText, {
                             children:
@@ -1571,7 +1586,7 @@ function XlsxConversionReview({
                           }),
                         ],
                       }),
-                  !!p.issues.length &&
+                  !!caches.issues.length &&
                     i.jsxs("table", {
                       "aria-label": text("Formula cache differences"),
                       lang: language("Formula cache differences"),
@@ -1604,39 +1619,39 @@ function XlsxConversionReview({
                           }),
                         }),
                         i.jsx("tbody", {
-                          children: p.issues.map((v) =>
+                          children: caches.issues.map((issue) =>
                             i.jsxs(
                               "tr",
                               {
                                 children: [
                                   i.jsxs("td", {
-                                    children: [v.sheet, "!", v.address],
+                                    children: [issue.sheet, "!", issue.address],
                                   }),
                                   i.jsx("td", {
-                                    children: v.source
-                                      ? `${v.source.type}: ${String(v.source.value)}`
+                                    children: issue.source
+                                      ? `${issue.source.type}: ${String(issue.source.value)}`
                                       : "No cache",
                                   }),
                                   i.jsxs("td", {
                                     children: [
-                                      v.calculated.type,
+                                      issue.calculated.type,
                                       ": ",
-                                      String(v.calculated.value),
+                                      String(issue.calculated.value),
                                     ],
                                   }),
-                                  i.jsx("td", { children: v.status }),
+                                  i.jsx("td", { children: issue.status }),
                                 ],
                               },
-                              `${v.sheet}!${v.address}`,
+                              `${issue.sheet}!${issue.address}`,
                             ),
                           ),
                         }),
                       ],
                     }),
-                  !!p.detailsOmitted &&
+                  !!caches.detailsOmitted &&
                     i.jsxs("p", {
                       children: [
-                        p.detailsOmitted,
+                        caches.detailsOmitted,
                         " ",
                         i.jsx(LocalizedText, {
                           children:
@@ -1666,27 +1681,30 @@ function XlsxConversionReview({
                           ],
                         }),
                         i.jsx("ul", {
-                          children: report.embeddedObjectLosses.map((v, g) =>
-                            i.jsxs(
-                              "li",
-                              {
-                                children: [
-                                  v.sourceFile,
-                                  " · ",
-                                  v.path,
-                                  " · ",
-                                  v.kind,
-                                  " · dropped · never executed",
-                                ],
-                              },
-                              g,
-                            ),
+                          children: report.embeddedObjectLosses.map(
+                            (embeddedObjectLoss, g) =>
+                              i.jsxs(
+                                "li",
+                                {
+                                  children: [
+                                    embeddedObjectLoss.sourceFile,
+                                    " · ",
+                                    embeddedObjectLoss.path,
+                                    " · ",
+                                    embeddedObjectLoss.kind,
+                                    " · dropped · never executed",
+                                  ],
+                                },
+                                g,
+                              ),
                           ),
                         }),
                       ],
                     })
                   : null,
-                report.warnings.map((v, g) => i.jsx("li", { children: v }, g)),
+                report.warnings.map((warning, g) =>
+                  i.jsx("li", { children: warning }, g),
+                ),
               ],
             }),
           ],

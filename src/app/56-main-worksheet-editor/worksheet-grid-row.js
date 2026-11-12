@@ -75,11 +75,11 @@ function WorksheetGridRow({
   readOnly,
 }) {
   const { text, language } = useWorkbookMessages(),
-    ge = useWorkbookMessages(),
-    se = (Te) => formatCellEntryForEdit(Te, ge.entryLocale),
-    we = ne.useRef(null),
+    workbookMessages = useWorkbookMessages(),
+    se = (cell) => formatCellEntryForEdit(cell, workbookMessages.entryLocale),
+    inputRef = ne.useRef(null),
     Ee = ne.useRef(null),
-    [Ae, ye] = ne.useState(0);
+    [caret, ye] = ne.useState(0);
   return i.jsx(i.Fragment, {
     children: i.jsxs("tr", {
       role: "row",
@@ -108,9 +108,9 @@ function WorksheetGridRow({
                   "Drag to resize; double-click to AutoFit row height",
                 ),
                 onPointerDown: onResize,
-                onClick: (Te) => Te.stopPropagation(),
-                onDoubleClick: (Te) => {
-                  (Te.stopPropagation(), onAutoFit());
+                onClick: (event) => event.stopPropagation(),
+                onDoubleClick: (event) => {
+                  (event.stopPropagation(), onAutoFit());
                 },
                 lang: language(
                   "Drag to resize; double-click to AutoFit row height",
@@ -118,28 +118,29 @@ function WorksheetGridRow({
               }),
             ],
           }),
-        [...frozenColumns, ...columns].map((Te, Pe) => {
-          const qe = mergeBounds.find((lt) => Tp(lt, row, Te));
-          let ht = 1,
-            Re = 1,
-            Me = `${columnIndexToLetters(Te)}${row + 1}`;
+        [...frozenColumns, ...columns].map((col, Pe) => {
+          const qe = mergeBounds.find((mergeBound) => Tp(mergeBound, row, col));
+          let colSpan = 1,
+            rowSpan = 1,
+            Me = `${columnIndexToLetters(col)}${row + 1}`;
           if (qe && !sortedView) {
             const lt = (
-                frozenColumns.includes(Te) ? frozenColumns : columns
+                frozenColumns.includes(col) ? frozenColumns : columns
               ).filter((ft) => ft >= qe.firstCol && ft <= qe.lastCol),
               be = displayedRows.filter(
-                (ft) => ft >= qe.firstRow && ft <= qe.lastRow,
+                (displayedRow) =>
+                  displayedRow >= qe.firstRow && displayedRow <= qe.lastRow,
               );
-            if (Te !== lt[0] || row !== be[0]) return null;
-            ((ht = lt.length),
-              (Re = be.length),
+            if (col !== lt[0] || row !== be[0]) return null;
+            ((colSpan = lt.length),
+              (rowSpan = be.length),
               (Me = `${columnIndexToLetters(qe.firstCol)}${qe.firstRow + 1}`));
           }
-          const ke = cells[Me],
+          const cell = cells[Me],
             je = {
-              ...ke,
-              raw: ke?.raw ?? null,
-              style: { ...ke?.style, ...ruleStyles(Me) },
+              ...cell,
+              raw: cell?.raw ?? null,
+              style: { ...cell?.style, ...ruleStyles(Me) },
             },
             $e = calc(sheetId, Me),
             Je =
@@ -149,10 +150,10 @@ function WorksheetGridRow({
             ze = active === Me,
             at = {
               ...cellStyleToCss(je.style, $e),
-              ...(frozenColumns.includes(Te)
+              ...(frozenColumns.includes(col)
                 ? {
                     position: "sticky",
-                    left: frozenColumnOffsets[Te],
+                    left: frozenColumnOffsets[col],
                     zIndex: 3,
                   }
                 : {}),
@@ -171,30 +172,34 @@ function WorksheetGridRow({
                   "td",
                   {
                     id: `${idPrefix}-${Me}`,
-                    colSpan: ht,
-                    rowSpan: Re,
-                    "aria-colspan": ht > 1 ? ht : undefined,
-                    "aria-rowspan": Re > 1 ? Re : undefined,
+                    colSpan: colSpan,
+                    rowSpan: rowSpan,
+                    "aria-colspan": colSpan > 1 ? colSpan : undefined,
+                    "aria-rowspan": rowSpan > 1 ? rowSpan : undefined,
                     role: "gridcell",
-                    "aria-label": `${Me} ${ge.entryLocale ? formatLocalizedNumberDisplay($e, je, workbook.datePolicy?.dateSystem, ge.entryLocale) : String($e ?? "")}`,
-                    "aria-colindex": Te + 2,
-                    "aria-selected": selectionBounds.some((lt) =>
-                      Tp(lt, row, Te),
+                    "aria-label": `${Me} ${workbookMessages.entryLocale ? formatLocalizedNumberDisplay($e, je, workbook.datePolicy?.dateSystem, workbookMessages.entryLocale) : String($e ?? "")}`,
+                    "aria-colindex": col + 2,
+                    "aria-selected": selectionBounds.some((selectionBound) =>
+                      Tp(selectionBound, row, col),
                     ),
                     "data-address": Me,
                     "data-formula-reference":
-                      formulaReference && Tp(formulaReference, row, Te)
+                      formulaReference && Tp(formulaReference, row, col)
                         ? "true"
                         : undefined,
-                    className: `${ze ? "lg-cell-active" : ""} ${selectionBounds.some((lt) => Tp(lt, row, Te)) ? "lg-cell-selected" : ""} ${Je ? "lg-formula-cell" : ""} ${typeof $e == "string" && $e.startsWith("#") ? "lg-cell-error" : ""} ${frozenColumns.includes(Te) ? "lg-frozen-column" : ""}`,
+                    className: `${ze ? "lg-cell-active" : ""} ${selectionBounds.some((selectionBound) => Tp(selectionBound, row, col)) ? "lg-cell-selected" : ""} ${Je ? "lg-formula-cell" : ""} ${typeof $e == "string" && $e.startsWith("#") ? "lg-cell-error" : ""} ${frozenColumns.includes(col) ? "lg-frozen-column" : ""}`,
                     style: at,
                     title: `${Me}${je?.note ? ` · ${je.note}` : ""}${Je ? ` · ${je.raw}` : ""}`,
-                    onPointerDown: (lt) => {
-                      lt.button !== 0 ||
+                    onPointerDown: (event) => {
+                      event.button !== 0 ||
                         editing !== null ||
-                        (lt.preventDefault(),
-                        onDragStart(Me, lt.ctrlKey || lt.metaKey),
-                        select(Me, lt.shiftKey, lt.ctrlKey || lt.metaKey));
+                        (event.preventDefault(),
+                        onDragStart(Me, event.ctrlKey || event.metaKey),
+                        select(
+                          Me,
+                          event.shiftKey,
+                          event.ctrlKey || event.metaKey,
+                        ));
                     },
                     onPointerEnter: (lt) => onDragEnter(Me, lt.buttons),
                     onClick: (lt) => {
@@ -214,10 +219,10 @@ function WorksheetGridRow({
                         ? i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("input", {
-                                ref: we,
+                                ref: inputRef,
                                 className: "lg-cell-editor",
-                                onFocus: (lt) =>
-                                  onFormulaInput(lt.currentTarget),
+                                onFocus: (event) =>
+                                  onFormulaInput(event.currentTarget),
                                 autoFocus: true,
                                 readOnly,
                                 "aria-label": `Edit ${Me}`,
@@ -225,52 +230,56 @@ function WorksheetGridRow({
                                   ? formulaHelpId
                                   : undefined,
                                 value: editing,
-                                onSelect: (lt) => {
-                                  (onFormulaInput(lt.currentTarget),
+                                onSelect: (event) => {
+                                  (onFormulaInput(event.currentTarget),
                                     ye(
-                                      lt.currentTarget.selectionStart ??
+                                      event.currentTarget.selectionStart ??
                                         editing.length,
                                     ));
                                 },
-                                onChange: (lt) => {
-                                  (setEditing(lt.target.value),
-                                    onFormulaInput(lt.currentTarget, true),
+                                onChange: (event) => {
+                                  (setEditing(event.target.value),
+                                    onFormulaInput(event.currentTarget, true),
                                     ye(
-                                      lt.target.selectionStart ??
-                                        lt.target.value.length,
+                                      event.target.selectionStart ??
+                                        event.target.value.length,
                                     ));
                                 },
-                                onClick: (lt) => lt.stopPropagation(),
-                                onBlur: (lt) => {
+                                onClick: (event) => event.stopPropagation(),
+                                onBlur: (event) => {
                                   isWithinFormulaSuggestions(
-                                    lt.currentTarget,
-                                    lt.relatedTarget,
+                                    event.currentTarget,
+                                    event.relatedTarget,
                                   ) || saveCell(editing);
                                 },
-                                onKeyDown: (lt) => {
+                                onKeyDown: (event) => {
                                   if (
-                                    (lt.stopPropagation(),
-                                    !lt.nativeEvent.isComposing)
+                                    (event.stopPropagation(),
+                                    !event.nativeEvent.isComposing)
                                   ) {
-                                    if (lt.key === "Escape") {
+                                    if (event.key === "Escape") {
                                       if (
                                         !formulaReference &&
                                         editing.length > 1 &&
-                                        Ee.current?.handleKeyDown(lt)
+                                        Ee.current?.handleKeyDown(event)
                                       )
                                         return;
-                                      (lt.preventDefault(), onCancelEdit());
+                                      (event.preventDefault(), onCancelEdit());
                                       return;
                                     }
-                                    onFormulaKey(lt) ||
-                                      Ee.current?.handleKeyDown(lt) ||
-                                      ((lt.key === "Enter" ||
-                                        lt.key === "Tab") &&
-                                        (lt.preventDefault(),
+                                    onFormulaKey(event) ||
+                                      Ee.current?.handleKeyDown(event) ||
+                                      ((event.key === "Enter" ||
+                                        event.key === "Tab") &&
+                                        (event.preventDefault(),
                                         saveCell(editing) &&
-                                          onNavigate(lt.key, lt.shiftKey)),
-                                      lt.key === "Escape" &&
-                                        (lt.preventDefault(), onCancelEdit()));
+                                          onNavigate(
+                                            event.key,
+                                            event.shiftKey,
+                                          )),
+                                      event.key === "Escape" &&
+                                        (event.preventDefault(),
+                                        onCancelEdit()));
                                   }
                                 },
                               }),
@@ -280,17 +289,20 @@ function WorksheetGridRow({
                                   saveCell(editing);
                                 },
                                 value: editing,
-                                caret: Ae,
+                                caret: caret,
                                 workbook,
                                 sheetId,
-                                inputRef: we,
+                                inputRef: inputRef,
                                 disabled: readOnly,
                                 onAccept: (lt, be) => {
                                   (setEditing(lt),
                                     ye(be),
                                     requestAnimationFrame(() => {
-                                      (we.current?.focus(),
-                                        we.current?.setSelectionRange(be, be));
+                                      (inputRef.current?.focus(),
+                                        inputRef.current?.setSelectionRange(
+                                          be,
+                                          be,
+                                        ));
                                     }));
                                 },
                               }),
@@ -301,7 +313,7 @@ function WorksheetGridRow({
                               i.jsx("span", {
                                 style: {
                                   ...textWrapToCss(je.style),
-                                  ...(fixedHeight && Re === 1
+                                  ...(fixedHeight && rowSpan === 1
                                     ? {
                                         maxHeight: minimumHeight - 1,
                                         minHeight: 0,
@@ -321,14 +333,16 @@ function WorksheetGridRow({
                                         }),
                                       }),
                               }),
-                              filterHeader?.some((lt) => lt.column === Te) &&
+                              filterHeader?.some((lt) => lt.column === col) &&
                                 i.jsx("button", {
                                   className: "lg-header-filter",
-                                  "aria-label": `Filter ${filterHeader.find((lt) => lt.column === Te).label} column`,
-                                  "aria-pressed": filteredColumns.includes(Te),
-                                  onPointerDown: (lt) => lt.stopPropagation(),
-                                  onClick: (lt) => {
-                                    (lt.stopPropagation(), onColumnFilter(Te));
+                                  "aria-label": `Filter ${filterHeader.find((lt) => lt.column === col).label} column`,
+                                  "aria-pressed": filteredColumns.includes(col),
+                                  onPointerDown: (event) =>
+                                    event.stopPropagation(),
+                                  onClick: (event) => {
+                                    (event.stopPropagation(),
+                                      onColumnFilter(col));
                                   },
                                   title: text("Filter this column"),
                                   lang: language("Filter this column"),
@@ -344,9 +358,10 @@ function WorksheetGridRow({
                                       "aria-label": `Open link at ${Me}`,
                                       title:
                                         je.hyperlink.label || je.hyperlink.url,
-                                      onPointerDown: (lt) =>
-                                        lt.stopPropagation(),
-                                      onClick: (lt) => lt.stopPropagation(),
+                                      onPointerDown: (event) =>
+                                        event.stopPropagation(),
+                                      onClick: (event) =>
+                                        event.stopPropagation(),
                                       children: "↗",
                                     })
                                   : i.jsx("button", {
@@ -355,13 +370,16 @@ function WorksheetGridRow({
                                       title:
                                         je.hyperlink.label ||
                                         `Go to ${je.hyperlink.address}`,
-                                      onPointerDown: (lt) =>
-                                        lt.stopPropagation(),
-                                      onClick: (lt) => {
-                                        lt.stopPropagation();
-                                        const be = je.hyperlink;
-                                        be?.kind === "internal" &&
-                                          onLink(be.sheetId, be.address);
+                                      onPointerDown: (event) =>
+                                        event.stopPropagation(),
+                                      onClick: (event) => {
+                                        event.stopPropagation();
+                                        const hyperlink = je.hyperlink;
+                                        hyperlink?.kind === "internal" &&
+                                          onLink(
+                                            hyperlink.sheetId,
+                                            hyperlink.address,
+                                          );
                                       },
                                       children: "↗",
                                     })),
@@ -373,9 +391,10 @@ function WorksheetGridRow({
                                   },
                                   "aria-label": `Review comments at ${Me}`,
                                   title: text("Open review discussion"),
-                                  onPointerDown: (lt) => lt.stopPropagation(),
-                                  onClick: (lt) => {
-                                    (lt.stopPropagation(), onReview(Me));
+                                  onPointerDown: (event) =>
+                                    event.stopPropagation(),
+                                  onClick: (event) => {
+                                    (event.stopPropagation(), onReview(Me));
                                   },
                                   lang: language("Open review discussion"),
                                   children: "●",
@@ -393,7 +412,7 @@ function WorksheetGridRow({
                         !fillDragging &&
                         editing === null &&
                         row === selectedBounds.lastRow &&
-                        Te === selectedBounds.lastCol &&
+                        col === selectedBounds.lastCol &&
                         i.jsx("button", {
                           className: "lg-fill-handle",
                           "aria-label": text("Fill handle"),
@@ -405,17 +424,17 @@ function WorksheetGridRow({
                             (lt.stopPropagation(),
                               lt.detail === 0 && onFillOptions());
                           },
-                          onDoubleClick: (lt) => lt.stopPropagation(),
+                          onDoubleClick: (event) => event.stopPropagation(),
                           lang: language("Fill handle"),
                           "data-ui-label": "Fill handle",
                         }),
                     ],
                   },
-                  `${Me}:${row}:${Te}`,
+                  `${Me}:${row}:${col}`,
                 ),
               ],
             },
-            `${Me}:${row}:${Te}`,
+            `${Me}:${row}:${col}`,
           );
         }),
         rightGap > 0 &&

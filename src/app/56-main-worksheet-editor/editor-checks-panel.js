@@ -54,8 +54,8 @@ function EditorChecksPanel({
             i.jsxs("select", {
               "aria-label": text("Analysis population"),
               value: auditState.auditPopulationScope,
-              onChange: (fe) => {
-                (auditState.setAuditPopulationScope(fe.target.value),
+              onChange: (event) => {
+                (auditState.setAuditPopulationScope(event.target.value),
                   auditState.setAuditAnalysisResult(null));
               },
               lang: language("Analysis population"),
@@ -201,7 +201,8 @@ function EditorChecksPanel({
               "aria-label": text("Audit source range"),
               placeholder: `A1:${columnIndexToLetters(activeSheet.colCount - 1)}${activeSheet.rowCount} (entire sheet)`,
               value: auditState.auditSourceRange,
-              onChange: (fe) => auditState.setAuditSourceRange(fe.target.value),
+              onChange: (event) =>
+                auditState.setAuditSourceRange(event.target.value),
               lang: language("Audit source range"),
               "data-ui-label": "Audit source range",
             }),
@@ -267,8 +268,8 @@ function EditorChecksPanel({
                   i.jsx("input", {
                     "aria-label": text("Sampling seed"),
                     value: auditState.samplingSeed,
-                    onChange: (fe) =>
-                      auditState.setSamplingSeed(fe.target.value),
+                    onChange: (event) =>
+                      auditState.setSamplingSeed(event.target.value),
                     lang: language("Sampling seed"),
                     "data-ui-label": "Sampling seed",
                   }),
@@ -287,7 +288,8 @@ function EditorChecksPanel({
                 "aria-label": text("Aging as of date"),
                 type: "date",
                 value: auditState.agingAsOfDate,
-                onChange: (fe) => auditState.setAgingAsOfDate(fe.target.value),
+                onChange: (event) =>
+                  auditState.setAgingAsOfDate(event.target.value),
                 lang: language("Aging as of date"),
                 "data-ui-label": "Aging as of date",
               }),
@@ -347,21 +349,21 @@ function EditorChecksPanel({
                     }),
                   ],
                 }),
-                auditState.auditAnalysisResult.findings.map((fe) =>
+                auditState.auditAnalysisResult.findings.map((finding) =>
                   i.jsxs(
                     "article",
                     {
-                      className: `lg-finding ${fe.severity}`,
+                      className: `lg-finding ${finding.severity}`,
                       children: [
                         i.jsx("h4", {
-                          children: fe.title,
+                          children: finding.title,
                         }),
                         i.jsx("p", {
-                          children: fe.detail,
+                          children: finding.detail,
                         }),
                         i.jsx("div", {
                           className: "lg-citations",
-                          children: fe.citations.map((Oe, Be) =>
+                          children: finding.citations.map((citation, Be) =>
                             i.jsxs(
                               "button",
                               {
@@ -375,7 +377,7 @@ function EditorChecksPanel({
                                         delete Xe[
                                           JSON.stringify([
                                             activeWorkbook.id,
-                                            Oe.sheetId,
+                                            citation.sheetId,
                                           ])
                                         ],
                                         Xe
@@ -383,34 +385,34 @@ function EditorChecksPanel({
                                     },
                                   ),
                                     navigationActions.switchActiveWorksheet(
-                                      Oe.sheetId,
+                                      citation.sheetId,
                                     ),
                                     navigationActions.selectCellAddress(
-                                      Oe.address,
+                                      citation.address,
                                     ),
                                     auditState.setAuditAnalysisResult(
                                       auditState.auditAnalysisResult,
                                     ),
                                     operationStatusState.setStatusNotice(
-                                      `${Oe.sheetName}!${Oe.address}: ${String(Oe.value ?? "")}`,
+                                      `${citation.sheetName}!${citation.address}: ${String(citation.value ?? "")}`,
                                     ));
                                 },
                                 children: [
-                                  Oe.sheetName,
+                                  citation.sheetName,
                                   "!",
-                                  Oe.address,
+                                  citation.address,
                                   i.jsx(ArrowUpRight, {
                                     size: 10,
                                   }),
                                 ],
                               },
-                              `${Oe.address}-${Be}`,
+                              `${citation.address}-${Be}`,
                             ),
                           ),
                         }),
                       ],
                     },
-                    fe.id,
+                    finding.id,
                   ),
                 ),
               ],

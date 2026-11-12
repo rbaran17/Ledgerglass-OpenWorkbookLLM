@@ -45,25 +45,27 @@ function FormatConversionDialog(e) {
   const { text } = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
-    o = useCancellableOperation(),
+    cancellableOperation = useCancellableOperation(),
     a = ne.useRef(e),
     s = ne.useRef(0),
     d = ne.useRef(true);
   a.current = e;
   const [u, l] = ne.useState(null),
     [c, h] = ne.useState(null),
-    [f, p] = ne.useState(false),
-    [m, v] = ne.useState(false),
+    [checked, p] = ne.useState(false),
+    [disabled, v] = ne.useState(false),
     [g, b] = ne.useState(""),
     [y, w] = ne.useState(null),
     [E, A] = ne.useState("");
   (ne.useEffect(() => {
     d.current = true;
-    const V = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       n.current?.focus(),
       () => {
-        ((d.current = false), s.current++, V?.isConnected && V.focus());
+        ((d.current = false),
+          s.current++,
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -74,8 +76,8 @@ function FormatConversionDialog(e) {
       (b(""), A(""), v(true));
       try {
         await V();
-      } catch (D) {
-        d.current && b(D.message);
+      } catch (error) {
+        d.current && b(error.message);
       } finally {
         d.current && v(false);
       }
@@ -88,7 +90,10 @@ function FormatConversionDialog(e) {
         p(false),
         w(null),
         k(async () => {
-          const B = await detectSupportedFileFormats(V, o.begin());
+          const B = await detectSupportedFileFormats(
+            V,
+            cancellableOperation.begin(),
+          );
           d.current && D === s.current && (l(B), h(V));
         })
       );
@@ -99,43 +104,57 @@ function FormatConversionDialog(e) {
   const I = (V, D) =>
       k(async () => {
         if (a.current.readOnly) throw Error("This workbook is read-only.");
-        const B = a.current.workbook,
+        const workbook = a.current.workbook,
           _ = ++s.current,
-          C = D
-            ? await importWorkbookFile(V, o.begin())
-            : await validateConvertedSource(u, V, f, o.begin());
+          imported = D
+            ? await importWorkbookFile(V, cancellableOperation.begin())
+            : await validateConvertedSource(
+                u,
+                V,
+                checked,
+                cancellableOperation.begin(),
+              );
         if (!(!d.current || _ !== s.current)) {
-          if (a.current.workbook !== B || a.current.readOnly)
+          if (a.current.workbook !== workbook || a.current.readOnly)
             throw Error(
               "The workbook or permissions changed. Review the conversion again.",
             );
-          if (!C.report)
+          if (!imported.report)
             throw Error(
               "A compatibility report is required for format conversion.",
             );
-          w({ snapshot: B, imported: C, report: C.report });
+          w({
+            snapshot: workbook,
+            imported: imported,
+            report: imported.report,
+          });
         }
       }),
     O = (V) =>
       k(async () => {
-        const D = a.current.workbook,
+        const workbook = a.current.workbook,
           B = ++s.current,
-          _ = V ? await exportXltxTemplate(D) : await exportWorkbookToXlsx(D);
+          _ = V
+            ? await exportXltxTemplate(workbook)
+            : await exportWorkbookToXlsx(workbook);
         if (!(!d.current || B !== s.current)) {
-          if (a.current.workbook !== D)
+          if (a.current.workbook !== workbook)
             throw Error("The workbook changed. Review the export again.");
           w({
-            snapshot: D,
+            snapshot: workbook,
             blob: _.blob,
             report: {
               ..._.report,
-              fileName: describeImportSource(D, V ? "xltx" : "xlsx"),
+              fileName: describeImportSource(workbook, V ? "xltx" : "xlsx"),
             },
           });
         }
       }),
-    j = (V, D) =>
-      (a.current.onDownload ?? downloadBlobAsFile)({ filename: V, blob: D }),
+    j = (filename, blob) =>
+      (a.current.onDownload ?? downloadBlobAsFile)({
+        filename: filename,
+        blob: blob,
+      }),
     z = (V) =>
       k(async () => {
         const D = V
@@ -160,7 +179,7 @@ function FormatConversionDialog(e) {
             ? "The workbook changed. Cancel and review again."
             : y.imported && e.readOnly
               ? "This workbook is read-only."
-              : m
+              : disabled
                 ? "Completing the reviewed operation."
                 : undefined),
         onClose: () => {
@@ -209,24 +228,24 @@ function FormatConversionDialog(e) {
           tabIndex: -1,
           ref: n,
           className: "lg-reports-dialog lg-formats-dialog",
-          onKeyDown: (V) => {
+          onKeyDown: (event) => {
             var D, B;
             if (
-              (V.key === "Escape" && (V.stopPropagation(), e.onClose()),
-              V.key === "Tab")
+              (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+              event.key === "Tab")
             ) {
               const _ = [
                 ...n.current.querySelectorAll(
                   'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
                 ),
               ];
-              V.shiftKey &&
+              event.shiftKey &&
               (document.activeElement === _[0] ||
                 document.activeElement === n.current)
-                ? (V.preventDefault(), (D = _.at(-1)) == null || D.focus())
-                : !V.shiftKey &&
+                ? (event.preventDefault(), (D = _.at(-1)) == null || D.focus())
+                : !event.shiftKey &&
                   document.activeElement === _.at(-1) &&
-                  (V.preventDefault(), (B = _[0]) == null || B.focus());
+                  (event.preventDefault(), (B = _[0]) == null || B.focus());
             }
           },
           children: [
@@ -265,7 +284,7 @@ function FormatConversionDialog(e) {
                     children: g,
                   }),
                 E && i.jsx("p", { role: "status", children: E }),
-                m &&
+                disabled &&
                   i.jsx("p", {
                     role: "status",
                     children: "Processing workbook…",
@@ -280,21 +299,21 @@ function FormatConversionDialog(e) {
                           type: "file",
                           accept: ".xls,.xlsb,.xlsm,.xltx,.xltm,.ods",
                           "aria-label": text("Inspect alternate workbook"),
-                          disabled: m,
-                          onChange: (V) => {
-                            const D = V.target.files?.[0];
-                            ((V.target.value = ""), D && F(D));
+                          disabled: disabled,
+                          onChange: (event) => {
+                            const D = event.target.files?.[0];
+                            ((event.target.value = ""), D && F(D));
                           },
                         }),
                       ],
                     }),
                     i.jsx("button", {
-                      disabled: m,
+                      disabled: disabled,
                       onClick: () => void O(false),
                       children: "Review XLSX export",
                     }),
                     i.jsx("button", {
-                      disabled: m,
+                      disabled: disabled,
                       onClick: () => void O(true),
                       children: "Review XLTX export",
                     }),
@@ -322,7 +341,7 @@ function FormatConversionDialog(e) {
                         ],
                       }),
                       i.jsx("button", {
-                        disabled: m,
+                        disabled: disabled,
                         onClick: () => void z(true),
                         children: "Download retained original",
                       }),
@@ -354,12 +373,12 @@ function FormatConversionDialog(e) {
                         className: "lg-formats-actions",
                         children: [
                           i.jsx("button", {
-                            disabled: m,
+                            disabled: disabled,
                             onClick: () => void z(false),
                             children: "Download inspected original",
                           }),
                           i.jsx("button", {
-                            disabled: m,
+                            disabled: disabled,
                             onClick: () =>
                               void k(async () => {
                                 await j(
@@ -376,7 +395,7 @@ function FormatConversionDialog(e) {
                               u.format,
                             ) &&
                             i.jsx("button", {
-                              disabled: m,
+                              disabled: disabled,
                               onClick: () =>
                                 void k(async () => {
                                   await e.onAutomation(c);
@@ -386,15 +405,15 @@ function FormatConversionDialog(e) {
                         ],
                       }),
                       i.jsx("ul", {
-                        children: u.warnings.map((V) =>
-                          i.jsx("li", { children: V }, V),
+                        children: u.warnings.map((warning) =>
+                          i.jsx("li", { children: warning }, warning),
                         ),
                       }),
                       u.format === "xltx" &&
                         i.jsx("p", {
                           children: i.jsx("button", {
                             className: "lg-reports-primary",
-                            disabled: m || e.readOnly,
+                            disabled: disabled || e.readOnly,
                             onClick: () => void I(c, true),
                             children: "Preview template workbook",
                           }),
@@ -406,8 +425,8 @@ function FormatConversionDialog(e) {
                             children: "Convert with the source application",
                           }),
                           i.jsx("ol", {
-                            children: u.steps.map((V) =>
-                              i.jsx("li", { children: V }, V),
+                            children: u.steps.map((step) =>
+                              i.jsx("li", { children: step }, step),
                             ),
                           }),
                           i.jsxs("label", {
@@ -415,9 +434,9 @@ function FormatConversionDialog(e) {
                             children: [
                               i.jsx("input", {
                                 type: "checkbox",
-                                checked: f,
-                                disabled: m || e.readOnly,
-                                onChange: (V) => p(V.target.checked),
+                                checked: checked,
+                                disabled: disabled || e.readOnly,
+                                onChange: (event) => p(event.target.checked),
                               }),
                               "I acknowledge possible conversion losses and will compare formulas, dates, styles and special parts with the original.",
                             ],
@@ -429,10 +448,10 @@ function FormatConversionDialog(e) {
                                 type: "file",
                                 accept: ".xlsx",
                                 "aria-label": text("Choose converted XLSX"),
-                                disabled: m || e.readOnly || !f,
-                                onChange: (V) => {
-                                  const D = V.target.files?.[0];
-                                  ((V.target.value = ""), D && I(D, false));
+                                disabled: disabled || e.readOnly || !checked,
+                                onChange: (event) => {
+                                  const D = event.target.files?.[0];
+                                  ((event.target.value = ""), D && I(D, false));
                                 },
                               }),
                             ],
@@ -454,17 +473,17 @@ function FormatConversionDialog(e) {
                           }),
                           i.jsx("ul", {
                             className: "lg-formats-inventory",
-                            children: u.parts.map((V, D) =>
+                            children: u.parts.map((part, D) =>
                               i.jsxs(
                                 "li",
                                 {
                                   children: [
-                                    V.path,
+                                    part.path,
                                     " · ",
-                                    V.bytes,
+                                    part.bytes,
                                     " known bytes ·",
                                     " ",
-                                    V.disposition,
+                                    part.disposition,
                                   ],
                                 },
                                 D,
@@ -493,22 +512,32 @@ function FormatConversionDialog(e) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: templateConversionRoutes.map((V) =>
-                          i.jsxs(
-                            "tr",
-                            {
-                              children: [
-                                i.jsxs("th", {
-                                  scope: "row",
-                                  children: [".", V.format],
-                                }),
-                                i.jsx("td", { children: V.read }),
-                                i.jsx("td", { children: V.write }),
-                                i.jsx("td", { children: V.preserve }),
-                              ],
-                            },
-                            V.format,
-                          ),
+                        children: templateConversionRoutes.map(
+                          (templateConversionRoute) =>
+                            i.jsxs(
+                              "tr",
+                              {
+                                children: [
+                                  i.jsxs("th", {
+                                    scope: "row",
+                                    children: [
+                                      ".",
+                                      templateConversionRoute.format,
+                                    ],
+                                  }),
+                                  i.jsx("td", {
+                                    children: templateConversionRoute.read,
+                                  }),
+                                  i.jsx("td", {
+                                    children: templateConversionRoute.write,
+                                  }),
+                                  i.jsx("td", {
+                                    children: templateConversionRoute.preserve,
+                                  }),
+                                ],
+                              },
+                              templateConversionRoute.format,
+                            ),
                         ),
                       }),
                     ],
@@ -553,8 +582,8 @@ const localWorkbookNamespace = "ledgerglass-local-workbook",
   maxLocalCheckpoints = 20,
   cloneStructuredValue = (e) => structuredClone(e),
   measureUtf8Bytes = (e) => new TextEncoder().encode(e).byteLength;
-function throwPersistenceError(e, r, t) {
-  throw new WorkbookRevisionConflictError(e, r, t);
+function throwPersistenceError(e, r, guard) {
+  throw new WorkbookRevisionConflictError(e, r, guard);
 }
 function stringifyCanonicalJson(e) {
   return e === undefined
@@ -585,32 +614,34 @@ function computeTextDigest(e) {
     .map((a) => (a >>> 0).toString(16).padStart(8, "0"))
     .join("");
 }
-function normalizeWorkbookSnapshot(e) {
-  return normalizeWorkbookInput(e);
+function normalizeWorkbookSnapshot(workbook) {
+  return normalizeWorkbookInput(workbook);
 }
-function normalizeSavedSelection(e, r) {
-  const t = e.sheets.find((d) => !d.hidden);
+function normalizeSavedSelection(workbookSnapshot, view) {
+  const t = workbookSnapshot.sheets.find((sheet) => !sheet.hidden);
   if (!t)
     return throwPersistenceError(
       "invalid",
       "A saved workbook needs a visible worksheet.",
     );
-  if (r === undefined)
+  if (view === undefined)
     return { activeSheetId: t.id, selection: { sheetId: t.id, range: "A1" } };
   if (
-    !isPlainRecord(r) ||
-    typeof r.activeSheetId != "string" ||
-    !isPlainRecord(r.selection)
+    !isPlainRecord(view) ||
+    typeof view.activeSheetId != "string" ||
+    !isPlainRecord(view.selection)
   )
     return throwPersistenceError(
       "invalid",
       "Invalid saved worksheet selection.",
     );
-  const n = e.sheets.find((d) => d.id === r.activeSheetId && !d.hidden);
+  const n = workbookSnapshot.sheets.find(
+    (sheet) => sheet.id === view.activeSheetId && !sheet.hidden,
+  );
   if (
     !n ||
-    r.selection.sheetId !== n.id ||
-    typeof r.selection.range != "string"
+    view.selection.sheetId !== n.id ||
+    typeof view.selection.range != "string"
   )
     return throwPersistenceError(
       "invalid",
@@ -618,7 +649,7 @@ function normalizeSavedSelection(e, r) {
     );
   let o;
   try {
-    o = parseRangeAddress(r.selection.range);
+    o = parseRangeAddress(view.selection.range);
   } catch {
     return throwPersistenceError("invalid", "Invalid saved cell range.");
   }
@@ -634,10 +665,14 @@ function normalizeSavedSelection(e, r) {
     selection: { sheetId: n.id, range: a === s ? a : `${a}:${s}` },
   };
 }
-function createWorkbookSnapshot(e, r, t = new Date().toISOString()) {
-  const n = normalizeWorkbookSnapshot(e),
-    o = normalizeSavedSelection(n, r),
-    a = { workbook: n, view: o, savedAt: t };
+function createWorkbookSnapshot(
+  workbook,
+  view,
+  savedAt = new Date().toISOString(),
+) {
+  const workbookSnapshot = normalizeWorkbookSnapshot(workbook),
+    savedSelection = normalizeSavedSelection(workbookSnapshot, view),
+    a = { workbook: workbookSnapshot, view: savedSelection, savedAt: savedAt };
   return { ...a, digest: computeTextDigest(stringifyCanonicalJson(a)) };
 }
 function parseWorkbookSnapshot(e) {
@@ -687,31 +722,39 @@ function createCheckpointRecord(e) {
     revision: e.snapshot.workbook.revision,
   };
 }
-function compareWorkbookVersions(e, r) {
-  const t = normalizeWorkbookSnapshot(e),
-    n = normalizeWorkbookSnapshot(r);
-  if (t.id !== n.id)
+function compareWorkbookVersions(e, workbook) {
+  const workbookSnapshot = normalizeWorkbookSnapshot(e),
+    n = normalizeWorkbookSnapshot(workbook);
+  if (workbookSnapshot.id !== n.id)
     return throwPersistenceError(
       "invalid",
       "Version comparison requires the same workbook identity.",
     );
   const o = {
-      fromRevision: t.revision,
+      fromRevision: workbookSnapshot.revision,
       toRevision: n.revision,
       cellChanges: [],
       metadataChanges: [],
       structuralChanges: [],
     },
     a = (m, v) => stringifyCanonicalJson(m) !== stringifyCanonicalJson(v),
-    s = new Set(t.events.map((m) => m.id)),
+    s = new Set(workbookSnapshot.events.map((m) => m.id)),
     d = n.events.filter((m) => !s.has(m.id)),
     u = new Map();
   for (const m of d)
-    for (const v of m.changes)
-      u.set(`${v.sheetId}:${v.address}`, { event: m, change: v });
-  const l = (m, v) =>
+    for (const change of m.changes)
+      u.set(`${change.sheetId}:${change.address}`, {
+        event: m,
+        change: change,
+      });
+  const l = (m, basis) =>
       m
-        ? { basis: v, actor: m.actor, timestamp: m.timestamp, eventId: m.id }
+        ? {
+            basis: basis,
+            actor: m.actor,
+            timestamp: m.timestamp,
+            eventId: m.id,
+          }
         : { basis: "unavailable" },
     c = (m) =>
       l(
@@ -722,81 +765,85 @@ function compareWorkbookVersions(e, r) {
       c(
         /sheet|structure|tab color|visibility|restore|row|column|merge|drawing|picture|shape|chart|validation|conditional|page|table|pivot|query/i,
       );
-  for (const m of new Set([...Object.keys(t), ...Object.keys(n)])) {
-    if (["sheets", "events", "revision", "id", "schemaVersion"].includes(m))
+  for (const path of new Set([
+    ...Object.keys(workbookSnapshot),
+    ...Object.keys(n),
+  ])) {
+    if (["sheets", "events", "revision", "id", "schemaVersion"].includes(path))
       continue;
-    const v = t[m],
-      g = n[m];
+    const v = workbookSnapshot[path],
+      g = n[path];
     a(v, g) &&
       o.metadataChanges.push({
-        path: m,
+        path: path,
         before: cloneStructuredValue(v),
         after: cloneStructuredValue(g),
         attribution: c(
-          m === "definedNames"
+          path === "definedNames"
             ? /name|formula|restore/i
-            : m === "formulaWatches"
+            : path === "formulaWatches"
               ? /watch|row|column|sheet|move|cut|restore/i
-              : m === "styleCatalog"
+              : path === "styleCatalog"
                 ? /theme|style|restore/i
                 : /workbook|properties|engagement|period|template|restore/i,
         ),
       });
   }
   a(
-    t.sheets.map((m) => m.id),
-    n.sheets.map((m) => m.id),
+    workbookSnapshot.sheets.map((sheet) => sheet.id),
+    n.sheets.map((sheet) => sheet.id),
   ) &&
     o.structuralChanges.push({
       path: "sheets.order",
-      before: t.sheets.map((m) => m.id),
-      after: n.sheets.map((m) => m.id),
+      before: workbookSnapshot.sheets.map((sheet) => sheet.id),
+      after: n.sheets.map((sheet) => sheet.id),
       attribution: h(),
     });
-  for (const m of new Set([
-    ...t.sheets.map((v) => v.id),
-    ...n.sheets.map((v) => v.id),
+  for (const sheetId of new Set([
+    ...workbookSnapshot.sheets.map((sheet) => sheet.id),
+    ...n.sheets.map((sheet) => sheet.id),
   ])) {
-    const v = t.sheets.find((E) => E.id === m),
-      g = n.sheets.find((E) => E.id === m),
+    const v = workbookSnapshot.sheets.find((sheet) => sheet.id === sheetId),
+      g = n.sheets.find((sheet) => sheet.id === sheetId),
       b = (E) =>
         E
           ? Object.fromEntries(Object.entries(E).filter(([A]) => A !== "cells"))
           : undefined,
-      y = b(v),
-      w = b(g);
+      before = b(v),
+      after = b(g);
     if (!v || !g)
       o.structuralChanges.push({
-        path: `sheets.${m}`,
-        before: y,
-        after: w,
+        path: `sheets.${sheetId}`,
+        before: before,
+        after: after,
         attribution: h(),
       });
     else
-      for (const E of new Set([...Object.keys(y), ...Object.keys(w)]))
-        a(y[E], w[E]) &&
+      for (const E of new Set([...Object.keys(before), ...Object.keys(after)]))
+        a(before[E], after[E]) &&
           o.structuralChanges.push({
-            path: `sheets.${m}.${E}`,
-            before: cloneStructuredValue(y[E]),
-            after: cloneStructuredValue(w[E]),
+            path: `sheets.${sheetId}.${E}`,
+            before: cloneStructuredValue(before[E]),
+            after: cloneStructuredValue(after[E]),
             attribution: h(),
           });
-    for (const E of new Set([
+    for (const address of new Set([
       ...Object.keys(v?.cells ?? {}),
       ...Object.keys(g?.cells ?? {}),
     ])) {
-      const A = v?.cells[E],
-        k = g?.cells[E];
+      const A = v?.cells[address],
+        k = g?.cells[address];
       a(A, k) &&
         o.cellChanges.push({
-          sheetId: m,
-          address: E,
+          sheetId: sheetId,
+          address: address,
           ...(A === undefined ? {} : { before: cloneStructuredValue(A) }),
           ...(k === undefined ? {} : { after: cloneStructuredValue(k) }),
           attribution: l(
-            stringifyCanonicalJson(u.get(`${m}:${E}`)?.change.after) ===
-              stringifyCanonicalJson(k)
-              ? u.get(`${m}:${E}`)?.event
+            stringifyCanonicalJson(
+              u.get(`${sheetId}:${address}`)?.change.after,
+            ) === stringifyCanonicalJson(k)
+              ? u.get(`${sheetId}:${address}`)?.event
               : undefined,
             "cell-history",
           ),
@@ -805,8 +852,12 @@ function compareWorkbookVersions(e, r) {
   }
   return o;
 }
-function createLocalWorkbookStore(e, r, t = {}) {
-  if (typeof r != "string" || !r.trim() || r.length > 300)
+function createLocalWorkbookStore(e, namespace, t = {}) {
+  if (
+    typeof namespace != "string" ||
+    !namespace.trim() ||
+    namespace.length > 300
+  )
     return throwPersistenceError(
       "invalid",
       "A local workbook namespace must contain 1–300 characters.",
@@ -827,7 +878,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
     );
   function a() {
     try {
-      return e.getItem(r);
+      return e.getItem(namespace);
     } catch {
       return throwPersistenceError(
         "unavailable",
@@ -857,9 +908,9 @@ function createLocalWorkbookStore(e, r, t = {}) {
         "corrupt",
         "Invalid local workbook envelope.",
       );
-    let p,
-      m = false,
-      v;
+    let envelope,
+      recovered = false,
+      warning;
     if (f.schemaVersion === 1) {
       let y;
       try {
@@ -870,15 +921,18 @@ function createLocalWorkbookStore(e, r, t = {}) {
           "The legacy saved workbook is invalid; original storage has been preserved.",
         );
       }
-      const w = createWorkbookSnapshot(y, normalizeSavedSelection(y));
-      ((p = {
+      const workbookSnapshot = createWorkbookSnapshot(
+        y,
+        normalizeSavedSelection(y),
+      );
+      ((envelope = {
         format: localWorkbookNamespace,
         version: 1,
         generation: 0,
-        current: w,
+        current: workbookSnapshot,
         checkpoints: [],
       }),
-        (v =
+        (warning =
           "Legacy workbook loaded. The next successful save will add local recovery and version metadata."));
     } else {
       if (
@@ -893,93 +947,93 @@ function createLocalWorkbookStore(e, r, t = {}) {
           "corrupt",
           "Unsupported or corrupt local workbook envelope; stored data was preserved.",
         );
-      let y, w;
+      let y, previous;
       if (f.previous !== undefined)
         try {
-          w = parseWorkbookSnapshot(f.previous);
+          previous = parseWorkbookSnapshot(f.previous);
         } catch {
-          v =
+          warning =
             "The previous recovery snapshot is invalid; the current workbook remains available.";
         }
       try {
         y = parseWorkbookSnapshot(f.current);
       } catch {
-        if (!w)
+        if (!previous)
           return throwPersistenceError(
             "corrupt",
             "Both saved workbook snapshots are invalid. Original storage has been preserved for recovery.",
           );
-        ((y = w),
-          (m = true),
-          (v =
+        ((y = previous),
+          (recovered = true),
+          (warning =
             "Recovered the previous complete save because the latest snapshot is invalid. Review it before saving; the original storage is unchanged."));
       }
       const E = new Set(),
-        A = [];
-      for (const k of f.checkpoints) {
+        checkpoints = [];
+      for (const checkpoint of f.checkpoints) {
         if (
-          !isPlainRecord(k) ||
-          typeof k.id != "string" ||
-          !k.id ||
-          k.id.length > 100 ||
-          E.has(k.id) ||
-          typeof k.label != "string" ||
-          !k.label.trim() ||
-          k.label.length > 120 ||
-          typeof k.createdAt != "string" ||
-          !Number.isFinite(Date.parse(k.createdAt))
+          !isPlainRecord(checkpoint) ||
+          typeof checkpoint.id != "string" ||
+          !checkpoint.id ||
+          checkpoint.id.length > 100 ||
+          E.has(checkpoint.id) ||
+          typeof checkpoint.label != "string" ||
+          !checkpoint.label.trim() ||
+          checkpoint.label.length > 120 ||
+          typeof checkpoint.createdAt != "string" ||
+          !Number.isFinite(Date.parse(checkpoint.createdAt))
         )
           return throwPersistenceError(
             "corrupt",
             "Saved checkpoint metadata is invalid; original storage was preserved.",
           );
-        let F;
+        let snapshot;
         try {
-          F = parseWorkbookSnapshot(k.snapshot);
+          snapshot = parseWorkbookSnapshot(checkpoint.snapshot);
         } catch {
           return throwPersistenceError(
             "corrupt",
             "A saved checkpoint is corrupt; original storage was preserved.",
           );
         }
-        if (F.workbook.id !== y.workbook.id)
+        if (snapshot.workbook.id !== y.workbook.id)
           return throwPersistenceError(
             "corrupt",
             "A checkpoint belongs to another workbook; original storage was preserved.",
           );
-        (E.add(k.id),
-          A.push({
-            id: k.id,
-            label: k.label,
-            createdAt: k.createdAt,
-            snapshot: F,
+        (E.add(checkpoint.id),
+          checkpoints.push({
+            id: checkpoint.id,
+            label: checkpoint.label,
+            createdAt: checkpoint.createdAt,
+            snapshot: snapshot,
           }));
       }
-      p = {
+      envelope = {
         format: localWorkbookNamespace,
         version: 1,
         generation: Number(f.generation),
         current: y,
-        ...(w ? { previous: w } : {}),
-        checkpoints: A,
+        ...(previous ? { previous: previous } : {}),
+        checkpoints: checkpoints,
       };
     }
-    const { workbook, view } = p.current;
+    const { workbook, view } = envelope.current;
     return {
-      envelope: p,
+      envelope: envelope,
       result: {
         workbook: cloneStructuredValue(workbook),
         view: cloneStructuredValue(view),
         guard: {
-          namespace: r,
-          generation: p.generation,
+          namespace: namespace,
+          generation: envelope.generation,
           workbookId: workbook.id,
           revision: workbook.revision,
           digest: computeTextDigest(h),
         },
-        recovered: m,
-        ...(v ? { warning: v } : {}),
-        checkpoints: p.checkpoints.map(createCheckpointRecord),
+        recovered: recovered,
+        ...(warning ? { warning: warning } : {}),
+        checkpoints: envelope.checkpoints.map(createCheckpointRecord),
       },
     };
   }
@@ -994,7 +1048,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
           )
         : null
       : !f ||
-          h.namespace !== r ||
+          h.namespace !== namespace ||
           stringifyCanonicalJson(h) !== stringifyCanonicalJson(f.result.guard)
         ? throwPersistenceError(
             "conflict",
@@ -1012,11 +1066,11 @@ function createLocalWorkbookStore(e, r, t = {}) {
       );
     d(f);
     try {
-      e.setItem(r, p);
-    } catch (m) {
+      e.setItem(namespace, p);
+    } catch (error) {
       const v =
-        m instanceof Error &&
-        /quota|space|full/i.test(`${m.name} ${m.message}`);
+        error instanceof Error &&
+        /quota|space|full/i.test(`${error.name} ${error.message}`);
       return throwPersistenceError(
         v ? "quota" : "unavailable",
         "Local save failed. The previous complete save is unchanged; keep this workbook open and export your unsaved changes.",
@@ -1026,7 +1080,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
       workbook: cloneStructuredValue(h.current.workbook),
       view: cloneStructuredValue(h.current.view),
       guard: {
-        namespace: r,
+        namespace: namespace,
         generation: h.generation,
         workbookId: h.current.workbook.id,
         revision: h.current.workbook.revision,
@@ -1046,7 +1100,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
         );
   }
   function c(h, f) {
-    const p = h?.envelope.checkpoints.find((m) => m.id === f);
+    const p = h?.envelope.checkpoints.find((checkpoint) => checkpoint.id === f);
     return (
       p ||
       throwPersistenceError(
@@ -1057,17 +1111,19 @@ function createLocalWorkbookStore(e, r, t = {}) {
   }
   return {
     load: () => s()?.result ?? null,
-    save(h, f, p, m = {}) {
+    save(workbook, view, p, m = {}) {
       const v = d(p),
-        g = createWorkbookSnapshot(h, f),
-        b = !v || v.result.workbook.id === g.workbook.id;
+        workbookSnapshot = createWorkbookSnapshot(workbook, view),
+        b = !v || v.result.workbook.id === workbookSnapshot.workbook.id;
       return !b && !m.allowIdentityChange
         ? throwPersistenceError(
             "conflict",
             "Opening another workbook requires an explicit namespace replacement or a separate namespace.",
             v?.result.guard,
           )
-        : b && v && g.workbook.revision < v.result.workbook.revision
+        : b &&
+            v &&
+            workbookSnapshot.workbook.revision < v.result.workbook.revision
           ? throwPersistenceError(
               "conflict",
               "An older workbook revision cannot overwrite a newer saved revision. Restore a checkpoint as a new revision instead.",
@@ -1075,8 +1131,9 @@ function createLocalWorkbookStore(e, r, t = {}) {
             )
           : b &&
               v &&
-              g.workbook.revision === v.result.workbook.revision &&
-              stringifyCanonicalJson(g.workbook) !==
+              workbookSnapshot.workbook.revision ===
+                v.result.workbook.revision &&
+              stringifyCanonicalJson(workbookSnapshot.workbook) !==
                 stringifyCanonicalJson(v.result.workbook)
             ? throwPersistenceError(
                 "conflict",
@@ -1088,7 +1145,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
                   format: localWorkbookNamespace,
                   version: 1,
                   generation: l(v),
-                  current: g,
+                  current: workbookSnapshot,
                   ...(v ? { previous: v.envelope.current } : {}),
                   checkpoints: b ? (v?.envelope.checkpoints ?? []) : [],
                 },
@@ -1108,8 +1165,8 @@ function createLocalWorkbookStore(e, r, t = {}) {
           createdAt: new Date().toISOString(),
           snapshot: cloneStructuredValue(p.envelope.current),
         },
-        v = [...p.envelope.checkpoints, m].slice(-n),
-        g = u({ ...p.envelope, generation: l(p), checkpoints: v }, f);
+        checkpoints = [...p.envelope.checkpoints, m].slice(-n),
+        g = u({ ...p.envelope, generation: l(p), checkpoints: checkpoints }, f);
       return (
         p.envelope.checkpoints.length >= n &&
           (g.warning = `The oldest checkpoint expired. This local store retains the newest ${n} checkpoints.`),
@@ -1117,15 +1174,16 @@ function createLocalWorkbookStore(e, r, t = {}) {
       );
     },
     listCheckpoints: () => s()?.result.checkpoints ?? [],
-    compareCheckpoint: (h, f) =>
-      compareWorkbookVersions(c(s(), h).snapshot.workbook, f),
-    restoreCheckpoint(h, f, p, m = "Auditor") {
+    compareCheckpoint: (h, workbook) =>
+      compareWorkbookVersions(c(s(), h).snapshot.workbook, workbook),
+    restoreCheckpoint(h, workbook, p, actor = "Auditor") {
       const v = d(p),
-        g = normalizeWorkbookSnapshot(f);
+        workbookSnapshot = normalizeWorkbookSnapshot(workbook);
       if (
-        g.id !== v.result.workbook.id ||
-        g.revision !== v.result.workbook.revision ||
-        stringifyCanonicalJson(g) !== stringifyCanonicalJson(v.result.workbook)
+        workbookSnapshot.id !== v.result.workbook.id ||
+        workbookSnapshot.revision !== v.result.workbook.revision ||
+        stringifyCanonicalJson(workbookSnapshot) !==
+          stringifyCanonicalJson(v.result.workbook)
       )
         return throwPersistenceError(
           "conflict",
@@ -1133,24 +1191,24 @@ function createLocalWorkbookStore(e, r, t = {}) {
           v.result.guard,
         );
       if (
-        g.structureProtection?.enabled ||
-        g.sheets.some((I) => I.protection?.enabled)
+        workbookSnapshot.structureProtection?.enabled ||
+        workbookSnapshot.sheets.some((sheet) => sheet.protection?.enabled)
       )
         return throwPersistenceError(
           "invalid",
           "Unlock the workbook structure and protected worksheets before restoring a version.",
         );
-      if (typeof m != "string" || !m.trim() || m.length > 100)
+      if (typeof actor != "string" || !actor.trim() || actor.length > 100)
         return throwPersistenceError(
           "invalid",
           "A restore actor must contain 1–100 characters.",
         );
       const b = c(v, h),
-        y = compareWorkbookVersions(g, b.snapshot.workbook),
-        w = new Date().toISOString();
+        y = compareWorkbookVersions(workbookSnapshot, b.snapshot.workbook),
+        timestamp = new Date().toISOString();
       let E = cloneStructuredValue(b.snapshot.workbook);
       if (
-        ((E.revision = g.revision + 1),
+        ((E.revision = workbookSnapshot.revision + 1),
         !Number.isSafeInteger(E.revision) ||
           E.revision >= Number.MAX_SAFE_INTEGER)
       )
@@ -1158,23 +1216,27 @@ function createLocalWorkbookStore(e, r, t = {}) {
           "limit",
           "Workbook revision limit reached.",
         );
-      (g.metadata &&
+      (workbookSnapshot.metadata &&
         (E.metadata = {
-          ...(E.metadata ?? g.metadata),
-          createdAt: g.metadata.createdAt,
-          modifiedAt: [g.metadata.modifiedAt, E.metadata?.modifiedAt ?? w, w]
+          ...(E.metadata ?? workbookSnapshot.metadata),
+          createdAt: workbookSnapshot.metadata.createdAt,
+          modifiedAt: [
+            workbookSnapshot.metadata.modifiedAt,
+            E.metadata?.modifiedAt ?? timestamp,
+            timestamp,
+          ]
             .sort()
             .at(-1),
         }),
-        (E = touchWorkbookModifiedAt(E, w)));
+        (E = touchWorkbookModifiedAt(E, timestamp)));
       const A = Math.max(1, Math.ceil(y.cellChanges.length / 500));
       return (
         (E.events = [
-          ...g.events,
+          ...workbookSnapshot.events,
           ...Array.from({ length: A }, (I, O) => ({
             id: crypto.randomUUID(),
-            timestamp: w,
-            actor: m,
+            timestamp: timestamp,
+            actor: actor,
             action: `Restored checkpoint “${b.label}” from revision ${b.snapshot.workbook.revision}${A > 1 ? ` (${O + 1}/${A})` : ""}`,
             changes: y.cellChanges
               .slice(O * 500, (O + 1) * 500)
@@ -1187,7 +1249,7 @@ function createLocalWorkbookStore(e, r, t = {}) {
             ...v.envelope,
             generation: l(v),
             previous: v.envelope.current,
-            current: createWorkbookSnapshot(E, b.snapshot.view, w),
+            current: createWorkbookSnapshot(E, b.snapshot.view, timestamp),
           },
           p,
         )
@@ -1198,15 +1260,15 @@ function createLocalWorkbookStore(e, r, t = {}) {
 function createWorkbookSession(e = {}) {
   let r = null,
     t = null;
-  const n = `session-${crypto.randomUUID()}`,
-    o = createLocalWorkbookStore(
+  const namespace = `session-${crypto.randomUUID()}`,
+    localWorkbookStore = createLocalWorkbookStore(
       {
         getItem: () => r,
         setItem: (f, p) => {
           r = p;
         },
       },
-      n,
+      namespace,
       e,
     );
   let a = null;
@@ -1222,8 +1284,8 @@ function createWorkbookSession(e = {}) {
       );
   }
   function c(f) {
-    const p = (t?.guard.generation ?? 0) + 1;
-    if (!Number.isSafeInteger(p))
+    const generation = (t?.guard.generation ?? 0) + 1;
+    if (!Number.isSafeInteger(generation))
       throw new WorkbookRevisionConflictError(
         "limit",
         "Session generation limit reached.",
@@ -1234,8 +1296,8 @@ function createWorkbookSession(e = {}) {
         workbook: buildCanonicalWorkbookSnapshot(f.workbook),
         view: structuredClone(f.view),
         guard: {
-          namespace: n,
-          generation: p,
+          namespace: namespace,
+          generation: generation,
           workbookId: f.workbook.id,
           revision: f.workbook.revision,
           digest: crypto.randomUUID(),
@@ -1250,21 +1312,25 @@ function createWorkbookSession(e = {}) {
         "invalid",
         "Save this session before creating a version.",
       );
-    const f = o.save(t.workbook, t.view, a, { allowIdentityChange: true });
+    const f = localWorkbookStore.save(t.workbook, t.view, a, {
+      allowIdentityChange: true,
+    });
     return ((a = f.guard), f);
   }
   return {
     load: () => t,
-    save(f, p, m, v = {}) {
-      l(m);
-      const g = buildCanonicalWorkbookSnapshot(f),
-        b = g.sheets.find((I) => I.id === p.activeSheetId && !I.hidden);
+    save(f, p, guard, v = {}) {
+      l(guard);
+      const canonicalWorkbookSnapshot = buildCanonicalWorkbookSnapshot(f),
+        b = canonicalWorkbookSnapshot.sheets.find(
+          (sheet) => sheet.id === p.activeSheetId && !sheet.hidden,
+        );
       if (!b || p.selection.sheetId !== b.id)
         throw new WorkbookRevisionConflictError(
           "invalid",
           "Saved selection must belong to the active visible worksheet.",
         );
-      const y = !t || t.workbook.id === g.id;
+      const y = !t || t.workbook.id === canonicalWorkbookSnapshot.id;
       if (!y && !v.allowIdentityChange)
         throw new WorkbookRevisionConflictError(
           "conflict",
@@ -1274,17 +1340,18 @@ function createWorkbookSession(e = {}) {
       if (
         y &&
         t &&
-        (g.revision < t.workbook.revision ||
-          (g.revision === t.workbook.revision && !u(g, t.workbook)))
+        (canonicalWorkbookSnapshot.revision < t.workbook.revision ||
+          (canonicalWorkbookSnapshot.revision === t.workbook.revision &&
+            !u(canonicalWorkbookSnapshot, t.workbook)))
       )
         throw new WorkbookRevisionConflictError(
           "conflict",
           "Commit a new revision before replacing saved content.",
           t.guard,
         );
-      const w = validateSavedSelection(g, p),
-        E = (I, O) => ({
-          workbook: I,
+      const view = validateSavedSelection(canonicalWorkbookSnapshot, p),
+        E = (workbook, O) => ({
+          workbook: workbook,
           view: O,
           savedAt: "1970-01-01T00:00:00.000Z",
           digest: "0".repeat(40),
@@ -1296,7 +1363,7 @@ function createWorkbookSession(e = {}) {
           format: "ledgerglass-local-workbook",
           version: 1,
           generation: (t?.guard.generation ?? 0) + 1,
-          current: E(g, w),
+          current: E(canonicalWorkbookSnapshot, view),
           ...(t ? { previous: E(t.workbook, t.view) } : {}),
           checkpoints: [],
         }) +
@@ -1311,9 +1378,9 @@ function createWorkbookSession(e = {}) {
       return (
         y || s.clear(),
         c({
-          workbook: g,
-          view: w,
-          guard: m,
+          workbook: canonicalWorkbookSnapshot,
+          view: view,
+          guard: guard,
           recovered: false,
           checkpoints: y ? (t?.checkpoints ?? []) : [],
         })
@@ -1322,9 +1389,9 @@ function createWorkbookSession(e = {}) {
     checkpoint(f, p) {
       l(p);
       const m = h(),
-        v = o.checkpoint(f, m.guard);
+        v = localWorkbookStore.checkpoint(f, m.guard);
       a = v.guard;
-      const g = new Set(v.checkpoints.map((b) => b.id));
+      const g = new Set(v.checkpoints.map((checkpoint) => checkpoint.id));
       for (const b of s.keys()) g.has(b) || s.delete(b);
       for (const b of g)
         s.has(b) ||
@@ -1332,7 +1399,8 @@ function createWorkbookSession(e = {}) {
             b,
             measureSerializedBytes({
               id: b,
-              label: v.checkpoints.find((y) => y.id === b).label,
+              label: v.checkpoints.find((checkpoint) => checkpoint.id === b)
+                .label,
               createdAt: "1970-01-01T00:00:00.000Z",
               snapshot: {
                 workbook: v.workbook,
@@ -1345,7 +1413,7 @@ function createWorkbookSession(e = {}) {
       return c(v);
     },
     listCheckpoints: () => structuredClone(t?.checkpoints ?? []),
-    compareCheckpoint: (f, p) => o.compareCheckpoint(f, p),
+    compareCheckpoint: (f, p) => localWorkbookStore.compareCheckpoint(f, p),
     restoreCheckpoint(f, p, m, v) {
       if ((l(m), !t || !u(p, t.workbook)))
         throw new WorkbookRevisionConflictError(
@@ -1354,29 +1422,34 @@ function createWorkbookSession(e = {}) {
           t?.guard,
         );
       const g = h(),
-        b = o.restoreCheckpoint(f, p, g.guard, v);
+        b = localWorkbookStore.restoreCheckpoint(f, p, g.guard, v);
       return ((a = b.guard), c(b));
     },
   };
 }
-function validateSavedSelection(e, r) {
-  const t = e.sheets.find((s) => s.id === r.activeSheetId),
-    n = parseRangeAddress(r.selection.range);
-  if (n.lastRow >= t.rowCount || n.lastCol >= t.colCount)
+function validateSavedSelection(canonicalWorkbookSnapshot, r) {
+  const t = canonicalWorkbookSnapshot.sheets.find(
+      (sheet) => sheet.id === r.activeSheetId,
+    ),
+    rangeAddress = parseRangeAddress(r.selection.range);
+  if (rangeAddress.lastRow >= t.rowCount || rangeAddress.lastCol >= t.colCount)
     throw new WorkbookRevisionConflictError(
       "invalid",
       "Saved selection exceeds worksheet dimensions.",
     );
-  const o = `${columnIndexToLetters(n.firstCol)}${n.firstRow + 1}`,
-    a = `${columnIndexToLetters(n.lastCol)}${n.lastRow + 1}`;
+  const o = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
+    a = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
   return {
     activeSheetId: t.id,
     selection: { sheetId: t.id, range: o === a ? o : `${o}:${a}` },
   };
 }
 const buildCompositeKey = (e, r) => JSON.stringify([e, r]),
-  isFormulaInputValue = (e) =>
-    !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
+  isFormulaInputValue = (cell) =>
+    !!cell &&
+    !cell.literal &&
+    typeof cell.raw == "string" &&
+    cell.raw.startsWith("="),
   bareSheetNamePattern = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
   sheetNamePattern = String.raw`(?:'(?:[^']|'')+'|[A-Za-z_\\][A-Za-z0-9_.\\]*)`,
   cellRangePattern = String.raw`(?:\$?[A-Za-z]{1,3}\$?[1-9]\d*(?:\s*:\s*\$?[A-Za-z]{1,3}\$?[1-9]\d*)?|\$?[A-Za-z]{1,3}\s*:\s*\$?[A-Za-z]{1,3}|\$?[1-9]\d*\s*:\s*\$?[1-9]\d*)`,
@@ -1387,7 +1460,9 @@ const buildCompositeKey = (e, r) => JSON.stringify([e, r]),
     `^${sheetNamePattern}\\s*:\\s*${sheetNamePattern}\\s*!\\s*${cellRangePattern}`,
   ),
   knownFunctionNameSet = new Set(
-    builtinFunctionNames.map((e) => e.toUpperCase()),
+    builtinFunctionNames.map((builtinFunctionName) =>
+      builtinFunctionName.toUpperCase(),
+    ),
   ),
   requireIntegerInRange = (e, r, t, n) => {
     const o = e ?? r;
@@ -1395,20 +1470,23 @@ const buildCompositeKey = (e, r) => JSON.stringify([e, r]),
       throw Error(`${n} must be an integer from 1 to ${t}.`);
     return o;
   };
-function parseCellReference(e) {
-  const r = e.replace(/[\s$]/g, "").toUpperCase(),
+function parseCellReference(address) {
+  const r = address.replace(/[\s$]/g, "").toUpperCase(),
     t = /^([A-Z]{1,3}):([A-Z]{1,3})$/.exec(r),
     n = /^([1-9]\d*):([1-9]\d*)$/.exec(r),
-    o = parseRangeAddress(
+    rangeAddress = parseRangeAddress(
       t
         ? `${t[1]}1:${t[2]}${workbookLimits.maxRows}`
         : n
           ? `A${n[1]}:XFD${n[2]}`
           : r,
     ),
-    a = formatCellAddress(o.firstRow, o.firstCol),
-    s = formatCellAddress(o.lastRow, o.lastCol);
-  return a === s ? a : `${a}:${s}`;
+    cellAddress = formatCellAddress(
+      rangeAddress.firstRow,
+      rangeAddress.firstCol,
+    ),
+    s = formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol);
+  return cellAddress === s ? cellAddress : `${cellAddress}:${s}`;
 }
 
 export {

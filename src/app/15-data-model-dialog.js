@@ -36,8 +36,10 @@ function DataModelDialog(e) {
     t = ne.useRef(e);
   t.current = e;
   const n = ne.useId(),
-    o = e.workbook.sheets.find((le) => le.id === e.sheetId)?.dataModelReport,
-    [a, s] = ne.useState(() =>
+    o = e.workbook.sheets.find(
+      (sheet) => sheet.id === e.sheetId,
+    )?.dataModelReport,
+    [definition, s] = ne.useState(() =>
       structuredClone(
         o?.definition ??
           e.workbook.dataModel ?? {
@@ -49,35 +51,35 @@ function DataModelDialog(e) {
           },
       ),
     ),
-    [d, u] = ne.useState(() =>
+    [query, u] = ne.useState(() =>
       structuredClone(
         o?.query ?? {
           groupBy: [],
           filters: [],
-          measureIds: a.measures.map((le) => le.id),
+          measureIds: definition.measures.map((measure) => measure.id),
         },
       ),
     ),
     [l, c] = ne.useState("Tables"),
-    [h, f] = ne.useState(e.sheetId),
+    [sheetId, f] = ne.useState(e.sheetId),
     [p, m] = ne.useState(
       e.range.includes(":")
         ? e.range
         : formatOccupiedRangeAddress(
-            e.workbook.sheets.find((le) => le.id === e.sheetId),
+            e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
           ),
     ),
     [v, g] = ne.useState(""),
-    [b, y] = ne.useState(false),
+    [checked, y] = ne.useState(false),
     [w, E] = ne.useState(""),
     [A, k] = ne.useState(null),
     [F, I] = ne.useState(0),
-    [O, j] = ne.useState(() => {
+    [outputName, j] = ne.useState(() => {
       let le = 1;
       for (
         ;
         e.workbook.sheets.some(
-          (ce) => ce.name.toLowerCase() === `model result ${le}`,
+          (sheet) => sheet.name.toLowerCase() === `model result ${le}`,
         );
       )
         le++;
@@ -86,41 +88,41 @@ function DataModelDialog(e) {
     z = ne.useRef(null),
     V = ne.useRef(false);
   ne.useEffect(() => {
-    const le = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       z.current?.querySelector("button")?.focus(),
       () => {
-        le?.isConnected && le.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
   const D = {
       readOnly: e.readOnly,
       allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && b,
+      includeHidden: !!e.allowHidden && checked,
     },
     B = () => {
       (k(null), E(""), (V.current = false));
     },
-    _ = (le) => {
+    onChange = (le) => {
       (s(le), B());
     },
     C = (le) => {
       (u(le), B());
     },
-    T = (le) => a.tables.find((ce) => ce.id === le),
+    T = (le) => definition.tables.find((table) => table.id === le),
     N = (le) => T(le)?.columns[0]?.name ?? "",
     R = (le, ce, ge) =>
       i.jsx("input", {
         "aria-label": text(le),
         value: ce,
-        onChange: (se) => ge(se.target.value),
+        onChange: (event) => ge(event.target.value),
       }),
     L = (le, ce, ge, se) =>
       i.jsx("select", {
         "aria-label": text(le),
         value: ce,
-        onChange: (we) => se(we.target.value),
+        onChange: (event) => se(event.target.value),
         children: ge.map((we) =>
           i.jsx(
             "option",
@@ -134,48 +136,70 @@ function DataModelDialog(e) {
       L(
         le,
         ce,
-        a.tables.map((se) => ({ value: se.id, label: se.name })),
+        definition.tables.map((table) => ({
+          value: table.id,
+          label: table.name,
+        })),
         ge,
       ),
     G = (le, ce, ge, se) =>
-      L(le, ge, $(T(ce)?.columns.map((Ee) => Ee.name) ?? []), se),
+      L(le, ge, $(T(ce)?.columns.map((column) => column.name) ?? []), se),
     H = (le, ce) =>
-      _({
-        ...a,
-        tables: a.tables.map((ge) => (ge.id === le ? { ...ge, ...ce } : ge)),
+      onChange({
+        ...definition,
+        tables: definition.tables.map((table) =>
+          table.id === le ? { ...table, ...ce } : table,
+        ),
       }),
     Q = (le) => {
-      const ce = a.measures.filter((ge) => ge.tableId !== le);
-      (_({
-        ...a,
-        tables: a.tables.filter((ge) => ge.id !== le),
-        relationships: a.relationships.filter(
-          (ge) => ge.one.tableId !== le && ge.many.tableId !== le,
+      const measures = definition.measures.filter(
+        (measure) => measure.tableId !== le,
+      );
+      (onChange({
+        ...definition,
+        tables: definition.tables.filter((table) => table.id !== le),
+        relationships: definition.relationships.filter(
+          (relationship) =>
+            relationship.one.tableId !== le && relationship.many.tableId !== le,
         ),
-        measures: ce,
+        measures: measures,
       }),
         C({
-          ...d,
-          groupBy: d.groupBy.filter((ge) => ge.tableId !== le),
-          filters: d.filters.filter((ge) => ge.tableId !== le),
-          measureIds: d.measureIds.filter((ge) =>
-            ce.some((se) => se.id === ge),
+          ...query,
+          groupBy: query.groupBy.filter((ge) => ge.tableId !== le),
+          filters: query.filters.filter((filter) => filter.tableId !== le),
+          measureIds: query.measureIds.filter((measureId) =>
+            measures.some((measure) => measure.id === measureId),
           ),
         }));
     };
   function X$1() {
     try {
-      const le = buildModelTableFromRange(e.workbook, h, p, v || undefined, D);
-      let ce = le.name,
+      const modelTableFromRange = buildModelTableFromRange(
+        e.workbook,
+        sheetId,
+        p,
+        v || undefined,
+        D,
+      );
+      let ce = modelTableFromRange.name,
         ge = 2;
-      for (; a.tables.some((se) => se.name.toLowerCase() === ce.toLowerCase());)
-        ce = `${le.name} ${ge++}`;
-      _({ ...a, tables: [...a.tables, { ...le, name: ce }] });
-    } catch (le) {
-      E(le.message);
+      for (
+        ;
+        definition.tables.some(
+          (table) => table.name.toLowerCase() === ce.toLowerCase(),
+        );
+      )
+        ce = `${modelTableFromRange.name} ${ge++}`;
+      onChange({
+        ...definition,
+        tables: [...definition.tables, { ...modelTableFromRange, name: ce }],
+      });
+    } catch (error) {
+      E(error.message);
     }
   }
-  function J() {
+  function onClick() {
     try {
       (E(""),
         I(0),
@@ -183,13 +207,13 @@ function DataModelDialog(e) {
         k(
           previewDataModelOutput(
             e.workbook,
-            { definition: a, query: d, outputName: O },
+            { definition: definition, query: query, outputName: outputName },
             D,
           ),
         ),
         c("Preview"));
-    } catch (le) {
-      (k(null), E(le.message));
+    } catch (error) {
+      (k(null), E(error.message));
     }
   }
   function q(le) {
@@ -199,7 +223,7 @@ function DataModelDialog(e) {
           ge = publishDataModelReport(ce.workbook, A, le, {
             readOnly: ce.readOnly,
             allowedSheetIds: ce.allowedSheetIds,
-            includeHidden: !!ce.allowHidden && b,
+            includeHidden: !!ce.allowHidden && checked,
           });
         ((V.current = true),
           ce.onWorkbookChange(
@@ -209,17 +233,17 @@ function DataModelDialog(e) {
               : "Publish relational model result",
           ),
           ce.onClose());
-      } catch (ce) {
-        E(ce.message);
+      } catch (error) {
+        E(error.message);
       }
   }
   const W = A?.result,
     K =
       !!W?.complete && !e.readOnly && !e.workbook.structureProtection?.enabled,
     te = e.workbook.sheets.filter(
-      (le) =>
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(le.id)) &&
-        ((!le.hidden && !le.veryHidden) || (e.allowHidden && b)),
+      (sheet) =>
+        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)) &&
+        ((!sheet.hidden && !sheet.veryHidden) || (e.allowHidden && checked)),
     );
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -229,10 +253,10 @@ function DataModelDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       ref: z,
-      onKeyDown: (le) => {
+      onKeyDown: (event) => {
         if (
-          (le.key === "Escape" && (le.stopPropagation(), e.onClose()),
-          le.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          event.key === "Tab")
         ) {
           const ce = [
               ...z.current.querySelectorAll(
@@ -245,11 +269,11 @@ function DataModelDialog(e) {
             ),
             ge = ce[0],
             se = ce.at(-1);
-          le.shiftKey && document.activeElement === ge
-            ? (le.preventDefault(), se == null || se.focus())
-            : !le.shiftKey &&
+          event.shiftKey && document.activeElement === ge
+            ? (event.preventDefault(), se == null || se.focus())
+            : !event.shiftKey &&
               document.activeElement === se &&
-              (le.preventDefault(), ge == null || ge.focus());
+              (event.preventDefault(), ge == null || ge.focus());
         }
       },
       children: [
@@ -328,20 +352,24 @@ function DataModelDialog(e) {
                     children: [
                       LabeledField(
                         "Model name",
-                        R("Model name", a.name, (le) => _({ ...a, name: le })),
+                        R("Model name", definition.name, (le) =>
+                          onChange({ ...definition, name: le }),
+                        ),
                       ),
                       LabeledField(
                         "Source worksheet",
                         L(
                           "Model source worksheet",
-                          h,
+                          sheetId,
                           te.map((le) => ({ value: le.id, label: le.name })),
                           (le) => {
                             (f(le),
                               g(""),
                               m(
                                 formatOccupiedRangeAddress(
-                                  e.workbook.sheets.find((ce) => ce.id === le),
+                                  e.workbook.sheets.find(
+                                    (sheet) => sheet.id === le,
+                                  ),
                                 ),
                               ));
                           },
@@ -355,8 +383,9 @@ function DataModelDialog(e) {
                           [
                             { value: "", label: "Cell range" },
                             ...(
-                              e.workbook.sheets.find((le) => le.id === h)
-                                ?.tables ?? []
+                              e.workbook.sheets.find(
+                                (sheet) => sheet.id === sheetId,
+                              )?.tables ?? []
                             ).map((le) => ({ value: le.id, label: le.name })),
                           ],
                           g,
@@ -368,7 +397,8 @@ function DataModelDialog(e) {
                           R("Model source range", p, m),
                         ),
                       i.jsx("button", {
-                        disabled: a.tables.length >= dataModelLimits.tables,
+                        disabled:
+                          definition.tables.length >= dataModelLimits.tables,
                         onClick: X$1,
                         children: i.jsx(LocalizedText, {
                           children: "Add table",
@@ -387,12 +417,12 @@ function DataModelDialog(e) {
                     e.workbook.dataModel &&
                     i.jsx("button", {
                       onClick: () => {
-                        (_(structuredClone(e.workbook.dataModel)),
+                        (onChange(structuredClone(e.workbook.dataModel)),
                           C({
                             groupBy: [],
                             filters: [],
                             measureIds: e.workbook.dataModel.measures.map(
-                              (le) => le.id,
+                              (measure) => measure.id,
                             ),
                           }));
                       },
@@ -414,52 +444,56 @@ function DataModelDialog(e) {
                             "Remove relational data model",
                           ),
                             le.onClose());
-                        } catch (le) {
-                          E(le.message);
+                        } catch (error) {
+                          E(error.message);
                         }
                       },
                       children: i.jsx(LocalizedText, {
                         children: "Remove saved model",
                       }),
                     }),
-                  a.tables.map((le) =>
+                  definition.tables.map((table) =>
                     i.jsxs(
                       "fieldset",
                       {
                         children: [
-                          i.jsx("legend", { children: le.name }),
+                          i.jsx("legend", { children: table.name }),
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
                               LabeledField(
                                 "Table name",
-                                R(`${le.name} table name`, le.name, (ge) =>
-                                  H(le.id, { name: ge }),
+                                R(
+                                  `${table.name} table name`,
+                                  table.name,
+                                  (ge) => H(table.id, { name: ge }),
                                 ),
                               ),
                               i.jsxs("span", {
                                 children: [
                                   e.workbook.sheets.find(
-                                    (ge) => ge.id === le.sheetId,
+                                    (sheet) => sheet.id === table.sheetId,
                                   )?.name ?? text("Missing worksheet"),
                                   " ",
                                   "· ",
-                                  le.range,
-                                  le.tableId
+                                  table.range,
+                                  table.tableId
                                     ? " · Linked structured table"
                                     : "",
                                 ],
                               }),
-                              !le.tableId &&
+                              !table.tableId &&
                                 LabeledField(
                                   "Headed range",
-                                  R(`${le.name} source range`, le.range, (ge) =>
-                                    H(le.id, { range: ge }),
+                                  R(
+                                    `${table.name} source range`,
+                                    table.range,
+                                    (range) => H(table.id, { range: range }),
                                   ),
                                 ),
                               i.jsx("button", {
-                                "aria-label": `Remove table ${le.name}`,
-                                onClick: () => Q(le.id),
+                                "aria-label": `Remove table ${table.name}`,
+                                onClick: () => Q(table.id),
                                 children: i.jsx(LocalizedText, {
                                   children: "Remove table",
                                 }),
@@ -470,7 +504,7 @@ function DataModelDialog(e) {
                             children: [
                               i.jsxs("summary", {
                                 children: [
-                                  le.columns.length,
+                                  table.columns.length,
                                   " ",
                                   i.jsx(LocalizedText, {
                                     children: "typed columns",
@@ -499,19 +533,19 @@ function DataModelDialog(e) {
                                     }),
                                   }),
                                   i.jsx("tbody", {
-                                    children: le.columns.map((ge, se) =>
+                                    children: table.columns.map((column, se) =>
                                       i.jsxs(
                                         "tr",
                                         {
                                           children: [
                                             i.jsx("th", {
                                               scope: "row",
-                                              children: ge.name,
+                                              children: column.name,
                                             }),
                                             i.jsx("td", {
                                               children: L(
-                                                `${le.name}.${ge.name} type`,
-                                                ge.type,
+                                                `${table.name}.${column.name} type`,
+                                                column.type,
                                                 $([
                                                   "text",
                                                   "number",
@@ -519,8 +553,8 @@ function DataModelDialog(e) {
                                                   "date",
                                                 ]),
                                                 (we) =>
-                                                  H(le.id, {
-                                                    columns: le.columns.map(
+                                                  H(table.id, {
+                                                    columns: table.columns.map(
                                                       (Ee, Ae) =>
                                                         Ae === se
                                                           ? { ...Ee, type: we }
@@ -532,17 +566,17 @@ function DataModelDialog(e) {
                                             i.jsx("td", {
                                               children: i.jsx("input", {
                                                 type: "checkbox",
-                                                "aria-label": `${le.name}.${ge.name} nullable`,
-                                                checked: ge.nullable,
-                                                onChange: (we) =>
-                                                  H(le.id, {
-                                                    columns: le.columns.map(
+                                                "aria-label": `${table.name}.${column.name} nullable`,
+                                                checked: column.nullable,
+                                                onChange: (event) =>
+                                                  H(table.id, {
+                                                    columns: table.columns.map(
                                                       (Ee, Ae) =>
                                                         Ae === se
                                                           ? {
                                                               ...Ee,
                                                               nullable:
-                                                                we.target
+                                                                event.target
                                                                   .checked,
                                                             }
                                                           : Ee,
@@ -552,7 +586,7 @@ function DataModelDialog(e) {
                                             }),
                                           ],
                                         },
-                                        ge.name,
+                                        column.name,
                                       ),
                                     ),
                                   }),
@@ -562,7 +596,7 @@ function DataModelDialog(e) {
                           }),
                         ],
                       },
-                      le.id,
+                      table.id,
                     ),
                   ),
                 ],
@@ -577,12 +611,12 @@ function DataModelDialog(e) {
                         "Filters flow from the unique one side to the related side. Missing, blank or duplicate keys block calculation. Cycles and competing paths are refused.",
                     }),
                   }),
-                  a.relationships.map((le, ce) => {
+                  definition.relationships.map((relationship, ce) => {
                     const ge = (se) =>
-                      _({
-                        ...a,
-                        relationships: a.relationships.map((we) =>
-                          we.id === le.id ? se : we,
+                      onChange({
+                        ...definition,
+                        relationships: definition.relationships.map((we) =>
+                          we.id === relationship.id ? se : we,
                         ),
                       });
                     return i.jsxs(
@@ -605,11 +639,14 @@ function DataModelDialog(e) {
                                 "One table",
                                 U(
                                   `Relationship ${ce + 1} one table`,
-                                  le.one.tableId,
-                                  (se) =>
+                                  relationship.one.tableId,
+                                  (tableId) =>
                                     ge({
-                                      ...le,
-                                      one: { tableId: se, column: N(se) },
+                                      ...relationship,
+                                      one: {
+                                        tableId: tableId,
+                                        column: N(tableId),
+                                      },
                                     }),
                                 ),
                               ),
@@ -617,12 +654,15 @@ function DataModelDialog(e) {
                                 "Unique key",
                                 G(
                                   `Relationship ${ce + 1} one key`,
-                                  le.one.tableId,
-                                  le.one.column,
-                                  (se) =>
+                                  relationship.one.tableId,
+                                  relationship.one.column,
+                                  (column) =>
                                     ge({
-                                      ...le,
-                                      one: { ...le.one, column: se },
+                                      ...relationship,
+                                      one: {
+                                        ...relationship.one,
+                                        column: column,
+                                      },
                                     }),
                                 ),
                               ),
@@ -634,11 +674,14 @@ function DataModelDialog(e) {
                                 "Related table",
                                 U(
                                   `Relationship ${ce + 1} related table`,
-                                  le.many.tableId,
-                                  (se) =>
+                                  relationship.many.tableId,
+                                  (tableId) =>
                                     ge({
-                                      ...le,
-                                      many: { tableId: se, column: N(se) },
+                                      ...relationship,
+                                      many: {
+                                        tableId: tableId,
+                                        column: N(tableId),
+                                      },
                                     }),
                                 ),
                               ),
@@ -646,12 +689,15 @@ function DataModelDialog(e) {
                                 "Foreign key",
                                 G(
                                   `Relationship ${ce + 1} foreign key`,
-                                  le.many.tableId,
-                                  le.many.column,
-                                  (se) =>
+                                  relationship.many.tableId,
+                                  relationship.many.column,
+                                  (column) =>
                                     ge({
-                                      ...le,
-                                      many: { ...le.many, column: se },
+                                      ...relationship,
+                                      many: {
+                                        ...relationship.many,
+                                        column: column,
+                                      },
                                     }),
                                 ),
                               ),
@@ -659,22 +705,27 @@ function DataModelDialog(e) {
                                 "Cardinality",
                                 L(
                                   `Relationship ${ce + 1} cardinality`,
-                                  le.cardinality,
+                                  relationship.cardinality,
                                   [
                                     { value: "one-to-many", label: "1 → many" },
                                     { value: "one-to-one", label: "1 → 1" },
                                   ],
-                                  (se) => ge({ ...le, cardinality: se }),
+                                  (cardinality) =>
+                                    ge({
+                                      ...relationship,
+                                      cardinality: cardinality,
+                                    }),
                                 ),
                               ),
                               i.jsx("button", {
                                 "aria-label": `Remove relationship ${ce + 1}`,
                                 onClick: () =>
-                                  _({
-                                    ...a,
-                                    relationships: a.relationships.filter(
-                                      (se) => se.id !== le.id,
-                                    ),
+                                  onChange({
+                                    ...definition,
+                                    relationships:
+                                      definition.relationships.filter(
+                                        (se) => se.id !== relationship.id,
+                                      ),
                                   }),
                                 children: i.jsx(LocalizedText, {
                                   children: "Remove",
@@ -684,27 +735,28 @@ function DataModelDialog(e) {
                           }),
                         ],
                       },
-                      le.id,
+                      relationship.id,
                     );
                   }),
                   i.jsx("button", {
                     disabled:
-                      a.tables.length < 2 ||
-                      a.relationships.length >= dataModelLimits.relationships,
+                      definition.tables.length < 2 ||
+                      definition.relationships.length >=
+                        dataModelLimits.relationships,
                     onClick: () =>
-                      _({
-                        ...a,
+                      onChange({
+                        ...definition,
                         relationships: [
-                          ...a.relationships,
+                          ...definition.relationships,
                           {
                             id: createUuid(),
                             one: {
-                              tableId: a.tables[0].id,
-                              column: a.tables[0].columns[0].name,
+                              tableId: definition.tables[0].id,
+                              column: definition.tables[0].columns[0].name,
                             },
                             many: {
-                              tableId: a.tables[1].id,
-                              column: a.tables[1].columns[0].name,
+                              tableId: definition.tables[1].id,
+                              column: definition.tables[1].columns[0].name,
                             },
                             direction: "single",
                             cardinality: "one-to-many",
@@ -718,7 +770,10 @@ function DataModelDialog(e) {
                 ],
               }),
             l === "Calculated columns" &&
-              i.jsx(DataModelDefinitionEditor, { definition: a, onChange: _ }),
+              i.jsx(DataModelDefinitionEditor, {
+                definition: definition,
+                onChange: onChange,
+              }),
             l === "Measures" &&
               i.jsxs(i.Fragment, {
                 children: [
@@ -729,12 +784,12 @@ function DataModelDialog(e) {
                         "Each measure aggregates its own filtered table, preventing fact-row multiplication. Choose DAX for expressions with row and filter context. Totals are recalculated in their own context.",
                     }),
                   }),
-                  a.measures.map((le, ce) => {
+                  definition.measures.map((measure, ce) => {
                     const ge = (se) =>
-                      _({
-                        ...a,
-                        measures: a.measures.map((we) =>
-                          we.id === le.id ? se : we,
+                      onChange({
+                        ...definition,
+                        measures: definition.measures.map((we) =>
+                          we.id === measure.id ? se : we,
                         ),
                       });
                     return i.jsxs(
@@ -753,28 +808,33 @@ function DataModelDialog(e) {
                             children: [
                               LabeledField(
                                 "Name",
-                                R(`Measure ${ce + 1} name`, le.name, (se) =>
-                                  ge({ ...le, name: se }),
+                                R(
+                                  `Measure ${ce + 1} name`,
+                                  measure.name,
+                                  (se) => ge({ ...measure, name: se }),
                                 ),
                               ),
                               LabeledField(
                                 "Table",
-                                U(`Measure ${ce + 1} table`, le.tableId, (se) =>
-                                  ge({
-                                    ...le,
-                                    tableId: se,
-                                    ...(le.operation === "countRows" ||
-                                    le.operation === "dax"
-                                      ? {}
-                                      : { column: N(se) }),
-                                  }),
+                                U(
+                                  `Measure ${ce + 1} table`,
+                                  measure.tableId,
+                                  (tableId) =>
+                                    ge({
+                                      ...measure,
+                                      tableId: tableId,
+                                      ...(measure.operation === "countRows" ||
+                                      measure.operation === "dax"
+                                        ? {}
+                                        : { column: N(tableId) }),
+                                    }),
                                 ),
                               ),
                               LabeledField(
                                 "Operation",
                                 L(
                                   `Measure ${ce + 1} operation`,
-                                  le.operation,
+                                  measure.operation,
                                   $([
                                     "sum",
                                     "count",
@@ -785,13 +845,17 @@ function DataModelDialog(e) {
                                     "distinctCount",
                                     "dax",
                                   ]),
-                                  (se) => {
-                                    const we = { ...le, operation: se };
-                                    (se === "countRows" || se === "dax"
+                                  (operation) => {
+                                    const we = {
+                                      ...measure,
+                                      operation: operation,
+                                    };
+                                    (operation === "countRows" ||
+                                    operation === "dax"
                                       ? delete we.column
                                       : (we.column =
-                                          we.column ?? N(le.tableId)),
-                                      se === "dax"
+                                          we.column ?? N(measure.tableId)),
+                                      operation === "dax"
                                         ? (we.expression =
                                             we.expression ?? "BLANK()")
                                         : delete we.expression,
@@ -799,30 +863,31 @@ function DataModelDialog(e) {
                                   },
                                 ),
                               ),
-                              le.operation !== "countRows" &&
-                                le.operation !== "dax" &&
+                              measure.operation !== "countRows" &&
+                                measure.operation !== "dax" &&
                                 LabeledField(
                                   "Column",
                                   G(
                                     `Measure ${ce + 1} column`,
-                                    le.tableId,
-                                    le.column ?? "",
-                                    (se) => ge({ ...le, column: se }),
+                                    measure.tableId,
+                                    measure.column ?? "",
+                                    (column) =>
+                                      ge({ ...measure, column: column }),
                                   ),
                                 ),
                               i.jsx("button", {
                                 "aria-label": `Remove measure ${ce + 1}`,
                                 onClick: () => {
-                                  (_({
-                                    ...a,
-                                    measures: a.measures.filter(
-                                      (se) => se.id !== le.id,
+                                  (onChange({
+                                    ...definition,
+                                    measures: definition.measures.filter(
+                                      (se) => se.id !== measure.id,
                                     ),
                                   }),
                                     C({
-                                      ...d,
-                                      measureIds: d.measureIds.filter(
-                                        (se) => se !== le.id,
+                                      ...query,
+                                      measureIds: query.measureIds.filter(
+                                        (measureId) => measureId !== measure.id,
                                       ),
                                     }));
                                 },
@@ -832,30 +897,37 @@ function DataModelDialog(e) {
                               }),
                             ],
                           }),
-                          le.operation === "dax" &&
+                          measure.operation === "dax" &&
                             i.jsx(DaxExpressionInput, {
                               label: `Measure ${ce + 1} DAX expression`,
-                              value: le.expression ?? "",
-                              onChange: (se) => ge({ ...le, expression: se }),
+                              value: measure.expression ?? "",
+                              onChange: (expression) =>
+                                ge({ ...measure, expression: expression }),
                             }),
                         ],
                       },
-                      le.id,
+                      measure.id,
                     );
                   }),
                   i.jsx("button", {
                     disabled:
-                      !a.tables.length ||
-                      a.measures.length >= dataModelLimits.measures,
+                      !definition.tables.length ||
+                      definition.measures.length >= dataModelLimits.measures,
                     onClick: () => {
                       const le = {
                         id: createUuid(),
-                        name: `Measure ${a.measures.length + 1}`,
-                        tableId: a.tables.at(-1).id,
+                        name: `Measure ${definition.measures.length + 1}`,
+                        tableId: definition.tables.at(-1).id,
                         operation: "countRows",
                       };
-                      (_({ ...a, measures: [...a.measures, le] }),
-                        C({ ...d, measureIds: [...d.measureIds, le.id] }));
+                      (onChange({
+                        ...definition,
+                        measures: [...definition.measures, le],
+                      }),
+                        C({
+                          ...query,
+                          measureIds: [...query.measureIds, le.id],
+                        }));
                     },
                     children: i.jsx(LocalizedText, { children: "Add measure" }),
                   }),
@@ -873,28 +945,31 @@ function DataModelDialog(e) {
                       }),
                       i.jsx("div", {
                         className: "lg-model-controls",
-                        children: a.measures.map((le) =>
+                        children: definition.measures.map((measure) =>
                           i.jsxs(
                             "label",
                             {
                               children: [
                                 i.jsx("input", {
                                   type: "checkbox",
-                                  checked: d.measureIds.includes(le.id),
-                                  onChange: (ce) =>
+                                  checked: query.measureIds.includes(
+                                    measure.id,
+                                  ),
+                                  onChange: (event) =>
                                     C({
-                                      ...d,
-                                      measureIds: ce.target.checked
-                                        ? [...d.measureIds, le.id]
-                                        : d.measureIds.filter(
-                                            (ge) => ge !== le.id,
+                                      ...query,
+                                      measureIds: event.target.checked
+                                        ? [...query.measureIds, measure.id]
+                                        : query.measureIds.filter(
+                                            (measureId) =>
+                                              measureId !== measure.id,
                                           ),
                                     }),
                                 }),
-                                le.name,
+                                measure.name,
                               ],
                             },
-                            le.id,
+                            measure.id,
                           ),
                         ),
                       }),
@@ -907,31 +982,39 @@ function DataModelDialog(e) {
                           children: "Group by shared dimensions",
                         }),
                       }),
-                      d.groupBy.map((le, ce) =>
+                      query.groupBy.map((le, ce) =>
                         i.jsxs(
                           "div",
                           {
                             className: "lg-model-controls",
                             children: [
-                              U(`Group ${ce + 1} table`, le.tableId, (ge) =>
-                                C({
-                                  ...d,
-                                  groupBy: d.groupBy.map((se, we) =>
-                                    we === ce
-                                      ? { tableId: ge, column: N(ge) }
-                                      : se,
-                                  ),
-                                }),
+                              U(
+                                `Group ${ce + 1} table`,
+                                le.tableId,
+                                (tableId) =>
+                                  C({
+                                    ...query,
+                                    groupBy: query.groupBy.map((se, we) =>
+                                      we === ce
+                                        ? {
+                                            tableId: tableId,
+                                            column: N(tableId),
+                                          }
+                                        : se,
+                                    ),
+                                  }),
                               ),
                               G(
                                 `Group ${ce + 1} column`,
                                 le.tableId,
                                 le.column,
-                                (ge) =>
+                                (column) =>
                                   C({
-                                    ...d,
-                                    groupBy: d.groupBy.map((se, we) =>
-                                      we === ce ? { ...se, column: ge } : se,
+                                    ...query,
+                                    groupBy: query.groupBy.map((se, we) =>
+                                      we === ce
+                                        ? { ...se, column: column }
+                                        : se,
                                     ),
                                   }),
                               ),
@@ -939,8 +1022,8 @@ function DataModelDialog(e) {
                                 "aria-label": `Remove group ${ce + 1}`,
                                 onClick: () =>
                                   C({
-                                    ...d,
-                                    groupBy: d.groupBy.filter(
+                                    ...query,
+                                    groupBy: query.groupBy.filter(
                                       (ge, se) => se !== ce,
                                     ),
                                   }),
@@ -954,15 +1037,17 @@ function DataModelDialog(e) {
                         ),
                       ),
                       i.jsx("button", {
-                        disabled: !a.tables.length || d.groupBy.length >= 3,
+                        disabled:
+                          !definition.tables.length ||
+                          query.groupBy.length >= 3,
                         onClick: () =>
                           C({
-                            ...d,
+                            ...query,
                             groupBy: [
-                              ...d.groupBy,
+                              ...query.groupBy,
                               {
-                                tableId: a.tables[0].id,
-                                column: a.tables[0].columns[0].name,
+                                tableId: definition.tables[0].id,
+                                column: definition.tables[0].columns[0].name,
                               },
                             ],
                           }),
@@ -979,46 +1064,49 @@ function DataModelDialog(e) {
                           children: "Filters (all must match)",
                         }),
                       }),
-                      d.filters.map((le, ce) => {
+                      query.filters.map((filter, ce) => {
                         const ge = (Ae) =>
                             C({
-                              ...d,
-                              filters: d.filters.map((ye, Te) =>
+                              ...query,
+                              filters: query.filters.map((ye, Te) =>
                                 Te === ce ? Ae : ye,
                               ),
                             }),
-                          se = T(le.tableId)?.columns.find(
-                            (Ae) => Ae.name === le.column,
+                          se = T(filter.tableId)?.columns.find(
+                            (column) => column.name === filter.column,
                           )?.type;
                         return i.jsxs(
                           "div",
                           {
                             className: "lg-model-controls",
                             children: [
-                              U(`Filter ${ce + 1} table`, le.tableId, (Ae) =>
-                                ge({
-                                  ...le,
-                                  tableId: Ae,
-                                  column: N(Ae),
-                                  operator: "blank",
-                                  value: undefined,
-                                }),
+                              U(
+                                `Filter ${ce + 1} table`,
+                                filter.tableId,
+                                (tableId) =>
+                                  ge({
+                                    ...filter,
+                                    tableId: tableId,
+                                    column: N(tableId),
+                                    operator: "blank",
+                                    value: undefined,
+                                  }),
                               ),
                               G(
                                 `Filter ${ce + 1} column`,
-                                le.tableId,
-                                le.column,
-                                (Ae) =>
+                                filter.tableId,
+                                filter.column,
+                                (column) =>
                                   ge({
-                                    ...le,
-                                    column: Ae,
+                                    ...filter,
+                                    column: column,
                                     operator: "blank",
                                     value: undefined,
                                   }),
                               ),
                               L(
                                 `Filter ${ce + 1} operator`,
-                                le.operator,
+                                filter.operator,
                                 $([
                                   "equals",
                                   "notEquals",
@@ -1029,11 +1117,13 @@ function DataModelDialog(e) {
                                   "blank",
                                   "notBlank",
                                 ]),
-                                (Ae) =>
+                                (operator) =>
                                   ge({
-                                    ...le,
-                                    operator: Ae,
-                                    value: ["blank", "notBlank"].includes(Ae)
+                                    ...filter,
+                                    operator: operator,
+                                    value: ["blank", "notBlank"].includes(
+                                      operator,
+                                    )
                                       ? undefined
                                       : se === "number"
                                         ? 0
@@ -1042,21 +1132,23 @@ function DataModelDialog(e) {
                                           : "",
                                   }),
                               ),
-                              !["blank", "notBlank"].includes(le.operator) &&
+                              !["blank", "notBlank"].includes(
+                                filter.operator,
+                              ) &&
                                 (se === "boolean"
                                   ? L(
                                       `Filter ${ce + 1} value`,
-                                      String(le.value),
+                                      String(filter.value),
                                       $(["true", "false"]),
                                       (Ae) =>
-                                        ge({ ...le, value: Ae === "true" }),
+                                        ge({ ...filter, value: Ae === "true" }),
                                     )
                                   : R(
                                       `Filter ${ce + 1} value`,
-                                      String(le.value ?? ""),
+                                      String(filter.value ?? ""),
                                       (Ae) =>
                                         ge({
-                                          ...le,
+                                          ...filter,
                                           value:
                                             se === "number"
                                               ? Ae.trim()
@@ -1069,8 +1161,8 @@ function DataModelDialog(e) {
                                 "aria-label": `Remove filter ${ce + 1}`,
                                 onClick: () =>
                                   C({
-                                    ...d,
-                                    filters: d.filters.filter(
+                                    ...query,
+                                    filters: query.filters.filter(
                                       (Ae, ye) => ye !== ce,
                                     ),
                                   }),
@@ -1085,16 +1177,16 @@ function DataModelDialog(e) {
                       }),
                       i.jsx("button", {
                         disabled:
-                          !a.tables.length ||
-                          d.filters.length >= dataModelLimits.filters,
+                          !definition.tables.length ||
+                          query.filters.length >= dataModelLimits.filters,
                         onClick: () =>
                           C({
-                            ...d,
+                            ...query,
                             filters: [
-                              ...d.filters,
+                              ...query.filters,
                               {
-                                tableId: a.tables[0].id,
-                                column: a.tables[0].columns[0].name,
+                                tableId: definition.tables[0].id,
+                                column: definition.tables[0].columns[0].name,
                                 operator: "notBlank",
                               },
                             ],
@@ -1157,21 +1249,23 @@ function DataModelDialog(e) {
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: W.diagnostics.map((le, ce) =>
+                              children: W.diagnostics.map((diagnostic, ce) =>
                                 i.jsxs(
                                   "tr",
                                   {
                                     children: [
-                                      i.jsx("td", { children: le.code }),
+                                      i.jsx("td", {
+                                        children: diagnostic.code,
+                                      }),
                                       i.jsxs("td", {
                                         children: [
-                                          T(le.tableId ?? "")?.name,
+                                          T(diagnostic.tableId ?? "")?.name,
                                           " ",
-                                          le.row ?? "",
+                                          diagnostic.row ?? "",
                                         ],
                                       }),
                                       i.jsx("td", {
-                                        children: text(le.message),
+                                        children: text(diagnostic.message),
                                       }),
                                     ],
                                   },
@@ -1207,31 +1301,33 @@ function DataModelDialog(e) {
                             }),
                           }),
                           i.jsx("tbody", {
-                            children: W.tables.map((le) =>
+                            children: W.tables.map((table) =>
                               i.jsxs(
                                 "tr",
                                 {
                                   children: [
                                     i.jsx("th", {
                                       scope: "row",
-                                      children: le.name,
+                                      children: table.name,
                                     }),
                                     i.jsxs("td", {
                                       children: [
                                         e.workbook.sheets.find(
-                                          (ge) => ge.id === le.sheetId,
+                                          (sheet) => sheet.id === table.sheetId,
                                         )?.name,
                                         "!",
-                                        le.range,
+                                        table.range,
                                       ],
                                     }),
-                                    i.jsx("td", { children: le.rows }),
-                                    i.jsx("td", { children: le.included }),
-                                    i.jsx("td", { children: le.excluded }),
-                                    i.jsx("td", { children: le.columnarBytes }),
+                                    i.jsx("td", { children: table.rows }),
+                                    i.jsx("td", { children: table.included }),
+                                    i.jsx("td", { children: table.excluded }),
+                                    i.jsx("td", {
+                                      children: table.columnarBytes,
+                                    }),
                                   ],
                                 },
-                                le.id,
+                                table.id,
                               ),
                             ),
                           }),
@@ -1273,33 +1369,35 @@ function DataModelDialog(e) {
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: W.calculatedColumns.map((le) =>
-                                    i.jsxs(
-                                      "tr",
-                                      {
-                                        children: [
-                                          i.jsxs("th", {
-                                            scope: "row",
-                                            children: [
-                                              T(le.tableId)?.name,
-                                              ".",
-                                              le.name,
-                                            ],
-                                          }),
-                                          i.jsx("td", {
-                                            children: le.values
-                                              .slice(0, 25)
-                                              .map((ge) =>
-                                                ge === null
-                                                  ? text("Blank")
-                                                  : String(ge),
-                                              )
-                                              .join(", "),
-                                          }),
-                                        ],
-                                      },
-                                      `${le.tableId}:${le.name}`,
-                                    ),
+                                  children: W.calculatedColumns.map(
+                                    (calculatedColumn) =>
+                                      i.jsxs(
+                                        "tr",
+                                        {
+                                          children: [
+                                            i.jsxs("th", {
+                                              scope: "row",
+                                              children: [
+                                                T(calculatedColumn.tableId)
+                                                  ?.name,
+                                                ".",
+                                                calculatedColumn.name,
+                                              ],
+                                            }),
+                                            i.jsx("td", {
+                                              children: calculatedColumn.values
+                                                .slice(0, 25)
+                                                .map((ge) =>
+                                                  ge === null
+                                                    ? text("Blank")
+                                                    : String(ge),
+                                                )
+                                                .join(", "),
+                                            }),
+                                          ],
+                                        },
+                                        `${calculatedColumn.tableId}:${calculatedColumn.name}`,
+                                      ),
                                   ),
                                 }),
                               ],
@@ -1307,7 +1405,7 @@ function DataModelDialog(e) {
                           ],
                         }),
                       W.complete &&
-                        d.measureIds.length > 0 &&
+                        query.measureIds.length > 0 &&
                         i.jsxs(i.Fragment, {
                           children: [
                             i.jsxs("table", {
@@ -1315,8 +1413,8 @@ function DataModelDialog(e) {
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsx("tr", {
-                                    children: W.headers.map((le) =>
-                                      i.jsx("th", { children: le }, le),
+                                    children: W.headers.map((header) =>
+                                      i.jsx("th", { children: header }, header),
                                     ),
                                   }),
                                 }),
@@ -1347,24 +1445,24 @@ function DataModelDialog(e) {
                                       ),
                                     ),
                                 }),
-                                d.groupBy.length > 0 &&
+                                query.groupBy.length > 0 &&
                                   i.jsx("tfoot", {
                                     children: i.jsxs("tr", {
                                       children: [
                                         i.jsx("th", {
-                                          colSpan: d.groupBy.length,
+                                          colSpan: query.groupBy.length,
                                           children: i.jsx(LocalizedText, {
                                             children: "Grand total",
                                           }),
                                         }),
-                                        W.totals.map((le, ce) =>
+                                        W.totals.map((total, ce) =>
                                           i.jsx(
                                             "td",
                                             {
                                               children:
-                                                le === null
+                                                total === null
                                                   ? text("Blank")
-                                                  : le,
+                                                  : total,
                                             },
                                             ce,
                                           ),
@@ -1427,9 +1525,9 @@ function DataModelDialog(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: b,
-                    onChange: (le) => {
-                      (y(le.target.checked), B());
+                    checked: checked,
+                    onChange: (event) => {
+                      (y(event.target.checked), B());
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
@@ -1437,12 +1535,12 @@ function DataModelDialog(e) {
               }),
             LabeledField(
               "Output worksheet",
-              R("Model output worksheet", O, (le) => {
+              R("Model output worksheet", outputName, (le) => {
                 (j(le), B());
               }),
             ),
             i.jsx("button", {
-              onClick: J,
+              onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Preview model" }),
             }),
             i.jsx("button", {
@@ -1452,7 +1550,7 @@ function DataModelDialog(e) {
             }),
             i.jsx("button", {
               className: "lg-model-primary",
-              disabled: !K || !d.measureIds.length,
+              disabled: !K || !query.measureIds.length,
               onClick: () => q("publish"),
               children: i.jsx(LocalizedText, {
                 children: "Publish model result",
@@ -1499,12 +1597,12 @@ const focusableElementSelector =
   'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
 function isElementVisibleForFocus(e) {
   for (let r = e; r; r = r.parentElement) {
-    const t = getComputedStyle(r);
+    const computedStyle = getComputedStyle(r);
     if (
       r.hidden ||
-      t.display === "none" ||
-      t.visibility === "hidden" ||
-      t.visibility === "collapse"
+      computedStyle.display === "none" ||
+      computedStyle.visibility === "hidden" ||
+      computedStyle.visibility === "collapse"
     )
       return false;
     if (r.tagName === "DETAILS" && !r.hasAttribute("open")) {
@@ -1525,10 +1623,10 @@ function getFocusableElements(e) {
       ),
   );
 }
-function useDialogFocusTrap(e) {
+function useDialogFocusTrap(appRootRef) {
   const r = ne.useRef(undefined);
   (ne.useLayoutEffect(() => {
-    const t = e.current;
+    const t = appRootRef.current;
     if (!t) return;
     let n,
       o = null;
@@ -1607,33 +1705,33 @@ function useDialogFocusTrap(e) {
         (m && (!m.isConnected || !isElementVisibleForFocus(m)) && a.delete(m),
           p || a.clear());
       },
-      c = (p) => {
-        const m = p.target;
-        if (m instanceof HTMLElement) {
-          if (n && t.contains(m) && !n.contains(m)) {
+      c = (event) => {
+        const target = event.target;
+        if (target instanceof HTMLElement) {
+          if (n && t.contains(target) && !n.contains(target)) {
             (getFocusableElements(n)[0] ?? n).focus({ preventScroll: true });
             return;
           }
-          ((!n && !m.closest('[role="dialog"][aria-modal="true"]')) ||
-            n?.contains(m)) &&
-            (s = m);
+          ((!n && !target.closest('[role="dialog"][aria-modal="true"]')) ||
+            n?.contains(target)) &&
+            (s = target);
         }
       },
-      h = (p) => {
-        if ((l(), !n || p.key !== "Tab")) return;
-        const m = getFocusableElements(n),
-          v = m[0],
-          g = m.at(-1);
+      h = (event) => {
+        if ((l(), !n || event.key !== "Tab")) return;
+        const focusableElements = getFocusableElements(n),
+          v = focusableElements[0],
+          g = focusableElements.at(-1);
         if (!v) {
-          (p.preventDefault(), (n.tabIndex = -1), n.focus());
+          (event.preventDefault(), (n.tabIndex = -1), n.focus());
           return;
         }
         (!n.contains(document.activeElement) ||
-          (p.shiftKey && document.activeElement === v) ||
-          (!p.shiftKey && document.activeElement === g)) &&
-          (p.preventDefault(),
-          p.stopPropagation(),
-          (p.shiftKey ? g : v)?.focus());
+          (event.shiftKey && document.activeElement === v) ||
+          (!event.shiftKey && document.activeElement === g)) &&
+          (event.preventDefault(),
+          event.stopPropagation(),
+          (event.shiftKey ? g : v)?.focus());
       };
     (t.addEventListener("keydown", h, true),
       document.addEventListener("focusin", c, true));
@@ -1655,7 +1753,7 @@ function useDialogFocusTrap(e) {
           (r.current = undefined));
       }
     );
-  }, [e]),
+  }, [appRootRef]),
     ne.useLayoutEffect(() => r.current?.()));
 }
 const dataModelBudgets = {
@@ -1670,29 +1768,32 @@ const dataModelBudgets = {
   dependencyCells: 2e3,
 };
 
-function assertRecordKeys(e, r, t) {
-  (!isNonArrayObject(e) || Object.keys(e).some((n) => !r.includes(n))) &&
+function assertRecordKeys(destination, r, t) {
+  (!isNonArrayObject(destination) ||
+    Object.keys(destination).some((n) => !r.includes(n))) &&
     failWithMessage(t);
 }
 const rangesOverlap = (e, r) => {
-  const t = parseRangeAddress(e),
+  const rangeAddress = parseRangeAddress(e),
     n = parseRangeAddress(r);
   return (
-    t.firstRow <= n.lastRow &&
-    t.lastRow >= n.firstRow &&
-    t.firstCol <= n.lastCol &&
-    t.lastCol >= n.firstCol
+    rangeAddress.firstRow <= n.lastRow &&
+    rangeAddress.lastRow >= n.firstRow &&
+    rangeAddress.firstCol <= n.lastCol &&
+    rangeAddress.lastCol >= n.firstCol
   );
 };
-function assertDelimiterCharacter(e) {
-  (typeof e != "string" || [...e].length !== 1 || /["\r\n\0]/.test(e)) &&
+function assertDelimiterCharacter(delimiter) {
+  (typeof delimiter != "string" ||
+    [...delimiter].length !== 1 ||
+    /["\r\n\0]/.test(delimiter)) &&
     failWithMessage(
       "Choose one delimiter character other than a quote, line break or NUL.",
     );
 }
-function splitDelimitedCell(e, r) {
-  (assertDelimiterCharacter(r),
-    (typeof e != "string" || e.length > 32767) &&
+function splitDelimitedCell(cellTextValue, delimiter) {
+  (assertDelimiterCharacter(delimiter),
+    (typeof cellTextValue != "string" || cellTextValue.length > 32767) &&
       failWithMessage(
         "A source cell must contain text of at most 32,767 characters.",
       ));
@@ -1701,7 +1802,7 @@ function splitDelimitedCell(e, r) {
     o = false,
     a = false,
     s = false;
-  const d = [...e],
+  const d = [...cellTextValue],
     u = () => {
       (t.push(n),
         t.length > dataModelBudgets.fields &&
@@ -1720,7 +1821,7 @@ function splitDelimitedCell(e, r) {
         : d[l + 1] === '"'
           ? ((n += '"'), l++)
           : ((o = false), (a = true))
-      : c === r
+      : c === delimiter
         ? u()
         : a
           ? failWithMessage(
@@ -1744,9 +1845,9 @@ function splitDelimitedCell(e, r) {
     t
   );
 }
-function validateTextToColumnsRequest(e) {
+function validateTextToColumnsRequest(request) {
   (assertRecordKeys(
-    e,
+    request,
     [
       "sourceSheetId",
       "sourceRange",
@@ -1757,33 +1858,36 @@ function validateTextToColumnsRequest(e) {
     ],
     "Invalid Text to Columns request.",
   ),
-    (typeof e.sourceSheetId != "string" || typeof e.sourceRange != "string") &&
+    (typeof request.sourceSheetId != "string" ||
+      typeof request.sourceRange != "string") &&
       failWithMessage("Choose a source worksheet and one-column range."),
-    assertDelimiterCharacter(e.delimiter),
-    ["none", "first-row"].includes(e.header) ||
+    assertDelimiterCharacter(request.delimiter),
+    ["none", "first-row"].includes(request.header) ||
       failWithMessage("Choose whether the first source row contains headings."),
-    e.formats !== undefined &&
-      (!Array.isArray(e.formats) ||
-        e.formats.length > dataModelBudgets.fields ||
-        e.formats.some((t) => !["text", "general"].includes(t))) &&
+    request.formats !== undefined &&
+      (!Array.isArray(request.formats) ||
+        request.formats.length > dataModelBudgets.fields ||
+        request.formats.some(
+          (format) => !["text", "general"].includes(format),
+        )) &&
       failWithMessage(
         "Column conversion must be Text or General, with at most 50 columns.",
       ),
     assertRecordKeys(
-      e.destination,
+      request.destination,
       ["kind", "name", "sheetId", "address"],
       "Choose a separate output range or a new worksheet.",
     ));
-  let r;
-  if (e.destination.kind === "new-sheet") {
+  let destination;
+  if (request.destination.kind === "new-sheet") {
     (assertRecordKeys(
-      e.destination,
+      request.destination,
       ["kind", "name"],
       "Invalid new worksheet destination.",
     ),
-      typeof e.destination.name != "string" &&
+      typeof request.destination.name != "string" &&
         failWithMessage("Enter an output worksheet name."));
-    const t = e.destination.name.trim();
+    const t = request.destination.name.trim();
     ((!t ||
       t.length > 31 ||
       /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(t) ||
@@ -1792,33 +1896,33 @@ function validateTextToColumnsRequest(e) {
       failWithMessage(
         "Output worksheet names need 1–31 characters without control/Excel-reserved characters or leading/trailing apostrophes.",
       ),
-      (r = { kind: "new-sheet", name: t }));
-  } else if (e.destination.kind === "range") {
+      (destination = { kind: "new-sheet", name: t }));
+  } else if (request.destination.kind === "range") {
     (assertRecordKeys(
-      e.destination,
+      request.destination,
       ["kind", "sheetId", "address"],
       "Invalid output range destination.",
     ),
-      (typeof e.destination.sheetId != "string" ||
-        typeof e.destination.address != "string") &&
+      (typeof request.destination.sheetId != "string" ||
+        typeof request.destination.address != "string") &&
         failWithMessage("Choose an output worksheet and one starting cell."));
-    const t = _t(e.destination.address.trim());
-    r = {
+    const t = _t(request.destination.address.trim());
+    destination = {
       kind: "range",
-      sheetId: e.destination.sheetId,
+      sheetId: request.destination.sheetId,
       address: formatCellAddress(t.row, t.col),
     };
   } else failWithMessage("Choose a separate output range or a new worksheet.");
   return {
-    sourceSheetId: e.sourceSheetId,
-    sourceRange: formatRangeCornerCells(e.sourceRange),
-    delimiter: e.delimiter,
-    header: e.header,
-    ...(e.formats ? { formats: [...e.formats] } : {}),
-    destination: r,
+    sourceSheetId: request.sourceSheetId,
+    sourceRange: formatRangeCornerCells(request.sourceRange),
+    delimiter: request.delimiter,
+    header: request.header,
+    ...(request.formats ? { formats: [...request.formats] } : {}),
+    destination: destination,
   };
 }
-function validateTextToColumnsPermissions(e, r) {
+function validateTextToColumnsPermissions(workbook, r) {
   return (
     [r.readOnly, r.includeHidden, r.allowNewSheet].some(
       (t) => t !== undefined && typeof t != "boolean",
@@ -1827,32 +1931,41 @@ function validateTextToColumnsPermissions(e, r) {
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
-          (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
+          (allowedSheetId) =>
+            typeof allowedSheetId != "string" ||
+            !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
         )) &&
       failWithMessage("The authorized worksheet context is invalid."),
     {
       includeHidden: r.includeHidden ?? false,
       allowNewSheet: r.allowNewSheet ?? true,
       allowedSheetIds: [
-        ...new Set(r.allowedSheetIds ?? e.sheets.map((t) => t.id)),
+        ...new Set(
+          r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+        ),
       ].sort(),
     }
   );
 }
-function assertSelectionInAuthorizedSheet(e, r, t) {
-  const n = parseRangeAddress(r);
-  ((!t.allowedSheetIds.includes(e.id) ||
-    (!t.includeHidden &&
+function assertSelectionInAuthorizedSheet(e, r, context) {
+  const rangeAddress = parseRangeAddress(r);
+  ((!context.allowedSheetIds.includes(e.id) ||
+    (!context.includeHidden &&
       (e.hidden ||
         e.veryHidden ||
-        cn(e, "row").some((o) => o.start <= n.lastRow && o.end >= n.firstRow) ||
+        cn(e, "row").some(
+          (o) =>
+            o.start <= rangeAddress.lastRow && o.end >= rangeAddress.firstRow,
+        ) ||
         cn(e, "column").some(
-          (o) => o.start <= n.lastCol && o.end >= n.firstCol,
+          (o) =>
+            o.start <= rangeAddress.lastCol && o.end >= rangeAddress.firstCol,
         )))) &&
     failWithMessage(
       "The selected cells are outside the visible, authorized worksheet context.",
     ),
-    (n.lastRow >= e.rowCount || n.lastCol >= e.colCount) &&
+    (rangeAddress.lastRow >= e.rowCount ||
+      rangeAddress.lastCol >= e.colCount) &&
       failWithMessage("The selected cells exceed the worksheet boundary."));
 }
 function formatCellTextValue(e) {
@@ -1888,7 +2001,7 @@ function stripFormulaLiterals(e) {
   }
   return r;
 }
-function assertOutputNameUnreferenced(e, r) {
+function assertOutputNameUnreferenced(workbook, outputName) {
   let t = 0;
   const n = (a) => (
       (t += a.length) > dataModelBudgets.nameFormulaCharacters &&
@@ -1905,49 +2018,49 @@ function assertOutputNameUnreferenced(e, r) {
           (u.startsWith("'")
             ? u.slice(1, -1).replace(/''/g, "'")
             : u
-          ).toLowerCase() === r.toLowerCase()
+          ).toLowerCase() === outputName.toLowerCase()
         );
       })
     ),
     o = [];
-  for (const a of e.sheets) {
-    for (const s of Object.values(a.cells))
-      typeof s.raw == "string" &&
-        s.raw.startsWith("=") &&
-        !s.literal &&
-        o.push(s.raw);
-    for (const s of a.conditionalFormats ?? [])
+  for (const sheet of workbook.sheets) {
+    for (const cell of Object.values(sheet.cells))
+      typeof cell.raw == "string" &&
+        cell.raw.startsWith("=") &&
+        !cell.literal &&
+        o.push(cell.raw);
+    for (const s of sheet.conditionalFormats ?? [])
       s.kind === "formula" && s.formula && o.push(s.formula);
-    for (const s of a.tables ?? [])
-      for (const d of s.columns)
-        d.calculatedFormula && o.push(d.calculatedFormula);
+    for (const s of sheet.tables ?? [])
+      for (const column of s.columns)
+        column.calculatedFormula && o.push(column.calculatedFormula);
   }
-  for (const a of e.definedNames ?? []) o.push(a.refersTo);
+  for (const a of workbook.definedNames ?? []) o.push(a.refersTo);
   o.some(n) &&
     failWithMessage(
       "The output worksheet name is already referenced by workbook formulas or formula metadata. Choose another name to avoid reconnecting an unresolved source reference.",
     );
 }
-function parseImportedCellValue(e, r) {
-  if (r === "general") {
-    const t = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(e);
-    if (/^(TRUE|FALSE)$/i.test(e))
-      return { raw: e.toUpperCase() === "TRUE", precision: false };
+function parseImportedCellValue(raw, format) {
+  if (format === "general") {
+    const t = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw);
+    if (/^(TRUE|FALSE)$/i.test(raw))
+      return { raw: raw.toUpperCase() === "TRUE", precision: false };
     if (t) {
-      const n = e
+      const n = raw
           .split(/[eE]/)[0]
           .replace(/[^0-9]/g, "")
           .replace(/^0+/, "").length,
-        o = Number(e);
+        o = Number(raw);
       return n > 15 ||
         !Number.isFinite(o) ||
-        (o === 0 && /[1-9]/.test(e.split(/[eE]/)[0])) ||
+        (o === 0 && /[1-9]/.test(raw.split(/[eE]/)[0])) ||
         (Number.isInteger(o) && !Number.isSafeInteger(o))
-        ? { raw: e, precision: true }
+        ? { raw: raw, precision: true }
         : { raw: o, precision: false };
     }
   }
-  return { raw: e, precision: false };
+  return { raw: raw, precision: false };
 }
 
 export {

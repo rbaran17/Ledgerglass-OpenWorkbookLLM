@@ -252,8 +252,8 @@ function createGridInteractionActions({
         ? selectionState.activeCellAddressRef.current
         : selectionState.activeCellAddress,
     );
-    let Xe = Ue.row,
-      gt = Ue.col;
+    let row = Ue.row,
+      col = Ue.col;
     if ((fe.ctrlKey || fe.metaKey) && fe.key.toLowerCase() === "z") {
       (fe.preventDefault(), navigationActions.undoOrRedo(fe.shiftKey));
       return;
@@ -275,7 +275,7 @@ function createGridInteractionActions({
       }
       if (jt === "pageup" || jt === "pagedown") {
         fe.preventDefault();
-        const rr = activeWorkbook.sheets.filter((xr) => !xr.hidden),
+        const rr = activeWorkbook.sheets.filter((sheet) => !sheet.hidden),
           Mr = rr.findIndex((xr) => xr.id === activeSheet.id),
           Br = rr[Mr + (jt === "pageup" ? -1 : 1)];
         Br &&
@@ -372,9 +372,9 @@ function createGridInteractionActions({
       }
       if (jt === "end") {
         fe.preventDefault();
-        const rr = findOccupiedRangeBounds(activeSheet);
+        const occupiedRangeBounds = findOccupiedRangeBounds(activeSheet);
         navigationActions.selectCellAddress(
-          `${columnIndexToLetters(columnVisibilityIndex.next(rr?.lastCol ?? 0, -1, true) ?? columnVisibilityIndex.logicalIndex(0))}${(rowVisibilityIndex.next(rr?.lastRow ?? 0, -1, true) ?? rowVisibilityIndex.logicalIndex(0)) + 1}`,
+          `${columnIndexToLetters(columnVisibilityIndex.next(occupiedRangeBounds?.lastCol ?? 0, -1, true) ?? columnVisibilityIndex.logicalIndex(0))}${(rowVisibilityIndex.next(occupiedRangeBounds?.lastRow ?? 0, -1, true) ?? rowVisibilityIndex.logicalIndex(0)) + 1}`,
           fe.shiftKey,
         );
         return;
@@ -389,16 +389,16 @@ function createGridInteractionActions({
     if (["Home", "PageUp", "PageDown"].includes(fe.key)) {
       (fe.preventDefault(),
         fe.key === "Home"
-          ? (gt = columnVisibilityIndex.logicalIndex(0))
-          : (Xe = viewAndSelectionActions.stepVisibleRowIndex(
-              Xe,
+          ? (col = columnVisibilityIndex.logicalIndex(0))
+          : (row = viewAndSelectionActions.stepVisibleRowIndex(
+              row,
               Math.max(
                 1,
                 Math.floor(rowViewport / zoomScale / defaultRowHeight) - 1,
               ) * (fe.key === "PageUp" ? -1 : 1),
             )),
         navigationActions.selectCellAddress(
-          `${columnIndexToLetters(gt)}${Xe + 1}`,
+          `${columnIndexToLetters(col)}${row + 1}`,
           fe.shiftKey,
         ));
       return;
@@ -416,37 +416,39 @@ function createGridInteractionActions({
       if (
         (fe.preventDefault(),
         fe.key === "ArrowDown" &&
-          (Xe = viewAndSelectionActions.stepVisibleRowIndex(Xe, 1)),
+          (row = viewAndSelectionActions.stepVisibleRowIndex(row, 1)),
         fe.key === "Enter" &&
-          (Xe = viewAndSelectionActions.stepVisibleRowIndex(
-            Xe,
+          (row = viewAndSelectionActions.stepVisibleRowIndex(
+            row,
             fe.shiftKey ? -1 : 1,
           )),
         fe.key === "ArrowUp" &&
-          (Xe = viewAndSelectionActions.stepVisibleRowIndex(Xe, -1)),
+          (row = viewAndSelectionActions.stepVisibleRowIndex(row, -1)),
         fe.key === "ArrowLeft" &&
-          (gt = viewAndSelectionActions.stepVisibleColumnIndex(gt, -1)),
+          (col = viewAndSelectionActions.stepVisibleColumnIndex(col, -1)),
         (fe.key === "ArrowRight" || fe.key === "Tab") &&
-          (gt = viewAndSelectionActions.stepVisibleColumnIndex(
-            gt,
+          (col = viewAndSelectionActions.stepVisibleColumnIndex(
+            col,
             fe.shiftKey && fe.key === "Tab" ? -1 : 1,
           )),
         !fe.shiftKey &&
           !filterSortState.filterValueSearch &&
           !filterSortState.activeColumnSort)
       ) {
-        const rr = mergeRanges.find((Mr) => Tp(Mr, Ue.row, Ue.col));
+        const rr = mergeRanges.find((mergeRange) =>
+          Tp(mergeRange, Ue.row, Ue.col),
+        );
         rr &&
-          (gt > Ue.col &&
-            (gt = columnVisibilityIndex.next(rr.lastCol, 1) ?? Ue.col),
-          gt < Ue.col &&
-            (gt = columnVisibilityIndex.next(rr.firstCol, -1) ?? Ue.col),
-          Xe > Ue.row &&
-            (Xe = rowVisibilityIndex.next(rr.lastRow, 1) ?? Ue.row),
-          Xe < Ue.row &&
-            (Xe = rowVisibilityIndex.next(rr.firstRow, -1) ?? Ue.row));
+          (col > Ue.col &&
+            (col = columnVisibilityIndex.next(rr.lastCol, 1) ?? Ue.col),
+          col < Ue.col &&
+            (col = columnVisibilityIndex.next(rr.firstCol, -1) ?? Ue.col),
+          row > Ue.row &&
+            (row = rowVisibilityIndex.next(rr.lastRow, 1) ?? Ue.row),
+          row < Ue.row &&
+            (row = rowVisibilityIndex.next(rr.firstRow, -1) ?? Ue.row));
       }
-      const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, gt)))}${Math.max(1, Math.min(activeSheet.rowCount, Xe + 1))}`;
+      const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, col)))}${Math.max(1, Math.min(activeSheet.rowCount, row + 1))}`;
       navigationActions.selectCellAddress(
         jt,
         fe.shiftKey && !["Tab", "Enter"].includes(fe.key),
@@ -458,10 +460,10 @@ function createGridInteractionActions({
       (fe.preventDefault(),
       viewAndSelectionActions.runGuardedAction(() =>
         cellEditActions.applyCellPatches(
-          viewAndSelectionActions.getSelectedCellAddresses().map((jt) => ({
+          viewAndSelectionActions.getSelectedCellAddresses().map((address) => ({
             sheetId: activeSheet.id,
-            address: jt,
-            cell: { ...activeSheet.cells[jt], raw: null },
+            address: address,
+            cell: { ...activeSheet.cells[address], raw: null },
           })),
           "Clear selection",
         ),
@@ -493,13 +495,13 @@ function createGridInteractionActions({
             "Rename workbook",
           );
         else {
-          const fe = addWorksheet(
+          const workbook = addWorksheet(
               activeWorkbook,
               dialogState.promptDialogState.value,
             ),
-            Oe = fe.sheets.at(-1);
+            Oe = workbook.sheets.at(-1);
           (navigationActions.replaceWorkbookSnapshot(
-            fe,
+            workbook,
             `Add sheet: ${Oe.name}`,
           ),
             navigationActions.switchActiveWorksheet(Oe.id));

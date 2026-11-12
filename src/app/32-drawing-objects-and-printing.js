@@ -133,8 +133,14 @@ function ChartInspectionPanel({
             report.diagnostics.length > 0 &&
               i.jsx("ul", {
                 className: "dg-chart-diagnostics",
-                children: report.diagnostics.map((v, g) =>
-                  i.jsxs("li", { children: [v.severity, ": ", v.message] }, g),
+                children: report.diagnostics.map((diagnostic, g) =>
+                  i.jsxs(
+                    "li",
+                    {
+                      children: [diagnostic.severity, ": ", diagnostic.message],
+                    },
+                    g,
+                  ),
                 ),
               }),
             i.jsx("button", {
@@ -146,7 +152,9 @@ function ChartInspectionPanel({
             }),
             i.jsx("button", {
               type: "button",
-              disabled: report.diagnostics.some((v) => v.severity === "error"),
+              disabled: report.diagnostics.some(
+                (diagnostic) => diagnostic.severity === "error",
+              ),
               onClick: () => m(true),
               children: i.jsx(LocalizedText, { children: "Export chart SVG" }),
             }),
@@ -193,8 +201,8 @@ function ChartInspectionPanel({
                     i.jsx("dd", {
                       children: report.series
                         .map(
-                          (v) =>
-                            `${v.name} (column ${v.column}, ${v.kind}, ${v.included ? "included" : "excluded"})`,
+                          (sery) =>
+                            `${sery.name} (column ${sery.column}, ${sery.kind}, ${sery.included ? "included" : "excluded"})`,
                         )
                         .join("; "),
                     }),
@@ -222,8 +230,8 @@ function ChartInspectionPanel({
                                 children: "Category / X",
                               }),
                             }),
-                            report.series.map((v) =>
-                              i.jsx("th", { children: v.name }, v.column),
+                            report.series.map((sery) =>
+                              i.jsx("th", { children: sery.name }, sery.column),
                             ),
                           ],
                         }),
@@ -249,37 +257,37 @@ function ChartInspectionPanel({
                                     String(v.category.value ?? "(blank)"),
                                   ],
                                 }),
-                                v.values.map((g) =>
+                                v.values.map((value) =>
                                   i.jsxs(
                                     "td",
                                     {
                                       children: [
-                                        g.address,
+                                        value.address,
                                         ": ",
-                                        String(g.value ?? "(blank)"),
-                                        g.raw !== g.value &&
+                                        String(value.value ?? "(blank)"),
+                                        value.raw !== value.value &&
                                           i.jsxs("small", {
                                             children: [
                                               " ",
                                               i.jsx(LocalizedText, {
                                                 children: "Raw: ",
                                               }),
-                                              String(g.raw),
+                                              String(value.raw),
                                             ],
                                           }),
-                                        g.note &&
+                                        value.note &&
                                           i.jsxs("small", {
                                             children: [
                                               " ",
                                               i.jsx(LocalizedText, {
                                                 children: "Note: ",
                                               }),
-                                              g.note,
+                                              value.note,
                                             ],
                                           }),
                                       ],
                                     },
-                                    g.address,
+                                    value.address,
                                   ),
                                 ),
                               ],
@@ -340,10 +348,10 @@ function ChartInspectionPanel({
 }
 function PicturePropertiesDialog(e) {
   const { text, language } = useWorkbookMessages(),
-    n = useCancellableOperation(),
+    cancellableOperation = useCancellableOperation(),
     o = e.workbook.sheets
-      .find((L) => L.id === e.sheetId)
-      ?.objects?.find((L) => L.id === e.objectId),
+      .find((sheet) => sheet.id === e.sheetId)
+      ?.objects?.find((object) => object.id === e.objectId),
     a =
       o?.kind ??
       (/picture|image/i.test(e.mode)
@@ -351,7 +359,7 @@ function PicturePropertiesDialog(e) {
         : /chart/i.test(e.mode)
           ? "chart"
           : "shape"),
-    s = e.workbook.sheets.find((L) => L.id === e.sheetId),
+    s = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     [d] = ne.useState(() => ({ current: F2(e.workbook, e.sheetId, e.range) })),
     u = ne.useRef(e.mode),
     l = ne.useRef(e.objectId),
@@ -370,7 +378,7 @@ function PicturePropertiesDialog(e) {
               : {}),
           },
     ),
-    [g, b] = ne.useState(o?.evidence?.sourceLocator ?? ""),
+    [sourceLocator, b] = ne.useState(o?.evidence?.sourceLocator ?? ""),
     [y, w] = ne.useState(""),
     [E, A] = ne.useState(false),
     k =
@@ -390,24 +398,24 @@ function PicturePropertiesDialog(e) {
         selection: L.range,
       });
     },
-    O = (L) => {
+    update = (L) => {
       !F && !E && v(($) => ({ ...$, ...L }));
     };
   (ne.useEffect(() => {
     f.current = true;
-    const L = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       h.current?.querySelector("button")?.focus(),
       () => {
         ((f.current = false),
           p.current++,
-          n.cancel(),
-          L?.isConnected && L.focus());
+          cancellableOperation.cancel(),
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      F && (p.current++, n.cancel(), A(false));
+      F && (p.current++, cancellableOperation.cancel(), A(false));
     }, [F]));
   async function j(L) {
     if (!L) return;
@@ -422,16 +430,19 @@ function PicturePropertiesDialog(e) {
           !["image/png", "image/jpeg"].includes(L.type))
       )
         throw Error("Choose a PNG or JPEG picture no larger than 2 MB.");
-      const { dataURL } = await importPictureFile(L, n.begin());
+      const { dataURL } = await importPictureFile(
+        L,
+        cancellableOperation.begin(),
+      );
       if (!f.current || $ !== p.current) return;
       I();
       const G = inspectPictureDataUrl(dataURL);
       if (G.bytes.length !== L.size)
         throw Error("The file bytes changed while reading the picture.");
-      const H = createPictureEvidence(dataURL, {
+      const pictureEvidence = createPictureEvidence(dataURL, {
           origin: "local-file",
           filename: L.name,
-          ...(g ? { sourceLocator: g } : {}),
+          ...(sourceLocator ? { sourceLocator: sourceLocator } : {}),
         }),
         Q = await new Promise((J, q) => {
           const W = new Image();
@@ -449,24 +460,24 @@ function PicturePropertiesDialog(e) {
       v((J) => ({
         ...J,
         dataURL,
-        evidence: H,
+        evidence: pictureEvidence,
         label: L.name.slice(0, 500),
         width: Math.max(24, Math.round(G.width * X)),
         height: Math.max(24, Math.round(G.height * X)),
       }));
-    } catch (U) {
+    } catch (error) {
       f.current &&
         $ === p.current &&
-        w(U instanceof Error ? U.message : "Picture import failed.");
+        w(error instanceof Error ? error.message : "Picture import failed.");
     } finally {
       f.current && $ === p.current && A(false);
     }
   }
-  function z() {
+  function onClick() {
     try {
       if ((I(), E)) return;
       const $ = c.current,
-        U = $.workbook.sheets.find((X) => X.id === $.sheetId);
+        U = $.workbook.sheets.find((sheet) => sheet.id === $.sheetId);
       if (
         (a === "chart" &&
           (measureChartSelection(m.range, U),
@@ -482,9 +493,9 @@ function PicturePropertiesDialog(e) {
           (G.evidence = {
             ...(m.evidence ??
               createPictureEvidence(m.dataURL, { origin: "legacy-native" })),
-            sourceLocator: g || undefined,
+            sourceLocator: sourceLocator || undefined,
           }),
-        e.objectId && !U.objects?.some((X) => X.id === e.objectId))
+        e.objectId && !U.objects?.some((object) => object.id === e.objectId))
       )
         throw Error("The drawing no longer exists.");
       const H = e.objectId
@@ -501,8 +512,12 @@ function PicturePropertiesDialog(e) {
           e.objectId ? "Update " + a + " properties" : "Insert " + a,
         ),
         $.onClose());
-    } catch ($) {
-      w($ instanceof Error ? $.message : "The object could not be saved.");
+    } catch (error) {
+      w(
+        error instanceof Error
+          ? error.message
+          : "The object could not be saved.",
+      );
     }
   }
   const V =
@@ -521,21 +536,21 @@ function PicturePropertiesDialog(e) {
           ),
           error: "",
         };
-      } catch (L) {
+      } catch (error) {
         return {
           report: null,
-          error: L instanceof Error ? L.message : String(L),
+          error: error instanceof Error ? error.message : String(error),
         };
       }
     }, [a, s, m, e.workbook]),
     B = a[0].toUpperCase() + a.slice(1) + " properties";
   return i.jsx("div", {
     className: "dg-backdrop",
-    onKeyDown: (L) => {
+    onKeyDown: (event) => {
       if (
-        (L.stopPropagation(),
-        L.key === "Escape" && (L.preventDefault(), e.onClose()),
-        L.key === "Tab")
+        (event.stopPropagation(),
+        event.key === "Escape" && (event.preventDefault(), e.onClose()),
+        event.key === "Tab")
       ) {
         const U = [
             ...(h.current?.querySelectorAll(
@@ -544,11 +559,11 @@ function PicturePropertiesDialog(e) {
           ].filter((Q) => !Q.closest("fieldset:disabled")),
           G = U[0],
           H = U.at(-1);
-        L.shiftKey && document.activeElement === G
-          ? (L.preventDefault(), H == null || H.focus())
-          : !L.shiftKey &&
+        event.shiftKey && document.activeElement === G
+          ? (event.preventDefault(), H == null || H.focus())
+          : !event.shiftKey &&
             document.activeElement === H &&
-            (L.preventDefault(), G == null || G.focus());
+            (event.preventDefault(), G == null || G.focus());
       }
     },
     children: i.jsxs("section", {
@@ -629,7 +644,8 @@ function PicturePropertiesDialog(e) {
                             accept: "image/png,image/jpeg",
                             "aria-label": text("Picture file"),
                             disabled: F || E,
-                            onChange: (L) => void j(L.target.files?.[0]),
+                            onChange: (event) =>
+                              void j(event.target.files?.[0]),
                             lang: language("Picture file"),
                             "data-ui-label": "Picture file",
                           }),
@@ -649,9 +665,9 @@ function PicturePropertiesDialog(e) {
                           }),
                           i.jsx("input", {
                             "aria-label": text("Picture source locator"),
-                            value: g,
+                            value: sourceLocator,
                             maxLength: 2e3,
-                            onChange: (L) => b(L.target.value),
+                            onChange: (event) => b(event.target.value),
                             lang: language("Picture source locator"),
                             "data-ui-label": "Picture source locator",
                           }),
@@ -672,7 +688,8 @@ function PicturePropertiesDialog(e) {
                       i.jsxs("select", {
                         "aria-label": text("Shape type"),
                         value: m.shape,
-                        onChange: (L) => O({ shape: L.target.value }),
+                        onChange: (event) =>
+                          update({ shape: event.target.value }),
                         lang: language("Shape type"),
                         "data-ui-label": "Shape type",
                         children: [
@@ -700,7 +717,7 @@ function PicturePropertiesDialog(e) {
                   i.jsx(ChartSettingsPanel, {
                     object: m,
                     report: D.report,
-                    update: O,
+                    update: update,
                   }),
                 i.jsxs("label", {
                   children: [
@@ -709,7 +726,8 @@ function PicturePropertiesDialog(e) {
                       "aria-label": text("Object label"),
                       value: m.label,
                       maxLength: 500,
-                      onChange: (L) => O({ label: L.target.value }),
+                      onChange: (event) =>
+                        update({ label: event.target.value }),
                       lang: language("Object label"),
                       "data-ui-label": "Object label",
                     }),
@@ -727,7 +745,7 @@ function PicturePropertiesDialog(e) {
                             max: 4e3,
                             "aria-label": text("Object width"),
                             value: m.width,
-                            onValueChange: (L) => O({ width: Number(L) }),
+                            onValueChange: (L) => update({ width: Number(L) }),
                             lang: language("Object width"),
                             "data-ui-label": "Object width",
                           }),
@@ -741,7 +759,7 @@ function PicturePropertiesDialog(e) {
                             max: 4e3,
                             "aria-label": text("Object height"),
                             value: m.height,
-                            onValueChange: (L) => O({ height: Number(L) }),
+                            onValueChange: (L) => update({ height: Number(L) }),
                             lang: language("Object height"),
                             "data-ui-label": "Object height",
                           }),
@@ -760,7 +778,8 @@ function PicturePropertiesDialog(e) {
                             type: "color",
                             "aria-label": text("Object fill"),
                             value: m.fill,
-                            onChange: (L) => O({ fill: L.target.value }),
+                            onChange: (event) =>
+                              update({ fill: event.target.value }),
                             lang: language("Object fill"),
                             "data-ui-label": "Object fill",
                           }),
@@ -773,7 +792,8 @@ function PicturePropertiesDialog(e) {
                             type: "color",
                             "aria-label": text("Object outline"),
                             value: m.stroke,
-                            onChange: (L) => O({ stroke: L.target.value }),
+                            onChange: (event) =>
+                              update({ stroke: event.target.value }),
                             lang: language("Object outline"),
                             "data-ui-label": "Object outline",
                           }),
@@ -868,7 +888,7 @@ function PicturePropertiesDialog(e) {
                       children: "Source locator",
                     }),
                   }),
-                  i.jsx("dd", { children: g || "Not recorded" }),
+                  i.jsx("dd", { children: sourceLocator || "Not recorded" }),
                 ],
               }),
             y &&
@@ -883,7 +903,7 @@ function PicturePropertiesDialog(e) {
             }),
             i.jsx("button", {
               className: "dg-primary",
-              onClick: z,
+              onClick: onClick,
               disabled: F || E,
               children: E
                 ? "Reading picture…"
@@ -902,8 +922,8 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
     if (object.kind !== "picture") return "";
     try {
       return (inspectPictureDataUrl(object.dataURL ?? ""), "");
-    } catch (a) {
-      return a instanceof Error ? a.message : "Invalid picture.";
+    } catch (error) {
+      return error instanceof Error ? error.message : "Invalid picture.";
     }
   }, [object.kind, object.dataURL]);
   return object.kind === "picture"
@@ -1001,26 +1021,26 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
 }
 function DrawingObjectOverlay(e) {
   const { text, language } = useWorkbookMessages(),
-    n = e.workbook.sheets.find((E) => E.id === e.sheetId),
+    n = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
   const a = e.readOnly || !n || !!n?.protection?.enabled,
     [s, d] = ne.useState(null),
     [u, l] = ne.useState(""),
-    [c, h] = ne.useState(null),
+    [objectId, h] = ne.useState(null),
     [f, p] = ne.useState(null),
     m = ne.useRef(null);
   m.current = f;
   function v(E, A, k) {
     try {
       const I = o.current,
-        O = I.workbook.sheets.find((z) => z.id === I.sheetId);
-      if (!O?.objects?.some((z) => z.id === E.id))
+        O = I.workbook.sheets.find((sheet) => sheet.id === I.sheetId);
+      if (!O?.objects?.some((object) => object.id === E.id))
         throw Error("The selected drawing no longer exists.");
       const j = setSheetDrawingObjects(
         I.workbook,
         I.sheetId,
-        O.objects.map((z) => (z.id === E.id ? E : z)),
+        O.objects.map((object) => (object.id === E.id ? E : object)),
         {
           readOnly: I.readOnly,
           snapshot: k ?? F2(I.workbook, I.sheetId, I.selection),
@@ -1028,14 +1048,14 @@ function DrawingObjectOverlay(e) {
         },
       );
       (j !== I.workbook && I.onWorkbookChange(j, A), l(""));
-    } catch (I) {
-      l(I instanceof Error ? I.message : "Could not update object.");
+    } catch (error) {
+      l(error instanceof Error ? error.message : "Could not update object.");
     }
   }
   function g(E) {
     try {
       const A = o.current,
-        k = A.workbook.sheets.find((I) => I.id === A.sheetId),
+        k = A.workbook.sheets.find((sheet) => sheet.id === A.sheetId),
         F = setSheetDrawingObjects(
           A.workbook,
           A.sheetId,
@@ -1047,8 +1067,8 @@ function DrawingObjectOverlay(e) {
           },
         );
       (F !== A.workbook && A.onWorkbookChange(F, "Delete drawing"), d(null));
-    } catch (A) {
-      l(A instanceof Error ? A.message : "Could not delete drawing.");
+    } catch (error) {
+      l(error instanceof Error ? error.message : "Could not delete drawing.");
     }
   }
   function b(E, A, k, F) {
@@ -1071,8 +1091,12 @@ function DrawingObjectOverlay(e) {
         scale: e.scale,
       }),
         l(""));
-    } catch (I) {
-      l(I instanceof Error ? I.message : "Could not start drawing edit.");
+    } catch (error) {
+      l(
+        error instanceof Error
+          ? error.message
+          : "Could not start drawing edit.",
+      );
     }
   }
   return (
@@ -1091,18 +1115,22 @@ function DrawingObjectOverlay(e) {
             e.scale !== f.scale)
           )
             throw Error("The zoom changed. Start the drawing move again.");
-        } catch (E) {
+        } catch (error) {
           (p(null),
-            l(E instanceof Error ? E.message : "Drawing edit was cancelled."));
+            l(
+              error instanceof Error
+                ? error.message
+                : "Drawing edit was cancelled.",
+            ));
         }
     }, [e.workbook, e.readOnly, e.selection, e.scale, f]),
     ne.useEffect(() => {
       if (!f) return;
-      const E = (I) => {
+      const E = (event) => {
           const O = m.current;
           if (!O) return;
-          const j = (I.clientX - O.x) / O.scale,
-            z = (I.clientY - O.y) / O.scale,
+          const j = (event.clientX - O.x) / O.scale,
+            z = (event.clientY - O.y) / O.scale,
             V = {
               ...O,
               next:
@@ -1140,8 +1168,8 @@ function DrawingObjectOverlay(e) {
         k = () => {
           ((m.current = null), p(null));
         },
-        F = (I) => {
-          I.key === "Escape" && k();
+        F = (event) => {
+          event.key === "Escape" && k();
         };
       return (
         window.addEventListener("pointermove", E),
@@ -1166,16 +1194,17 @@ function DrawingObjectOverlay(e) {
           "data-ui-label": "Worksheet drawings",
           children: [
             (n?.objects ?? []).map((E) => {
-              const A = f?.id === E.id ? f.next : E,
-                k = e.positionForCell(A.anchor),
-                F = A.kind === "chart" && A.chart === "sparkline",
-                I = applyChartDrawingLayout(n, A);
+              const object = f?.id === E.id ? f.next : E,
+                k = e.positionForCell(object.anchor),
+                disabled =
+                  object.kind === "chart" && object.chart === "sparkline",
+                I = applyChartDrawingLayout(n, object);
               return k
                 ? i.jsxs(
                     "div",
                     {
-                      className: `dg-drawing ${s === A.id ? "dg-drawing-selected" : ""}`,
-                      "data-object-id": A.id,
+                      className: `dg-drawing ${s === object.id ? "dg-drawing-selected" : ""}`,
+                      "data-object-id": object.id,
                       style: {
                         left: k.left + I.offsetX * e.scale,
                         top: k.top + I.offsetY * e.scale,
@@ -1183,58 +1212,59 @@ function DrawingObjectOverlay(e) {
                         height: I.height * e.scale,
                       },
                       tabIndex: 0,
-                      "aria-label": A.kind + ": " + A.label,
-                      onClick: () => d(A.id),
-                      onKeyDown: (O) => {
-                        (O.stopPropagation(),
-                          O.key === "Escape" && d(null),
-                          (O.key === "Delete" || O.key === "Backspace") &&
-                            O.target === O.currentTarget &&
+                      "aria-label": object.kind + ": " + object.label,
+                      onClick: () => d(object.id),
+                      onKeyDown: (event) => {
+                        (event.stopPropagation(),
+                          event.key === "Escape" && d(null),
+                          (event.key === "Delete" ||
+                            event.key === "Backspace") &&
+                            event.target === event.currentTarget &&
                             !a &&
-                            (O.preventDefault(), g(A.id)));
+                            (event.preventDefault(), g(object.id)));
                       },
                       children: [
                         i.jsx(DrawingObjectSvg, {
-                          object: A,
+                          object: object,
                           sheet: n,
                           calc: e.calc,
                           textScale: e.scale,
                         }),
-                        s === A.id &&
+                        s === object.id &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("div", {
                                 className: "dg-object-toolbar",
                                 children: [
-                                  (A.kind === "picture" ||
-                                    A.kind === "chart") &&
+                                  (object.kind === "picture" ||
+                                    object.kind === "chart") &&
                                     i.jsx("button", {
                                       className: "dg-properties-button",
                                       "aria-label":
-                                        (A.kind === "chart"
+                                        (object.kind === "chart"
                                           ? "Chart"
                                           : "Picture") +
                                         " properties: " +
-                                        A.label,
-                                      onClick: () => h(A.id),
+                                        object.label,
+                                      onClick: () => h(object.id),
                                       children: "ⓘ",
                                     }),
                                   !a &&
                                     i.jsxs(i.Fragment, {
                                       children: [
                                         i.jsx("button", {
-                                          "aria-label": "Move " + A.label,
-                                          title: F
+                                          "aria-label": "Move " + object.label,
+                                          title: disabled
                                             ? "Set the sparkline anchor in Chart properties"
                                             : "Drag to move",
-                                          disabled: F,
-                                          onPointerDown: (O) => {
-                                            (O.preventDefault(),
+                                          disabled: disabled,
+                                          onPointerDown: (event) => {
+                                            (event.preventDefault(),
                                               b(
-                                                A,
+                                                object,
                                                 "move",
-                                                O.clientX,
-                                                O.clientY,
+                                                event.clientX,
+                                                event.clientY,
                                               ));
                                           },
                                           children: i.jsx(Move, { size: 14 }),
@@ -1243,10 +1273,13 @@ function DrawingObjectOverlay(e) {
                                           "aria-label": text(
                                             "Selected object label",
                                           ),
-                                          value: A.label,
-                                          onChange: (O) =>
+                                          value: object.label,
+                                          onChange: (event) =>
                                             v(
-                                              { ...A, label: O.target.value },
+                                              {
+                                                ...object,
+                                                label: event.target.value,
+                                              },
                                               "Rename drawing",
                                             ),
                                           lang: language(
@@ -1256,8 +1289,9 @@ function DrawingObjectOverlay(e) {
                                             "Selected object label",
                                         }),
                                         i.jsx("button", {
-                                          "aria-label": "Delete " + A.label,
-                                          onClick: () => g(A.id),
+                                          "aria-label":
+                                            "Delete " + object.label,
+                                          onClick: () => g(object.id),
                                           children: i.jsx(Trash2, { size: 14 }),
                                         }),
                                       ],
@@ -1265,20 +1299,25 @@ function DrawingObjectOverlay(e) {
                                 ],
                               }),
                               !a &&
-                                !F &&
+                                !disabled &&
                                 i.jsx("button", {
                                   className: "dg-resize-object",
-                                  "aria-label": "Resize " + A.label,
-                                  onPointerDown: (O) => {
-                                    (O.preventDefault(),
-                                      b(A, "resize", O.clientX, O.clientY));
+                                  "aria-label": "Resize " + object.label,
+                                  onPointerDown: (event) => {
+                                    (event.preventDefault(),
+                                      b(
+                                        object,
+                                        "resize",
+                                        event.clientX,
+                                        event.clientY,
+                                      ));
                                   },
                                 }),
                             ],
                           }),
                       ],
                     },
-                    A.id,
+                    object.id,
                   )
                 : null;
             }),
@@ -1290,14 +1329,16 @@ function DrawingObjectOverlay(e) {
               }),
           ],
         }),
-        c &&
-          n?.objects?.some((E) => E.id === c) &&
+        objectId &&
+          n?.objects?.some((object) => object.id === objectId) &&
           i.jsx(PicturePropertiesDialog, {
             mode: "drawing-properties",
-            objectId: c,
+            objectId: objectId,
             workbook: e.workbook,
             sheetId: e.sheetId,
-            range: e.selection ?? n.objects.find((E) => E.id === c).anchor,
+            range:
+              e.selection ??
+              n.objects.find((object) => object.id === objectId).anchor,
             readOnly: e.readOnly,
             onClose: () => h(null),
             onWorkbookChange: e.onWorkbookChange,
@@ -1319,23 +1360,26 @@ function PrintPagePreview({
   calc,
   ruleStyles,
 }) {
-  const l = createAxisVisibilityIndex(sheet.rowCount, cn(sheet, "row")),
+  const axisVisibilityIndex = createAxisVisibilityIndex(
+      sheet.rowCount,
+      cn(sheet, "row"),
+    ),
     c = createAxisVisibilityIndex(sheet.colCount, cn(sheet, "column")),
-    h = resolvePageDimensions(layout),
-    f = parseRangeAddress(layout.printArea),
+    pageDimensions = resolvePageDimensions(layout),
+    rangeAddress = parseRangeAddress(layout.printArea),
     p =
       page.rows ??
       Array.from(
         { length: page.lastRow - page.firstRow + 1 },
         (E, A) => page.firstRow + A,
-      ).filter((E) => !l.isHidden(E)),
+      ).filter((E) => !axisVisibilityIndex.isHidden(E)),
     m =
       page.columns ??
       Array.from(
         { length: page.lastCol - page.firstCol + 1 },
         (E, A) => page.firstCol + A,
       ).filter((E) => !c.isHidden(E)),
-    v = m.reduce(
+    width = m.reduce(
       (E, A) => E + columnWidthAt(sheet, A),
       layout.headings ? 32 : 0,
     ),
@@ -1355,7 +1399,8 @@ function PrintPagePreview({
       lastCol: F.at(-1),
       rowSpan: k.length,
       colSpan: F.length,
-      suppressContent: l.isHidden(A.firstRow) || c.isHidden(A.firstCol),
+      suppressContent:
+        axisVisibilityIndex.isHidden(A.firstRow) || c.isHidden(A.firstCol),
       anchor: `${columnIndexToLetters(A.firstCol)}${A.firstRow + 1}`,
     };
     if (!(I.firstRow > I.lastRow || I.firstCol > I.lastCol))
@@ -1368,8 +1413,8 @@ function PrintPagePreview({
     "aria-label": `Print page ${index + 1}`,
     style: {
       boxSizing: "border-box",
-      width: h.width,
-      height: h.height,
+      width: pageDimensions.width,
+      height: pageDimensions.height,
       paddingTop: layout.margins.top * 96,
       paddingBottom: layout.margins.bottom * 96,
       paddingLeft: layout.margins.left * 96,
@@ -1388,19 +1433,23 @@ function PrintPagePreview({
       i.jsx("div", {
         className: "dg-print-content",
         style: {
-          width: h.width - (layout.margins.left + layout.margins.right) * 96,
-          height: h.height - (layout.margins.top + layout.margins.bottom) * 96,
+          width:
+            pageDimensions.width -
+            (layout.margins.left + layout.margins.right) * 96,
+          height:
+            pageDimensions.height -
+            (layout.margins.top + layout.margins.bottom) * 96,
         },
         children: i.jsxs("div", {
           style: {
             transform: `scale(${scale})`,
             transformOrigin: "top left",
-            width: v,
+            width: width,
           },
           children: [
             i.jsxs("table", {
               className: "dg-print-table",
-              style: { width: v },
+              style: { width: width },
               children: [
                 i.jsxs("colgroup", {
                   children: [
@@ -1440,16 +1489,16 @@ function PrintPagePreview({
                             const F =
                                 k?.anchor ??
                                 `${columnIndexToLetters(A)}${E + 1}`,
-                              I = k?.suppressContent
+                              cell = k?.suppressContent
                                 ? undefined
                                 : sheet.cells[F],
                               O = {
-                                ...I,
-                                raw: I?.raw ?? null,
+                                ...cell,
+                                raw: cell?.raw ?? null,
                                 style: k?.suppressContent
                                   ? {}
                                   : {
-                                      ...I?.style,
+                                      ...cell?.style,
                                       ...ruleStyles(F).style,
                                     },
                               },
@@ -1460,10 +1509,10 @@ function PrintPagePreview({
                               {
                                 "data-print-cell": F,
                                 "data-print-in-area":
-                                  E >= f.firstRow &&
-                                  E <= f.lastRow &&
-                                  A >= f.firstCol &&
-                                  A <= f.lastCol
+                                  E >= rangeAddress.firstRow &&
+                                  E <= rangeAddress.lastRow &&
+                                  A >= rangeAddress.firstCol &&
+                                  A <= rangeAddress.lastCol
                                     ? "true"
                                     : "false",
                                 "data-print-number":
@@ -1505,11 +1554,11 @@ function PrintPagePreview({
                 }),
               ],
             }),
-            (sheet.objects ?? []).map((E) => {
-              const A = parseRangeAddress(E.anchor),
-                k = applyChartDrawingLayout(sheet, E);
+            (sheet.objects ?? []).map((object) => {
+              const A = parseRangeAddress(object.anchor),
+                k = applyChartDrawingLayout(sheet, object);
               if (
-                l.isHidden(A.firstRow) ||
+                axisVisibilityIndex.isHidden(A.firstRow) ||
                 c.isHidden(A.firstCol) ||
                 !p.includes(A.firstRow) ||
                 !m.includes(A.firstCol)
@@ -1525,24 +1574,28 @@ function PrintPagePreview({
                 "div",
                 {
                   className: "dg-print-object",
-                  "data-print-object": E.id,
+                  "data-print-object": object.id,
                   "data-print-in-area":
-                    A.firstRow >= f.firstRow &&
-                    A.firstRow <= f.lastRow &&
-                    A.firstCol >= f.firstCol &&
-                    A.firstCol <= f.lastCol
+                    A.firstRow >= rangeAddress.firstRow &&
+                    A.firstRow <= rangeAddress.lastRow &&
+                    A.firstCol >= rangeAddress.firstCol &&
+                    A.firstCol <= rangeAddress.lastCol
                       ? "true"
                       : "false",
-                  "data-print-label": E.label,
+                  "data-print-label": object.label,
                   style: {
                     left: F + k.offsetX,
                     top: I + k.offsetY,
                     width: k.width,
                     height: k.height,
                   },
-                  children: i.jsx(DrawingObjectSvg, { object: E, sheet, calc }),
+                  children: i.jsx(DrawingObjectSvg, {
+                    object: object,
+                    sheet,
+                    calc,
+                  }),
                 },
-                E.id,
+                object.id,
               );
             }),
           ],
@@ -1561,66 +1614,76 @@ function PrintPagePreview({
   });
 }
 
-function buildPrintPages(e, r, t) {
-  const n = { ...findSheetOrThrow(e, r) };
-  validatePageSetup(t, n);
+function buildPrintPages(workbook, sheetId, t) {
+  const sheet = { ...findSheetOrThrow(workbook, sheetId) };
+  validatePageSetup(t, sheet);
   try {
-    validateDrawingObjects(n.objects, n);
-  } catch (d) {
+    validateDrawingObjects(sheet.objects, sheet);
+  } catch (error) {
     throw Error(
-      `Unsupported or invalid print object: ${d instanceof Error ? d.message : "check the worksheet drawings."}`,
+      `Unsupported or invalid print object: ${error instanceof Error ? error.message : "check the worksheet drawings."}`,
     );
   }
-  const o = zU(n, n.pageLayout),
-    a = calculateWorkbookWithSettings(e),
-    s = evaluateConditionalFormatRules(n, a, vx(n, a));
-  for (const d of o.pages) {
+  const o = zU(sheet, sheet.pageLayout),
+    workbookWithSettings = calculateWorkbookWithSettings(workbook),
+    ruleStyles = evaluateConditionalFormatRules(
+      sheet,
+      workbookWithSettings,
+      vx(sheet, workbookWithSettings),
+    );
+  for (const page of o.pages) {
     const u =
-        d.rows ??
+        page.rows ??
         Array.from(
-          { length: d.lastRow - d.firstRow + 1 },
-          (c, h) => d.firstRow + h,
+          { length: page.lastRow - page.firstRow + 1 },
+          (c, h) => page.firstRow + h,
         ),
       l =
-        d.columns ??
+        page.columns ??
         Array.from(
-          { length: d.lastCol - d.firstCol + 1 },
-          (c, h) => d.firstCol + h,
+          { length: page.lastCol - page.firstCol + 1 },
+          (c, h) => page.firstCol + h,
         );
     for (const c of u)
-      for (const h of l) s(`${columnIndexToLetters(h)}${c + 1}`);
+      for (const h of l) ruleStyles(`${columnIndexToLetters(h)}${c + 1}`);
   }
-  return { ...o, sheet: n, layout: n.pageLayout, calc: a, ruleStyles: s };
+  return {
+    ...o,
+    sheet: sheet,
+    layout: sheet.pageLayout,
+    calc: workbookWithSettings,
+    ruleStyles: ruleStyles,
+  };
 }
-function renderPrintDocument(e, r, t) {
-  const n = findSheetOrThrow(e, r),
-    o = buildPrintPages(
-      e,
-      r,
-      t ??
-        n.pageLayout ?? {
-          ...createDefaultPageSetup(n),
+function renderPrintDocument(workbook, sheetId, layout) {
+  const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
+    printPages = buildPrintPages(
+      workbook,
+      sheetId,
+      layout ??
+        sheetOrThrow.pageLayout ?? {
+          ...createDefaultPageSetup(sheetOrThrow),
           ...defaultPrintHeaderFooter,
         },
     ),
-    a = o.pages.map((l, c) =>
+    a = printPages.pages.map((page, c) =>
       i.jsx(
         PrintPagePreview,
         {
-          workbook: e,
-          sheet: o.sheet,
-          layout: o.layout,
-          page: l,
+          workbook: workbook,
+          sheet: printPages.sheet,
+          layout: printPages.layout,
+          page: page,
           index: c,
-          total: o.pages.length,
-          scale: o.scale,
-          calc: o.calc,
-          ruleStyles: o.ruleStyles,
+          total: printPages.pages.length,
+          scale: printPages.scale,
+          calc: printPages.calc,
+          ruleStyles: printPages.ruleStyles,
         },
         c,
       ),
     ),
-    s = o.layout.paper === "a4" ? "A4" : o.layout.paper;
+    s = printPages.layout.paper === "a4" ? "A4" : printPages.layout.paper;
   return {
     html:
       "<!doctype html>" +
@@ -1632,14 +1695,14 @@ function renderPrintDocument(e, r, t) {
               children: [
                 i.jsx("meta", { charSet: "utf-8" }),
                 i.jsx("title", {
-                  children: `${e.name} — ${n.name} — revision ${e.revision}`,
+                  children: `${workbook.name} — ${sheetOrThrow.name} — revision ${workbook.revision}`,
                 }),
                 i.jsx("meta", {
                   name: "description",
-                  content: `Workbook ${e.name}; revision ${e.revision}; period ${e.metadata?.period || "not set"}; ${o.pages.length} page(s).`,
+                  content: `Workbook ${workbook.name}; revision ${workbook.revision}; period ${workbook.metadata?.period || "not set"}; ${printPages.pages.length} page(s).`,
                 }),
                 i.jsx("style", {
-                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${printPaperStyles}@page{size:${s} ${o.layout.orientation};margin:0}`,
+                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${printPaperStyles}@page{size:${s} ${printPages.layout.orientation};margin:0}`,
                 }),
               ],
             }),
@@ -1647,10 +1710,10 @@ function renderPrintDocument(e, r, t) {
           ],
         }),
       ),
-    pageCount: o.pages.length,
+    pageCount: printPages.pages.length,
     notices: [
-      ...(o.notices ?? []),
-      ...o.ruleStyles
+      ...(printPages.notices ?? []),
+      ...printPages.ruleStyles
         .errors()
         .map((l) => `Conditional formatting: ${l.message}`),
     ],
@@ -1667,10 +1730,10 @@ function boundsOverlap(e, r, t = 0.8) {
 function measureRenderedTextBounds(e) {
   if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
     return true;
-  const r = e.ownerDocument,
+  const ownerDocument = e.ownerDocument,
     t = e.getBoundingClientRect(),
-    n = r.createTreeWalker(e, 4),
-    o = r.createRange();
+    n = ownerDocument.createTreeWalker(e, 4),
+    o = ownerDocument.createRange();
   let a;
   for (; (a = n.nextNode());)
     if (a.textContent?.trim()) {
@@ -1681,9 +1744,9 @@ function measureRenderedTextBounds(e) {
 }
 function measurePrintLayoutIssues(e) {
   const r = Array.from(e.querySelectorAll(".dg-print-paper")),
-    t = [];
+    issues = [];
   r.length ||
-    t.push({
+    issues.push({
       severity: "error",
       code: "empty",
       message: "There are no pages to print. Choose a populated print area.",
@@ -1691,26 +1754,26 @@ function measurePrintLayoutIssues(e) {
   let n = false;
   return (
     r.forEach((o, a) => {
-      const s = a + 1,
+      const page = a + 1,
         d = o.getBoundingClientRect(),
         u = o.querySelector(".dg-print-content"),
         l = o.querySelector(".dg-print-table");
       if (!d.width || !d.height || !u || !l) {
-        t.push({
+        issues.push({
           severity: "error",
           code: "layout",
-          page: s,
-          message: `Page ${s}: print layout could not be measured. Keep the preview visible and retry in a supported browser.`,
+          page: page,
+          message: `Page ${page}: print layout could not be measured. Keep the preview visible and retry in a supported browser.`,
         });
         return;
       }
       const c = u.getBoundingClientRect();
       boundsOverlap(l.getBoundingClientRect(), c) &&
-        t.push({
+        issues.push({
           severity: "error",
           code: "layout",
-          page: s,
-          message: `Page ${s}: rows or columns extend beyond the printable area. Reduce scale, increase margins' available space, or adjust row/column sizes.`,
+          page: page,
+          message: `Page ${page}: rows or columns extend beyond the printable area. Reduce scale, increase margins' available space, or adjust row/column sizes.`,
         });
       for (const m of ["header", "footer"]) {
         const v = o.querySelector(`.dg-print-${m}`);
@@ -1719,28 +1782,28 @@ function measurePrintLayoutIssues(e) {
         (boundsOverlap(g, d) ||
           measureRenderedTextBounds(v) ||
           (m === "header" ? g.bottom > c.top + 0.8 : g.top < c.bottom - 0.8)) &&
-          t.push({
+          issues.push({
             severity: "error",
             code: "identity",
-            page: s,
-            message: `Page ${s}: the ${m} is clipped or overlaps the schedule. Shorten its text or increase the ${m === "header" ? "top" : "bottom"} margin.`,
+            page: page,
+            message: `Page ${page}: the ${m} is clipped or overlaps the schedule. Shorten its text or increase the ${m === "header" ? "top" : "bottom"} margin.`,
           });
       }
       const h = [];
       for (const m of o.querySelectorAll("[data-print-cell]")) {
-        const v = m.firstElementChild;
-        if (!v?.textContent?.trim()) continue;
+        const firstElementChild = m.firstElementChild;
+        if (!firstElementChild?.textContent?.trim()) continue;
         m.dataset.printInArea !== "false" && (n = true);
-        const g = m.dataset.printCell,
+        const printCell = m.dataset.printCell,
           b = m.dataset.printNumber === "true";
-        (b && h.push({ address: g, bounds: m.getBoundingClientRect() }),
-          measureRenderedTextBounds(v) &&
-            t.push({
+        (b && h.push({ address: printCell, bounds: m.getBoundingClientRect() }),
+          measureRenderedTextBounds(firstElementChild) &&
+            issues.push({
               severity: b ? "error" : "warning",
               code: b ? "number" : "text",
-              page: s,
-              address: g,
-              message: `Page ${s}, ${g}: ${b ? "the full number does not fit" : "text is clipped"}. AutoFit or widen the column, increase row height, or reduce the cell font size before printing.`,
+              page: page,
+              address: printCell,
+              message: `Page ${page}, ${printCell}: ${b ? "the full number does not fit" : "text is clipped"}. AutoFit or widen the column, increase row height, or reduce the cell font size before printing.`,
             }));
       }
       for (const m of o.querySelectorAll(".dg-print-object")) {
@@ -1748,21 +1811,21 @@ function measurePrintLayoutIssues(e) {
         const v = m.dataset.printLabel || m.dataset.printObject || "Drawing",
           g = m.getBoundingClientRect();
         boundsOverlap(g, c) &&
-          t.push({
+          issues.push({
             severity: "error",
             code: "object",
-            page: s,
-            message: `Page ${s}: “${v}” crosses the printable boundary. Move or resize it; drawings are not continued onto the next page.`,
+            page: page,
+            message: `Page ${page}: “${v}” crosses the printable boundary. Move or resize it; drawings are not continued onto the next page.`,
           });
         const b = m.querySelector(".dg-shape-label"),
           y = [...m.querySelectorAll("svg text")];
         ((b && measureRenderedTextBounds(b)) ||
           y.some((w) => boundsOverlap(w.getBoundingClientRect(), g))) &&
-          t.push({
+          issues.push({
             severity: "error",
             code: "object",
-            page: s,
-            message: `Page ${s}: the label in “${v}” is clipped. Enlarge the object or shorten the label.`,
+            page: page,
+            message: `Page ${page}: the label in “${v}” is clipped. Enlarge the object or shorten the label.`,
           });
         for (const w of h)
           Math.min(g.right, w.bounds.right) - Math.max(g.left, w.bounds.left) >
@@ -1770,37 +1833,37 @@ function measurePrintLayoutIssues(e) {
             Math.min(g.bottom, w.bounds.bottom) -
               Math.max(g.top, w.bounds.top) >
               1 &&
-            t.push({
+            issues.push({
               severity: "error",
               code: "object",
-              page: s,
+              page: page,
               address: w.address,
-              message: `Page ${s}, ${w.address}: “${v}” overlaps a numeric cell. Move the drawing so the amount remains visible.`,
+              message: `Page ${page}, ${w.address}: “${v}” overlaps a numeric cell. Move the drawing so the amount remains visible.`,
             });
         for (const w of m.querySelectorAll("img"))
           (!w.complete || w.naturalWidth <= 0) &&
-            t.push({
+            issues.push({
               severity: "error",
               code: "image",
-              page: s,
-              message: `Page ${s}: picture “${v}” could not be decoded. Replace it before printing.`,
+              page: page,
+              message: `Page ${page}: picture “${v}” could not be decoded. Replace it before printing.`,
             });
       }
     }),
     r.length &&
       !n &&
-      !t.some((o) => o.code === "layout") &&
-      t.unshift({
+      !issues.some((issue) => issue.code === "layout") &&
+      issues.unshift({
         severity: "error",
         code: "empty",
         message:
           "The print area is empty: no displayed values or visible objects. Choose a populated print area. Formatting, repeated titles outside the area, and page identifiers alone do not count as schedule content.",
       }),
-    { pages: r.length, issues: t }
+    { pages: r.length, issues: issues }
   );
 }
 function summarizePrintIssues(e) {
-  const r = e.issues.filter((t) => t.severity === "error");
+  const r = e.issues.filter((issue) => issue.severity === "error");
   if (r.length)
     throw Error(
       `${r.length} print issue(s). ${r
@@ -1870,10 +1933,10 @@ async function waitForPrintAssets(e, r = {}) {
     a.forEach((d) => d());
   }
 }
-async function printDocumentInWindow(e, r, t) {
+async function printDocumentInWindow(e, html, t) {
   if (
     (t.assertCurrent(),
-    e.document.write(r),
+    e.document.write(html),
     e.document.close(),
     await waitForPrintAssets(e.document, t),
     t.assertCurrent(),
@@ -1888,15 +1951,15 @@ const pdfRenderLimits = {
   maxBytes: 50 * 1024 * 1024,
   pageTimeoutMs: 3e4,
 };
-function buildScheduleFileName(e, r) {
+function buildScheduleFileName(workbook, sheetId) {
   return `${
-    `${e.name}-${findSheetOrThrow(e, r).name}-rev-${e.revision}`
+    `${workbook.name}-${findSheetOrThrow(workbook, sheetId).name}-rev-${workbook.revision}`
       .replace(/[\x00-\x1f\x7f<>:"/\\|?*]+/g, "-")
       .replace(/[. ]+$/g, "")
       .slice(0, 160) || "Schedule"
   }.pdf`;
 }
-async function renderSchedulePdf(e, r, t) {
+async function renderSchedulePdf(workbook, sheetId, t) {
   const n = () => {
       if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
       t.assertCurrent();
@@ -1927,20 +1990,20 @@ async function renderSchedulePdf(e, r, t) {
     };
   if ((n(), typeof document > "u"))
     throw Error("PDF rendering requires a browser with canvas support.");
-  const a = findSheetOrThrow(e, r),
-    s = t.layout ??
-      a.pageLayout ?? {
-        ...createDefaultPageSetup(a),
+  const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
+    layout = t.layout ??
+      sheetOrThrow.pageLayout ?? {
+        ...createDefaultPageSetup(sheetOrThrow),
         ...defaultPrintHeaderFooter,
       },
-    d = renderPrintDocument(e, r, s),
-    u = resolvePageDimensions(s),
+    d = renderPrintDocument(workbook, sheetId, layout),
+    pageDimensions = resolvePageDimensions(layout),
     l = document.createElement("iframe");
   ((l.title = "Preparing schedule PDF"),
     l.setAttribute("aria-hidden", "true"),
     (l.tabIndex = -1),
     l.setAttribute("sandbox", "allow-same-origin"),
-    (l.style.cssText = `position:fixed;left:-100000px;top:0;width:${u.width}px;height:${u.height}px;border:0;pointer-events:none;`));
+    (l.style.cssText = `position:fixed;left:-100000px;top:0;width:${pageDimensions.width}px;height:${pageDimensions.height}px;border:0;pointer-events:none;`));
   const c = [];
   try {
     await new Promise((F, I) => {
@@ -1969,15 +2032,15 @@ async function renderSchedulePdf(e, r, t) {
         )),
         document.body.append(l));
     });
-    const b = l.contentDocument;
-    if (!b)
+    const contentDocument = l.contentDocument;
+    if (!contentDocument)
       throw Error(
         "The host does not allow the isolated PDF rendering document.",
       );
-    (await waitForPrintAssets(b, { signal: t.signal }), n());
-    const y = measurePrintLayoutIssues(b);
-    summarizePrintIssues(y);
-    const w = [...b.querySelectorAll(".dg-print-paper")];
+    (await waitForPrintAssets(contentDocument, { signal: t.signal }), n());
+    const inspection = measurePrintLayoutIssues(contentDocument);
+    summarizePrintIssues(inspection);
+    const w = [...contentDocument.querySelectorAll(".dg-print-paper")];
     if (
       w.length !== d.pageCount ||
       !w.length ||
@@ -1987,9 +2050,9 @@ async function renderSchedulePdf(e, r, t) {
         "The PDF page plan changed. Reopen print preview and try again.",
       );
     const E = await PDFDocument.create();
-    (E.setTitle(`${e.name} — ${a.name}`),
+    (E.setTitle(`${workbook.name} — ${sheetOrThrow.name}`),
       E.setSubject(
-        `Period: ${e.metadata?.period || "not set"}; engagement: ${e.metadata?.engagement || "not set"}; revision ${e.revision}. Image-based schedule snapshot.`,
+        `Period: ${workbook.metadata?.period || "not set"}; engagement: ${workbook.metadata?.engagement || "not set"}; revision ${workbook.revision}. Image-based schedule snapshot.`,
       ),
       E.setCreator("Ledgerglass schedule PDF"),
       E.setProducer("Ledgerglass / pdf-lib"));
@@ -1999,8 +2062,8 @@ async function renderSchedulePdf(e, r, t) {
       if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
       const I = await o(
         toCanvas(w[F], {
-          width: u.width,
-          height: u.height,
+          width: pageDimensions.width,
+          height: pageDimensions.height,
           pixelRatio: pdfRenderLimits.pixelRatio,
           backgroundColor: "#ffffff",
           skipFonts: true,
@@ -2011,8 +2074,8 @@ async function renderSchedulePdf(e, r, t) {
       try {
         if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
         if (
-          I.width !== Math.floor(u.width * 2) ||
-          I.height !== Math.floor(u.height * 2)
+          I.width !== Math.floor(pageDimensions.width * 2) ||
+          I.height !== Math.floor(pageDimensions.height * 2)
         )
           throw Error(
             "The browser changed the PDF page resolution. Use browser printing instead.",
@@ -2031,7 +2094,10 @@ async function renderSchedulePdf(e, r, t) {
             "PDF images exceed 50 MB. Reduce the print area or image sizes.",
           );
         const j = await E.embedPng(await O.arrayBuffer()),
-          z = E.addPage([u.width * 0.75, u.height * 0.75]);
+          z = E.addPage([
+            pageDimensions.width * 0.75,
+            pageDimensions.height * 0.75,
+          ]);
         z.drawImage(j, {
           x: 0,
           y: 0,
@@ -2044,16 +2110,16 @@ async function renderSchedulePdf(e, r, t) {
       t.onProgress?.(F + 1, w.length);
     }
     n();
-    const k = await E.save();
-    if ((n(), k.length > pdfRenderLimits.maxBytes))
+    const bytes = await E.save();
+    if ((n(), bytes.length > pdfRenderLimits.maxBytes))
       throw Error(
         "The PDF exceeds 50 MB. Reduce the print area or image sizes.",
       );
     return {
-      bytes: k,
-      filename: buildScheduleFileName(e, r),
+      bytes: bytes,
+      filename: buildScheduleFileName(workbook, sheetId),
       pageCount: w.length,
-      inspection: y,
+      inspection: inspection,
       notices: [
         "Image-based PDF at 192 dpi: text is not selectable, searchable or accessibility-tagged. Use browser printing when a text PDF is needed.",
         ...d.notices,

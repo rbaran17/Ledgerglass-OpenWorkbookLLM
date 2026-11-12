@@ -8,21 +8,21 @@ import {
   parseDateText,
 } from "./01-schemas-date-functions-and-validation.js";
 
-function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
+function solveRateCandidates(e, guess, t = financialSolverLimits.minRate) {
   const n = Math.log1p(t),
     o = Math.log1p(financialSolverLimits.maxRate),
-    a = Math.log1p(r);
-  let s = 0;
-  const d = [],
+    a = Math.log1p(guess);
+  let evaluations = 0;
+  const candidates = [],
     u = (g) => {
       if (
         g < n ||
         g > o ||
         !Number.isFinite(g) ||
-        s >= financialSolverLimits.evaluations
+        evaluations >= financialSolverLimits.evaluations
       )
         return;
-      s++;
+      evaluations++;
       const b = e(Math.expm1(g));
       if (!(
         !Number.isFinite(b.value) ||
@@ -34,13 +34,15 @@ function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
     l = (g, b) => {
       if (!b || Math.abs(b.normalized) > financialSolverLimits.relativeResidual)
         return false;
-      const y = Math.expm1(g);
+      const rate = Math.expm1(g);
       return (
-        d.some(
-          (w) => Math.abs(w.rate - y) <= 1e-7 * Math.max(1, Math.abs(y)),
+        candidates.some(
+          (candidate) =>
+            Math.abs(candidate.rate - rate) <=
+            1e-7 * Math.max(1, Math.abs(rate)),
         ) ||
-          d.push({
-            rate: y,
+          candidates.push({
+            rate: rate,
             residual: b.value,
             relativeResidual: Math.abs(b.normalized),
           }),
@@ -50,8 +52,8 @@ function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
   if ([0, Math.log1p(0.1), Math.log1p(0.5)].map(u).every((g) => g?.value === 0))
     return {
       status: "indeterminate",
-      candidates: d,
-      evaluations: s,
+      candidates: candidates,
+      evaluations: evaluations,
       exhaustive: false,
     };
   let h = a;
@@ -89,7 +91,7 @@ function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
         1,
         2,
         10,
-        r,
+        guess,
       ]
         .filter((g) => g >= t)
         .map(Math.log1p),
@@ -105,27 +107,29 @@ function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
     if ((l(g, b), p && p.y.normalized * b.normalized < 0)) {
       let y = p.x,
         w = g,
-        E = p.y.normalized;
+        normalized = p.y.normalized;
       for (let A = 0; A < 100; A++) {
         const k = (y + w) / 2,
           F = u(k);
         if (!F || l(k, F) || k === y || k === w) break;
-        E * F.normalized < 0 ? (w = k) : ((y = k), (E = F.normalized));
+        normalized * F.normalized < 0
+          ? (w = k)
+          : ((y = k), (normalized = F.normalized));
       }
     }
     p = { x: g, y: b };
   }
-  d.sort((g, b) => g.rate - b.rate);
-  const m = [...d].sort(
+  candidates.sort((g, b) => g.rate - b.rate);
+  const selected = [...candidates].sort(
       (g, b) =>
         Math.abs(Math.log1p(g.rate) - a) - Math.abs(Math.log1p(b.rate) - a),
     )[0],
-    v = s >= financialSolverLimits.evaluations;
+    v = evaluations >= financialSolverLimits.evaluations;
   return {
-    ...(m && !v ? { selected: m } : {}),
-    candidates: d,
-    evaluations: s,
-    status: v ? "limit" : m ? "converged" : "no-convergence",
+    ...(selected && !v ? { selected: selected } : {}),
+    candidates: candidates,
+    evaluations: evaluations,
+    status: v ? "limit" : selected ? "converged" : "no-convergence",
     exhaustive: false,
   };
 }
@@ -190,16 +194,22 @@ const supportedFinancialFunctionNames = [
     const r = e.filter((t) => t !== 0).map(Math.sign);
     return r.slice(1).filter((t, n) => t !== r[n]).length;
   };
-function evaluateFinancialFunction(e, r, t) {
-  if (!supportedFinancialFunctionNames.includes(e)) return notFinancialSentinel;
-  let n =
+function evaluateFinancialFunction(functionName, r, t) {
+  if (!supportedFinancialFunctionNames.includes(functionName))
+    return notFinancialSentinel;
+  let convention =
       "Cash paid out is negative; cash received is positive. Rates and periods must use the same interval. No automatic cent rounding.",
     o = false;
-  const a = t.clock.dateSystem,
-    s = (k, F, I) => dateToSerial(k, F, I, a),
-    d = (k) => serialToDateParts(k, a),
+  const dateSystem = t.clock.dateSystem,
+    s = (k, F, I) => dateToSerial(k, F, I, dateSystem),
+    d = (k) => serialToDateParts(k, dateSystem),
     u = (k) => {
-      ((o = true), t.report?.({ functionName: e, convention: n, ...k }));
+      ((o = true),
+        t.report?.({
+          functionName: functionName,
+          convention: convention,
+          ...k,
+        }));
     },
     l = (k, F) => {
       throw (u({ status: "error", error: k, message: F }), t.issue(k));
@@ -242,8 +252,8 @@ function evaluateFinancialFunction(e, r, t) {
         );
       const F = typeof k == "string" ? parseDateText(k, t.clock) : f(k);
       return F === undefined ||
-        F < (a === "1904" ? 0 : 1) ||
-        F >= dateSystemMaxSerial(a) + 1
+        F < (dateSystem === "1904" ? 0 : 1) ||
+        F >= dateSystemMaxSerial(dateSystem) + 1
         ? l(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
@@ -285,38 +295,40 @@ function evaluateFinancialFunction(e, r, t) {
         O
       );
     },
-    A = (k, F, I, O) => {
-      (F < (O ?? financialSolverLimits.minRate) ||
-        F > financialSolverLimits.maxRate) &&
+    A = (k, guess, signChanges, O) => {
+      (guess < (O ?? financialSolverLimits.minRate) ||
+        guess > financialSolverLimits.maxRate) &&
         l("#NUM!", "The rate guess is outside the supported search interval.");
-      const j = solveRateCandidates(k, F, O),
-        z = j.status === "limit" ? "#LIMIT!" : "#NUM!";
+      const solver = solveRateCandidates(k, guess, O),
+        z = solver.status === "limit" ? "#LIMIT!" : "#NUM!";
       if (
         (u({
-          status: j.selected ? "converged" : "error",
-          ...(j.selected ? {} : { error: z }),
-          guess: F,
-          signChanges: I,
-          solver: j,
-          message: j.selected
-            ? `Residual-checked rate. ${j.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== undefined && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
-            : j.status === "indeterminate"
+          status: solver.selected ? "converged" : "error",
+          ...(solver.selected ? {} : { error: z }),
+          guess: guess,
+          signChanges: signChanges,
+          solver: solver,
+          message: solver.selected
+            ? `Residual-checked rate. ${solver.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${signChanges !== undefined && signChanges > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
+            : solver.status === "indeterminate"
               ? "The equation does not identify a unique rate; no rate has been invented."
               : "No residual-checked rate converged within the supported search interval and evaluation budget. Review signs, timing and guess.",
         }),
-        !j.selected)
+        !solver.selected)
       )
         throw t.issue(z);
-      return j.selected.rate;
+      return solver.selected.rate;
     };
   try {
-    const [k, F] = financialArgumentRanges[e];
+    const [k, F] = financialArgumentRanges[functionName];
     (r.length < k || r.length > F) &&
-      l("#VALUE!", `${e} requires ${k}–${F} arguments.`);
+      l("#VALUE!", `${functionName} requires ${k}–${F} arguments.`);
     const I = r.map(t.retrieve);
     let O;
-    if (["PV", "FV", "PMT", "IPMT", "PPMT", "RATE", "NPER"].includes(e))
-      if (e === "RATE") {
+    if (
+      ["PV", "FV", "PMT", "IPMT", "PPMT", "RATE", "NPER"].includes(functionName)
+    )
+      if (functionName === "RATE") {
         const j = m(f(I[0])),
           z = f(I[1]),
           V = f(I[2]),
@@ -334,7 +346,7 @@ function evaluateFinancialFunction(e, r, t) {
             },
             f(I[5], 0.1),
           )));
-      } else if (e === "NPER") {
+      } else if (functionName === "NPER") {
         const j = v(f(I[0])),
           z = f(I[1]),
           V = f(I[2]),
@@ -358,7 +370,7 @@ function evaluateFinancialFunction(e, r, t) {
             (O = Math.log(C) / Math.log1p(j)));
         }
         m(O);
-      } else if (e === "IPMT" || e === "PPMT") {
+      } else if (functionName === "IPMT" || functionName === "PPMT") {
         const j = v(f(I[0])),
           z = f(I[1]),
           V = m(f(I[2])),
@@ -376,7 +388,7 @@ function evaluateFinancialFunction(e, r, t) {
               ? 0
               : (-(D * b(j, z - 1) + C * (1 + j * _) * y(j, z - 1)) * j) /
                 (1 + j * _);
-        O = e === "IPMT" ? T : C - T;
+        O = functionName === "IPMT" ? T : C - T;
       } else {
         const j = v(f(I[0])),
           z = m(f(I[1])),
@@ -384,17 +396,22 @@ function evaluateFinancialFunction(e, r, t) {
           D = f(I[3]),
           B = g(f(I[4]));
         O =
-          e === "PMT"
+          functionName === "PMT"
             ? w(j, z, V, D, B)
-            : e === "FV"
+            : functionName === "FV"
               ? -(D * b(j, z) + V * (1 + j * B) * y(j, z))
               : -(D + V * (1 + j * B) * y(j, z)) / b(j, z);
       }
-    else if (["NPV", "XNPV", "IRR", "XIRR", "MIRR"].includes(e)) {
-      const j = e.startsWith("X"),
-        z = e === "IRR" || e === "XIRR",
-        V = E(e === "NPV" ? I.slice(1) : I[z || e === "MIRR" ? 0 : 1], j);
-      let D = V.map((_, C) => C + (e === "NPV" ? 1 : 0));
+    else if (["NPV", "XNPV", "IRR", "XIRR", "MIRR"].includes(functionName)) {
+      const j = functionName.startsWith("X"),
+        z = functionName === "IRR" || functionName === "XIRR",
+        V = E(
+          functionName === "NPV"
+            ? I.slice(1)
+            : I[z || functionName === "MIRR" ? 0 : 1],
+          j,
+        );
+      let D = V.map((_, C) => C + (functionName === "NPV" ? 1 : 0));
       if (j) {
         const _ = flattenNestedValues(I[z ? 1 : 2]);
         _.length !== V.length &&
@@ -403,10 +420,10 @@ function evaluateFinancialFunction(e, r, t) {
         (C.some((T) => T < C[0]) &&
           l("#NUM!", "A cash-flow date precedes the first cash-flow date."),
           (D = C.map((T) => (T - C[0]) / 365)),
-          (n =
+          (convention =
             "Dated cash flows use truncated Gregorian/workbook-system dates and actual elapsed days / 365, including leap years. The first date is time zero; later dates may be unsorted or repeated. One numeric amount per date."));
       } else
-        n =
+        convention =
           "Periodic cash-flow positions are equally spaced. NPV starts at period 1; IRR/MIRR start at period 0. Numeric zeros retain a period; blanks, text and booleans in cash-flow lists are ignored. No automatic cent rounding.";
       const B = (_) => {
         const C = V.map((T, N) => T / Math.exp(D[N] * Math.log1p(_)));
@@ -415,14 +432,14 @@ function evaluateFinancialFunction(e, r, t) {
           scale: compensatedSum(C.map(Math.abs)),
         };
       };
-      if (z || e === "MIRR")
+      if (z || functionName === "MIRR")
         if (
           ((!V.some((_) => _ < 0) || !V.some((_) => _ > 0)) &&
             l(
               "#NUM!",
               "At least one positive and one negative cash flow are required.",
             ),
-          e === "MIRR")
+          functionName === "MIRR")
         ) {
           const _ = v(f(I[1])),
             C = v(f(I[2])),
@@ -438,29 +455,31 @@ function evaluateFinancialFunction(e, r, t) {
           O = Math.expm1(Math.log(-R / N) / T);
         } else O = A(B, f(I[j ? 2 : 1], 0.1), countSignChanges(V));
       else O = B(v(f(I[0]))).value;
-    } else if (["SLN", "SYD", "DB", "DDB"].includes(e)) {
+    } else if (["SLN", "SYD", "DB", "DDB"].includes(functionName)) {
       const j = f(I[0]),
         z = f(I[1]),
         V = m(f(I[2]));
       if (
-        ((n =
+        ((convention =
           "Depreciation uses matching life/period units and no automatic cent rounding. DB rounds its fixed rate to three decimals and prorates first/last years; DDB does not switch to straight line."),
         (j < 0 || z < 0) && l("#NUM!", "Cost and salvage must be nonnegative."),
-        e === "SLN")
+        functionName === "SLN")
       )
         O = (j - z) / V;
       else {
         const D = f(I[3]);
         if (
-          ((D < 1 || D > V + (e === "DB" ? 1 : 0) || !Number.isInteger(D)) &&
+          ((D < 1 ||
+            D > V + (functionName === "DB" ? 1 : 0) ||
+            !Number.isInteger(D)) &&
             l(
               "#NUM!",
               "Depreciation period must be a supported whole period within asset life (plus DB partial final year).",
             ),
-          e === "SYD")
+          functionName === "SYD")
         )
           O = ((j - z) * (V - D + 1) * 2) / (V * (V + 1));
-        else if (e === "DB") {
+        else if (functionName === "DB") {
           const B = f(I[4], 12);
           if (
             ((!Number.isInteger(V) ||
@@ -493,14 +512,15 @@ function evaluateFinancialFunction(e, r, t) {
         }
       }
     } else {
-      const j = e === "ACCRINT" ? 6 : e === "ACCRINTM" ? 4 : 6,
+      const j =
+          functionName === "ACCRINT" ? 6 : functionName === "ACCRINTM" ? 4 : 6,
         z = Math.trunc(f(I[j]));
       ([0, 1, 2, 3, 4].includes(z) ||
         l(
           "#NUM!",
           "Day-count basis must be 0 (US 30/360), 1 (actual/actual), 2 (actual/360), 3 (actual/365), or 4 (European 30/360).",
         ),
-        (n = `Security basis ${z}; annual coupon/yield rates, regular maturity-anchored coupons at frequency 1/2/4, end-of-month anchoring. PRICE/YIELD are per 100 face value. Gregorian/workbook-system dates; no business-day adjustment or automatic rounding.`));
+        (convention = `Security basis ${z}; annual coupon/yield rates, regular maturity-anchored coupons at frequency 1/2/4, end-of-month anchoring. PRICE/YIELD are per 100 face value. Gregorian/workbook-system dates; no business-day adjustment or automatic rounding.`));
       const V = (C, T) =>
           z === 0 || z === 4
             ? evaluateDateFunction("DAYS360", [C, T, z === 4], {
@@ -528,14 +548,18 @@ function evaluateFinancialFunction(e, r, t) {
               : Math.min(N.day, daysInExcelMonth(L, $)),
           );
         };
-      if (e === "PRICE" || e === "YIELD") {
+      if (functionName === "PRICE" || functionName === "YIELD") {
         const C = p(I[0]),
           T = p(I[1]),
           N = f(I[2]),
           R = f(I[3]),
           L = f(I[4]),
           $ = B(I[5]);
-        (C >= T || N < 0 || L <= 0 || R < 0 || (e === "YIELD" && R === 0)) &&
+        (C >= T ||
+          N < 0 ||
+          L <= 0 ||
+          R < 0 ||
+          (functionName === "YIELD" && R === 0)) &&
           l(
             "#NUM!",
             "Require settlement before maturity, nonnegative coupon/yield, and positive redemption/price.",
@@ -565,7 +589,7 @@ function evaluateFinancialFunction(e, r, t) {
                 L / (1 + te / $) ** (U - 1 + q) -
                 (W * X) / Q;
         O =
-          e === "PRICE"
+          functionName === "PRICE"
             ? K(R)
             : A(
                 (te) => {
@@ -576,7 +600,7 @@ function evaluateFinancialFunction(e, r, t) {
                 undefined,
                 0,
               );
-      } else if (e === "ACCRINTM") {
+      } else if (functionName === "ACCRINTM") {
         const C = p(I[0]),
           T = p(I[1]),
           N = f(I[2]),
@@ -591,7 +615,7 @@ function evaluateFinancialFunction(e, r, t) {
           retrieve: ($) => $,
         });
         ((O = R * N * L),
-          (n = `Accrued interest at maturity: par × annual rate × YEARFRAC basis ${z}, using the published local day-count convention. Gregorian/workbook-system; no automatic rounding.`));
+          (convention = `Accrued interest at maturity: par × annual rate × YEARFRAC basis ${z}, using the published local day-count convention. Gregorian/workbook-system; no automatic rounding.`));
       } else {
         const C = p(I[0]),
           T = p(I[1]),
@@ -625,7 +649,7 @@ function evaluateFinancialFunction(e, r, t) {
             (X = _(T, ((++H + 1) * 12) / $)));
         }
         ((O = ((L * R) / $) * J),
-          (n = `Accrued coupon interest: quasi-coupon periods anchored to first_interest, basis ${z}, frequency ${$}; calc_method ${U} starts at ${!U && N > T ? "first_interest" : "issue"}. No business-day adjustment or automatic rounding.`));
+          (convention = `Accrued coupon interest: quasi-coupon periods anchored to first_interest, basis ${z}, frequency ${$}; calc_method ${U} starts at ${!U && N > T ? "first_interest" : "issue"}. No business-day adjustment or automatic rounding.`));
       }
     }
     return (
@@ -638,16 +662,16 @@ function evaluateFinancialFunction(e, r, t) {
         }),
       O
     );
-  } catch (k) {
+  } catch (error) {
     throw (
       o ||
         u({
           status: "error",
-          error: t.isIssue(k) ? (k.error ?? "#VALUE!") : "#VALUE!",
+          error: t.isIssue(error) ? (error.error ?? "#VALUE!") : "#VALUE!",
           message:
             "An input or dependent calculation failed; inspect the source values and dates.",
         }),
-      k
+      error
     );
   }
 }
@@ -724,7 +748,7 @@ const defaultColumnWidth = 84,
     ],
     ["XLSX compression", "200:1 maximum for any entry larger than 1 MiB"],
   ];
-function broadcastOverArrays(e, r, t) {
+function broadcastOverArrays(e, r, issue) {
   if (!e.some(Array.isArray)) return r(e);
   const n = e.map((s) =>
       Array.isArray(s) ? (s.every(Array.isArray) ? s : [s]) : [[s]],
@@ -741,9 +765,9 @@ function broadcastOverArrays(e, r, t) {
         (s.length !== o && s.length !== 1) ||
         (s[0].length !== a && s[0].length !== 1),
     )
-    ? t("#VALUE!")
+    ? issue("#VALUE!")
     : o * a > fileImportLimits.maxSpillCells
-      ? t("#LIMIT!")
+      ? issue("#LIMIT!")
       : Array.from({ length: o }, (s, d) =>
           Array.from({ length: a }, (u, l) =>
             r(
@@ -924,15 +948,15 @@ function evaluateTextFunction(e, r, t) {
     const w = [...m],
       E = [];
     for (let F = 0; F < w.length; F++) {
-      const I = w[F];
-      e === "SEARCH" && I === "~" && ["*", "?", "~"].includes(w[F + 1])
+      const char = w[F];
+      e === "SEARCH" && char === "~" && ["*", "?", "~"].includes(w[F + 1])
         ? E.push({ char: w[++F], kind: "literal" })
         : E.push({
-            char: I,
+            char: char,
             kind:
-              e === "SEARCH" && I === "*"
+              e === "SEARCH" && char === "*"
                 ? "many"
-                : e === "SEARCH" && I === "?"
+                : e === "SEARCH" && char === "?"
                   ? "one"
                   : "literal",
           });

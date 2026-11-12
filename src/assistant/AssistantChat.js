@@ -128,9 +128,10 @@ function mb(t) {
   async function w(v) {
     if (!v.length || !t.adapter.chat?.attachments || c.current || l$1 || t.busy)
       return;
-    const D = t.session.attachments;
+    const attachments = t.session.attachments;
     if (
-      (d$1(""), D.length + v.length > assistantRequestLimits.filesPerMessage)
+      (d$1(""),
+      attachments.length + v.length > assistantRequestLimits.filesPerMessage)
     ) {
       d$1(
         "Attach up to 4 files per message. Remove a file before adding more.",
@@ -138,7 +139,8 @@ function mb(t) {
       return;
     }
     if (
-      D.reduce((F, H) => F + H.size, 0) + v.reduce((F, H) => F + H.size, 0) >
+      attachments.reduce((F, H) => F + H.size, 0) +
+        v.reduce((F, H) => F + H.size, 0) >
       assistantRequestLimits.totalFileBytes
     ) {
       d$1("Attachments must total 10 MB or less.");
@@ -146,10 +148,12 @@ function mb(t) {
     }
     if (
       new Set([
-        ...D.map((F) => `${F.name}:${F.size}`),
+        ...attachments.map(
+          (attachment) => `${attachment.name}:${attachment.size}`,
+        ),
         ...v.map((F) => `${F.name}:${F.size}`),
       ]).size !==
-      D.length + v.length
+      attachments.length + v.length
     ) {
       d$1("This file is already attached. Remove it before adding it again.");
       return;
@@ -165,10 +169,12 @@ function mb(t) {
         t.setSession((H) =>
           H.id === U ? { ...H, attachments: [...H.attachments, ...F] } : H,
         );
-    } catch (F) {
+    } catch (error) {
       $.signal.aborted ||
         d$1(
-          F instanceof Error ? F.message : "The attachment could not be read.",
+          error instanceof Error
+            ? error.message
+            : "The attachment could not be read.",
         );
     } finally {
       c.current === $ && (u$1(false), (c.current = null));
@@ -177,8 +183,8 @@ function mb(t) {
   async function S$1(v$1, D) {
     const $ = r$1.current;
     if (i$1.current || $.busy || l$1 || !v$1.trim()) return;
-    const U = D ?? $.session.attachments,
-      K = $.scope,
+    const attachments = D ?? $.session.attachments,
+      scope = $.scope,
       F = $.session.id,
       H = [];
     for (let N = 1; N < $.session.messages.length; N++) {
@@ -186,9 +192,9 @@ function mb(t) {
         L = $.session.messages[N - 1];
       V.role === "assistant" &&
         V.outcome === "complete" &&
-        V.scope === K &&
+        V.scope === scope &&
         L.role === "user" &&
-        L.scope === K &&
+        L.scope === scope &&
         H.push(
           {
             role: "user",
@@ -206,7 +212,7 @@ function mb(t) {
         );
       if (v$1.length > assistantRequestLimits.promptCharacters)
         throw Error("Keep your message under 10,000 characters.");
-      if (U.length && !$.adapter.chat?.attachments)
+      if (attachments.length && !$.adapter.chat?.attachments)
         throw Error(
           "This provider does not support file attachments. Remove the files or connect a chat-enabled provider.",
         );
@@ -214,19 +220,19 @@ function mb(t) {
         (J = parseAssistantChatRequest({
           version: 1,
           messages: $.adapter.chat.history ? H : [],
-          attachments: U,
+          attachments: attachments,
         }));
-    } catch (N) {
-      d$1(N.message);
+    } catch (error) {
+      d$1(error.message);
       return;
     }
     const X = {
       id: crypto.randomUUID(),
       role: "user",
       text: v$1.trim(),
-      scope: K,
+      scope: scope,
       label: $.selectionLabel,
-      attachments: U,
+      attachments: attachments,
     };
     ((i$1.current = true),
       d$1(""),
@@ -251,7 +257,7 @@ function mb(t) {
                   role: "assistant",
                   text:
                     N?.explanation ?? "Request stopped. No changes were made.",
-                  scope: K,
+                  scope: scope,
                   label: X.label,
                   proposalId: N?.id,
                   outcome: N ? "complete" : "stopped",
@@ -266,14 +272,14 @@ function mb(t) {
           : {
               ...N,
               draft: N.draft || X.text,
-              attachments: N.attachments.length ? N.attachments : U,
+              attachments: N.attachments.length ? N.attachments : attachments,
               messages: [
                 ...N.messages,
                 {
                   id: crypto.randomUUID(),
                   role: "assistant",
                   text: "The request did not complete. Your message is ready to retry.",
-                  scope: K,
+                  scope: scope,
                   label: X.label,
                   outcome: "failed",
                 },
@@ -284,7 +290,7 @@ function mb(t) {
       i$1.current = false;
     }
   }
-  const I = React.useMemo(
+  const messages = React.useMemo(
       () =>
         t.session.messages.map((v) => ({
           id: v.id,
@@ -299,8 +305,8 @@ function mb(t) {
         })),
       [t.session.messages, t.scope],
     ),
-    R = useExternalStoreRuntime({
-      messages: I,
+    externalStoreRuntime = useExternalStoreRuntime({
+      messages: messages,
       convertMessage: (v) => v,
       isRunning: t.busy,
       onNew: async (v) => {
@@ -315,7 +321,7 @@ function mb(t) {
       (v) =>
         v.proposalId && v.proposalId === t.proposalId && v.scope === t.scope,
     ),
-    M = () => {
+    onClick = () => {
       const v = [...t.session.messages]
         .reverse()
         .find((D) => D.role === "user" && D.scope === t.scope);
@@ -341,7 +347,7 @@ function mb(t) {
       }
     };
   return jsxRuntime.jsx(AssistantRuntimeProvider, {
-    runtime: R,
+    runtime: externalStoreRuntime,
     children: jsxRuntime.jsxs(ThreadPrimitive.Root, {
       className: "lg-chat",
       role: "group",
@@ -432,21 +438,22 @@ function mb(t) {
                       "Explain this selection",
                       "Highlight values above 25000",
                       "Add a total formula",
-                    ].map((v) =>
+                    ].map((draft) =>
                       jsxRuntime.jsxs(
                         "button",
                         {
                           type: "button",
                           disabled: t.busy || l$1,
                           onClick: () => {
-                            (t.setSession((D) => ({ ...D, draft: v })), S$1(v));
+                            (t.setSession((D) => ({ ...D, draft: draft })),
+                              S$1(draft));
                           },
                           children: [
-                            jsxRuntime.jsx(LocalizedText, { children: v }),
+                            jsxRuntime.jsx(LocalizedText, { children: draft }),
                             jsxRuntime.jsx(ArrowUp, { size: 13 }),
                           ],
                         },
-                        v,
+                        draft,
                       ),
                     ),
                   }),
@@ -454,22 +461,22 @@ function mb(t) {
               }),
             jsxRuntime.jsx(ThreadPrimitive.Messages, {
               children: ({ message }) => {
-                const D = message.metadata.custom.source;
-                if (!D) return null;
-                const $ = D.scope === t.scope,
-                  U = $ && D.proposalId === t.proposalId && !!t.review;
+                const source = message.metadata.custom.source;
+                if (!source) return null;
+                const $ = source.scope === t.scope,
+                  U = $ && source.proposalId === t.proposalId && !!t.review;
                 return jsxRuntime.jsxs(MessagePrimitive.Root, {
                   role: "article",
-                  className: `lg-chat-message ${D.role}`,
+                  className: `lg-chat-message ${source.role}`,
                   "aria-label":
-                    D.role === "user"
+                    source.role === "user"
                       ? text("Your message")
                       : text("Assistant message"),
                   children: [
                     jsxRuntime.jsxs("div", {
                       className: "lg-chat-message-label",
                       children: [
-                        D.role === "user"
+                        source.role === "user"
                           ? "You"
                           : jsxRuntime.jsxs(jsxRuntime.Fragment, {
                               children: [
@@ -479,21 +486,25 @@ function mb(t) {
                                 }),
                               ],
                             }),
-                        jsxRuntime.jsx("small", { children: D.label }),
+                        jsxRuntime.jsx("small", { children: source.label }),
                       ],
                     }),
                     jsxRuntime.jsxs("div", {
                       className: `lg-chat-bubble ${$ ? "" : "archived"}`,
                       children: [
                         $ &&
-                          D.attachments?.map((F) =>
-                            jsxRuntime.jsx(ai, { file: F }, F.id),
+                          source.attachments?.map((attachment) =>
+                            jsxRuntime.jsx(
+                              ai,
+                              { file: attachment },
+                              attachment.id,
+                            ),
                           ),
                         U
                           ? t.review
                           : jsxRuntime.jsx(AssistantChatMarkdown, {
                               children: $
-                                ? D.text
+                                ? source.text
                                 : text(
                                     "This message belongs to an earlier selection or workbook revision and is excluded from the current context.",
                                   ),
@@ -501,7 +512,7 @@ function mb(t) {
                       ],
                     }),
                     $ &&
-                      D.outcome === "complete" &&
+                      source.outcome === "complete" &&
                       jsxRuntime.jsxs("div", {
                         className: "lg-chat-message-actions",
                         children: [
@@ -509,31 +520,32 @@ function mb(t) {
                             type: "button",
                             "aria-label": text("Copy assistant response"),
                             title: text("Copy response"),
-                            onClick: () => void E(D),
+                            onClick: () => void E(source),
                             children:
-                              m === D.id
+                              m === source.id
                                 ? jsxRuntime.jsx(Check, { size: 14 })
                                 : jsxRuntime.jsx(Copy, { size: 14 }),
                           }),
-                          D === t.session.messages.at(-1) &&
+                          source === t.session.messages.at(-1) &&
                             jsxRuntime.jsx("button", {
                               type: "button",
                               "aria-label": text("Regenerate response"),
                               title: text("Regenerate response"),
                               disabled: t.busy || l$1,
-                              onClick: M,
+                              onClick: onClick,
                               children: jsxRuntime.jsx(RotateCcw, { size: 14 }),
                             }),
                         ],
                       }),
                     $ &&
-                      (D.outcome === "failed" || D.outcome === "stopped") &&
-                      D === t.session.messages.at(-1) &&
+                      (source.outcome === "failed" ||
+                        source.outcome === "stopped") &&
+                      source === t.session.messages.at(-1) &&
                       jsxRuntime.jsxs("button", {
                         type: "button",
                         className: "lg-chat-retry",
                         disabled: t.busy || l$1,
-                        onClick: M,
+                        onClick: onClick,
                         children: [
                           jsxRuntime.jsx(RotateCcw, { size: 13 }),
                           jsxRuntime.jsx(LocalizedText, {
@@ -587,21 +599,21 @@ function mb(t) {
               }),
             jsxRuntime.jsxs(ComposerPrimitive.Root, {
               className: `lg-chat-composer ${f$1 ? "dragging" : ""}`,
-              onSubmit: (v) => {
-                (v.preventDefault(), S$1(t.session.draft));
+              onSubmit: (event) => {
+                (event.preventDefault(), S$1(t.session.draft));
               },
-              onDragOver: (v) => {
-                v.dataTransfer.types.includes("Files") &&
-                  (v.preventDefault(), p$1(true));
+              onDragOver: (event) => {
+                event.dataTransfer.types.includes("Files") &&
+                  (event.preventDefault(), p$1(true));
               },
-              onDragLeave: (v) => {
-                v.currentTarget.contains(v.relatedTarget) || p$1(false);
+              onDragLeave: (event) => {
+                event.currentTarget.contains(event.relatedTarget) || p$1(false);
               },
-              onDrop: (v) => {
-                (v.preventDefault(),
+              onDrop: (event) => {
+                (event.preventDefault(),
                   p$1(false),
                   t.adapter.chat?.attachments
-                    ? w(Array.from(v.dataTransfer.files))
+                    ? w(Array.from(event.dataTransfer.files))
                     : d$1("This provider does not support attachments."));
               },
               children: [
@@ -610,20 +622,20 @@ function mb(t) {
                     className: "lg-chat-attachments",
                     role: "group",
                     "aria-label": text("Attached files"),
-                    children: t.session.attachments.map((v) =>
+                    children: t.session.attachments.map((attachment) =>
                       jsxRuntime.jsx(
                         ai,
                         {
-                          file: v,
+                          file: attachment,
                           remove: () =>
                             t.setSession((D) => ({
                               ...D,
                               attachments: D.attachments.filter(
-                                ($) => $.id !== v.id,
+                                ($) => $.id !== attachment.id,
                               ),
                             })),
                         },
-                        v.id,
+                        attachment.id,
                       ),
                     ),
                   }),
@@ -648,20 +660,20 @@ function mb(t) {
                   "data-ui-label": "Assistant prompt",
                   placeholder: text("Message the workbook assistant…"),
                   value: t.session.draft,
-                  onChange: (v) =>
-                    t.setSession((D) => ({ ...D, draft: v.target.value })),
+                  onChange: (event) =>
+                    t.setSession((D) => ({ ...D, draft: event.target.value })),
                   minRows: 2,
                   maxRows: 6,
                   maxLength: 1e4,
                   autoFocus: false,
                   cancelOnEscape: false,
                   addAttachmentOnPaste: false,
-                  onKeyDown: (v) => v.stopPropagation(),
-                  onPaste: (v) => {
-                    v.clipboardData.files.length &&
-                      (v.preventDefault(),
+                  onKeyDown: (event) => event.stopPropagation(),
+                  onPaste: (event) => {
+                    event.clipboardData.files.length &&
+                      (event.preventDefault(),
                       t.adapter.chat?.attachments
-                        ? w(Array.from(v.clipboardData.files))
+                        ? w(Array.from(event.clipboardData.files))
                         : d$1("This provider does not support attachments."));
                   },
                 }),
@@ -677,9 +689,11 @@ function mb(t) {
                           multiple: true,
                           accept: attachmentAcceptAttribute,
                           "aria-label": text("Upload chat attachments"),
-                          onChange: (v) => {
-                            const D = Array.from(v.currentTarget.files ?? []);
-                            ((v.currentTarget.value = ""), w(D));
+                          onChange: (event) => {
+                            const D = Array.from(
+                              event.currentTarget.files ?? [],
+                            );
+                            ((event.currentTarget.value = ""), w(D));
                           },
                         }),
                         jsxRuntime.jsx("button", {

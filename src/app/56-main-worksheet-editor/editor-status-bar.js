@@ -128,8 +128,8 @@ function EditorStatusBar({
             max: "200",
             step: "10",
             value: viewDisplayState.zoomPercent,
-            onChange: (fe) =>
-              navigationActions.applyZoomPercent(Number(fe.target.value)),
+            onChange: (event) =>
+              navigationActions.applyZoomPercent(Number(event.target.value)),
             lang: language("Zoom"),
             "data-ui-label": "Zoom",
           }),

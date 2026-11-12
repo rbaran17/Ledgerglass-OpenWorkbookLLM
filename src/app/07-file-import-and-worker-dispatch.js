@@ -64,8 +64,8 @@ function createBrowserFileWorker(e = {}) {
       (n.onmessageerror = () => o.onerror?.({})),
       o
     );
-  } catch (n) {
-    throw (r && URL.revokeObjectURL(String(t)), n);
+  } catch (error) {
+    throw (r && URL.revokeObjectURL(String(t)), error);
   }
 }
 async function createNodeFileWorker() {
@@ -106,24 +106,27 @@ function createFileWorker() {
   throw Error("File worker unavailable.");
 }
 const inspectionSignatureCache = new WeakMap();
-function registerIsolatedInspection(e, r, t) {
+function registerIsolatedInspection(e, bytes, t) {
   if (
     e.schemaVersion !== 1 ||
     e.fileName !== t ||
-    e.fileBytes !== r.length ||
-    e.sha256 !== sha256HexDigest(r)
+    e.fileBytes !== bytes.length ||
+    e.sha256 !== sha256HexDigest(bytes)
   )
     throw Error("Invalid isolated inspection.");
-  inspectionSignatureCache.set(e, { signature: JSON.stringify(e), bytes: r });
+  inspectionSignatureCache.set(e, {
+    signature: JSON.stringify(e),
+    bytes: bytes,
+  });
 }
 let activeFileImportCount = 0;
-function readFileAsArrayBuffer(e, r) {
+function readFileAsArrayBuffer(e, signal) {
   return typeof e.arrayBuffer == "function"
     ? e.arrayBuffer()
     : new Promise((t, n) => {
         const o = new FileReader(),
           a = () => o.abort(),
-          s = () => r.removeEventListener("abort", a);
+          s = () => signal.removeEventListener("abort", a);
         ((o.onload = () => {
           (s(), t(o.result));
         }),
@@ -131,16 +134,18 @@ function readFileAsArrayBuffer(e, r) {
             (s(), n(new FileProcessingError("FILE_READ")));
           }),
           (o.onabort = o.onerror),
-          r.addEventListener("abort", a, { once: true }),
+          signal.addEventListener("abort", a, { once: true }),
           o.readAsArrayBuffer(e));
       });
 }
-async function runFileImport(e, r, t = {}, n) {
+async function runFileImport(operation, r, t = {}, n) {
   if (t.reliability) {
     const { reliability, ...d } = t;
-    return reliability.run("file", e, () => runFileImport(e, r, d, n));
+    return reliability.run("file", operation, () =>
+      runFileImport(operation, r, d, n),
+    );
   }
-  assertImportFileAllowed(e, r.name, r.size);
+  assertImportFileAllowed(operation, r.name, r.size);
   const o = t.timeoutMs ?? u1.defaultTimeoutMs;
   if (!Number.isInteger(o) || o < 1 || o > u1.maxTimeoutMs)
     throw new FileProcessingError("FILE_LIMIT");
@@ -183,28 +188,30 @@ async function runFileImport(e, r, t = {}, n) {
         return;
       }
       (async () => {
-        let y;
+        let bytes;
         try {
-          y = new Uint8Array(await readFileAsArrayBuffer(r, c.signal));
+          bytes = new Uint8Array(await readFileAsArrayBuffer(r, c.signal));
         } catch {
           p(new FileProcessingError("FILE_READ"));
           return;
         }
         if (u) return;
         try {
-          assertImportFileAllowed(e, r.name, y.byteLength);
-        } catch (E) {
-          p(E);
+          assertImportFileAllowed(operation, r.name, bytes.byteLength);
+        } catch (error) {
+          p(error);
           return;
         }
-        if (y.byteLength !== r.size) {
+        if (bytes.byteLength !== r.size) {
           p(new FileProcessingError("FILE_READ"));
           return;
         }
-        y = y.slice();
+        bytes = bytes.slice();
         const w =
-          e === "automation" || e === "formats" || e === "source"
-            ? y.slice()
+          operation === "automation" ||
+          operation === "formats" ||
+          operation === "source"
+            ? bytes.slice()
             : undefined;
         try {
           const E = await (t.workerFactory ?? createFileWorker)();
@@ -234,13 +241,13 @@ async function runFileImport(e, r, t = {}, n) {
                 }
                 try {
                   (w &&
-                    e === "source" &&
+                    operation === "source" &&
                     recordSourceInspection(k.value, w, r.name),
                     w &&
-                      e === "formats" &&
+                      operation === "formats" &&
                       validateIsolatedFormatInspection(k.value, w, r.name),
                     w &&
-                      e === "automation" &&
+                      operation === "automation" &&
                       registerIsolatedInspection(k.value, w, r.name),
                     p(undefined, k.value));
                 } catch {
@@ -249,8 +256,14 @@ async function runFileImport(e, r, t = {}, n) {
               }
             }),
             l.postMessage(
-              { id: h, operation: e, fileName: r.name, bytes: y, options: n },
-              [y.buffer],
+              {
+                id: h,
+                operation: operation,
+                fileName: r.name,
+                bytes: bytes,
+                options: n,
+              },
+              [bytes.buffer],
             ));
         } catch {
           p(new FileProcessingError("FILE_WORKER"));
@@ -265,8 +278,8 @@ function importWorkbookFile(e, r) {
 function importAutomationFile(e, r) {
   return runFileImport("automation", e, r);
 }
-function importDelimitedFile(e, r = {}, t) {
-  return runFileImport("delimited", e, t, r);
+function importDelimitedFile(file, r = {}, t) {
+  return runFileImport("delimited", file, t, r);
 }
 function importNativeJsonFile(e, r) {
   return runFileImport("json", e, r);
@@ -278,21 +291,22 @@ function detectSupportedFileFormats(e, r) {
   return runFileImport("formats", e, r);
 }
 
-function readGeneratedTemplateBuffer(e) {
-  return typeof e.arrayBuffer == "function"
-    ? e.arrayBuffer()
+function readGeneratedTemplateBuffer(blob) {
+  return typeof blob.arrayBuffer == "function"
+    ? blob.arrayBuffer()
     : new Promise((r, t) => {
         const n = new FileReader();
         ((n.onload = () => r(n.result)),
           (n.onerror = () =>
             t(Error("Unable to read the generated template copy."))),
-          n.readAsArrayBuffer(e));
+          n.readAsArrayBuffer(blob));
       });
 }
-function describeImportSource(e, r) {
-  const t = e.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook",
-    n = [e.xlsxSource?.fileName, e.alternateSource?.fileName].map((d) =>
-      d?.toLowerCase(),
+function describeImportSource(workbook, r) {
+  const t =
+      workbook.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook",
+    n = [workbook.xlsxSource?.fileName, workbook.alternateSource?.fileName].map(
+      (d) => d?.toLowerCase(),
     );
   let o = t + "-derived";
   for (; n.includes((o + "." + r).toLowerCase());) o += "-copy";

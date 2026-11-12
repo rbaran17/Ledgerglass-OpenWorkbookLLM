@@ -30,34 +30,41 @@ import {
   buildAuthorizedContextSnapshot,
 } from "./12-consolidation-and-dependency-inspection.js";
 
-function publishConsolidatedSchedule(e, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function publishConsolidatedSchedule(workbook, plan, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   if (
-    (assertWorkbookStructureEditable(e),
-    fingerprintCanonicalValue(e) !== r.workbookHash ||
-      buildAuthorizedContextSnapshot(e, t) !== r.contextHash)
+    (assertWorkbookStructureEditable(workbook),
+    fingerprintCanonicalValue(workbook) !== plan.workbookHash ||
+      buildAuthorizedContextSnapshot(workbook, options) !== plan.contextHash)
   )
     throw Error(
       "Workbook or authorization changed. Preview consolidation again.",
     );
-  const n = createConsolidationPreview(e, r.request, t);
-  if (fingerprintCanonicalValue(n) !== fingerprintCanonicalValue(r))
+  const consolidationPreview = createConsolidationPreview(
+    workbook,
+    plan.request,
+    options,
+  );
+  if (
+    fingerprintCanonicalValue(consolidationPreview) !==
+    fingerprintCanonicalValue(plan)
+  )
     throw Error(
       "Source data or the reviewed plan changed. Preview consolidation again.",
     );
-  if (!n.review.complete)
+  if (!consolidationPreview.review.complete)
     throw Error(
       "Resolve all consolidation errors before publishing. No partial result is permitted.",
     );
-  const o = n.request.definition,
-    a = n.review,
-    s = createWorksheetRecord(r.request.outputName),
-    d = o.categoryLabels.length + 4,
+  const definition = consolidationPreview.request.definition,
+    review = consolidationPreview.review,
+    worksheetRecord = createWorksheetRecord(plan.request.outputName),
+    d = definition.categoryLabels.length + 4,
     u = columnIndexToLetters(d),
-    l = o.categoryLabels.length + 7,
+    l = definition.categoryLabels.length + 7,
     c = [
       "Row type",
-      ...o.categoryLabels,
+      ...definition.categoryLabels,
       "Period",
       "Currency",
       "Unit",
@@ -67,16 +74,16 @@ function publishConsolidatedSchedule(e, r, t = {}) {
     ];
   let h = 1;
   const f = [],
-    p = (E, A = -1, k = "") => {
+    p = (E, A = -1, note = "") => {
       const F = h++;
       return (
-        E.forEach((I, O) => {
-          s.cells[`${columnIndexToLetters(O)}${F}`] = {
-            raw: I,
-            ...(typeof I == "string" && I.startsWith("=") && O !== A
+        E.forEach((raw, O) => {
+          worksheetRecord.cells[`${columnIndexToLetters(O)}${F}`] = {
+            raw: raw,
+            ...(typeof raw == "string" && raw.startsWith("=") && O !== A
               ? { literal: true }
               : {}),
-            ...(k && O === d ? { note: k } : {}),
+            ...(note && O === d ? { note: note } : {}),
             ...(O === d && F > 1
               ? { format: "number", numFmt: "#,##0.00;[Red](#,##0.00)" }
               : {}),
@@ -125,95 +132,99 @@ function publishConsolidatedSchedule(e, r, t = {}) {
       }
       for (const F of k.values()) {
         const I = h;
-        (A < o.categoryLabels.length ? v(F, A + 1) : F.forEach(m),
+        (A < definition.categoryLabels.length ? v(F, A + 1) : F.forEach(m),
           f.push({
             address: `${u}${h}`,
             expected: sumConsolidationAmounts(F.map((z) => z.amount)),
             count: F.length,
           }));
         const O = h - 1,
-          j = Array.from({ length: o.categoryLabels.length }, (z, V) =>
-            V < A ? F[0].categories[V] : null,
+          j = Array.from(
+            { length: definition.categoryLabels.length },
+            (z, V) => (V < A ? F[0].categories[V] : null),
           );
         (p(
           [
             `Subtotal ${A}`,
             ...j,
-            o.period,
-            o.currency,
-            o.unit,
+            definition.period,
+            definition.currency,
+            definition.unit,
             `=SUBTOTAL(9,${u}${I}:${u}${O})`,
             `${F.length} contributions`,
             "Review source status",
           ],
           d,
         ),
-          (s.outlineGroups ??= []).push({
+          (worksheetRecord.outlineGroups ??= []).push({
             id: crypto.randomUUID(),
             axis: "row",
             start: I - 1,
             end: O - 1,
-            collapsed: o.collapseDetails,
+            collapsed: definition.collapseDetails,
           }));
       }
     };
   if (
-    (v(a.contributions, 1),
+    (v(review.contributions, 1),
     f.push({
       address: `${u}${h}`,
-      expected: a.grandTotal,
-      count: a.contributions.length,
+      expected: review.grandTotal,
+      count: review.contributions.length,
     }),
     p(
       [
         "Grand total",
-        ...o.categoryLabels.map(() => null),
-        o.period,
-        o.currency,
-        o.unit,
+        ...definition.categoryLabels.map(() => null),
+        definition.period,
+        definition.currency,
+        definition.unit,
         `=SUBTOTAL(9,${u}2:${u}${h - 1})`,
-        `${a.contributions.length} contributions`,
+        `${review.contributions.length} contributions`,
         "Review source status",
       ],
       d,
-      `Reviewed grand total ${a.grandTotal}; source controls ${a.sourceTotal}; difference ${a.difference}. No implicit conversion.`,
+      `Reviewed grand total ${review.grandTotal}; source controls ${review.sourceTotal}; difference ${review.difference}. No implicit conversion.`,
     ),
     h - 1 > consolidationLimits.outputRows ||
       (h - 1) * l > consolidationLimits.outputCells ||
-      e.sheets.reduce((E, A) => E + Object.keys(A.cells).length, 0) +
-        Object.keys(s.cells).length >
+      workbook.sheets.reduce((E, A) => E + Object.keys(A.cells).length, 0) +
+        Object.keys(worksheetRecord.cells).length >
         workbookLimits.maxCells)
   )
     throw Error(
       "Consolidation exceeds the output or workbook cell budget. No worksheet was published.",
     );
-  ((s.frozenRows = 1),
-    (s.columnWidths = Object.fromEntries(
+  ((worksheetRecord.frozenRows = 1),
+    (worksheetRecord.columnWidths = Object.fromEntries(
       c.map((E, A) => [A, A === l - 2 ? 340 : A === l - 1 ? 260 : 130]),
     )));
-  const g = `A1:${columnIndexToLetters(l - 1)}${h - 1}`,
+  const outputRange = `A1:${columnIndexToLetters(l - 1)}${h - 1}`,
     b = {
-      workbookId: e.id,
-      revision: e.revision,
+      workbookId: workbook.id,
+      revision: workbook.revision,
       at: new Date().toISOString(),
     };
-  s.consolidation = {
+  worksheetRecord.consolidation = {
     engine: consolidationFormatVersion,
-    definition: o,
-    review: a,
+    definition: definition,
+    review: review,
     origin: b,
     evidenceHash: fingerprintCanonicalValue({
-      definition: o,
-      review: a,
+      definition: definition,
+      review: review,
       origin: b,
     }),
-    outputRange: g,
-    outputHash: buildConsolidationOutputCells(s, g),
+    outputRange: outputRange,
+    outputHash: buildConsolidationOutputCells(worksheetRecord, outputRange),
   };
-  const y = normalizeWorkbookInput({ ...e, sheets: [...e.sheets, s] }),
-    w = calculateWorkbookWithSettings(y);
+  const workbookInput = normalizeWorkbookInput({
+      ...workbook,
+      sheets: [...workbook.sheets, worksheetRecord],
+    }),
+    workbookWithSettings = calculateWorkbookWithSettings(workbookInput);
   for (const E of f) {
-    const A = w(s.id, E.address),
+    const A = workbookWithSettings(worksheetRecord.id, E.address),
       k = Number.EPSILON * Math.max(1, Math.abs(E.expected)) * E.count * 4;
     if (
       typeof A != "number" ||
@@ -224,36 +235,46 @@ function publishConsolidatedSchedule(e, r, t = {}) {
         "Calculated subtotals do not reconcile with the reviewed amounts, or a calculation limit was reached. Reduce numeric cancellation or explicitly round source amounts before publishing.",
       );
   }
-  return y;
+  return workbookInput;
 }
-function checkConsolidationFreshness(e, r, t = {}) {
-  const n = r.consolidation;
-  if (!n) throw Error("This worksheet has no consolidation record.");
-  const o = [];
+function checkConsolidationFreshness(workbook, worksheetRecord, options = {}) {
+  const consolidation = worksheetRecord.consolidation;
+  if (!consolidation)
+    throw Error("This worksheet has no consolidation record.");
+  const messages = [];
   try {
-    (n.origin.workbookId !== e.id &&
-      o.push(
+    (consolidation.origin.workbookId !== workbook.id &&
+      messages.push(
         "Historical result from another workbook identity. Review and rebind its sources before refreshing.",
       ),
-      buildConsolidationOutputCells(r, n.outputRange) !== n.outputHash &&
-        o.push(
+      buildConsolidationOutputCells(
+        worksheetRecord,
+        consolidation.outputRange,
+      ) !== consolidation.outputHash &&
+        messages.push(
           "Published result cells or source notes were edited. Reconcile or publish a fresh result.",
         ));
-    for (const a of n.definition.sources)
+    for (const source of consolidation.definition.sources)
       try {
-        const s = readSourceTableRecords(e, a, t),
-          d = n.review.sources.find((u) => u.sourceId === a.id);
-        s.fingerprint !== d?.fingerprint &&
-          o.push(
-            `${a.id}: source data, context, layout or formula dependencies changed.`,
+        const sourceTableRecords = readSourceTableRecords(
+            workbook,
+            source,
+            options,
+          ),
+          d = consolidation.review.sources.find(
+            (u) => u.sourceId === source.id,
           );
-      } catch (s) {
-        o.push(`${a.id}: ${s.message}`);
+        sourceTableRecords.fingerprint !== d?.fingerprint &&
+          messages.push(
+            `${source.id}: source data, context, layout or formula dependencies changed.`,
+          );
+      } catch (error) {
+        messages.push(`${source.id}: ${error.message}`);
       }
-  } catch (a) {
-    o.push(a.message);
+  } catch (error) {
+    messages.push(error.message);
   }
-  return { state: o.length ? "stale" : "current", messages: o };
+  return { state: messages.length ? "stale" : "current", messages: messages };
 }
 function saveBlobToFile(e, r) {
   const t = URL.createObjectURL(e),
@@ -263,48 +284,55 @@ function saveBlobToFile(e, r) {
     n.click(),
     setTimeout(() => URL.revokeObjectURL(t), 5e3));
 }
-function findTableRangesForSource(e, r) {
+function findTableRangesForSource(workbook, source) {
   try {
-    const o = e?.sheets.find((s) => s.id === r.sheetId);
+    const o = workbook?.sheets.find((sheet) => sheet.id === source.sheetId);
     if (!o) return [];
-    const a = parseRangeAddress(
-      o.tables?.find((s) => s.id === r.tableId)?.range ?? r.range,
+    const rangeAddress = parseRangeAddress(
+      o.tables?.find((table) => table.id === source.tableId)?.range ??
+        source.range,
     );
-    return a.lastCol - a.firstCol >= 50
+    return rangeAddress.lastCol - rangeAddress.firstCol >= 50
       ? []
       : Array.from(
-          { length: a.lastCol - a.firstCol + 1 },
+          { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
           (s, d) =>
-            o.cells[`${columnIndexToLetters(a.firstCol + d)}${a.firstRow + 1}`]
-              ?.raw,
+            o.cells[
+              `${columnIndexToLetters(rangeAddress.firstCol + d)}${rangeAddress.firstRow + 1}`
+            ]?.raw,
         ).filter((s) => typeof s == "string" && !!s);
   } catch {
     return [];
   }
 }
-function createConsolidationDefinition(e, r, t, n) {
-  const o = {
+function createConsolidationDefinition(workbook, sheetId, range, definition) {
+  const source = {
       id: crypto.randomUUID(),
-      workbookId: e.id,
-      sheetId: r,
-      range: t,
-      categories: [...n.categoryLabels],
+      workbookId: workbook.id,
+      sheetId: sheetId,
+      range: range,
+      categories: [...definition.categoryLabels],
       amountField: "Amount",
-      period: { kind: "constant", value: n.period },
-      currency: { kind: "constant", value: n.currency },
-      unit: { kind: "constant", value: n.unit },
+      period: { kind: "constant", value: definition.period },
+      currency: { kind: "constant", value: definition.currency },
+      unit: { kind: "constant", value: definition.unit },
       duplicatePolicy: "reject",
     },
-    a = findTableRangesForSource(e, o);
-  ((o.categories = n.categoryLabels.map((s, d) =>
-    a.includes(s) ? s : (a[d] ?? s),
+    tableRangesForSource = findTableRangesForSource(workbook, source);
+  ((source.categories = definition.categoryLabels.map((categoryLabel, d) =>
+    tableRangesForSource.includes(categoryLabel)
+      ? categoryLabel
+      : (tableRangesForSource[d] ?? categoryLabel),
   )),
-    (o.amountField = a.includes("Amount") ? "Amount" : (a.at(-1) ?? "Amount")));
+    (source.amountField = tableRangesForSource.includes("Amount")
+      ? "Amount"
+      : (tableRangesForSource.at(-1) ?? "Amount")));
   for (const s of ["period", "currency", "unit"]) {
-    const d = s[0].toUpperCase() + s.slice(1);
-    a.includes(d) && (o[s] = { kind: "field", field: d });
+    const field = s[0].toUpperCase() + s.slice(1);
+    tableRangesForSource.includes(field) &&
+      (source[s] = { kind: "field", field: field });
   }
-  return o;
+  return source;
 }
 function ConsolidationStatusBanner({
   workbook,
@@ -313,7 +341,7 @@ function ConsolidationStatusBanner({
   onReview,
 }) {
   const { text, language } = useWorkbookMessages(),
-    s = workbook.sheets.find((l) => l.id === sheetId),
+    s = workbook.sheets.find((sheet) => sheet.id === sheetId),
     d = s?.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
       () =>
@@ -356,28 +384,29 @@ function ConsolidationStatusBanner({
 }
 function ConsolidationDialog(e) {
   const { text, language } = useWorkbookMessages(),
-    n = useCancellableOperation(),
+    cancellableOperation = useCancellableOperation(),
     o = ne.useRef(null),
     a = ne.useRef(null),
     s = ne.useRef(0),
     d = ne.useRef(""),
     u = ne.useRef(true),
-    l = e.allowedSheetIds ?? e.workbook.sheets.map((K) => K.id),
+    allowedSheetIds =
+      e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
     c = JSON.stringify([
       e.workbook,
       e.sheetId,
       e.range,
       e.readOnly,
-      l,
+      allowedSheetIds,
       e.allowHidden,
       e.allowFileSources,
       e.approvedWorkbooks,
     ]);
   d.current = c;
-  const [h, f] = ne.useState(() => {
+  const [definition, f] = ne.useState(() => {
       const K =
         e.initialDefinition ??
-        e.workbook.sheets.find((Se) => Se.id === e.sheetId)?.consolidation
+        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.consolidation
           ?.definition;
       if (K) return structuredClone(K);
       const te = {
@@ -390,28 +419,30 @@ function ConsolidationDialog(e) {
           collapseDetails: false,
           sources: [],
         },
-        ae = e.workbook.sheets.find((Se) => Se.id === e.sheetId),
-        oe = e.range.includes(":") ? e.range : formatOccupiedRangeAddress(ae);
+        ae = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+        range = e.range.includes(":")
+          ? e.range
+          : formatOccupiedRangeAddress(ae);
       return (
         (te.sources = [
-          createConsolidationDefinition(e.workbook, ae.id, oe, te),
+          createConsolidationDefinition(e.workbook, ae.id, range, te),
         ]),
         te
       );
     }),
-    [p, m] = ne.useState(() => {
+    [outputName, m] = ne.useState(() => {
       let K = "Consolidated",
         te = 2;
       for (
         ;
         e.workbook.sheets.some(
-          (ae) => ae.name.toLowerCase() === K.toLowerCase(),
+          (sheet) => sheet.name.toLowerCase() === K.toLowerCase(),
         );
       )
         K = `Consolidated ${te++}`;
       return K;
     }),
-    [v, g] = ne.useState(false),
+    [checked, g] = ne.useState(false),
     [b, y] = ne.useState([]),
     [w, E] = ne.useState(null),
     [A, k] = ne.useState(false),
@@ -419,37 +450,42 @@ function ConsolidationDialog(e) {
     [O, j] = ne.useState(null),
     [z, V] = ne.useState(0),
     [D, B] = ne.useState("contributions"),
-    _ = [
+    approvedWorkbooks = [
       ...(e.approvedWorkbooks ?? []),
       ...b.filter(
         (K) =>
-          !e.approvedWorkbooks?.some((ae) => ae.workbook.id === K.workbook.id),
+          !e.approvedWorkbooks?.some(
+            (approvedWorkbook) =>
+              approvedWorkbook.workbook.id === K.workbook.id,
+          ),
       ),
     ],
-    C = {
+    options = {
       readOnly: e.readOnly,
-      allowedSheetIds: l,
-      includeHidden: !!e.allowHidden && v,
-      approvedWorkbooks: _,
+      allowedSheetIds: allowedSheetIds,
+      includeHidden: !!e.allowHidden && checked,
+      approvedWorkbooks: approvedWorkbooks,
     },
-    T = JSON.stringify([c, h, p, C]),
-    N = O?.stamp === T,
-    R = N ? O.plan.review : null,
+    stamp = JSON.stringify([c, definition, outputName, options]),
+    N = O?.stamp === stamp,
+    review = N ? O.plan.review : null,
     L = [
       {
         workbook: e.workbook,
-        allowedSheetIds: l,
+        allowedSheetIds: allowedSheetIds,
         includeHidden: !!e.allowHidden,
       },
-      ..._,
+      ...approvedWorkbooks,
     ];
   (ne.useEffect(() => {
     u.current = true;
-    const K = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       a.current?.querySelector("input,select,button")?.focus(),
       () => {
-        ((u.current = false), s.current++, K?.isConnected && K.focus());
+        ((u.current = false),
+          s.current++,
+          activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
@@ -464,12 +500,17 @@ function ConsolidationDialog(e) {
       (f(K), j(null), I(""), V(0));
     },
     U = (K, te) =>
-      $({ ...h, sources: h.sources.map((ae, oe) => (oe === K ? te : ae)) }),
+      $({
+        ...definition,
+        sources: definition.sources.map((source, oe) =>
+          oe === K ? te : source,
+        ),
+      }),
     G = (K) => {
       try {
         (I(""), K());
-      } catch (te) {
-        I(te.message);
+      } catch (error) {
+        I(error.message);
       }
     };
   async function H(K) {
@@ -480,15 +521,15 @@ function ConsolidationDialog(e) {
     try {
       if (!/\.(json|xlsx)$/i.test(K.name))
         throw Error("Choose a native workbook JSON or an XLSX file.");
-      const oe = await importWorkbookFile(K, n.begin());
+      const oe = await importWorkbookFile(K, cancellableOperation.begin());
       if (!u.current || te !== s.current || ae !== d.current) return;
       if (oe.workbook.id === e.workbook.id)
         throw Error(
           "This is the current workbook identity. Use the current workbook source instead.",
         );
       E({ ...oe, stamp: ae });
-    } catch (oe) {
-      u.current && te === s.current && ae === d.current && I(oe.message);
+    } catch (error) {
+      u.current && te === s.current && ae === d.current && I(error.message);
     } finally {
       u.current && te === s.current && k(false);
     }
@@ -497,14 +538,14 @@ function ConsolidationDialog(e) {
     (e.onApprovedWorkbooksChange ? e.onApprovedWorkbooksChange(K) : y(K),
       j(null));
   }
-  const X$1 = R
+  const X$1 = review
       ? D === "contributions"
-        ? R.contributions
+        ? review.contributions
         : D === "subtotals"
-          ? R.subtotals
+          ? review.subtotals
           : D === "sources"
-            ? R.sources
-            : R.exceptions
+            ? review.sources
+            : review.exceptions
       : [],
     J = Math.max(1, Math.ceil(X$1.length / 25)),
     q = Math.min(z, J - 1);
@@ -516,10 +557,10 @@ function ConsolidationDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": "consolidation-title",
-      onKeyDown: (K) => {
+      onKeyDown: (event) => {
         if (
-          (K.key === "Escape" && (K.stopPropagation(), e.onClose()),
-          K.key === "Tab")
+          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          event.key === "Tab")
         ) {
           const te = [
               ...a.current.querySelectorAll(
@@ -528,11 +569,11 @@ function ConsolidationDialog(e) {
             ].filter((de) => !de.hasAttribute("hidden")),
             ae = te[0],
             oe = te.at(-1);
-          K.shiftKey && document.activeElement === ae
-            ? (K.preventDefault(), oe == null || oe.focus())
-            : !K.shiftKey &&
+          event.shiftKey && document.activeElement === ae
+            ? (event.preventDefault(), oe == null || oe.focus())
+            : !event.shiftKey &&
               document.activeElement === oe &&
-              (K.preventDefault(), ae == null || ae.focus());
+              (event.preventDefault(), ae == null || ae.focus());
         }
       },
       children: [
@@ -583,10 +624,10 @@ function ConsolidationDialog(e) {
                     i.jsx(LocalizedText, { children: "Output worksheet" }),
                     i.jsx("input", {
                       "aria-label": text("Output worksheet"),
-                      value: p,
+                      value: outputName,
                       maxLength: 31,
-                      onChange: (K) => {
-                        (m(K.target.value), j(null));
+                      onChange: (event) => {
+                        (m(event.target.value), j(null));
                       },
                       lang: language("Output worksheet"),
                       "data-ui-label": "Output worksheet",
@@ -602,8 +643,9 @@ function ConsolidationDialog(e) {
                         K,
                         i.jsx("input", {
                           "aria-label": `Target ${K}`,
-                          value: h[K],
-                          onChange: (te) => $({ ...h, [K]: te.target.value }),
+                          value: definition[K],
+                          onChange: (event) =>
+                            $({ ...definition, [K]: event.target.value }),
                         }),
                       ],
                     },
@@ -615,21 +657,23 @@ function ConsolidationDialog(e) {
                     i.jsx(LocalizedText, { children: "Category levels" }),
                     i.jsx("select", {
                       "aria-label": text("Category levels"),
-                      value: h.categoryLabels.length,
-                      onChange: (K) => {
-                        const te = Number(K.target.value),
-                          ae = Array.from(
+                      value: definition.categoryLabels.length,
+                      onChange: (event) => {
+                        const te = Number(event.target.value),
+                          categoryLabels = Array.from(
                             { length: te },
                             (oe, de) =>
-                              h.categoryLabels[de] ?? `Category ${de + 1}`,
+                              definition.categoryLabels[de] ??
+                              `Category ${de + 1}`,
                           );
                         $({
-                          ...h,
-                          categoryLabels: ae,
-                          sources: h.sources.map((oe) => ({
-                            ...oe,
-                            categories: ae.map(
-                              (de, he) => oe.categories[he] ?? "",
+                          ...definition,
+                          categoryLabels: categoryLabels,
+                          sources: definition.sources.map((source) => ({
+                            ...source,
+                            categories: categoryLabels.map(
+                              (categoryLabel, he) =>
+                                source.categories[he] ?? "",
                             ),
                           })),
                         });
@@ -642,7 +686,7 @@ function ConsolidationDialog(e) {
                     }),
                   ],
                 }),
-                h.categoryLabels.map((K, te) =>
+                definition.categoryLabels.map((categoryLabel, te) =>
                   i.jsxs(
                     "label",
                     {
@@ -653,12 +697,13 @@ function ConsolidationDialog(e) {
                         i.jsx(LocalizedText, { children: "label" }),
                         i.jsx("input", {
                           "aria-label": `Category ${te + 1} label`,
-                          value: K,
-                          onChange: (ae) =>
+                          value: categoryLabel,
+                          onChange: (event) =>
                             $({
-                              ...h,
-                              categoryLabels: h.categoryLabels.map((oe, de) =>
-                                de === te ? ae.target.value : oe,
+                              ...definition,
+                              categoryLabels: definition.categoryLabels.map(
+                                (oe, de) =>
+                                  de === te ? event.target.value : oe,
                               ),
                             }),
                         }),
@@ -676,9 +721,12 @@ function ConsolidationDialog(e) {
                   children: [
                     i.jsx("input", {
                       type: "checkbox",
-                      checked: h.linkedAmounts,
-                      onChange: (K) =>
-                        $({ ...h, linkedAmounts: K.target.checked }),
+                      checked: definition.linkedAmounts,
+                      onChange: (event) =>
+                        $({
+                          ...definition,
+                          linkedAmounts: event.target.checked,
+                        }),
                     }),
                     i.jsx(LocalizedText, {
                       children: "Link amounts from this workbook",
@@ -689,9 +737,12 @@ function ConsolidationDialog(e) {
                   children: [
                     i.jsx("input", {
                       type: "checkbox",
-                      checked: h.collapseDetails,
-                      onChange: (K) =>
-                        $({ ...h, collapseDetails: K.target.checked }),
+                      checked: definition.collapseDetails,
+                      onChange: (event) =>
+                        $({
+                          ...definition,
+                          collapseDetails: event.target.checked,
+                        }),
                     }),
                     i.jsx(LocalizedText, {
                       children: "Collapse detail groups",
@@ -703,9 +754,9 @@ function ConsolidationDialog(e) {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: v,
-                        onChange: (K) => {
-                          (g(K.target.checked), j(null));
+                        checked: checked,
+                        onChange: (event) => {
+                          (g(event.target.checked), j(null));
                         },
                       }),
                       i.jsx(LocalizedText, {
@@ -727,18 +778,20 @@ function ConsolidationDialog(e) {
               lang: language("Consolidation sources"),
               "data-ui-label": "Consolidation sources",
               children: [
-                h.sources.map((K, te) => {
-                  const ae = L.find((se) => se.workbook.id === K.workbookId),
-                    oe = ae?.workbook,
+                definition.sources.map((source, te) => {
+                  const ae = L.find(
+                      (se) => se.workbook.id === source.workbookId,
+                    ),
+                    workbook = ae?.workbook,
                     de =
-                      oe?.sheets.filter(
-                        (se) =>
-                          ae.allowedSheetIds.includes(se.id) &&
-                          ((!se.hidden && !se.veryHidden) ||
-                            (v && ae.includeHidden)),
+                      workbook?.sheets.filter(
+                        (sheet) =>
+                          ae.allowedSheetIds.includes(sheet.id) &&
+                          ((!sheet.hidden && !sheet.veryHidden) ||
+                            (checked && ae.includeHidden)),
                       ) ?? [],
-                    he = de.find((se) => se.id === K.sheetId),
-                    Se = he ? findTableRangesForSource(oe, K) : [],
+                    he = de.find((se) => se.id === source.sheetId),
+                    Se = he ? findTableRangesForSource(workbook, source) : [],
                     le = (se, we, Ee) =>
                       i.jsxs("label", {
                         children: [
@@ -746,7 +799,7 @@ function ConsolidationDialog(e) {
                           i.jsxs("select", {
                             "aria-label": `Source ${te + 1} ${se}`,
                             value: we,
-                            onChange: (Ae) => Ee(Ae.target.value),
+                            onChange: (event) => Ee(event.target.value),
                             children: [
                               !Se.includes(we) &&
                                 i.jsx("option", {
@@ -779,11 +832,11 @@ function ConsolidationDialog(e) {
                               ],
                             }),
                             i.jsxs("button", {
-                              disabled: h.sources.length === 1,
+                              disabled: definition.sources.length === 1,
                               onClick: () =>
                                 $({
-                                  ...h,
-                                  sources: h.sources.filter(
+                                  ...definition,
+                                  sources: definition.sources.filter(
                                     (se, we) => te !== we,
                                   ),
                                 }),
@@ -804,17 +857,19 @@ function ConsolidationDialog(e) {
                                 i.jsx(LocalizedText, { children: "Workbook" }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Workbook`,
-                                  value: K.workbookId,
-                                  onChange: (se) => {
+                                  value: source.workbookId,
+                                  onChange: (event) => {
                                     const we = L.find(
                                         (Ae) =>
-                                          Ae.workbook.id === se.target.value,
+                                          Ae.workbook.id === event.target.value,
                                       ),
                                       Ee = we.workbook.sheets.find(
-                                        (Ae) =>
-                                          we.allowedSheetIds.includes(Ae.id) &&
-                                          !Ae.hidden &&
-                                          !Ae.veryHidden,
+                                        (sheet) =>
+                                          we.allowedSheetIds.includes(
+                                            sheet.id,
+                                          ) &&
+                                          !sheet.hidden &&
+                                          !sheet.veryHidden,
                                       );
                                     Ee &&
                                       U(te, {
@@ -822,15 +877,15 @@ function ConsolidationDialog(e) {
                                           we.workbook,
                                           Ee.id,
                                           formatOccupiedRangeAddress(Ee),
-                                          h,
+                                          definition,
                                         ),
-                                        id: K.id,
+                                        id: source.id,
                                       });
                                   },
                                   children: [
                                     !ae &&
                                       i.jsx("option", {
-                                        value: K.workbookId,
+                                        value: source.workbookId,
                                         children:
                                           "Missing or unapproved workbook",
                                       }),
@@ -858,25 +913,25 @@ function ConsolidationDialog(e) {
                                 i.jsx(LocalizedText, { children: "Worksheet" }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Worksheet`,
-                                  value: K.sheetId,
-                                  onChange: (se) => {
+                                  value: source.sheetId,
+                                  onChange: (event) => {
                                     const we = de.find(
-                                      (Ee) => Ee.id === se.target.value,
+                                      (Ee) => Ee.id === event.target.value,
                                     );
                                     U(te, {
                                       ...createConsolidationDefinition(
-                                        oe,
+                                        workbook,
                                         we.id,
                                         formatOccupiedRangeAddress(we),
-                                        h,
+                                        definition,
                                       ),
-                                      id: K.id,
+                                      id: source.id,
                                     });
                                   },
                                   children: [
                                     !he &&
                                       i.jsx("option", {
-                                        value: K.sheetId,
+                                        value: source.sheetId,
                                         children:
                                           "Missing or unauthorized worksheet",
                                       }),
@@ -898,13 +953,13 @@ function ConsolidationDialog(e) {
                                 }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Source type`,
-                                  value: K.tableId ?? "",
-                                  onChange: (se) => {
-                                    const { tableId, ...Ee } = K;
+                                  value: source.tableId ?? "",
+                                  onChange: (event) => {
+                                    const { tableId, ...Ee } = source;
                                     U(te, {
                                       ...Ee,
-                                      ...(se.target.value
-                                        ? { tableId: se.target.value }
+                                      ...(event.target.value
+                                        ? { tableId: event.target.value }
                                         : {}),
                                     });
                                   },
@@ -913,19 +968,22 @@ function ConsolidationDialog(e) {
                                       value: "",
                                       children: "Explicit range",
                                     }),
-                                    K.tableId &&
+                                    source.tableId &&
                                       !he?.tables?.some(
-                                        (se) => se.id === K.tableId,
+                                        (table) => table.id === source.tableId,
                                       ) &&
                                       i.jsx("option", {
-                                        value: K.tableId,
+                                        value: source.tableId,
                                         children: "Missing table",
                                       }),
-                                    he?.tables?.map((se) =>
+                                    he?.tables?.map((table) =>
                                       i.jsx(
                                         "option",
-                                        { value: se.id, children: se.name },
-                                        se.id,
+                                        {
+                                          value: table.id,
+                                          children: table.name,
+                                        },
+                                        table.id,
                                       ),
                                     ),
                                   ],
@@ -939,25 +997,29 @@ function ConsolidationDialog(e) {
                                 }),
                                 i.jsx("input", {
                                   "aria-label": `Source ${te + 1} Header & data range`,
-                                  value: K.range,
-                                  disabled: !!K.tableId,
-                                  onChange: (se) =>
-                                    U(te, { ...K, range: se.target.value }),
+                                  value: source.range,
+                                  disabled: !!source.tableId,
+                                  onChange: (event) =>
+                                    U(te, {
+                                      ...source,
+                                      range: event.target.value,
+                                    }),
                                 }),
                               ],
                             }),
-                            h.categoryLabels.map((se, we) =>
+                            definition.categoryLabels.map((categoryLabel, we) =>
                               i.jsx(
                                 "div",
                                 {
                                   children: le(
                                     `Category ${we + 1}`,
-                                    K.categories[we],
+                                    source.categories[we],
                                     (Ee) =>
                                       U(te, {
-                                        ...K,
-                                        categories: K.categories.map(
-                                          (Ae, ye) => (ye === we ? Ee : Ae),
+                                        ...source,
+                                        categories: source.categories.map(
+                                          (category, ye) =>
+                                            ye === we ? Ee : category,
                                         ),
                                       }),
                                   ),
@@ -965,8 +1027,8 @@ function ConsolidationDialog(e) {
                                 we,
                               ),
                             ),
-                            le("Amount", K.amountField, (se) =>
-                              U(te, { ...K, amountField: se }),
+                            le("Amount", source.amountField, (amountField) =>
+                              U(te, { ...source, amountField: amountField }),
                             ),
                             i.jsxs("label", {
                               children: [
@@ -975,11 +1037,11 @@ function ConsolidationDialog(e) {
                                 }),
                                 i.jsxs("select", {
                                   "aria-label": `Source ${te + 1} Repeated categories`,
-                                  value: K.duplicatePolicy,
-                                  onChange: (se) =>
+                                  value: source.duplicatePolicy,
+                                  onChange: (event) =>
                                     U(te, {
-                                      ...K,
-                                      duplicatePolicy: se.target.value,
+                                      ...source,
+                                      duplicatePolicy: event.target.value,
                                     }),
                                   children: [
                                     i.jsx("option", {
@@ -1009,15 +1071,16 @@ function ConsolidationDialog(e) {
                                         }),
                                         i.jsxs("select", {
                                           "aria-label": `Source ${te + 1} ${se} source`,
-                                          value: K[se].kind,
-                                          onChange: (we) =>
+                                          value: source[se].kind,
+                                          onChange: (event) =>
                                             U(te, {
-                                              ...K,
+                                              ...source,
                                               [se]:
-                                                we.target.value === "constant"
+                                                event.target.value ===
+                                                "constant"
                                                   ? {
                                                       kind: "constant",
-                                                      value: h[se],
+                                                      value: definition[se],
                                                     }
                                                   : {
                                                       kind: "field",
@@ -1037,11 +1100,14 @@ function ConsolidationDialog(e) {
                                         }),
                                       ],
                                     }),
-                                    K[se].kind === "field"
-                                      ? le(se, K[se].field, (we) =>
+                                    source[se].kind === "field"
+                                      ? le(se, source[se].field, (field) =>
                                           U(te, {
-                                            ...K,
-                                            [se]: { kind: "field", field: we },
+                                            ...source,
+                                            [se]: {
+                                              kind: "field",
+                                              field: field,
+                                            },
                                           }),
                                         )
                                       : i.jsxs("label", {
@@ -1049,13 +1115,13 @@ function ConsolidationDialog(e) {
                                             se,
                                             i.jsx("input", {
                                               "aria-label": `Source ${te + 1} ${se}`,
-                                              value: K[se].value,
-                                              onChange: (we) =>
+                                              value: source[se].value,
+                                              onChange: (event) =>
                                                 U(te, {
-                                                  ...K,
+                                                  ...source,
                                                   [se]: {
                                                     kind: "constant",
-                                                    value: we.target.value,
+                                                    value: event.target.value,
                                                   },
                                                 }),
                                             }),
@@ -1070,25 +1136,28 @@ function ConsolidationDialog(e) {
                         }),
                       ],
                     },
-                    K.id,
+                    source.id,
                   );
                 }),
                 i.jsx("button", {
-                  disabled: h.sources.length >= 8,
+                  disabled: definition.sources.length >= 8,
                   onClick: () => {
                     const K = e.workbook.sheets.find(
-                      (te) => l.includes(te.id) && !te.hidden && !te.veryHidden,
+                      (sheet) =>
+                        allowedSheetIds.includes(sheet.id) &&
+                        !sheet.hidden &&
+                        !sheet.veryHidden,
                     );
                     K &&
                       $({
-                        ...h,
+                        ...definition,
                         sources: [
-                          ...h.sources,
+                          ...definition.sources,
                           createConsolidationDefinition(
                             e.workbook,
                             K.id,
                             formatOccupiedRangeAddress(K),
-                            h,
+                            definition,
                           ),
                         ],
                       });
@@ -1121,9 +1190,10 @@ function ConsolidationDialog(e) {
                         type: "file",
                         accept: ".json,.xlsx",
                         "aria-label": text("Inspect consolidation workbook"),
-                        disabled: A || _.length >= 8,
-                        onChange: (K) => {
-                          (H(K.target.files?.[0]), (K.target.value = ""));
+                        disabled: A || approvedWorkbooks.length >= 8,
+                        onChange: (event) => {
+                          (H(event.target.files?.[0]),
+                            (event.target.value = ""));
                         },
                         lang: language("Inspect consolidation workbook"),
                         "data-ui-label": "Inspect consolidation workbook",
@@ -1146,23 +1216,30 @@ function ConsolidationDialog(e) {
                         i.jsx("strong", { children: w.workbook.name }),
                         i.jsx("p", {
                           children: w.workbook.sheets
-                            .filter((K) => !K.hidden && !K.veryHidden)
+                            .filter(
+                              (sheet) => !sheet.hidden && !sheet.veryHidden,
+                            )
                             .map((K) => K.name)
                             .join(", "),
                         }),
-                        w.warnings.map((K, te) =>
-                          i.jsx("p", { children: K }, te),
+                        w.warnings.map((warning, te) =>
+                          i.jsx("p", { children: warning }, te),
                         ),
                         i.jsx("button", {
                           onClick: () => {
                             (Q([
-                              ..._.filter(
-                                (K) => K.workbook.id !== w.workbook.id,
+                              ...approvedWorkbooks.filter(
+                                (approvedWorkbook) =>
+                                  approvedWorkbook.workbook.id !==
+                                  w.workbook.id,
                               ),
                               {
                                 workbook: w.workbook,
                                 allowedSheetIds: w.workbook.sheets
-                                  .filter((K) => !K.hidden && !K.veryHidden)
+                                  .filter(
+                                    (sheet) =>
+                                      !sheet.hidden && !sheet.veryHidden,
+                                  )
                                   .map((K) => K.id),
                                 includeHidden: false,
                               },
@@ -1181,7 +1258,7 @@ function ConsolidationDialog(e) {
                         }),
                       ],
                     }),
-                  _.map((K) =>
+                  approvedWorkbooks.map((K) =>
                     i.jsxs(
                       "p",
                       {
@@ -1196,12 +1273,16 @@ function ConsolidationDialog(e) {
                             disabled:
                               !e.onApprovedWorkbooksChange &&
                               !!e.approvedWorkbooks?.some(
-                                (ae) => ae.workbook.id === K.workbook.id,
+                                (approvedWorkbook) =>
+                                  approvedWorkbook.workbook.id ===
+                                  K.workbook.id,
                               ),
                             onClick: () =>
                               Q(
-                                _.filter(
-                                  (ae) => ae.workbook.id !== K.workbook.id,
+                                approvedWorkbooks.filter(
+                                  (approvedWorkbook) =>
+                                    approvedWorkbook.workbook.id !==
+                                    K.workbook.id,
                                 ),
                               ),
                             children: [
@@ -1222,7 +1303,7 @@ function ConsolidationDialog(e) {
                 className: "lg-consolidation-error",
                 children: F,
               }),
-            R &&
+            review &&
               i.jsxs("section", {
                 ref: o,
                 "aria-label": text("Consolidation preview"),
@@ -1231,7 +1312,7 @@ function ConsolidationDialog(e) {
                 "data-ui-label": "Consolidation preview",
                 children: [
                   i.jsx("h3", {
-                    children: R.complete
+                    children: review.complete
                       ? "Ready for review"
                       : "Resolve exceptions before publishing",
                   }),
@@ -1241,14 +1322,16 @@ function ConsolidationDialog(e) {
                       i.jsxs("span", {
                         children: [
                           i.jsx(LocalizedText, { children: "Contributions " }),
-                          i.jsx("strong", { children: R.contributions.length }),
+                          i.jsx("strong", {
+                            children: review.contributions.length,
+                          }),
                         ],
                       }),
                       i.jsxs("span", {
                         children: [
                           i.jsx(LocalizedText, { children: "Grand total " }),
                           i.jsx("strong", {
-                            children: R.grandTotal ?? "Blocked",
+                            children: review.grandTotal ?? "Blocked",
                           }),
                         ],
                       }),
@@ -1257,32 +1340,34 @@ function ConsolidationDialog(e) {
                           i.jsx(LocalizedText, { children: "Source controls" }),
                           " ",
                           i.jsx("strong", {
-                            children: R.sourceTotal ?? "Blocked",
+                            children: review.sourceTotal ?? "Blocked",
                           }),
                         ],
                       }),
                       i.jsxs("span", {
                         children: [
                           i.jsx(LocalizedText, { children: "Difference " }),
-                          i.jsx("strong", { children: R.difference ?? "—" }),
+                          i.jsx("strong", {
+                            children: review.difference ?? "—",
+                          }),
                         ],
                       }),
                     ],
                   }),
                   i.jsxs("p", {
                     children: [
-                      h.period,
+                      definition.period,
                       " · ",
-                      h.currency,
+                      definition.currency,
                       " · ",
-                      h.unit,
+                      definition.unit,
                       ".",
                       " ",
-                      R.exceptions.length,
+                      review.exceptions.length,
                       " ",
                       i.jsx(LocalizedText, { children: "exceptions." }),
                       " ",
-                      R.complete
+                      review.complete
                         ? "Review all contributions and source controls before publishing."
                         : "No totals or partial output can be published while errors remain.",
                     ],
@@ -1316,7 +1401,7 @@ function ConsolidationDialog(e) {
                                 JSON.stringify(
                                   {
                                     definition: O.plan.request.definition,
-                                    review: R,
+                                    review: review,
                                   },
                                   null,
                                   2,
@@ -1371,7 +1456,7 @@ function ConsolidationDialog(e) {
                           i.jsxs("tbody", {
                             children: [
                               D === "contributions" &&
-                                R.contributions
+                                review.contributions
                                   .slice(q * 25, q * 25 + 25)
                                   .map((K, te) =>
                                     i.jsxs(
@@ -1381,8 +1466,8 @@ function ConsolidationDialog(e) {
                                           i.jsx("td", {
                                             children: K.categories
                                               .map(
-                                                (ae) =>
-                                                  `${typeof ae}: ${String(ae)}`,
+                                                (category) =>
+                                                  `${typeof category}: ${String(category)}`,
                                               )
                                               .join(" / "),
                                           }),
@@ -1404,7 +1489,7 @@ function ConsolidationDialog(e) {
                                     ),
                                   ),
                               D === "subtotals" &&
-                                R.subtotals
+                                review.subtotals
                                   .slice(q * 25, q * 25 + 25)
                                   .map((K, te) =>
                                     i.jsxs(
@@ -1425,49 +1510,51 @@ function ConsolidationDialog(e) {
                                     ),
                                   ),
                               D === "sources" &&
-                                R.sources.slice(q * 25, q * 25 + 25).map((K) =>
-                                  i.jsxs(
-                                    "tr",
-                                    {
-                                      children: [
-                                        i.jsxs("td", {
-                                          children: [
-                                            K.workbookName,
-                                            " / ",
-                                            K.sheetName,
-                                          ],
-                                        }),
-                                        i.jsx("td", { children: K.range }),
-                                        i.jsxs("td", {
-                                          children: [
-                                            K.records,
-                                            " / ",
-                                            K.acceptedRecords,
-                                          ],
-                                        }),
-                                        i.jsxs("td", {
-                                          children: [
-                                            K.periods.join(", "),
-                                            " / ",
-                                            K.currencies.join(", "),
-                                            " ",
-                                            "/ ",
-                                            K.units.join(", "),
-                                          ],
-                                        }),
-                                        i.jsx("td", { children: K.amount }),
-                                        i.jsx("td", {
-                                          children: i.jsx("code", {
-                                            children: K.fingerprint,
+                                review.sources
+                                  .slice(q * 25, q * 25 + 25)
+                                  .map((K) =>
+                                    i.jsxs(
+                                      "tr",
+                                      {
+                                        children: [
+                                          i.jsxs("td", {
+                                            children: [
+                                              K.workbookName,
+                                              " / ",
+                                              K.sheetName,
+                                            ],
                                           }),
-                                        }),
-                                      ],
-                                    },
-                                    K.sourceId,
+                                          i.jsx("td", { children: K.range }),
+                                          i.jsxs("td", {
+                                            children: [
+                                              K.records,
+                                              " / ",
+                                              K.acceptedRecords,
+                                            ],
+                                          }),
+                                          i.jsxs("td", {
+                                            children: [
+                                              K.periods.join(", "),
+                                              " / ",
+                                              K.currencies.join(", "),
+                                              " ",
+                                              "/ ",
+                                              K.units.join(", "),
+                                            ],
+                                          }),
+                                          i.jsx("td", { children: K.amount }),
+                                          i.jsx("td", {
+                                            children: i.jsx("code", {
+                                              children: K.fingerprint,
+                                            }),
+                                          }),
+                                        ],
+                                      },
+                                      K.sourceId,
+                                    ),
                                   ),
-                                ),
                               D === "exceptions" &&
-                                R.exceptions
+                                review.exceptions
                                   .slice(q * 25, q * 25 + 25)
                                   .map((K, te) =>
                                     i.jsxs(
@@ -1480,8 +1567,9 @@ function ConsolidationDialog(e) {
                                                 children: "Source",
                                               }),
                                               " ",
-                                              h.sources.findIndex(
-                                                (ae) => ae.id === K.sourceId,
+                                              definition.sources.findIndex(
+                                                (source) =>
+                                                  source.id === K.sourceId,
                                               ) + 1,
                                               K.row ? ` / row ${K.row}` : "",
                                             ],
@@ -1559,14 +1647,18 @@ function ConsolidationDialog(e) {
             i.jsx("button", {
               onClick: () =>
                 G(() => {
-                  const K = createConsolidationPreview(
+                  const consolidationPreview = createConsolidationPreview(
                     e.workbook,
-                    { definition: h, outputName: p },
-                    C,
+                    { definition: definition, outputName: outputName },
+                    options,
                   );
-                  (j({ plan: K, stamp: T }),
+                  (j({ plan: consolidationPreview, stamp: stamp }),
                     V(0),
-                    B(K.review.complete ? "contributions" : "exceptions"));
+                    B(
+                      consolidationPreview.review.complete
+                        ? "contributions"
+                        : "exceptions",
+                    ));
                 }),
               children: i.jsx(LocalizedText, {
                 children: "Preview consolidation",
@@ -1575,13 +1667,17 @@ function ConsolidationDialog(e) {
             i.jsx("button", {
               className: "primary",
               disabled:
-                !R?.complete ||
+                !review?.complete ||
                 e.readOnly ||
                 !!e.workbook.structureProtection?.enabled,
               onClick: () =>
                 G(() => {
                   if (!N) return;
-                  const K = publishConsolidatedSchedule(e.workbook, O.plan, C);
+                  const K = publishConsolidatedSchedule(
+                    e.workbook,
+                    O.plan,
+                    options,
+                  );
                   (j(null),
                     e.onWorkbookChange(K, "Publish consolidated schedule"),
                     e.onClose());

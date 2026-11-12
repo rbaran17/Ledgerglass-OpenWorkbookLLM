@@ -64,22 +64,23 @@ import {
   assertRangeWithinBoundary,
 } from "./47-fill-and-paste-special.js";
 
-function remapReferenceForMove(e, r, t) {
-  if (r !== e.source.id) return { sheetId: r, reference: t, changed: false };
-  const n = parseWholeColumnReference(t);
-  if (!rangesIntersect(n, e.from))
-    return { sheetId: r, reference: t, changed: false };
-  if (rangeContainsRange(e.from, n))
+function remapReferenceForMove(e, sheetId, reference) {
+  if (sheetId !== e.source.id)
+    return { sheetId: sheetId, reference: reference, changed: false };
+  const wholeColumnReference = parseWholeColumnReference(reference);
+  if (!rangesIntersect(wholeColumnReference, e.from))
+    return { sheetId: sheetId, reference: reference, changed: false };
+  if (rangeContainsRange(e.from, wholeColumnReference))
     return {
       sheetId: e.target.id,
-      reference: parseMovableA1Rectangle(t, e.dr, e.dc),
+      reference: parseMovableA1Rectangle(reference, e.dr, e.dc),
       changed: true,
     };
   const o = {
-      firstRow: Math.max(n.firstRow, e.from.firstRow),
-      lastRow: Math.min(n.lastRow, e.from.lastRow),
-      firstCol: Math.max(n.firstCol, e.from.firstCol),
-      lastCol: Math.min(n.lastCol, e.from.lastCol),
+      firstRow: Math.max(wholeColumnReference.firstRow, e.from.firstRow),
+      lastRow: Math.min(wholeColumnReference.lastRow, e.from.lastRow),
+      firstCol: Math.max(wholeColumnReference.firstCol, e.from.firstCol),
+      lastCol: Math.min(wholeColumnReference.lastCol, e.from.lastCol),
     },
     a = {
       firstRow: o.firstRow + e.dr,
@@ -87,13 +88,16 @@ function remapReferenceForMove(e, r, t) {
       firstCol: o.firstCol + e.dc,
       lastCol: o.lastCol + e.dc,
     };
-  if (e.source.id === e.target.id && rangeContainsRange(n, a))
-    return { sheetId: r, reference: t, changed: false };
+  if (
+    e.source.id === e.target.id &&
+    rangeContainsRange(wholeColumnReference, a)
+  )
+    return { sheetId: sheetId, reference: reference, changed: false };
   throwWorkbookError(
-    `Reference ${e.source.name}!${t} includes cells outside the moved block. This move would require a split or cross-sheet range; use explicit references first.`,
+    `Reference ${e.source.name}!${reference} includes cells outside the moved block. This move would require a split or cross-sheet range; use explicit references first.`,
   );
 }
-function qW(e, r, t = new Set()) {
+function qW(book, r, t = new Set()) {
   const n = `${r.scopeSheetId ?? ""}:${r.name.toLowerCase()}`;
   return t.has(n) || t.size > 32
     ? false
@@ -103,16 +107,16 @@ function qW(e, r, t = new Set()) {
           return false;
         if (o.kind === "reference") return !!o.sheet;
         if (o.kind === "name" && !o.sheet) {
-          const a = (e.definedNames ?? []).find(
+          const a = (book.definedNames ?? []).find(
             (s) =>
               !s.scopeSheetId && s.name.toLowerCase() === o.name.toLowerCase(),
           );
-          return !a || qW(e, a, new Set(t));
+          return !a || qW(book, a, new Set(t));
         }
         return true;
       }));
 }
-function XW(e, r, t = new Set()) {
+function XW(book, r, t = new Set()) {
   const n = `${r.scopeSheetId ?? ""}:${r.name.toLowerCase()}`;
   return t.has(n) || t.size > 32
     ? true
@@ -121,29 +125,29 @@ function XW(e, r, t = new Set()) {
         if (isUnsafeStructuredReference(o)) return true;
         if (o.kind !== "name" || o.sheet) return false;
         const a =
-          (e.definedNames ?? []).find(
+          (book.definedNames ?? []).find(
             (s) =>
               s.scopeSheetId === r.scopeSheetId &&
               s.name.toLowerCase() === o.name.toLowerCase(),
           ) ??
-          (e.definedNames ?? []).find(
+          (book.definedNames ?? []).find(
             (s) =>
               !s.scopeSheetId && s.name.toLowerCase() === o.name.toLowerCase(),
           );
-        return !!a && XW(e, a, new Set(t));
+        return !!a && XW(book, a, new Set(t));
       }));
 }
-function repairReferencesForMove(e, r, t, n, o = false) {
-  ((e.characters += r.length),
+function repairReferencesForMove(e, refersTo, t, n, o = false) {
+  ((e.characters += refersTo.length),
     e.characters > pasteOperationLimits.formulaCharacters &&
       throwWorkbookError(
         "Reference repair exceeds 10 million formula characters. Simplify the workbook before moving cells.",
       ));
-  const a = assertFormulaReferencesMovable(r);
+  const a = assertFormulaReferencesMovable(refersTo);
   let s = "",
     d = 0;
   for (const l of a) {
-    let c = l.text;
+    let text = l.text;
     if (
       (l.kind === "dynamic" &&
         throwWorkbookError(
@@ -184,47 +188,48 @@ function repairReferencesForMove(e, r, t, n, o = false) {
           ));
     }
     if (l.kind === "reference") {
-      const h = l.sheet
+      const sheetId = l.sheet
         ? e.book.sheets.find(
-            (f) => f.name.toLowerCase() === l.sheet.toLowerCase(),
+            (sheet) => sheet.name.toLowerCase() === l.sheet.toLowerCase(),
           )?.id
         : t;
-      if (!h)
+      if (!sheetId)
         !l.sheet &&
           rangesIntersect(parseWholeColumnReference(l.reference), e.from) &&
           throwWorkbookError(
             "A workbook-level name has a context-dependent unqualified reference. Qualify its worksheet before moving cells.",
           );
       else {
-        const f = remapReferenceForMove(e, h, l.reference);
+        const f = remapReferenceForMove(e, sheetId, l.reference);
         f.changed
-          ? (c = `${l.sheet || f.sheetId !== n ? quoteSheetName(findSheetOrThrow(e.book, f.sheetId).name) + "!" : ""}${f.reference}`)
+          ? (text = `${l.sheet || f.sheetId !== n ? quoteSheetName(findSheetOrThrow(e.book, f.sheetId).name) + "!" : ""}${f.reference}`)
           : !l.sheet &&
             t !== n &&
             t &&
-            (c = `${quoteSheetName(findSheetOrThrow(e.book, t).name)}!${l.reference}`);
+            (text = `${quoteSheetName(findSheetOrThrow(e.book, t).name)}!${l.reference}`);
       }
     }
-    c !== l.text && ((s += r.slice(d, l.start) + c), (d = l.end));
+    text !== l.text && ((s += refersTo.slice(d, l.start) + text), (d = l.end));
   }
-  return s + r.slice(d);
+  return s + refersTo.slice(d);
 }
-function computeDrawingFootprint(e, r) {
+function computeDrawingFootprint(sheet, r) {
   const t = _t(r.anchor),
     n = (s, d, u, l) => {
-      const c = createAxisVisibilityIndex(
-          s === "row" ? e.rowCount : e.colCount,
-          cn(e, s),
+      const axisVisibilityIndex = createAxisVisibilityIndex(
+          s === "row" ? sheet.rowCount : sheet.colCount,
+          cn(sheet, s),
         ),
-        h = (p) => (s === "row" ? rowHeightAt(e, p) : columnWidthAt(e, p));
-      if (c.isHidden(d)) return [d, d];
+        h = (p) =>
+          s === "row" ? rowHeightAt(sheet, p) : columnWidthAt(sheet, p);
+      if (axisVisibilityIndex.isHidden(d)) return [d, d];
       const f = (p) => {
         let m = d,
           v = 0;
         if (p >= 0)
           for (; p >= h(m);) {
             p -= h(m);
-            const g = c.next(m, 1);
+            const g = axisVisibilityIndex.next(m, 1);
             if (g === null) return m;
             ((m = g),
               ++v > 1e3 &&
@@ -234,7 +239,7 @@ function computeDrawingFootprint(e, r) {
           }
         else
           for (; p < 0;) {
-            const g = c.next(m, -1);
+            const g = axisVisibilityIndex.next(m, -1);
             if (g === null) return 0;
             ((m = g),
               (p += h(m)),
@@ -252,82 +257,93 @@ function computeDrawingFootprint(e, r) {
   return { firstRow: o[0], lastRow: o[1], firstCol: a[0], lastCol: a[1] };
 }
 function findMoveBlockers(e) {
-  const r = collectFormulaEntries(e.book);
-  for (const [t, n] of [
+  const formulaEntries = collectFormulaEntries(e.book);
+  for (const [sheet, n] of [
     [e.source, e.from],
     [e.target, e.to],
   ]) {
-    for (const o of t.merges ?? [])
+    for (const o of sheet.merges ?? [])
       rangesIntersect(n, parseRangeAddress(o)) &&
         throwWorkbookError(
           "Unmerge the source and destination before moving cells.",
         );
-    for (const o of t.tables ?? [])
+    for (const o of sheet.tables ?? [])
       rangesIntersect(n, parseRangeAddress(o.range)) &&
         throwWorkbookError(
           `The move intersects table ${o.name}. Table-cell moves are not supported; use ordinary cells outside tables.`,
         );
-    for (const o of [...(t.pivots ?? []), ...(t.queries ?? [])])
+    for (const o of [...(sheet.pivots ?? []), ...(sheet.queries ?? [])])
       rangesIntersect(n, parseRangeAddress(o.outputRange)) &&
         throwWorkbookError(
           "The move intersects a generated PivotTable or query output. Move ordinary cells instead.",
         );
-    for (const o of [...(t.validations ?? []), ...(t.conditionalFormats ?? [])])
+    for (const o of [
+      ...(sheet.validations ?? []),
+      ...(sheet.conditionalFormats ?? []),
+    ])
       rangesIntersect(n, parseRangeAddress(o.range)) &&
         throwWorkbookError(
           "The move intersects a validation or conditional-formatting rule. Remove or relocate the rule first.",
         );
-    for (const o of t.objects ?? [])
+    for (const o of sheet.objects ?? [])
       (isCellInsideRange(n, _t(o.anchor)) ||
-        rangesIntersect(n, computeDrawingFootprint(t, o))) &&
+        rangesIntersect(n, computeDrawingFootprint(sheet, o))) &&
         throwWorkbookError(
           `The move intersects drawing ${o.label || o.id}. Drawing footprints cannot be moved or partially overwritten by this command.`,
         );
-    for (const o of r)
-      o.sheetId === t.id &&
-        rangesIntersect(n, parseRangeAddress(o.range)) &&
+    for (const formulaEntry of formulaEntries)
+      formulaEntry.sheetId === sheet.id &&
+        rangesIntersect(n, parseRangeAddress(formulaEntry.range)) &&
         throwWorkbookError(
           "The move intersects a dynamic-array footprint. Convert it to ordinary values or move cells outside the array.",
         );
   }
 }
-function collectFormulaEntries(e) {
-  const r = calculateWorkbookWithSettings(e),
+function collectFormulaEntries(book) {
+  const workbookWithSettings = calculateWorkbookWithSettings(book),
     t = [];
   let n = 0,
     o = 0;
-  for (const a of e.sheets)
-    for (const [s, d] of Object.entries(a.cells))
-      if (isFormulaInputValue(d)) {
+  for (const sheet of book.sheets)
+    for (const [anchor, cell] of Object.entries(sheet.cells))
+      if (isFormulaInputValue(cell)) {
         (++n > pasteOperationLimits.formulaCells ||
-          (o += d.raw.length) > pasteOperationLimits.formulaCharacters) &&
+          (o += cell.raw.length) > pasteOperationLimits.formulaCharacters) &&
           throwWorkbookError(
             "Array inspection supports at most 10,000 formulas and 10 million formula characters. Simplify the workbook before moving cells.",
           );
-        const u = r.getSpillRange(a.id, s);
-        if (u) {
-          const l = parseRangeAddress(u);
-          (l.firstRow !== l.lastRow || l.firstCol !== l.lastCol) &&
-            t.push({ sheetId: a.id, anchor: s, range: u });
+        const range = workbookWithSettings.getSpillRange(sheet.id, anchor);
+        if (range) {
+          const rangeAddress = parseRangeAddress(range);
+          (rangeAddress.firstRow !== rangeAddress.lastRow ||
+            rangeAddress.firstCol !== rangeAddress.lastCol) &&
+            t.push({ sheetId: sheet.id, anchor: anchor, range: range });
         }
       }
   return t;
 }
-function formulaEntriesSignature(e) {
-  return collectFormulaEntries(e)
+function formulaEntriesSignature(book) {
+  return collectFormulaEntries(book)
     .map((r) => `${r.sheetId}:${r.anchor}:${r.range}`)
     .sort().join(`
 `);
 }
-function computeRangeMoveResult(e, r, t, n, o, a = {}) {
+function computeRangeMoveResult(
+  book,
+  sourceSheetId,
+  sourceRange,
+  targetSheetId,
+  targetRange,
+  a = {},
+) {
   assertWorkbookWritable(a.readOnly);
-  const s = findSheetOrThrow(e, r),
-    d = findSheetOrThrow(e, n);
-  (assertSheetUnprotected(s), assertSheetUnprotected(d));
-  const u = assertCutSourceWithinLimit(s, t),
-    l = assertRangeWithinBoundary(d, o),
-    c = u.lastRow - u.firstRow + 1,
-    h = u.lastCol - u.firstCol + 1;
+  const sheetOrThrow = findSheetOrThrow(book, sourceSheetId),
+    d = findSheetOrThrow(book, targetSheetId);
+  (assertSheetUnprotected(sheetOrThrow), assertSheetUnprotected(d));
+  const from = assertCutSourceWithinLimit(sheetOrThrow, sourceRange),
+    l = assertRangeWithinBoundary(d, targetRange),
+    c = from.lastRow - from.firstRow + 1,
+    h = from.lastCol - from.firstCol + 1;
   (l.lastRow !== l.firstRow || l.lastCol !== l.firstCol) &&
     (l.lastRow - l.firstRow + 1 !== c || l.lastCol - l.firstCol + 1 !== h) &&
     throwWorkbookError(
@@ -341,199 +357,211 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
   };
   (f.lastRow >= d.rowCount || f.lastCol >= d.colCount) &&
     throwWorkbookError("The moved cells would exceed the worksheet boundary.");
-  const p = a.sourceSnapshot ?? createCutSourceSnapshot(e, r, t);
-  verifyCutSourceSnapshot(e, p, r, t);
+  const p =
+    a.sourceSnapshot ??
+    createCutSourceSnapshot(book, sourceSheetId, sourceRange);
+  verifyCutSourceSnapshot(book, p, sourceSheetId, sourceRange);
   const m = {
-      book: e,
-      source: s,
+      book: book,
+      source: sheetOrThrow,
       target: d,
-      from: u,
+      from: from,
       to: f,
-      dr: f.firstRow - u.firstRow,
-      dc: f.firstCol - u.firstCol,
+      dr: f.firstRow - from.firstRow,
+      dc: f.firstCol - from.firstCol,
       characters: 0,
     },
-    v = formatSortRangeAddress(t),
+    sortRangeAddress = formatSortRangeAddress(sourceRange),
     g = formatSortRangeAddress(
       `${formatCellAddress(f.firstRow, f.firstCol)}:${formatCellAddress(f.lastRow, f.lastCol)}`,
     ),
-    b = [],
-    y = r === n && m.dr === 0 && m.dc === 0;
+    metadataChanges = [],
+    y = sourceSheetId === targetSheetId && m.dr === 0 && m.dc === 0;
   y || findMoveBlockers(m);
-  const w = y ? e : structuredClone(e),
+  const workbook = y ? book : structuredClone(book),
     E = new Map();
-  let A = 0,
-    k = 0;
+  let overwrittenCells = 0,
+    referenceChanges = 0;
   const F = (B) => {
-    (b.push(B),
-      b.length > pasteOperationLimits.metadataChanges &&
+    (metadataChanges.push(B),
+      metadataChanges.length > pasteOperationLimits.metadataChanges &&
         throwWorkbookError(
           "The move would change more than 500 metadata references. Narrow the source.",
         ));
   };
   if (
     (!y &&
-      e.sheets.some((B) =>
-        B.conditionalFormats?.some((C) => C.kind === "formula"),
+      book.sheets.some((sheet) =>
+        sheet.conditionalFormats?.some(
+          (conditionalFormat) => conditionalFormat.kind === "formula",
+        ),
       ) &&
       throwWorkbookError(
         "Range moves cannot repair formula-based conditional rules yet. Remove those rules before moving cells.",
       ),
     !y)
   ) {
-    const B = pQ(w, r, v, n, g);
-    B.watches && (w.formulaWatches = B.watches);
-    for (const N of B.changes) F(N);
-    for (const N of e.reviewThreads ?? [])
+    const B = pQ(workbook, sourceSheetId, sortRangeAddress, targetSheetId, g);
+    B.watches && (workbook.formulaWatches = B.watches);
+    for (const change of B.changes) F(change);
+    for (const N of book.reviewThreads ?? [])
       !N.orphaned &&
-        N.anchor.sheetId === n &&
+        N.anchor.sheetId === targetSheetId &&
         isCellInsideRange(f, _t(N.anchor.address)) &&
         !(
-          N.anchor.sheetId === r && isCellInsideRange(u, _t(N.anchor.address))
+          N.anchor.sheetId === sourceSheetId &&
+          isCellInsideRange(from, _t(N.anchor.address))
         ) &&
         throwWorkbookError(
           "The destination contains an existing review discussion. Choose a destination without anchored discussions to preserve its evidence context.",
         );
-    const _ = findSheetOrThrow(w, r),
-      C = findSheetOrThrow(w, n);
-    for (let N = u.firstRow; N <= u.lastRow; N++)
-      for (let R = u.firstCol; R <= u.lastCol; R++) {
-        const L = formatCellAddress(N, R);
-        hasCellContent(s.cells[L]) && delete _.cells[L];
+    const _ = findSheetOrThrow(workbook, sourceSheetId),
+      C = findSheetOrThrow(workbook, targetSheetId);
+    for (let firstRow = from.firstRow; firstRow <= from.lastRow; firstRow++)
+      for (let firstCol = from.firstCol; firstCol <= from.lastCol; firstCol++) {
+        const cellAddress = formatCellAddress(firstRow, firstCol);
+        hasCellContent(sheetOrThrow.cells[cellAddress]) &&
+          delete _.cells[cellAddress];
       }
-    for (let N = u.firstRow; N <= u.lastRow; N++)
-      for (let R = u.firstCol; R <= u.lastCol; R++) {
-        const L = formatCellAddress(N, R),
-          $ = formatCellAddress(N + m.dr, R + m.dc),
-          U = s.cells[L],
+    for (let firstRow = from.firstRow; firstRow <= from.lastRow; firstRow++)
+      for (let firstCol = from.firstCol; firstCol <= from.lastCol; firstCol++) {
+        const cellAddress = formatCellAddress(firstRow, firstCol),
+          $ = formatCellAddress(firstRow + m.dr, firstCol + m.dc),
+          cell = sheetOrThrow.cells[cellAddress],
           G = d.cells[$];
-        (!(r === n && isCellInsideRange(u, _t($))) &&
+        (!(sourceSheetId === targetSheetId && isCellInsideRange(from, _t($))) &&
           hasCellContent(G) &&
-          JSON.stringify(G) !== JSON.stringify(U) &&
-          A++,
-          hasCellContent(U)
-            ? (C.cells[$] = normalizeCellRecordInput(U))
+          JSON.stringify(G) !== JSON.stringify(cell) &&
+          overwrittenCells++,
+          hasCellContent(cell)
+            ? (C.cells[$] = normalizeCellRecordInput(cell))
             : hasCellContent(C.cells[$]) && delete C.cells[$],
-          E.set(`${n}:${$}`, L));
+          E.set(`${targetSheetId}:${$}`, cellAddress));
       }
     let T = 0;
-    for (const N of w.sheets)
-      for (const [R, L] of Object.entries(N.cells)) {
+    for (const sheet of workbook.sheets)
+      for (const [R, cell] of Object.entries(sheet.cells)) {
         ++T > workbookLimits.maxCells &&
           throwWorkbookError(
             "Range moves inspect at most 100,000 populated cells.",
           );
-        const $ = E.has(`${N.id}:${R}`);
-        if (isFormulaInputValue(L)) {
-          const G = repairReferencesForMove(m, L.raw, $ ? r : N.id, N.id, $);
-          G !== L.raw && ((L.raw = G), k++);
+        const $ = E.has(`${sheet.id}:${R}`);
+        if (isFormulaInputValue(cell)) {
+          const G = repairReferencesForMove(
+            m,
+            cell.raw,
+            $ ? sourceSheetId : sheet.id,
+            sheet.id,
+            $,
+          );
+          G !== cell.raw && ((cell.raw = G), referenceChanges++);
         }
-        const U = L.hyperlink;
+        const hyperlink = cell.hyperlink;
         if (
-          U?.kind === "internal" &&
-          U.sheetId === r &&
-          isCellInsideRange(u, _t(U.address))
+          hyperlink?.kind === "internal" &&
+          hyperlink.sheetId === sourceSheetId &&
+          isCellInsideRange(from, _t(hyperlink.address))
         ) {
-          const G = _t(U.address),
-            H = `${s.name}!${U.address}`;
-          ((L.hyperlink = {
-            ...U,
-            sheetId: n,
+          const G = _t(hyperlink.address),
+            before = `${sheetOrThrow.name}!${hyperlink.address}`;
+          ((cell.hyperlink = {
+            ...hyperlink,
+            sheetId: targetSheetId,
             address: formatCellAddress(G.row + m.dr, G.col + m.dc),
           }),
-            JSON.stringify(U) !== JSON.stringify(L.hyperlink) &&
-              (k++,
+            JSON.stringify(hyperlink) !== JSON.stringify(cell.hyperlink) &&
+              (referenceChanges++,
               F({
                 kind: "internal-link",
-                label: `${N.name}!${R}`,
-                before: H,
-                after: `${d.name}!${L.hyperlink.address}`,
+                label: `${sheet.name}!${R}`,
+                before: before,
+                after: `${d.name}!${cell.hyperlink.address}`,
               })));
         }
       }
-    for (const N of w.sheets)
-      for (const R of N.tables ?? [])
-        for (const L of R.columns)
-          if (L.calculatedFormula) {
-            const $ = repairReferencesForMove(
+    for (const sheet of workbook.sheets)
+      for (const R of sheet.tables ?? [])
+        for (const column of R.columns)
+          if (column.calculatedFormula) {
+            const after = repairReferencesForMove(
               m,
-              L.calculatedFormula,
-              N.id,
-              N.id,
+              column.calculatedFormula,
+              sheet.id,
+              sheet.id,
             );
-            $ !== L.calculatedFormula &&
-              (assertSheetUnprotected(findSheetOrThrow(e, N.id)),
+            after !== column.calculatedFormula &&
+              (assertSheetUnprotected(findSheetOrThrow(book, sheet.id)),
               F({
                 kind: "table-column",
-                label: `${N.name}: ${R.name}[${L.name}] calculated rule`,
-                before: L.calculatedFormula,
-                after: $,
+                label: `${sheet.name}: ${R.name}[${column.name}] calculated rule`,
+                before: column.calculatedFormula,
+                after: after,
               }),
-              (L.calculatedFormula = $),
-              k++);
+              (column.calculatedFormula = after),
+              referenceChanges++);
           }
-    for (const N of w.definedNames ?? []) {
-      const R = repairReferencesForMove(
+    for (const N of workbook.definedNames ?? []) {
+      const after = repairReferencesForMove(
         m,
         N.refersTo,
         N.scopeSheetId,
         N.scopeSheetId,
       );
-      R !== N.refersTo &&
+      after !== N.refersTo &&
         (N.scopeSheetId &&
-          assertSheetUnprotected(findSheetOrThrow(e, N.scopeSheetId)),
+          assertSheetUnprotected(findSheetOrThrow(book, N.scopeSheetId)),
         F({
           kind: "defined-name",
           label: N.name,
           before: N.refersTo,
-          after: R,
+          after: after,
         }),
-        (N.refersTo = R),
-        k++);
+        (N.refersTo = after),
+        referenceChanges++);
     }
-    for (const N of w.reviewThreads ?? [])
+    for (const N of workbook.reviewThreads ?? [])
       if (
         !N.orphaned &&
-        N.anchor.sheetId === r &&
-        isCellInsideRange(u, _t(N.anchor.address))
+        N.anchor.sheetId === sourceSheetId &&
+        isCellInsideRange(from, _t(N.anchor.address))
       ) {
         const R = _t(N.anchor.address),
-          L = `${N.anchor.sheetName}!${N.anchor.address}`;
+          before = `${N.anchor.sheetName}!${N.anchor.address}`;
         ((N.anchor = {
-          sheetId: n,
+          sheetId: targetSheetId,
           sheetName: d.name,
           address: formatCellAddress(R.row + m.dr, R.col + m.dc),
         }),
           F({
             kind: "review-anchor",
             label: N.id,
-            before: L,
+            before: before,
             after: `${d.name}!${N.anchor.address}`,
           }));
       }
-    for (const N of w.sheets) {
-      for (const R of [...(N.pivots ?? []), ...(N.queries ?? [])]) {
+    for (const sheet of workbook.sheets) {
+      for (const R of [...(sheet.pivots ?? []), ...(sheet.queries ?? [])]) {
         const L = remapReferenceForMove(m, R.source.sheetId, R.source.range);
         L.changed &&
-          (assertSheetUnprotected(findSheetOrThrow(e, N.id)),
+          (assertSheetUnprotected(findSheetOrThrow(book, sheet.id)),
           F({
             kind: "analysis-source",
-            label: `${N.name}: ${R.name}`,
-            before: `${findSheetOrThrow(e, R.source.sheetId).name}!${R.source.range}`,
-            after: `${findSheetOrThrow(e, L.sheetId).name}!${L.reference}`,
+            label: `${sheet.name}: ${R.name}`,
+            before: `${findSheetOrThrow(book, R.source.sheetId).name}!${R.source.range}`,
+            after: `${findSheetOrThrow(book, L.sheetId).name}!${L.reference}`,
           }),
           (R.source = { ...R.source, sheetId: L.sheetId, range: L.reference }),
-          k++);
+          referenceChanges++);
       }
-      for (const R of N.objects ?? [])
+      for (const R of sheet.objects ?? [])
         if (R.kind === "chart" && R.range) {
-          const L = remapReferenceForMove(m, N.id, R.range);
+          const L = remapReferenceForMove(m, sheet.id, R.range);
           L.changed &&
-            (L.sheetId !== N.id &&
+            (L.sheetId !== sheet.id &&
               throwWorkbookError(
                 "A chart source cannot follow data to another worksheet in this implementation. Move the chart data on its current sheet.",
               ),
-            assertSheetUnprotected(findSheetOrThrow(e, N.id)),
+            assertSheetUnprotected(findSheetOrThrow(book, sheet.id)),
             F({
               kind: "chart-source",
               label: R.label || R.id,
@@ -541,150 +569,155 @@ function computeRangeMoveResult(e, r, t, n, o, a = {}) {
               after: L.reference,
             }),
             (R.range = L.reference),
-            k++);
+            referenceChanges++);
         }
     }
   }
-  const I = [];
-  let O = 0;
+  const previewChanges = [];
+  let dependentCount = 0;
   if (!y)
-    for (const B of w.sheets) {
-      const _ = findSheetOrThrow(e, B.id),
-        C = new Set([...Object.keys(_.cells), ...Object.keys(B.cells)]);
-      for (const T of C) {
-        const N = _.cells[T],
-          R = B.cells[T];
-        JSON.stringify(N) !== JSON.stringify(R) &&
+    for (const sheet of workbook.sheets) {
+      const _ = findSheetOrThrow(book, sheet.id),
+        C = new Set([...Object.keys(_.cells), ...Object.keys(sheet.cells)]);
+      for (const address of C) {
+        const cell = _.cells[address],
+          R = sheet.cells[address];
+        JSON.stringify(cell) !== JSON.stringify(R) &&
           (assertSheetUnprotected(_),
-          I.push({
-            sheetId: B.id,
-            sheetName: B.name,
-            address: T,
-            ...(N ? { before: normalizeCellRecordInput(N) } : {}),
+          previewChanges.push({
+            sheetId: sheet.id,
+            sheetName: sheet.name,
+            address: address,
+            ...(cell ? { before: normalizeCellRecordInput(cell) } : {}),
             ...(R ? { after: normalizeCellRecordInput(R) } : {}),
           }),
-          I.length > pasteOperationLimits.changedCells &&
+          previewChanges.length > pasteOperationLimits.changedCells &&
             throwWorkbookError(
               "A move may change at most 500 cells in total, including source clears, destination cells, and dependent references. Move a smaller block.",
             ),
-          !(B.id === r && isCellInsideRange(u, _t(T))) &&
-            !(B.id === n && isCellInsideRange(f, _t(T))) &&
-            O++);
+          !(
+            sheet.id === sourceSheetId && isCellInsideRange(from, _t(address))
+          ) &&
+            !(
+              sheet.id === targetSheetId && isCellInsideRange(f, _t(address))
+            ) &&
+            dependentCount++);
       }
     }
-  const j = I.length > 0 || b.length > 0;
+  const j = previewChanges.length > 0 || metadataChanges.length > 0;
   j &&
-    (formulaEntriesSignature(e) !== formulaEntriesSignature(w) &&
+    (formulaEntriesSignature(book) !== formulaEntriesSignature(workbook) &&
       throwWorkbookError(
         "The move would create, remove, or resize a dynamic-array footprint. Convert the affected array to ordinary values before moving cells.",
       ),
-    (e.events.length >= 2e3 ||
-      e.events.reduce((B, _) => B + _.changes.length, 0) + I.length >
+    (book.events.length >= 2e3 ||
+      book.events.reduce((B, _) => B + _.changes.length, 0) +
+        previewChanges.length >
         workbookLimits.maxCells) &&
       throwWorkbookError(
         "The move exceeds workbook history limits. Export the workbook before starting a new workpaper.",
       ),
-    e.revision >= Number.MAX_SAFE_INTEGER - 1 &&
+    book.revision >= Number.MAX_SAFE_INTEGER - 1 &&
       throwWorkbookError("Workbook revision limit reached."),
     checkDataValidationBatch(
-      w,
-      I.filter(
-        (B) =>
-          B.before?.raw !== B.after?.raw ||
-          B.before?.literal !== B.after?.literal,
+      workbook,
+      previewChanges.filter(
+        (previewChange) =>
+          previewChange.before?.raw !== previewChange.after?.raw ||
+          previewChange.before?.literal !== previewChange.after?.literal,
       ),
     ));
-  const z = j ? normalizeWorkbookInput(w) : e,
-    V = I.map((B) => ({
-      sheetId: B.sheetId,
-      address: B.address,
-      cell: normalizeCellRecordInput(B.after ?? { raw: null }),
+  const z = j ? normalizeWorkbookInput(workbook) : book,
+    V = previewChanges.map((previewChange) => ({
+      sheetId: previewChange.sheetId,
+      address: previewChange.address,
+      cell: normalizeCellRecordInput(previewChange.after ?? { raw: null }),
     })),
     D = {
-      workbookId: e.id,
-      revision: e.revision,
+      workbookId: book.id,
+      revision: book.revision,
       snapshotGuard: p.snapshotGuard,
-      sourceSheetId: r,
-      sourceRange: v,
+      sourceSheetId: sourceSheetId,
+      sourceRange: sortRangeAddress,
       sourceSnapshot: { ...p },
-      targetSheetId: n,
+      targetSheetId: targetSheetId,
       targetRange: g,
       targetCount: c * h,
       patches: V,
       previewPatches: V,
-      count: I.length,
-      dependentCount: O,
-      overwrittenCells: A,
-      referenceChanges: k,
-      metadataChanges: b,
-      previewChanges: I,
-      summary: `Move ${s.name}!${v} to ${d.name}!${g}: ${I.length} cell changes, ${A} destination cells overwritten, ${b.length} metadata changes.`,
+      count: previewChanges.length,
+      dependentCount: dependentCount,
+      overwrittenCells: overwrittenCells,
+      referenceChanges: referenceChanges,
+      metadataChanges: metadataChanges,
+      previewChanges: previewChanges,
+      summary: `Move ${sheetOrThrow.name}!${sortRangeAddress} to ${d.name}!${g}: ${previewChanges.length} cell changes, ${overwrittenCells} destination cells overwritten, ${metadataChanges.length} metadata changes.`,
     };
   return {
     plan: eI(D),
-    next: j ? { ...z, revision: e.revision, events: e.events } : e,
+    next: j ? { ...z, revision: book.revision, events: book.events } : book,
   };
 }
-function buildRangeMovePlan(e, r, t, n, o, a = {}) {
-  return computeRangeMoveResult(e, r, t, n, o, a).plan;
+function buildRangeMovePlan(workbook, sheetId, range, n, o, a = {}) {
+  return computeRangeMoveResult(workbook, sheetId, range, n, o, a).plan;
 }
-function applyRangeMovePreview(e, r, t = {}) {
+function applyRangeMovePreview(workbook, plan, t = {}) {
   (assertWorkbookWritable(t.readOnly),
-    (!r ||
-      r.workbookId !== e.id ||
-      r.revision !== e.revision ||
-      r.snapshotGuard !== JSON.stringify(e)) &&
+    (!plan ||
+      plan.workbookId !== workbook.id ||
+      plan.revision !== workbook.revision ||
+      plan.snapshotGuard !== JSON.stringify(workbook)) &&
       throwWorkbookError(
         "The workbook changed after this move preview. Cut the source again before moving it.",
       ));
-  const n = computeRangeMoveResult(
-    e,
-    r.sourceSheetId,
-    r.sourceRange,
-    r.targetSheetId,
-    r.targetRange,
-    { sourceSnapshot: r.sourceSnapshot, readOnly: t.readOnly },
+  const rangeMoveResult = computeRangeMoveResult(
+    workbook,
+    plan.sourceSheetId,
+    plan.sourceRange,
+    plan.targetSheetId,
+    plan.targetRange,
+    { sourceSnapshot: plan.sourceSnapshot, readOnly: t.readOnly },
   );
   return (
-    (JSON.stringify(n.plan.previewChanges) !==
-      JSON.stringify(r.previewChanges) ||
-      JSON.stringify(n.plan.metadataChanges) !==
-        JSON.stringify(r.metadataChanges)) &&
+    (JSON.stringify(rangeMoveResult.plan.previewChanges) !==
+      JSON.stringify(plan.previewChanges) ||
+      JSON.stringify(rangeMoveResult.plan.metadataChanges) !==
+        JSON.stringify(plan.metadataChanges)) &&
       throwWorkbookError(
         "The move no longer matches its preview. Cut the source again.",
       ),
-    n.next
+    rangeMoveResult.next
   );
 }
-function describeCellContents(e) {
-  if (!e) return "(empty)";
-  const r = [String(e.raw ?? "(empty)")];
+function describeCellContents(cell) {
+  if (!cell) return "(empty)";
+  const r = [String(cell.raw ?? "(empty)")];
   return (
-    e.literal && r.push("Literal text"),
-    e.note !== undefined && r.push("Note: " + e.note),
-    e.tickmark !== undefined && r.push("Tickmark: " + e.tickmark),
-    e.hyperlink &&
+    cell.literal && r.push("Literal text"),
+    cell.note !== undefined && r.push("Note: " + cell.note),
+    cell.tickmark !== undefined && r.push("Tickmark: " + cell.tickmark),
+    cell.hyperlink &&
       r.push(
         "Link: " +
-          (e.hyperlink.kind === "external"
-            ? e.hyperlink.url
-            : e.hyperlink.sheetId + "!" + e.hyperlink.address) +
-          (e.hyperlink.label ? " (" + e.hyperlink.label + ")" : ""),
+          (cell.hyperlink.kind === "external"
+            ? cell.hyperlink.url
+            : cell.hyperlink.sheetId + "!" + cell.hyperlink.address) +
+          (cell.hyperlink.label ? " (" + cell.hyperlink.label + ")" : ""),
       ),
-    e.numberFormat
+    cell.numberFormat
       ? r.push(
           "Number display: " +
-            Object.entries(e.numberFormat)
+            Object.entries(cell.numberFormat)
               .map(([t, n]) => t + " = " + n)
               .join(", "),
         )
-      : (e.numFmt || e.format) &&
-        r.push("Number display: " + (e.numFmt ?? e.format)),
-    e.style &&
-      Object.keys(e.style).length &&
+      : (cell.numFmt || cell.format) &&
+        r.push("Number display: " + (cell.numFmt ?? cell.format)),
+    cell.style &&
+      Object.keys(cell.style).length &&
       r.push(
         "Cell style: " +
-          Object.entries(e.style)
+          Object.entries(cell.style)
             .map(([t, n]) => t + " = " + n)
             .join(", "),
       ),
@@ -704,10 +737,10 @@ function MoveCellsDialog(e) {
       range: e.range,
       source: e.source,
       sourceName:
-        e.workbook.sheets.find((k) => k.id === e.source.sheetId)?.name ??
-        "Deleted worksheet",
+        e.workbook.sheets.find((sheet) => sheet.id === e.source.sheetId)
+          ?.name ?? "Deleted worksheet",
       targetName:
-        e.workbook.sheets.find((k) => k.id === e.sheetId)?.name ??
+        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.name ??
         "Deleted worksheet",
       book: JSON.stringify(e.workbook),
     }),
@@ -731,10 +764,13 @@ function MoveCellsDialog(e) {
           ),
           error: "",
         };
-      } catch (k) {
+      } catch (error) {
         return {
           plan: null,
-          error: k instanceof Error ? k.message : "The cells cannot be moved.",
+          error:
+            error instanceof Error
+              ? error.message
+              : "The cells cannot be moved.",
         };
       }
     }),
@@ -753,15 +789,15 @@ function MoveCellsDialog(e) {
     m = Math.max(1, Math.ceil(p.length / 15)),
     v = Math.min(l, m - 1);
   ne.useEffect(() => {
-    const k = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
-        k?.isConnected && k.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  function g() {
+  function onClick() {
     try {
       const k = a.current;
       if (k.readOnly) throw Error("This workbook is read-only.");
@@ -780,8 +816,12 @@ function MoveCellsDialog(e) {
         k.onSelectionChange(f.plan.targetRange),
         k.onApplied(),
         k.onClose());
-    } catch (k) {
-      u(k instanceof Error ? k.message : "The cells could not be moved.");
+    } catch (error) {
+      u(
+        error instanceof Error
+          ? error.message
+          : "The cells could not be moved.",
+      );
     }
   }
   return i.jsx("div", {
@@ -793,11 +833,13 @@ function MoveCellsDialog(e) {
       "aria-modal": "true",
       "aria-labelledby": n,
       tabIndex: -1,
-      onKeyDown: (k) => {
+      onKeyDown: (event) => {
         if (
-          (k.key === "Escape" &&
-            (k.preventDefault(), k.stopPropagation(), a.current.onClose()),
-          k.key === "Tab")
+          (event.key === "Escape" &&
+            (event.preventDefault(),
+            event.stopPropagation(),
+            a.current.onClose()),
+          event.key === "Tab")
         ) {
           const I = Array.from(
               o.current?.querySelectorAll(
@@ -806,11 +848,11 @@ function MoveCellsDialog(e) {
             ),
             O = I[0],
             j = I.at(-1);
-          k.shiftKey && document.activeElement === O
-            ? (k.preventDefault(), j == null || j.focus())
-            : !k.shiftKey &&
+          event.shiftKey && document.activeElement === O
+            ? (event.preventDefault(), j == null || j.focus())
+            : !event.shiftKey &&
               document.activeElement === j &&
-              (k.preventDefault(), O == null || O.focus());
+              (event.preventDefault(), O == null || O.focus());
         }
       },
       children: [
@@ -995,7 +1037,7 @@ function MoveCellsDialog(e) {
               type: "button",
               className: "et-primary",
               disabled: e.readOnly || h || !f.plan || !p.length,
-              onClick: g,
+              onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Apply move" }),
             }),
           ],
@@ -1025,25 +1067,27 @@ const numberFormatCategoryLabels = {
     "en-IN": "English (India)",
   };
 function resolveSelectionNumberFormat(e) {
-  const r = parseRangeAddress(e.range),
-    t = `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}`,
+  const rangeAddress = parseRangeAddress(e.range),
+    t = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     n =
       e.active && isCellAddressInRanges(e.ranges ?? [e.range], e.active)
         ? e.active
         : t,
-    o = e.workbook.sheets.find((d) => d.id === e.sheetId)?.cells[n];
+    o = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.cells[n];
   if (o?.numberFormat)
     try {
       return validateNumberFormatSettings(o.numberFormat);
     } catch {}
-  const a = o?.format ?? "general";
+  const category = o?.format ?? "general";
   return validateNumberFormatSettings({
-    category: a,
+    category: category,
     locale: "en-US",
-    ...(["number", "currency", "percent"].includes(a)
+    ...(["number", "currency", "percent"].includes(category)
       ? {
           decimals: Math.min(12, summarizeNumberFormat(o?.numFmt) ?? 2),
-          useGrouping: o?.numFmt ? o.numFmt.includes(",") : a !== "percent",
+          useGrouping: o?.numFmt
+            ? o.numFmt.includes(",")
+            : category !== "percent",
         }
       : {}),
   });
@@ -1063,25 +1107,25 @@ function M4e(e) {
       active: e.active,
     }),
     [d] = ne.useState(() => resolveSelectionNumberFormat(e)),
-    [u, l] = ne.useState(d.category),
-    [c, h] = ne.useState(d.locale),
-    [f, p] = ne.useState(d.currency ?? "USD"),
+    [category, l] = ne.useState(d.category),
+    [locale, h] = ne.useState(d.locale),
+    [currency, p] = ne.useState(d.currency ?? "USD"),
     [m, v] = ne.useState(String(d.decimals ?? 2)),
     [g, b] = ne.useState(d.useGrouping ?? true),
     [y, w] = ne.useState(String(d.scale ?? 1)),
     [E, A] = ne.useState(d.negative ?? "minus"),
     [k, F] = ne.useState(d.pattern ?? "#,##0.00"),
     [I, O] = ne.useState(""),
-    j = e.workbook.sheets.find((te) => te.id === e.sheetId),
-    z = parseSelectionAreas(e.ranges ?? [e.range]),
-    V = parseRangeAddress(e.range),
+    j = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
+    rangeAddress = parseRangeAddress(e.range),
     D =
-      e.active && isCellAddressInRanges(z, e.active)
+      e.active && isCellAddressInRanges(selectionAreas, e.active)
         ? e.active
-        : `${columnIndexToLetters(V.firstCol)}${V.firstRow + 1}`,
-    B = j?.cells[D],
-    _ = countSelectionCells(z),
-    C = getImportedNumberFormatWarning(B),
+        : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
+    cell = j?.cells[D],
+    _ = countSelectionCells(selectionAreas),
+    importedNumberFormatWarning = getImportedNumberFormatWarning(cell),
     T =
       s.current.book !== e.workbook.id ||
       s.current.revision !== e.workbook.revision ||
@@ -1094,38 +1138,42 @@ function M4e(e) {
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
     ),
-    L = ["number", "currency", "accounting", "percent"].includes(u),
-    $ = ["currency", "accounting"].includes(u),
-    U = ["date", "time", "datetime", "duration"].includes(u);
+    L = ["number", "currency", "accounting", "percent"].includes(category),
+    $ = ["currency", "accounting"].includes(category),
+    U = ["date", "time", "datetime", "duration"].includes(category);
   let G,
     H = "",
     Q = null;
   try {
     ((Q = R(e.sheetId, D)),
       (G = validateNumberFormatSettings({
-        category: u,
-        locale: c,
+        category: category,
+        locale: locale,
         ...(L
           ? {
               decimals: m.trim() === "" ? NaN : Number(m),
               useGrouping: g,
-              scale: u === "percent" ? 1 : Number(y),
-              negative: u === "accounting" ? "parentheses" : E,
-              ...($ ? { currency: f } : {}),
+              scale: category === "percent" ? 1 : Number(y),
+              negative: category === "accounting" ? "parentheses" : E,
+              ...($ ? { currency: currency } : {}),
             }
-          : U || u === "custom"
+          : U || category === "custom"
             ? { pattern: k }
             : {}),
       })));
-  } catch (te) {
-    H = te instanceof Error ? te.message : "The format could not be previewed.";
+  } catch (error) {
+    H =
+      error instanceof Error
+        ? error.message
+        : "The format could not be previewed.";
   }
   const X$1 = [
       {
         name: `${j?.name ?? "Worksheet"}!${D}`,
         value: Q,
       },
-      ...(U || (u === "custom" && /[ymdhs]/i.test(k.replace(/"[^"]*"/g, "")))
+      ...(U ||
+      (category === "custom" && /[ymdhs]/i.test(k.replace(/"[^"]*"/g, "")))
         ? [
             { name: "Date / time example", value: 46273.625 },
             { name: "Elapsed-time example", value: 1.5 },
@@ -1142,20 +1190,20 @@ function M4e(e) {
         te in builtInDateTimeFormats && F(builtInDateTimeFormats[te][0]),
         te === "custom" &&
           F(
-            B?.numberFormat?.category === "custom"
-              ? B.numberFormat.pattern
+            cell?.numberFormat?.category === "custom"
+              ? cell.numberFormat.pattern
               : '#,##0.00;(#,##0.00);"-"',
           ));
     };
   return (
     ne.useEffect(() => {
-      const te = document.activeElement;
+      const activeElement = document.activeElement;
       return (
         o.current
           ?.querySelector('[role="option"][aria-selected="true"]')
           ?.focus(),
         () => {
-          te?.isConnected && te.focus();
+          activeElement?.isConnected && activeElement.focus();
         }
       );
     }, []),
@@ -1167,11 +1215,11 @@ function M4e(e) {
         "aria-modal": "true",
         "aria-labelledby": `${n}-title`,
         ref: o,
-        onKeyDown: (te) => {
+        onKeyDown: (event) => {
           if (
-            (te.stopPropagation(),
-            te.key === "Escape" && (te.preventDefault(), a.current()),
-            te.key === "Tab")
+            (event.stopPropagation(),
+            event.key === "Escape" && (event.preventDefault(), a.current()),
+            event.key === "Tab")
           ) {
             const oe = [
                 ...(o.current?.querySelectorAll(
@@ -1180,11 +1228,11 @@ function M4e(e) {
               ],
               de = oe[0],
               he = oe.at(-1);
-            te.shiftKey && document.activeElement === de
-              ? (te.preventDefault(), he == null || he.focus())
-              : !te.shiftKey &&
+            event.shiftKey && document.activeElement === de
+              ? (event.preventDefault(), he == null || he.focus())
+              : !event.shiftKey &&
                 document.activeElement === he &&
-                (te.preventDefault(), de == null || de.focus());
+                (event.preventDefault(), de == null || de.focus());
           }
         },
         children: [
@@ -1211,9 +1259,9 @@ function M4e(e) {
               _.toLocaleString(),
               " ",
               i.jsx(LocalizedText, { children: "selected cells · " }),
-              z.length,
+              selectionAreas.length,
               " ",
-              z.length === 1 ? "area" : "areas",
+              selectionAreas.length === 1 ? "area" : "areas",
             ],
           }),
           i.jsxs("div", {
@@ -1230,28 +1278,28 @@ function M4e(e) {
                     "button",
                     {
                       role: "option",
-                      "aria-selected": u === te,
-                      tabIndex: u === te ? 0 : -1,
+                      "aria-selected": category === te,
+                      tabIndex: category === te ? 0 : -1,
                       onClick: () => J(te),
-                      onKeyDown: (oe) => {
+                      onKeyDown: (event) => {
                         if (
                           ["ArrowUp", "ArrowDown", "Home", "End"].includes(
-                            oe.key,
+                            event.key,
                           )
                         ) {
-                          oe.preventDefault();
+                          event.preventDefault();
                           const Se =
-                            oe.key === "Home"
+                            event.key === "Home"
                               ? 0
-                              : oe.key === "End"
+                              : event.key === "End"
                                 ? Uv.length - 1
                                 : (ae +
-                                    (oe.key === "ArrowDown"
+                                    (event.key === "ArrowDown"
                                       ? 1
                                       : Uv.length - 1)) %
                                   Uv.length;
                           (J(Uv[Se]),
-                            oe.currentTarget.parentElement?.children[
+                            event.currentTarget.parentElement?.children[
                               Se
                             ]?.focus());
                         }
@@ -1264,8 +1312,8 @@ function M4e(e) {
               }),
               i.jsxs("form", {
                 className: "nf-settings",
-                onSubmit: (te) => {
-                  (te.preventDefault(), O(""));
+                onSubmit: (event) => {
+                  (event.preventDefault(), O(""));
                   try {
                     if (e.readOnly)
                       throw new Error("This workbook is read-only.");
@@ -1278,7 +1326,7 @@ function M4e(e) {
                     const ae = applyNumberFormatTransaction(
                       e.workbook,
                       e.sheetId,
-                      z,
+                      selectionAreas,
                       G,
                       {
                         readOnly: e.readOnly,
@@ -1287,10 +1335,10 @@ function M4e(e) {
                     (ae !== e.workbook &&
                       e.onWorkbookChange(ae, "Format numbers"),
                       e.onClose());
-                  } catch (ae) {
+                  } catch (error) {
                     O(
-                      ae instanceof Error
-                        ? ae.message
+                      error instanceof Error
+                        ? error.message
                         : "The format could not be applied.",
                     );
                   }
@@ -1330,7 +1378,11 @@ function M4e(e) {
                           "Select at most 500 unique cells to apply number formats.",
                       }),
                     }),
-                  C && i.jsx("p", { className: "nf-notice", children: C }),
+                  importedNumberFormatWarning &&
+                    i.jsx("p", {
+                      className: "nf-notice",
+                      children: importedNumberFormatWarning,
+                    }),
                   i.jsxs("section", {
                     className: "nf-preview",
                     "aria-label": text("Number format preview"),
@@ -1419,7 +1471,7 @@ function M4e(e) {
                             children:
                               formatNumberWithPattern(
                                 Q,
-                                B,
+                                cell,
                                 e.workbook.datePolicy?.dateSystem,
                               ) || "Blank",
                           }),
@@ -1436,16 +1488,21 @@ function M4e(e) {
                       i.jsx(LocalizedText, { children: "Locale" }),
                       i.jsx("select", {
                         "aria-label": text("Number format locale"),
-                        value: c,
-                        onChange: (te) => h(te.target.value),
+                        value: locale,
+                        onChange: (event) => h(event.target.value),
                         lang: language("Number format locale"),
                         "data-ui-label": "Number format locale",
-                        children: supportedNumberLocales.map((te) =>
-                          i.jsx(
-                            "option",
-                            { value: te, children: localeDisplayNames[te] },
-                            te,
-                          ),
+                        children: supportedNumberLocales.map(
+                          (supportedNumberLocale) =>
+                            i.jsx(
+                              "option",
+                              {
+                                value: supportedNumberLocale,
+                                children:
+                                  localeDisplayNames[supportedNumberLocale],
+                              },
+                              supportedNumberLocale,
+                            ),
                         ),
                       }),
                     ],
@@ -1477,23 +1534,27 @@ function M4e(e) {
                               i.jsx(LocalizedText, { children: "Currency" }),
                               i.jsx("select", {
                                 "aria-label": text("Currency"),
-                                value: f,
-                                onChange: (te) => {
-                                  p(te.target.value);
+                                value: currency,
+                                onChange: (event) => {
+                                  p(event.target.value);
                                 },
                                 lang: language("Currency"),
                                 "data-ui-label": "Currency",
-                                children: supportedCurrencyCodes.map((te) =>
-                                  i.jsx(
-                                    "option",
-                                    { value: te, children: te },
-                                    te,
-                                  ),
+                                children: supportedCurrencyCodes.map(
+                                  (supportedCurrencyCode) =>
+                                    i.jsx(
+                                      "option",
+                                      {
+                                        value: supportedCurrencyCode,
+                                        children: supportedCurrencyCode,
+                                      },
+                                      supportedCurrencyCode,
+                                    ),
                                 ),
                               }),
                             ],
                           }),
-                        u !== "percent" &&
+                        category !== "percent" &&
                           i.jsxs("label", {
                             children: [
                               i.jsx(LocalizedText, {
@@ -1502,7 +1563,7 @@ function M4e(e) {
                               i.jsxs("select", {
                                 "aria-label": text("Display scale"),
                                 value: y,
-                                onChange: (te) => w(te.target.value),
+                                onChange: (event) => w(event.target.value),
                                 lang: language("Display scale"),
                                 "data-ui-label": "Display scale",
                                 children: [
@@ -1522,7 +1583,7 @@ function M4e(e) {
                               }),
                             ],
                           }),
-                        u !== "accounting" &&
+                        category !== "accounting" &&
                           i.jsxs("label", {
                             children: [
                               i.jsx(LocalizedText, {
@@ -1531,7 +1592,7 @@ function M4e(e) {
                               i.jsxs("select", {
                                 "aria-label": text("Negative numbers"),
                                 value: E,
-                                onChange: (te) => A(te.target.value),
+                                onChange: (event) => A(event.target.value),
                                 lang: language("Negative numbers"),
                                 "data-ui-label": "Negative numbers",
                                 children: [
@@ -1554,7 +1615,7 @@ function M4e(e) {
                               type: "checkbox",
                               "aria-label": text("Use thousands separator"),
                               checked: g,
-                              onChange: (te) => b(te.target.checked),
+                              onChange: (event) => b(event.target.checked),
                               lang: language("Use thousands separator"),
                               "data-ui-label": "Use thousands separator",
                             }),
@@ -1572,20 +1633,21 @@ function M4e(e) {
                         i.jsxs("select", {
                           "aria-label": text("Date or time format"),
                           value: k,
-                          onChange: (te) => F(te.target.value),
+                          onChange: (event) => F(event.target.value),
                           lang: language("Date or time format"),
                           "data-ui-label": "Date or time format",
                           children: [
-                            !builtInDateTimeFormats[u].some((te) => te === k) &&
-                              i.jsx("option", { value: k, children: k }),
-                            builtInDateTimeFormats[u].map((te) =>
+                            !builtInDateTimeFormats[category].some(
+                              (te) => te === k,
+                            ) && i.jsx("option", { value: k, children: k }),
+                            builtInDateTimeFormats[category].map((te) =>
                               i.jsx("option", { value: te, children: te }, te),
                             ),
                           ],
                         }),
                       ],
                     }),
-                  u === "custom" &&
+                  category === "custom" &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsxs("label", {
@@ -1595,7 +1657,7 @@ function M4e(e) {
                               "aria-label": text("Custom number format"),
                               value: k,
                               maxLength: 200,
-                              onChange: (te) => F(te.target.value),
+                              onChange: (event) => F(event.target.value),
                               lang: language("Custom number format"),
                               "data-ui-label": "Custom number format",
                             }),
@@ -1610,7 +1672,7 @@ function M4e(e) {
                         }),
                       ],
                     }),
-                  u === "accounting" &&
+                  category === "accounting" &&
                     i.jsx("p", {
                       className: "nf-help",
                       children: i.jsx(LocalizedText, {
@@ -1628,7 +1690,7 @@ function M4e(e) {
                     }),
                   L &&
                     y !== "1" &&
-                    u !== "percent" &&
+                    category !== "percent" &&
                     i.jsxs("p", {
                       className: "nf-notice",
                       children: [

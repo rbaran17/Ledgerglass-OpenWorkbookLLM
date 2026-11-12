@@ -59,9 +59,12 @@ function PageSetupDialog(e) {
       snapshot: buildSnapshotGuard(e.workbook),
       sheetId: e.sheetId,
       range: e.range,
-      sheet: structuredClone(e.workbook.sheets.find((W) => W.id === e.sheetId)),
+      sheet: structuredClone(
+        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+      ),
     })),
-    b = e.workbook.sheets.find((W) => W.id === e.sheetId) ?? g.sheet;
+    sheetOrThrow =
+      e.workbook.sheets.find((sheet) => sheet.id === e.sheetId) ?? g.sheet;
   function y(W = false) {
     const K = n.current;
     if (
@@ -74,14 +77,14 @@ function PageSetupDialog(e) {
     if (W) {
       if (K.readOnly) throw Error("This workbook is read-only.");
       assertSheetUnprotected(
-        K.workbook.sheets.find((te) => te.id === g.sheetId),
+        K.workbook.sheets.find((sheet) => sheet.id === g.sheetId),
       );
     }
   }
-  const [w, E] = ne.useState(() =>
+  const [layout, E] = ne.useState(() =>
       structuredClone(
-        b.pageLayout ?? {
-          ...createDefaultPageSetup(b),
+        sheetOrThrow.pageLayout ?? {
+          ...createDefaultPageSetup(sheetOrThrow),
           ...defaultPrintHeaderFooter,
         },
       ),
@@ -89,10 +92,14 @@ function PageSetupDialog(e) {
     [A, k] = ne.useState(""),
     [F, I] = ne.useState("office"),
     [O, j] = ne.useState(() =>
-      (b.pageLayout?.rowBreaks ?? []).map((K) => String(K + 1)).join(", "),
+      (sheetOrThrow.pageLayout?.rowBreaks ?? [])
+        .map((K) => String(K + 1))
+        .join(", "),
     ),
     [z, V] = ne.useState(() =>
-      (b.pageLayout?.columnBreaks ?? []).map(columnIndexToLetters).join(", "),
+      (sheetOrThrow.pageLayout?.columnBreaks ?? [])
+        .map(columnIndexToLetters)
+        .join(", "),
     );
   function D() {
     const W = (K, te) => {
@@ -111,44 +118,44 @@ function PageSetupDialog(e) {
         .sort((oe, de) => oe - de);
       return validatePrintPageBreaks(
         ae,
-        te === "row" ? b.rowCount : b.colCount,
+        te === "row" ? sheetOrThrow.rowCount : sheetOrThrow.colCount,
       );
     };
-    return { ...w, rowBreaks: W(O, "row"), columnBreaks: W(z, "column") };
+    return { ...layout, rowBreaks: W(O, "row"), columnBreaks: W(z, "column") };
   }
   const B = /theme/i.test(e.mode),
-    _ = ne.useMemo(
+    calc = ne.useMemo(
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
     ),
     C = ne.useMemo(() => {
       try {
-        if (!e.workbook.sheets.some((W) => W.id === e.sheetId))
+        if (!e.workbook.sheets.some((sheet) => sheet.id === e.sheetId))
           throw Error(
             "The worksheet changed or was deleted. Close and reopen page setup.",
           );
         return { ...buildPrintPages(e.workbook, e.sheetId, D()), error: "" };
-      } catch (W) {
+      } catch (error) {
         return {
           pages: [],
           notices: [],
           scale: 1,
-          layout: w,
+          layout: layout,
           ruleStyles: evaluateConditionalFormatRules(
-            { ...b, conditionalFormats: [] },
-            _,
+            { ...sheetOrThrow, conditionalFormats: [] },
+            calc,
           ),
-          error: W instanceof Error ? W.message : "Invalid page setup.",
+          error: error instanceof Error ? error.message : "Invalid page setup.",
         };
       }
-    }, [e.workbook, e.sheetId, b, w, _, O, z]),
-    T = JSON.stringify([w, O, z]),
+    }, [e.workbook, e.sheetId, sheetOrThrow, layout, calc, O, z]),
+    T = JSON.stringify([layout, O, z]),
     N = ne.useRef(T);
   ((N.current = T),
     ne.useEffect(() => {
       (d(null), k(""), v(null));
     }, [T, e.workbook, e.sheetId, e.range]));
-  async function R() {
+  async function onClick() {
     const W = o.current;
     if (!(!W || C.error)) {
       (l(true), k(""));
@@ -156,8 +163,8 @@ function PageSetupDialog(e) {
         if ((y(), await waitForPrintAssets(W), y(), N.current !== T))
           throw Error("Page settings changed. Run the print check again.");
         d(measurePrintLayoutIssues(W));
-      } catch (K) {
-        k(K instanceof Error ? K.message : "Print check failed.");
+      } catch (error) {
+        k(error instanceof Error ? error.message : "Print check failed.");
       } finally {
         l(false);
       }
@@ -173,15 +180,19 @@ function PageSetupDialog(e) {
       });
       (W !== e.workbook && e.onWorkbookChange(W, "Update page layout"),
         e.onClose());
-    } catch (W) {
-      k(W instanceof Error ? W.message : "Could not save page setup.");
+    } catch (error) {
+      k(error instanceof Error ? error.message : "Could not save page setup.");
     }
   }
   function U() {
     try {
       y(true);
-      const te = parseRangeAddress(e.range);
-      if ((te.lastRow - te.firstRow + 1) * (te.lastCol - te.firstCol + 1) > 500)
+      const rangeAddress = parseRangeAddress(e.range);
+      if (
+        (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
+          (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+        500
+      )
         throw new Error("Select at most 500 cells to apply a theme.");
       const ae =
           F === "mint"
@@ -191,33 +202,33 @@ function PageSetupDialog(e) {
               : F === "amber"
                 ? ["#9C6500", "#FFF2CC"]
                 : ["#4472C4", "#D9E2F3"],
-        oe = { ...b.cells };
+        cells = { ...sheetOrThrow.cells };
       for (const de of assertRangeCellBudget(e.range)) {
-        const he = parseRangeAddress(de).firstRow === te.firstRow;
-        oe[de] = {
-          ...oe[de],
-          raw: oe[de]?.raw ?? null,
+        const bold = parseRangeAddress(de).firstRow === rangeAddress.firstRow;
+        cells[de] = {
+          ...cells[de],
+          raw: cells[de]?.raw ?? null,
           style: {
-            ...oe[de]?.style,
+            ...cells[de]?.style,
             fontFamily: "Calibri",
-            fill: he ? ae[0] : ae[1],
-            color: he ? "#FFFFFF" : "#242424",
-            bold: he,
+            fill: bold ? ae[0] : ae[1],
+            color: bold ? "#FFFFFF" : "#242424",
+            bold: bold,
           },
         };
       }
       (e.onWorkbookChange(
         {
           ...e.workbook,
-          sheets: e.workbook.sheets.map((de) =>
-            de.id === b.id ? { ...de, cells: oe } : de,
+          sheets: e.workbook.sheets.map((sheet) =>
+            sheet.id === sheetOrThrow.id ? { ...sheet, cells: cells } : sheet,
           ),
         },
         `Apply ${F} theme to selection`,
       ),
         e.onClose());
-    } catch (te) {
-      k(te instanceof Error ? te.message : "Theme could not be applied.");
+    } catch (error) {
+      k(error instanceof Error ? error.message : "Theme could not be applied.");
     }
   }
   async function G() {
@@ -227,7 +238,7 @@ function PageSetupDialog(e) {
     ((a.current = K), h(true), k(""));
     try {
       if ((y(), C.error)) throw Error(C.error);
-      const te = renderPrintDocument(e.workbook, e.sheetId, C.layout).html;
+      const html = renderPrintDocument(e.workbook, e.sheetId, C.layout).html;
       if (((W = window.open("", "_blank")), !W))
         throw Error(
           "Allow the print preview window in your browser, then try again.",
@@ -236,7 +247,7 @@ function PageSetupDialog(e) {
       await waitForPrintAssets(ae, { signal: K.signal });
       const oe = measurePrintLayoutIssues(ae);
       (d(oe), summarizePrintIssues(oe));
-      const de = await printDocumentInWindow(W, te, {
+      const de = await printDocumentInWindow(W, html, {
         signal: K.signal,
         assertCurrent: () => {
           if ((y(), K.signal.aborted))
@@ -246,11 +257,13 @@ function PageSetupDialog(e) {
         },
       });
       d(de);
-    } catch (te) {
+    } catch (error) {
       (W && !W.closed && W.close(),
         K.signal.aborted ||
           k(
-            te instanceof Error ? te.message : "Print preview could not open.",
+            error instanceof Error
+              ? error.message
+              : "Print preview could not open.",
           ));
     } finally {
       ((a.current = null), h(false));
@@ -285,11 +298,11 @@ function PageSetupDialog(e) {
           filename: te.filename,
           pages: te.pageCount,
         }));
-    } catch (K) {
+    } catch (error) {
       W.signal.aborted ||
         k(
-          K instanceof Error
-            ? K.message
+          error instanceof Error
+            ? error.message
             : "PDF creation failed. Try browser printing.",
         );
     } finally {
@@ -301,8 +314,8 @@ function PageSetupDialog(e) {
   }
   return i.jsx("div", {
     className: "dg-backdrop",
-    onKeyDown: (W) => {
-      W.key === "Escape" && Q();
+    onKeyDown: (event) => {
+      event.key === "Escape" && Q();
     },
     children: i.jsxs("section", {
       className: `dg-dialog ${B ? "" : "dg-page-dialog"}`,
@@ -346,7 +359,7 @@ function PageSetupDialog(e) {
                     i.jsxs("select", {
                       "aria-label": text("Theme"),
                       value: F,
-                      onChange: (W) => I(W.target.value),
+                      onChange: (event) => I(event.target.value),
                       lang: language("Theme"),
                       "data-ui-label": "Theme",
                       children: [
@@ -389,9 +402,9 @@ function PageSetupDialog(e) {
                             i.jsx(LocalizedText, { children: "Orientation" }),
                             i.jsxs("select", {
                               "aria-label": text("Page orientation"),
-                              value: w.orientation,
-                              onChange: (W) =>
-                                L({ orientation: W.target.value }),
+                              value: layout.orientation,
+                              onChange: (event) =>
+                                L({ orientation: event.target.value }),
                               lang: language("Page orientation"),
                               "data-ui-label": "Page orientation",
                               children: [
@@ -412,8 +425,9 @@ function PageSetupDialog(e) {
                             i.jsx(LocalizedText, { children: "Paper" }),
                             i.jsxs("select", {
                               "aria-label": text("Paper size"),
-                              value: w.paper,
-                              onChange: (W) => L({ paper: W.target.value }),
+                              value: layout.paper,
+                              onChange: (event) =>
+                                L({ paper: event.target.value }),
                               lang: language("Paper size"),
                               "data-ui-label": "Paper size",
                               children: [
@@ -440,9 +454,9 @@ function PageSetupDialog(e) {
                         i.jsx(LocalizedText, { children: "Print area" }),
                         i.jsx("input", {
                           "aria-label": text("Print area"),
-                          value: w.printArea,
-                          onChange: (W) =>
-                            L({ printArea: W.target.value.toUpperCase() }),
+                          value: layout.printArea,
+                          onChange: (event) =>
+                            L({ printArea: event.target.value.toUpperCase() }),
                           lang: language("Print area"),
                           "data-ui-label": "Print area",
                         }),
@@ -470,9 +484,9 @@ function PageSetupDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Rows to repeat at top"),
                               placeholder: "1:2",
-                              value: w.repeatRows ?? "",
-                              onChange: (W) =>
-                                L({ repeatRows: W.target.value }),
+                              value: layout.repeatRows ?? "",
+                              onChange: (event) =>
+                                L({ repeatRows: event.target.value }),
                               lang: language("Rows to repeat at top"),
                               "data-ui-label": "Rows to repeat at top",
                             }),
@@ -486,10 +500,11 @@ function PageSetupDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Columns to repeat at left"),
                               placeholder: text("A:B"),
-                              value: w.repeatColumns ?? "",
-                              onChange: (W) =>
+                              value: layout.repeatColumns ?? "",
+                              onChange: (event) =>
                                 L({
-                                  repeatColumns: W.target.value.toUpperCase(),
+                                  repeatColumns:
+                                    event.target.value.toUpperCase(),
                                 }),
                               lang: language("Columns to repeat at left"),
                               "data-ui-label": "Columns to repeat at left",
@@ -517,8 +532,9 @@ function PageSetupDialog(e) {
                             i.jsx(LocalizedText, { children: "Page order" }),
                             i.jsxs("select", {
                               "aria-label": text("Page order"),
-                              value: w.pageOrder ?? "overThenDown",
-                              onChange: (W) => L({ pageOrder: W.target.value }),
+                              value: layout.pageOrder ?? "overThenDown",
+                              onChange: (event) =>
+                                L({ pageOrder: event.target.value }),
                               lang: language("Page order"),
                               "data-ui-label": "Page order",
                               children: [
@@ -550,7 +566,7 @@ function PageSetupDialog(e) {
                               "aria-label": text("Break before rows"),
                               placeholder: "25, 50",
                               value: O,
-                              onChange: (W) => j(W.target.value),
+                              onChange: (event) => j(event.target.value),
                               lang: language("Break before rows"),
                               "data-ui-label": "Break before rows",
                             }),
@@ -565,7 +581,8 @@ function PageSetupDialog(e) {
                               "aria-label": text("Break before columns"),
                               placeholder: text("D, H"),
                               value: z,
-                              onChange: (W) => V(W.target.value.toUpperCase()),
+                              onChange: (event) =>
+                                V(event.target.value.toUpperCase()),
                               lang: language("Break before columns"),
                               "data-ui-label": "Break before columns",
                             }),
@@ -616,11 +633,11 @@ function PageSetupDialog(e) {
                                     max: 3,
                                     step: 0.05,
                                     "aria-label": `${W} margin`,
-                                    value: w.margins[W],
+                                    value: layout.margins[W],
                                     onValueChange: (K) =>
                                       L({
                                         margins: {
-                                          ...w.margins,
+                                          ...layout.margins,
                                           [W]: Number(K),
                                         },
                                       }),
@@ -638,13 +655,14 @@ function PageSetupDialog(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: w.fitToPage,
-                          onChange: (W) => L({ fitToPage: W.target.checked }),
+                          checked: layout.fitToPage,
+                          onChange: (event) =>
+                            L({ fitToPage: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, { children: "Fit to pages" }),
                       ],
                     }),
-                    w.fitToPage
+                    layout.fitToPage
                       ? i.jsxs("div", {
                           className: "dg-two",
                           children: [
@@ -657,7 +675,7 @@ function PageSetupDialog(e) {
                                   min: 0,
                                   max: 10,
                                   "aria-label": text("Pages wide"),
-                                  value: w.fitToWidth,
+                                  value: layout.fitToWidth,
                                   onValueChange: (W) =>
                                     L({ fitToWidth: Number(W) }),
                                   lang: language("Pages wide"),
@@ -674,7 +692,7 @@ function PageSetupDialog(e) {
                                   min: 0,
                                   max: 10,
                                   "aria-label": text("Pages tall"),
-                                  value: w.fitToHeight,
+                                  value: layout.fitToHeight,
                                   onValueChange: (W) =>
                                     L({ fitToHeight: Number(W) }),
                                   lang: language("Pages tall"),
@@ -691,7 +709,7 @@ function PageSetupDialog(e) {
                               min: 10,
                               max: 400,
                               "aria-label": text("Print scale"),
-                              value: w.scale,
+                              value: layout.scale,
                               onValueChange: (W) => L({ scale: Number(W) }),
                               lang: language("Print scale"),
                               "data-ui-label": "Print scale",
@@ -710,8 +728,9 @@ function PageSetupDialog(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: w.gridlines,
-                          onChange: (W) => L({ gridlines: W.target.checked }),
+                          checked: layout.gridlines,
+                          onChange: (event) =>
+                            L({ gridlines: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, { children: "Print gridlines" }),
                       ],
@@ -721,8 +740,9 @@ function PageSetupDialog(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: w.headings,
-                          onChange: (W) => L({ headings: W.target.checked }),
+                          checked: layout.headings,
+                          onChange: (event) =>
+                            L({ headings: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, {
                           children: "Print row and column headings",
@@ -736,8 +756,9 @@ function PageSetupDialog(e) {
                           "aria-label": text("Print header"),
                           rows: 3,
                           maxLength: 255,
-                          value: w.header,
-                          onChange: (W) => L({ header: W.target.value }),
+                          value: layout.header,
+                          onChange: (event) =>
+                            L({ header: event.target.value }),
                           lang: language("Print header"),
                           "data-ui-label": "Print header",
                         }),
@@ -750,8 +771,9 @@ function PageSetupDialog(e) {
                           "aria-label": text("Print footer"),
                           rows: 2,
                           maxLength: 255,
-                          value: w.footer,
-                          onChange: (W) => L({ footer: W.target.value }),
+                          value: layout.footer,
+                          onChange: (event) =>
+                            L({ footer: event.target.value }),
                           lang: language("Print footer"),
                           "data-ui-label": "Print footer",
                         }),
@@ -778,7 +800,7 @@ function PageSetupDialog(e) {
                           "Replaces the header and footer with workbook name, engagement, period, revision and page numbers. Fields: &[Workbook], &[Engagement], &[Period], &[Revision]. Missing properties display a “not set” label. Values come from this workbook; revision is local history, not an approval or certification.",
                       }),
                     }),
-                    !!b.merges?.length &&
+                    !!sheetOrThrow.merges?.length &&
                       i.jsx("p", {
                         className: "dg-muted",
                         children: i.jsx(LocalizedText, {
@@ -847,7 +869,7 @@ function PageSetupDialog(e) {
                         }),
                         i.jsx("button", {
                           type: "button",
-                          onClick: R,
+                          onClick: onClick,
                           disabled: u || c || !!C.error,
                           children: u ? "Checking…" : "Check print output",
                         }),
@@ -858,11 +880,11 @@ function PageSetupDialog(e) {
                               i.jsx("p", {
                                 children: s.issues.length
                                   ? s.issues.filter(
-                                      (W) => W.severity === "error",
+                                      (issue) => issue.severity === "error",
                                     ).length +
                                     " blocking issue(s), " +
                                     s.issues.filter(
-                                      (W) => W.severity === "warning",
+                                      (issue) => issue.severity === "warning",
                                     ).length +
                                     " warning(s)."
                                   : "Print check passed: " +
@@ -927,8 +949,12 @@ function PageSetupDialog(e) {
                           }),
                       ],
                     }),
-                    C.notices?.map((W) =>
-                      i.jsx("p", { className: "dg-muted", children: W }, W),
+                    C.notices?.map((notice) =>
+                      i.jsx(
+                        "p",
+                        { className: "dg-muted", children: notice },
+                        notice,
+                      ),
                     ),
                     C.ruleStyles.errors().length > 0 &&
                       i.jsxs("p", {
@@ -952,18 +978,18 @@ function PageSetupDialog(e) {
                           role: "alert",
                           children: C.error,
                         })
-                      : C.pages.map((W, K) =>
+                      : C.pages.map((page, K) =>
                           i.jsx(
                             PrintPagePreview,
                             {
                               workbook: e.workbook,
-                              sheet: b,
+                              sheet: sheetOrThrow,
                               layout: C.layout,
-                              page: W,
+                              page: page,
                               index: K,
                               total: C.pages.length,
                               scale: C.scale,
-                              calc: _,
+                              calc: calc,
                               ruleStyles: C.ruleStyles,
                             },
                             K,
@@ -1001,7 +1027,7 @@ function PageSetupDialog(e) {
                 e.readOnly ||
                 c ||
                 u ||
-                !!b.protection?.enabled ||
+                !!sheetOrThrow.protection?.enabled ||
                 (!B && !!C.error),
               children: B ? "Apply theme" : "Save page setup",
             }),
@@ -1259,9 +1285,9 @@ const functionArgumentSignatures = {
     ACCRINTM: "Calculates interest accrued to maturity",
     MIRR: "Calculates modified return using explicit finance and reinvestment rates",
   };
-function getFormulaCompletions(e, r, t, n) {
-  if (!e.startsWith("=")) return { items: [] };
-  const o = e.slice(0, r);
+function getFormulaCompletions(value, caret, workbook, sheetId) {
+  if (!value.startsWith("=")) return { items: [] };
+  const o = value.slice(0, caret);
   let a = false;
   const s = [];
   for (let I = 1; I < o.length; I++) {
@@ -1286,23 +1312,28 @@ function getFormulaCompletions(e, r, t, n) {
           : o[I] === "," && s.length && s[s.length - 1].argumentIndex++;
   }
   if (a) return { items: [] };
-  const d = listInstalledExtensionFunctions(t),
+  const installedExtensionFunctions = listInstalledExtensionFunctions(workbook),
     u = s.at(-1),
-    l = d.find((I) => I.name === u?.name),
+    l = installedExtensionFunctions.find(
+      (installedExtensionFunction) =>
+        installedExtensionFunction.name === u?.name,
+    ),
     c = u?.name
       ? [
-          ...(t.definedNames ?? []).filter((I) => I.scopeSheetId === n),
-          ...(t.definedNames ?? []).filter((I) => !I.scopeSheetId),
+          ...(workbook.definedNames ?? []).filter(
+            (I) => I.scopeSheetId === sheetId,
+          ),
+          ...(workbook.definedNames ?? []).filter((I) => !I.scopeSheetId),
         ].find((I) => I.name.toUpperCase() === u.name)
       : undefined,
     h = c ? parseFormulaTree(c.refersTo) : undefined,
-    f =
+    hint =
       u?.name && (builtinFunctionNames.includes(u.name) || h || l)
         ? {
             ...u,
             signature:
               (l
-                ? l.fn.parameters.map((I) => I.name).join(", ")
+                ? l.fn.parameters.map((parameter) => parameter.name).join(", ")
                 : h
                   ? h.join(", ")
                   : functionArgumentSignatures[u.name]) ??
@@ -1311,21 +1342,22 @@ function getFormulaCompletions(e, r, t, n) {
         : undefined,
     p = /([A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?)$/.exec(o),
     m = /^=\s*$/.test(o);
-  if (!p && !m) return { items: [], hint: f };
+  if (!p && !m) return { items: [], hint: hint };
   const v = p?.[1] ?? "",
-    g = p ? r - v.length : r;
-  if (g > 0 && /[A-Za-z0-9_$!']/.test(e[g - 1])) return { items: [], hint: f };
+    start = p ? caret - v.length : caret;
+  if (start > 0 && /[A-Za-z0-9_$!']/.test(value[start - 1]))
+    return { items: [], hint: hint };
   const b = v.toLowerCase(),
     y = [],
-    w = (I, O, j, z) => {
+    w = (I, O, insertText, detail) => {
       I.toLowerCase().startsWith(b) &&
         y.push({
           label: I,
           kind: O,
-          insertText: j,
-          start: g,
-          end: r,
-          detail: z,
+          insertText: insertText,
+          start: start,
+          end: caret,
+          detail: detail,
         });
     },
     E = [
@@ -1346,39 +1378,39 @@ function getFormulaCompletions(e, r, t, n) {
       `${I}(${functionArgumentSignatures[I] ?? "value1, …"})${functionDescriptions[I] ? ` · ${functionDescriptions[I]}` : ""}`,
     );
   const A = new Set();
-  for (const I of d)
+  for (const installedExtensionFunction of installedExtensionFunctions)
     w(
-      I.name,
+      installedExtensionFunction.name,
       "function",
-      `${I.name}(`,
-      `${I.name}(${I.fn.parameters.map((O) => O.name).join(", ")}) · ${I.entry.enabled ? "Custom function · manual refresh" : "Disabled extension"} · ${I.fn.description}`,
+      `${installedExtensionFunction.name}(`,
+      `${installedExtensionFunction.name}(${installedExtensionFunction.fn.parameters.map((parameter) => parameter.name).join(", ")}) · ${installedExtensionFunction.entry.enabled ? "Custom function · manual refresh" : "Disabled extension"} · ${installedExtensionFunction.fn.description}`,
     );
   for (const I of [
-    ...(t.definedNames ?? []).filter((O) => O.scopeSheetId === n),
-    ...(t.definedNames ?? []).filter((O) => !O.scopeSheetId),
+    ...(workbook.definedNames ?? []).filter((O) => O.scopeSheetId === sheetId),
+    ...(workbook.definedNames ?? []).filter((O) => !O.scopeSheetId),
   ]) {
     const O = I.name.toLowerCase(),
-      j = parseFormulaTree(I.refersTo);
+      formulaTree = parseFormulaTree(I.refersTo);
     (A.has(O) ||
       w(
         I.name,
         "name",
-        `${I.name}${j ? "(" : ""}`,
-        j
-          ? `${I.name}(${j.join(", ")})${I.comment ? ` · ${I.comment}` : ""}`
+        `${I.name}${formulaTree ? "(" : ""}`,
+        formulaTree
+          ? `${I.name}(${formulaTree.join(", ")})${I.comment ? ` · ${I.comment}` : ""}`
           : I.refersTo,
       ),
       A.add(O));
   }
-  for (const I of t.sheets)
-    for (const O of I.tables ?? []) {
-      w(O.name, "table", `${O.name}[`, `${I.name}!${O.range}`);
-      for (const j of O.columns)
+  for (const sheet of workbook.sheets)
+    for (const O of sheet.tables ?? []) {
+      w(O.name, "table", `${O.name}[`, `${sheet.name}!${O.range}`);
+      for (const column of O.columns)
         w(
-          `${O.name}[${j.name}]`,
+          `${O.name}[${column.name}]`,
           "table",
-          `${O.name}[${j.name}]`,
-          `Table column · ${j.name}`,
+          `${O.name}[${column.name}]`,
+          `Table column · ${column.name}`,
         );
     }
   return (
@@ -1392,16 +1424,16 @@ function getFormulaCompletions(e, r, t, n) {
               : 100;
         return j(I) - j(O) || I.label.localeCompare(O.label);
       }),
-    { items: y.slice(0, 12), hint: f }
+    { items: y.slice(0, 12), hint: hint }
   );
 }
-function applyFormulaCompletion(e, r) {
-  const t = e.slice(r.end),
+function applyFormulaCompletion(value, r) {
+  const t = value.slice(r.end),
     n =
       r.insertText.endsWith("(") && t.startsWith("(")
         ? r.insertText.slice(0, -1)
         : r.insertText;
-  return { value: e.slice(0, r.start) + n + t, caret: r.start + n.length };
+  return { value: value.slice(0, r.start) + n + t, caret: r.start + n.length };
 }
 
 export {

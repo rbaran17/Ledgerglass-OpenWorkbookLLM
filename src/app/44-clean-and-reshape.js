@@ -39,94 +39,102 @@ function CleanAndReshapeDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(false),
     s = ne.useRef([e.sheetId, e.range]),
-    [d, u] = ne.useState(e.initialRequest?.sourceSheetId ?? e.sheetId),
-    [l, c] = ne.useState(e.initialRequest?.sourceRange ?? e.range),
+    [sourceSheetId, u] = ne.useState(
+      e.initialRequest?.sourceSheetId ?? e.sheetId,
+    ),
+    [sourceRange, c] = ne.useState(e.initialRequest?.sourceRange ?? e.range),
     [h, f] = ne.useState(e.initialRequest?.header ?? true),
-    [p, m] = ne.useState(e.initialRequest?.outputName ?? "Reshaped fields"),
-    [v, g] = ne.useState(false),
-    [b, y] = ne.useState(() => structuredClone(e.initialRequest?.steps ?? [])),
-    [w, E] = ne.useState(null),
+    [outputName, m] = ne.useState(
+      e.initialRequest?.outputName ?? "Reshaped fields",
+    ),
+    [checked, g] = ne.useState(false),
+    [steps, y] = ne.useState(() =>
+      structuredClone(e.initialRequest?.steps ?? []),
+    ),
+    [editing, E] = ne.useState(null),
     [A, k] = ne.useState("trim"),
-    [F, I] = ne.useState("1"),
+    [columns, I] = ne.useState("1"),
     [O, j] = ne.useState("collapse"),
     [z, V] = ne.useState("upper"),
-    [D, B] = ne.useState(""),
-    [_, C] = ne.useState(""),
+    [find, B] = ne.useState(""),
+    [replacement, C] = ne.useState(""),
     [T, N] = ne.useState("delimited"),
-    [R, L] = ne.useState(",;"),
+    [delimiters, L] = ne.useState(",;"),
     [$, U] = ne.useState(false),
-    [G, H] = ne.useState("5, 10"),
-    [Q, X$1] = ne.useState(" "),
+    [breaks, H] = ne.useState("5, 10"),
+    [separator, X$1] = ne.useState(" "),
     [J, q] = ne.useState("Combined"),
     [W, K] = ne.useState(false),
     [te, ae] = ne.useState("number"),
-    [oe, de] = ne.useState("."),
-    [he, Se] = ne.useState(","),
-    [le, ce] = ne.useState("MDY"),
-    [ge, se] = ne.useState("down"),
-    [we, Ee] = ne.useState(""),
-    [Ae, ye] = ne.useState("text"),
-    [Te, Pe] = ne.useState(""),
-    [qe, ht] = ne.useState("2, 3"),
-    [Re, Me] = ne.useState(""),
+    [decimal, de] = ne.useState("."),
+    [group, Se] = ne.useState(","),
+    [dateOrder, ce] = ne.useState("MDY"),
+    [direction, se] = ne.useState("down"),
+    [fillValue, Ee] = ne.useState(""),
+    [fillType, ye] = ne.useState("text"),
+    [groupColumns, Pe] = ne.useState(""),
+    [exampleRows, ht] = ne.useState("2, 3"),
+    [exampleValues, Me] = ne.useState(""),
     [ke, je] = ne.useState([]),
-    [$e, Je] = ne.useState(""),
+    [candidate, Je] = ne.useState(""),
     [ze, at] = ne.useState(""),
     [_e, Ze] = ne.useState(null),
     [lt, be] = ne.useState(null),
     [ft, pt] = ne.useState(0),
     [Fe, nt] = ne.useState(0),
     [mt, Wt] = ne.useState(false),
-    Zt = [
-      ...new Set(e.allowedSheetIds ?? e.workbook.sheets.map((Qe) => Qe.id)),
+    allowedSheetIds = [
+      ...new Set(
+        e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
+      ),
     ].sort(),
     xt = {
       readOnly: e.readOnly,
-      allowedSheetIds: Zt,
-      includeHidden: !!e.allowHidden && v,
+      allowedSheetIds: allowedSheetIds,
+      includeHidden: !!e.allowHidden && checked,
       allowNewSheet: e.allowNewSheet ?? true,
     },
     or = e.workbook.sheets.filter(
-      (Qe) =>
-        Zt.includes(Qe.id) &&
-        (xt.includeHidden || (!Qe.hidden && !Qe.veryHidden)),
+      (sheet) =>
+        allowedSheetIds.includes(sheet.id) &&
+        (xt.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     ),
-    Wr = {
-      sourceSheetId: d,
-      sourceRange: l,
+    request = {
+      sourceSheetId: sourceSheetId,
+      sourceRange: sourceRange,
       header: h,
-      outputName: p,
-      steps: b,
+      outputName: outputName,
+      steps: steps,
     },
     Rr = JSON.stringify({
-      request: Wr,
+      request: request,
       options: xt,
       selection: [e.sheetId, e.range],
-      editing: w,
+      editing: editing,
       operation: A,
-      columns: F,
+      columns: columns,
       trimMode: O,
       caseMode: z,
-      find: D,
-      replacement: _,
+      find: find,
+      replacement: replacement,
       splitMode: T,
-      delimiters: R,
+      delimiters: delimiters,
       collapse: $,
-      breaks: G,
-      separator: Q,
+      breaks: breaks,
+      separator: separator,
       fieldName: J,
       skipBlank: W,
       convertTo: te,
-      decimal: oe,
-      group: he,
-      dateOrder: le,
-      direction: ge,
-      fillValue: we,
-      fillType: Ae,
-      groupColumns: Te,
-      exampleRows: qe,
-      exampleValues: Re,
-      candidate: $e,
+      decimal: decimal,
+      group: group,
+      dateOrder: dateOrder,
+      direction: direction,
+      fillValue: fillValue,
+      fillType: fillType,
+      groupColumns: groupColumns,
+      exampleRows: exampleRows,
+      exampleValues: exampleValues,
+      candidate: candidate,
     }),
     qt =
       _e?.key === Rr && _e.plan.snapshot === JSON.stringify(e.workbook)
@@ -137,15 +145,15 @@ function CleanAndReshapeDialog(e) {
         ? lt.message
         : null,
     bt = JSON.stringify({
-      sourceSheetId: d,
-      sourceRange: l,
+      sourceSheetId: sourceSheetId,
+      sourceRange: sourceRange,
       header: h,
-      outputName: p,
-      steps: b,
-      editing: w,
-      columns: F,
-      exampleRows: qe,
-      exampleValues: Re,
+      outputName: outputName,
+      steps: steps,
+      editing: editing,
+      columns: columns,
+      exampleRows: exampleRows,
+      exampleValues: exampleValues,
       options: xt,
       selection: [e.sheetId, e.range],
       snapshot: e.workbook,
@@ -153,13 +161,13 @@ function CleanAndReshapeDialog(e) {
     [St, cr] = ne.useState(""),
     dr = St === bt ? ke : [];
   (ne.useEffect(() => {
-    const Qe = document.activeElement;
+    const activeElement = document.activeElement;
     return (
       o.current
         ?.querySelector('[data-ui-label="Transform source range"]')
         ?.focus(),
       () => {
-        Qe?.isConnected && Qe.focus();
+        activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
@@ -187,92 +195,108 @@ function CleanAndReshapeDialog(e) {
       (Ze(null), be(null), Wt(false), (a.current = false));
     },
     fr = () => {
-      if (!/^\s*\d+(?:\s*,\s*\d+)+\s*$/.test(qe))
+      if (!/^\s*\d+(?:\s*,\s*\d+)+\s*$/.test(exampleRows))
         throw Error(
           "Enter at least two worksheet row numbers, separated by commas.",
         );
-      const Qe = qe.split(",").map((It) => Number(It)),
-        Dt = Re.split(`
+      const Qe = exampleRows.split(",").map((It) => Number(It)),
+        Dt = exampleValues.split(`
 `);
       if (Qe.length !== Dt.length)
         throw Error("Provide one example value per row, on separate lines.");
-      return Qe.map((It, ar) => ({ row: It, value: Dt[ar] }));
+      return Qe.map((row, ar) => ({ row: row, value: Dt[ar] }));
     },
-    br = () => {
+    onClick = () => {
       Jt();
       try {
-        const Qe = selectExceptionFreeRows(
+        const exceptionFreeRows = selectExceptionFreeRows(
           e.workbook,
-          { ...Wr, steps: w === null ? b : b.slice(0, w) },
+          {
+            ...request,
+            steps: editing === null ? steps : steps.slice(0, editing),
+          },
           fr(),
-          parseFieldPositions(F),
+          parseFieldPositions(columns),
           xt,
         );
-        (je(Qe.candidates),
+        (je(exceptionFreeRows.candidates),
           Je(""),
           cr(bt),
           at(
-            `${Qe.candidates.length} matching patterns from ${Qe.searched} candidates. ${Qe.truncated ? "Results are capped. " : ""}Search is bounded; choose a pattern, add the step, and review every resulting row.`,
+            `${exceptionFreeRows.candidates.length} matching patterns from ${exceptionFreeRows.searched} candidates. ${exceptionFreeRows.truncated ? "Results are capped. " : ""}Search is bounded; choose a pattern, add the step, and review every resulting row.`,
           ));
-      } catch (Qe) {
-        Ut(Qe);
+      } catch (error) {
+        Ut(error);
       }
     },
     rt = () => {
-      const Qe = parseFieldPositions(F);
-      if (A === "trim") return { kind: A, columns: Qe, mode: O };
-      if (A === "clean" || A === "select") return { kind: A, columns: Qe };
-      if (A === "case") return { kind: A, columns: Qe, mode: z };
+      const fieldPositions = parseFieldPositions(columns);
+      if (A === "trim") return { kind: A, columns: fieldPositions, mode: O };
+      if (A === "clean" || A === "select")
+        return { kind: A, columns: fieldPositions };
+      if (A === "case") return { kind: A, columns: fieldPositions, mode: z };
       if (A === "replace")
-        return { kind: A, columns: Qe, find: D, replacement: _ };
+        return {
+          kind: A,
+          columns: fieldPositions,
+          find: find,
+          replacement: replacement,
+        };
       if (A === "split") {
-        if (Qe.length !== 1) throw Error("Split one field at a time.");
-        if (T === "fixed" && !/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(G))
+        if (fieldPositions.length !== 1)
+          throw Error("Split one field at a time.");
+        if (T === "fixed" && !/^\s*\d+(?:\s*,\s*\d+)*\s*$/.test(breaks))
           throw Error(
             "Enter increasing fixed-width break positions separated by commas.",
           );
-        const It = T === "fixed" ? G.split(",").map(Number) : [];
+        const It = T === "fixed" ? breaks.split(",").map(Number) : [];
         return {
           kind: A,
-          column: Qe[0],
+          column: fieldPositions[0],
           mode: T,
-          delimiters: R,
+          delimiters: delimiters,
           collapse: $,
           breaks: It,
         };
       }
       if (A === "concat")
-        return { kind: A, columns: Qe, separator: Q, name: J, skipBlank: W };
+        return {
+          kind: A,
+          columns: fieldPositions,
+          separator: separator,
+          name: J,
+          skipBlank: W,
+        };
       if (A === "convert")
         return {
           kind: A,
-          columns: Qe,
+          columns: fieldPositions,
           to: te,
-          decimal: oe,
-          group: he,
-          dateOrder: le,
+          decimal: decimal,
+          group: group,
+          dateOrder: dateOrder,
         };
       if (A === "fill") {
-        let It = we;
-        if (ge === "value" && Ae === "number") {
-          if (!we.trim() || !Number.isFinite(Number(we)))
+        let It = fillValue;
+        if (direction === "value" && fillType === "number") {
+          if (!fillValue.trim() || !Number.isFinite(Number(fillValue)))
             throw Error("Enter a finite fill number.");
-          It = Number(we);
+          It = Number(fillValue);
         }
-        if (ge === "value" && Ae === "boolean") {
-          if (!/^(TRUE|FALSE)$/i.test(we))
+        if (direction === "value" && fillType === "boolean") {
+          if (!/^(TRUE|FALSE)$/i.test(fillValue))
             throw Error("Enter TRUE or FALSE for Boolean fill.");
-          It = we.toUpperCase() === "TRUE";
+          It = fillValue.toUpperCase() === "TRUE";
         }
         return {
           kind: A,
-          columns: Qe,
-          direction: ge,
+          columns: fieldPositions,
+          direction: direction,
           value: It,
-          groupColumns: parseFieldPositions(Te, true),
+          groupColumns: parseFieldPositions(groupColumns, true),
         };
       }
-      const Dt = dr.find((It) => It.id === $e);
+      const Dt = dr.find((It) => It.id === candidate);
       if (!Dt)
         throw Error(
           "Suggest patterns and explicitly choose one before adding the inferred step.",
@@ -282,27 +306,27 @@ function CleanAndReshapeDialog(e) {
         name: J,
         pattern: Dt.pattern,
         examples: fr(),
-        inferenceColumns: Qe,
+        inferenceColumns: fieldPositions,
       };
     },
     Le = () => {
       Jt();
       try {
         const Qe = rt(),
-          Dt = [...b];
-        (w === null ? Dt.push(Qe) : (Dt[w] = Qe),
-          buildTransformationPreview(e.workbook, { ...Wr, steps: Dt }, xt),
+          Dt = [...steps];
+        (editing === null ? Dt.push(Qe) : (Dt[editing] = Qe),
+          buildTransformationPreview(e.workbook, { ...request, steps: Dt }, xt),
           y(Dt),
           E(null),
           je([]),
           Je(""));
-      } catch (Qe) {
-        Ut(Qe);
+      } catch (error) {
+        Ut(error);
       }
     },
     et = (Qe) => {
       Jt();
-      const Dt = b[Qe];
+      const Dt = steps[Qe];
       (E(Qe),
         k(Dt.kind),
         I(
@@ -337,12 +361,12 @@ function CleanAndReshapeDialog(e) {
                 ? "boolean"
                 : "text",
           ),
-          Pe(Dt.groupColumns.map((It) => It + 1).join(", "))),
+          Pe(Dt.groupColumns.map((groupColumn) => groupColumn + 1).join(", "))),
         Dt.kind === "pattern" &&
           (q(Dt.name),
-          ht(Dt.examples.map((It) => It.row).join(", ")),
+          ht(Dt.examples.map((example) => example.row).join(", ")),
           Me(
-            Dt.examples.map((It) => It.value).join(`
+            Dt.examples.map((example) => example.value).join(`
 `),
           ),
           je([]),
@@ -351,10 +375,14 @@ function CleanAndReshapeDialog(e) {
     st = () => {
       Jt();
       try {
-        const Qe = buildTransformationPreview(e.workbook, Wr, xt);
-        (pt(0), nt(0), Ze({ plan: Qe, key: Rr }));
-      } catch (Qe) {
-        Ut(Qe);
+        const transformationPreview = buildTransformationPreview(
+          e.workbook,
+          request,
+          xt,
+        );
+        (pt(0), nt(0), Ze({ plan: transformationPreview, key: Rr }));
+      } catch (error) {
+        Ut(error);
       }
     },
     kt = () => {
@@ -371,8 +399,8 @@ function CleanAndReshapeDialog(e) {
               `Clean & Reshape: ${qt.sourceSheetName}!${qt.request.sourceRange} → ${qt.request.outputName} (${qt.exceptions.length} retained parse exceptions)`,
             ),
             Ze(null));
-        } catch (Qe) {
-          Ut(Qe);
+        } catch (error) {
+          Ut(error);
         }
     },
     gr = (Qe, Dt) => {
@@ -384,10 +412,12 @@ function CleanAndReshapeDialog(e) {
     },
     Ir = (e.workbook.fieldTransforms ?? []).filter((Qe) => {
       try {
-        const Dt = e.workbook.sheets.find((It) => It.id === Qe.sourceSheetId);
+        const Dt = e.workbook.sheets.find(
+          (sheet) => sheet.id === Qe.sourceSheetId,
+        );
         return Dt
           ? (assertSelectionInAuthorizedSheet(Dt, Qe.request.sourceRange, {
-              allowedSheetIds: Zt,
+              allowedSheetIds: allowedSheetIds,
               includeHidden: xt.includeHidden,
               allowNewSheet: xt.allowNewSheet,
             }),
@@ -405,12 +435,12 @@ function CleanAndReshapeDialog(e) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
-      onKeyDown: (Qe) => {
+      onKeyDown: (event) => {
         var It, ar;
         if (
-          (Qe.stopPropagation(),
-          Qe.key === "Escape" && (Qe.preventDefault(), e.onClose()),
-          Qe.key === "Tab")
+          (event.stopPropagation(),
+          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Tab")
         ) {
           const Lr = [
             ...(o.current?.querySelectorAll(
@@ -422,11 +452,11 @@ function CleanAndReshapeDialog(e) {
               !Pr.hidden &&
               !Pr.closest("details:not([open]) > :not(summary)"),
           );
-          Qe.shiftKey && document.activeElement === Lr[0]
-            ? (Qe.preventDefault(), (It = Lr.at(-1)) == null || It.focus())
-            : !Qe.shiftKey &&
+          event.shiftKey && document.activeElement === Lr[0]
+            ? (event.preventDefault(), (It = Lr.at(-1)) == null || It.focus())
+            : !event.shiftKey &&
               document.activeElement === Lr.at(-1) &&
-              (Qe.preventDefault(), (ar = Lr[0]) == null || ar.focus());
+              (event.preventDefault(), (ar = Lr[0]) == null || ar.focus());
         }
       },
       children: [
@@ -488,8 +518,8 @@ function CleanAndReshapeDialog(e) {
                     i.jsx(LocalizedText, { children: "Source worksheet" }),
                     i.jsx("select", {
                       "aria-label": text("Transform source worksheet"),
-                      value: d,
-                      onChange: (Qe) => u(Qe.target.value),
+                      value: sourceSheetId,
+                      onChange: (event) => u(event.target.value),
                       lang: language("Transform source worksheet"),
                       "data-ui-label": "Transform source worksheet",
                       children: or.map((Qe) =>
@@ -507,8 +537,8 @@ function CleanAndReshapeDialog(e) {
                     i.jsx(LocalizedText, { children: "Source range" }),
                     i.jsx("input", {
                       "aria-label": text("Transform source range"),
-                      value: l,
-                      onChange: (Qe) => c(Qe.target.value),
+                      value: sourceRange,
+                      onChange: (event) => c(event.target.value),
                       lang: language("Transform source range"),
                       "data-ui-label": "Transform source range",
                     }),
@@ -519,8 +549,8 @@ function CleanAndReshapeDialog(e) {
                     i.jsx(LocalizedText, { children: "Output worksheet" }),
                     i.jsx("input", {
                       "aria-label": text("Transform output worksheet"),
-                      value: p,
-                      onChange: (Qe) => m(Qe.target.value),
+                      value: outputName,
+                      onChange: (event) => m(event.target.value),
                       lang: language("Transform output worksheet"),
                       "data-ui-label": "Transform output worksheet",
                     }),
@@ -532,7 +562,7 @@ function CleanAndReshapeDialog(e) {
                     i.jsx("input", {
                       type: "checkbox",
                       checked: h,
-                      onChange: (Qe) => f(Qe.target.checked),
+                      onChange: (event) => f(event.target.checked),
                     }),
                     i.jsx(LocalizedText, {
                       children: "First source row contains headings",
@@ -545,8 +575,8 @@ function CleanAndReshapeDialog(e) {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: v,
-                        onChange: (Qe) => g(Qe.target.checked),
+                        checked: checked,
+                        onChange: (event) => g(event.target.checked),
                       }),
                       i.jsx(LocalizedText, {
                         children: "Include hidden source cells",
@@ -565,11 +595,11 @@ function CleanAndReshapeDialog(e) {
                     i.jsx(LocalizedText, {
                       children: "Transformation steps (",
                     }),
-                    b.length,
+                    steps.length,
                     "/12)",
                   ],
                 }),
-                !b.length &&
+                !steps.length &&
                   i.jsx("p", {
                     children: i.jsx(LocalizedText, {
                       children:
@@ -578,13 +608,13 @@ function CleanAndReshapeDialog(e) {
                   }),
                 i.jsx("ol", {
                   className: "fr-steps",
-                  children: b.map((Qe, Dt) =>
+                  children: steps.map((step, Dt) =>
                     i.jsxs(
                       "li",
                       {
                         children: [
                           i.jsx("span", {
-                            children: describeSplitFieldStep(Qe),
+                            children: describeSplitFieldStep(step),
                           }),
                           i.jsxs("div", {
                             children: [
@@ -603,7 +633,7 @@ function CleanAndReshapeDialog(e) {
                                 "aria-label": `Move step ${Dt + 1} up`,
                                 onClick: () => {
                                   Jt();
-                                  const It = [...b];
+                                  const It = [...steps];
                                   (([It[Dt - 1], It[Dt]] = [
                                     It[Dt],
                                     It[Dt - 1],
@@ -614,11 +644,11 @@ function CleanAndReshapeDialog(e) {
                                 children: "↑",
                               }),
                               i.jsx("button", {
-                                disabled: e.readOnly || Dt === b.length - 1,
+                                disabled: e.readOnly || Dt === steps.length - 1,
                                 "aria-label": `Move step ${Dt + 1} down`,
                                 onClick: () => {
                                   Jt();
-                                  const It = [...b];
+                                  const It = [...steps];
                                   (([It[Dt + 1], It[Dt]] = [
                                     It[Dt],
                                     It[Dt + 1],
@@ -632,7 +662,7 @@ function CleanAndReshapeDialog(e) {
                                 disabled: e.readOnly,
                                 onClick: () => {
                                   (Jt(),
-                                    y(b.filter((It, ar) => ar !== Dt)),
+                                    y(steps.filter((It, ar) => ar !== Dt)),
                                     E(null));
                                 },
                                 children: [
@@ -657,7 +687,10 @@ function CleanAndReshapeDialog(e) {
               className: "fr-fields",
               children: [
                 i.jsx("legend", {
-                  children: w === null ? "Add a step" : `Edit step ${w + 1}`,
+                  children:
+                    editing === null
+                      ? "Add a step"
+                      : `Edit step ${editing + 1}`,
                 }),
                 i.jsxs("label", {
                   children: [
@@ -665,7 +698,7 @@ function CleanAndReshapeDialog(e) {
                     i.jsx("select", {
                       "aria-label": text("Field operation"),
                       value: A,
-                      onChange: (Qe) => k(Qe.target.value),
+                      onChange: (event) => k(event.target.value),
                       lang: language("Field operation"),
                       "data-ui-label": "Field operation",
                       children: textCleanupStepLabels.map(([Qe, Dt]) =>
@@ -679,8 +712,8 @@ function CleanAndReshapeDialog(e) {
                     i.jsx(LocalizedText, { children: "Field positions" }),
                     i.jsx("input", {
                       "aria-label": text("Field positions"),
-                      value: F,
-                      onChange: (Qe) => I(Qe.target.value),
+                      value: columns,
+                      onChange: (event) => I(event.target.value),
                       placeholder: "1, 3",
                       lang: language("Field positions"),
                       "data-ui-label": "Field positions",
@@ -694,7 +727,7 @@ function CleanAndReshapeDialog(e) {
                       i.jsxs("select", {
                         "aria-label": text("Whitespace handling"),
                         value: O,
-                        onChange: (Qe) => j(Qe.target.value),
+                        onChange: (event) => j(event.target.value),
                         lang: language("Whitespace handling"),
                         "data-ui-label": "Whitespace handling",
                         children: [
@@ -717,7 +750,7 @@ function CleanAndReshapeDialog(e) {
                       i.jsxs("select", {
                         "aria-label": text("Case conversion"),
                         value: z,
-                        onChange: (Qe) => V(Qe.target.value),
+                        onChange: (event) => V(event.target.value),
                         lang: language("Case conversion"),
                         "data-ui-label": "Case conversion",
                         children: [
@@ -751,8 +784,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsx("input", {
                             "aria-label": text("Find literal text"),
-                            value: D,
-                            onChange: (Qe) => B(Qe.target.value),
+                            value: find,
+                            onChange: (event) => B(event.target.value),
                             lang: language("Find literal text"),
                             "data-ui-label": "Find literal text",
                           }),
@@ -763,8 +796,8 @@ function CleanAndReshapeDialog(e) {
                           i.jsx(LocalizedText, { children: "Replace with" }),
                           i.jsx("input", {
                             "aria-label": text("Replacement text"),
-                            value: _,
-                            onChange: (Qe) => C(Qe.target.value),
+                            value: replacement,
+                            onChange: (event) => C(event.target.value),
                             lang: language("Replacement text"),
                             "data-ui-label": "Replacement text",
                           }),
@@ -781,7 +814,7 @@ function CleanAndReshapeDialog(e) {
                           i.jsxs("select", {
                             "aria-label": text("Field split mode"),
                             value: T,
-                            onChange: (Qe) => N(Qe.target.value),
+                            onChange: (event) => N(event.target.value),
                             lang: language("Field split mode"),
                             "data-ui-label": "Field split mode",
                             children: [
@@ -807,15 +840,15 @@ function CleanAndReshapeDialog(e) {
                                   }),
                                   i.jsx("input", {
                                     "aria-label": text("Delimiter characters"),
-                                    value: R,
-                                    onChange: (Qe) => L(Qe.target.value),
+                                    value: delimiters,
+                                    onChange: (event) => L(event.target.value),
                                     lang: language("Delimiter characters"),
                                     "data-ui-label": "Delimiter characters",
                                   }),
                                 ],
                               }),
                               i.jsx("button", {
-                                onClick: () => L(R + "	"),
+                                onClick: () => L(delimiters + "	"),
                                 children: i.jsx(LocalizedText, {
                                   children: "Add tab delimiter",
                                 }),
@@ -826,7 +859,8 @@ function CleanAndReshapeDialog(e) {
                                   i.jsx("input", {
                                     type: "checkbox",
                                     checked: $,
-                                    onChange: (Qe) => U(Qe.target.checked),
+                                    onChange: (event) =>
+                                      U(event.target.checked),
                                   }),
                                   i.jsx(LocalizedText, {
                                     children: "Collapse consecutive delimiters",
@@ -842,8 +876,8 @@ function CleanAndReshapeDialog(e) {
                               }),
                               i.jsx("input", {
                                 "aria-label": text("Fixed-width breaks"),
-                                value: G,
-                                onChange: (Qe) => H(Qe.target.value),
+                                value: breaks,
+                                onChange: (event) => H(event.target.value),
                                 lang: language("Fixed-width breaks"),
                                 "data-ui-label": "Fixed-width breaks",
                               }),
@@ -858,7 +892,7 @@ function CleanAndReshapeDialog(e) {
                       i.jsx("input", {
                         "aria-label": text("New field name"),
                         value: J,
-                        onChange: (Qe) => q(Qe.target.value),
+                        onChange: (event) => q(event.target.value),
                         lang: language("New field name"),
                         "data-ui-label": "New field name",
                       }),
@@ -872,8 +906,8 @@ function CleanAndReshapeDialog(e) {
                           i.jsx(LocalizedText, { children: "Separator" }),
                           i.jsx("input", {
                             "aria-label": text("Concatenation separator"),
-                            value: Q,
-                            onChange: (Qe) => X$1(Qe.target.value),
+                            value: separator,
+                            onChange: (event) => X$1(event.target.value),
                             lang: language("Concatenation separator"),
                             "data-ui-label": "Concatenation separator",
                           }),
@@ -885,7 +919,7 @@ function CleanAndReshapeDialog(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: W,
-                            onChange: (Qe) => K(Qe.target.checked),
+                            onChange: (event) => K(event.target.checked),
                           }),
                           i.jsx(LocalizedText, {
                             children: "Skip blank fields",
@@ -903,7 +937,7 @@ function CleanAndReshapeDialog(e) {
                           i.jsx("select", {
                             "aria-label": text("Conversion type"),
                             value: te,
-                            onChange: (Qe) => ae(Qe.target.value),
+                            onChange: (event) => ae(event.target.value),
                             lang: language("Conversion type"),
                             "data-ui-label": "Conversion type",
                             children: [
@@ -925,8 +959,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsxs("select", {
                             "aria-label": text("Transform decimal separator"),
-                            value: oe,
-                            onChange: (Qe) => de(Qe.target.value),
+                            value: decimal,
+                            onChange: (event) => de(event.target.value),
                             lang: language("Transform decimal separator"),
                             "data-ui-label": "Transform decimal separator",
                             children: [
@@ -946,8 +980,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsxs("select", {
                             "aria-label": text("Transform grouping separator"),
-                            value: he,
-                            onChange: (Qe) => Se(Qe.target.value),
+                            value: group,
+                            onChange: (event) => Se(event.target.value),
                             lang: language("Transform grouping separator"),
                             "data-ui-label": "Transform grouping separator",
                             children: [
@@ -976,8 +1010,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsxs("select", {
                             "aria-label": text("Transform date order"),
-                            value: le,
-                            onChange: (Qe) => ce(Qe.target.value),
+                            value: dateOrder,
+                            onChange: (event) => ce(event.target.value),
                             lang: language("Transform date order"),
                             "data-ui-label": "Transform date order",
                             children: [
@@ -1003,8 +1037,8 @@ function CleanAndReshapeDialog(e) {
                           i.jsx(LocalizedText, { children: "Fill direction" }),
                           i.jsxs("select", {
                             "aria-label": text("Fill direction"),
-                            value: ge,
-                            onChange: (Qe) => se(Qe.target.value),
+                            value: direction,
+                            onChange: (event) => se(event.target.value),
                             lang: language("Fill direction"),
                             "data-ui-label": "Fill direction",
                             children: [
@@ -1031,14 +1065,14 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsx("input", {
                             "aria-label": text("Fill group fields"),
-                            value: Te,
-                            onChange: (Qe) => Pe(Qe.target.value),
+                            value: groupColumns,
+                            onChange: (event) => Pe(event.target.value),
                             lang: language("Fill group fields"),
                             "data-ui-label": "Fill group fields",
                           }),
                         ],
                       }),
-                      ge === "value" &&
+                      direction === "value" &&
                         i.jsxs(i.Fragment, {
                           children: [
                             i.jsxs("label", {
@@ -1046,8 +1080,8 @@ function CleanAndReshapeDialog(e) {
                                 i.jsx(LocalizedText, { children: "Fill type" }),
                                 i.jsxs("select", {
                                   "aria-label": text("Fill value type"),
-                                  value: Ae,
-                                  onChange: (Qe) => ye(Qe.target.value),
+                                  value: fillType,
+                                  onChange: (event) => ye(event.target.value),
                                   lang: language("Fill value type"),
                                   "data-ui-label": "Fill value type",
                                   children: [
@@ -1074,8 +1108,8 @@ function CleanAndReshapeDialog(e) {
                                 }),
                                 i.jsx("input", {
                                   "aria-label": text("Fill value"),
-                                  value: we,
-                                  onChange: (Qe) => Ee(Qe.target.value),
+                                  value: fillValue,
+                                  onChange: (event) => Ee(event.target.value),
                                   lang: language("Fill value"),
                                   "data-ui-label": "Fill value",
                                 }),
@@ -1095,8 +1129,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsx("input", {
                             "aria-label": text("Inference example rows"),
-                            value: qe,
-                            onChange: (Qe) => ht(Qe.target.value),
+                            value: exampleRows,
+                            onChange: (event) => ht(event.target.value),
                             lang: language("Inference example rows"),
                             "data-ui-label": "Inference example rows",
                           }),
@@ -1109,8 +1143,8 @@ function CleanAndReshapeDialog(e) {
                           }),
                           i.jsx("textarea", {
                             "aria-label": text("Inference example values"),
-                            value: Re,
-                            onChange: (Qe) => Me(Qe.target.value),
+                            value: exampleValues,
+                            onChange: (event) => Me(event.target.value),
                             rows: 3,
                             lang: language("Inference example values"),
                             "data-ui-label": "Inference example values",
@@ -1118,7 +1152,7 @@ function CleanAndReshapeDialog(e) {
                         ],
                       }),
                       i.jsx("button", {
-                        onClick: br,
+                        onClick: onClick,
                         children: i.jsx(LocalizedText, {
                           children: "Suggest patterns",
                         }),
@@ -1138,8 +1172,8 @@ function CleanAndReshapeDialog(e) {
                             }),
                             i.jsxs("select", {
                               "aria-label": text("Inferred pattern"),
-                              value: $e,
-                              onChange: (Qe) => Je(Qe.target.value),
+                              value: candidate,
+                              onChange: (event) => Je(event.target.value),
                               lang: language("Inferred pattern"),
                               "data-ui-label": "Inferred pattern",
                               children: [
@@ -1165,13 +1199,13 @@ function CleanAndReshapeDialog(e) {
                   children: [
                     i.jsx("button", {
                       onClick: Le,
-                      disabled: w === null && b.length >= 12,
+                      disabled: editing === null && steps.length >= 12,
                       children:
-                        w === null
+                        editing === null
                           ? "Add transformation step"
                           : "Save transformation step",
                     }),
-                    w !== null &&
+                    editing !== null &&
                       i.jsx("button", {
                         onClick: () => {
                           (Jt(), E(null));
@@ -1203,7 +1237,7 @@ function CleanAndReshapeDialog(e) {
               className: "fr-actions",
               children: [
                 i.jsx("button", {
-                  disabled: e.readOnly || !b.length || w !== null,
+                  disabled: e.readOnly || !steps.length || editing !== null,
                   onClick: st,
                   children: i.jsx(LocalizedText, {
                     children: "Preview transformation",
@@ -1217,8 +1251,8 @@ function CleanAndReshapeDialog(e) {
                           verifyTransformationPreview(e.workbook, qt, xt),
                           "Field-transformation-preview.json",
                         );
-                      } catch (Qe) {
-                        Ut(Qe);
+                      } catch (error) {
+                        Ut(error);
                       }
                     },
                     children: i.jsx(LocalizedText, {
@@ -1285,35 +1319,35 @@ function CleanAndReshapeDialog(e) {
                             "Step results and resulting field positions",
                         }),
                       }),
-                      qt.stages.map((Qe) =>
+                      qt.stages.map((stage) =>
                         i.jsxs(
                           "p",
                           {
                             children: [
                               i.jsx(LocalizedText, { children: "Step " }),
-                              Qe.step,
+                              stage.step,
                               " (",
-                              Qe.kind,
+                              stage.kind,
                               "):",
                               " ",
-                              Qe.fields
-                                .map((Dt, It) => `${It + 1}: ${Dt}`)
+                              stage.fields
+                                .map((field, It) => `${It + 1}: ${field}`)
                                 .join(" · "),
                               ".",
                               " ",
-                              Qe.changedCells,
+                              stage.changedCells,
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "affected cells; ",
                               }),
-                              Qe.exceptions,
+                              stage.exceptions,
                               " ",
                               i.jsx(LocalizedText, {
                                 children: "new exceptions.",
                               }),
                             ],
                           },
-                          Qe.step,
+                          stage.step,
                         ),
                       ),
                     ],
@@ -1380,27 +1414,28 @@ function CleanAndReshapeDialog(e) {
                                           i.jsx("summary", {
                                             children: Qe.sources
                                               .map(
-                                                (Dt) =>
-                                                  `${qt.sourceSheetName}!${Dt}`,
+                                                (source) =>
+                                                  `${qt.sourceSheetName}!${source}`,
                                               )
                                               .join(", "),
                                           }),
-                                          Qe.sources.map((Dt) =>
+                                          Qe.sources.map((source) =>
                                             i.jsxs(
                                               "pre",
                                               {
                                                 children: [
-                                                  Dt,
+                                                  source,
                                                   ":",
                                                   " ",
                                                   stringifyJsonValue(
                                                     qt.sources.find(
-                                                      (Lr) => Lr.address === Dt,
+                                                      (Lr) =>
+                                                        Lr.address === source,
                                                     )?.original?.raw ?? null,
                                                   ),
                                                 ],
                                               },
-                                              Dt,
+                                              source,
                                             ),
                                           ),
                                         ],
@@ -1509,26 +1544,32 @@ function CleanAndReshapeDialog(e) {
                               i.jsx("tbody", {
                                 children: qt.exceptions
                                   .slice(Fe * 20, (Fe + 1) * 20)
-                                  .map((Qe, Dt) =>
+                                  .map((cell, Dt) =>
                                     i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsxs("td", {
-                                            children: [Qe.row, " / ", Qe.field],
+                                            children: [
+                                              cell.row,
+                                              " / ",
+                                              cell.field,
+                                            ],
                                           }),
-                                          i.jsx("td", { children: Qe.step }),
+                                          i.jsx("td", { children: cell.step }),
                                           i.jsx("td", {
                                             children: i.jsx("code", {
                                               children: stringifyJsonValue(
-                                                Qe.raw,
+                                                cell.raw,
                                               ),
                                             }),
                                           }),
                                           i.jsx("td", {
-                                            children: Qe.sources.join(", "),
+                                            children: cell.sources.join(", "),
                                           }),
-                                          i.jsx("td", { children: Qe.reason }),
+                                          i.jsx("td", {
+                                            children: cell.reason,
+                                          }),
                                         ],
                                       },
                                       Dt,
@@ -1576,7 +1617,7 @@ function CleanAndReshapeDialog(e) {
                             i.jsx("input", {
                               type: "checkbox",
                               checked: mt,
-                              onChange: (Qe) => Wt(Qe.target.checked),
+                              onChange: (event) => Wt(event.target.checked),
                             }),
                             i.jsx(LocalizedText, {
                               children:
@@ -1630,10 +1671,10 @@ function CleanAndReshapeDialog(e) {
                             ],
                           }),
                           i.jsx("ol", {
-                            children: Qe.request.steps.map((Dt, It) =>
+                            children: Qe.request.steps.map((step, It) =>
                               i.jsx(
                                 "li",
-                                { children: describeSplitFieldStep(Dt) },
+                                { children: describeSplitFieldStep(step) },
                                 It,
                               ),
                             ),
@@ -1699,7 +1740,7 @@ function CleanAndReshapeDialog(e) {
                 !qt ||
                 e.readOnly ||
                 (qt.exceptions.length > 0 && !mt) ||
-                w !== null,
+                editing !== null,
               onClick: kt,
               children: i.jsx(LocalizedText, {
                 children: "Apply reviewed transformation",
@@ -1734,85 +1775,96 @@ const sortEngineLimits = Object.freeze({
   }),
   MW = new WeakMap(),
   formatSortRangeAddress = (e) => {
-    const r = parseRangeAddress(e),
-      t = formatCellAddress(r.firstRow, r.firstCol),
-      n = formatCellAddress(r.lastRow, r.lastCol);
-    return t === n ? t : `${t}:${n}`;
+    const rangeAddress = parseRangeAddress(e),
+      cellAddress = formatCellAddress(
+        rangeAddress.firstRow,
+        rangeAddress.firstCol,
+      ),
+      n = formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol);
+    return cellAddress === n ? cellAddress : `${cellAddress}:${n}`;
   },
-  isNonBlankCellEntry = (e) =>
-    e.raw !== null || Object.keys(e).some((r) => r !== "raw"),
-  N3 = (e) => !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
-  buildAllowedSheetKey = (e, r) =>
+  isNonBlankCellEntry = (cell) =>
+    cell.raw !== null || Object.keys(cell).some((r) => r !== "raw"),
+  N3 = (cell) =>
+    !cell.literal && typeof cell.raw == "string" && cell.raw.startsWith("="),
+  buildAllowedSheetKey = (workbook, r) =>
     JSON.stringify(
-      [...(r.allowedSheetIds ?? e.sheets.map((t) => t.id))].sort(),
+      [
+        ...(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
+      ].sort(),
     );
-function assertSortWorkbookAuthorized(e, r, t) {
+function assertSortWorkbookAuthorized(workbook, sheetId, t) {
   if (t.readOnly)
     throw Error(
       "This workbook is read-only. Sorting cannot change its records.",
     );
-  if (t.allowedSheetIds && !t.allowedSheetIds.includes(r))
+  if (t.allowedSheetIds && !t.allowedSheetIds.includes(sheetId))
     throw Error("The sort source is outside the host-approved worksheets.");
-  const n = findSheetOrThrow(e, r);
-  if (n.hidden || n.veryHidden)
+  const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
+  if (sheetOrThrow.hidden || sheetOrThrow.veryHidden)
     throw Error("Unhide this worksheet before sorting its records.");
-  return (assertSheetUnprotected(n), n);
+  return (assertSheetUnprotected(sheetOrThrow), sheetOrThrow);
 }
-function resolveSortSourceRange(e, r, t, n = false) {
-  const o = findSheetOrThrow(e, r),
-    a = parseRangeAddress(t);
-  if (a.lastRow >= o.rowCount || a.lastCol >= o.colCount)
+function resolveSortSourceRange(workbook, sheetId, range, headers = false) {
+  const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
+    rangeAddress = parseRangeAddress(range);
+  if (
+    rangeAddress.lastRow >= sheetOrThrow.rowCount ||
+    rangeAddress.lastCol >= sheetOrThrow.colCount
+  )
     throw Error("The sort selection is outside the worksheet.");
-  let s = a.firstRow,
-    d = a.lastRow,
-    u = a.firstCol,
-    l = a.lastCol;
-  const c = Object.entries(o.cells)
+  let firstRow = rangeAddress.firstRow,
+    lastRow = rangeAddress.lastRow,
+    firstCol = rangeAddress.firstCol,
+    lastCol = rangeAddress.lastCol;
+  const c = Object.entries(sheetOrThrow.cells)
     .filter(([, m]) => isNonBlankCellEntry(m))
     .map(([m]) => _t(m));
-  if (s === d && u === l) {
-    const m = o.tables
-      ?.map((v) => ({
-        bounds: parseRangeAddress(v.range),
-        totals: v.showTotals,
+  if (firstRow === lastRow && firstCol === lastCol) {
+    const m = sheetOrThrow.tables
+      ?.map((table) => ({
+        bounds: parseRangeAddress(table.range),
+        totals: table.showTotals,
       }))
       .find(
         (v) =>
-          s >= v.bounds.firstRow &&
-          s <= v.bounds.lastRow &&
-          u >= v.bounds.firstCol &&
-          u <= v.bounds.lastCol,
+          firstRow >= v.bounds.firstRow &&
+          firstRow <= v.bounds.lastRow &&
+          firstCol >= v.bounds.firstCol &&
+          firstCol <= v.bounds.lastCol,
       );
     if (m)
-      ((s = m.bounds.firstRow),
-        (d = m.bounds.lastRow - (m.totals ? 1 : 0)),
-        (u = m.bounds.firstCol),
-        (l = m.bounds.lastCol));
+      ((firstRow = m.bounds.firstRow),
+        (lastRow = m.bounds.lastRow - (m.totals ? 1 : 0)),
+        (firstCol = m.bounds.firstCol),
+        (lastCol = m.bounds.lastCol));
     else {
       const v = new Set(c.map((g) => g.row));
-      if (!v.has(s))
+      if (!v.has(firstRow))
         throw Error("Select a populated record or an explicit range to sort.");
-      for (; s > 0 && v.has(s - 1);) s--;
-      for (; d + 1 < o.rowCount && v.has(d + 1);) d++;
+      for (; firstRow > 0 && v.has(firstRow - 1);) firstRow--;
+      for (; lastRow + 1 < sheetOrThrow.rowCount && v.has(lastRow + 1);)
+        lastRow++;
     }
   }
   for (const m of c)
-    m.row >= s &&
-      m.row <= d &&
-      ((u = Math.min(u, m.col)), (l = Math.max(l, m.col)));
-  const h = formatSortRangeAddress(
-      `${formatCellAddress(s, u)}:${formatCellAddress(d, l)}`,
+    m.row >= firstRow &&
+      m.row <= lastRow &&
+      ((firstCol = Math.min(firstCol, m.col)),
+      (lastCol = Math.max(lastCol, m.col)));
+  const sortRangeAddress = formatSortRangeAddress(
+      `${formatCellAddress(firstRow, firstCol)}:${formatCellAddress(lastRow, lastCol)}`,
     ),
-    f = formatSortRangeAddress(t);
+    f = formatSortRangeAddress(range);
   return {
     selectedRange: f,
-    expandedRange: h,
-    expansionRequired: f !== h,
-    firstDataRow: s + (n ? 1 : 0),
-    lastRow: d,
+    expandedRange: sortRangeAddress,
+    expansionRequired: f !== sortRangeAddress,
+    firstDataRow: firstRow + (headers ? 1 : 0),
+    lastRow: lastRow,
   };
 }
-function normalizeSortSpecification(e, r) {
+function normalizeSortSpecification(workbook, r) {
   if (
     !r ||
     typeof r.headers != "boolean" ||
@@ -1827,32 +1879,32 @@ function normalizeSortSpecification(e, r) {
   const t = structuredClone(r);
   t.range = formatSortRangeAddress(r.range);
   const n = new Set();
-  for (const o of t.keys) {
+  for (const key of t.keys) {
     if (
-      !Number.isInteger(o.column) ||
-      o.column < 0 ||
-      o.column >= findSheetOrThrow(e, r.sheetId).colCount ||
-      n.has(o.column) ||
-      !["ascending", "descending"].includes(o.direction) ||
-      !["auto", "number", "date", "text"].includes(o.type)
+      !Number.isInteger(key.column) ||
+      key.column < 0 ||
+      key.column >= findSheetOrThrow(workbook, r.sheetId).colCount ||
+      n.has(key.column) ||
+      !["ascending", "descending"].includes(key.direction) ||
+      !["auto", "number", "date", "text"].includes(key.type)
     )
       throw Error(
         "Choose distinct valid sort columns, directions and data types.",
       );
-    if ((n.add(o.column), o.customOrder !== undefined)) {
+    if ((n.add(key.column), key.customOrder !== undefined)) {
       const a = (s) =>
         t.caseSensitive
           ? s.normalize("NFC")
           : s.normalize("NFC").toLocaleLowerCase("en-US");
       if (
-        !Array.isArray(o.customOrder) ||
-        !o.customOrder.length ||
-        o.customOrder.length > sortEngineLimits.customItems ||
-        o.type !== "text" ||
-        o.customOrder.some(
+        !Array.isArray(key.customOrder) ||
+        !key.customOrder.length ||
+        key.customOrder.length > sortEngineLimits.customItems ||
+        key.type !== "text" ||
+        key.customOrder.some(
           (s) => typeof s != "string" || !s.length || s.length > 255,
         ) ||
-        new Set(o.customOrder.map(a)).size !== o.customOrder.length
+        new Set(key.customOrder.map(a)).size !== key.customOrder.length
       )
         throw Error(
           "Custom orders require Text, 1–100 distinct nonempty labels of at most 255 characters.",
@@ -1861,20 +1913,23 @@ function normalizeSortSpecification(e, r) {
   }
   return t;
 }
-function buildSortPlan(e, r, t) {
-  const n = parseRangeAddress(t.expandedRange),
-    o = calculateWorkbookWithSettings(e),
-    a = normalizeDatePolicy(e.datePolicy);
+function buildSortPlan(workbook, r, t) {
+  const rangeAddress = parseRangeAddress(t.expandedRange),
+    workbookWithSettings = calculateWorkbookWithSettings(workbook),
+    datePolicy = normalizeDatePolicy(workbook.datePolicy);
   return Array.from({ length: t.lastRow - t.firstDataRow + 1 }, (s, d) => {
-    const u = t.firstDataRow + d,
-      l = r.keys.map((c) => {
-        if (c.column < n.firstCol || c.column > n.lastCol)
+    const row = t.firstDataRow + d,
+      keys = r.keys.map((key) => {
+        if (
+          key.column < rangeAddress.firstCol ||
+          key.column > rangeAddress.lastCol
+        )
           throw Error(
             "Every sort key must be inside the complete record range.",
           );
-        const h = formatCellAddress(u, c.column),
-          f = findSheetOrThrow(e, r.sheetId).cells[h],
-          p = o(r.sheetId, h);
+        const cellAddress = formatCellAddress(row, key.column),
+          f = findSheetOrThrow(workbook, r.sheetId).cells[cellAddress],
+          p = workbookWithSettings(r.sheetId, cellAddress);
         if (
           f &&
           N3(f) &&
@@ -1882,49 +1937,57 @@ function buildSortPlan(e, r, t) {
           ["#PENDING!", "#TIMEOUT!", "#LIMIT!", "#BLOCKED!"].includes(p)
         )
           throw Error(
-            `Calculate ${h} successfully before sorting. Its current result is ${p}.`,
+            `Calculate ${cellAddress} successfully before sorting. Its current result is ${p}.`,
           );
         const m =
-          !!f && N3(f) && o.getTypedValue(r.sheetId, h).type === "error";
-        let v = p;
+          !!f &&
+          N3(f) &&
+          workbookWithSettings.getTypedValue(r.sheetId, cellAddress).type ===
+            "error";
+        let compare = p;
         if (p !== null && p !== "" && !m) {
-          if ((c.type === "text" && (v = String(p)), c.type === "number")) {
-            if (typeof p == "number") v = p;
+          if (
+            (key.type === "text" && (compare = String(p)),
+            key.type === "number")
+          ) {
+            if (typeof p == "number") compare = p;
             else if (
               typeof p == "string" &&
               /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(p.trim())
             )
-              v = Number(p);
+              compare = Number(p);
             else
               throw Error(
-                `${h} cannot be interpreted as a Number. Choose Automatic or correct the source.`,
+                `${cellAddress} cannot be interpreted as a Number. Choose Automatic or correct the source.`,
               );
-            if (!Number.isFinite(v))
-              throw Error(`${h} is outside the finite numeric range.`);
+            if (!Number.isFinite(compare))
+              throw Error(
+                `${cellAddress} is outside the finite numeric range.`,
+              );
           }
           if (
-            c.type === "date" &&
-            ((v =
+            key.type === "date" &&
+            ((compare =
               typeof p == "number"
                 ? p
                 : typeof p == "string"
-                  ? (parseDateText(p, a) ?? null)
+                  ? (parseDateText(p, datePolicy) ?? null)
                   : null),
-            v === null ||
-              typeof v != "number" ||
-              v < 0 ||
-              v >= dateSystemMaxSerial(a.dateSystem) + 1)
+            compare === null ||
+              typeof compare != "number" ||
+              compare < 0 ||
+              compare >= dateSystemMaxSerial(datePolicy.dateSystem) + 1)
           )
             throw Error(
-              `${h} is not a valid date under the workbook's date policy.`,
+              `${cellAddress} is not a valid date under the workbook's date policy.`,
             );
         }
-        return { value: p, compare: v, error: m };
+        return { value: p, compare: compare, error: m };
       });
-    return { row: u, keys: l };
+    return { row: row, keys: keys };
   });
 }
-function assertSortSafeFormulas(e, r, t) {
+function assertSortSafeFormulas(workbook, r, t) {
   let n = 0,
     o = 0,
     a = 0;
@@ -1937,8 +2000,11 @@ function assertSortSafeFormulas(e, r, t) {
       );
     if (
       /[{}#]/.test(u) ||
-      matrixResultFunctionNames.some((l) =>
-        new RegExp(`\\b${l.replaceAll(".", "\\.")}\\s*\\(`, "i").test(u),
+      matrixResultFunctionNames.some((matrixResultFunctionName) =>
+        new RegExp(
+          `\\b${matrixResultFunctionName.replaceAll(".", "\\.")}\\s*\\(`,
+          "i",
+        ).test(u),
       )
     )
       throw Error(
@@ -1946,12 +2012,15 @@ function assertSortSafeFormulas(e, r, t) {
       );
     a += (u.match(/:/g) ?? []).length;
   };
-  for (const d of e.sheets) {
-    for (const u of Object.values(d.cells)) N3(u) && s(u.raw);
-    for (const u of [...(d.validations ?? []), ...(d.conditionalFormats ?? [])])
+  for (const sheet of workbook.sheets) {
+    for (const cell of Object.values(sheet.cells)) N3(cell) && s(cell.raw);
+    for (const u of [
+      ...(sheet.validations ?? []),
+      ...(sheet.conditionalFormats ?? []),
+    ])
       u.formula && s(u.formula);
   }
-  for (const d of e.definedNames ?? []) s(d.refersTo);
+  for (const d of workbook.definedNames ?? []) s(d.refersTo);
   if (
     n > sortEngineLimits.formulaCells ||
     o > sortEngineLimits.formulaCharacters ||
@@ -1962,7 +2031,7 @@ function assertSortSafeFormulas(e, r, t) {
     );
   if (
     t.allowedSheetIds &&
-    e.sheets.some((d) => !t.allowedSheetIds.includes(d.id))
+    workbook.sheets.some((sheet) => !t.allowedSheetIds.includes(sheet.id))
   )
     throw Error(
       "A structural sort requires the host to authorize all worksheets so cross-sheet reference changes can be reviewed.",

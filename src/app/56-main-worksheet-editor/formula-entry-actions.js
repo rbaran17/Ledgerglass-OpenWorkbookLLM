@@ -34,11 +34,11 @@ function createFormulaEntryActions({
     if (!gt) return false;
     const Nt =
         Oe && Xe.sheetId === activeSheet.id && Xe.anchor ? Xe.anchor : fe,
-      wt = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
+      range = Be?.range ?? (Nt === fe ? fe : wy(Nt, fe)),
       jt = replaceFormulaReferenceSpan(
         Ue.value,
         gt,
-        wt,
+        range,
         Ue.sheetId === activeSheet.id ? undefined : activeSheet.name,
       );
     return (
@@ -54,26 +54,26 @@ function createFormulaEntryActions({
       formulaEntryState.setFormulaCaretPosition(jt.span.end),
       formulaEntryState.setActiveFormulaReference({
         sheetId: activeSheet.id,
-        range: wt,
-        bounds: Be?.bounds ?? parseRangeAddress(wt),
+        range: range,
+        bounds: Be?.bounds ?? parseRangeAddress(range),
       }),
       cellEditActions.restoreFormulaEditorFocus(),
       true
     );
   }
-  function handleFormulaPointerDown(fe) {
+  function handleFormulaPointerDown(event) {
     if (
-      fe.button !== 0 ||
+      event.button !== 0 ||
       !formulaEntryState.activeCellEditRef.current?.value.startsWith("=")
     )
       return false;
-    const Oe = fe.target;
-    if (Oe.closest('input,button,a,[role="separator"]')) return false;
-    const Be = Oe.closest("[data-address]"),
-      Ue = Oe.closest("[data-column]"),
-      Xe = Oe.closest("[data-row-header]");
+    const target = event.target;
+    if (target.closest('input,button,a,[role="separator"]')) return false;
+    const Be = target.closest("[data-address]"),
+      Ue = target.closest("[data-column]"),
+      Xe = target.closest("[data-row-header]");
     let gt = false;
-    if (Be) gt = insertFormulaReference(Be.dataset.address, fe.shiftKey);
+    if (Be) gt = insertFormulaReference(Be.dataset.address, event.shiftKey);
     else if (Ue) {
       const wt = Number(Ue.dataset.column);
       gt = insertFormulaReference(`${columnIndexToLetters(wt)}1`, false, {
@@ -98,41 +98,41 @@ function createFormulaEntryActions({
       });
     }
     return gt
-      ? (fe.preventDefault(),
-        fe.stopPropagation(),
+      ? (event.preventDefault(),
+        event.stopPropagation(),
         (formulaEntryState.formulaPointerStateRef.current.dragging = !!Be),
         (dragFillState.dragAnchorRef.current = null),
         true)
       : false;
   }
-  function handleFormulaKeyDown(fe) {
+  function handleFormulaKeyDown(event) {
     if (
-      fe.nativeEvent.isComposing ||
-      fe.altKey ||
+      event.nativeEvent.isComposing ||
+      event.altKey ||
       cellEditActions.isFormulaEditingLocked() ||
       operationStatusState.isOperationBusy
     )
       return false;
-    const Oe = fe.currentTarget;
-    if (!Oe.value.startsWith("=")) return false;
-    cellEditActions.syncFormulaEditorSelection(Oe);
+    const currentTarget = event.currentTarget;
+    if (!currentTarget.value.startsWith("=")) return false;
+    cellEditActions.syncFormulaEditorSelection(currentTarget);
     const Be = formulaEntryState.formulaPointerStateRef.current;
-    if (fe.key === "F2" && !fe.ctrlKey && !fe.metaKey)
+    if (event.key === "F2" && !event.ctrlKey && !event.metaKey)
       return (
-        fe.preventDefault(),
+        event.preventDefault(),
         formulaEntryState.activeCellEditRef.current ||
-          cellEditActions.beginCellEdit(Oe.value),
+          cellEditActions.beginCellEdit(currentTarget.value),
         (Be.mode = !Be.mode),
         formulaEntryState.setIsFormulaPointMode(Be.mode),
         true
       );
-    if (fe.key === "F4" && !fe.ctrlKey && !fe.metaKey) {
-      const jt = $ae(Oe.value, Be.start, Be.end);
+    if (event.key === "F4" && !event.ctrlKey && !event.metaKey) {
+      const jt = $ae(currentTarget.value, Be.start, Be.end);
       return jt
-        ? (fe.preventDefault(),
+        ? (event.preventDefault(),
           cellEditActions.beginCellEdit(
             jt.value,
-            Oe.classList.contains("lg-cell-editor"),
+            currentTarget.classList.contains("lg-cell-editor"),
           ),
           (Be.span = jt.span),
           (Be.start = Be.end = jt.span.end),
@@ -141,30 +141,36 @@ function createFormulaEntryActions({
           true)
         : false;
     }
-    if ((fe.ctrlKey || fe.metaKey) && ["PageUp", "PageDown"].includes(fe.key)) {
-      fe.preventDefault();
-      const jt = activeWorkbook.sheets.filter((Br) => !Br.hidden),
+    if (
+      (event.ctrlKey || event.metaKey) &&
+      ["PageUp", "PageDown"].includes(event.key)
+    ) {
+      event.preventDefault();
+      const jt = activeWorkbook.sheets.filter((sheet) => !sheet.hidden),
         rr = jt.findIndex((Br) => Br.id === activeSheet.id),
-        Mr = jt[rr + (fe.key === "PageUp" ? -1 : 1)];
+        Mr = jt[rr + (event.key === "PageUp" ? -1 : 1)];
       return (Mr && navigationActions.switchActiveWorksheet(Mr.id), true);
     }
     if (
       !Be.mode ||
-      !fe.key.startsWith("Arrow") ||
+      !event.key.startsWith("Arrow") ||
       !formulaEntryState.activeCellEditRef.current ||
-      !(Be.span ?? findFormulaReferenceSpan(Oe.value, Be.start, Be.end))
+      !(
+        Be.span ??
+        findFormulaReferenceSpan(currentTarget.value, Be.start, Be.end)
+      )
     )
       return false;
-    fe.preventDefault();
+    event.preventDefault();
     const Ue = _t(
         Be.sheetId === activeSheet.id && Be.head
           ? Be.head
           : selectionState.activeCellAddress,
       ),
-      Xe = ["ArrowUp", "ArrowDown"].includes(fe.key),
-      gt = ["ArrowUp", "ArrowLeft"].includes(fe.key) ? -1 : 1,
+      Xe = ["ArrowUp", "ArrowDown"].includes(event.key),
+      gt = ["ArrowUp", "ArrowLeft"].includes(event.key) ? -1 : 1,
       Nt =
-        fe.ctrlKey || fe.metaKey
+        event.ctrlKey || event.metaKey
           ? viewAndSelectionActions.jumpToDataEdge(Ue.row, Ue.col, Xe, gt)
           : {
               row: Xe
@@ -176,7 +182,7 @@ function createFormulaEntryActions({
             },
       wt = `${columnIndexToLetters(Nt.col)}${Nt.row + 1}`;
     return (
-      insertFormulaReference(wt, fe.shiftKey),
+      insertFormulaReference(wt, event.shiftKey),
       viewAndSelectionActions.requestCellScroll(wt),
       true
     );

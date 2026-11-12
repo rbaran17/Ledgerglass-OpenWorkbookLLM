@@ -25,7 +25,7 @@ function EditorSheetTabs({
       i.jsxs("div", {
         children: [
           activeWorkbook.sheets
-            .filter((fe) => !fe.hidden)
+            .filter((sheet) => !sheet.hidden)
             .map((fe) =>
               i.jsx(
                 "button",
@@ -34,37 +34,39 @@ function EditorSheetTabs({
                   className: fe.id === activeSheet.id ? "active" : "",
                   "data-sheet-id": fe.id,
                   tabIndex: fe.id === activeSheet.id ? 0 : -1,
-                  onPointerDown: (Oe) => {
+                  onPointerDown: (event) => {
                     formulaEntryState.activeCellEditRef.current?.value.startsWith(
                       "=",
-                    ) && Oe.preventDefault();
+                    ) && event.preventDefault();
                   },
-                  onMouseDown: (Oe) => {
+                  onMouseDown: (event) => {
                     formulaEntryState.activeCellEditRef.current?.value.startsWith(
                       "=",
-                    ) && Oe.preventDefault();
+                    ) && event.preventDefault();
                   },
-                  onKeyDown: (Oe) => {
+                  onKeyDown: (event) => {
                     if (
                       !["ArrowLeft", "ArrowRight", "Home", "End"].includes(
-                        Oe.key,
+                        event.key,
                       ) ||
-                      Oe.altKey ||
-                      Oe.ctrlKey ||
-                      Oe.metaKey
+                      event.altKey ||
+                      event.ctrlKey ||
+                      event.metaKey
                     )
                       return;
-                    Oe.preventDefault();
-                    const Be = activeWorkbook.sheets.filter((gt) => !gt.hidden),
+                    event.preventDefault();
+                    const Be = activeWorkbook.sheets.filter(
+                        (sheet) => !sheet.hidden,
+                      ),
                       Ue = Be.findIndex((gt) => gt.id === fe.id),
                       Xe =
-                        Oe.key === "Home"
+                        event.key === "Home"
                           ? Be[0]
-                          : Oe.key === "End"
+                          : event.key === "End"
                             ? Be.at(-1)
                             : Be[
                                 (Ue +
-                                  (Oe.key === "ArrowRight"
+                                  (event.key === "ArrowRight"
                                     ? 1
                                     : Be.length - 1)) %
                                   Be.length
@@ -91,8 +93,8 @@ function EditorSheetTabs({
                       (navigationState.setTabBarSheetId(fe.id),
                       dialogState.setActiveDialogMode("sheets"));
                   },
-                  onContextMenu: (Oe) => {
-                    (Oe.preventDefault(),
+                  onContextMenu: (event) => {
+                    (event.preventDefault(),
                       cellEditActions.commitCellEdit() &&
                         (navigationState.setTabBarSheetId(fe.id),
                         dialogState.setActiveDialogMode("sheets")));
