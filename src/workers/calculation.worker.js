@@ -17,16 +17,16 @@ import {
   refreshCalculationReport,
 } from "../app/03-workbook-model/09-calculation-engine.js";
 
-function GR(workbook, t) {
-  let calculator = t.calculator,
+function GR(workbook, calculation) {
+  let calculator = calculation.calculator,
     spills = [];
   for (let sheet of workbook.sheets)
     try {
-      for (let i of calculator.getSpillEntries(sheet.id))
+      for (let spillEntry of calculator.getSpillEntries(sheet.id))
         spills.push({
-          ...i,
+          ...spillEntry,
           sheetId: sheet.id,
-          result: calculator.getTypedValue(sheet.id, i.address),
+          result: calculator.getTypedValue(sheet.id, spillEntry.address),
         });
     } catch {
       if (!calculator.getOperationalErrors().includes("#LIMIT!"))
@@ -34,9 +34,9 @@ function GR(workbook, t) {
     }
   return {
     inputSignature: getCalculationInputSignature(workbook),
-    report: t.report,
+    report: calculation.report,
     spills: spills,
-    spillMetadata: t.report.cells.map((cell) => ({
+    spillMetadata: calculation.report.cells.map((cell) => ({
       sheetId: cell.sheetId,
       address: cell.address,
       ...calculator.peekSpill(cell.sheetId, cell.address),
@@ -49,23 +49,33 @@ function GR(workbook, t) {
 }
 
 function HR() {
-  let e;
-  return (t) => {
-    let workbook = t.workbook;
+  let previousWorkbook;
+  return (request) => {
+    let workbook = request.workbook;
     try {
-      if (t.baseRevision !== undefined) {
-        if (!e || e.id !== workbook.id || e.revision !== t.baseRevision)
+      if (request.baseRevision !== undefined) {
+        if (
+          !previousWorkbook ||
+          previousWorkbook.id !== workbook.id ||
+          previousWorkbook.revision !== request.baseRevision
+        )
           throw Error("Stale calculation delta");
         workbook = {
           ...workbook,
           sheets: workbook.sheets.map((sheet) => {
-            let l = e.sheets.find((u) => u.id === sheet.id),
-              s = t.removedCells?.[sheet.id] ?? [];
-            if (!l) return sheet;
-            if (!Object.keys(sheet.cells).length && !s.length)
-              return { ...sheet, cells: l.cells };
-            let cells = { ...l.cells, ...sheet.cells };
-            for (let u of s) delete cells[u];
+            let matchingSheet = previousWorkbook.sheets.find(
+                (previousSheet) => previousSheet.id === sheet.id,
+              ),
+              removedCellAddresses = request.removedCells?.[sheet.id] ?? [];
+            if (!matchingSheet) return sheet;
+            if (
+              !Object.keys(sheet.cells).length &&
+              !removedCellAddresses.length
+            )
+              return { ...sheet, cells: matchingSheet.cells };
+            let cells = { ...matchingSheet.cells, ...sheet.cells };
+            for (let cellAddress of removedCellAddresses)
+              delete cells[cellAddress];
             return { ...sheet, cells: cells };
           }),
         };
@@ -81,22 +91,30 @@ function HR() {
           "#LIMIT! Calculation inputs exceed the working-data budget.",
         );
       (deepFreezeValue(workbook),
-        setExtensionCacheEntries(workbook, t.extensionAvailability ?? []),
-        e && (zie(e, workbook), carryCalculatorRecordForward(e, workbook)));
-      let n = t.force
+        setExtensionCacheEntries(workbook, request.extensionAvailability ?? []),
+        previousWorkbook &&
+          (zie(previousWorkbook, workbook),
+          carryCalculatorRecordForward(previousWorkbook, workbook)));
+      let calculation = request.force
           ? refreshCalculationReport(workbook)
           : getWorkbookCalculation(workbook),
-        i = GR(workbook, n);
-      if (estimateValueFootprintBytes(i, memoryBudgetBytes) > memoryBudgetBytes)
+        result = GR(workbook, calculation);
+      if (
+        estimateValueFootprintBytes(result, memoryBudgetBytes) >
+        memoryBudgetBytes
+      )
         throw Error(
           "#LIMIT! Calculation result payload exceeds the working-data budget.",
         );
-      return ((e = workbook), { id: t.id, result: i });
+      return (
+        (previousWorkbook = workbook),
+        { id: request.id, result: result }
+      );
     } catch (error) {
       return (
-        (e = undefined),
+        (previousWorkbook = undefined),
         {
-          id: t.id,
+          id: request.id,
           error:
             error instanceof Error && error.message.startsWith("#LIMIT!")
               ? error.message

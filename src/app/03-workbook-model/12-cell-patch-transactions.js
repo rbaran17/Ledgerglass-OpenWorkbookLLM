@@ -48,7 +48,7 @@ function applyCellPatchTransaction(
   patches,
   actor = "Preparer",
   action = "Edit cells",
-  o = {},
+  options = {},
 ) {
   if (!Array.isArray(patches) || patches.length > workbookLimits.maxPatches)
     return throwWithMessage(
@@ -57,8 +57,8 @@ function applyCellPatchTransaction(
   if (patches.length === 0) return workbook;
   (requireBoundedText(actor, "Actor", 100),
     requireBoundedText(action, "Action", 200));
-  const a = new Set();
-  let s;
+  const changedCellKeys = new Set();
+  let calculator;
   const changes = patches.map((patch) => {
       if (!isNonArrayObject(patch))
         return throwWithMessage("Invalid cell patch.");
@@ -79,11 +79,16 @@ function applyCellPatchTransaction(
         (cell?.raw ?? null) !== patch.cell?.raw ||
         !!cell?.literal != !!patch.cell?.literal
       ) {
-        s ??= calculateWorkbookWithSettings(workbook);
-        const k = s.getSpillAnchor(sheetOrThrow.id, address);
-        if (k && k !== address) {
+        calculator ??= calculateWorkbookWithSettings(workbook);
+        const spillAnchorAddress = calculator.getSpillAnchor(
+          sheetOrThrow.id,
+          address,
+        );
+        if (spillAnchorAddress && spillAnchorAddress !== address) {
           const patch = patches.find(
-            (patch) => patch.sheetId === sheetOrThrow.id && patch.address === k,
+            (patch) =>
+              patch.sheetId === sheetOrThrow.id &&
+              patch.address === spillAnchorAddress,
           );
           if (
             !patch ||
@@ -92,14 +97,14 @@ function applyCellPatchTransaction(
               patch.cell.raw.startsWith("="))
           )
             return throwWithMessage(
-              `Cell ${address} belongs to the array formula in ${k}. Edit the array formula instead.`,
+              `Cell ${address} belongs to the array formula in ${spillAnchorAddress}. Edit the array formula instead.`,
             );
         }
       }
-      const w = `${sheetOrThrow.id}:${address}`;
-      return a.has(w)
+      const cellKey = `${sheetOrThrow.id}:${address}`;
+      return changedCellKeys.has(cellKey)
         ? throwWithMessage("A transaction cannot change the same cell twice.")
-        : (a.add(w),
+        : (changedCellKeys.add(cellKey),
           {
             sheetId: sheetOrThrow.id,
             address: address,
@@ -109,29 +114,31 @@ function applyCellPatchTransaction(
             after: normalizeCellRecordInput(patch.cell),
           });
     }),
-    u = changes.filter((change) => !change.before).length;
+    newCellCount = changes.filter((change) => !change.before).length;
   if (
     workbook.sheets.reduce(
-      (p, m) =>
-        p +
-        (isDeepFrozenValue(m.cells)
-          ? (QU.get(m.cells) ?? Object.keys(m.cells).length)
-          : Object.keys(m.cells).length),
+      (populatedCellCount, sheet) =>
+        populatedCellCount +
+        (isDeepFrozenValue(sheet.cells)
+          ? (QU.get(sheet.cells) ?? Object.keys(sheet.cells).length)
+          : Object.keys(sheet.cells).length),
       0,
     ) +
-      u >
+      newCellCount >
     workbookLimits.maxCells
   )
     return throwWithMessage(
       "Workbook exceeds the 100,000 populated cell limit.",
     );
   const sheets = workbook.sheets.map((sheet) => {
-      const m = changes.filter((change) => change.sheetId === sheet.id);
-      if (!m.length) return sheet;
+      const sheetChanges = changes.filter(
+        (change) => change.sheetId === sheet.id,
+      );
+      if (!sheetChanges.length) return sheet;
       const cells = { ...sheet.cells };
       return (
-        m.forEach((g) => {
-          cells[g.address] = g.after;
+        sheetChanges.forEach((change) => {
+          cells[change.address] = change.after;
         }),
         { ...sheet, cells: cells }
       );
@@ -163,25 +170,29 @@ function applyCellPatchTransaction(
           );
       }
     }
-  const h = checkDataValidationBatch(
+  const validationWarningCount = checkDataValidationBatch(
     book,
     changes.filter(
       (change) =>
         change.before?.raw !== change.after.raw ||
         change.before?.literal !== change.after.literal,
     ),
-    o.validationApproval,
+    options.validationApproval,
   );
   if (
-    (h &&
-      (action = `${action.slice(0, 140)} (accepted ${h} validation warnings)`),
+    (validationWarningCount &&
+      (action = `${action.slice(0, 140)} (accepted ${validationWarningCount} validation warnings)`),
     workbook.events.length >= 2e3)
   )
     return throwWithMessage(
       "Change history has reached its 2,000 transaction limit. Export the workbook before starting a new workpaper.",
     );
   if (
-    workbook.events.reduce((p, m) => p + m.changes.length, 0) + changes.length >
+    workbook.events.reduce(
+      (changeCount, entry) => changeCount + entry.changes.length,
+      0,
+    ) +
+      changes.length >
     workbookLimits.maxCells
   )
     return throwWithMessage(
@@ -220,97 +231,107 @@ function applyBorderEditTransaction(
   workbook,
   sheetId,
   selectionAreas,
-  n,
-  o = {},
+  stylePatch,
+  options = {},
 ) {
-  o.readOnly && failWithMessage("This workbook is read-only.");
+  options.readOnly && failWithMessage("This workbook is read-only.");
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
   assertSheetUnprotected(sheetOrThrow);
-  const s = validateCellStyle(n),
-    d = enumerateSelectionCells(
+  const validatedStyle = validateCellStyle(stylePatch),
+    selectionAddresses = enumerateSelectionCells(
       typeof selectionAreas == "string" ? [selectionAreas] : selectionAreas,
     ),
-    sampleGridAddresses = new Set(d);
-  if (o.borders || Object.hasOwn(n, "borders") || Object.hasOwn(n, "border")) {
-    const h = d.map(_t);
-    (sheetOrThrow.merges ?? []).some((f) => {
-      const rangeAddress = parseRangeAddress(f);
-      return h.some(
-        (m) =>
-          m.row >= rangeAddress.firstRow &&
-          m.row <= rangeAddress.lastRow &&
-          m.col >= rangeAddress.firstCol &&
-          m.col <= rangeAddress.lastCol,
+    sampleGridAddresses = new Set(selectionAddresses);
+  if (
+    options.borders ||
+    Object.hasOwn(stylePatch, "borders") ||
+    Object.hasOwn(stylePatch, "border")
+  ) {
+    const selectionPositions = selectionAddresses.map(_t);
+    (sheetOrThrow.merges ?? []).some((mergeRange) => {
+      const rangeAddress = parseRangeAddress(mergeRange);
+      return selectionPositions.some(
+        (position) =>
+          position.row >= rangeAddress.firstRow &&
+          position.row <= rangeAddress.lastRow &&
+          position.col >= rangeAddress.firstCol &&
+          position.col <= rangeAddress.lastCol,
       );
     }) &&
       failWithMessage(
         "Unmerge the intersecting cells before applying border edges or presets.",
       );
   }
-  const patches = d.flatMap((address) => {
-    const f = sheetOrThrow.cells[address],
-      p = { ...f?.style, ...n, ...s };
-    (Object.hasOwn(n, "border") && delete p.borders,
-      o.borders &&
-        (p.borders = {
-          ...f?.style?.borders,
+  const patches = selectionAddresses.flatMap((address) => {
+    const existingCell = sheetOrThrow.cells[address],
+      mergedStyle = {
+        ...existingCell?.style,
+        ...stylePatch,
+        ...validatedStyle,
+      };
+    (Object.hasOwn(stylePatch, "border") && delete mergedStyle.borders,
+      options.borders &&
+        (mergedStyle.borders = {
+          ...existingCell?.style?.borders,
           ...buildBorderPresetStyles(
             address,
             sampleGridAddresses,
-            o.borders.preset,
-            o.borders.line,
+            options.borders.preset,
+            options.borders.line,
           ),
         }),
-      n.borders !== undefined &&
-        (p.borders = {
-          ...(o.borders ? p.borders : f?.style?.borders),
-          ...s.borders,
+      stylePatch.borders !== undefined &&
+        (mergedStyle.borders = {
+          ...(options.borders
+            ? mergedStyle.borders
+            : existingCell?.style?.borders),
+          ...validatedStyle.borders,
         }));
-    const m = validateCellStyle(p),
+    const nextStyle = validateCellStyle(mergedStyle),
       cell = {
-        ...(f ?? { raw: null }),
-        ...(Object.keys(m).length ? { style: m } : {}),
+        ...(existingCell ?? { raw: null }),
+        ...(Object.keys(nextStyle).length ? { style: nextStyle } : {}),
       };
     return (
-      Object.keys(m).length || delete cell.style,
-      !f && !Object.keys(m).length
+      Object.keys(nextStyle).length || delete cell.style,
+      !existingCell && !Object.keys(nextStyle).length
         ? []
-        : JSON.stringify(validateCellStyle(f?.style ?? {})) ===
-            JSON.stringify(m)
+        : JSON.stringify(validateCellStyle(existingCell?.style ?? {})) ===
+            JSON.stringify(nextStyle)
           ? []
-          : JSON.stringify(f) === JSON.stringify(cell)
+          : JSON.stringify(existingCell) === JSON.stringify(cell)
             ? []
             : [{ sheetId: sheetId, address: address, cell: cell }]
     );
   });
   if (!patches.length) return workbook;
-  const c = applyCellPatchTransaction(
+  const patchedWorkbook = applyCellPatchTransaction(
     workbook,
     patches,
     "Preparer",
     "Format cell styles",
   );
-  return { ...workbook, sheets: c.sheets };
+  return { ...workbook, sheets: patchedWorkbook.sheets };
 }
 function applyNumberFormatTransaction(
   workbook,
   sheetId,
   selectionAreas,
-  n,
-  o = {},
+  numberFormatInput,
+  options = {},
 ) {
-  o.readOnly && throwWorkbookError("This workbook is read-only.");
+  options.readOnly && throwWorkbookError("This workbook is read-only.");
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
   assertSheetUnprotected(sheetOrThrow);
-  const numberFormat = validateNumberFormatSettings(n),
-    d = enumerateSelectionCells(
+  const numberFormat = validateNumberFormatSettings(numberFormatInput),
+    selectionAddresses = enumerateSelectionCells(
       typeof selectionAreas == "string" ? [selectionAreas] : selectionAreas,
     ),
     numberFormatCode = buildNumberFormatCode(numberFormat),
-    patches = d.flatMap((address) => {
-      const f = sheetOrThrow.cells[address],
+    patches = selectionAddresses.flatMap((address) => {
+      const existingCell = sheetOrThrow.cells[address],
         cell = {
-          ...(f ?? { raw: null }),
+          ...(existingCell ?? { raw: null }),
           numberFormat: numberFormat,
           numFmt: numberFormatCode,
           format:
@@ -326,18 +347,18 @@ function applyNumberFormatTransaction(
                     ? "number"
                     : "general",
         };
-      return JSON.stringify(f) === JSON.stringify(cell)
+      return JSON.stringify(existingCell) === JSON.stringify(cell)
         ? []
         : [{ sheetId: sheetId, address: address, cell: cell }];
     });
   if (!patches.length) return workbook;
-  const c = applyCellPatchTransaction(
+  const patchedWorkbook = applyCellPatchTransaction(
     workbook,
     patches,
     "Preparer",
     "Format numbers",
   );
-  return { ...workbook, sheets: c.sheets };
+  return { ...workbook, sheets: patchedWorkbook.sheets };
 }
 function buildCanonicalWorkbookSnapshot(workbook) {
   const workbookModel = normalizeWorkbookModel(workbook, true);
