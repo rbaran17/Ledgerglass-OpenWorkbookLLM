@@ -7,12 +7,12 @@ import {
   PanelRightClose,
   Sparkles,
 } from "lucide-react";
-import { renderChecksPanel } from "./render-checks-panel.js";
-import { renderAssistantPanel } from "./render-assistant-panel.js";
+import { EditorChecksPanel } from "./editor-checks-panel.js";
+import { EditorAssistantPanel } from "./editor-assistant-panel.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { WorkbookCapacityLimits } from "../20-calculation-options-and-assistant.js";
 
-function renderSidePanel({
+function EditorSidePanel({
   selectionState,
   formulaEntryState,
   dialogState,
@@ -89,7 +89,7 @@ function renderSidePanel({
         i.jsxs("div", {
           className: "lg-panel-body",
           children: [
-            renderChecksPanel({
+            i.jsx(EditorChecksPanel, {
               dialogState,
               filterSortState,
               auditState,
@@ -104,7 +104,7 @@ function renderSidePanel({
               switchActiveWorksheet,
               runCurrentAuditAnalysis,
             }),
-            renderAssistantPanel({
+            i.jsx(EditorAssistantPanel, {
               selectionState,
               formulaEntryState,
               dialogState,
@@ -324,4 +324,4 @@ function renderSidePanel({
   );
 }
 
-export { renderSidePanel };
+export { EditorSidePanel };

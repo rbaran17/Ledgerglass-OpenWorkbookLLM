@@ -26,7 +26,7 @@ compiled application in `dist/` and is now the source the build uses.
   under `app/03-workbook-model/`. The main editor component,
   `app/56-main-worksheet-editor.js` (about 3,000 lines of state, effects and
   wiring), delegates to twenty modules under `app/56-main-worksheet-editor/`:
-  `render-*.js` build parts of the interface, `*-actions.js` hold the
+  `editor-*.js` are React components for parts of the interface (dialogs, ribbon, formula bar, grid, sheet tabs, status bar, side panel), `*-actions.js` hold the
   editor's commands and `editor-state.js` groups 85 of the editor's state
   declarations into 14 hooks by subject (persistence, selection, formula
   entry, find and replace, and so on). Each render and action module takes
@@ -75,7 +75,7 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 1. Reduce the coupling in `app/56-main-worksheet-editor/` further: move the
    derived values and effects that belong to one state slice into its hook,
-   then turn the render functions into components that take slices.
+   so the components take fewer inputs and can be memoised.
 2. Name the file-parser worker's own parsing code and reconcile the last
    near-duplicates (`importXlsxWorkbook`, `normalizeWorkbookModel`) with
    their application twins.

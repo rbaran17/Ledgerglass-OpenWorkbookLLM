@@ -24,11 +24,11 @@ import { createClipboardAndFindActions } from "./56-main-worksheet-editor/clipbo
 import { createRowColumnAndFillActions } from "./56-main-worksheet-editor/row-column-and-fill-actions.js";
 import { createGridInteractionActions } from "./56-main-worksheet-editor/grid-interaction-actions.js";
 import { createGridPaneRenderer } from "./56-main-worksheet-editor/render-grid-pane.js";
-import { renderWorkbookGrid } from "./56-main-worksheet-editor/render-workbook-grid.js";
-import { renderSidePanel } from "./56-main-worksheet-editor/render-side-panel.js";
+import { EditorWorkbookGrid } from "./56-main-worksheet-editor/editor-workbook-grid.js";
+import { EditorSidePanel } from "./56-main-worksheet-editor/editor-side-panel.js";
 import { WorksheetGridRow } from "./56-main-worksheet-editor/worksheet-grid-row.js";
-import { renderEditorDialogs } from "./56-main-worksheet-editor/render-dialogs.js";
-import { renderEditorRibbon } from "./56-main-worksheet-editor/render-ribbon.js";
+import { EditorDialogs } from "./56-main-worksheet-editor/editor-dialogs.js";
+import { EditorRibbonBar } from "./56-main-worksheet-editor/editor-ribbon-bar.js";
 
 import { saveBlobToFile } from "./13-consolidation-dialog.js";
 import { isFiniteNumber } from "./03-workbook-model.js";
@@ -2220,7 +2220,7 @@ function MainWorksheetEditor({
             (clipboardState.setMoveCellsSource(null), focusGridSurface());
           },
         }),
-      renderEditorDialogs({
+      i.jsx(EditorDialogs, {
         persistenceState,
         dialogState,
         navigationState,
@@ -2436,7 +2436,7 @@ function MainWorksheetEditor({
             lang: language("Import workbook file"),
             "data-ui-label": "Import workbook file",
           }),
-          renderEditorRibbon({
+          i.jsx(EditorRibbonBar, {
             selectionState,
             dialogState,
             filterSortState,
@@ -2644,7 +2644,7 @@ function MainWorksheetEditor({
           i.jsxs("div", {
             className: "lg-workarea",
             children: [
-              renderWorkbookGrid({
+              i.jsx(EditorWorkbookGrid, {
                 dialogState,
                 selectionState,
                 navigationState,
@@ -2703,7 +2703,7 @@ function MainWorksheetEditor({
                 moveSelectionAfterCommit,
                 renderGridPane,
               }),
-              renderSidePanel({
+              i.jsx(EditorSidePanel, {
                 selectionState,
                 formulaEntryState,
                 dialogState,
