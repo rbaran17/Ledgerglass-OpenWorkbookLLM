@@ -88,7 +88,7 @@ export interface TableHeaderSuggestion {
   requiresResolution: boolean;
 }
 
-/** The result of checking a column's values, from `setTableColumnDataType`. */
+/** The result of checking a column's values, from `checkTableColumnValues`. */
 export interface TableColumnTypeCheck {
   /** The type the values were checked against: the column's current type. */
   dataType: TableColumnDataType;
@@ -442,7 +442,7 @@ export function suggestTableHeaderName(
  * Counts the values in a table column that do not match the column's current type. It does not change the
  * workbook. A column with type "any" has no exceptions. Throws if the table or column is not found.
  */
-export function setTableColumnDataType(
+export function checkTableColumnValues(
   workbook: Workbook,
   sheetId: string,
   tableId: string,
@@ -510,7 +510,7 @@ export function createSavedFilterView(
  * Renames a saved filter view and returns a new workbook. Throws if the view does not exist or the name is not 1
  * to 80 characters.
  */
-export function addSavedFilterView(
+export function renameSavedFilterView(
   workbook: Workbook,
   viewId: string,
   newName: string,

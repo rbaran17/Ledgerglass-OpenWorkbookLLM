@@ -122,10 +122,10 @@ import { suggestTableHeaderName } from "@ledgerglass/workbook";
 suggestTableHeaderName(book, sheet.id, "A1:C1").map((s) => s.suggested); // ["Region", "Units", "Price"]
 ```
 
-### setTableColumnDataType
+### checkTableColumnValues
 
 ```ts
-function setTableColumnDataType(
+function checkTableColumnValues(
   workbook: Workbook,
   sheetId: string,
   tableId: string,
@@ -133,12 +133,12 @@ function setTableColumnDataType(
 ): TableColumnTypeCheck;
 ```
 
-Checks the values in a column against the column's current type and lists the ones that do not match. Despite the name, it sets nothing and does not change the workbook. A column of type `any` has no exceptions, and at most 500 data rows are checked. It throws if the table or column is not found.
+Checks the values in a column against the column's current type and lists the ones that do not match. It does not change the workbook. A column of type `any` has no exceptions, and at most 500 data rows are checked. It throws if the table or column is not found.
 
 ```js
-import { setTableColumnDataType } from "@ledgerglass/workbook";
+import { checkTableColumnValues } from "@ledgerglass/workbook";
 
-const check = setTableColumnDataType(
+const check = checkTableColumnValues(
   withTable,
   sheet.id,
   tableId,
@@ -280,10 +280,10 @@ const saved = createSavedFilterView(
 saved.savedFilterViews[0].population.matchedRows; // 1
 ```
 
-### addSavedFilterView
+### renameSavedFilterView
 
 ```ts
-function addSavedFilterView(
+function renameSavedFilterView(
   workbook: Workbook,
   viewId: string,
   newName: string,

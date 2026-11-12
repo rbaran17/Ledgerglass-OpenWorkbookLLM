@@ -5,7 +5,7 @@ export {
   applyTableOperationPreview,
   findTableForRange,
   suggestTableHeaderName,
-  setTableColumnDataType,
+  setTableColumnDataType as checkTableColumnValues,
   previewColumnTypeChange,
   applyColumnTypePreview,
   tableColumnDataTypes,
@@ -16,7 +16,7 @@ export {
   applyFilterConditions,
   buildFilterFacetValues,
   createSavedFilterView,
-  addSavedFilterView,
+  addSavedFilterView as renameSavedFilterView,
   removeSavedFilterView,
 } from "../app/03-workbook-model.js";
 

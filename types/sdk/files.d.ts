@@ -53,6 +53,7 @@ export interface DelimitedImportOptions {
    */
   columns?: Record<string, string>;
 }
+/** The values `importDelimitedFile` uses for any option left out. */
 export const delimitedImportDefaults: Readonly<
   Required<DelimitedImportOptions>
 >;

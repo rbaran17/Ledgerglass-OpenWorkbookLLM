@@ -4,7 +4,7 @@ import {
   getWorkbookCalculation,
 } from "../../src/app/03-workbook-model.js";
 import {
-  addSavedFilterView,
+  renameSavedFilterView,
   applyColumnTypePreview,
   applyFilterConditions,
   applyPivotViewChange,
@@ -26,7 +26,7 @@ import {
   refreshPivotTable,
   removeSavedFilterView,
   rewriteStructuredReferences,
-  setTableColumnDataType,
+  checkTableColumnValues,
   suggestTableHeaderName,
   tableColumnDataTypes,
 } from "../../src/sdk/tables.js";
@@ -389,7 +389,7 @@ describe("suggestTableHeaderName", () => {
   });
 });
 
-describe("setTableColumnDataType", () => {
+describe("checkTableColumnValues", () => {
   test("reports the values that do not match the column's type", () => {
     const book = salesBook();
     book.sheets[0].cells.B3 = { raw: "x" };
@@ -403,7 +403,7 @@ describe("setTableColumnDataType", () => {
         invalid: "keep",
       }),
     );
-    const check = setTableColumnDataType(
+    const check = checkTableColumnValues(
       typed,
       sheetId,
       table.id,
@@ -423,7 +423,7 @@ describe("setTableColumnDataType", () => {
     book.sheets[0].cells.B3 = { raw: "x" };
     const { workbook, sheetId, table } = tableBook2(book);
     expect(
-      setTableColumnDataType(workbook, sheetId, table.id, table.columns[1].id),
+      checkTableColumnValues(workbook, sheetId, table.id, table.columns[1].id),
     ).toMatchObject({
       dataType: "any",
       exceptions: [],
@@ -433,14 +433,14 @@ describe("setTableColumnDataType", () => {
   test("does not change the workbook", () => {
     const { workbook, sheetId, table } = tableBook();
     const before = JSON.stringify(workbook);
-    setTableColumnDataType(workbook, sheetId, table.id, table.columns[1].id);
+    checkTableColumnValues(workbook, sheetId, table.id, table.columns[1].id);
     expect(JSON.stringify(workbook)).toBe(before);
   });
 
   test("throws for a column that is not in the table", () => {
     const { workbook, sheetId, table } = tableBook();
     expect(() =>
-      setTableColumnDataType(workbook, sheetId, table.id, "missing"),
+      checkTableColumnValues(workbook, sheetId, table.id, "missing"),
     ).toThrow("Select an existing table column.");
   });
 });
@@ -881,7 +881,7 @@ describe("saved filter views", () => {
     });
   });
 
-  test("addSavedFilterView renames a view", () => {
+  test("renameSavedFilterView renames a view", () => {
     const { workbook, sheetId } = tableBook();
     const saved = createSavedFilterView(
       workbook,
@@ -889,7 +889,7 @@ describe("saved filter views", () => {
       northOnly,
       "North only",
     );
-    const renamed = addSavedFilterView(
+    const renamed = renameSavedFilterView(
       saved,
       saved.savedFilterViews[0].id,
       "Northern",
@@ -898,7 +898,7 @@ describe("saved filter views", () => {
     expect(saved.savedFilterViews[0].name).toBe("North only");
   });
 
-  test("addSavedFilterView refuses an empty name and an unknown view", () => {
+  test("renameSavedFilterView refuses an empty name and an unknown view", () => {
     const { workbook, sheetId } = tableBook();
     const saved = createSavedFilterView(
       workbook,
@@ -907,10 +907,10 @@ describe("saved filter views", () => {
       "North only",
     );
     const id = saved.savedFilterViews[0].id;
-    expect(() => addSavedFilterView(saved, id, "   ")).toThrow(
+    expect(() => renameSavedFilterView(saved, id, "   ")).toThrow(
       "Use a nonempty filter view name of up to 80 characters.",
     );
-    expect(() => addSavedFilterView(saved, "missing", "x")).toThrow(
+    expect(() => renameSavedFilterView(saved, "missing", "x")).toThrow(
       "This saved filter view no longer exists.",
     );
   });
@@ -1539,7 +1539,7 @@ describe("additional checks on refusals and limits", () => {
     });
     const big = sized.sheets[0].tables[0];
     expect(
-      setTableColumnDataType(sized, sheetId, big.id, big.columns[1].id),
+      checkTableColumnValues(sized, sheetId, big.id, big.columns[1].id),
     ).toMatchObject({
       checked: 500,
       total: 501,

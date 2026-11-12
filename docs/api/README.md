@@ -12,6 +12,8 @@ The model functions the library exports, by area. Every function listed on these
 | [Calculation](calculation.md) | Calculation settings and evidence, the calculator object, function-name catalogues, what-if |      22 |
 | [Node entry](node.md)         | Files by path and all calculated values at once, for scripts and servers                    |       3 |
 
+[All exports](exports.md) lists every public name on one page, with the entry points that export it.
+
 The editor component, the assistant adapters and the core functions (`createBlankWorkbook`, `normalizeWorkbookInput`, `getWorkbookCalculation`, `applyCellPatchTransaction`) are described in [Using Ledgerglass as a library](../LIBRARY.md). The agent-rendered workbook is in [Showing a workbook from an agent](../AGENT-UI.md), and the MCP server in [MCP](../MCP.md).
 
 ## Where to import from

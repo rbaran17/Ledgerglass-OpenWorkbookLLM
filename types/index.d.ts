@@ -94,6 +94,7 @@ export interface CellPatch {
   cell: Cell;
 }
 
+/** The size limits the model enforces: rows, columns, cells, file sizes and assistant selection sizes. */
 export const workbookLimits: Readonly<{
   maxRows: number;
   maxCols: number;
@@ -106,9 +107,11 @@ export const workbookLimits: Readonly<{
   maxPatches: number;
 }>;
 
+/** Returns a new workbook with one empty sheet. */
 export function createBlankWorkbook(name?: string): Workbook;
 /** Validates and completes workbook data, for example parsed native JSON. Throws if it is invalid. */
 export function normalizeWorkbookInput(input: unknown): Workbook;
+/** Calculates the workbook (or reuses the cached calculation) and returns the calculator and its report. */
 export function getWorkbookCalculation(workbook: Workbook): {
   calculator: Calculator;
   report: CalculationReport;
@@ -121,6 +124,7 @@ export function applyCellPatchTransaction(
   action?: string,
   options?: Record<string, unknown>,
 ): Workbook;
+/** Returns a normalised copy of the workbook suitable for comparing or hashing. */
 export function buildCanonicalWorkbookSnapshot(workbook: Workbook): Workbook;
 /** Moves the relative references in a formula. A reference pushed off the grid becomes "#REF!". */
 export function shiftFormulaReferences(
@@ -162,6 +166,7 @@ export function resolveAssistantSelection(
   workbook: Workbook,
   selection: AssistantSelection,
 ): string[];
+/** Builds what an assistant may see for an approved selection: the cells, their values and identifiers. Throws if the selection is not allowed. */
 export function buildAssistantSelectionContext(
   workbook: Workbook,
   selection: AssistantSelection,
@@ -193,6 +198,7 @@ export interface AssistantAdapter {
 /** The built-in demonstration adapter. It calls no model and no network. */
 export const localDemoAdapter: AssistantAdapter;
 
+/** Returns an assistant adapter that asks your own server for a proposal. */
 export function createHttpAdapter(options: {
   /** Your server's URL. It receives `{ prompt, context, request }` and returns a proposal. */
   endpoint: string;
