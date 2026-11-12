@@ -1,3 +1,4 @@
+import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
 import {
   X,
   ListTree,
@@ -1386,25 +1387,11 @@ function ReviewToolsPanel(e) {
     }),
   });
 }
-const Aj = (e) => {
-    try {
-      const r = parseRangeAddress(e);
-      return r.lastCol - r.firstCol < 500
-        ? Array.from(
-            { length: r.lastCol - r.firstCol + 1 },
-            (t, n) => r.firstCol + n,
-          )
-        : [];
-    } catch {
-      return [];
-    }
-  },
-  formatCellValueLabel = (e) =>
+const formatCellValueLabel = (e) =>
     e === null ? "Blank" : typeof e == "string" ? JSON.stringify(e) : String(e),
   comparatorSymbols = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
 
 export {
-  Aj,
   ReviewToolsPanel,
   comparatorSymbols,
   OutlineToolsPanel,

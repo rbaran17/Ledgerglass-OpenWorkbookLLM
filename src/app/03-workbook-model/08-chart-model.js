@@ -1,3 +1,13 @@
+import {
+  isNonArrayObject,
+  failWithMessage,
+  throwWorkbookError,
+} from "./01-cell-styles-and-themes.js";
+import {
+  isPlainDataObject,
+  isFiniteNumber,
+} from "./04-pivot-tables-and-pictures.js";
+import { isNullOrEmptyValue } from "./03-defined-names.js";
 import { workbookLimits } from "../02-financial-functions.js";
 import { cn } from "./01-cell-styles-and-themes.js";
 import {
@@ -7,8 +17,6 @@ import {
   Kne,
   validateDrawingNumber,
   throwXlsxDefinedNameError,
-  isRecordObject,
-  Rl,
   Yne,
   validateXmlSafeName,
   validateNameSheetReferences,
@@ -24,7 +32,6 @@ import {
   pivotAggregateOperations,
   inspectPictureDataUrl,
   computePivotRefreshFingerprint,
-  throwWorkbookError,
   findSourceFieldIndex,
   validatePictureEvidence,
   basicAggregateOperations,
@@ -58,7 +65,7 @@ function serializeDefinedNames(e, r) {
 function inspectChartSource(e, r, t) {
   var I, O;
   (r.kind !== "chart" || !supportedChartKinds.includes(r.chart)) &&
-    Rl("Choose a supported chart type.");
+    failWithMessage("Choose a supported chart type.");
   const n = r.chart,
     o = r.range ?? "",
     a = parseRangeAddress(o),
@@ -66,11 +73,13 @@ function inspectChartSource(e, r, t) {
   (a.lastRow >= e.rowCount ||
     a.lastCol >= e.colCount ||
     (a.lastRow - a.firstRow + 1) * (a.lastCol - a.firstCol + 1) > 500) &&
-    Rl("Select at most 500 cells inside this worksheet for a chart.");
+    failWithMessage(
+      "Select at most 500 cells inside this worksheet for a chart.",
+    );
   const d = a.firstRow + (r.headers ? 1 : 0),
     u = a.firstCol + (a.lastCol > a.firstCol ? 1 : 0);
   a.lastCol - u + 1 > 20 &&
-    Rl(
+    failWithMessage(
       "Chart inspection supports at most 20 value columns; narrow the source range.",
     );
   const l = (z, V) => {
@@ -97,12 +106,12 @@ function inspectChartSource(e, r, t) {
     });
   ((I = s.series) != null &&
     I.some((z) => z.column < u + 1 || z.column > a.lastCol + 1) &&
-    Rl(
+    failWithMessage(
       "A selected chart series no longer exists in its source range. Re-select series.",
     ),
     (O = s.includedRows) != null &&
       O.some((z) => z < d + 1 || z > a.lastRow + 1) &&
-      Rl(
+      failWithMessage(
         "A chart filter row is outside its source range. Reset the row filter.",
       ));
   const h = cn(e, "row"),
@@ -324,7 +333,7 @@ function validateDrawingObjects(e, r) {
     o = 0;
   for (const s of e)
     if (
-      isRecordObject(s) &&
+      isNonArrayObject(s) &&
       s.kind === "picture" &&
       typeof s.dataURL == "string"
     ) {
@@ -343,7 +352,7 @@ function validateDrawingObjects(e, r) {
     }
   const a = e.map((s) => {
     if (
-      !isRecordObject(s) ||
+      !isNonArrayObject(s) ||
       !["picture", "shape", "chart"].includes(String(s.kind))
     )
       throw new Error("Invalid worksheet drawing object.");
@@ -414,13 +423,7 @@ function setSheetDrawingObjects(e, r, t, n = {}) {
       : { ...e, sheets: e.sheets.map((s) => (s.id !== r ? s : a)) }
   );
 }
-const dl = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    (Object.getPrototypeOf(e) === Object.prototype ||
-      Object.getPrototypeOf(e) === null),
-  xf = (e, r, t = 255) =>
+const xf = (e, r, t = 255) =>
     typeof e == "string" && e.trim() && e.length <= t
       ? e
       : throwWorkbookError(`${r} must contain 1–${t} characters.`),
@@ -432,15 +435,13 @@ const dl = (e) =>
   Cn = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   Dp = (e, r, t) =>
     r >= e.firstRow && r <= e.lastRow && t >= e.firstCol && t <= e.lastCol,
-  Qf = (e, r) =>
+  rangesIntersect = (e, r) =>
     e.firstRow <= r.lastRow &&
     e.lastRow >= r.firstRow &&
     e.firstCol <= r.lastCol &&
     e.lastCol >= r.firstCol,
   measureRangeArea = (e) =>
     (e.lastRow - e.firstRow + 1) * (e.lastCol - e.firstCol + 1),
-  Mg = (e) => e === null || e === "",
-  tg = (e) => typeof e == "number" && Number.isFinite(e),
   tablePaletteColors = {
     blue: ["#174a7e", "#e8f1fa"],
     green: ["#176344", "#e9f3ed"],
@@ -498,7 +499,8 @@ function validateFieldList(e, r) {
   );
 }
 function normalizeSourceReference(e) {
-  dl(e) || throwWorkbookError("A source worksheet and range are required.");
+  isPlainDataObject(e) ||
+    throwWorkbookError("A source worksheet and range are required.");
   const r = {
     sheetId: requireMetadataId(e.sheetId),
     range: toA1RangeAddress(xf(e.range, "Source range", 50)),
@@ -514,7 +516,7 @@ function normalizeSourceFilters(e) {
     : ((!Array.isArray(e) || e.length > 100) &&
         throwWorkbookError("Use at most 100 source filters."),
       e.map((r) => {
-        (!dl(r) ||
+        (!isPlainDataObject(r) ||
           ![
             "equals",
             "notEquals",
@@ -546,7 +548,7 @@ function normalizeSourceFilters(e) {
 }
 function normalizeOutputDestination(e) {
   if (e === undefined) return;
-  dl(e) || throwWorkbookError("Invalid output destination.");
+  isPlainDataObject(e) || throwWorkbookError("Invalid output destination.");
   const r =
       e.address === undefined ? "A1" : xf(e.address, "Output address", 20),
     t = _t(r);
@@ -561,12 +563,13 @@ function normalizeOutputDestination(e) {
   };
 }
 function normalizePivotDefinition(e) {
-  (dl(e) || throwWorkbookError("Invalid pivot definition."),
+  (isPlainDataObject(e) || throwWorkbookError("Invalid pivot definition."),
     (!Array.isArray(e.values) || !e.values.length || e.values.length > 100) &&
       throwWorkbookError("Choose between 1 and 100 pivot value fields."));
   const r = e.values.map(
     (o) => (
-      (!dl(o) || !pivotAggregateOperations.includes(o.operation)) &&
+      (!isPlainDataObject(o) ||
+        !pivotAggregateOperations.includes(o.operation)) &&
         throwWorkbookError(
           "Invalid pivot aggregation. Choose sum, count, average, min, max or distinctCount.",
         ),
@@ -592,7 +595,7 @@ function normalizePivotDefinition(e) {
       throwWorkbookError("Use at most 100 date groups."));
   const t = (e.dateGroups ?? []).map(
     (o) => (
-      (!dl(o) ||
+      (!isPlainDataObject(o) ||
         !["year", "quarter", "month"].includes(String(o.unit)) ||
         !["iso", "1900", "1904"].includes(String(o.dateSystem))) &&
         throwWorkbookError(
@@ -612,7 +615,7 @@ function normalizePivotDefinition(e) {
       throwWorkbookError("Use at most 100 calculated fields."));
   const n = (e.calculatedFields ?? []).map(
     (o) => (
-      (!dl(o) ||
+      (!isPlainDataObject(o) ||
         !["add", "subtract", "multiply", "divide"].includes(
           String(o.operation),
         ) ||
@@ -652,12 +655,13 @@ function normalizePivotDefinition(e) {
   );
 }
 function normalizeQueryDefinition(e) {
-  dl(e) || throwWorkbookError("Invalid query definition.");
+  isPlainDataObject(e) || throwWorkbookError("Invalid query definition.");
   const r = validateFieldList(e.fields, "Selected fields");
   r.length || throwWorkbookError("Choose at least one output field.");
   const t = {};
   if (e.rename !== undefined) {
-    dl(e.rename) || throwWorkbookError("Rename fields must be a name map.");
+    isPlainDataObject(e.rename) ||
+      throwWorkbookError("Rename fields must be a name map.");
     for (const [s, d] of Object.entries(e.rename))
       (r.includes(s) ||
         throwWorkbookError("Only selected fields can be renamed."),
@@ -670,7 +674,7 @@ function normalizeQueryDefinition(e) {
   }
   let n;
   (e.sort !== undefined &&
-    ((!dl(e.sort) ||
+    ((!isPlainDataObject(e.sort) ||
       !["ascending", "descending"].includes(String(e.sort.direction))) &&
       throwWorkbookError("Invalid query sort."),
     (n = {
@@ -682,7 +686,7 @@ function normalizeQueryDefinition(e) {
       throwWorkbookError("Use at most 100 derived fields."));
   const o = (e.derived ?? []).map(
       (s) => (
-        (!dl(s) ||
+        (!isPlainDataObject(s) ||
           ![
             "add",
             "subtract",
@@ -731,7 +735,7 @@ function normalizeQueryDefinition(e) {
   );
 }
 function normalizeTableDefinitions(e, r) {
-  if (dl(e)) {
+  if (isPlainDataObject(e)) {
     if (e.tables !== undefined) {
       (!Array.isArray(e.tables) || e.tables.length > workbookLimits.maxCells) &&
         throwWorkbookError("Tables must be a bounded list.");
@@ -739,18 +743,18 @@ function normalizeTableDefinitions(e, r) {
         n = new Set();
       r.tables = e.tables.map((s) => {
         var p;
-        (!dl(s) ||
+        (!isPlainDataObject(s) ||
           !Array.isArray(s.columns) ||
           typeof s.showTotals != "boolean" ||
           !["blue", "green", "gray"].includes(String(s.style)) ||
-          !dl(s.totals)) &&
+          !isPlainDataObject(s.totals)) &&
           throwWorkbookError("Invalid table metadata.");
         const d = requireMetadataId(s.id),
           u = validateTableName(s.name),
           l = toA1RangeAddress(xf(s.range, "Table range", 50)),
           c = resolveSourceRange(l, r);
         ((p = r.merges) != null &&
-          p.some((m) => Qf(c, parseRangeAddress(m))) &&
+          p.some((m) => rangesIntersect(c, parseRangeAddress(m))) &&
           throwWorkbookError(
             "A table cannot overlap merged cells. Unmerge the source first.",
           ),
@@ -765,7 +769,7 @@ function normalizeTableDefinitions(e, r) {
             ));
         const h = s.columns.map(
           (m) => (
-            dl(m) || throwWorkbookError("Invalid table column."),
+            isPlainDataObject(m) || throwWorkbookError("Invalid table column."),
             {
               id: requireMetadataId(m.id),
               name: validateColumnName(m.name),
@@ -829,7 +833,8 @@ function normalizeTableDefinitions(e, r) {
         throwWorkbookError("Analysis definitions must be a bounded list.");
       const n = new Set(),
         o = e[t].map((a) => {
-          dl(a) || throwWorkbookError("Invalid analysis metadata.");
+          isPlainDataObject(a) ||
+            throwWorkbookError("Invalid analysis metadata.");
           const s =
               t === "pivots"
                 ? normalizePivotDefinition(a)
@@ -1077,9 +1082,9 @@ function filterSourceRows(e, r) {
         s = o.value ?? null;
       switch (o.operator) {
         case "blank":
-          return Mg(a);
+          return isNullOrEmptyValue(a);
         case "notBlank":
-          return !Mg(a);
+          return !isNullOrEmptyValue(a);
         case "contains":
           return String(a ?? "")
             .toLocaleLowerCase()
@@ -1096,11 +1101,11 @@ function filterSourceRows(e, r) {
           );
         default:
           return (
-            tg(s) ||
+            isFiniteNumber(s) ||
               throwWorkbookError(
                 "Numeric comparisons require a numeric filter value.",
               ),
-            tg(a)
+            isFiniteNumber(a)
               ? o.operator === "gt"
                 ? a > s
                 : o.operator === "gte"
@@ -1257,23 +1262,20 @@ export {
   resolveSourceRange,
   tableDataBodyRange,
   setSheetDrawingObjects,
-  Mg,
   normalizeQueryDefinition,
-  Qf,
+  rangesIntersect,
   applyTableStyleToCells,
   inspectChartSource,
   toA1RangeAddress,
   collectRangeValues,
   checkStructuralEditImpact,
   validateTableName,
-  dl,
   serializeDefinedNames,
   normalizeSourceReference,
   buildTableTotalCell,
   filterSourceRows,
   measureChartSelection,
   validateColumnName,
-  tg,
   normalizePivotDefinition,
   buildTableCellEntries,
   validateDrawingObjects,

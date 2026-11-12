@@ -1,3 +1,4 @@
+import { isPlainObjectValue, throwWorkbookError } from "./03-workbook-model.js";
 import ne from "react";
 import i from "react/jsx-runtime";
 import {
@@ -36,20 +37,12 @@ import {
   shiftFormulaReferences,
 } from "./03-workbook-model.js";
 
-function throwCellEditError(e) {
-  throw new Error(e);
-}
 const formatCellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   formatRangeAddress = (e, r, t, n) => {
     const o = formatCellAddress(e, r),
       a = formatCellAddress(e + t - 1, r + n - 1);
     return o === a ? o : `${o}:${a}`;
-  },
-  isPlainObjectValue = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e));
+  };
 function eI(e) {
   return (
     e &&
@@ -88,8 +81,8 @@ function cellContentsMatch(e, r) {
 function assertWorkbookWritable(e) {
   (e !== undefined &&
     typeof e != "boolean" &&
-    throwCellEditError("Read-only must be boolean."),
-    e && throwCellEditError("This workbook is read-only."));
+    throwWorkbookError("Read-only must be boolean."),
+    e && throwWorkbookError("This workbook is read-only."));
 }
 function validateClipboardSnapshot(e) {
   (!isPlainObjectValue(e) ||
@@ -110,16 +103,16 @@ function validateClipboardSnapshot(e) {
     typeof e.sourceRange != "string" ||
     !Array.isArray(e.cells) ||
     e.cells.length !== e.rowCount * e.colCount) &&
-    throwCellEditError("Invalid or oversized internal clipboard snapshot.");
+    throwWorkbookError("Invalid or oversized internal clipboard snapshot.");
   const r = parseRangeAddress(e.sourceRange);
   (r.lastRow - r.firstRow + 1 !== e.rowCount ||
     r.lastCol - r.firstCol + 1 !== e.colCount) &&
-    throwCellEditError("Clipboard dimensions do not match its source range.");
+    throwWorkbookError("Clipboard dimensions do not match its source range.");
   const t = e.cells.map((n, o) => {
     (!isPlainObjectValue(n) ||
       n.rowOffset !== Math.floor(o / e.colCount) ||
       n.colOffset !== o % e.colCount) &&
-      throwCellEditError(
+      throwWorkbookError(
         "Clipboard cells must form a complete row-major rectangle.",
       );
     const a = stripCellDecorations(normalizeCellRecordInput(n.cell)),
@@ -153,9 +146,9 @@ function buildClipboardSnapshot(e, r, t) {
     a = o.lastRow - o.firstRow + 1,
     s = o.lastCol - o.firstCol + 1;
   (a * s > workbookLimits.maxPatches &&
-    throwCellEditError("Copy at most 500 cells into the internal clipboard."),
+    throwWorkbookError("Copy at most 500 cells into the internal clipboard."),
     (o.lastRow >= n.rowCount || o.lastCol >= n.colCount) &&
-      throwCellEditError("The copied range exceeds the worksheet."));
+      throwWorkbookError("The copied range exceeds the worksheet."));
   const d = calculateWorkbookWithSettings(e),
     u = [];
   for (let l = 0; l < a; l++)
@@ -191,7 +184,7 @@ function buildCellChangePreview(e, r, t, n, o = false) {
   (assertWorkbookWritable(n),
     assertSheetUnprotected(findSheetOrThrow(e, t.targetSheetId)),
     r.length > workbookLimits.maxPatches &&
-      throwCellEditError(
+      throwWorkbookError(
         "A fill or paste operation may change at most 500 cells.",
       ));
   const a = r.map((c) => ({
@@ -241,7 +234,7 @@ function applyCellChangePreview(e, r, t = {}) {
       r.workbookId !== e.id ||
       r.revision !== e.revision ||
       r.snapshotGuard !== JSON.stringify(e)) &&
-      throwCellEditError(
+      throwWorkbookError(
         "The workbook changed after this preview. Create a new preview before applying it.",
       ),
     assertSheetUnprotected(findSheetOrThrow(e, r.targetSheetId)));
@@ -262,15 +255,15 @@ function buildPastePreview(e, r, t, n, o = {}) {
     c = o.operation ?? "none";
   ((!["all", "values", "formulas", "formats"].includes(l) ||
     !["none", "add", "subtract", "multiply", "divide"].includes(c)) &&
-    throwCellEditError(
+    throwWorkbookError(
       "Choose a supported paste mode and arithmetic operation.",
     ),
     [o.transpose, o.skipBlanks].some(
       (k) => k !== undefined && typeof k != "boolean",
-    ) && throwCellEditError("Transpose and skip blanks must be boolean."),
+    ) && throwWorkbookError("Transpose and skip blanks must be boolean."),
     c !== "none" &&
       (l === "formats" || l === "formulas") &&
-      throwCellEditError(
+      throwWorkbookError(
         "Arithmetic paste requires All or Values mode; its results are numeric values.",
       ),
     a.sourceWorkbookId !== e.id &&
@@ -281,7 +274,7 @@ function buildPastePreview(e, r, t, n, o = {}) {
           k.cell.raw.startsWith("=") &&
           !k.cell.literal,
       ) &&
-      throwCellEditError(
+      throwWorkbookError(
         "Use Values paste for formulas copied from a different workbook.",
       ));
   const h = o.transpose ? a.colCount : a.rowCount,
@@ -290,13 +283,13 @@ function buildPastePreview(e, r, t, n, o = {}) {
     m = p ? h : d.lastRow - d.firstRow + 1,
     v = p ? f : d.lastCol - d.firstCol + 1;
   ((m % h || v % f) &&
-    throwCellEditError(
+    throwWorkbookError(
       "The target rectangle must be a whole multiple of the copied rows and columns.",
     ),
     m * v > workbookLimits.maxPatches &&
-      throwCellEditError("Paste into at most 500 target cells."),
+      throwWorkbookError("Paste into at most 500 target cells."),
     (d.firstRow + m > s.rowCount || d.firstCol + v > s.colCount) &&
-      throwCellEditError(
+      throwWorkbookError(
         "The pasted cells would exceed the worksheet boundary.",
       ));
   const g = formatRangeAddress(d.firstRow, d.firstCol, m, v),
@@ -313,7 +306,7 @@ function buildPastePreview(e, r, t, n, o = {}) {
         d.firstRow === F.firstRow &&
         d.firstCol === F.firstCol
       ) &&
-      throwCellEditError(
+      throwWorkbookError(
         "Unmerge the target area before pasting a block of cells or editing a covered cell.",
       );
   }
@@ -365,12 +358,12 @@ function buildPastePreview(e, r, t, n, o = {}) {
           !Number.isFinite(C) ||
           typeof N != "number" ||
           !Number.isFinite(N)) &&
-          throwCellEditError(
+          throwWorkbookError(
             `Arithmetic paste requires numbers or blanks at ${V}.`,
           ),
           c === "divide" &&
             C === 0 &&
-            throwCellEditError(
+            throwWorkbookError(
               `Arithmetic paste would divide by zero at ${V}.`,
             ));
         const R =
@@ -382,7 +375,7 @@ function buildPastePreview(e, r, t, n, o = {}) {
                 ? N * C
                 : N / C;
         (Number.isFinite(R) ||
-          throwCellEditError(`Arithmetic paste would overflow at ${V}.`),
+          throwWorkbookError(`Arithmetic paste would overflow at ${V}.`),
           (_ = { ..._, raw: R }),
           delete _.literal);
       }
@@ -404,36 +397,24 @@ function buildPastePreview(e, r, t, n, o = {}) {
     o.deferValidationWarnings,
   );
 }
-function applyPastePreview(e, r, t = {}) {
+function applyCellPreview(e, r, t = {}) {
   return applyCellChangePreview(e, r, t);
 }
-function throwFillError(e) {
-  throw new Error(e);
-}
-const formatCellReference = (e, r) => `${columnIndexToLetters(r)}${e + 1}`;
+
 function validateFillDirection(e) {
   return (
     ["down", "right", "up", "left"].includes(e) ||
-      throwFillError("Choose a supported fill direction."),
+      throwWorkbookError("Choose a supported fill direction."),
     e
   );
 }
 function formatRangeBoundsAddress(e) {
   const r = parseRangeAddress(e),
-    t = formatCellReference(r.firstRow, r.firstCol),
-    n = formatCellReference(r.lastRow, r.lastCol);
+    t = formatCellAddress(r.firstRow, r.firstCol),
+    n = formatCellAddress(r.lastRow, r.lastCol);
   return t === n ? t : `${t}:${n}`;
 }
-function withCellDecorations(e, r) {
-  return {
-    ...e,
-    ...(r?.note !== undefined ? { note: r.note } : {}),
-    ...(r?.hyperlink !== undefined
-      ? { hyperlink: structuredClone(r.hyperlink) }
-      : {}),
-    ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
-  };
-}
+
 function cellContentsDiffer(e, r) {
   return (
     JSON.stringify(normalizeCellRecordInput(e ?? { raw: null })) !==
@@ -470,7 +451,8 @@ function assertFillTargetUnmerged(e, r, t) {
         d.col <= a.lastCol &&
         (d.row !== a.firstRow || d.col !== a.firstCol)
       );
-    }) && throwFillError("Unmerge covered target cells before filling them.");
+    }) &&
+      throwWorkbookError("Unmerge covered target cells before filling them.");
   }
 }
 function buildFillPreview(e, r, t, n, o = {}) {
@@ -478,13 +460,13 @@ function buildFillPreview(e, r, t, n, o = {}) {
     s = findSheetOrThrow(e, r),
     d = parseRangeAddress(t);
   (d.lastRow >= s.rowCount || d.lastCol >= s.colCount) &&
-    throwFillError("The fill range exceeds the worksheet.");
+    throwWorkbookError("The fill range exceeds the worksheet.");
   const u = a === "down" || a === "up",
     l = d.lastRow - d.firstRow + 1,
     c = d.lastCol - d.firstCol + 1,
     h = u ? (l - 1) * c : (c - 1) * l;
   h > workbookLimits.maxPatches &&
-    throwFillError("Fill at most 500 destination cells.");
+    throwWorkbookError("Fill at most 500 destination cells.");
   const f = a === "up" ? d.lastRow : d.firstRow,
     p = a === "left" ? d.lastCol : d.firstCol,
     m = [],
@@ -499,14 +481,14 @@ function buildFillPreview(e, r, t, n, o = {}) {
         if (u ? y === f : w === p) continue;
         const E = u ? f : y,
           A = u ? w : p,
-          k = formatCellReference(y, w);
+          k = formatCellAddress(y, w);
         v.push(k);
-        const F = buildFillCellPatches(s, formatCellReference(E, A), g, b);
+        const F = buildFillCellPatches(s, formatCellAddress(E, A), g, b);
         typeof F.raw == "string" &&
           F.raw.startsWith("=") &&
           !F.literal &&
           (F.raw = shiftFormulaReferences(F.raw, y - E, w - A));
-        const I = normalizeCellRecordInput(withCellDecorations(F, s.cells[k]));
+        const I = normalizeCellRecordInput(mergeCellDecorations(F, s.cells[k]));
         cellContentsDiffer(s.cells[k], I) &&
           m.push({ sheetId: r, address: k, cell: I });
       }
@@ -556,14 +538,14 @@ function parseSeriesSeedDate(e, r = "1900") {
   if (typeof e == "number")
     return (
       (!Number.isSafeInteger(e) || e < 0 || e > dateSystemMaxSerial(r)) &&
-        throwFillError(
+        throwWorkbookError(
           `Date values must be whole Excel ${r} serials between 0 and ${dateSystemMaxSerial(r)}.`,
         ),
       e
     );
   if (
     ((typeof e != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e)) &&
-      throwFillError(
+      throwWorkbookError(
         "Enter a date as YYYY-MM-DD or a whole Excel date serial.",
       ),
     e === "1900-02-29" && r === "1900")
@@ -575,14 +557,14 @@ function parseSeriesSeedDate(e, r = "1900") {
     (a.getUTCFullYear() !== t ||
       a.getUTCMonth() !== n - 1 ||
       a.getUTCDate() !== o) &&
-      throwFillError("The series date is not a valid calendar date."),
+      throwWorkbookError("The series date is not a valid calendar date."),
     parseSeriesSeedDate(dateToExcelSerial(a) - dateSystemSerialOffset(r), r)
   );
 }
 function stepSeriesDateSerial(e, r, t, n) {
   if (
     (Number.isSafeInteger(r) ||
-      throwFillError("The date step exceeds safe integer limits."),
+      throwWorkbookError("The date step exceeds safe integer limits."),
     !r)
   )
     return e;
@@ -594,7 +576,7 @@ function stepSeriesDateSerial(e, r, t, n) {
     );
   }
   e === 60 &&
-    throwFillError(
+    throwWorkbookError(
       "Calendar and weekday series require a real calendar seed; use Days for the fictitious 1900-02-29 serial.",
     );
   const o = excelSerialToDate(e);
@@ -634,37 +616,37 @@ function buildSeriesPreview(e, r, t, n) {
     s = parseRangeAddress(t),
     d = o === "down" || o === "up";
   (["number", "date"].includes(n.kind) ||
-    throwFillError("Choose a numeric or date series."),
+    throwWorkbookError("Choose a numeric or date series."),
     ((d && s.firstCol !== s.lastCol) || (!d && s.firstRow !== s.lastRow)) &&
-      throwFillError(
+      throwWorkbookError(
         "Select one column for vertical series or one row for horizontal series.",
       ),
     (s.lastRow >= a.rowCount || s.lastCol >= a.colCount) &&
-      throwFillError("The series range exceeds the worksheet."));
+      throwWorkbookError("The series range exceeds the worksheet."));
   const u = d ? s.lastRow - s.firstRow + 1 : s.lastCol - s.firstCol + 1;
   u > workbookLimits.maxPatches &&
-    throwFillError("A series may contain at most 500 target cells.");
+    throwWorkbookError("A series may contain at most 500 target cells.");
   const l = o === "up" ? s.lastRow : s.firstRow,
     c = o === "left" ? s.lastCol : s.firstCol,
-    h = formatCellReference(l, c),
+    h = formatCellAddress(l, c),
     f = stripCellDecorations(a.cells[h]),
     p = n.step ?? 1;
   (typeof p != "number" ||
     !Number.isFinite(p) ||
     p === 0 ||
     (n.kind === "date" && !Number.isSafeInteger(p))) &&
-    throwFillError(
+    throwWorkbookError(
       "Series step must be a nonzero finite number; date steps must be whole numbers.",
     );
   const m = n.dateUnit ?? "day",
     v = n.monthPolicy ?? "preserveDay";
   (!["day", "weekday", "month", "year"].includes(m) ||
     !["preserveDay", "endOfMonth"].includes(v)) &&
-    throwFillError("Choose a supported date unit and month policy.");
+    throwWorkbookError("Choose a supported date unit and month policy.");
   const g = n.start ?? calculateWorkbookWithSettings(e)(r, h);
   typeof g != "number" &&
     typeof g != "string" &&
-    throwFillError(
+    throwWorkbookError(
       "The directional seed must contain a number or date, or supply a start value.",
     );
   const b =
@@ -672,7 +654,7 @@ function buildSeriesPreview(e, r, t, n) {
         ? parseSeriesSeedDate(g, e.datePolicy?.dateSystem)
         : typeof g == "number" && Number.isFinite(g)
           ? g
-          : throwFillError(
+          : throwWorkbookError(
               "Numeric series require a finite numeric start value.",
             ),
     y =
@@ -682,12 +664,12 @@ function buildSeriesPreview(e, r, t, n) {
           ? parseSeriesSeedDate(n.stop, e.datePolicy?.dateSystem)
           : typeof n.stop == "number" && Number.isFinite(n.stop)
             ? n.stop
-            : throwFillError(
+            : throwWorkbookError(
                 "Numeric series require a finite numeric stop value.",
               );
   y !== undefined &&
     ((p > 0 && y < b) || (p < 0 && y > b)) &&
-    throwFillError("The stop value is opposite the series step direction.");
+    throwWorkbookError("The stop value is opposite the series step direction.");
   const w = [],
     E = [];
   let A = 0;
@@ -703,14 +685,15 @@ function buildSeriesPreview(e, r, t, n) {
       throw D;
     }
     if (y !== undefined && (p > 0 ? j > y : j < y)) break;
-    Number.isFinite(j) || throwFillError("The numeric series would overflow.");
-    const z = formatCellReference(
+    Number.isFinite(j) ||
+      throwWorkbookError("The numeric series would overflow.");
+    const z = formatCellAddress(
       l + (d ? O * (o === "up" ? -1 : 1) : 0),
       c + (d ? 0 : O * (o === "left" ? -1 : 1)),
     );
     (E.push(z), A++);
     const V = normalizeCellRecordInput(
-      withCellDecorations(
+      mergeCellDecorations(
         {
           ...f,
           raw: j,
@@ -742,37 +725,35 @@ function buildSeriesPreview(e, r, t, n) {
     )
   );
 }
-function applyFillPreview(e, r, t = {}) {
-  return applyCellChangePreview(e, r, t);
-}
+
 function buildFillHandlePreview(e, r, t, n, o = {}) {
   const a = findSheetOrThrow(e, r),
     s = parseRangeAddress(t),
     d = parseRangeAddress(n),
     u = o.mode ?? "copy";
   (["copy", "series"].includes(u) ||
-    throwFillError("Choose Copy or Series for the fill handle."),
+    throwWorkbookError("Choose Copy or Series for the fill handle."),
     (s.firstRow < d.firstRow ||
       s.lastRow > d.lastRow ||
       s.firstCol < d.firstCol ||
       s.lastCol > d.lastCol) &&
-      throwFillError(
+      throwWorkbookError(
         "The fill-handle target must contain the complete source range.",
       ),
     (d.lastRow >= a.rowCount || d.lastCol >= a.colCount) &&
-      throwFillError("The fill-handle target exceeds the worksheet."));
+      throwWorkbookError("The fill-handle target exceeds the worksheet."));
   const l = s.lastRow - s.firstRow + 1,
     c = s.lastCol - s.firstCol + 1,
     h = s.firstCol === d.firstCol && s.lastCol === d.lastCol,
     f = s.firstRow === d.firstRow && s.lastRow === d.lastRow;
   !h &&
     !f &&
-    throwFillError(
+    throwWorkbookError(
       "Extend the fill handle along one axis while keeping the other source dimension unchanged.",
     );
   const p = (d.lastRow - d.firstRow + 1) * (d.lastCol - d.firstCol + 1) - l * c;
   p > workbookLimits.maxPatches &&
-    throwFillError("The fill handle may extend into at most 500 cells.");
+    throwWorkbookError("The fill handle may extend into at most 500 cells.");
   const m = h
       ? d.firstRow < s.firstRow
         ? "up"
@@ -788,17 +769,19 @@ function buildFillHandlePreview(e, r, t, n, o = {}) {
   if (u === "series") {
     (h && l === 2 && c === 1) ||
       (f && l === 1 && c === 2) ||
-      throwFillError(
+      throwWorkbookError(
         "Series handle fill requires exactly two seed cells in the extension's row or column.",
       );
-    const k = b(r, formatCellReference(s.firstRow, s.firstCol)),
-      F = b(r, formatCellReference(s.lastRow, s.lastCol));
+    const k = b(r, formatCellAddress(s.firstRow, s.firstCol)),
+      F = b(r, formatCellAddress(s.lastRow, s.lastCol));
     ((typeof k != "number" ||
       !Number.isFinite(k) ||
       typeof F != "number" ||
       !Number.isFinite(F) ||
       !Number.isFinite(F - k)) &&
-      throwFillError("Series handle seeds must evaluate to finite numbers."),
+      throwWorkbookError(
+        "Series handle seeds must evaluate to finite numbers.",
+      ),
       (y = k),
       (w = F - k));
   }
@@ -825,12 +808,12 @@ function buildFillHandlePreview(e, r, t, n, o = {}) {
       const I =
           u === "series" ? s.firstRow : s.firstRow + E(row - s.firstRow, l),
         O = u === "series" ? s.firstCol : s.firstCol + E(col - s.firstCol, c),
-        j = buildFillCellPatches(a, formatCellReference(I, O), b, s),
-        z = formatCellReference(row, col);
+        j = buildFillCellPatches(a, formatCellAddress(I, O), b, s),
+        z = formatCellAddress(row, col);
       if (u === "series") {
         const D = y + (h ? row - s.firstRow : col - s.firstCol) * w;
         (Number.isFinite(D) ||
-          throwFillError("The handle series would overflow."),
+          throwWorkbookError("The handle series would overflow."),
           (j.raw = D),
           delete j.literal);
       } else
@@ -838,7 +821,7 @@ function buildFillHandlePreview(e, r, t, n, o = {}) {
           j.raw.startsWith("=") &&
           !j.literal &&
           (j.raw = shiftFormulaReferences(j.raw, row - I, col - O));
-      const V = normalizeCellRecordInput(withCellDecorations(j, a.cells[z]));
+      const V = normalizeCellRecordInput(mergeCellDecorations(j, a.cells[z]));
       (g.push(z),
         cellContentsDiffer(a.cells[z], V) &&
           v.push({ sheetId: r, address: z, cell: V }));
@@ -2112,7 +2095,6 @@ export {
   LocalizedText,
   parseLocalizedCellEntry,
   runExtensionOperation,
-  applyFillPreview,
   buildSeriesPreview,
   parseSeriesSeedDate,
   replaceFormulaReferenceSpan,
@@ -2123,7 +2105,7 @@ export {
   resolveExtensionSheetScope,
   buildPastePreview,
   k$,
-  applyPastePreview,
+  applyCellPreview,
   formatLocalizedNumberDisplay,
   validateExtensionHostPolicy,
   reviewExtensionFormulas,
@@ -2133,3 +2115,4 @@ export {
   getFormulaScanList,
   autoCloseFormulaParens,
 };
+export { assertWorkbookWritable, eI, formatCellAddress, mergeCellDecorations };

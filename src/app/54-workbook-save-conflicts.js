@@ -1,3 +1,4 @@
+import { clampNumber } from "./53-find-replace-go-to.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -39,12 +40,11 @@ import { inspectOutputNameSafety } from "./12-formula-dependency-inspector.js";
 import {
   resolveAxisScale,
   physicalToLogicalPixels,
-  clampValueToRange,
 } from "./53-find-replace-go-to.js";
 
 function computeVirtualizedRange(e, r, t, n, o = 5) {
   const a = resolveAxisScale(e.total, t, n),
-    s = clampValueToRange(r, 0, a.physicalMax),
+    s = clampNumber(r, 0, a.physicalMax),
     d = physicalToLogicalPixels(s, e.total, t, n),
     u = e.count ? Math.max(0, e.indexAt(d) - o) : 0,
     l = e.count ? Math.min(e.count, e.indexAt(d + a.viewport / n) + o + 1) : 0,

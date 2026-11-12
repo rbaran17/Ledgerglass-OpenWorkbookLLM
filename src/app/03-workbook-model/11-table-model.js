@@ -1,4 +1,14 @@
 import {
+  isNonArrayObject,
+  throwWithMessage,
+  failWithMessage,
+  throwWorkbookError,
+} from "./01-cell-styles-and-themes.js";
+import {
+  isPlainDataObject,
+  isFiniteNumber,
+} from "./04-pivot-tables-and-pictures.js";
+import {
   workbookLimits,
   fileImportLimits,
   maxRowHeight,
@@ -18,16 +28,14 @@ import {
 import {
   cloneStyleValue,
   reconcileWorkbookStyleBindings,
-  isPlainRecordObject,
+  isPlainObjectValue,
   canonicalStyleKey,
   regenerateOutlineGroupIds,
   validateOutlineGroups,
   aQ,
-  throwSheetProtectionError,
   createReviewThread,
   fQ,
   createFormulaWatch,
-  throwWorkbookStyleError,
   assertSheetUnprotected,
   createWorkbookMetadata,
   validateCellStyle,
@@ -42,14 +50,13 @@ import {
   $v,
   describeSheetDeletionImpacts,
   visitTableFormulasOutsideSheet,
-  isBlankValue,
+  isNullOrEmptyValue,
   hashWorkbookStructurePassword,
   coerceImportedValue,
   convertTextForDataType,
   rewriteStructuredTableReference,
-  throwWorkbookModelError,
   validateDefinedName,
-  fp,
+  createUuid,
   validateTableColumnType,
   validateWorkbookPassword,
   validateWorkbookStructureProtection,
@@ -66,12 +73,10 @@ import {
   computePivotTable,
   findPivotDefinition,
   assertUniqueTableNames,
-  throwWorkbookError,
   findSourceFieldIndex,
   normalizeRowProvenance,
   filterPivotSourceRows,
   buildUniqueSheetName,
-  createUuid,
   validateCalculatedColumnFormula,
   assertWithinCellBudget,
 } from "./04-pivot-tables-and-pictures.js";
@@ -85,7 +90,6 @@ import {
   validateAnalysisReport,
   validateDataModelReport,
   requireBoundedText,
-  Hn,
   readRetainedXlsxSource,
   JU,
   validateDelimitedSourceFootprint,
@@ -94,7 +98,6 @@ import {
   NC,
   P2,
   QU,
-  isNonArrayObject,
   validateSourceImports,
   WU,
   YE,
@@ -129,15 +132,13 @@ import {
   resolveSourceRange,
   tableDataBodyRange,
   normalizeQueryDefinition,
-  Qf,
+  rangesIntersect,
   applyTableStyleToCells,
   toA1RangeAddress,
   collectRangeValues,
   validateTableName,
-  dl,
   buildTableTotalCell,
   filterSourceRows,
-  tg,
   normalizePivotDefinition,
   validateDrawingObjects,
 } from "./08-chart-model.js";
@@ -165,7 +166,7 @@ import {
 
 function createWorksheetRecord(e) {
   return !e.trim() || e.length > 31 || /[\\/\[\]*?:]/.test(e)
-    ? Hn(
+    ? throwWithMessage(
         "Sheet names must contain 1–31 characters and cannot contain \\ / [ ] * ? : .",
       )
     : {
@@ -208,13 +209,14 @@ function writeAnalysisOutputBlock(e, r, t, n) {
   }
   return (
     (f = s.tables) != null &&
-      f.some((g) => Qf(c, parseRangeAddress(g.range))) &&
+      f.some((g) => rangesIntersect(c, parseRangeAddress(g.range))) &&
       throwWorkbookError("The output destination overlaps a table."),
-    (((p = s.merges) != null && p.some((g) => Qf(c, parseRangeAddress(g)))) ||
+    (((p = s.merges) != null &&
+      p.some((g) => rangesIntersect(c, parseRangeAddress(g)))) ||
       ((m = s.pivots) != null &&
-        m.some((g) => Qf(c, parseRangeAddress(g.outputRange)))) ||
+        m.some((g) => rangesIntersect(c, parseRangeAddress(g.outputRange)))) ||
       ((v = s.queries) != null &&
-        v.some((g) => Qf(c, parseRangeAddress(g.outputRange))))) &&
+        v.some((g) => rangesIntersect(c, parseRangeAddress(g.outputRange))))) &&
       throwWorkbookError(
         "The output destination overlaps an existing merged area or analysis result. Choose another empty destination.",
       ),
@@ -227,7 +229,7 @@ function writeAnalysisOutputBlock(e, r, t, n) {
             : {}),
           ...(b === 0
             ? { style: { bold: true, fill: "#174a7e", color: "#ffffff" } }
-            : tg(y)
+            : isFiniteNumber(y)
               ? { format: "number" }
               : {}),
         };
@@ -323,7 +325,7 @@ function applyPivotViewChange(e, r, t, n) {
   (n.readOnly && throwWorkbookError("This workbook is read-only."),
     n.snapshot !== JSON.stringify(e) &&
       throwWorkbookError("The workbook changed. Preview pivot filters again."),
-    (!dl(t) ||
+    (!isPlainDataObject(t) ||
       Object.keys(t).some(
         (s) =>
           !["slicers", "timelines", "sorts", "values", "chart"].includes(s),
@@ -449,7 +451,7 @@ function runQueryDefinition(e, r) {
       const g = m.values[f],
         b = v.values[f];
       return (
-        (tg(g) && tg(b)
+        (isFiniteNumber(g) && isFiniteNumber(b)
           ? g - b
           : String(g ?? "").localeCompare(String(b ?? ""))) * p ||
         m.index - v.index
@@ -476,7 +478,7 @@ function runQueryDefinition(e, r) {
       else if (m.operation === "concat")
         p.push(String(v ?? "") + String(g ?? ""));
       else {
-        ((!tg(v) || !tg(g)) &&
+        ((!isFiniteNumber(v) || !isFiniteNumber(g)) &&
           throwWorkbookError(
             `Derived field “${m.name}” requires numbers on source row ${f.index + 1}.`,
           ),
@@ -541,7 +543,7 @@ function normalizeCellRecord(e, r) {
   )
     return e;
   if (!isNonArrayObject(e) || !hasOwnKey(e, "raw"))
-    return Hn("A cell must have a raw value.");
+    return throwWithMessage("A cell must have a raw value.");
   const t = e.raw;
   if (
     t !== null &&
@@ -549,7 +551,9 @@ function normalizeCellRecord(e, r) {
     typeof t != "boolean" &&
     (typeof t != "number" || !Number.isFinite(t))
   )
-    return Hn("Cell values must be text, finite numbers, booleans, or null.");
+    return throwWithMessage(
+      "Cell values must be text, finite numbers, booleans, or null.",
+    );
   typeof t == "string" &&
     requireBoundedText(
       t,
@@ -561,7 +565,7 @@ function normalizeCellRecord(e, r) {
   const n = { raw: t };
   if (e.literal !== undefined) {
     if (typeof e.literal != "boolean")
-      return Hn("Cell literal flag must be boolean.");
+      return throwWithMessage("Cell literal flag must be boolean.");
     n.literal = e.literal;
   }
   if (
@@ -572,7 +576,7 @@ function normalizeCellRecord(e, r) {
     e.format !== undefined)
   ) {
     if (typeof e.format != "string" || !numberFormatCategories.has(e.format))
-      return Hn("Unsupported cell format.");
+      return throwWithMessage("Unsupported cell format.");
     n.format = e.format;
   }
   return (
@@ -593,7 +597,7 @@ function paintCellFormatting(e, r, t, n) {
   const o = e.sheets.find((l) => l.id === r);
   assertSheetUnprotected(o);
   const a = assertRangeCellBudget(n);
-  a.length > 500 && throwSheetProtectionError("Paint at most 500 cells.");
+  a.length > 500 && failWithMessage("Paint at most 500 cells.");
   const s = o.cells[t] ?? {},
     d = { ...o.cells };
   for (const l of a)
@@ -753,7 +757,7 @@ function previewColumnTypeChange(e, r, t, n, o = {}) {
         continue;
       }
       const O = g(r, A);
-      if (isBlankValue(F) && !isBlankValue(O)) {
+      if (isNullOrEmptyValue(F) && !isNullOrEmptyValue(O)) {
         if (!coerceImportedValue(O, a.dataType))
           throw Error(
             "Spill result does not match the selected type; the spill is preserved.",
@@ -836,7 +840,7 @@ function createWorksheetTable(e, r, t) {
   if (
     (assertSheetUnprotected(n),
     (c = n.merges) != null &&
-      c.some((f) => Qf(a, parseRangeAddress(f))) &&
+      c.some((f) => rangesIntersect(a, parseRangeAddress(f))) &&
       throwWorkbookError(
         "A table cannot overlap merged cells. Unmerge the source first.",
       ),
@@ -854,7 +858,7 @@ function createWorksheetTable(e, r, t) {
   }
   (measureRangeArea(a) > workbookLimits.maxCells ||
     ((h = n.tables) != null &&
-      h.some((f) => Qf(a, parseRangeAddress(f.range))))) &&
+      h.some((f) => rangesIntersect(a, parseRangeAddress(f.range))))) &&
     throwWorkbookError(
       "The table overlaps another table or exceeds the cell budget.",
     );
@@ -951,7 +955,9 @@ function resizeTable(e, r, t, n) {
         "The resized table does not fit the worksheet or processing budget.",
       ),
     (w = o.tables) != null &&
-      w.some((A) => A.id !== t && Qf(d, parseRangeAddress(A.range))) &&
+      w.some(
+        (A) => A.id !== t && rangesIntersect(d, parseRangeAddress(A.range)),
+      ) &&
       throwWorkbookError("Tables cannot overlap."),
     l && (!a.showTotals || d.lastRow !== u.lastRow))
   )
@@ -1072,7 +1078,7 @@ function applyTableOperation(e, r, t, n, o = {}) {
       a.tables?.find((v) => v.id === t) ??
       throwWorkbookError("Select an existing table.");
   (assertSheetUnprotected(a),
-    dl(n) || throwWorkbookError("Choose a table operation."));
+    isPlainDataObject(n) || throwWorkbookError("Choose a table operation."));
   const d = {
     setColumnFormula: ["kind", "columnId", "formula"],
     clearColumnFormula: ["kind", "columnId"],
@@ -1453,18 +1459,21 @@ function validateFieldTransformEvidence(e, r) {
 function normalizeWorkbookModel(e, r) {
   if (r && isDeepFrozenValue(e) && NC.has(e)) return e;
   if (!isNonArrayObject(e) || e.schemaVersion !== 1)
-    return Hn("Unsupported workbook schema. Expected schemaVersion 1.");
+    return throwWithMessage(
+      "Unsupported workbook schema. Expected schemaVersion 1.",
+    );
   const t = requireBoundedText(e.id, "Workbook ID", 100),
     n = requireBoundedText(e.name, "Workbook name", 200);
-  if (!t || !n.trim()) return Hn("Workbook ID and name are required.");
+  if (!t || !n.trim())
+    return throwWithMessage("Workbook ID and name are required.");
   const o = P2(e.revision, 0, Number.MAX_SAFE_INTEGER - 1, "Revision");
   if (!Array.isArray(e.sheets) || !e.sheets.length)
-    return Hn("A workbook must contain at least one sheet.");
+    return throwWithMessage("A workbook must contain at least one sheet.");
   let a = 0;
   const s = new Set(),
     d = new Set(),
     u = e.sheets.map((p) => {
-      if (!isNonArrayObject(p)) return Hn("Invalid sheet.");
+      if (!isNonArrayObject(p)) return throwWithMessage("Invalid sheet.");
       const m = requireBoundedText(p.id, "Sheet ID", 100),
         v = requireBoundedText(p.name, "Sheet name", 31);
       if (
@@ -1474,18 +1483,20 @@ function normalizeWorkbookModel(e, r) {
         s.has(m) ||
         d.has(v.toLowerCase())
       )
-        return Hn(
+        return throwWithMessage(
           "Sheet IDs and names must be nonempty and unique; sheet names cannot contain Excel-reserved characters.",
         );
       (s.add(m), d.add(v.toLowerCase()));
       const g = P2(p.rowCount, 1, workbookLimits.maxRows, "Row count"),
         b = P2(p.colCount, 1, workbookLimits.maxCols, "Column count");
       if (!isNonArrayObject(p.cells))
-        return Hn("Sheet cells must be an address map.");
+        return throwWithMessage("Sheet cells must be an address map.");
       const y = r && isDeepFrozenValue(p) ? YE.get(p) : undefined;
       if (y !== undefined) {
         if (((a += y), a > workbookLimits.maxCells))
-          return Hn("Workbook exceeds the 100,000 populated cell limit.");
+          return throwWithMessage(
+            "Workbook exceeds the 100,000 populated cell limit.",
+          );
         const A = { ...p };
         return (YE.set(A, y), A);
       }
@@ -1497,9 +1508,11 @@ function normalizeWorkbookModel(e, r) {
           F.row >= g ||
           F.col >= b
         )
-          return Hn(`Invalid or out-of-bounds cell: ${A}`);
+          return throwWithMessage(`Invalid or out-of-bounds cell: ${A}`);
         if (++a > workbookLimits.maxCells)
-          return Hn("Workbook exceeds the 100,000 populated cell limit.");
+          return throwWithMessage(
+            "Workbook exceeds the 100,000 populated cell limit.",
+          );
         w[A] = normalizeCellRecord(k, r);
       }
       const E = {
@@ -1511,7 +1524,7 @@ function normalizeWorkbookModel(e, r) {
       };
       if (p.columnWidths !== undefined) {
         if (!isNonArrayObject(p.columnWidths))
-          return Hn("Column widths must be an index map.");
+          return throwWithMessage("Column widths must be an index map.");
         E.columnWidths = {};
         for (const [A, k] of Object.entries(p.columnWidths)) {
           if (
@@ -1522,7 +1535,7 @@ function normalizeWorkbookModel(e, r) {
             k < minColumnWidth ||
             k > maxColumnWidth
           )
-            return Hn(
+            return throwWithMessage(
               "Column widths must be 40–600 pixels for an existing column.",
             );
           E.columnWidths[A] = k;
@@ -1534,7 +1547,7 @@ function normalizeWorkbookModel(e, r) {
           (Object.getPrototypeOf(p.rowHeights) !== Object.prototype &&
             Object.getPrototypeOf(p.rowHeights) !== null)
         )
-          return Hn("Row heights must be a plain index map.");
+          return throwWithMessage("Row heights must be a plain index map.");
         E.rowHeights = {};
         for (const [A, k] of Object.entries(p.rowHeights)) {
           if (
@@ -1545,7 +1558,7 @@ function normalizeWorkbookModel(e, r) {
             k < minRowHeight ||
             k > maxRowHeight
           )
-            return Hn(
+            return throwWithMessage(
               `Row heights must be ${minRowHeight}–${maxRowHeight} pixels for an existing row.`,
             );
           E.rowHeights[A] = k;
@@ -1553,7 +1566,7 @@ function normalizeWorkbookModel(e, r) {
       }
       if (p.hidden !== undefined) {
         if (typeof p.hidden != "boolean")
-          return Hn("Sheet hidden flag must be boolean.");
+          return throwWithMessage("Sheet hidden flag must be boolean.");
         E.hidden = p.hidden;
       }
       return (
@@ -1569,22 +1582,27 @@ function normalizeWorkbookModel(e, r) {
       );
     });
   if (u.every((p) => p.hidden))
-    return Hn("At least one sheet must be visible.");
+    return throwWithMessage("At least one sheet must be visible.");
   if (!Array.isArray(e.events) || e.events.length > 2e3)
-    return Hn("Workbook history must be an array of at most 2,000 events.");
+    return throwWithMessage(
+      "Workbook history must be an array of at most 2,000 events.",
+    );
   const l = new Set();
   let c = 0;
   const h = e.events.map((p) => {
-      if (!isNonArrayObject(p)) return Hn("Invalid history event.");
+      if (!isNonArrayObject(p))
+        return throwWithMessage("Invalid history event.");
       const m = requireBoundedText(p.id, "Event ID", 100),
         v = requireBoundedText(p.timestamp, "Event timestamp", 40);
       return !m || l.has(m) || !Number.isFinite(Date.parse(v))
-        ? Hn("History events require unique IDs and valid timestamps.")
+        ? throwWithMessage(
+            "History events require unique IDs and valid timestamps.",
+          )
         : (l.add(m),
           !Array.isArray(p.changes) ||
           p.changes.length > workbookLimits.maxPatches ||
           (c += p.changes.length) > workbookLimits.maxCells
-            ? Hn("Invalid history change count.")
+            ? throwWithMessage("Invalid history change count.")
             : {
                 id: m,
                 timestamp: v,
@@ -1598,13 +1616,15 @@ function normalizeWorkbookModel(e, r) {
                     g.sheetId.length > 100 ||
                     typeof g.address != "string"
                   )
-                    return Hn("Invalid history cell reference.");
+                    return throwWithMessage("Invalid history cell reference.");
                   const b = _t(g.address);
                   return g.address !==
                     `${columnIndexToLetters(b.col)}${b.row + 1}`
-                    ? Hn("History cell address is not canonical.")
+                    ? throwWithMessage("History cell address is not canonical.")
                     : g.before === undefined && g.after === undefined
-                      ? Hn("History change must have a before or after value.")
+                      ? throwWithMessage(
+                          "History change must have a before or after value.",
+                        )
                       : {
                           sheetId: g.sheetId,
                           address: g.address,
@@ -1660,15 +1680,15 @@ function normalizeWorkbookInput(e) {
   return normalizeWorkbookModel(e, false);
 }
 function assertThemePreviewCurrent(e, r, t = {}) {
-  (t.readOnly && throwWorkbookStyleError("This workbook is read-only."),
+  (t.readOnly && failWithMessage("This workbook is read-only."),
     (r.version !== 1 || r.snapshot !== JSON.stringify(e)) &&
-      throwWorkbookStyleError(
+      failWithMessage(
         "The workbook changed after this preview. Close and reopen Themes & Cell Styles.",
       ));
   const n = applyNamedStyleChange(e, r.request, t);
   if (
     (canonicalStyleKey(n) !== canonicalStyleKey(r) &&
-      throwWorkbookStyleError(
+      failWithMessage(
         "This theme preview changed. Create a fresh preview before applying it.",
       ),
     !r.count &&
@@ -1689,7 +1709,7 @@ function Mw(e) {
 }
 function updateWorkbookProperties(e, r) {
   if (
-    !isPlainRecordObject(r) ||
+    !isPlainObjectValue(r) ||
     Object.keys(r).some((n) => !["name", "engagement", "period"].includes(n))
   )
     throw new Error("Invalid workbook property fields.");
@@ -1935,15 +1955,13 @@ function moveWorksheet(e, r, t) {
     o = e.sheets.indexOf(n);
   if (
     ((!Number.isInteger(t) || t < 0 || t >= e.sheets.length) &&
-      throwWorkbookModelError(
-        "Choose a worksheet position inside the workbook.",
-      ),
+      throwWorkbookError("Choose a worksheet position inside the workbook."),
     o === t)
   )
     return e;
   visitTableFormulasOutsideSheet(e, (s) => {
     parseWorksheetQualifiedReference(s).some((d) => d.sheets) &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "Reordering worksheets with three-dimensional references requires explicit references first.",
       );
   });
@@ -1954,11 +1972,11 @@ function setWorksheetVisibility(e, r, t) {
   assertWorkbookStructureEditable(e);
   const n = findWorksheetById(e, r);
   (["visible", "hidden", "veryHidden"].includes(t) ||
-    throwWorkbookModelError("Choose visible, hidden or very hidden."),
+    throwWorkbookError("Choose visible, hidden or very hidden."),
     t !== "visible" &&
       isVisibleWorksheet(n) &&
       e.sheets.filter(isVisibleWorksheet).length === 1 &&
-      throwWorkbookModelError("At least one worksheet must remain visible."));
+      throwWorkbookError("At least one worksheet must remain visible."));
   const o = n.veryHidden ? "veryHidden" : n.hidden ? "hidden" : "visible";
   return t === o
     ? e
@@ -1993,18 +2011,18 @@ function duplicateWorksheet(e, r, t) {
     o = assertUniqueWorksheetName(e, createUniqueWorksheetName(e, n.name));
   (visitTableFormulasOutsideSheet(e, (g) => {
     parseWorksheetQualifiedReference(g).some((b) => b.sheets) &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "Duplicating worksheets with three-dimensional references requires explicit references first.",
       );
   }),
     e.sheets.reduce((g, b) => g + Object.keys(b.cells).length, 0) +
       Object.keys(n.cells).length >
       workbookLimits.maxCells &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "Duplicating this worksheet would exceed the 100,000 populated-cell budget.",
       ));
   const s = structuredClone(n);
-  ((s.id = fp()),
+  ((s.id = createUuid()),
     s.outlineGroups && (s.outlineGroups = regenerateOutlineGroupIds(s)),
     (s.name = o));
   const d = new Set([
@@ -2018,7 +2036,8 @@ function duplicateWorksheet(e, r, t) {
   for (const g of s.tables ?? []) {
     const b = g.id,
       y = g.name;
-    ((g.id = fp()), (g.columns = g.columns.map((w) => ({ ...w, id: fp() }))));
+    ((g.id = createUuid()),
+      (g.columns = g.columns.map((w) => ({ ...w, id: createUuid() }))));
     for (let w = 2; ; w++) {
       const E = `_Copy${w}`,
         A = y.slice(0, 255 - E.length) + E;
@@ -2044,27 +2063,27 @@ function duplicateWorksheet(e, r, t) {
       (g.raw = c(g.raw));
   ((p = s.objects) == null ||
     p.forEach((g) => {
-      g.id = fp();
+      g.id = createUuid();
     }),
     (m = s.validations) == null ||
       m.forEach((g) => {
-        ((g.id = fp()),
+        ((g.id = createUuid()),
           g.kind === "custom" && g.formula && (g.formula = c(g.formula)));
       }),
     (v = s.conditionalFormats) == null ||
       v.forEach((g) => {
-        ((g.id = fp()),
+        ((g.id = createUuid()),
           g.kind === "formula" && g.formula && (g.formula = c(g.formula)));
       }));
   for (const g of [...(s.pivots ?? []), ...(s.queries ?? [])])
-    ((g.id = fp()),
+    ((g.id = createUuid()),
       (g.sourceRevision = e.revision),
       g.source.sheetId === n.id &&
         ((g.source.sheetId = s.id),
         g.source.tableId &&
           (g.source.tableId =
             u.get(g.source.tableId) ??
-            throwWorkbookModelError(
+            throwWorkbookError(
               "A copied analysis refers to a missing source table.",
             ))));
   const h = (e.definedNames ?? [])
@@ -2096,18 +2115,18 @@ function deleteWorksheet(e, r, t = false) {
   assertWorkbookStructureEditable(e);
   const n = findWorksheetById(e, r);
   (e.sheets.length === 1 &&
-    throwWorkbookModelError("The final worksheet cannot be deleted."),
+    throwWorkbookError("The final worksheet cannot be deleted."),
     isVisibleWorksheet(n) &&
       e.sheets.filter(isVisibleWorksheet).length === 1 &&
-      throwWorkbookModelError("At least one worksheet must remain visible."));
+      throwWorkbookError("At least one worksheet must remain visible."));
   const o = describeSheetDeletionImpacts(e, r);
   (o.some((s) => s.kind === "unsupported-reference") &&
-    throwWorkbookModelError(
+    throwWorkbookError(
       "Deletion is blocked by ambiguous or unsupported references. Replace dynamic or three-dimensional references with explicit references first.",
     ),
     o.length &&
       !t &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "This worksheet has dependencies. Review them and explicitly confirm deletion.",
       ));
   const a = structuredClone(e);
@@ -2165,7 +2184,7 @@ function deleteWorksheet(e, r, t = false) {
 }
 async function protectWorkbookStructure(e, r) {
   (assertWorkbookStructureEditable(e), validateWorkbookPassword(r));
-  const t = fp(),
+  const t = createUuid(),
     n = r
       ? {
           enabled: true,
@@ -2183,9 +2202,7 @@ async function unprotectWorkbookStructure(e, r) {
     t.passwordHash &&
       (await hashWorkbookStructurePassword(r, t.salt)) !==
         t.passwordHash.toLowerCase() &&
-      throwWorkbookModelError(
-        "The workbook structure password does not match.",
-      ));
+      throwWorkbookError("The workbook structure password does not match."));
   const n = { ...e };
   return (delete n.structureProtection, w0(n));
 }

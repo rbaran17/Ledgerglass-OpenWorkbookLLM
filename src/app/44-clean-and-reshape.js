@@ -1,3 +1,5 @@
+import { stringifyJsonValue } from "./42-combine-populations.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -30,7 +32,6 @@ import {
   textCleanupStepLabels,
   describeSplitFieldStep,
   parseFieldPositions,
-  vS,
 } from "./43-text-cleanup.js";
 
 function CleanAndReshapeDialog(e) {
@@ -1396,7 +1397,7 @@ function CleanAndReshapeDialog(e) {
                                                   Dt,
                                                   ":",
                                                   " ",
-                                                  vS(
+                                                  stringifyJsonValue(
                                                     qt.sources.find(
                                                       (Lr) => Lr.address === Dt,
                                                     )?.original?.raw ?? null,
@@ -1411,7 +1412,7 @@ function CleanAndReshapeDialog(e) {
                                     }),
                                     i.jsx("td", {
                                       children: i.jsx("code", {
-                                        children: vS(Qe.value),
+                                        children: stringifyJsonValue(Qe.value),
                                       }),
                                     }),
                                     i.jsx("td", { children: Qe.type }),
@@ -1523,7 +1524,9 @@ function CleanAndReshapeDialog(e) {
                                           i.jsx("td", { children: Qe.step }),
                                           i.jsx("td", {
                                             children: i.jsx("code", {
-                                              children: vS(Qe.raw),
+                                              children: stringifyJsonValue(
+                                                Qe.raw,
+                                              ),
                                             }),
                                           }),
                                           i.jsx("td", {
@@ -1734,11 +1737,10 @@ const sortEngineLimits = Object.freeze({
       "All source rows in the range participate, including empty-key rows. Hidden rows require explicit inclusion. Temporary view filters are separate. Color/icon and left-to-right sorts are outside this contract.",
   }),
   MW = new WeakMap(),
-  formatSortCellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   formatSortRangeAddress = (e) => {
     const r = parseRangeAddress(e),
-      t = formatSortCellAddress(r.firstRow, r.firstCol),
-      n = formatSortCellAddress(r.lastRow, r.lastCol);
+      t = formatCellAddress(r.firstRow, r.firstCol),
+      n = formatCellAddress(r.lastRow, r.lastCol);
     return t === n ? t : `${t}:${n}`;
   },
   isNonBlankCellEntry = (e) =>
@@ -1803,7 +1805,7 @@ function resolveSortSourceRange(e, r, t, n = false) {
       m.row <= d &&
       ((u = Math.min(u, m.col)), (l = Math.max(l, m.col)));
   const h = formatSortRangeAddress(
-      `${formatSortCellAddress(s, u)}:${formatSortCellAddress(d, l)}`,
+      `${formatCellAddress(s, u)}:${formatCellAddress(d, l)}`,
     ),
     f = formatSortRangeAddress(t);
   return {
@@ -1874,7 +1876,7 @@ function buildSortPlan(e, r, t) {
           throw Error(
             "Every sort key must be inside the complete record range.",
           );
-        const h = formatSortCellAddress(u, c.column),
+        const h = formatCellAddress(u, c.column),
           f = findSheetOrThrow(e, r.sheetId).cells[h],
           p = o(r.sheetId, h);
         if (
@@ -1978,7 +1980,6 @@ export {
   MW,
   N3,
   stableSortPolicy,
-  formatSortCellAddress,
   resolveSortSourceRange,
   assertSortSafeFormulas,
   isNonBlankCellEntry,
@@ -1986,3 +1987,4 @@ export {
   normalizeSortSpecification,
   sortEngineLimits,
 };
+export { formatSortRangeAddress };

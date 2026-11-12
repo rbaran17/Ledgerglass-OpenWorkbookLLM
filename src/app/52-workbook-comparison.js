@@ -1,3 +1,7 @@
+import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+import { eI, formatCellAddress } from "./04-cell-input-paste-and-fill.js";
+import { throwWithMessage, isFormulaCellValue } from "./03-workbook-model.js";
+import { coerceCellValueToText } from "./16-text-split-tools.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -26,7 +30,6 @@ import {
   patternCheckBudgets,
   Bj,
   isBlankFormulaCell,
-  Vf,
   computeFormulaSignature,
   identifierPattern,
   sheetSpanPattern,
@@ -34,7 +37,6 @@ import {
   definedNameReferencePattern,
   referenceTokenPattern,
   ww,
-  xc,
   readFormulaText,
 } from "./51-pattern-checks-and-citations.js";
 
@@ -158,8 +160,12 @@ function runWorkbookComparison(e, r, t, n = {}) {
         );
       const O = Array.from({ length: F }, (j, z) => {
         if (!w) return columnIndexToLetters(z);
-        const V = E.cells[xc(A.firstRow, A.firstCol + z)];
-        if (Vf(V) || typeof V?.raw != "string" || !V.raw.trim())
+        const V = E.cells[formatCellAddress(A.firstRow, A.firstCol + z)];
+        if (
+          isFormulaInputValue(V) ||
+          typeof V?.raw != "string" ||
+          !V.raw.trim()
+        )
           throw Error(
             "Header rows require nonempty literal text in every column. Turn off headers for an unstructured sheet.",
           );
@@ -171,14 +177,16 @@ function runWorkbookComparison(e, r, t, n = {}) {
         );
       return {
         sheet: E,
-        range: `${xc(A.firstRow, A.firstCol)}:${xc(A.lastRow, A.lastCol)}`,
+        range: `${formatCellAddress(A.firstRow, A.firstCol)}:${formatCellAddress(A.lastRow, A.lastCol)}`,
         headers: O,
         firstCol: A.firstCol,
         rows: Array.from({ length: k - Number(w) }, (j, z) => {
           const V = A.firstRow + Number(w) + z;
           return {
             row: V,
-            cells: O.map((D, B) => E.cells[xc(V, A.firstCol + B)]),
+            cells: O.map(
+              (D, B) => E.cells[formatCellAddress(V, A.firstCol + B)],
+            ),
           };
         }),
       };
@@ -218,7 +226,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
         c(
           I,
           O.sheet,
-          `${xc(j, O.firstCol)}:${xc(j, O.firstCol + O.headers.length - 1)}`,
+          `${formatCellAddress(j, O.firstCol)}:${formatCellAddress(j, O.firstCol + O.headers.length - 1)}`,
         ),
       A = [],
       k = (I, O, j) => {
@@ -281,7 +289,11 @@ function runWorkbookComparison(e, r, t, n = {}) {
           return (
             V.rows.forEach((C, T) => {
               if (
-                B.some((L) => isBlankFormulaCell(C.cells[L]) || Vf(C.cells[L]))
+                B.some(
+                  (L) =>
+                    isBlankFormulaCell(C.cells[L]) ||
+                    isFormulaInputValue(C.cells[L]),
+                )
               ) {
                 F(
                   D,
@@ -351,19 +363,30 @@ function runWorkbookComparison(e, r, t, n = {}) {
           C = B < 0 ? undefined : z.cells[B];
         (D >= 0 && B >= 0 && ww(_ ?? { raw: null }, C ?? { raw: null })) ||
           u({
-            kind: Vf(_) && !Vf(C) ? "formula-to-value" : "cell-change",
+            kind:
+              isFormulaInputValue(_) && !isFormulaInputValue(C)
+                ? "formula-to-value"
+                : "cell-change",
             confidence: "observed",
-            message: `${V}: ${D < 0 ? "column added" : B < 0 ? "column removed" : Vf(_) && !Vf(C) ? "formula replaced by a literal or blank" : "stored value, formula or cell metadata changed"}.`,
+            message: `${V}: ${D < 0 ? "column added" : B < 0 ? "column removed" : isFormulaInputValue(_) && !isFormulaInputValue(C) ? "formula replaced by a literal or blank" : "stored value, formula or cell metadata changed"}.`,
             ...(D < 0
               ? {}
               : {
-                  ...c("before", y.sheet, xc(j.row, y.firstCol + D)),
+                  ...c(
+                    "before",
+                    y.sheet,
+                    formatCellAddress(j.row, y.firstCol + D),
+                  ),
                   beforeValue: readFormulaText(_),
                 }),
             ...(B < 0
               ? {}
               : {
-                  ...c("after", w.sheet, xc(z.row, w.firstCol + B)),
+                  ...c(
+                    "after",
+                    w.sheet,
+                    formatCellAddress(z.row, w.firstCol + B),
+                  ),
                   afterValue: readFormulaText(C),
                 }),
           });
@@ -377,12 +400,12 @@ function runWorkbookComparison(e, r, t, n = {}) {
         const z = new Map();
         let V = 0;
         O.rows.forEach((_, C) => {
-          if (Vf(_.cells[j])) {
+          if (isFormulaInputValue(_.cells[j])) {
             V++;
             try {
               const T = computeFormulaSignature(
                   _.cells[j].raw,
-                  xc(_.row, O.firstCol + j),
+                  formatCellAddress(_.row, O.firstCol + j),
                 ),
                 N = z.get(T) ?? [];
               (N.push(C), z.set(T, N));
@@ -391,7 +414,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
                 kind: "uncertain",
                 confidence: "unresolved",
                 message: "Formula pattern could not be normalized reliably.",
-                ...c(I, O.sheet, xc(_.row, O.firstCol + j)),
+                ...c(I, O.sheet, formatCellAddress(_.row, O.firstCol + j)),
               });
             }
           }
@@ -400,7 +423,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
           B = D[0];
         for (const _ of O.rows) {
           const C = _.cells[j];
-          if (Vf(C) || isBlankFormulaCell(C)) continue;
+          if (isFormulaInputValue(C) || isBlankFormulaCell(C)) continue;
           const T =
             V > O.rows.length / 2 &&
             !!B &&
@@ -412,7 +435,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
             message: T
               ? `${O.headers[j]}: literal value in a formula-dominant column; a deliberate exception is possible.`
               : `${O.headers[j]}: stored literal input, not a formula. This inventory entry is not an error finding.`,
-            ...c(I, O.sheet, xc(_.row, O.firstCol + j)),
+            ...c(I, O.sheet, formatCellAddress(_.row, O.firstCol + j)),
             [I === "before" ? "beforeValue" : "afterValue"]: readFormulaText(C),
           });
         }
@@ -429,13 +452,13 @@ function runWorkbookComparison(e, r, t, n = {}) {
           }
           O.rows.forEach((_, C) => {
             const T = _.cells[j],
-              N = xc(_.row, O.firstCol + j);
-            Vf(T) &&
+              N = formatCellAddress(_.row, O.firstCol + j);
+            isFormulaInputValue(T) &&
               !B[1].includes(C) &&
               u({
                 kind: "formula-pattern",
                 confidence: "candidate",
-                message: `${O.headers[j]}: formula differs from the dominant relative-reference pattern (${B[1].length}/${V} formulas); review against ${xc(O.rows[B[1][0]].row, O.firstCol + j)}.`,
+                message: `${O.headers[j]}: formula differs from the dominant relative-reference pattern (${B[1].length}/${V} formulas); review against ${formatCellAddress(O.rows[B[1][0]].row, O.firstCol + j)}.`,
                 ...c(I, O.sheet, N),
                 [I === "before" ? "beforeValue" : "afterValue"]:
                   readFormulaText(T),
@@ -520,7 +543,7 @@ function runWorkbookComparison(e, r, t, n = {}) {
             throw Error(
               "Static comparison supports 20,000 permitted stored cells across both workbooks.",
             );
-          if (!Vf(F)) continue;
+          if (!isFormulaInputValue(F)) continue;
           d.counts.scannedFormulas++;
           const O = (z, V) =>
               u({
@@ -1739,36 +1762,16 @@ function WorkbookComparisonDialog(e) {
   });
 }
 const comparisonLimits = {
-    maxQueryLength: 256,
-    maxResults: 1e5,
-    maxCalculatedCells: 1e4,
-    maxTextCharacters: 1e7,
-    maxPatternWork: 3e7,
-    maxSpecialCells: 500,
-    maxSpecialAreas: 256,
-    maxBlankScan: 1e5,
-  },
-  throwSearchError = (e) => {
-    throw new Error(e);
-  },
-  toA1CellAddress = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  E_ = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
-  cellValueToText = (e) =>
-    e === null
-      ? ""
-      : typeof e == "boolean"
-        ? e
-          ? "TRUE"
-          : "FALSE"
-        : String(e);
-function deepFreezeRecord(e) {
-  return (
-    e &&
-      typeof e == "object" &&
-      (Object.values(e).forEach(deepFreezeRecord), Object.freeze(e)),
-    e
-  );
-}
+  maxQueryLength: 256,
+  maxResults: 1e5,
+  maxCalculatedCells: 1e4,
+  maxTextCharacters: 1e7,
+  maxPatternWork: 3e7,
+  maxSpecialCells: 500,
+  maxSpecialAreas: 256,
+  maxBlankScan: 1e5,
+};
+
 function normalizeSearchRequest(e, r) {
   const t = findSheetOrThrow(e, r.sheetId),
     n = parseSelectionAreas(r.ranges ?? [r.range]),
@@ -1779,12 +1782,12 @@ function normalizeSearchRequest(e, r) {
   return (
     (!["selection", "sheet", "workbook"].includes(a) ||
       !["rows", "columns"].includes(s)) &&
-      throwSearchError("Choose a valid search scope and order."),
+      throwWithMessage("Choose a valid search scope and order."),
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      throwSearchError("Include hidden must be boolean."),
+      throwWithMessage("Include hidden must be boolean."),
     o.some((d) => d.lastRow >= t.rowCount || d.lastCol >= t.colCount) &&
-      throwSearchError("The search selection exceeds the worksheet."),
+      throwWithMessage("The search selection exceeds the worksheet."),
     {
       ...r,
       ranges: n,
@@ -1800,15 +1803,15 @@ function normalizeSearchQuery(e, r) {
   ((typeof r.query != "string" ||
     !r.query.length ||
     r.query.length > comparisonLimits.maxQueryLength) &&
-    throwSearchError(
+    throwWithMessage(
       "Enter 1–256 characters to find. Use Go To Special to select blank cells.",
     ),
     ["raw", "formulas", "calculated", "formatted"].includes(n) ||
-      throwSearchError("Choose a supported Look in option."));
+      throwWithMessage("Choose a supported Look in option."));
   for (const o of [r.matchCase, r.wholeCell, r.wildcards])
     o !== undefined &&
       typeof o != "boolean" &&
-      throwSearchError("Search switches must be boolean.");
+      throwWithMessage("Search switches must be boolean.");
   return {
     ...t,
     query: r.query,
@@ -1847,7 +1850,7 @@ function matchTextWithBudget(e, r, t, n) {
     (n.work += (a + 1) * t.length),
     (n.text > comparisonLimits.maxTextCharacters ||
       n.work > comparisonLimits.maxPatternWork) &&
-      throwSearchError(
+      throwWithMessage(
         "This search exceeds the text-comparison budget. Narrow the selection or simplify the search.",
       ),
     !a)
@@ -1916,7 +1919,7 @@ function searchWorkbookCells(e, r) {
     if (l) for (const g of s.getSpillEntries(f.id)) p.add(g.address);
     for (const g of p) {
       ++n.scanned > workbookLimits.maxCells &&
-        throwSearchError(
+        throwWithMessage(
           "This search exceeds 100,000 populated cells. Narrow its scope.",
         );
       const { row, col } = _t(g),
@@ -1928,19 +1931,19 @@ function searchWorkbookCells(e, r) {
         (w && !t.includeHidden)
       )
         continue;
-      const A = E_(E);
+      const A = isFormulaCellValue(E);
       if (t.lookIn === "formulas" && !A) continue;
       let k = E?.raw ?? null;
       l &&
         (++n.calculated > comparisonLimits.maxCalculatedCells &&
-          throwSearchError(
+          throwWithMessage(
             "Calculated searches support at most 10,000 cells. Narrow the selection or use Raw contents.",
           ),
         (k = s(f.id, g)));
       const F =
           t.lookIn === "formatted"
             ? formatNumberWithPattern(k, E, e.datePolicy?.dateSystem)
-            : cellValueToText(k),
+            : coerceCellValueToText(k),
         I = matchTextWithBudget(F, t, o, n);
       I.length &&
         (v.push({
@@ -1958,11 +1961,11 @@ function searchWorkbookCells(e, r) {
           occurrences: I.length,
         }),
         a.length + v.length > comparisonLimits.maxResults &&
-          throwSearchError("Too many matching cells. Narrow the search."));
+          throwWithMessage("Too many matching cells. Narrow the search."));
     }
     (v.sort((g, b) => compareCellPositions(t.order, g, b)), a.push(...v));
   }
-  return deepFreezeRecord({
+  return eI({
     workbookId: e.id,
     revision: e.revision,
     snapshotGuard: JSON.stringify(e),
@@ -1980,7 +1983,7 @@ function normalizeSearchPage(e, r = 0, t = 25) {
       !Number.isSafeInteger(t) ||
       t < 1 ||
       t > 200) &&
-      throwSearchError(
+      throwWithMessage(
         "Search pages require a nonnegative page and 1–200 results per page.",
       ),
     e.results.slice(r * t, (r + 1) * t)
@@ -1989,7 +1992,7 @@ function normalizeSearchPage(e, r = 0, t = 25) {
 function findAdjacentSearchResult(e, r, t = "next") {
   if (
     (["next", "previous"].includes(t) ||
-      throwSearchError("Choose next or previous."),
+      throwWithMessage("Choose next or previous."),
     !e.total)
   )
     return null;
@@ -2027,7 +2030,7 @@ function toComparableCellValue(e, r) {
     : (t = null);
   const n = { ...e, raw: t };
   return (
-    typeof t == "string" && t.startsWith("=") && !E_(e)
+    typeof t == "string" && t.startsWith("=") && !isFormulaCellValue(e)
       ? (n.literal = true)
       : (typeof t == "string" && t.startsWith("=")) || delete n.literal,
     normalizeCellRecordInput(n)
@@ -2035,8 +2038,6 @@ function toComparableCellValue(e, r) {
 }
 
 export {
-  E_,
-  throwSearchError,
   compareCellPositions,
   compileSearchPattern,
   searchWorkbookCells,
@@ -2044,12 +2045,10 @@ export {
   findAdjacentSearchResult,
   normalizeSearchRequest,
   describeHiddenState,
-  deepFreezeRecord,
   createSearchBudget,
   toComparableCellValue,
   comparisonLimits,
   matchTextWithBudget,
   WorkbookComparisonDialog,
   rangeContainsCell,
-  toA1CellAddress,
 };

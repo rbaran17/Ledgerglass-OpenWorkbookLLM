@@ -174,8 +174,8 @@ const supportedFinancialFunctionNames = [
     ACCRINT: [6, 8],
     ACCRINTM: [4, 5],
   },
-  flattenFinancialArgs = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenFinancialArgs) : [e],
+  flattenNestedValues = (e) =>
+    Array.isArray(e) ? e.flatMap(flattenNestedValues) : [e],
   compensatedSum = (e) => {
     let r = 0,
       t = 0;
@@ -269,7 +269,7 @@ function evaluateFinancialFunction(e, r, t) {
     y = (k, F) => (k === 0 ? F : Math.expm1(F * Math.log1p(k)) / k),
     w = (k, F, I, O, j) => -(I * b(k, F) + O) / ((1 + k * j) * y(k, F)),
     E = (k, F = false) => {
-      const I = flattenFinancialArgs(k);
+      const I = flattenNestedValues(k);
       I.length > financialSolverLimits.cashFlows &&
         l("#LIMIT!", "Cash-flow input exceeds 10000 positions.");
       const O = [];
@@ -399,7 +399,7 @@ function evaluateFinancialFunction(e, r, t) {
         V = E(e === "NPV" ? I.slice(1) : I[z || e === "MIRR" ? 0 : 1], j);
       let D = V.map((_, C) => C + (e === "NPV" ? 1 : 0));
       if (j) {
-        const _ = flattenFinancialArgs(I[z ? 1 : 2]);
+        const _ = flattenNestedValues(I[z ? 1 : 2]);
         _.length !== V.length &&
           l("#NUM!", "Every cash-flow amount must have exactly one date.");
         const C = _.map(p);
@@ -786,8 +786,6 @@ const supportedTextFunctionNames = [
     "TEXTAFTER",
   ],
   notTextFunctionSentinel = Symbol("not-text-function"),
-  flattenTextArgs = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenTextArgs) : [e],
   coerceValueToText = (e) =>
     e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
 function parseDateTimeText(e) {
@@ -861,7 +859,7 @@ function evaluateTextFunction(e, r, t) {
     [a, s] = o[e];
   (r.length < a || r.length > s) && n();
   const d = r.map(t.retrieve),
-    u = d.flatMap(flattenTextArgs).find(t.isIssue);
+    u = d.flatMap(flattenNestedValues).find(t.isIssue);
   if (u) return u;
   ((!(e === "CONCAT" || e === "TEXTJOIN") && d.some(Array.isArray)) ||
     (e === "TEXTJOIN" && d.slice(0, 2).some(Array.isArray))) &&
@@ -980,7 +978,7 @@ function evaluateTextFunction(e, r, t) {
       y = e === "TEXTJOIN" && p(d[1]),
       w = d
         .slice(e === "TEXTJOIN" ? 2 : 0)
-        .flatMap(flattenTextArgs)
+        .flatMap(flattenNestedValues)
         .filter((E) => !y || (E != null && E !== ""))
         .map(coerceValueToText);
     return (
@@ -1086,3 +1084,4 @@ export {
   broadcastOverArrays,
   minColumnWidth,
 };
+export { coerceValueToText, flattenNestedValues };

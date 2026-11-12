@@ -2139,3 +2139,4 @@ export {
   listInstalledExtensionFunctions,
   parseDateText,
 };
+export { boundedTextSchema };

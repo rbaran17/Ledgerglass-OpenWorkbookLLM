@@ -1,3 +1,10 @@
+import {
+  isNonArrayObject,
+  createUuid,
+  failWithMessage,
+} from "./03-workbook-model.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
+import { formatRangeCornerCells } from "./08-xlsx-export-and-preservation.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -15,13 +22,12 @@ import {
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
 import {
-  createModelId,
   previewDataModelOutput,
   DataModelDefinitionEditor,
   publishDataModelReport,
   getModelReportStatus,
   removeDataModelFromWorkbook,
-  LabeledModelField,
+  LabeledField,
   buildModelTableFromRange,
   DaxExpressionInput,
 } from "./14-dax-data-model-engine.js";
@@ -328,11 +334,11 @@ function DataModelDialog(e) {
                   i.jsxs("div", {
                     className: "lg-model-controls",
                     children: [
-                      LabeledModelField(
+                      LabeledField(
                         "Model name",
                         R("Model name", a.name, (le) => _({ ...a, name: le })),
                       ),
-                      LabeledModelField(
+                      LabeledField(
                         "Source worksheet",
                         L(
                           "Model source worksheet",
@@ -349,7 +355,7 @@ function DataModelDialog(e) {
                           },
                         ),
                       ),
-                      LabeledModelField(
+                      LabeledField(
                         "Source table or range",
                         L(
                           "Model structured source",
@@ -365,7 +371,7 @@ function DataModelDialog(e) {
                         ),
                       ),
                       !v &&
-                        LabeledModelField(
+                        LabeledField(
                           "Headed range",
                           R("Model source range", p, m),
                         ),
@@ -433,7 +439,7 @@ function DataModelDialog(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              LabeledModelField(
+                              LabeledField(
                                 "Table name",
                                 R(`${le.name} table name`, le.name, (ge) =>
                                   H(le.id, { name: ge }),
@@ -453,7 +459,7 @@ function DataModelDialog(e) {
                                 ],
                               }),
                               !le.tableId &&
-                                LabeledModelField(
+                                LabeledField(
                                   "Headed range",
                                   R(`${le.name} source range`, le.range, (ge) =>
                                     H(le.id, { range: ge }),
@@ -603,7 +609,7 @@ function DataModelDialog(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              LabeledModelField(
+                              LabeledField(
                                 "One table",
                                 U(
                                   `Relationship ${ce + 1} one table`,
@@ -615,7 +621,7 @@ function DataModelDialog(e) {
                                     }),
                                 ),
                               ),
-                              LabeledModelField(
+                              LabeledField(
                                 "Unique key",
                                 G(
                                   `Relationship ${ce + 1} one key`,
@@ -632,7 +638,7 @@ function DataModelDialog(e) {
                                 "aria-hidden": "true",
                                 children: "1 → *",
                               }),
-                              LabeledModelField(
+                              LabeledField(
                                 "Related table",
                                 U(
                                   `Relationship ${ce + 1} related table`,
@@ -644,7 +650,7 @@ function DataModelDialog(e) {
                                     }),
                                 ),
                               ),
-                              LabeledModelField(
+                              LabeledField(
                                 "Foreign key",
                                 G(
                                   `Relationship ${ce + 1} foreign key`,
@@ -657,7 +663,7 @@ function DataModelDialog(e) {
                                     }),
                                 ),
                               ),
-                              LabeledModelField(
+                              LabeledField(
                                 "Cardinality",
                                 L(
                                   `Relationship ${ce + 1} cardinality`,
@@ -699,7 +705,7 @@ function DataModelDialog(e) {
                         relationships: [
                           ...a.relationships,
                           {
-                            id: createModelId(),
+                            id: createUuid(),
                             one: {
                               tableId: a.tables[0].id,
                               column: a.tables[0].columns[0].name,
@@ -753,13 +759,13 @@ function DataModelDialog(e) {
                           i.jsxs("div", {
                             className: "lg-model-controls",
                             children: [
-                              LabeledModelField(
+                              LabeledField(
                                 "Name",
                                 R(`Measure ${ce + 1} name`, le.name, (se) =>
                                   ge({ ...le, name: se }),
                                 ),
                               ),
-                              LabeledModelField(
+                              LabeledField(
                                 "Table",
                                 U(`Measure ${ce + 1} table`, le.tableId, (se) =>
                                   ge({
@@ -772,7 +778,7 @@ function DataModelDialog(e) {
                                   }),
                                 ),
                               ),
-                              LabeledModelField(
+                              LabeledField(
                                 "Operation",
                                 L(
                                   `Measure ${ce + 1} operation`,
@@ -803,7 +809,7 @@ function DataModelDialog(e) {
                               ),
                               le.operation !== "countRows" &&
                                 le.operation !== "dax" &&
-                                LabeledModelField(
+                                LabeledField(
                                   "Column",
                                   G(
                                     `Measure ${ce + 1} column`,
@@ -851,7 +857,7 @@ function DataModelDialog(e) {
                       a.measures.length >= dataModelLimits.measures,
                     onClick: () => {
                       const le = {
-                        id: createModelId(),
+                        id: createUuid(),
                         name: `Measure ${a.measures.length + 1}`,
                         tableId: a.tables.at(-1).id,
                         operation: "countRows",
@@ -1437,7 +1443,7 @@ function DataModelDialog(e) {
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
                 ],
               }),
-            LabeledModelField(
+            LabeledField(
               "Output worksheet",
               R("Model output worksheet", O, (le) => {
                 (j(le), B());
@@ -1677,39 +1683,31 @@ const dataModelBudgets = {
   discoveryAnchors: 50,
   dependencyCells: 2e3,
 };
-function throwValidationError(e) {
-  throw Error(e);
-}
-const xce = (e) => !!e && typeof e == "object" && !Array.isArray(e);
+
 function assertRecordKeys(e, r, t) {
-  (!xce(e) || Object.keys(e).some((n) => !r.includes(n))) &&
-    throwValidationError(t);
+  (!isNonArrayObject(e) || Object.keys(e).some((n) => !r.includes(n))) &&
+    failWithMessage(t);
 }
-const lg = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  Ece = (e) => {
-    const r = parseRangeAddress(e);
-    return `${lg(r.firstRow, r.firstCol)}:${lg(r.lastRow, r.lastCol)}`;
-  },
-  rangesOverlap = (e, r) => {
-    const t = parseRangeAddress(e),
-      n = parseRangeAddress(r);
-    return (
-      t.firstRow <= n.lastRow &&
-      t.lastRow >= n.firstRow &&
-      t.firstCol <= n.lastCol &&
-      t.lastCol >= n.firstCol
-    );
-  };
+const rangesOverlap = (e, r) => {
+  const t = parseRangeAddress(e),
+    n = parseRangeAddress(r);
+  return (
+    t.firstRow <= n.lastRow &&
+    t.lastRow >= n.firstRow &&
+    t.firstCol <= n.lastCol &&
+    t.lastCol >= n.firstCol
+  );
+};
 function assertDelimiterCharacter(e) {
   (typeof e != "string" || [...e].length !== 1 || /["\r\n\0]/.test(e)) &&
-    throwValidationError(
+    failWithMessage(
       "Choose one delimiter character other than a quote, line break or NUL.",
     );
 }
 function splitDelimitedCell(e, r) {
   (assertDelimiterCharacter(r),
     (typeof e != "string" || e.length > 32767) &&
-      throwValidationError(
+      failWithMessage(
         "A source cell must contain text of at most 32,767 characters.",
       ));
   const t = [];
@@ -1721,7 +1719,7 @@ function splitDelimitedCell(e, r) {
     u = () => {
       (t.push(n),
         t.length > dataModelBudgets.fields &&
-          throwValidationError(
+          failWithMessage(
             "A source cell contains more than 50 fields. Choose a different delimiter or split a smaller record.",
           ),
         (n = ""),
@@ -1739,12 +1737,12 @@ function splitDelimitedCell(e, r) {
       : c === r
         ? u()
         : a
-          ? throwValidationError(
+          ? failWithMessage(
               "Unexpected text after a closing quote. A closing quote must be followed by the delimiter or end of the cell.",
             )
           : c === '"'
             ? (s &&
-                throwValidationError(
+                failWithMessage(
                   "A quote must begin a field; escape embedded quotes by doubling them inside a quoted field.",
                 ),
               (o = true),
@@ -1753,7 +1751,7 @@ function splitDelimitedCell(e, r) {
   }
   return (
     o &&
-      throwValidationError(
+      failWithMessage(
         "A quoted field is not closed. Check the source cell before splitting.",
       ),
     u(),
@@ -1774,17 +1772,15 @@ function validateTextToColumnsRequest(e) {
     "Invalid Text to Columns request.",
   ),
     (typeof e.sourceSheetId != "string" || typeof e.sourceRange != "string") &&
-      throwValidationError("Choose a source worksheet and one-column range."),
+      failWithMessage("Choose a source worksheet and one-column range."),
     assertDelimiterCharacter(e.delimiter),
     ["none", "first-row"].includes(e.header) ||
-      throwValidationError(
-        "Choose whether the first source row contains headings.",
-      ),
+      failWithMessage("Choose whether the first source row contains headings."),
     e.formats !== undefined &&
       (!Array.isArray(e.formats) ||
         e.formats.length > dataModelBudgets.fields ||
         e.formats.some((t) => !["text", "general"].includes(t))) &&
-      throwValidationError(
+      failWithMessage(
         "Column conversion must be Text or General, with at most 50 columns.",
       ),
     assertRecordKeys(
@@ -1800,14 +1796,14 @@ function validateTextToColumnsRequest(e) {
       "Invalid new worksheet destination.",
     ),
       typeof e.destination.name != "string" &&
-        throwValidationError("Enter an output worksheet name."));
+        failWithMessage("Enter an output worksheet name."));
     const t = e.destination.name.trim();
     ((!t ||
       t.length > 31 ||
       /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(t) ||
       t.startsWith("'") ||
       t.endsWith("'")) &&
-      throwValidationError(
+      failWithMessage(
         "Output worksheet names need 1–31 characters without control/Excel-reserved characters or leading/trailing apostrophes.",
       ),
       (r = { kind: "new-sheet", name: t }));
@@ -1819,20 +1815,17 @@ function validateTextToColumnsRequest(e) {
     ),
       (typeof e.destination.sheetId != "string" ||
         typeof e.destination.address != "string") &&
-        throwValidationError(
-          "Choose an output worksheet and one starting cell.",
-        ));
+        failWithMessage("Choose an output worksheet and one starting cell."));
     const t = _t(e.destination.address.trim());
     r = {
       kind: "range",
       sheetId: e.destination.sheetId,
-      address: lg(t.row, t.col),
+      address: formatCellAddress(t.row, t.col),
     };
-  } else
-    throwValidationError("Choose a separate output range or a new worksheet.");
+  } else failWithMessage("Choose a separate output range or a new worksheet.");
   return {
     sourceSheetId: e.sourceSheetId,
-    sourceRange: Ece(e.sourceRange),
+    sourceRange: formatRangeCornerCells(e.sourceRange),
     delimiter: e.delimiter,
     header: e.header,
     ...(e.formats ? { formats: [...e.formats] } : {}),
@@ -1843,14 +1836,14 @@ function validateTextToColumnsPermissions(e, r) {
   return (
     [r.readOnly, r.includeHidden, r.allowNewSheet].some(
       (t) => t !== undefined && typeof t != "boolean",
-    ) && throwValidationError("Text to Columns permissions must be boolean."),
-    r.readOnly && throwValidationError("This workbook is read-only."),
+    ) && failWithMessage("Text to Columns permissions must be boolean."),
+    r.readOnly && failWithMessage("This workbook is read-only."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      throwValidationError("The authorized worksheet context is invalid."),
+      failWithMessage("The authorized worksheet context is invalid."),
     {
       includeHidden: r.includeHidden ?? false,
       allowNewSheet: r.allowNewSheet ?? true,
@@ -1870,13 +1863,11 @@ function assertSelectionInAuthorizedSheet(e, r, t) {
         cn(e, "column").some(
           (o) => o.start <= n.lastCol && o.end >= n.firstCol,
         )))) &&
-    throwValidationError(
+    failWithMessage(
       "The selected cells are outside the visible, authorized worksheet context.",
     ),
     (n.lastRow >= e.rowCount || n.lastCol >= e.colCount) &&
-      throwValidationError(
-        "The selected cells exceed the worksheet boundary.",
-      ));
+      failWithMessage("The selected cells exceed the worksheet boundary."));
 }
 function formatCellTextValue(e) {
   return e === null
@@ -1915,7 +1906,7 @@ function assertOutputNameUnreferenced(e, r) {
   let t = 0;
   const n = (a) => (
       (t += a.length) > dataModelBudgets.nameFormulaCharacters &&
-        throwValidationError(
+        failWithMessage(
           "Output-name safety checking exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ),
       [
@@ -1947,7 +1938,7 @@ function assertOutputNameUnreferenced(e, r) {
   }
   for (const a of e.definedNames ?? []) o.push(a.refersTo);
   o.some(n) &&
-    throwValidationError(
+    failWithMessage(
       "The output worksheet name is already referenced by workbook formulas or formula metadata. Choose another name to avoid reconnecting an unresolved source reference.",
     );
 }
@@ -1977,13 +1968,11 @@ export {
   validateTextToColumnsRequest,
   assertSelectionInAuthorizedSheet,
   splitDelimitedCell,
-  throwValidationError,
   parseImportedCellValue,
   DataModelSnapshotNotice,
   rangesOverlap,
   dataModelBudgets,
   formatCellTextValue,
-  lg,
   DataModelDialog,
   validateTextToColumnsPermissions,
   useDialogFocusTrap,

@@ -1,3 +1,9 @@
+import { throwErrorMessage, failWithMessage } from "./03-workbook-model.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
+import {
+  buildCompositeKey,
+  isFormulaInputValue,
+} from "./11-workbook-formats-dialog.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -79,14 +85,8 @@ async function requestAssistantAnswer(e, r, t, n = {}) {
 }
 const materialityScreenLimits = { sourceCells: 500, pageSize: 20 },
   Tz = new WeakMap();
-function throwMaterialityError(e) {
-  throw Error(e);
-}
-const formatCellAddressLabel = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  buildPairCacheKey = (e, r) => JSON.stringify([e, r]),
-  isFormulaCellEntry = (e) =>
-    !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
-  cde = 864e5;
+
+const cde = 864e5;
 function parseStrictIsoDate(e) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return null;
   const r = Date.parse(`${e}T00:00:00.000Z`);
@@ -113,16 +113,16 @@ function normalizeScreenHostScope(e, r) {
   return (
     r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
-      throwMaterialityError("Include hidden must be boolean."),
+      failWithMessage("Include hidden must be boolean."),
     r.readOnly !== undefined &&
       typeof r.readOnly != "boolean" &&
-      throwMaterialityError("Read-only must be boolean."),
+      failWithMessage("Read-only must be boolean."),
     r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
         )) &&
-      throwMaterialityError("The materiality screen host context is invalid."),
+      failWithMessage("The materiality screen host context is invalid."),
     {
       includeHidden: !!r.includeHidden,
       allowedSheetIds: [
@@ -150,46 +150,46 @@ function normalizeMaterialityConfig(e, r) {
     typeof r != "object" ||
     Object.keys(r).some((a) => !t.includes(a)) ||
     t.some((a) => !(a in r))) &&
-    throwMaterialityError(
+    failWithMessage(
       "Provide a complete, supported materiality screen configuration.",
     ),
     (typeof r.sheetId != "string" ||
       !e.sheets.some((a) => a.id === r.sheetId)) &&
-      throwMaterialityError("The source worksheet no longer exists."),
+      failWithMessage("The source worksheet no longer exists."),
     (typeof r.range != "string" ||
       !/^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
         r.range,
       )) &&
-      throwMaterialityError("Choose one rectangular A1 source range."));
+      failWithMessage("Choose one rectangular A1 source range."));
   const n = parseRangeAddress(r.range);
   ((n.lastRow - n.firstRow + 1) * (n.lastCol - n.firstCol + 1) >
     materialityScreenLimits.sourceCells &&
-    throwMaterialityError(
+    failWithMessage(
       "The materiality screen supports at most 500 selected source cells.",
     ),
     (typeof r.headers != "boolean" ||
       n.lastRow - n.firstRow + 1 <= Number(r.headers)) &&
-      throwMaterialityError(
+      failWithMessage(
         "Choose a source range with at least one data row and valid header handling.",
       ));
   const o = [r.amountColumn, r.currencyColumn, r.dateColumn];
   return (
     (o.some((a) => !Number.isInteger(a) || a < n.firstCol || a > n.lastCol) ||
       new Set(o).size !== 3) &&
-      throwMaterialityError(
+      failWithMessage(
         "Choose three distinct amount, currency and date columns inside the source range.",
       ),
     (typeof r.threshold != "number" ||
       !Number.isFinite(r.threshold) ||
       r.threshold < 0) &&
-      throwMaterialityError("Threshold must be a finite, nonnegative number."),
+      failWithMessage("Threshold must be a finite, nonnegative number."),
     (!["absolute", "signed"].includes(r.amountMode) ||
       !["gt", "gte", "lt", "lte", "eq"].includes(r.comparator)) &&
-      throwMaterialityError(
+      failWithMessage(
         "Choose an absolute or signed amount and a supported comparison rule.",
       ),
     (typeof r.currency != "string" || !/^[A-Za-z]{3}$/.test(r.currency)) &&
-      throwMaterialityError(
+      failWithMessage(
         "Declare a three-letter currency identifier; no currency conversion is performed.",
       ),
     (typeof r.effectiveFrom != "string" ||
@@ -197,12 +197,12 @@ function normalizeMaterialityConfig(e, r) {
       parseStrictIsoDate(r.effectiveFrom) === null ||
       parseStrictIsoDate(r.effectiveTo) === null ||
       r.effectiveFrom > r.effectiveTo) &&
-      throwMaterialityError(
+      failWithMessage(
         "Choose valid ISO start and end dates in chronological order.",
       ),
     {
       sheetId: r.sheetId,
-      range: `${formatCellAddressLabel(n.firstRow, n.firstCol)}:${formatCellAddressLabel(n.lastRow, n.lastCol)}`,
+      range: `${formatCellAddress(n.firstRow, n.firstCol)}:${formatCellAddress(n.lastRow, n.lastCol)}`,
       headers: r.headers,
       amountColumn: r.amountColumn,
       currencyColumn: r.currencyColumn,
@@ -219,7 +219,7 @@ function normalizeMaterialityConfig(e, r) {
 function resolveMaterialitySourceRange(e, r, t) {
   const n = e.sheets.find((a) => a.id === r.sheetId);
   (!n || !t.allowedSheetIds.includes(n.id)) &&
-    throwMaterialityError("The source is outside the authorized host context.");
+    failWithMessage("The source is outside the authorized host context.");
   const o = parseRangeAddress(r.range);
   return (
     !t.includeHidden &&
@@ -229,7 +229,7 @@ function resolveMaterialitySourceRange(e, r, t) {
         cn(n, "column").some(
           (a) => a.start <= o.lastCol && a.end >= o.firstCol,
         )) &&
-      throwMaterialityError(
+      failWithMessage(
         "The source range includes hidden content. Explicitly include hidden content only within authorized host scope.",
       ),
     (n.merges ?? []).some((a) => {
@@ -241,14 +241,14 @@ function resolveMaterialitySourceRange(e, r, t) {
         s.lastCol >= o.firstCol
       );
     }) &&
-      throwMaterialityError(
+      failWithMessage(
         "Unmerge the source range before screening so every record has unambiguous fields.",
       ),
     n
   );
 }
 function inspectScreenFormulaCells(e, r, t, n) {
-  const o = t.filter((g) => isFormulaCellEntry(r.cells[g])),
+  const o = t.filter((g) => isFormulaInputValue(r.cells[g])),
     a = new Map(
       t.map((g) => {
         return [g, r.cells[g]?.raw ?? null];
@@ -265,10 +265,7 @@ function inspectScreenFormulaCells(e, r, t, n) {
     g++
   )
     d = "";
-  d ||
-    throwMaterialityError(
-      "A private calculation context could not be isolated.",
-    );
+  d || failWithMessage("A private calculation context could not be isolated.");
   const u = {
     id: d,
     name: d,
@@ -281,7 +278,7 @@ function inspectScreenFormulaCells(e, r, t, n) {
     },
   };
   String(u.cells.A1.raw).length > 8192 &&
-    throwMaterialityError(
+    failWithMessage(
       "The selected formulas exceed the bounded calculation inspection length.",
     );
   const l = inspectFormulaDependencies(
@@ -307,7 +304,7 @@ function inspectScreenFormulaCells(e, r, t, n) {
     l.coverage.depthLimited ||
     l.cycles.length ||
     l.issues.some((g) => g.from === l.target.key || c.has(g.from))) &&
-    throwMaterialityError(
+    failWithMessage(
       "Formula fields require a complete supported static dependency closure within the visible authorized context (1,000 cells, depth 8, 5,000 scanned formulas).",
     );
   const h = new Set([
@@ -335,10 +332,10 @@ function inspectScreenFormulaCells(e, r, t, n) {
     const b = e.sheets.find((y) => y.id === g.sheetId)?.cells[g.address];
     if (
       ((!b || b.raw === null) &&
-        throwMaterialityError(
+        failWithMessage(
           "Formula dependencies must be populated scalar cells; ambiguous blank or spill-child dependencies cannot be screened.",
         ),
-      isFormulaCellEntry(b))
+      isFormulaInputValue(b))
     ) {
       const y = resolveDefinedNameValue(String(b.raw), e, g.sheetId).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
@@ -353,7 +350,7 @@ function inspectScreenFormulaCells(e, r, t, n) {
               .replace(/^_XLWS\./, ""),
           ),
         )) &&
-        throwMaterialityError(
+        failWithMessage(
           "The screen excludes volatile, dynamic-reference and array/spill formulas. Use supported scalar values or formulas.",
         );
     }
@@ -366,7 +363,7 @@ function inspectScreenFormulaCells(e, r, t, n) {
           ...g,
           cells: Object.fromEntries(
             Object.entries(g.cells).filter(([b]) =>
-              c.has(buildPairCacheKey(g.id, b)),
+              c.has(buildCompositeKey(g.id, b)),
             ),
           ),
         })),
@@ -375,19 +372,19 @@ function inspectScreenFormulaCells(e, r, t, n) {
   for (const g of l.nodes) {
     const b = p(g.sheetId, g.address);
     (p.getOperationalErrors().length &&
-      throwMaterialityError(
+      failWithMessage(
         "An operational calculation limit or cycle prevents screening, even when a formula handles the visible error.",
       ),
       p.getSpillRange(g.sheetId, g.address) &&
-        throwMaterialityError(
+        failWithMessage(
           "The screen requires scalar fields; a formula produced an array/spill result.",
         ),
-      isFormulaCellEntry(
+      isFormulaInputValue(
         e.sheets.find((y) => y.id === g.sheetId)?.cells[g.address],
       ) &&
         typeof b == "string" &&
         /^#(?:[A-Z0-9_/.]+[!?]?)/.test(b) &&
-        throwMaterialityError(
+        failWithMessage(
           "A selected formula or dependency has a calculation error. Correct it before screening.",
         ),
       g.sheetId === r.id && o.includes(g.address) && a.set(g.address, b));
@@ -427,7 +424,7 @@ function buildMaterialitySourceEvidence(e, r, t = {}) {
     typeof r.headers != "boolean" ||
     !Array.isArray(r.columns) ||
     r.columns.length > 500) &&
-    throwMaterialityError(
+    failWithMessage(
       "Provide a bounded source range and scalar field selection.",
     );
   const n = parseRangeAddress(r.range),
@@ -440,41 +437,41 @@ function buildMaterialitySourceEvidence(e, r, t = {}) {
     r.columns.some(
       (m) => !Number.isInteger(m) || m < n.firstCol || m > n.lastCol,
     )) &&
-    throwMaterialityError(
+    failWithMessage(
       "Choose scalar fields inside one source rectangle of at most 500 cells and within worksheet dimensions.",
     );
   const a = {
       ...r,
-      range: `${formatCellAddressLabel(n.firstRow, n.firstCol)}:${formatCellAddressLabel(n.lastRow, n.lastCol)}`,
+      range: `${formatCellAddress(n.firstRow, n.firstCol)}:${formatCellAddress(n.lastRow, n.lastCol)}`,
     },
     s = normalizeScreenHostScope(e, t),
     d = resolveMaterialitySourceRange(e, a, s),
     u = parseRangeAddress(a.range);
   for (let m = u.firstRow; m <= u.lastRow; m++)
     for (let v = u.firstCol; v <= u.lastCol; v++) {
-      const g = d.cells[formatCellAddressLabel(m, v)]?.raw;
+      const g = d.cells[formatCellAddress(m, v)]?.raw;
       typeof g == "number" &&
         !Number.isFinite(g) &&
-        throwMaterialityError(
+        failWithMessage(
           "Selected raw evidence contains a nonfinite number and cannot be preserved in JSON. Correct it before screening.",
         );
     }
   const l = [];
   for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
-    for (const v of new Set(a.columns)) l.push(formatCellAddressLabel(m, v));
+    for (const v of new Set(a.columns)) l.push(formatCellAddress(m, v));
   const c = inspectScreenFormulaCells(e, d, l, s),
     h = [];
   for (let m = u.firstRow + Number(a.headers); m <= u.lastRow; m++)
     h.push({
       sourceRow: m + 1,
-      sourceRange: `${formatCellAddressLabel(m, u.firstCol)}:${formatCellAddressLabel(m, u.lastCol)}`,
+      sourceRange: `${formatCellAddress(m, u.firstCol)}:${formatCellAddress(m, u.lastCol)}`,
       cells: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) =>
         structuredClone(
-          d.cells[formatCellAddressLabel(m, u.firstCol + g)] ?? { raw: null },
+          d.cells[formatCellAddress(m, u.firstCol + g)] ?? { raw: null },
         ),
       ),
       values: Array.from({ length: u.lastCol - u.firstCol + 1 }, (v, g) => {
-        const b = formatCellAddressLabel(m, u.firstCol + g);
+        const b = formatCellAddress(m, u.firstCol + g);
         return c.has(b) ? c.get(b) : (d.cells[b]?.raw ?? null);
       }),
     });
@@ -486,7 +483,7 @@ function buildMaterialitySourceEvidence(e, r, t = {}) {
     headers: Array.from({ length: u.lastCol - u.firstCol + 1 }, (m, v) => {
       return a.headers
         ? String(
-            d.cells[formatCellAddressLabel(u.firstRow, u.firstCol + v)]?.raw ??
+            d.cells[formatCellAddress(u.firstRow, u.firstCol + v)]?.raw ??
               `Column ${columnIndexToLetters(u.firstCol + v)}`,
           )
         : `Column ${columnIndexToLetters(u.firstCol + v)}`;
@@ -494,7 +491,7 @@ function buildMaterialitySourceEvidence(e, r, t = {}) {
   };
   return (
     new TextEncoder().encode(JSON.stringify(f, null, 2)).length > 2e6 &&
-      throwMaterialityError(
+      failWithMessage(
         "The complete source evidence exceeds 2,000,000 bytes. Select a smaller population.",
       ),
     f
@@ -594,7 +591,7 @@ function runMaterialityScreen(e, r, t = {}) {
         .filter((m) => m.disposition === "flagged")
         .reduce((m, v) => m + v.amount, 0);
   [l, c, l - c, f].some((m) => m !== null && !Number.isFinite(m)) &&
-    throwMaterialityError(
+    failWithMessage(
       "The control total exceeds finite numeric capacity. Reduce the population or magnitude.",
     );
   const p = {
@@ -635,7 +632,7 @@ function runMaterialityScreen(e, r, t = {}) {
   };
   return (
     new TextEncoder().encode(JSON.stringify(p, null, 2)).length > 2e6 &&
-      throwMaterialityError(
+      failWithMessage(
         "The complete evidence report exceeds 2,000,000 bytes. Select a smaller source population.",
       ),
     Tz.set(p, {
@@ -703,32 +700,29 @@ function checkMaterialityReportFreshness(e, r, t, n = {}) {
 }
 function exportMaterialityReportJson(e, r, t, n = {}) {
   const o = checkMaterialityReportFreshness(e, r, t, n);
-  return (
-    o.current || throwMaterialityError(o.reason),
-    JSON.stringify(r, null, 2)
-  );
+  return (o.current || failWithMessage(o.reason), JSON.stringify(r, null, 2));
 }
 function parseMaterialityReportText(e, r, t = {}) {
   (typeof r != "string" ||
     r.length > 2e6 ||
     new TextEncoder().encode(r).length > 2e6) &&
-    throwMaterialityError(
+    failWithMessage(
       "The screen configuration/report must be at most 2,000,000 bytes.",
     );
   let n;
   try {
     n = JSON.parse(r);
   } catch {
-    throwMaterialityError("The screen configuration/report is not valid JSON.");
+    failWithMessage("The screen configuration/report is not valid JSON.");
   }
   return loadMaterialityConfiguration(e, n, t);
 }
 function loadMaterialityConfiguration(e, r, t = {}) {
   (!r || typeof r != "object" || Array.isArray(r)) &&
-    throwMaterialityError("Choose a supported screen configuration or report.");
+    failWithMessage("Choose a supported screen configuration or report.");
   const n = r;
   (n.schemaVersion !== 1 || n.kind !== "materiality-screen") &&
-    throwMaterialityError(
+    failWithMessage(
       "The materiality screen configuration version is unsupported.",
     );
   const o = normalizeMaterialityConfig(e, n.request);
@@ -744,9 +738,6 @@ const agingScheduleLimits = {
     reportBytes: 2e6,
   },
   _z = new WeakMap(),
-  throwAgingError = (e) => {
-    throw Error(e);
-  },
   dayInMilliseconds = 864e5;
 function parseAgingIsoDate(e) {
   if (
@@ -809,20 +800,20 @@ function normalizeAgingConfiguration(e, r, t) {
     Array.isArray(r) ||
     Object.keys(r).length !== n.length ||
     n.some((d) => !Object.hasOwn(r, d))) &&
-    throwAgingError("Provide a complete, supported aging configuration."),
+    throwErrorMessage("Provide a complete, supported aging configuration."),
     (!["due", "document"].includes(r.dateBasis) ||
       !["1900", "1904"].includes(r.dateSystem)) &&
-      throwAgingError(
+      throwErrorMessage(
         "Choose due or document date and an explicit 1900 or 1904 serial date system.",
       ),
     parseAgingIsoDate(r.asOf) === null &&
-      throwAgingError(
+      throwErrorMessage(
         "Choose a valid fixed as-of date in ISO YYYY-MM-DD format.",
       ),
     (!Array.isArray(r.buckets) ||
       r.buckets.length < 1 ||
       r.buckets.length > agingScheduleLimits.buckets) &&
-      throwAgingError("Configure between 1 and 24 aging buckets."));
+      throwErrorMessage("Configure between 1 and 24 aging buckets."));
   let o = 0;
   const a = new Set();
   for (const [d, u] of r.buckets.entries())
@@ -836,7 +827,7 @@ function normalizeAgingConfiguration(e, r, t) {
       u.label.trim().length > 80 ||
       /[\u0000-\u001f\u007f]/.test(u.label) ||
       a.has(u.label.trim().toLowerCase())) &&
-      throwAgingError(
+      throwErrorMessage(
         "Each bucket needs a unique label of 1–80 characters and inclusive from/to bounds.",
       ),
       a.add(u.label.trim().toLowerCase()),
@@ -845,7 +836,7 @@ function normalizeAgingConfiguration(e, r, t) {
         (d === r.buckets.length - 1
           ? u.to !== null
           : !Number.isSafeInteger(u.to) || u.to < u.from || u.to > 3652424)) &&
-        throwAgingError(
+        throwErrorMessage(
           "Buckets must cover every nonnegative day exactly once: start at 0, use contiguous inclusive integer bounds, and leave only the final upper bound open.",
         ),
       (o = u.to === null ? 0 : u.to + 1));
@@ -890,7 +881,7 @@ function assertAgingControlTotal(e) {
   const r = Number(e);
   return Number.isFinite(r)
     ? r
-    : throwAgingError(
+    : throwErrorMessage(
         "The aging control total exceeds finite numeric capacity. Reduce the selected population or magnitude.",
       );
 }
@@ -942,7 +933,7 @@ function buildAgingSchedule(e, r, t = {}) {
           );
       return (
         V === -1 &&
-          throwAgingError(
+          throwErrorMessage(
             "The configured aging buckets do not cover a valid source row.",
           ),
         {
@@ -1032,7 +1023,7 @@ function buildAgingSchedule(e, r, t = {}) {
   return (
     new TextEncoder().encode(JSON.stringify(b, null, 2)).length >
       agingScheduleLimits.reportBytes &&
-      throwAgingError(
+      throwErrorMessage(
         "The aging report exceeds 2,000,000 bytes. Select a smaller population.",
       ),
     _z.set(b, {
@@ -1091,7 +1082,7 @@ function checkAgingReportFreshness(e, r, t, n = {}) {
 }
 function exportAgingReportJson(e, r, t, n = {}) {
   const o = checkAgingReportFreshness(e, r, t, n);
-  return (o.current || throwAgingError(o.reason), JSON.stringify(r, null, 2));
+  return (o.current || throwErrorMessage(o.reason), JSON.stringify(r, null, 2));
 }
 function loadAgingConfiguration(e, r, t = {}) {
   return (
@@ -1100,7 +1091,7 @@ function loadAgingConfiguration(e, r, t = {}) {
       Array.isArray(r) ||
       r.schemaVersion !== 1 ||
       r.kind !== "aging-schedule") &&
-      throwAgingError("Choose a supported aging configuration or report."),
+      throwErrorMessage("Choose a supported aging configuration or report."),
     normalizeAgingConfiguration(e, r.request, t)
   );
 }
@@ -2099,3 +2090,4 @@ export {
   exportMaterialityReportJson,
   runMaterialityScreen,
 };
+export { listRangeColumnIndexes };

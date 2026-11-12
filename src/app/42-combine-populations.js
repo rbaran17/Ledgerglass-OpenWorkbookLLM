@@ -1,3 +1,4 @@
+import { formatCellValueForDisplay } from "./17-recipe-step-editors.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -31,7 +32,7 @@ import {
   applyTextSplitPreview,
   buildTextSplitResult,
 } from "./16-text-split-tools.js";
-import { formatAutomationValue, w2 } from "./41-automation-and-scripts.js";
+import { w2 } from "./41-automation-and-scripts.js";
 
 function CombinePopulationsDialog(e) {
   const { text, language } = useWorkbookMessages(),
@@ -963,7 +964,7 @@ function CombinePopulationsDialog(e) {
                                       {
                                         title:
                                           ke === null ? "Blank" : typeof ke,
-                                        children: formatAutomationValue(ke),
+                                        children: formatCellValueForDisplay(ke),
                                       },
                                       je,
                                     ),
@@ -1079,7 +1080,7 @@ function CombinePopulationsDialog(e) {
   });
 }
 const Fv = 20,
-  uj = (e) => JSON.stringify(e);
+  stringifyJsonValue = (e) => JSON.stringify(e);
 function TextToColumnsDialog(e) {
   const { text, language } = useWorkbookMessages(),
     n = ne.useId(),
@@ -1658,7 +1659,9 @@ function TextToColumnsDialog(e) {
                                 i.jsx("td", { children: ae.sourceAddress }),
                                 i.jsxs("td", {
                                   children: [
-                                    i.jsx("code", { children: uj(ae.field) }),
+                                    i.jsx("code", {
+                                      children: stringifyJsonValue(ae.field),
+                                    }),
                                     ae.padded &&
                                       i.jsxs("span", {
                                         children: [
@@ -1674,7 +1677,7 @@ function TextToColumnsDialog(e) {
                                 i.jsxs("td", {
                                   children: [
                                     i.jsx("code", {
-                                      children: uj(ae.cell.raw),
+                                      children: stringifyJsonValue(ae.cell.raw),
                                     }),
                                     i.jsx("br", {}),
                                     ae.type,
@@ -2071,3 +2074,4 @@ export {
   TextToColumnsDialog,
   stringifyEscapedJson,
 };
+export { stringifyJsonValue };

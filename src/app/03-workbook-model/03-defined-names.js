@@ -1,4 +1,13 @@
 import {
+  coerceValueToText,
+  flattenNestedValues,
+} from "../02-financial-functions.js";
+import {
+  isNonArrayObject,
+  failWithMessage,
+  throwWorkbookError,
+} from "./01-cell-styles-and-themes.js";
+import {
   walkFormulaNodes,
   tokenizeFormulaText,
   normalizeBindingName,
@@ -9,7 +18,6 @@ import {
   sha256HexDigest,
 } from "../01-core-schemas-and-hashing.js";
 import {
-  flattenNestedArguments,
   toMatrixArgument,
   valuesEqualIgnoringCase,
   compareSortKeyWithDirection,
@@ -17,7 +25,6 @@ import {
   notModernFunctionSentinel,
   modernFunctionNames,
   matrixResultFunctionNames,
-  zh,
 } from "./02-number-formats.js";
 
 function evaluateDefinedNameFunction(e, r, t) {
@@ -89,7 +96,7 @@ function evaluateDefinedNameFunction(e, r, t) {
     e !== "MAXIFS" &&
     e !== "MINIFS"
   ) {
-    const h = u.flatMap(flattenNestedArguments).find(t.isIssue);
+    const h = u.flatMap(flattenNestedValues).find(t.isIssue);
     if (h) return h;
   }
   if (
@@ -108,8 +115,8 @@ function evaluateDefinedNameFunction(e, r, t) {
     const h = e.startsWith("RANK"),
       f = (
         e === "STDEV.P" || e === "VAR.P" || e === "MODE.SNGL"
-          ? u.flatMap(flattenNestedArguments)
-          : flattenNestedArguments(u[h ? 1 : 0])
+          ? u.flatMap(flattenNestedValues)
+          : flattenNestedValues(u[h ? 1 : 0])
       )
         .filter((b) => typeof b == "number")
         .sort((b, y) => b - y);
@@ -180,25 +187,25 @@ function evaluateDefinedNameFunction(e, r, t) {
   }
   if (e === "CONCAT" || e === "TEXTJOIN") {
     e === "TEXTJOIN" && u.length < 3 && n();
-    const h = e === "TEXTJOIN" ? zh(u[0]) : "",
+    const h = e === "TEXTJOIN" ? coerceValueToText(u[0]) : "",
       f = e === "TEXTJOIN" && d(u[1]),
       p = u
         .slice(e === "TEXTJOIN" ? 2 : 0)
-        .flatMap(flattenNestedArguments)
+        .flatMap(flattenNestedValues)
         .filter((m) => !f || (m !== null && m !== ""));
     return (
-      p.reduce((m, v) => m + zh(v).length, 0) +
+      p.reduce((m, v) => m + coerceValueToText(v).length, 0) +
         Math.max(0, p.length - 1) * h.length >
         32767 && n("#LIMIT!"),
-      p.map(zh).join(h)
+      p.map(coerceValueToText).join(h)
     );
   }
   if (e === "MAXIFS" || e === "MINIFS") {
     (u.length < 3 || u.length % 2 === 0) && n();
-    const h = flattenNestedArguments(u[0]),
+    const h = flattenNestedValues(u[0]),
       f = [];
     for (let g = 1; g < u.length; g += 2) {
-      const b = flattenNestedArguments(u[g]);
+      const b = flattenNestedValues(u[g]);
       if (
         ((b.length !== h.length ||
           toMatrixArgument(u[g]).length !== toMatrixArgument(u[0]).length ||
@@ -240,7 +247,7 @@ function evaluateDefinedNameFunction(e, r, t) {
       f.some((A) => A.length !== f[0].length) ||
       (f.length > 1 && f[0].length > 1)) &&
       n();
-    const p = flattenNestedArguments(f),
+    const p = flattenNestedValues(f),
       m = o(u[e === "XMATCH" ? 2 : 4], 0),
       v = o(u[e === "XMATCH" ? 3 : 5], 1);
     (![0, -1, 1, 2].includes(m) || ![1, -1, 2, -2].includes(v)) && n();
@@ -313,7 +320,7 @@ function evaluateDefinedNameFunction(e, r, t) {
     const h = toMatrixArgument(u[0]),
       f = toMatrixArgument(u[1]);
     u[1] === undefined && n();
-    const p = flattenNestedArguments(f).find(t.isIssue);
+    const p = flattenNestedValues(f).find(t.isIssue);
     if (p) throw p;
     let m;
     if (f.length === h.length && f[0].length === 1)
@@ -351,7 +358,7 @@ function evaluateDefinedNameFunction(e, r, t) {
           : F.length !== w || F.some((z) => z.length !== 1)) ||
           ![-1, 1].includes(I)) &&
           n();
-        const O = flattenNestedArguments(F),
+        const O = flattenNestedValues(F),
           j = O.find(t.isIssue);
         if (j) throw j;
         E.push({ data: O, order: I });
@@ -423,7 +430,7 @@ function evaluateDefinedNameFunction(e, r, t) {
       f = e === "CHOOSECOLS" ? h[0].length : h.length,
       p = u
         .slice(1)
-        .flatMap(flattenNestedArguments)
+        .flatMap(flattenNestedValues)
         .map((m) => {
           const v = a(m),
             g = v > 0 ? v - 1 : f + v;
@@ -495,8 +502,8 @@ function evaluateDefinedNameFunction(e, r, t) {
     );
   }
   if (e === "TEXTBEFORE" || e === "TEXTAFTER") {
-    const h = zh(u[0]),
-      f = zh(u[1]),
+    const h = coerceValueToText(u[0]),
+      f = coerceValueToText(u[1]),
       p = a(u[2], 1),
       m = a(u[3], 0) === 1,
       v = a(u[4], 0) === 1;
@@ -528,18 +535,18 @@ function evaluateDefinedNameFunction(e, r, t) {
   }
   if (e === "TEXTSPLIT") {
     (u.length < 2 || u.length > 6) && n();
-    const h = u.slice(0, 5).flatMap(flattenNestedArguments).find(t.isIssue);
+    const h = u.slice(0, 5).flatMap(flattenNestedValues).find(t.isIssue);
     if (h) return h;
-    const f = zh(u[0]),
+    const f = coerceValueToText(u[0]),
       p = u[3] === undefined ? false : d(u[3]),
       m = o(u[4], 0);
     (Array.isArray(u[0]) || ![0, 1].includes(m)) && n();
     const v = (A) =>
-        flattenNestedArguments(A)
+        flattenNestedValues(A)
           .filter((k) => k != null)
           .map((k) => {
             if (t.isIssue(k)) throw k;
-            return zh(k);
+            return coerceValueToText(k);
           })
           .filter(Boolean),
       g = v(u[1]),
@@ -1415,10 +1422,8 @@ function summarizeWorksheets(e, r = {}) {
       };
     });
 }
-const fp = () => crypto.randomUUID();
-function throwWorkbookModelError(e) {
-  throw new Error(e);
-}
+const createUuid = () => crypto.randomUUID();
+
 const isPlainObject = (e) =>
   !!e &&
   typeof e == "object" &&
@@ -1431,7 +1436,7 @@ function validateWorksheetName(e) {
       e.length > 31 ||
       /[\\/\[\]*?:\u0000-\u001f]/.test(e) ||
       /^'|'$/.test(e)) &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "Sheet names must contain 1–31 characters and cannot contain control characters, Excel-reserved characters, or begin or end with an apostrophe.",
       ),
     e
@@ -1442,20 +1447,18 @@ function assertUniqueWorksheetName(e, r, t) {
   return (
     e.sheets.some(
       (o) => o.id !== t && o.name.toLowerCase() === n.toLowerCase(),
-    ) && throwWorkbookModelError("A worksheet with that name already exists."),
+    ) && throwWorkbookError("A worksheet with that name already exists."),
     n
   );
 }
 const findWorksheetById = (e, r) =>
     e.sheets.find((t) => t.id === r) ??
-    throwWorkbookModelError("The worksheet was not found."),
+    throwWorkbookError("The worksheet was not found."),
   isVisibleWorksheet = (e) => !e.hidden && !e.veryHidden;
 function validateTabColor(e) {
   return (
     (typeof e != "string" || !/^#[a-f\d]{6}$/i.test(e)) &&
-      throwWorkbookModelError(
-        "Tab colors must use a six-digit hexadecimal color.",
-      ),
+      throwWorkbookError("Tab colors must use a six-digit hexadecimal color."),
     e.toLowerCase()
   );
 }
@@ -1463,10 +1466,10 @@ function validateWorksheetVisibility(e, r) {
   (validateWorksheetName(r.name),
     e.veryHidden !== undefined &&
       (typeof e.veryHidden != "boolean" &&
-        throwWorkbookModelError("The very-hidden flag must be boolean."),
+        throwWorkbookError("The very-hidden flag must be boolean."),
       e.veryHidden &&
         e.hidden === false &&
-        throwWorkbookModelError("A very-hidden worksheet must also be hidden."),
+        throwWorkbookError("A very-hidden worksheet must also be hidden."),
       (r.veryHidden = e.veryHidden),
       e.veryHidden && (r.hidden = true)),
     e.tabColor !== undefined && (r.tabColor = validateTabColor(e.tabColor)));
@@ -1479,7 +1482,7 @@ function validateWorkbookStructureProtection(e, r) {
       Object.keys(t).some(
         (a) => !["enabled", "passwordHash", "salt"].includes(a),
       )) &&
-      throwWorkbookModelError("Invalid workbook structure protection.");
+      throwWorkbookError("Invalid workbook structure protection.");
     const n = t.passwordHash !== undefined,
       o = t.salt !== undefined;
     ((n !== o ||
@@ -1489,7 +1492,7 @@ function validateWorkbookStructureProtection(e, r) {
           typeof t.salt != "string" ||
           t.salt.length < 16 ||
           t.salt.length > 100))) &&
-      throwWorkbookModelError(
+      throwWorkbookError(
         "Workbook structure protection requires a valid salted password hash.",
       ),
       (r.structureProtection = {
@@ -1503,20 +1506,21 @@ function validateWorkbookStructureProtection(e, r) {
       }));
   }
   r.sheets.some(isVisibleWorksheet) ||
-    throwWorkbookModelError("At least one worksheet must remain visible.");
+    throwWorkbookError("At least one worksheet must remain visible.");
 }
 function assertWorkbookStructureEditable(e) {
   var r;
   (r = e.structureProtection) != null &&
     r.enabled &&
-    throwWorkbookModelError(
+    throwWorkbookError(
       "Workbook structure is protected. Unprotect the structure before changing worksheets.",
     );
 }
 const S5 = String.raw`(?:'(?:[^']|'')+'|[^\s+\-*/^&=<>(),;:'"\[\]!]+)`,
   sheetPrefixPattern = new RegExp(`^(${S5})!`),
   Bne = new RegExp(`^(${S5}):(${S5})!`),
-  J6 = (e) => (e.startsWith("'") ? e.slice(1, -1).replace(/''/g, "'") : e),
+  unquoteSheetName = (e) =>
+    e.startsWith("'") ? e.slice(1, -1).replace(/''/g, "'") : e,
   quoteSheetName = (e) => `'${e.replace(/'/g, "''")}'`;
 function findClosingBracketIndex(e, r) {
   let t = r,
@@ -1577,7 +1581,7 @@ function parseWorksheetQualifiedReference(e) {
           start: n,
           end: t,
           text: e.slice(n, t),
-          sheets: [J6(s[1]), J6(s[2])],
+          sheets: [unquoteSheetName(s[1]), unquoteSheetName(s[2])],
           unsupported:
             "Three-dimensional worksheet references require explicit references before this operation.",
         }));
@@ -1585,7 +1589,7 @@ function parseWorksheetQualifiedReference(e) {
     }
     const d = a ? sheetPrefixPattern.exec(e.slice(t)) : null;
     if (d) {
-      const l = J6(d[1]);
+      const l = unquoteSheetName(d[1]);
       t += d[0].length;
       const c = Q6(e, t),
         h = e.slice(t, c);
@@ -1660,7 +1664,7 @@ function rewriteStructuredTableReference(e, r, t, n, o = false) {
   for (const u of parseWorksheetQualifiedReference(e)) {
     const l = xP(u, r, t),
       c = o && u.table && a.has(u.table.toLowerCase());
-    (u.unsupported && l && throwWorkbookModelError(u.unsupported),
+    (u.unsupported && l && throwWorkbookError(u.unsupported),
       !(!l && !c) &&
         ((s += e.slice(d, u.start)),
         (s +=
@@ -1698,7 +1702,7 @@ function createUniqueWorksheetName(e, r) {
     if (!e.sheets.some((a) => a.name.toLowerCase() === o.toLowerCase()))
       return o;
   }
-  return throwWorkbookModelError("No unique worksheet name is available.");
+  return throwWorkbookError("No unique worksheet name is available.");
 }
 function describeSheetDeletionImpacts(e, r) {
   const t = findWorksheetById(e, r),
@@ -1790,9 +1794,7 @@ function describeSheetDeletionImpacts(e, r) {
 function validateWorkbookPassword(e) {
   return (
     (typeof e != "string" || e.length > 200) &&
-      throwWorkbookModelError(
-        "Passwords must be text of at most 200 characters.",
-      ),
+      throwWorkbookError("Passwords must be text of at most 200 characters."),
     e
   );
 }
@@ -1828,7 +1830,7 @@ function applyTableSourceEvidence(e, r) {
     ],
   };
 }
-const isBlankValue = (e) => e === null || e === "";
+const isNullOrEmptyValue = (e) => e === null || e === "";
 function parseIsoDateText(e) {
   if (
     typeof e != "string" ||
@@ -1842,7 +1844,7 @@ function parseIsoDateText(e) {
 function coerceImportedValue(e, r = "any") {
   return (
     r === "any" ||
-    isBlankValue(e) ||
+    isNullOrEmptyValue(e) ||
     (r === "date"
       ? parseIsoDateText(e)
       : typeof e === (r === "text" ? "string" : r) &&
@@ -1902,13 +1904,10 @@ const supportedChartKinds = [
   "histogram",
   "sparkline",
 ];
-function Rl(e) {
-  throw Error(e);
-}
-const CO = (e) => !!e && typeof e == "object" && !Array.isArray(e);
+
 function validateChartSettings(e) {
   if (e === undefined) return {};
-  (!CO(e) ||
+  (!isNonArrayObject(e) ||
     Object.keys(e).some(
       (t) =>
         ![
@@ -1925,46 +1924,49 @@ function validateChartSettings(e) {
           "sparklineKind",
         ].includes(t),
     )) &&
-    Rl("Invalid or unknown chart settings.");
+    failWithMessage("Invalid or unknown chart settings.");
   const r = {};
   for (const t of ["altText", "xTitle", "yTitle", "units"])
     e[t] !== undefined &&
       ((typeof e[t] != "string" ||
         e[t].length > (t === "altText" ? 2e3 : 200)) &&
-        Rl(`Invalid chart ${t}.`),
+        failWithMessage(`Invalid chart ${t}.`),
       (r[t] = e[t]));
   for (const t of ["xScale", "yScale"])
     e[t] !== undefined &&
       (["linear", "log"].includes(String(e[t])) ||
-        Rl("Chart scales must be linear or log."),
+        failWithMessage("Chart scales must be linear or log."),
       (r[t] = e[t]));
   if (
     (e.showLegend !== undefined &&
-      (typeof e.showLegend != "boolean" && Rl("Invalid chart legend setting."),
+      (typeof e.showLegend != "boolean" &&
+        failWithMessage("Invalid chart legend setting."),
       (r.showLegend = e.showLegend)),
     e.histogramBins !== undefined &&
       ((!Number.isInteger(e.histogramBins) ||
         Number(e.histogramBins) < 1 ||
         Number(e.histogramBins) > 50) &&
-        Rl("Choose 1 to 50 histogram bins."),
+        failWithMessage("Choose 1 to 50 histogram bins."),
       (r.histogramBins = Number(e.histogramBins))),
     e.sparklineKind !== undefined &&
       (["line", "column", "winLoss"].includes(String(e.sparklineKind)) ||
-        Rl("Invalid sparkline style."),
+        failWithMessage("Invalid sparkline style."),
       (r.sparklineKind = e.sparklineKind)),
     e.series !== undefined)
   ) {
     (!Array.isArray(e.series) || e.series.length > 20) &&
-      Rl("Select at most 20 chart series.");
+      failWithMessage("Select at most 20 chart series.");
     const t = new Set();
     r.series = e.series.map((n) => {
-      ((!CO(n) ||
+      ((!isNonArrayObject(n) ||
         Object.keys(n).some((a) => !["column", "name", "kind"].includes(a)) ||
         !Number.isInteger(n.column) ||
         Number(n.column) < 1 ||
         Number(n.column) > 16384 ||
         t.has(Number(n.column))) &&
-        Rl("Chart series require unique one-based worksheet columns."),
+        failWithMessage(
+          "Chart series require unique one-based worksheet columns.",
+        ),
         t.add(Number(n.column)));
       const o = { column: Number(n.column) };
       return (
@@ -1972,11 +1974,11 @@ function validateChartSettings(e) {
           ((typeof n.name != "string" ||
             !n.name.trim() ||
             n.name.length > 200) &&
-            Rl("Chart series names require 1 to 200 characters."),
+            failWithMessage("Chart series names require 1 to 200 characters."),
           (o.name = n.name)),
         n.kind !== undefined &&
           (["column", "line"].includes(String(n.kind)) ||
-            Rl("Combo series must be column or line."),
+            failWithMessage("Combo series must be column or line."),
           (o.kind = n.kind)),
         o
       );
@@ -1990,7 +1992,7 @@ function validateChartSettings(e) {
           (t) => !Number.isInteger(t) || t < 1 || t > 1048576,
         ) ||
         new Set(e.includedRows).size !== e.includedRows.length) &&
-        Rl(
+        failWithMessage(
           "Chart filters require at most 500 unique one-based worksheet rows.",
         ),
       (r.includedRows = [...e.includedRows].sort((t, n) => t - n))),
@@ -2000,7 +2002,7 @@ function validateChartSettings(e) {
 function formatDiagnosticsMessage(e) {
   const r = e.diagnostics.filter((t) => t.severity === "error");
   r.length &&
-    Rl(
+    failWithMessage(
       r
         .slice(0, 5)
         .map((t) => t.message)
@@ -2010,7 +2012,6 @@ function formatDiagnosticsMessage(e) {
 const Kne = 100,
   maxPictureHashBytes = 2 * 1024 * 1024,
   Yne = 500,
-  isRecordObject = (e) => !!e && typeof e == "object" && !Array.isArray(e),
   validateDrawingNumber = (e, r, t, n) => {
     if (typeof e != "number" || !Number.isFinite(e) || e < r || e > t)
       throw new Error(`Invalid drawing ${n}.`);
@@ -2045,10 +2046,8 @@ export {
   validateChartSettings,
   Kne,
   validateDrawingNumber,
-  isBlankValue,
+  isNullOrEmptyValue,
   throwXlsxDefinedNameError,
-  isRecordObject,
-  Rl,
   hashWorkbookStructurePassword,
   tableColumnDataTypes,
   spreadsheetMlNamespace,
@@ -2062,10 +2061,9 @@ export {
   parseDefinedNameXmlAttributes,
   validateNameSheetReferences,
   rewriteStructuredTableReference,
-  throwWorkbookModelError,
   validateDefinedName,
   insertDefinedNamesIntoWorkbookXml,
-  fp,
+  createUuid,
   replaceTextSpans,
   localBindingFunctionNames,
   parseDefinedNamesXml,
@@ -2091,3 +2089,4 @@ export {
   validateDrawingText,
   isVisibleWorksheet,
 };
+export { unquoteSheetName, quoteSheetName };

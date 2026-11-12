@@ -1,3 +1,4 @@
+import { buildSnapshotGuard } from "./03-workbook-model.js";
 import { X, Palette, FileText, Printer } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -16,7 +17,6 @@ import {
   createDefaultPageSetup,
   parseRangeAddress,
   assertSheetUnprotected,
-  createPrintSnapshotGuard,
   applyPrintLayoutChange,
   columnIndexToLetters,
 } from "./03-workbook-model.js";
@@ -62,7 +62,7 @@ function PageSetupDialog(e) {
       [],
     ));
   const [g] = ne.useState(() => ({
-      snapshot: createPrintSnapshotGuard(e.workbook),
+      snapshot: buildSnapshotGuard(e.workbook),
       sheetId: e.sheetId,
       range: e.range,
       sheet: structuredClone(e.workbook.sheets.find((W) => W.id === e.sheetId)),

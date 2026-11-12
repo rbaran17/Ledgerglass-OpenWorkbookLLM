@@ -1,4 +1,12 @@
 import {
+  isNonArrayObject,
+  isPlainObjectValue,
+  throwWorkbookError,
+} from "./01-cell-styles-and-themes.js";
+import { createUuid, isNullOrEmptyValue } from "./03-defined-names.js";
+import { boundedTextSchema } from "../01-core-schemas-and-hashing.js";
+import { flattenNestedValues } from "../02-financial-functions.js";
+import {
   workbookLimits,
   supportedFinancialFunctionNames,
 } from "../02-financial-functions.js";
@@ -36,7 +44,6 @@ import {
   definedNameScopeKey,
   hashPictureBytes,
   maxPictureHashBytes,
-  isRecordObject,
   stripFormulaStringLiterals,
   replaceTextSpans,
   localBindingFunctionNames,
@@ -182,7 +189,7 @@ function assertPlainTextLabel(e, r, t) {
 }
 function validatePictureEvidence(e, r) {
   if (
-    !isRecordObject(e) ||
+    !isNonArrayObject(e) ||
     ![Object.prototype, null].includes(Object.getPrototypeOf(e)) ||
     Reflect.ownKeys(e).some(
       (o) =>
@@ -286,14 +293,12 @@ function assertDrawingPreviewCurrent(e, r, t = {}) {
       "The drawing preview is stale. Reopen it or select the object again.",
     );
 }
-const Pa = (e) => {
+const throwErrorMessage = (e) => {
     throw Error(e);
   },
-  isFiniteNumber = (e) => typeof e == "number" && Number.isFinite(e),
-  LE = (e) => e === null || e === "",
-  isObjectRecord = (e) => !!e && typeof e == "object" && !Array.isArray(e);
+  isFiniteNumber = (e) => typeof e == "number" && Number.isFinite(e);
 function validatePivotRefreshEvidence(e) {
-  isObjectRecord(e) || Pa("Invalid pivot refresh evidence.");
+  isNonArrayObject(e) || throwErrorMessage("Invalid pivot refresh evidence.");
   const r = e;
   (typeof r.at != "string" ||
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(r.at) ||
@@ -304,20 +309,20 @@ function validatePivotRefreshEvidence(e) {
     r.sourceSheetName.length > 31 ||
     typeof r.sourceRange != "string" ||
     !/^[A-Z]+\d+:[A-Z]+\d+$/.test(r.sourceRange)) &&
-    Pa("Invalid pivot refresh time or source label.");
+    throwErrorMessage("Invalid pivot refresh time or source label.");
   for (const n of ["sourceFingerprint", "outputFingerprint"])
     (typeof r[n] != "string" || !/^[a-f0-9]{64}$/.test(r[n])) &&
-      Pa("Invalid pivot content fingerprint.");
+      throwErrorMessage("Invalid pivot content fingerprint.");
   for (const n of ["sourceRows", "includedRows", "excludedRows"])
     (!Number.isSafeInteger(r[n]) || Number(r[n]) < 0 || Number(r[n]) > 1e5) &&
-      Pa("Invalid pivot population counts.");
+      throwErrorMessage("Invalid pivot population counts.");
   (Number(r.sourceRows) !== Number(r.includedRows) + Number(r.excludedRows) ||
     !Array.isArray(r.measures) ||
     !r.measures.length ||
     r.measures.length > 100) &&
-    Pa("Pivot population evidence does not reconcile.");
+    throwErrorMessage("Pivot population evidence does not reconcile.");
   const t = r.measures.map((n) => {
-    (!isObjectRecord(n) ||
+    (!isNonArrayObject(n) ||
       typeof n.name != "string" ||
       !n.name ||
       n.name.length > 512 ||
@@ -333,16 +338,16 @@ function validatePivotRefreshEvidence(e) {
         isFiniteNumber(n.result) ||
         (typeof n.result == "string" && n.result.length <= 32767)
       )) &&
-      Pa("Invalid pivot measure evidence.");
+      throwErrorMessage("Invalid pivot measure evidence.");
     const o = n;
     for (const a of ["numericCount", "nonblankCount"])
       (!Number.isSafeInteger(o[a]) ||
         Number(o[a]) < 0 ||
         Number(o[a]) > Number(r.includedRows)) &&
-        Pa("Invalid pivot measure count.");
+        throwErrorMessage("Invalid pivot measure count.");
     return (
       Number(o.numericCount) > Number(o.nonblankCount) &&
-        Pa("Invalid pivot numeric count."),
+        throwErrorMessage("Invalid pivot numeric count."),
       {
         name: o.name,
         field: o.field,
@@ -366,11 +371,11 @@ function validatePivotRefreshEvidence(e) {
   };
 }
 function bucketPivotDateValue(e, r, t) {
-  if (LE(e)) return null;
+  if (isNullOrEmptyValue(e)) return null;
   let n;
   if (r.dateSystem === "iso") {
     if (typeof e != "string" || !/^\d{4}-\d{2}-\d{2}$/.test(e))
-      return Pa(
+      return throwErrorMessage(
         `Date grouping for “${r.field}” needs YYYY-MM-DD text on source row ${t + 1}; choose the correct date system or clean the source.`,
       );
     if (
@@ -379,14 +384,16 @@ function bucketPivotDateValue(e, r, t) {
         n.toISOString().slice(0, 10) !== e ||
         e.startsWith("0000"))
     )
-      return Pa(`Invalid date in “${r.field}” on source row ${t + 1}.`);
+      return throwErrorMessage(
+        `Invalid date in “${r.field}” on source row ${t + 1}.`,
+      );
   } else {
     if (
       !isFiniteNumber(e) ||
       e < (r.dateSystem === "1900" ? 1 : 0) ||
       e > 2958465
     )
-      return Pa(
+      return throwErrorMessage(
         `Date grouping for “${r.field}” requires a valid ${r.dateSystem} numeric date serial on source row ${t + 1}.`,
       );
     const s = Math.floor(e),
@@ -398,7 +405,7 @@ function bucketPivotDateValue(e, r, t) {
       )),
       n.getUTCFullYear() > 9999)
     )
-      return Pa("Grouped date exceeds year 9999.");
+      return throwErrorMessage("Grouped date exceeds year 9999.");
   }
   const o = String(n.getUTCFullYear()).padStart(4, "0"),
     a = n.getUTCMonth() + 1;
@@ -418,7 +425,7 @@ const createAggregateAccumulator = (e = false) => ({
 });
 function SO(e, r) {
   var t;
-  (LE(r) ||
+  (isNullOrEmptyValue(r) ||
     (e.count++,
     (t = e.distinct) == null ||
       t.add(
@@ -433,7 +440,7 @@ function SO(e, r) {
       (e.min = Math.min(e.min, r)),
       (e.max = Math.max(e.max, r)),
       Number.isFinite(e.sum) ||
-        Pa("Aggregation exceeds finite numeric bounds.")));
+        throwErrorMessage("Aggregation exceeds finite numeric bounds.")));
 }
 function finalizeAggregateState(e, r) {
   return r === "count"
@@ -454,17 +461,23 @@ function computePivotTable(e, r, t) {
   const n = (C) => {
       const T = r.indexOf(C);
       return T < 0
-        ? Pa(`Source field “${C}” was not found. Refresh the field selection.`)
+        ? throwErrorMessage(
+            `Source field “${C}” was not found. Refresh the field selection.`,
+          )
         : T;
     },
     o = e.rowFields.map(n),
     a = e.columnFields.map(n);
   for (const C of e.dateGroups ?? [])
     [...e.rowFields, ...e.columnFields].includes(C.field) ||
-      Pa(`Date group “${C.field}” must be selected as a row or column field.`);
+      throwErrorMessage(
+        `Date group “${C.field}” must be selected as a row or column field.`,
+      );
   for (const C of e.calculatedFields ?? [])
     (r.some((T) => T.toLowerCase() === C.name.toLowerCase()) &&
-      Pa(`Calculated field “${C.name}” duplicates a source header.`),
+      throwErrorMessage(
+        `Calculated field “${C.name}” duplicates a source header.`,
+      ),
       n(C.field),
       C.otherField && n(C.otherField));
   const s = e.values.map((C) => {
@@ -472,7 +485,7 @@ function computePivotTable(e, r, t) {
       return (
         T &&
           C.operation !== "sum" &&
-          Pa(
+          throwErrorMessage(
             `Calculated field “${C.field}” requires sum aggregation; its arithmetic is applied to source-field sums.`,
           ),
         {
@@ -495,7 +508,7 @@ function computePivotTable(e, r, t) {
     Math.max(1, e.subtotals ? o.length : 1) *
     Math.max(1, e.subtotals ? a.length : 1) >
     2e6 &&
-    Pa(
+    throwErrorMessage(
       "Pivot aggregation exceeds the 2,000,000 contribution budget. Reduce value fields, hierarchy depth or source rows.",
     );
   let u = 0;
@@ -505,7 +518,7 @@ function computePivotTable(e, r, t) {
         (SO(C[R], T[N.index]),
           (u += (C[R].distinct?.size ?? 0) - L),
           u > 25e4 &&
-            Pa(
+            throwErrorMessage(
               "Pivot distinct counts exceed 250,000 retained group entries. Reduce groups, value fields or source rows.",
             ),
           N.other !== undefined && SO(C[R].right, T[N.other]));
@@ -523,7 +536,7 @@ function computePivotTable(e, r, t) {
         $ = N.other !== undefined ? R.right.sum : N.calculated.constant;
       N.calculated.operation === "divide" &&
         $ === 0 &&
-        Pa(
+        throwErrorMessage(
           `Calculated field “${N.field}” divides by zero in a group or total. Filter, clean or change the calculation; no result was written.`,
         );
       const U =
@@ -536,13 +549,19 @@ function computePivotTable(e, r, t) {
               : L / $;
       return Number.isFinite(U)
         ? U
-        : Pa(`Calculated field “${N.field}” exceeds finite numeric bounds.`);
+        : throwErrorMessage(
+            `Calculated field “${N.field}” exceeds finite numeric bounds.`,
+          );
     },
     h = (C, T) =>
       C.map((N) => {
         const R = e.dateGroups?.find((U) => U.field === r[N]),
           L = T.values[N];
-        return R ? bucketPivotDateValue(L, R, T.index) : LE(L) ? null : L;
+        return R
+          ? bucketPivotDateValue(L, R, T.index)
+          : isNullOrEmptyValue(L)
+            ? null
+            : L;
       }),
     f = (C) =>
       [
@@ -574,7 +593,7 @@ function computePivotTable(e, r, t) {
       Math.max(1, o.length) +
       (m.size + +(!!e.grandTotals && !!a.length)) * s.length;
     (p.size + 2) * R > 1e5 &&
-      Pa(
+      throwErrorMessage(
         "The pivot grouping would exceed the 100,000-cell output budget. Reduce group fields or filter the source.",
       );
     for (const L of T) {
@@ -637,7 +656,7 @@ function computePivotTable(e, r, t) {
       (C.calculated
         ? `Calculated ${C.field}`
         : `${C.operation === "distinctCount" ? "Distinct count" : C.operation[0].toUpperCase() + C.operation.slice(1)} of ${C.field}`),
-    I = (C) => (LE(C) ? "(blank)" : String(C)),
+    I = (C) => (isNullOrEmptyValue(C) ? "(blank)" : String(C)),
     O = e.rowFields.length
       ? e.rowFields.map((C) => {
           const T = e.dateGroups?.find((R) => R.field === C);
@@ -732,14 +751,10 @@ const pivotShowValuesAsModes = [
     "percentRow",
     "percentColumn",
   ],
-  throwPivotValidationError = (e) => {
-    throw Error(e);
-  },
-  isPivotSlicerRecord = (e) => !!e && typeof e == "object" && !Array.isArray(e),
   requirePivotFieldName = (e) =>
     typeof e == "string" && e.trim() && e.length <= 255
       ? e
-      : throwPivotValidationError("Choose a valid pivot field."),
+      : throwErrorMessage("Choose a valid pivot field."),
   isIsoDateString = (e) =>
     typeof e == "string" &&
     /^\d{4}-\d{2}-\d{2}$/.test(e) &&
@@ -749,7 +764,7 @@ const pivotShowValuesAsModes = [
   requireBoundedList = (e, r) =>
     Array.isArray(e) && e.length <= r
       ? e
-      : throwPivotValidationError(
+      : throwErrorMessage(
           `Pivot controls require a list of at most ${r} entries.`,
         ),
   buildSlicerItemKey = (e) =>
@@ -761,33 +776,33 @@ function normalizePivotControls(e) {
   const r = {};
   (e.slicers !== undefined &&
     (r.slicers = requireBoundedList(e.slicers, 20).map((n) => {
-      if (!isPivotSlicerRecord(n))
-        return throwPivotValidationError("Invalid pivot slicer.");
+      if (!isNonArrayObject(n))
+        return throwErrorMessage("Invalid pivot slicer.");
       const o = requireBoundedList(n.selected, 500).map(
         (a) => (
           a !== null &&
             typeof a != "boolean" &&
             !(typeof a == "number" && Number.isFinite(a)) &&
             !(typeof a == "string" && a.length <= 32767) &&
-            throwPivotValidationError("Invalid slicer item."),
+            throwErrorMessage("Invalid slicer item."),
           a
         ),
       );
       return (
         new Set(o.map(buildSlicerItemKey)).size !== o.length &&
-          throwPivotValidationError("Slicer selections must be unique."),
+          throwErrorMessage("Slicer selections must be unique."),
         { field: requirePivotFieldName(n.field), selected: o }
       );
     })),
     e.timelines !== undefined &&
       (r.timelines = requireBoundedList(e.timelines, 10).map((n) =>
-        !isPivotSlicerRecord(n) ||
+        !isNonArrayObject(n) ||
         !isIsoDateString(n.from) ||
         !isIsoDateString(n.to) ||
         n.from > n.to ||
         !["year", "quarter", "month"].includes(String(n.unit)) ||
         !["iso", "1900", "1904"].includes(String(n.dateSystem))
-          ? throwPivotValidationError(
+          ? throwErrorMessage(
               "Timeline requires ordered YYYY-MM-DD bounds, a period and an explicit date system.",
             )
           : {
@@ -800,9 +815,9 @@ function normalizePivotControls(e) {
       )),
     e.sorts !== undefined &&
       (r.sorts = requireBoundedList(e.sorts, 100).map((n) =>
-        !isPivotSlicerRecord(n) ||
+        !isNonArrayObject(n) ||
         !["ascending", "descending"].includes(String(n.direction))
-          ? throwPivotValidationError(
+          ? throwErrorMessage(
               "Pivot field sorting requires ascending or descending order.",
             )
           : { field: requirePivotFieldName(n.field), direction: n.direction },
@@ -810,19 +825,17 @@ function normalizePivotControls(e) {
   for (const n of [r.slicers, r.timelines, r.sorts])
     n &&
       new Set(n.map((o) => o.field)).size !== n.length &&
-      throwPivotValidationError(
-        "Choose only one control of each kind per field.",
-      );
+      throwErrorMessage("Choose only one control of each kind per field.");
   if (e.chart !== undefined) {
     const n = e.chart;
     if (
-      !isPivotSlicerRecord(n) ||
+      !isNonArrayObject(n) ||
       !["column", "bar", "line"].includes(String(n.kind)) ||
       !Number.isInteger(n.valueIndex) ||
       Number(n.valueIndex) < 0 ||
       Number(n.valueIndex) >= Number(e.values?.length)
     )
-      return throwPivotValidationError(
+      return throwErrorMessage(
         "PivotChart requires a supported chart and an existing value field.",
       );
     r.chart = { kind: n.kind, valueIndex: n.valueIndex };
@@ -847,12 +860,12 @@ function validatePivotFieldReferences(e, r) {
     ];
   for (const a of n)
     r.includes(a) ||
-      throwPivotValidationError(
+      throwErrorMessage(
         `Broken pivot field “${a}”: source field was not found. Restore the header or remove/reselect this field before refreshing. Historical totals are not current.`,
       );
   for (const a of e.sorts ?? [])
     [...e.rowFields, ...e.columnFields].includes(a.field) ||
-      throwPivotValidationError(
+      throwErrorMessage(
         `Sort field “${a.field}” must be a row or column group.`,
       );
 }
@@ -861,7 +874,7 @@ function normalizeTimelineDate(e, r, t, n) {
   if (r === "iso")
     return isIsoDateString(e)
       ? e
-      : throwPivotValidationError(
+      : throwErrorMessage(
           `Timeline field “${t}” has an invalid ISO date on source row ${n + 1}.`,
         );
   if (
@@ -870,7 +883,7 @@ function normalizeTimelineDate(e, r, t, n) {
     e < (r === "1900" ? 1 : 0) ||
     e > 2958465
   )
-    return throwPivotValidationError(
+    return throwErrorMessage(
       `Timeline field “${t}” requires ${r} date serials on source row ${n + 1}.`,
     );
   const o = Math.floor(e);
@@ -880,7 +893,7 @@ function normalizeTimelineDate(e, r, t, n) {
       (o - (r === "1900" && o >= 60 ? 1 : 0)) * 864e5,
   );
   return a.getUTCFullYear() > 9999
-    ? throwPivotValidationError("Timeline date exceeds year 9999.")
+    ? throwErrorMessage("Timeline date exceeds year 9999.")
     : a.toISOString().slice(0, 10);
 }
 function filterPivotSourceRows(e, r, t) {
@@ -932,7 +945,7 @@ function buildTimelinePeriods(e, r) {
   }
   return [...t.values()].sort((n, o) => n.from.localeCompare(o.from));
 }
-const TO = (e) =>
+const isPlainDataObject = (e) =>
     !!e &&
     typeof e == "object" &&
     !Array.isArray(e) &&
@@ -957,7 +970,7 @@ function normalizeRowProvenance(e, r) {
   const n = new Set();
   r.rowOrigins = e.rowOrigins.map((a) => {
     if (
-      !TO(a) ||
+      !isPlainDataObject(a) ||
       !isBoundedString(a.id, 100) ||
       n.has(a.id) ||
       !isBoundedString(a.sourceId, 100) ||
@@ -985,7 +998,7 @@ function normalizeRowProvenance(e, r) {
   for (let a = 0; a < t.length; a++) {
     const s = t[a].rowOriginIds;
     if (s === undefined) continue;
-    if (!TO(s))
+    if (!isPlainDataObject(s))
       throw Error("Source row associations must be a plain index map.");
     const d = {};
     for (const [u, l] of Object.entries(s)) {
@@ -1028,11 +1041,8 @@ function validateRowOrigins(e, r) {
       );
 }
 const basicAggregateOperations = ["sum", "count", "average", "min", "max"],
-  pivotAggregateOperations = [...basicAggregateOperations, "distinctCount"],
-  createUuid = () => crypto.randomUUID();
-function throwWorkbookError(e) {
-  throw new Error(e);
-}
+  pivotAggregateOperations = [...basicAggregateOperations, "distinctCount"];
+
 function assertUniqueTableNames(e) {
   const r = new Set(),
     t = new Set();
@@ -1274,12 +1284,7 @@ const formatExternalSheetReference = (e, r, t) =>
     formulas: 500,
     metadataCharacters: 2e6,
   }),
-  boundedPlainText = (e) =>
-    string()
-      .min(1)
-      .max(e)
-      .refine((r) => !/[\u0000-\u001f\u007f]/.test(r)),
-  workbookQualifierSchema = boundedPlainText(2048).refine(
+  workbookQualifierSchema = boundedTextSchema(2048).refine(
     (e) => /^[^\[\]]*\[[^\[\]]+\]$/.test(e),
     "Use an exact workbook qualifier such as [Source.xlsx].",
   ),
@@ -1298,15 +1303,15 @@ const formatExternalSheetReference = (e, r, t) =>
   ]),
   workbookLinkSourceSchema = strictObject({
     target: workbookQualifierSchema,
-    sourceId: boundedPlainText(100),
-    sourceName: boundedPlainText(200),
+    sourceId: boundedTextSchema(100),
+    sourceName: boundedTextSchema(200),
     sourceRevision: number().int().nonnegative(),
     sourceFingerprint: tU,
     resolvedAt: isoDateTimeSchemaFactory(),
     sheets: array(
       strictObject({
-        id: boundedPlainText(100),
-        name: boundedPlainText(31),
+        id: boundedTextSchema(100),
+        name: boundedTextSchema(31),
         cells: record(
           string().regex(/^[A-Z]{1,3}[1-9]\d{0,6}$/),
           linkedCellValueSchema,
@@ -1322,8 +1327,8 @@ const formatExternalSheetReference = (e, r, t) =>
     packageTargets: array(
       strictObject({
         key: workbookQualifierSchema,
-        target: boundedPlainText(4096),
-        part: boundedPlainText(1024),
+        target: boundedTextSchema(4096),
+        part: boundedTextSchema(1024),
         sourceSha256: tU,
       }),
     )
@@ -1714,12 +1719,8 @@ const referenceSensitiveFunctionNames = [
     "FORMULATEXT",
   ],
   notReferenceFunctionMarker = Symbol("not-reference-function"),
-  isPlainObjectLiteral = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e)),
-  z4 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal;
+  isFormulaCellValue = (e) =>
+    typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal;
 function containsSubtotalCall(e) {
   return /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.(?:_xlws\.)?)?SUBTOTAL\s*\(/i.test(
     e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, ""),
@@ -1828,8 +1829,6 @@ const aggregateFunctionNames = [
   createFormulaError = (e) => new FormulaErrorClass(e),
   formulaErrorFactory = createFormulaError,
   isFormulaError = (e) => e instanceof FormulaErrorClass,
-  flattenNestedValues = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenNestedValues) : [e],
   findFormulaErrorArg = (e) =>
     e.flatMap(flattenNestedValues).find(isFormulaError);
 function findScopedDefinedName(e, r, t) {
@@ -1900,7 +1899,6 @@ export {
   F2,
   pivotAggregateOperations,
   builtinFunctionNames,
-  flattenNestedValues,
   containsSubtotalCall,
   tableMutationLimits,
   findFormulaErrorArg,
@@ -1914,7 +1912,6 @@ export {
   findRowOrigin,
   assertUniqueTableNames,
   computePivotRefreshFingerprint,
-  throwWorkbookError,
   workbookQualifierSchema,
   findSourceFieldIndex,
   validatePictureEvidence,
@@ -1926,7 +1923,6 @@ export {
   createPictureEvidence,
   referenceSensitiveFunctionNames,
   normalizePivotControls,
-  isPlainObjectLiteral,
   filterPivotSourceRows,
   formulaErrorFactory,
   createFormulaError,
@@ -1937,7 +1933,6 @@ export {
   resolveDefinedNameValue,
   buildUniqueSheetName,
   buildPivotStatusRecord,
-  createUuid,
   buildExternalLinkAliases,
   validateRowOrigins,
   validatePivotRefreshEvidence,
@@ -1947,5 +1942,6 @@ export {
   isFormulaError,
   assertWithinCellBudget,
   rewriteExternalReferences,
-  z4,
+  isFormulaCellValue,
 };
+export { throwErrorMessage, isPlainDataObject, isFiniteNumber };

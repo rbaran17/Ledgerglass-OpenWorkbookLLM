@@ -1,3 +1,5 @@
+import { isFiniteNumber } from "./03-workbook-model.js";
+import { buildCompositeKey } from "./11-workbook-formats-dialog.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -783,8 +785,6 @@ const goalSeekLimits = {
     maxDepth: 8,
     maxFormulaCells: 5e3,
   },
-  isFiniteNumberValue = (e) => typeof e == "number" && Number.isFinite(e),
-  nj = (e, r) => JSON.stringify([e, r]),
   isCellInRange = (e, r) => {
     const t = parseRangeAddress(e),
       n = _t(r);
@@ -838,15 +838,15 @@ function normalizeGoalSeekRequest(e) {
     maxIterations: e.maxIterations ?? 64,
   };
   if (
-    !isFiniteNumberValue(r.target) ||
-    !isFiniteNumberValue(r.lowerBound) ||
-    !isFiniteNumberValue(r.upperBound) ||
+    !isFiniteNumber(r.target) ||
+    !isFiniteNumber(r.lowerBound) ||
+    !isFiniteNumber(r.upperBound) ||
     r.lowerBound >= r.upperBound
   )
     throw Error(
       "Target and bounds must be finite numbers, with lower bound smaller than upper bound.",
     );
-  if (!isFiniteNumberValue(r.tolerance) || r.tolerance <= 0)
+  if (!isFiniteNumber(r.tolerance) || r.tolerance <= 0)
     throw Error("Tolerance must be a finite positive absolute error.");
   if (
     !Number.isInteger(r.maxIterations) ||
@@ -903,7 +903,7 @@ function solveGoalSeek(e, r, t = {}) {
     u = a.cells[n.variableAddress];
   if (!d || d.literal || typeof d.raw != "string" || !d.raw.startsWith("="))
     throw Error("Set cell must contain an actual calculation formula.");
-  if (!u || !isFiniteNumberValue(u.raw))
+  if (!u || !isFiniteNumber(u.raw))
     throw Error(
       "Changing cell must contain a finite numeric input, not a formula, text, blank or spill output.",
     );
@@ -1006,7 +1006,7 @@ function solveGoalSeek(e, r, t = {}) {
     throw Error(
       `Goal Seek requires supported static dependencies: ${p?.message ?? "the dependency graph contains a cycle."}`,
     );
-  if (!f.has(nj(a.id, n.variableAddress)))
+  if (!f.has(buildCompositeKey(a.id, n.variableAddress)))
     throw Error(
       "The Set cell formula does not depend on the selected changing cell.",
     );
@@ -1067,7 +1067,9 @@ function solveGoalSeek(e, r, t = {}) {
       .map((z) => ({
         ...z,
         cells: Object.fromEntries(
-          Object.entries(z.cells).filter(([V]) => f.has(nj(z.id, V))),
+          Object.entries(z.cells).filter(([V]) =>
+            f.has(buildCompositeKey(z.id, V)),
+          ),
         ),
       })),
   };
@@ -1112,7 +1114,7 @@ function solveGoalSeek(e, r, t = {}) {
           "calculation-error",
           `A trial encountered an operational calculation error (${B.getOperationalErrors().join(", ")}), even if a formula error handler concealed it. The baseline is unchanged.`,
         );
-      if (!isFiniteNumberValue(_))
+      if (!isFiniteNumber(_))
         throw new k(
           "calculation-error",
           `The formula returned ${String(_)} at input ${z}; a finite numeric result is required.`,
@@ -1129,7 +1131,7 @@ function solveGoalSeek(e, r, t = {}) {
           "Dependency inspection encountered an operational calculation error; the baseline is unchanged.",
         );
       const C = _ - n.target;
-      if (!isFiniteNumberValue(C))
+      if (!isFiniteNumber(C))
         throw new k(
           "calculation-error",
           "The residual exceeded finite numeric precision.",
@@ -1887,18 +1889,17 @@ const rejectRangeAsScalar = (e) => {
     if (!Number.isFinite(e) || Math.abs(e) > 1e100)
       throw Error("Solver arithmetic exceeds the supported finite magnitude.");
     return e;
-  },
-  gxe = (e, r) => JSON.stringify([e, r]);
+  };
 
 export {
   assertSolverMagnitude,
   parseRangeBounds,
   FormulaWatchWindow,
   assertAutomaticCalculation,
-  gxe,
   normalizeAnalysisPermissions,
   rejectRangeAsScalar,
   GoalSeekDialog,
   p_,
   validateAnalysisSource,
 };
+export { isCellInRange };

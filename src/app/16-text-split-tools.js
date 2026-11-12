@@ -1,4 +1,10 @@
 import {
+  isNullOrEmptyValue,
+  serializeTypedKeyValues,
+  failWithMessage,
+} from "./03-workbook-model.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
+import {
   transformationRecipeLimits,
   fingerprintCanonicalValue,
   normalizeDatePolicy,
@@ -31,12 +37,10 @@ import {
   validateTextToColumnsRequest,
   assertSelectionInAuthorizedSheet,
   splitDelimitedCell,
-  throwValidationError,
   parseImportedCellValue,
   rangesOverlap,
   dataModelBudgets,
   formatCellTextValue,
-  lg,
   validateTextToColumnsPermissions,
   assertOutputNameUnreferenced,
 } from "./15-data-model-dialog.js";
@@ -51,7 +55,7 @@ function discoverArrayFormulaAnchors(e, r, t) {
         continue;
       (++o > dataModelBudgets.formulaCells ||
         (a += p.raw.length) > dataModelBudgets.formulaCharacters) &&
-        throwValidationError(
+        failWithMessage(
           "Array checking supports at most 1,000 formulas and 100,000 formula characters on the participating worksheets.",
         );
       const m = _t(f);
@@ -69,7 +73,7 @@ function discoverArrayFormulaAnchors(e, r, t) {
     }
   if (
     (n.length > dataModelBudgets.discoveryAnchors &&
-      throwValidationError(
+      failWithMessage(
         "The selection has more than 50 possible array anchors. Choose a new output sheet or a smaller reviewed region.",
       ),
     !n.length)
@@ -98,19 +102,19 @@ function discoverArrayFormulaAnchors(e, r, t) {
       f.coverage.depthLimited ||
       f.cycles.length ||
       f.issues.some((v) => m.has(v.from))) &&
-      throwValidationError(
+      failWithMessage(
         "Array discovery requires a complete, authorized static dependency closure. Resolve hidden, dynamic, cyclic or unsupported formula dependencies before splitting.",
       );
     for (const v of p) {
       const g = e.sheets.find((b) => b.id === v.sheetId);
       (assertSelectionInAuthorizedSheet(g, v.address, t),
         (!g.cells[v.address] || g.cells[v.address].raw === null) &&
-          throwValidationError(
+          failWithMessage(
             "Array discovery cannot infer blank or possible spill-child dependencies. Use a reviewed values snapshot before splitting.",
           ),
         s.add(d(v.sheetId, v.address)),
         s.size > dataModelBudgets.dependencyCells &&
-          throwValidationError(
+          failWithMessage(
             "Array discovery exceeds 2,000 dependency cells. Use a smaller reviewed values snapshot.",
           ));
     }
@@ -131,12 +135,12 @@ function discoverArrayFormulaAnchors(e, r, t) {
     const p = c.getSpillRange(sheet.id, anchor);
     p &&
       r.some((m) => m.sheet.id === sheet.id && rangesOverlap(m.range, p)) &&
-      throwValidationError(
+      failWithMessage(
         "The selected source or destination intersects a generated array. Convert its results to ordinary values explicitly before splitting.",
       );
   }
   c.getOperationalErrors().length &&
-    throwValidationError(
+    failWithMessage(
       "Array discovery encountered an operational calculation error. Resolve the uncertain formula state before splitting text.",
     );
 }
@@ -145,42 +149,40 @@ function buildTextSplitResult(e, r, t = {}) {
   const n = validateTextToColumnsPermissions(e, t),
     o = validateTextToColumnsRequest(r),
     a = e.sheets.find((O) => O.id === o.sourceSheetId);
-  (a || throwValidationError("Choose an existing source worksheet."),
+  (a || failWithMessage("Choose an existing source worksheet."),
     assertSelectionInAuthorizedSheet(a, o.sourceRange, n));
   const s = parseRangeAddress(o.sourceRange),
     d = s.lastRow - s.firstRow + 1;
   ((s.firstCol !== s.lastCol || d > dataModelBudgets.sourceCells) &&
-    throwValidationError(
-      "Select one source column containing at most 500 cells.",
-    ),
+    failWithMessage("Select one source column containing at most 500 cells."),
     (w = a.merges) != null &&
       w.some((O) => rangesOverlap(O, o.sourceRange)) &&
-      throwValidationError("Unmerge the source before splitting text."));
+      failWithMessage("Unmerge the source before splitting text."));
   const u = [],
     l = [],
     c = [];
   let h = 0,
     f = 0;
   for (let O = s.firstRow; O <= s.lastRow; O++) {
-    const j = lg(O, s.firstCol),
+    const j = formatCellAddress(O, s.firstCol),
       z = a.cells[j];
     z &&
       typeof z.raw == "string" &&
       z.raw.startsWith("=") &&
       !z.literal &&
-      throwValidationError(
+      failWithMessage(
         `Source ${j} contains a formula. Copy its results to ordinary values explicitly before splitting.`,
       );
     const V = formatCellTextValue(z?.raw ?? null);
     (f += V.length) > dataModelBudgets.sourceCharacters &&
-      throwValidationError(
+      failWithMessage(
         "Selected source text exceeds the 200,000-character processing budget.",
       );
     let D;
     try {
       D = splitDelimitedCell(V, o.delimiter);
     } catch (B) {
-      throwValidationError(`Source ${j}: ${B.message}`);
+      failWithMessage(`Source ${j}: ${B.message}`);
     }
     ((h = Math.max(h, D.length)),
       l.push(D),
@@ -192,11 +194,11 @@ function buildTextSplitResult(e, r, t = {}) {
       }));
   }
   (h * d > dataModelBudgets.outputCells &&
-    throwValidationError(
+    failWithMessage(
       "Split output may contain at most 500 cells. Select fewer source rows or fields.",
     ),
     (o.formats?.length ?? 0) > h &&
-      throwValidationError(
+      failWithMessage(
         "A column conversion refers to a field outside the split result.",
       ));
   const p = Array.from({ length: h }, (O, j) => {
@@ -207,33 +209,33 @@ function buildTextSplitResult(e, r, t = {}) {
     g = { row: 0, col: 0 };
   if (o.destination.kind === "new-sheet")
     ((!n.allowNewSheet || ((A = e.structureProtection) != null && A.enabled)) &&
-      throwValidationError(
+      failWithMessage(
         "Creating an output worksheet is not permitted while workbook structure is protected or the host disallows new worksheets.",
       ),
       (v = o.destination.name),
       e.sheets.some((O) => O.name.toLowerCase() === v.toLowerCase()) &&
-        throwValidationError(
+        failWithMessage(
           "The output worksheet name is already used. Choose another name.",
         ),
       assertOutputNameUnreferenced(e, v));
   else {
     const O = o.destination;
     ((m = e.sheets.find((j) => j.id === O.sheetId)),
-      m || throwValidationError("Choose an existing output worksheet."),
+      m || failWithMessage("Choose an existing output worksheet."),
       (g = _t(o.destination.address)),
       (v = m.name),
       (k = m.protection) != null &&
         k.enabled &&
-        throwValidationError("The output worksheet is protected."));
+        failWithMessage("The output worksheet is protected."));
   }
   (g.row + d > workbookLimits.maxRows || g.col + h > workbookLimits.maxCols) &&
-    throwValidationError("Split output exceeds the worksheet boundary.");
-  const b = `${lg(g.row, g.col)}:${lg(g.row + d - 1, g.col + h - 1)}`;
+    failWithMessage("Split output exceeds the worksheet boundary.");
+  const b = `${formatCellAddress(g.row, g.col)}:${formatCellAddress(g.row + d - 1, g.col + h - 1)}`;
   (m &&
     (assertSelectionInAuthorizedSheet(m, b, n),
     m.id === a.id &&
       rangesOverlap(o.sourceRange, b) &&
-      throwValidationError(
+      failWithMessage(
         "Choose a separate destination so the original source cells remain intact.",
       ),
     (((F = m.tables) != null && F.some((O) => rangesOverlap(O.range, b))) ||
@@ -241,11 +243,11 @@ function buildTextSplitResult(e, r, t = {}) {
       [...(m.pivots ?? []), ...(m.queries ?? [])].some((O) =>
         rangesOverlap(O.outputRange, b),
       )) &&
-      throwValidationError(
+      failWithMessage(
         "Choose an output outside tables, merged areas and generated analysis results.",
       ),
     Object.keys(m.cells).some((O) => rangesOverlap(O, b)) &&
-      throwValidationError(
+      failWithMessage(
         "The destination contains cells or their formatting. Choose an empty range or new worksheet.",
       ),
     [...(e.reviewThreads ?? []), ...(e.formulaWatches ?? [])].some(
@@ -254,7 +256,7 @@ function buildTextSplitResult(e, r, t = {}) {
         O.anchor.sheetId === m.id &&
         rangesOverlap(O.anchor.address, b),
     ) &&
-      throwValidationError(
+      failWithMessage(
         "The destination contains a saved watch or discussion anchor. Choose another range to preserve its evidence context.",
       )),
     discoverArrayFormulaAnchors(
@@ -307,7 +309,7 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
         });
       y.push({
         sourceAddress: u[O].address,
-        address: lg(g.row + O, g.col + j),
+        address: formatCellAddress(g.row + O, g.col + j),
         field: z,
         padded: j >= l[O].length,
         format: V,
@@ -324,7 +326,7 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
   if (
     (e.sheets.reduce((O, j) => O + Object.keys(j.cells).length, 0) + y.length >
       workbookLimits.maxCells &&
-      throwValidationError(
+      failWithMessage(
         "The split would exceed the workbook's 100,000 stored-cell budget.",
       ),
     m)
@@ -354,12 +356,12 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
 }
 function applyTextSplitPreview(e, r, t = {}) {
   r.snapshot !== JSON.stringify(e) &&
-    throwValidationError(
+    failWithMessage(
       "The workbook changed after the split preview. Preview again.",
     );
   const n = buildTextSplitResult(e, r.request, t);
   JSON.stringify(n) !== JSON.stringify(r) &&
-    throwValidationError(
+    failWithMessage(
       "The split preview or authorized context changed. Preview again.",
     );
   const o = structuredClone(e),
@@ -537,9 +539,7 @@ function inferTextPatternFromExamples(e, r, t) {
     }
   return { candidates: u, searched: c, truncated: h };
 }
-const Gh = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  isBlankCellValue = (e) => e === null || e === "",
-  inferCellValueType = (e) =>
+const inferCellValueType = (e) =>
     e === null
       ? "blank"
       : typeof e == "number"
@@ -604,7 +604,7 @@ function splitTextWithQuoteRules(e, r) {
 }
 function convertFieldToTypedValue(e, r, t = "1900") {
   if (r.to === "text") return coerceCellValueToText(e);
-  if (isBlankCellValue(e)) return null;
+  if (isNullOrEmptyValue(e)) return null;
   if (r.to === "boolean") {
     if (typeof e == "boolean") return e;
     if (typeof e == "string" && /^(true|false)$/i.test(e.trim()))
@@ -686,7 +686,7 @@ function prepareTransformationInput(e, r, t) {
     d = s.lastCol - s.firstCol + 1,
     u = s.lastRow - s.firstRow + 1;
   if (
-    ((n.sourceRange = `${Gh(s.firstRow, s.firstCol)}:${Gh(s.lastRow, s.lastCol)}`),
+    ((n.sourceRange = `${formatCellAddress(s.firstRow, s.firstCol)}:${formatCellAddress(s.lastRow, s.lastCol)}`),
     d > 50 || d * u > 500)
   )
     throw Error("Select at most 500 source cells and 50 fields.");
@@ -714,7 +714,7 @@ function prepareTransformationInput(e, r, t) {
   for (let v = s.firstRow; v <= s.lastRow; v++) {
     const g = [];
     for (let b = s.firstCol; b <= s.lastCol; b++) {
-      const y = Gh(v, b),
+      const y = formatCellAddress(v, b),
         w = a.cells[y];
       if (w && typeof w.raw == "string" && w.raw.startsWith("=") && !w.literal)
         throw Error(
@@ -819,7 +819,7 @@ function applyTransformationSteps(e, r, t, n = "1900") {
           const b = d.columns.map((w) => g.fields[w]),
             y = createSourcedValue(
               b
-                .filter((w) => !d.skipBlank || !isBlankCellValue(w.value))
+                .filter((w) => !d.skipBlank || !isNullOrEmptyValue(w.value))
                 .map((w) => coerceCellValueToText(w.value))
                 .join(d.separator),
               uniqueSourceReferences(b),
@@ -846,7 +846,7 @@ function applyTransformationSteps(e, r, t, n = "1900") {
               y = undefined;
               continue;
             }
-            if (!isBlankCellValue(F.value)) {
+            if (!isNullOrEmptyValue(F.value)) {
               y = F;
               continue;
             }
@@ -924,7 +924,7 @@ function applyTransformationSteps(e, r, t, n = "1900") {
                         : d.to === "date"
                           ? "date"
                           : inferCellValueType(w)));
-                else if (!isBlankCellValue(y.value)) {
+                else if (!isNullOrEmptyValue(y.value)) {
                   const A = coerceCellValueToText(y.value);
                   ((w =
                     d.kind === "trim"
@@ -1002,11 +1002,15 @@ function buildTransformationPreview(e, r, t = {}) {
     f = {};
   if (
     (headers.forEach((v, g) => {
-      f[Gh(0, g)] = { raw: v, literal: true, style: { bold: true } };
+      f[formatCellAddress(0, g)] = {
+        raw: v,
+        literal: true,
+        style: { bold: true },
+      };
     }),
     rows.forEach((v, g) =>
       v.fields.forEach((b, y) => {
-        const w = Gh(g + 1, y);
+        const w = formatCellAddress(g + 1, y);
         h.push({ address: w, row: v.row, field: headers[y], ...b });
         const E = `Clean & Reshape derivation
 Workbook: ${JSON.stringify(e.id)}
@@ -1021,7 +1025,7 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
     exceptions.length)
   ) {
     const v = rows.length + 3;
-    ((f[Gh(v, 0)] = {
+    ((f[formatCellAddress(v, 0)] = {
       raw: "Transformation exceptions",
       style: { bold: true },
     }),
@@ -1033,7 +1037,8 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
         "Original cells",
         "Reason",
       ].forEach(
-        (b, y) => (f[Gh(v + 1, y)] = { raw: b, style: { bold: true } }),
+        (b, y) =>
+          (f[formatCellAddress(v + 1, y)] = { raw: b, style: { bold: true } }),
       ),
       exceptions.forEach((b, y) =>
         [
@@ -1045,7 +1050,7 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
           b.reason,
         ].forEach(
           (w, E) =>
-            (f[Gh(v + 2 + y, E)] = createAnnotatedCellValue(
+            (f[formatCellAddress(v + 2 + y, E)] = createAnnotatedCellValue(
               w,
               `Retained parsing exception at source revision ${e.revision}`,
               inferCellValueType(w),
@@ -1074,7 +1079,7 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
     exceptions,
     stages,
     cells: f,
-    targetRange: `A1:${Gh(exceptions.length ? rows.length + 4 + exceptions.length : rows.length, Math.max(headers.length, exceptions.length ? 6 : 0) - 1)}`,
+    targetRange: `A1:${formatCellAddress(exceptions.length ? rows.length + 4 + exceptions.length : rows.length, Math.max(headers.length, exceptions.length ? 6 : 0) - 1)}`,
     counts: {
       sourceRows: rows.length,
       sourceCells: sources.length,
@@ -1449,9 +1454,7 @@ function parseRowExpression(e, r) {
   }
   return (v) => assertDerivedValueLimits(m(p, v));
 }
-const isNullOrEmptyValue = (e) => e === null || e === "",
-  fingerprintTypedValues = (e) => JSON.stringify(e.map((r) => [typeof r, r])),
-  findFieldIndexOrThrow = (e, r) => {
+const findFieldIndexOrThrow = (e, r) => {
     const t = e.fields.indexOf(r);
     if (t < 0)
       throw Error(`Field “${r}” is missing from the step input schema.`);
@@ -1580,7 +1583,7 @@ function aggregateFieldValues(e, r, t) {
   const n = e.map((s) => s.values[r]).filter((s) => !isNullOrEmptyValue(s));
   if (t === "count") return n.length;
   if (t === "distinctCount")
-    return new Set(n.map((s) => fingerprintTypedValues([s]))).size;
+    return new Set(n.map((s) => serializeTypedKeyValues([s]))).size;
   if (n.some((s) => typeof s != "number"))
     throw Error(
       "Numeric aggregation encountered text or Boolean values. Add a Types step before aggregating.",
@@ -1601,7 +1604,7 @@ function groupRowsByFields(e, r) {
   const t = r.map((o) => findFieldIndexOrThrow(e, o)),
     n = new Map();
   for (const o of e.rows) {
-    const a = fingerprintTypedValues(t.map((s) => o.values[s]));
+    const a = serializeTypedKeyValues(t.map((s) => o.values[s]));
     n.set(a, [...(n.get(a) ?? []), o]);
   }
   return { indices: t, groups: n };
@@ -1907,7 +1910,7 @@ function executeRecipeStep(e, r, t, n) {
         c = [
           ...new Map(
             o.rows.map((p) => [
-              fingerprintTypedValues([p.values[s]]),
+              serializeTypedKeyValues([p.values[s]]),
               p.values[s],
             ]),
           ).values(),
@@ -2047,3 +2050,4 @@ export {
   profileFieldTypes,
   buildFieldControlTotals,
 };
+export { coerceCellValueToText };

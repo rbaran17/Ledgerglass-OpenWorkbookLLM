@@ -1,3 +1,5 @@
+import { hasOnlyAllowedKeys } from "./12-formula-dependency-inspector.js";
+import { isPlainRecord } from "./11-workbook-formats-dialog.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -1150,14 +1152,10 @@ async function prepareChatAttachment(e, r) {
     data: o,
   };
 }
-const Lk = (e, r) =>
-  !!e &&
-  typeof e == "object" &&
-  !Array.isArray(e) &&
-  Object.keys(e).every((t) => r.includes(t));
+
 function parseAssistantChatRequest(e) {
   (assertCondition(
-    Lk(e, ["version", "messages", "attachments"]) &&
+    hasOnlyAllowedKeys(e, ["version", "messages", "attachments"]) &&
       e.version === 1 &&
       Array.isArray(e.messages) &&
       Array.isArray(e.attachments),
@@ -1177,7 +1175,14 @@ function parseAssistantChatRequest(e) {
     const s = new Set();
     return a.map((d) => {
       (assertCondition(
-        Lk(d, ["id", "name", "mediaType", "size", "encoding", "data"]) &&
+        hasOnlyAllowedKeys(d, [
+          "id",
+          "name",
+          "mediaType",
+          "size",
+          "encoding",
+          "data",
+        ]) &&
           typeof d.id == "string" &&
           d.id.length > 0 &&
           d.id.length <= 100 &&
@@ -1244,7 +1249,7 @@ function parseAssistantChatRequest(e) {
     messages: e.messages.map(
       (a) => (
         assertCondition(
-          Lk(a, ["role", "text", "attachments"]) &&
+          hasOnlyAllowedKeys(a, ["role", "text", "attachments"]) &&
             (a.role === "user" || a.role === "assistant") &&
             typeof a.text == "string" &&
             a.text.length <= 1e4,
@@ -1477,27 +1482,20 @@ const nonVolatileFunctionNames = builtinFunctionNames.filter(
         "CALL",
       ].includes(e),
   ),
-  nonVolatileFunctionNameSet = new Set(nonVolatileFunctionNames),
-  kg = (e) =>
-    !!e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    Object.getPrototypeOf(e) === Object.prototype;
-function assertAssistantCondition(e, r) {
-  if (!e) throw new Error(r);
-}
+  nonVolatileFunctionNameSet = new Set(nonVolatileFunctionNames);
+
 const assertNoUnexpectedFields = (e, r) =>
-  assertAssistantCondition(
+  assertCondition(
     Object.keys(e).every((t) => r.includes(t)),
     "Unexpected field in LLM proposal.",
   );
 function parseCellAddress(e) {
   const r = /^([A-Z]{1,3})([1-9]\d*)$/.exec(e);
-  assertAssistantCondition(r, `Invalid cell address: ${e}`);
+  assertCondition(r, `Invalid cell address: ${e}`);
   const t = [...r[1]].reduce((o, a) => o * 26 + a.charCodeAt(0) - 64, 0),
     n = Number(r[2]);
   return (
-    assertAssistantCondition(
+    assertCondition(
       n <= workbookLimits.maxRows && t <= workbookLimits.maxCols,
       "Cell address exceeds supported dimensions.",
     ),
@@ -1511,28 +1509,28 @@ function columnNumberToLetters(e) {
   return r;
 }
 function resolveAssistantSelection(e, r) {
-  assertAssistantCondition(
+  assertCondition(
     !r.ranges || (r.ranges.length === 1 && r.ranges[0] === r.range),
     "Select one rectangular range before using an assistant.",
   );
   const t = e.sheets.find((d) => d.id === r.sheetId);
-  assertAssistantCondition(
+  assertCondition(
     t && !t.hidden,
     "Select a visible worksheet before using an assistant.",
   );
   const n = r.range.toUpperCase().split(":");
-  assertAssistantCondition(n.length <= 2, "Select one rectangular range.");
+  assertCondition(n.length <= 2, "Select one rectangular range.");
   const o = parseCellAddress(n[0]),
     a = parseCellAddress(n[1] || n[0]);
-  (assertAssistantCondition(
+  (assertCondition(
     o.row <= a.row && o.col <= a.col,
     "Selection range must run from top left to bottom right.",
   ),
-    assertAssistantCondition(
+    assertCondition(
       a.row <= t.rowCount && a.col <= t.colCount,
       "Selection exceeds worksheet dimensions.",
     ),
-    assertAssistantCondition(
+    assertCondition(
       (a.row - o.row + 1) * (a.col - o.col + 1) <= workbookLimits.maxLLMCells,
       `Select at most ${workbookLimits.maxLLMCells} cells for the assistant.`,
     ));
@@ -1548,11 +1546,11 @@ function buildAssistantSelectionContext(e, r) {
     o = calculateWorkbookWithSettings(e);
   for (const a of t) {
     const s = o.getTypedValue(n.id, a);
-    (assertAssistantCondition(
+    (assertCondition(
       !(s.type === "error" && s.value === "#PENDING!"),
       "Calculation is pending in the approved selection. Choose Calculate Now before sharing current values with an assistant.",
     ),
-      assertAssistantCondition(
+      assertCondition(
         !(
           s.type === "error" &&
           ["#TIMEOUT!", "#LIMIT!", "#BLOCKED!"].includes(String(s.value))
@@ -1582,11 +1580,11 @@ function buildAssistantSelectionContext(e, r) {
 function validateAssistantFormula(e, r) {
   let t = e.replace(/"(?:[^"]|"")*"/g, '""');
   if (
-    (assertAssistantCondition(
+    (assertCondition(
       !/[!\[\]|\\#]/.test(t),
       "Assistant formulas cannot reference other worksheets, external workbooks, table names, existing spills or executable content.",
     ),
-    assertAssistantCondition(
+    assertCondition(
       !/(?:https?:|javascript:|data:|file:)/i.test(e),
       "Assistant formulas cannot contain network or executable URLs.",
     ),
@@ -1602,7 +1600,7 @@ function validateAssistantFormula(e, r) {
   }
   const n = [...t.matchAll(/([A-Z_][A-Z0-9_.]*)\s*\(/gi)];
   for (const a of n)
-    assertAssistantCondition(
+    assertCondition(
       nonVolatileFunctionNameSet.has(a[1].toUpperCase()),
       `Assistant formula function ${a[1]} is not allowed.`,
     );
@@ -1612,7 +1610,7 @@ function validateAssistantFormula(e, r) {
       "gi",
     ),
   ))
-    assertAssistantCondition(
+    assertCondition(
       r.has(`${a[1].toUpperCase()}${a[2]}`),
       "Assistant formulas may only reference cells in the approved selection.",
     );
@@ -1622,13 +1620,13 @@ function validateAssistantFormula(e, r) {
     .replace(/""/g, "0")
     .replace(/\b(?:TRUE|FALSE)\b/gi, "0")
     .replace(/\d+(?:\.\d+)?(?:E[+-]?\d+)?/gi, "0");
-  assertAssistantCondition(
+  assertCondition(
     !/[A-Z_]/i.test(o),
     "Named ranges and unsupported formula tokens are not allowed in assistant changes.",
   );
 }
 function validateProposedCell(e, r) {
-  (assertAssistantCondition(kg(e), "Each proposed cell must be an object."),
+  (assertCondition(isPlainRecord(e), "Each proposed cell must be an object."),
     assertNoUnexpectedFields(e, [
       "raw",
       "literal",
@@ -1638,7 +1636,7 @@ function validateProposedCell(e, r) {
       "note",
       "tickmark",
     ]),
-    assertAssistantCondition(
+    assertCondition(
       Object.hasOwn(e, "raw") &&
         (e.raw === null ||
           typeof e.raw == "string" ||
@@ -1647,22 +1645,22 @@ function validateProposedCell(e, r) {
       "Unsupported proposed cell value.",
     ),
     typeof e.raw == "string" &&
-      assertAssistantCondition(
+      assertCondition(
         e.raw.length <= (e.raw.startsWith("=") ? 4096 : 32767),
         "Proposed cell text is too long.",
       ),
     e.literal !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         typeof e.literal == "boolean",
         "Cell literal must be boolean.",
       ),
     e.numFmt !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         typeof e.numFmt == "string" && e.numFmt.length <= 200,
         "Invalid number format.",
       ),
     e.format !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         ["general", "number", "currency", "percent", "date"].includes(
           String(e.format),
         ),
@@ -1670,13 +1668,13 @@ function validateProposedCell(e, r) {
       ));
   for (const t of ["note", "tickmark"])
     e[t] !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         typeof e[t] == "string" &&
           String(e[t]).length <= (t === "note" ? 1e4 : 40),
         `Invalid cell ${t}.`,
       );
   if (e.style !== undefined) {
-    (assertAssistantCondition(kg(e.style), "Cell style must be an object."),
+    (assertCondition(isPlainRecord(e.style), "Cell style must be an object."),
       assertNoUnexpectedFields(e.style, [
         "bold",
         "italic",
@@ -1691,17 +1689,14 @@ function validateProposedCell(e, r) {
       ]));
     for (const t of ["bold", "italic", "underline", "wrap"])
       e.style[t] !== undefined &&
-        assertAssistantCondition(
-          typeof e.style[t] == "boolean",
-          "Invalid font style.",
-        );
+        assertCondition(typeof e.style[t] == "boolean", "Invalid font style.");
     (e.style.fontFamily !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         supportedFontFamilies.includes(e.style.fontFamily),
         "Unsupported font family.",
       ),
       e.style.fontSize !== undefined &&
-        assertAssistantCondition(
+        assertCondition(
           typeof e.style.fontSize == "number" &&
             Number.isInteger(e.style.fontSize) &&
             e.style.fontSize >= 8 &&
@@ -1709,19 +1704,19 @@ function validateProposedCell(e, r) {
           "Font size must be an integer between 8 and 72.",
         ),
       e.style.border !== undefined &&
-        assertAssistantCondition(
+        assertCondition(
           ["all", "bottom", "none"].includes(String(e.style.border)),
           "Unsupported cell border.",
         ));
     for (const t of ["fill", "color"])
       e.style[t] !== undefined &&
-        assertAssistantCondition(
+        assertCondition(
           typeof e.style[t] == "string" &&
             /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(e.style[t])),
           "Use hexadecimal colors.",
         );
     e.style.align !== undefined &&
-      assertAssistantCondition(
+      assertCondition(
         ["left", "center", "right"].includes(String(e.style.align)),
         "Invalid alignment.",
       );
@@ -1735,8 +1730,8 @@ function validateProposedCell(e, r) {
   );
 }
 function validateAssistantProposal(e, r) {
-  (assertAssistantCondition(
-    kg(e),
+  (assertCondition(
+    isPlainRecord(e),
     "The assistant response must be a proposal object.",
   ),
     assertNoUnexpectedFields(e, [
@@ -1748,46 +1743,46 @@ function validateAssistantProposal(e, r) {
       "patches",
       "grounding",
     ]),
-    assertAssistantCondition(
+    assertCondition(
       typeof e.id == "string" && e.id.length > 0 && e.id.length <= 100,
       "Invalid proposal identifier.",
     ),
-    assertAssistantCondition(
+    assertCondition(
       e.workbookId === r.workbookId && e.revision === r.revision,
       "This proposal is stale or belongs to another workbook. Generate a new proposal.",
     ),
-    assertAssistantCondition(
+    assertCondition(
       typeof e.explanation == "string" &&
         e.explanation.length > 0 &&
         e.explanation.length <= 1e4,
       "Invalid proposal explanation.",
     ));
   const t = new Set(r.cells.map((a) => a.address));
-  (assertAssistantCondition(
+  (assertCondition(
     Array.isArray(e.citations) &&
       e.citations.length <= workbookLimits.maxLLMCells,
     "Invalid proposal citations.",
   ),
-    assertAssistantCondition(
+    assertCondition(
       e.citations.every((a) => typeof a == "string" && t.has(a)),
       "Citations must reference the approved selection.",
     ),
-    assertAssistantCondition(
+    assertCondition(
       Array.isArray(e.patches) && e.patches.length <= workbookLimits.maxPatches,
       "Too many proposed edits.",
     ));
   const n = new Set(),
     o = e.patches.map(
       (a) => (
-        assertAssistantCondition(kg(a), "Each patch must be an object."),
+        assertCondition(isPlainRecord(a), "Each patch must be an object."),
         assertNoUnexpectedFields(a, ["sheetId", "address", "cell"]),
-        assertAssistantCondition(
+        assertCondition(
           a.sheetId === r.sheetId &&
             typeof a.address == "string" &&
             t.has(a.address),
           "Assistant changes must stay inside the approved selection.",
         ),
-        assertAssistantCondition(
+        assertCondition(
           !n.has(a.address),
           "The proposal contains duplicate cell edits.",
         ),
@@ -1852,7 +1847,7 @@ function validateProposedCalculation(e, r, t) {
             return p.row === y.row && p.col >= y.col && p.col <= w.col;
           });
         return (
-          assertAssistantCondition(
+          assertCondition(
             !m ||
               (h?.raw === f.raw && !!(h != null && h.literal) == !!f.literal),
             "Assistant changes cannot rename table headers because dependent references may change outside the approved selection.",
@@ -1902,17 +1897,17 @@ function validateProposedCalculation(e, r, t) {
     )
       continue;
     const h = l(a.id, c.address);
-    (assertAssistantCondition(
+    (assertCondition(
       h !== "#LIMIT!",
       "The proposed formula exceeds calculation limits.",
     ),
-      assertAssistantCondition(
+      assertCondition(
         l.getOperationalErrors().length === 0,
         "The proposed formula has invalid syntax, a circular reference or an operational calculation failure. Correct the formula before review; error handlers cannot suppress this rejection.",
       ));
     const f = l.getSpillRange(a.id, c.address);
     if (
-      (assertAssistantCondition(
+      (assertCondition(
         !l.getSpillDiagnostic(a.id, c.address),
         "The proposed array is blocked. Review the spill obstruction before requesting approval.",
       ),
@@ -1921,20 +1916,20 @@ function validateProposedCalculation(e, r, t) {
       const [p, m] = f.split(":"),
         v = parseCellAddress(p),
         g = parseCellAddress(m ?? p);
-      assertAssistantCondition(
+      assertCondition(
         (g.row - v.row + 1) * (g.col - v.col + 1) <= workbookLimits.maxLLMCells,
         "Assistant spill outputs must stay inside the approved selection.",
       );
       for (let b = v.row; b <= g.row; b++)
         for (let y = v.col; y <= g.col; y++)
-          assertAssistantCondition(
+          assertCondition(
             d.has(`${columnNumberToLetters(y)}${b}`),
             "Assistant spill outputs must stay inside the approved selection.",
           );
     }
   }
   return (
-    assertAssistantCondition(
+    assertCondition(
       l.getOperationalErrors().length === 0,
       "The proposed formula cannot be validated because calculation encountered an operational failure.",
     ),
@@ -2041,7 +2036,7 @@ ${u}`),
 }
 function validateCalculationClock(e) {
   try {
-    (assertAssistantCondition(kg(e), "context"),
+    (assertCondition(isPlainRecord(e), "context"),
       assertNoUnexpectedFields(e, [
         "workbookId",
         "revision",
@@ -2055,61 +2050,61 @@ function validateCalculationClock(e) {
     const r = normalizeDatePolicy(e.datePolicy);
     if (e.calculationClock !== undefined) {
       const d = e.calculationClock;
-      (assertAssistantCondition(kg(d), "clock"),
-        assertAssistantCondition(
+      (assertCondition(isPlainRecord(d), "clock"),
+        assertCondition(
           typeof d.calculatedAt == "string" &&
             /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(d.calculatedAt),
           "clock timestamp",
         ));
       const u = resolveLocalDateTime(r, new Date(d.calculatedAt));
       (assertNoUnexpectedFields(d, Object.keys(u)),
-        assertAssistantCondition(
+        assertCondition(
           Object.entries(u).every(([l, c]) => d[l] === c),
           "clock policy/value mismatch",
         ));
     }
     for (const d of ["workbookId", "sheetId", "sheetName"])
-      assertAssistantCondition(
+      assertCondition(
         typeof e[d] == "string" && e[d].length > 0 && e[d].length <= 200,
         "identity",
       );
-    (assertAssistantCondition(
+    (assertCondition(
       Number.isSafeInteger(e.revision) && e.revision >= 0,
       "revision",
     ),
-      assertAssistantCondition(
+      assertCondition(
         typeof e.range == "string" && e.range.length <= 64,
         "range",
       ));
     const t = e.range.split(":");
-    assertAssistantCondition(t.length <= 2, "range");
+    assertCondition(t.length <= 2, "range");
     const n = parseCellAddress(t[0]),
       o = parseCellAddress(t[1] ?? t[0]),
       a = (o.row - n.row + 1) * (o.col - n.col + 1);
-    (assertAssistantCondition(
+    (assertCondition(
       o.row >= n.row && o.col >= n.col && a <= workbookLimits.maxLLMCells,
       "bounds",
     ),
-      assertAssistantCondition(
+      assertCondition(
         Array.isArray(e.cells) && e.cells.length === a,
         "population",
       ));
     const s = new Set();
     for (const d of e.cells) {
-      (assertAssistantCondition(kg(d), "cell"),
+      (assertCondition(isPlainRecord(d), "cell"),
         assertNoUnexpectedFields(d, ["address", "raw", "value"]),
-        assertAssistantCondition(
+        assertCondition(
           typeof d.address == "string" && !s.has(d.address),
           "address",
         ));
       const u = parseCellAddress(d.address);
-      (assertAssistantCondition(
+      (assertCondition(
         u.row >= n.row && u.row <= o.row && u.col >= n.col && u.col <= o.col,
         "scope",
       ),
         s.add(d.address));
       for (const l of [d.raw, d.value])
-        assertAssistantCondition(
+        assertCondition(
           l === null ||
             typeof l == "boolean" ||
             (typeof l == "number" && Number.isFinite(l)) ||
@@ -2141,3 +2136,4 @@ export {
   answerGroundingLimits,
   buildAssistantSelectionContext,
 };
+export { assertCondition };

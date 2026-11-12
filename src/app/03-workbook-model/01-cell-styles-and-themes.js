@@ -44,10 +44,10 @@ const cellBorderEdges = ["top", "right", "bottom", "left"],
     "verticalAlign",
     "indent",
   ]);
-function throwCellStyleError(e) {
+function failWithMessage(e) {
   throw Error(e);
 }
-function isPlainStyleObject(e) {
+function isPlainObjectLiteral(e) {
   return !!(
     e &&
     typeof e == "object" &&
@@ -58,16 +58,16 @@ function isPlainStyleObject(e) {
 function validateStyleColor(e) {
   return (
     (typeof e != "string" || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(e)) &&
-      throwCellStyleError("Style colors must use hexadecimal colors."),
+      failWithMessage("Style colors must use hexadecimal colors."),
     e
   );
 }
 function validateCellBorder(e) {
   return (
-    (!isPlainStyleObject(e) ||
+    (!isPlainObjectLiteral(e) ||
       Object.keys(e).some((r) => !["style", "color"].includes(r)) ||
       !borderLineStyles.includes(e.style)) &&
-      throwCellStyleError(
+      failWithMessage(
         "Choose a supported border line style and hexadecimal color.",
       ),
     e.color !== undefined && validateStyleColor(e.color),
@@ -81,55 +81,55 @@ function validateCellBorder(e) {
   );
 }
 function validateCellStyle(e) {
-  isPlainStyleObject(e) || throwCellStyleError("Cell style must be an object.");
+  isPlainObjectLiteral(e) || failWithMessage("Cell style must be an object.");
   for (const t of Object.keys(e))
     supportedCellStyleKeys.has(t) ||
-      throwCellStyleError(`Unsupported cell style setting: ${t}.`);
+      failWithMessage(`Unsupported cell style setting: ${t}.`);
   const r = {};
   e.binding !== undefined && (r.binding = validateNamedStyleBinding(e.binding));
   for (const t of ["bold", "italic", "underline", "strikethrough", "wrap"])
     e[t] !== undefined &&
       (typeof e[t] != "boolean" &&
-        throwCellStyleError(`Style ${t} must be boolean.`),
+        failWithMessage(`Style ${t} must be boolean.`),
       (r[t] = e[t]));
   (e.fontFamily !== undefined &&
     (supportedFontFamilies.includes(e.fontFamily) ||
-      throwCellStyleError("Unsupported font family."),
+      failWithMessage("Unsupported font family."),
     (r.fontFamily = e.fontFamily)),
     e.fontSize !== undefined &&
       ((typeof e.fontSize != "number" ||
         !Number.isInteger(e.fontSize) ||
         e.fontSize < 8 ||
         e.fontSize > 72) &&
-        throwCellStyleError("Font size must be an integer between 8 and 72."),
+        failWithMessage("Font size must be an integer between 8 and 72."),
       (r.fontSize = e.fontSize)));
   for (const t of ["fill", "color"])
     e[t] !== undefined && (r[t] = validateStyleColor(e[t]));
   if (
     (e.align !== undefined &&
       (["left", "center", "right"].includes(e.align) ||
-        throwCellStyleError("Invalid text alignment."),
+        failWithMessage("Invalid text alignment."),
       (r.align = e.align)),
     e.verticalAlign !== undefined &&
       (["top", "middle", "bottom"].includes(e.verticalAlign) ||
-        throwCellStyleError("Choose Top, Center or Bottom vertical alignment."),
+        failWithMessage("Choose Top, Center or Bottom vertical alignment."),
       (r.verticalAlign = e.verticalAlign)),
     e.indent !== undefined &&
       ((typeof e.indent != "number" ||
         !Number.isInteger(e.indent) ||
         e.indent < 0 ||
         e.indent > 15) &&
-        throwCellStyleError("Indent must be an integer between 0 and 15."),
+        failWithMessage("Indent must be an integer between 0 and 15."),
       (r.indent = e.indent)),
     e.border !== undefined &&
       (["all", "bottom", "none"].includes(e.border) ||
-        throwCellStyleError("Unsupported cell border."),
+        failWithMessage("Unsupported cell border."),
       (r.border = e.border)),
     e.borders !== undefined)
   ) {
-    (!isPlainStyleObject(e.borders) ||
+    (!isPlainObjectLiteral(e.borders) ||
       Object.keys(e.borders).some((n) => !cellBorderEdges.includes(n))) &&
-      throwCellStyleError(
+      failWithMessage(
         "Cell borders support top, right, bottom and left edges only.",
       );
     const t = {};
@@ -140,14 +140,14 @@ function validateCellStyle(e) {
   return r;
 }
 function validateNamedStyleBinding(e) {
-  (!isPlainStyleObject(e) ||
+  (!isPlainObjectLiteral(e) ||
     Object.keys(e).some(
       (t) =>
         !["namespace", "styleId", "base", "missing", "themeFallback"].includes(
           t,
         ),
     )) &&
-    throwCellStyleError(
+    failWithMessage(
       "Named style binding must contain a namespace, style ID and supported base.",
     );
   for (const t of ["namespace", "styleId"])
@@ -155,22 +155,20 @@ function validateNamedStyleBinding(e) {
       !e[t].trim() ||
       e[t].length > 100 ||
       /[\x00-\x1f\x7f]/.test(e[t])) &&
-      throwCellStyleError(
+      failWithMessage(
         "Named style identifiers must contain 1–100 characters without control characters.",
       );
-  (!isPlainStyleObject(e.base) || Object.hasOwn(e.base, "binding")) &&
-    throwCellStyleError("A named style base cannot contain another binding.");
+  (!isPlainObjectLiteral(e.base) || Object.hasOwn(e.base, "binding")) &&
+    failWithMessage("A named style base cannot contain another binding.");
   for (const t of ["missing", "themeFallback"])
     e[t] !== undefined &&
       e[t] !== true &&
-      throwCellStyleError("Invalid named style fallback flag.");
+      failWithMessage("Invalid named style fallback flag.");
   const r = validateCellStyle(e.base);
   return (
     e.missing &&
       Object.keys(r).length &&
-      throwCellStyleError(
-        "A missing named style must use an empty fallback base.",
-      ),
+      failWithMessage("A missing named style must use an empty fallback base."),
     {
       namespace: e.namespace,
       styleId: e.styleId,
@@ -347,20 +345,10 @@ const themePaletteRoles = [
       fonts: { body: "Calibri", heading: "Times New Roman" },
     },
   ];
-function throwWorkbookStyleError(e) {
-  throw Error(e);
-}
-function isPlainCatalogObject(e) {
-  return !!(
-    e &&
-    typeof e == "object" &&
-    !Array.isArray(e) &&
-    [Object.prototype, null].includes(Object.getPrototypeOf(e))
-  );
-}
+
 function assertKnownStyleKeys(e, r, t) {
   Object.keys(e).some((n) => !r.includes(n)) &&
-    throwWorkbookStyleError(`Unsupported ${t} setting.`);
+    failWithMessage(`Unsupported ${t} setting.`);
 }
 function validateBoundedStyleText(e, r, t = 80) {
   return (
@@ -368,7 +356,7 @@ function validateBoundedStyleText(e, r, t = 80) {
       !e.trim() ||
       e.length > t ||
       /[\x00-\x1f\x7f]/.test(e)) &&
-      throwWorkbookStyleError(
+      failWithMessage(
         `${r} must contain 1–${t} characters without control characters.`,
       ),
     e.trim()
@@ -380,7 +368,7 @@ function cloneStyleValue(e) {
 function canonicalStyleKey(e) {
   return Array.isArray(e)
     ? `[${e.map(canonicalStyleKey).join(",")}]`
-    : isPlainCatalogObject(e)
+    : isPlainObjectLiteral(e)
       ? `{${Object.keys(e)
           .filter((r) => e[r] !== undefined)
           .sort()
@@ -389,27 +377,22 @@ function canonicalStyleKey(e) {
       : JSON.stringify(e);
 }
 function validateWorkbookTheme(e) {
-  (isPlainCatalogObject(e) ||
-    throwWorkbookStyleError("Choose a workbook theme."),
+  (isPlainObjectLiteral(e) || failWithMessage("Choose a workbook theme."),
     assertKnownStyleKeys(e, ["name", "palette", "fonts"], "theme"),
-    (!isPlainCatalogObject(e.palette) || !isPlainCatalogObject(e.fonts)) &&
-      throwWorkbookStyleError(
-        "A theme needs eight colors and body and heading fonts.",
-      ),
+    (!isPlainObjectLiteral(e.palette) || !isPlainObjectLiteral(e.fonts)) &&
+      failWithMessage("A theme needs eight colors and body and heading fonts."),
     assertKnownStyleKeys(e.palette, themePaletteRoles, "theme palette"),
     assertKnownStyleKeys(e.fonts, ["body", "heading"], "theme font"));
   const r = {};
   for (const t of themePaletteRoles) {
     const n = e.palette[t];
     ((typeof n != "string" || !/^#[0-9a-f]{6}$/i.test(n)) &&
-      throwWorkbookStyleError(
-        "Theme colors must use six-digit hexadecimal colors.",
-      ),
+      failWithMessage("Theme colors must use six-digit hexadecimal colors."),
       (r[t] = n.toUpperCase()));
   }
   for (const t of ["body", "heading"])
     supportedFontFamilies.includes(e.fonts[t]) ||
-      throwWorkbookStyleError("Choose a supported theme font.");
+      failWithMessage("Choose a supported theme font.");
   return {
     name: validateBoundedStyleText(e.name, "Theme name"),
     palette: r,
@@ -417,39 +400,39 @@ function validateWorkbookTheme(e) {
   };
 }
 function validateNamedStyleDefinition(e) {
-  (isPlainCatalogObject(e) ||
-    throwWorkbookStyleError("Named style definition must be an object."),
+  (isPlainObjectLiteral(e) ||
+    failWithMessage("Named style definition must be an object."),
     assertKnownStyleKeys(
       e,
       ["base", "fontRole", "fillRole", "colorRole", "borderRoles"],
       "named style",
     ),
-    (!isPlainCatalogObject(e.base) || Object.hasOwn(e.base, "binding")) &&
-      throwWorkbookStyleError(
+    (!isPlainObjectLiteral(e.base) || Object.hasOwn(e.base, "binding")) &&
+      failWithMessage(
         "A named style definition needs supported formatting without another binding.",
       ));
   const r = { base: validateCellStyle(e.base) };
   e.fontRole !== undefined &&
     (["body", "heading"].includes(e.fontRole) ||
-      throwWorkbookStyleError("Choose Body or Heading theme font."),
+      failWithMessage("Choose Body or Heading theme font."),
     (r.fontRole = e.fontRole));
   for (const n of ["fillRole", "colorRole"])
     e[n] !== undefined &&
       (themePaletteRoles.includes(e[n]) ||
-        throwWorkbookStyleError("Choose a supported theme color role."),
+        failWithMessage("Choose a supported theme color role."),
       (r[n] = e[n]));
   if (e.borderRoles !== undefined) {
-    (isPlainCatalogObject(e.borderRoles) ||
-      throwWorkbookStyleError("Border color roles must be an object."),
+    (isPlainObjectLiteral(e.borderRoles) ||
+      failWithMessage("Border color roles must be an object."),
       assertKnownStyleKeys(e.borderRoles, cellBorderEdges, "border role"));
     const n = {};
     for (const o of cellBorderEdges)
       e.borderRoles[o] !== undefined &&
         (themePaletteRoles.includes(e.borderRoles[o]) ||
-          throwWorkbookStyleError("Choose a supported border color role."),
+          failWithMessage("Choose a supported border color role."),
         (!resolveBorderEdge(r.base, o) ||
           resolveBorderEdge(r.base, o)?.style === "none") &&
-          throwWorkbookStyleError(
+          failWithMessage(
             "Add a border line before assigning its theme color.",
           ),
         (n[o] = e.borderRoles[o]));
@@ -458,8 +441,8 @@ function validateNamedStyleDefinition(e) {
   return r;
 }
 function validateWorkbookStyleCatalog(e) {
-  (isPlainCatalogObject(e) ||
-    throwWorkbookStyleError("Workbook styles must be an object."),
+  (isPlainObjectLiteral(e) ||
+    failWithMessage("Workbook styles must be an object."),
     assertKnownStyleKeys(
       e,
       ["namespace", "theme", "styles", "missingTheme"],
@@ -467,21 +450,20 @@ function validateWorkbookStyleCatalog(e) {
     ),
     e.missingTheme !== undefined &&
       e.missingTheme !== true &&
-      throwWorkbookStyleError("Invalid missing theme flag."),
+      failWithMessage("Invalid missing theme flag."),
     (!Array.isArray(e.styles) ||
       e.styles.length > workbookStyleLimits.maxStyles) &&
-      throwWorkbookStyleError("A workbook supports at most 50 named styles."));
+      failWithMessage("A workbook supports at most 50 named styles."));
   const r = new Set(),
     t = new Set(),
     n = e.styles.map((s) => {
-      (isPlainCatalogObject(s) ||
-        throwWorkbookStyleError("Invalid named style."),
+      (isPlainObjectLiteral(s) || failWithMessage("Invalid named style."),
         assertKnownStyleKeys(s, ["id", "name", "definition"], "named style"));
       const d = validateBoundedStyleText(s.id, "Style ID", 100),
         u = validateBoundedStyleText(s.name, "Style name");
       return (
         (r.has(d) || t.has(u.toLocaleLowerCase("en-US"))) &&
-          throwWorkbookStyleError(
+          failWithMessage(
             "Named style IDs and names must be unique within this workbook.",
           ),
         r.add(d),
@@ -501,7 +483,7 @@ function validateWorkbookStyleCatalog(e) {
   return (
     o &&
       canonicalStyleKey(a) !== canonicalStyleKey(officeThemeDefinition) &&
-      throwWorkbookStyleError("A missing theme must use the Office fallback."),
+      failWithMessage("A missing theme must use the Office fallback."),
     {
       namespace: validateBoundedStyleText(e.namespace, "Style namespace", 100),
       theme: a,
@@ -583,7 +565,7 @@ function resolveNamedStyleAppearance(e, r) {
 function resolveNamedStyleBinding(e, r) {
   e &&
     r.namespace !== e.namespace &&
-    throwWorkbookStyleError(
+    failWithMessage(
       "This style belongs to another workbook. Import or remap its style catalog before pasting the binding.",
     );
   const t = e?.styles.find((n) => n.id === r.styleId);
@@ -599,7 +581,7 @@ function reconcileWorkbookStyleBindings(e, r) {
   var o;
   const t = e === undefined ? undefined : validateWorkbookStyleCatalog(e);
   t ? (r.styleCatalog = t) : delete r.styleCatalog;
-  const n = isPlainCatalogObject(e) && e.theme === undefined;
+  const n = isPlainObjectLiteral(e) && e.theme === undefined;
   for (const a of r.sheets)
     for (const s of hasLinkedOrBoundCells(a.cells)
       ? Object.values(a.cells)
@@ -610,7 +592,7 @@ function reconcileWorkbookStyleBindings(e, r) {
       (!u.missing &&
         !n &&
         canonicalStyleKey(d) !== canonicalStyleKey(u) &&
-        throwWorkbookStyleError(
+        failWithMessage(
           "Named style appearance does not match the workbook catalog. Reapply the style from a trusted catalog.",
         ),
         (s.style.binding = u));
@@ -621,7 +603,7 @@ function assertNamedStyleBindingCurrent(e, r) {
   const t = validateNamedStyleBinding(r.binding),
     n = resolveNamedStyleBinding(e.styleCatalog, t);
   canonicalStyleKey(t) !== canonicalStyleKey(n) &&
-    throwWorkbookStyleError(
+    failWithMessage(
       "Named style binding is stale or inconsistent with this workbook. Reapply its named style.",
     );
 }
@@ -741,13 +723,11 @@ function planMoveSegments(e, r, t) {
       ),
     ),
   ].sort((o, a) => o - a);
-  return n
-    .slice(0, -1)
-    .map((o, a) => ({
-      start: o,
-      end: n[a + 1] - 1,
-      offset: mapIndexAfterMove(o, t) - o,
-    }));
+  return n.slice(0, -1).map((o, a) => ({
+    start: o,
+    end: n[a + 1] - 1,
+    offset: mapIndexAfterMove(o, t) - o,
+  }));
 }
 function mapRangeAfterMove(e, r, t) {
   if (t.permutation && e <= t.index && r >= t.index + t.count - 1)
@@ -785,7 +765,7 @@ const reviewThreadLimits = {
   },
   unsafeControlCharPattern =
     /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/,
-  ji = (e) => {
+  throwWithMessage = (e) => {
     throw new Error(e);
   };
 function assertPlainReviewRecord(e, r) {
@@ -794,7 +774,7 @@ function assertPlainReviewRecord(e, r) {
       typeof e != "object" ||
       Array.isArray(e) ||
       ![Object.prototype, null].includes(Object.getPrototypeOf(e))) &&
-      ji(`${r} must be a plain object.`),
+      throwWithMessage(`${r} must be a plain object.`),
     e
   );
 }
@@ -804,7 +784,7 @@ function normalizeBoundedText(e, r, t, n = false) {
       !e.trim() ||
       e.length > t ||
       unsafeControlCharPattern.test(n ? e.replace(/[\n\r\t]/g, "") : e)) &&
-      ji(
+      throwWithMessage(
         `${r} must contain 1–${t} characters without unsupported control characters.`,
       ),
     e.trim()
@@ -815,7 +795,7 @@ function normalizeReviewTimestamp(e, r = "Review timestamp") {
     (typeof e != "string" ||
       !Number.isFinite(Date.parse(e)) ||
       new Date(e).toISOString() !== e) &&
-      ji(`${r} must be an ISO UTC timestamp.`),
+      throwWithMessage(`${r} must be an ISO UTC timestamp.`),
     e
   );
 }
@@ -832,7 +812,11 @@ function resolveReviewTimestamp(e = {}, r) {
       ? new Date(Math.max(Date.now(), r ? Date.parse(r) : 0)).toISOString()
       : normalizeReviewTimestamp(e.timestamp);
   return (
-    r && t < r && ji("The review time cannot precede the existing discussion."),
+    r &&
+      t < r &&
+      throwWithMessage(
+        "The review time cannot precede the existing discussion.",
+      ),
     t
   );
 }
@@ -1157,11 +1141,8 @@ function readHiddenAxisIntervals(e, r) {
     normalizeHiddenIntervals(e[hiddenKeyForAxis(r)], axisCountOf(e, r))
   );
 }
-const outlineGroupLimits = { maxGroups: 1e3, maxDepth: 8 },
-  SB = (e, r) => (r === "row" ? e.rowCount : e.colCount);
-function assertOutlineAxis(e) {
-  if (e !== "row" && e !== "column") throw Error("Choose rows or columns.");
-}
+const outlineGroupLimits = { maxGroups: 1e3, maxDepth: 8 };
+
 function assertOutlineGroupNesting(e, r) {
   const t = e
       .filter((o) => o.axis === r)
@@ -1235,13 +1216,13 @@ function validateOutlineGroups(
 }
 function addOutlineGroup(e, r) {
   return (
-    assertOutlineAxis(r),
+    assertWorksheetAxis(r),
     assertOutlineGroupNesting(e.outlineGroups ?? [], r)
   );
 }
 function cn(e, r) {
-  assertOutlineAxis(r);
-  const t = SB(e, r),
+  assertWorksheetAxis(r);
+  const t = axisCountOf(e, r),
     n = [
       ...normalizeHiddenIntervals(r === "row" ? e.hiddenRows : e.hiddenCols, t),
       ...(e.outlineGroups ?? [])
@@ -1261,8 +1242,8 @@ function regenerateOutlineGroupIds(e) {
   return e.outlineGroups?.map((t) => ({ ...t, id: crypto.randomUUID() }));
 }
 function remapOutlineGroupsForEdit(e, r, t, n, o) {
-  assertOutlineAxis(r);
-  const a = SB(e, r);
+  assertWorksheetAxis(r);
+  const a = axisCountOf(e, r);
   if (
     !Number.isInteger(t) ||
     t < 0 ||
@@ -1308,7 +1289,7 @@ function remapOutlineGroupsForEdit(e, r, t, n, o) {
   }
   return d;
 }
-const isPlainRecordObject = (e) =>
+const isPlainObjectValue = (e) =>
   !!e &&
   typeof e == "object" &&
   !Array.isArray(e) &&
@@ -1331,7 +1312,7 @@ function isValidUtcTimestamp(e) {
 function validateWorkbookMetadata(e, r) {
   if (e === undefined) return;
   if (
-    !isPlainRecordObject(e) ||
+    !isPlainObjectValue(e) ||
     Object.keys(e).some(
       (a) =>
         ![
@@ -1362,7 +1343,7 @@ function validateWorkbookMetadata(e, r) {
   ) {
     const a = e.template;
     if (
-      !isPlainRecordObject(a) ||
+      !isPlainObjectValue(a) ||
       Object.keys(a).some(
         (s) =>
           ![
@@ -1437,7 +1418,7 @@ const validationLimits = Object.freeze({
     customChecks: 5e3,
     displayedIssues: 500,
   }),
-  FQ = (e) => !!e && typeof e == "object" && !Array.isArray(e),
+  isNonArrayObject = (e) => !!e && typeof e == "object" && !Array.isArray(e),
   assertBoundedValidationText = (e, r, t) => {
     if (typeof e != "string" || e.length > r)
       throw Error(`Invalid validation ${t}.`);
@@ -1540,23 +1521,22 @@ function vx(e, r) {
   return n;
 }
 const conditionalRuleKinds = [
-    "greater",
-    "less",
-    "equal",
-    "between",
-    "contains",
-    "duplicate",
-    "unique",
-    "blank",
-    "notBlank",
-    "error",
-    "notError",
-    "formula",
-    "colorScale",
-    "dataBar",
-    "iconSet",
-  ],
-  PQ = (e) => !!e && typeof e == "object" && !Array.isArray(e);
+  "greater",
+  "less",
+  "equal",
+  "between",
+  "contains",
+  "duplicate",
+  "unique",
+  "blank",
+  "notBlank",
+  "error",
+  "notError",
+  "formula",
+  "colorScale",
+  "dataBar",
+  "iconSet",
+];
 function assertBoundedString(e, r, t) {
   if (typeof e != "string" || e.length > r) throw Error(`Invalid ${t}.`);
   return e;
@@ -1566,7 +1546,7 @@ function assertSixDigitHexColor(e) {
     throw Error("Choose a six-digit hexadecimal color.");
   return e;
 }
-const n5 = (e, r) =>
+const isCellInsideRange = (e, r) =>
     r.row >= e.firstRow &&
     r.row <= e.lastRow &&
     r.col >= e.firstCol &&
@@ -1582,15 +1562,12 @@ function sortConditionalRulesByPriority(e) {
     .sort((r, t) => r.rank - t.rank)
     .map((r) => r.rule);
 }
-const sD = (e) => !!e && typeof e == "object" && !Array.isArray(e);
-function throwSheetProtectionError(e) {
-  throw Error(e);
-}
+
 function assertSheetUnprotected(e) {
   var r;
   (r = e.protection) != null &&
     r.enabled &&
-    throwSheetProtectionError(
+    failWithMessage(
       "This sheet is protected. Unprotect it before changing its contents.",
     );
 }
@@ -1681,15 +1658,15 @@ async function updateSheetProtection(e, r, t, n) {
   (n &&
     (d = o.protection) != null &&
     d.enabled &&
-    throwSheetProtectionError(
+    failWithMessage(
       "Unprotect this sheet before changing its protection settings.",
     ),
-    t.length > 200 && throwSheetProtectionError("Password is too long."),
+    t.length > 200 && failWithMessage("Password is too long."),
     !n &&
       (u = o.protection) != null &&
       u.hash &&
       (await hashSheetPassword(t, o.protection.salt)) !== o.protection.hash &&
-      throwSheetProtectionError("The password does not match."));
+      failWithMessage("The password does not match."));
   const a = crypto.randomUUID(),
     s = n
       ? {
@@ -1742,7 +1719,7 @@ const supportedNumberLocales = [
     ],
     duration: ["[h]:mm", "[h]:mm:ss", "[h]:mm:ss.000", "[m]:ss", "[s].000"],
   };
-function throwFormatError(e) {
+function throwWorkbookError(e) {
   throw new Error(e);
 }
 const numericFormatKinds = new Set([
@@ -1871,14 +1848,14 @@ function parseDateTimeFormatCode(e) {
     if (c === '"') {
       const v = e.indexOf('"', u + 1);
       (v < 0 &&
-        throwFormatError("The format contains an unclosed quoted literal."),
+        throwWorkbookError("The format contains an unclosed quoted literal."),
         t.push({ kind: "literal", text: e.slice(u + 1, v) }),
         (u = v + 1));
       continue;
     }
     if (c === "\\") {
       (l.length < 2 &&
-        throwFormatError("A format escape must be followed by a character."),
+        throwWorkbookError("A format escape must be followed by a character."),
         t.push({ kind: "literal", text: l[1] }),
         (u += 2));
       continue;
@@ -1901,7 +1878,7 @@ function parseDateTimeFormatCode(e) {
       (((g === "y" && ![2, 4].includes(v.length)) ||
         (g === "m" && v.length > 4) ||
         (["d", "h", "s"].includes(g) && v.length > 2)) &&
-        throwFormatError(
+        throwWorkbookError(
           "This date pattern uses unsupported fields. Use yy/yyyy, m–mmmm, d/dd, h/hh or s/ss.",
         ),
         t.push({
@@ -1917,7 +1894,7 @@ function parseDateTimeFormatCode(e) {
         !["second", "elapsed"].includes(t.at(-1).kind) ||
         (t.at(-1).kind === "elapsed" && !t.at(-1).text.startsWith("s")) ||
         n) &&
-        throwFormatError(
+        throwWorkbookError(
           "Fractional seconds must follow seconds and use 1–3 zero digits.",
         ),
         (n = m[1].length),
@@ -1929,7 +1906,7 @@ function parseDateTimeFormatCode(e) {
       (t.push({ kind: "literal", text: c }), u++);
       continue;
     }
-    throwFormatError(
+    throwWorkbookError(
       "Unsupported date/time code. Quote literal words and use one supported date/time pattern.",
     );
   }
@@ -1950,21 +1927,21 @@ function parseDateTimeFormatCode(e) {
       a ||
       o.some((l) => ["hour", "ampm"].includes(l.kind)) ||
       o[0].kind !== "elapsed") &&
-      throwFormatError(
+      throwWorkbookError(
         "Elapsed-time patterns start with one [h], [m] or [s] field and cannot include calendar or AM/PM fields.",
       );
     const u = d[0].text[0];
     ((u === "s" && s) || (u === "m" && o.some((l) => l.kind === "minute"))) &&
-      throwFormatError("Use [h]:mm:ss, [m]:ss or [s] for elapsed time.");
+      throwWorkbookError("Use [h]:mm:ss, [m]:ss or [s] for elapsed time.");
   }
   return (
     o.some((u) => u.kind === "ampm") &&
       !o.some((u) => u.kind === "hour") &&
-      throwFormatError("AM/PM requires an hour field."),
+      throwWorkbookError("AM/PM requires an hour field."),
     !a &&
       !s &&
       !d.length &&
-      throwFormatError("The format does not contain a date or time field."),
+      throwWorkbookError("The format does not contain a date or time field."),
     {
       kind: "temporal",
       category: d.length
@@ -1988,23 +1965,23 @@ function parseCustomNumberFormat(e) {
     if (d[0] === '"') {
       const u = e.indexOf('"', s + 1);
       (u < 0 &&
-        throwFormatError("The format contains an unclosed quoted literal."),
+        throwWorkbookError("The format contains an unclosed quoted literal."),
         (r += e.slice(s, u + 1)),
         (s = u + 1));
     } else if (d[0] === "\\")
       (d.length < 2 &&
-        throwFormatError("A format escape must be followed by a character."),
+        throwWorkbookError("A format escape must be followed by a character."),
         (r += d.slice(0, 2)),
         (s += 2));
     else if (/^[0#]/.test(d)) {
       n &&
-        throwFormatError(
+        throwWorkbookError(
           "Only one numeric field per custom section is supported.",
         );
       const u = /^[0#.,]+/.exec(d)[0],
         l = /,+$/.exec(u)?.[0] ?? "";
       (l.length > 2 &&
-        throwFormatError(
+        throwWorkbookError(
           "Custom display scaling supports at most two trailing commas.",
         ),
         (t = 1e3 ** l.length),
@@ -2014,17 +1991,17 @@ function parseCustomNumberFormat(e) {
     } else ((r += d[0]), s++);
   }
   /\[/.test(r.replace(/"[^"]*"|\\./g, "")) &&
-    throwFormatError(
+    throwWorkbookError(
       "Custom colors, conditions and locale tags are not supported. Use conditional formatting or the locale selector.",
     );
   const o = parseNumberFormatCode(r);
   return (
     o ||
-      throwFormatError(
+      throwWorkbookError(
         "Unsupported custom format. Use 0/# digits, grouping, decimals, percent, quoted literals and positive/negative/zero sections.",
       ),
     o.maxDecimals > 12 &&
-      throwFormatError("Custom formats support at most 12 decimal places."),
+      throwWorkbookError("Custom formats support at most 12 decimal places."),
     { parsed: o, divisor: t }
   );
 }
@@ -2038,11 +2015,11 @@ function validateNumberFormatCode(e) {
     !e.length ||
     e.length > 200 ||
     /[\u0000-\u001f\u007f]/.test(e)) &&
-    throwFormatError("Enter a supported format pattern of 1–200 characters.");
+    throwWorkbookError("Enter a supported format pattern of 1–200 characters.");
   let t;
   const n = BN(e);
   n ||
-    throwFormatError(
+    throwWorkbookError(
       "A format has at most four sections and must close quoted literals.",
     );
   const o = n.length === 1 ? parseDateTimeFormatCode(e) : undefined;
@@ -2051,7 +2028,7 @@ function validateNumberFormatCode(e) {
       ? (t = o)
       : (n.length === 4 &&
           !isTextOnlyFormatSection(n[3]) &&
-          throwFormatError(
+          throwWorkbookError(
             "The text section supports @ and quoted or escaped literals only.",
           ),
         (t = {
@@ -2078,9 +2055,8 @@ export {
   defaultRowHeightOf,
   cellStyleToCss,
   readHiddenAxisIntervals,
-  assertOutlineAxis,
   FB,
-  FQ,
+  isNonArrayObject,
   hiddenKeyForAxis,
   dateTimeFormatKinds,
   resolveMovedRange,
@@ -2098,15 +2074,14 @@ export {
   addOutlineGroup,
   defaultColumnWidthOf,
   supportedNumberLocales,
-  PQ,
   Pv,
   hasBorderEdgeChanges,
-  isPlainRecordObject,
+  isPlainObjectValue,
   canonicalStyleKey,
   regenerateOutlineGroupIds,
   textWrapToCss,
   validateBoundedStyleText,
-  throwFormatError,
+  throwWorkbookError,
   validateOutlineGroups,
   remapOutlineGroupsForEdit,
   supportedCurrencyCodes,
@@ -2125,7 +2100,6 @@ export {
   validationLimits,
   anchorsMatchOnAxis,
   aQ,
-  throwSheetProtectionError,
   collectStyleFallbackWarnings,
   builtInWorkbookThemes,
   validateCellBorder,
@@ -2141,10 +2115,9 @@ export {
   touchWorkbookModifiedAt,
   measureCellBorderInsets,
   createFormulaWatch,
-  throwWorkbookStyleError,
   assertNoStopValidationIssues,
   DataValidationError,
-  ji,
+  throwWithMessage,
   assertSheetUnprotected,
   validateDataValidationRule,
   normalizeBoundedText,
@@ -2153,21 +2126,20 @@ export {
   validateSheetDefaultSizes,
   resolveBorderEdge,
   createWorkbookMetadata,
-  n5,
+  isCellInsideRange,
   validateCellStyle,
   offsetRowReference,
   validateWorkbookMetadata,
   r5,
   validateRowColumnMove,
   cellBorderEdges,
-  sD,
   renameStyleNamespace,
   borderLineStyles,
   trimRequiredMetadataText,
   createAxisVisibilityIndex,
   resolveNamedStyleAppearance,
   applySheetSizeEdits,
-  throwCellStyleError,
+  failWithMessage,
   vx,
   normalizeReviewAuthor,
   worksheetCapacityLimits,
@@ -2177,3 +2149,4 @@ export {
   assertBoundedValidationText,
   numberFormatToIntlOptions,
 };
+export { isPlainObjectLiteral };

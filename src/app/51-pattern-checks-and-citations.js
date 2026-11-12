@@ -1,3 +1,7 @@
+import { parseNumericText } from "./37-linear-solver-engine.js";
+import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
+import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -30,8 +34,6 @@ import {
 } from "./20-calculation-options-and-sources.js";
 import {
   formatScreenCountsSummary,
-  parseNumericText,
-  rangeColumnIndexes,
   exportScreenReportJson,
   nanToEmptyText,
   runPatternChecks,
@@ -101,7 +103,7 @@ function PatternCheckDialog(e) {
     H = V === "combined" ? U?.combination : G,
     Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
     X$1 = Math.min(B, Q - 1),
-    J = rangeColumnIndexes(C.range),
+    J = listRangeColumnIndexes(C.range),
     q = e.workbook.sheets.find((ce) => ce.id === e.sheetId),
     W = (ce) => h((ge) => ({ ...ge, ...ce })),
     K = (ce, ge) =>
@@ -1773,8 +1775,6 @@ const patternCheckBudgets = {
     nameDepth: 16,
     keys: 8,
   },
-  Vf = (e) =>
-    !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
   readFormulaText = (e) => e?.raw ?? null,
   isBlankFormulaCell = (e) =>
     readFormulaText(e) === null || readFormulaText(e) === "",
@@ -1800,7 +1800,6 @@ const patternCheckBudgets = {
       o.length === a.length && o.every((s, d) => s === a[d] && ww(t[s], n[s]))
     );
   },
-  xc = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   unquotedSheetNamePattern = "[A-Za-z_.\\d\\u007F-\\uFFFF]+",
   I3 = `(?:'(?:[^']|'')*'|${unquotedSheetNamePattern})`,
   a1RangePattern =
@@ -1907,7 +1906,6 @@ export {
   isBlankFormulaCell,
   buildAnswerCitations,
   AssistantAnswerEvidence,
-  Vf,
   PatternCheckDialog,
   computeFormulaSignature,
   evaluateAnswerEvidence,
@@ -1917,6 +1915,5 @@ export {
   definedNameReferencePattern,
   referenceTokenPattern,
   ww,
-  xc,
   readFormulaText,
 };

@@ -1,3 +1,5 @@
+import { downloadBlobAsFile } from "./09-workbook-links.js";
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -34,7 +36,6 @@ import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   validateConvertedSource,
   describeSourceFile,
-  downloadBlobFile,
   XlsxConversionReview,
 } from "./10-source-import-dialog.js";
 
@@ -136,7 +137,7 @@ function FormatConversionDialog(e) {
         }
       }),
     j = (V, D) =>
-      (a.current.onDownload ?? downloadBlobFile)({ filename: V, blob: D }),
+      (a.current.onDownload ?? downloadBlobAsFile)({ filename: V, blob: D }),
     z = (V) =>
       k(async () => {
         const D = V
@@ -1388,7 +1389,6 @@ function validateSavedSelection(e, r) {
   };
 }
 const buildCompositeKey = (e, r) => JSON.stringify([e, r]),
-  o3 = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
   isFormulaInputValue = (e) =>
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
   bareSheetNamePattern = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
@@ -1420,8 +1420,8 @@ function parseCellReference(e) {
           ? `A${n[1]}:XFD${n[2]}`
           : r,
     ),
-    a = o3(o.firstRow, o.firstCol),
-    s = o3(o.lastRow, o.lastCol);
+    a = formatCellAddress(o.firstRow, o.firstCol),
+    s = formatCellAddress(o.lastRow, o.lastCol);
   return a === s ? a : `${a}:${s}`;
 }
 
@@ -1437,7 +1437,7 @@ export {
   knownFunctionNameSet,
   isFormulaInputValue,
   compareWorkbookVersions,
-  o3,
   sheetRangeReferencePattern,
   createWorkbookSession,
 };
+export { cloneStructuredValue, isPlainRecord };

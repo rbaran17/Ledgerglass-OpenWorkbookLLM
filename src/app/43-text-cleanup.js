@@ -1,3 +1,4 @@
+import { stringifyJsonValue } from "./42-combine-populations.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -755,8 +756,7 @@ const textCleanupStepLabels = [
     if (t.some((n) => n < 0 || n > 49) || new Set(t).size !== t.length)
       throw Error("Choose distinct field positions from 1 to 50.");
     return t;
-  },
-  vS = (e) => JSON.stringify(e);
+  };
 function describeSplitFieldStep(e) {
   if (e.kind === "pattern")
     return `Infer “${e.name}”: ${describeInferredTextRule(e.pattern)} (${e.examples.length} examples)`;
@@ -771,5 +771,4 @@ export {
   describeSplitFieldStep,
   parseFieldPositions,
   TextCleanupDialog,
-  vS,
 };

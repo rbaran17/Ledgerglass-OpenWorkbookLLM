@@ -1430,21 +1430,19 @@ function DelimitedImportExportDialog({
                                   children: "Record",
                                 }),
                               }),
-                              z.schema
-                                .slice(0, 200)
-                                .map((R) =>
-                                  i.jsxs(
-                                    "th",
-                                    {
-                                      children: [
-                                        columnIndexToLetters(R.index),
-                                        " — ",
-                                        R.label,
-                                      ],
-                                    },
-                                    R.index,
-                                  ),
+                              z.schema.slice(0, 200).map((R) =>
+                                i.jsxs(
+                                  "th",
+                                  {
+                                    children: [
+                                      columnIndexToLetters(R.index),
+                                      " — ",
+                                      R.label,
+                                    ],
+                                  },
+                                  R.index,
                                 ),
+                              ),
                             ],
                           }),
                         }),

@@ -1,3 +1,5 @@
+import { isPlainObjectValue } from "./01-cell-styles-and-themes.js";
+import { isFiniteNumber } from "./04-pivot-tables-and-pictures.js";
 import {
   workbookLimits,
   maxSelectionAreas,
@@ -21,8 +23,7 @@ import {
   normalizeHiddenIntervals,
   conditionalRuleKinds,
   readHiddenAxisIntervals,
-  assertOutlineAxis,
-  FQ,
+  isNonArrayObject,
   hiddenKeyForAxis,
   columnWidthAt,
   sortConditionalRulesByPriority,
@@ -31,7 +32,6 @@ import {
   normalizeReviewTimestamp,
   axisCountOf,
   addOutlineGroup,
-  PQ,
   validateOutlineGroups,
   remapOutlineGroupsForEdit,
   isErrorValueText,
@@ -40,21 +40,19 @@ import {
   unsafeControlCharPattern,
   assertWorksheetAxis,
   validationLimits,
-  throwSheetProtectionError,
   validateCellBorder,
   cn,
   resolveReviewTimestamp,
   rowHeightAt,
-  ji,
+  throwWithMessage,
   assertSheetUnprotected,
   normalizeBoundedText,
   assertSixDigitHexColor,
   validateSheetDefaultSizes,
-  n5,
+  isCellInsideRange,
   cellBorderEdges,
-  sD,
   createAxisVisibilityIndex,
-  throwCellStyleError,
+  failWithMessage,
   vx,
   normalizeReviewAuthor,
   worksheetCapacityLimits,
@@ -82,26 +80,22 @@ import {
   inspectPictureDataUrl,
   containsSubtotalOrAggregateCall,
   referenceSensitiveFunctionNames,
-  isPlainObjectLiteral,
   notReferenceFunctionMarker,
-  z4,
+  isFormulaCellValue,
 } from "./04-pivot-tables-and-pictures.js";
 import {
   B2,
   requireWhatIfName,
   HO,
-  Hn,
   transformCellValueSchema,
   whatIfLimits,
   expandWhatIfScenarios,
   referenceImpactKinds,
   cellAddressKey,
-  WO,
   validateWhatIfFields,
   isBoundedPlainText,
   validateWhatIfValues,
   requireWhatIfList,
-  qE,
   columnIndexToLetters,
   printRenderLimits,
   shiftFormulaReferences,
@@ -109,12 +103,12 @@ import {
 
 function resolveFilteredRowContext(e, r = {}) {
   if (
-    !isPlainObjectLiteral(r) ||
+    !isPlainObjectValue(r) ||
     Object.keys(r).some((u) => u !== "filteredRowsBySheet")
   )
     throw Error("Calculation options support only filteredRowsBySheet.");
   const t = r.filteredRowsBySheet;
-  if (t !== undefined && !isPlainObjectLiteral(t))
+  if (t !== undefined && !isPlainObjectValue(t))
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
@@ -147,7 +141,7 @@ function resolveFilteredRowContext(e, r = {}) {
     const { issue, isIssue } = c,
       p = (J) => {
         if (isIssue(J)) throw J;
-        if (!isPlainObjectLiteral(J) || !isPlainObjectLiteral(J.ref))
+        if (!isPlainObjectValue(J) || !isPlainObjectValue(J.ref))
           throw issue("#VALUE!");
         const q = J.ref;
         if (q.sheet !== undefined && typeof q.sheet != "string")
@@ -156,8 +150,8 @@ function resolveFilteredRowContext(e, r = {}) {
           String(q.sheet ?? c.currentSheetName ?? "").toLowerCase(),
         );
         if (!W) throw issue("#REF!");
-        const K = isPlainObjectLiteral(q.from) ? q.from : q,
-          te = isPlainObjectLiteral(q.to) ? q.to : q,
+        const K = isPlainObjectValue(q.from) ? q.from : q,
+          te = isPlainObjectValue(q.to) ? q.to : q,
           ae = [K.row, K.col, te.row, te.col];
         if (ae.some((le) => !Number.isInteger(le))) throw issue("#REF!");
         const [oe, de, he, Se] = ae;
@@ -191,16 +185,18 @@ function resolveFilteredRowContext(e, r = {}) {
         };
       if (u === "FORMULATEXT") {
         const K = q(J.firstRow, J.firstCol);
-        return z4(K) && K.raw.length <= 8192 ? K.raw : issue("#N/A");
+        return isFormulaCellValue(K) && K.raw.length <= 8192
+          ? K.raw
+          : issue("#N/A");
       }
       const W = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
       return W > 1e4
         ? issue("#LIMIT!")
         : W === 1
-          ? z4(q(J.firstRow, J.firstCol))
+          ? isFormulaCellValue(q(J.firstRow, J.firstCol))
           : Array.from({ length: J.lastRow - J.firstRow + 1 }, (K, te) =>
               Array.from({ length: J.lastCol - J.firstCol + 1 }, (ae, oe) =>
-                z4(q(J.firstRow + te, J.firstCol + oe)),
+                isFormulaCellValue(q(J.firstRow + te, J.firstCol + oe)),
               ),
             );
     }
@@ -233,8 +229,7 @@ function resolveFilteredRowContext(e, r = {}) {
     const I = F ? v(l[3]) : 0,
       O = F ? [l[2]] : l.slice(m ? 2 : 1),
       z =
-        F &&
-        !((J) => isPlainObjectLiteral(J) && isPlainObjectLiteral(J.ref))(O[0]),
+        F && !((J) => isPlainObjectValue(J) && isPlainObjectValue(J.ref))(O[0]),
       V = z ? [] : O.map(p);
     let D = 0;
     for (const J of V) {
@@ -300,7 +295,7 @@ function resolveFilteredRowContext(e, r = {}) {
             const te = J.sheet.cells[K];
             if (
               k &&
-              z4(te) &&
+              isFormulaCellValue(te) &&
               (m ? containsSubtotalOrAggregateCall : containsSubtotalCall)(
                 c.expandedFormula(te, J.sheet.id),
               )
@@ -362,12 +357,12 @@ function formatAxisIntervalRef(e, r) {
 }
 function _t(e) {
   const r = /^\$?([A-Za-z]{1,3})\$?([1-9]\d{0,6})$/.exec(e);
-  if (!r) return Hn(`Invalid cell address: ${e}`);
+  if (!r) return throwWithMessage(`Invalid cell address: ${e}`);
   let t = 0;
   for (const o of r[1].toUpperCase()) t = t * 26 + o.charCodeAt(0) - 64;
   const n = Number(r[2]) - 1;
   return n >= workbookLimits.maxRows || t > workbookLimits.maxCols
-    ? Hn(`Cell ${e} exceeds the supported workbook bounds.`)
+    ? throwWithMessage(`Cell ${e} exceeds the supported workbook bounds.`)
     : { row: n, col: t - 1 };
 }
 function buildBorderPresetStyles(
@@ -380,7 +375,7 @@ function buildBorderPresetStyles(
     a = validateCellBorder(n),
     s = {};
   ["all", "outline", "inside", "clear"].includes(t) ||
-    throwCellStyleError("Choose a supported border preset.");
+    failWithMessage("Choose a supported border preset.");
   for (const d of cellBorderEdges) {
     const u = o.row + (d === "top" ? -1 : d === "bottom" ? 1 : 0),
       l = o.col + (d === "left" ? -1 : d === "right" ? 1 : 0),
@@ -397,7 +392,8 @@ function buildBorderPresetStyles(
   return s;
 }
 function normalizeCellAddress(e) {
-  if (typeof e != "string") return ji("Choose a valid worksheet cell address.");
+  if (typeof e != "string")
+    return throwWithMessage("Choose a valid worksheet cell address.");
   const r = _t(e.trim());
   return `${columnIndexToLetters(r.col)}${r.row + 1}`;
 }
@@ -419,7 +415,7 @@ function validateHyperlinkRecord(e) {
       ...(t ? { label: t } : {}),
     };
   if (r.kind !== "external")
-    return ji("Choose a web, email or worksheet link.");
+    return throwWithMessage("Choose a web, email or worksheet link.");
   const n = normalizeBoundedText(
     r.url,
     "Link address",
@@ -428,30 +424,38 @@ function validateHyperlinkRecord(e) {
   let o = n;
   for (let s = 0; s < 4; s++) {
     (unsafeControlCharPattern.test(o) || /\\/.test(o)) &&
-      ji("Link addresses cannot contain control characters or backslashes.");
+      throwWithMessage(
+        "Link addresses cannot contain control characters or backslashes.",
+      );
     let d = o;
     try {
       d = decodeURIComponent(o);
     } catch {
-      ji("The link contains invalid encoded characters.");
+      throwWithMessage("The link contains invalid encoded characters.");
     }
     if (d === o) break;
     o = d;
   }
   (unsafeControlCharPattern.test(o) ||
     /%(?:0[\da-f]|1[\da-f]|7f|8[\da-f]|9[\da-f])/i.test(o)) &&
-    ji("Link addresses cannot contain encoded control characters.");
+    throwWithMessage(
+      "Link addresses cannot contain encoded control characters.",
+    );
   let a;
   try {
     a = new URL(n);
   } catch {
-    return ji("Enter a complete https://, http:// or mailto: address.");
+    return throwWithMessage(
+      "Enter a complete https://, http:// or mailto: address.",
+    );
   }
   return (
     ["https:", "http:", "mailto:"].includes(a.protocol) ||
-      ji("Only https://, http:// and mailto: links are supported."),
+      throwWithMessage(
+        "Only https://, http:// and mailto: links are supported.",
+      ),
     (a.username || a.password) &&
-      ji("Links cannot contain embedded credentials."),
+      throwWithMessage("Links cannot contain embedded credentials."),
     a.protocol === "mailto:"
       ? (a.search ||
           a.hash ||
@@ -459,10 +463,12 @@ function validateHyperlinkRecord(e) {
           !/^[^\s@/?#:,]+@[^\s@/?#:,]+\.[^\s@/?#:,]+$/.test(
             decodeURIComponent(a.pathname),
           )) &&
-        ji("Use mailto: with one email address and no additional headers.")
-      : a.hostname || ji("Web links require a hostname."),
+        throwWithMessage(
+          "Use mailto: with one email address and no additional headers.",
+        )
+      : a.hostname || throwWithMessage("Web links require a hostname."),
     a.href.length > reviewThreadLimits.urlLength &&
-      ji("The normalized link is too long."),
+      throwWithMessage("The normalized link is too long."),
     { kind: "external", url: a.href, ...(t ? { label: t } : {}) }
   );
 }
@@ -471,7 +477,7 @@ function normalizeReviewMetadata(e, r) {
   if (t.reviewThreads !== undefined) {
     (!Array.isArray(t.reviewThreads) ||
       t.reviewThreads.length > reviewThreadLimits.threads) &&
-      ji(
+      throwWithMessage(
         `A workbook can contain at most ${reviewThreadLimits.threads} review threads.`,
       );
     const n = new Set(),
@@ -481,10 +487,11 @@ function normalizeReviewMetadata(e, r) {
       const u = assertPlainReviewRecord(d, "Review thread"),
         l = assertPlainReviewRecord(u.anchor, "Review target"),
         c = normalizeBoundedText(u.id, "Review thread ID", 100);
-      (n.has(c) && ji("Review thread IDs must be unique."), n.add(c));
+      (n.has(c) && throwWithMessage("Review thread IDs must be unique."),
+        n.add(c));
       const h = normalizeReviewTimestamp(u.createdAt),
         f = normalizeReviewTimestamp(u.updatedAt);
-      f < h && ji("Review update time cannot precede creation.");
+      f < h && throwWithMessage("Review update time cannot precede creation.");
       const p = {
         sheetId: normalizeBoundedText(l.sheetId, "Review worksheet ID", 100),
         sheetName: normalizeBoundedText(
@@ -498,7 +505,7 @@ function normalizeReviewMetadata(e, r) {
         !u.messages.length ||
         u.messages.length > reviewThreadLimits.messagesPerThread ||
         (a += u.messages.length) > reviewThreadLimits.totalMessages) &&
-        ji(
+        throwWithMessage(
           "Review discussions exceed the per-thread or workbook message limit.",
         );
       let m = h;
@@ -506,12 +513,16 @@ function normalizeReviewMetadata(e, r) {
           const w = assertPlainReviewRecord(b, "Review message"),
             E = normalizeBoundedText(w.id, "Review message ID", 100);
           (o.has(E) &&
-            ji("Review message IDs must be unique within the workbook."),
+            throwWithMessage(
+              "Review message IDs must be unique within the workbook.",
+            ),
             o.add(E));
           const A = normalizeReviewTimestamp(w.createdAt);
           return (
             (A < m || A > f || (y === 0 && A !== h)) &&
-              ji("Review message times must follow their discussion in order."),
+              throwWithMessage(
+                "Review message times must follow their discussion in order.",
+              ),
             (m = A),
             {
               id: E,
@@ -533,7 +544,7 @@ function normalizeReviewMetadata(e, r) {
         const b = assertPlainReviewRecord(u.resolved, "Review resolution"),
           y = normalizeReviewTimestamp(b.createdAt);
         ((y < v.at(-1).createdAt || y > f) &&
-          ji("Invalid review resolution time."),
+          throwWithMessage("Invalid review resolution time."),
           (g.resolved = {
             author: normalizeReviewAuthor(
               normalizeBoundedText(b.author, "Reviewer name", 100),
@@ -547,13 +558,13 @@ function normalizeReviewMetadata(e, r) {
         ((!["worksheet-deleted", "cell-deleted"].includes(String(b.reason)) ||
           y < h ||
           y > f) &&
-          ji("Invalid orphaned review target."),
+          throwWithMessage("Invalid orphaned review target."),
           (g.orphaned = { reason: b.reason, createdAt: y }));
       }
       return (
         !g.orphaned &&
           !r.sheets.some((b) => b.id === p.sheetId) &&
-          ji(
+          throwWithMessage(
             "A review thread with a missing worksheet must be retained as orphaned.",
           ),
         g
@@ -569,7 +580,9 @@ function normalizeReviewMetadata(e, r) {
       const a = validateHyperlinkRecord(o.hyperlink);
       (a.kind === "internal" &&
         !r.sheets.some((s) => s.id === a.sheetId) &&
-        ji("An internal hyperlink must target an existing worksheet."),
+        throwWithMessage(
+          "An internal hyperlink must target an existing worksheet.",
+        ),
         (o.hyperlink = a));
     }
 }
@@ -594,7 +607,7 @@ function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
     !Number.isInteger(t.count) ||
     t.count < 1 ||
     t.index + t.count > o) &&
-    ji("Choose a valid row or column change for review targets.");
+    throwWithMessage("Choose a valid row or column change for review targets.");
   const a = (c) => {
     const h = _t(c),
       f = t.axis === "row" ? h.row : h.col;
@@ -607,7 +620,7 @@ function shiftReviewTargetsOnAxisEdit(e, r, t, n) {
         : f + (t.remove ? -t.count : t.count);
     return (
       p >= o &&
-        ji(
+        throwWithMessage(
           "Insertion would discard a review target or hyperlink at the worksheet boundary.",
         ),
       t.axis === "row"
@@ -744,10 +757,10 @@ function validateFormulaWatches(e, r) {
     n = new Set();
   return e.map((o) => {
     if (
-      !WO(o) ||
+      !isPlainObjectValue(o) ||
       !HO(o, ["id", "anchor", "orphaned"]) ||
       !isBoundedPlainText(o.id, 100) ||
-      !WO(o.anchor) ||
+      !isPlainObjectValue(o.anchor) ||
       !HO(o.anchor, ["sheetId", "sheetName", "address"]) ||
       !isBoundedPlainText(o.anchor.sheetId, 100) ||
       !isBoundedPlainText(o.anchor.sheetName, 31)
@@ -941,7 +954,7 @@ function validateSavedWhatIfAnalyses(e) {
             !(
               m.raw === null ||
               typeof m.raw == "boolean" ||
-              qE(m.raw) ||
+              isFiniteNumber(m.raw) ||
               (typeof m.raw == "string" && m.raw.length <= 32767)
             ) ||
               (m.literal !== undefined && typeof m.literal != "boolean"))
@@ -1148,7 +1161,7 @@ const evidenceAddressSchema = string().refine((e) => {
   });
 function parseRangeAddress(e) {
   const r = e.trim().split(":");
-  if (r.length > 2) return Hn(`Invalid range: ${e}`);
+  if (r.length > 2) return throwWithMessage(`Invalid range: ${e}`);
   const t = _t(r[0]),
     n = _t(r[1] ?? r[0]);
   return {
@@ -1467,7 +1480,7 @@ function setWorksheetReadOnly(e, r, t, n = {}) {
 }
 function EQ(e, r, t, n, o, a) {
   return (
-    assertOutlineAxis(t),
+    assertWorksheetAxis(t),
     setWorksheetReadOnly(
       e,
       r,
@@ -1515,7 +1528,7 @@ function setOutlineGroupCollapsed(e, r, t, n, o) {
 }
 function setOutlineGroupLevel(e, r, t, n, o) {
   return (
-    assertOutlineAxis(t),
+    assertWorksheetAxis(t),
     setWorksheetReadOnly(
       e,
       r,
@@ -1535,7 +1548,7 @@ function setOutlineGroupLevel(e, r, t, n, o) {
 }
 function clearAxisOutlineGroups(e, r, t, n) {
   return (
-    assertOutlineAxis(t),
+    assertWorksheetAxis(t),
     setWorksheetReadOnly(
       e,
       r,
@@ -1552,7 +1565,7 @@ function normalizeDataValidationRules(e) {
   const r = new Set();
   return e.map((t) => {
     if (
-      !FQ(t) ||
+      !isNonArrayObject(t) ||
       ![
         "list",
         "number",
@@ -1665,7 +1678,7 @@ function normalizeConditionalRules(e) {
     t = new Set();
   return e.map((n) => {
     var d;
-    if (!PQ(n) || !conditionalRuleKinds.includes(n.kind))
+    if (!isNonArrayObject(n) || !conditionalRuleKinds.includes(n.kind))
       throw Error("Invalid conditional rule.");
     const o = assertBoundedString(n.id, 100, "conditional rule ID");
     if (!o.trim() || r.has(o))
@@ -1799,7 +1812,7 @@ function evaluateConditionalFormatRules(e, r, t) {
               "Conditional statistics exceed 1,000,000 inspected cells; narrow the rule ranges or remove rules.";
             break;
           }
-          if (!n5(p, point)) continue;
+          if (!isCellInsideRange(p, point)) continue;
           const E = r(e.id, address);
           if (
             (typeof E == "number" &&
@@ -1823,7 +1836,7 @@ function evaluateConditionalFormatRules(e, r, t) {
         m = { style: {}, errors: [] },
         v = r(e.id, f);
       for (const { rule, bounds, counts, min, max, failure } of c) {
-        if (!n5(bounds, p)) continue;
+        if (!isCellInsideRange(bounds, p)) continue;
         if (failure) {
           m.errors.push(d(rule.id, f, failure));
           continue;
@@ -1973,7 +1986,7 @@ function evaluateConditionalFormatRules(e, r, t) {
 const normalizeWorksheetToolText = (e, r = 200) =>
     typeof e == "string" && e.length <= r
       ? e
-      : throwSheetProtectionError("Invalid worksheet tool text."),
+      : failWithMessage("Invalid worksheet tool text."),
   CE = (e) => {
     const r = parseRangeAddress(e);
     return `${columnIndexToLetters(r.firstCol)}${r.firstRow + 1}:${columnIndexToLetters(r.lastCol)}${r.lastRow + 1}`;
@@ -1999,20 +2012,18 @@ const normalizeWorksheetToolText = (e, r = 200) =>
     );
   };
 function validateWorksheetFeatures(e, r) {
-  if (sD(e)) {
+  if (isNonArrayObject(e)) {
     if (e.merges !== undefined) {
       (!Array.isArray(e.merges) || e.merges.length > 1e3) &&
-        throwSheetProtectionError("At most1,000 merged ranges are supported.");
+        failWithMessage("At most1,000 merged ranges are supported.");
       const t = [];
       for (const n of e.merges) {
         const o = CE(normalizeWorksheetToolText(n, 40)),
           a = parseRangeAddress(o);
         ((a.lastRow - a.firstRow + 1) * (a.lastCol - a.firstCol + 1) > 500 &&
-          throwSheetProtectionError(
-            "A merged area supports at most 500 cells.",
-          ),
+          failWithMessage("A merged area supports at most 500 cells."),
           t.some((s) => doesRangeOverlap(s, o)) &&
-            throwSheetProtectionError("Merged ranges cannot overlap."),
+            failWithMessage("Merged ranges cannot overlap."),
           t.push(o));
       }
       r.merges = t;
@@ -2027,13 +2038,13 @@ function validateWorksheetFeatures(e, r) {
       e.protection !== undefined)
     ) {
       const t = e.protection;
-      ((!sD(t) ||
+      ((!isNonArrayObject(t) ||
         typeof t.enabled != "boolean" ||
         (t.hash !== undefined &&
           (!/^[a-f\d]{64}$/i.test(String(t.hash)) ||
             typeof t.salt != "string" ||
             t.salt.length > 100))) &&
-        throwSheetProtectionError("Invalid sheet protection."),
+        failWithMessage("Invalid sheet protection."),
         (r.protection = {
           enabled: t.enabled,
           ...(t.hash ? { hash: String(t.hash), salt: String(t.salt) } : {}),
@@ -2047,11 +2058,9 @@ function mergeWorksheetCells(e, r, t, n = false) {
   const a = CE(t),
     s = parseRangeAddress(a);
   (s.lastRow - s.firstRow + 1) * (s.lastCol - s.firstCol + 1) > 500 &&
-    throwSheetProtectionError("Merge at most 500 cells.");
+    failWithMessage("Merge at most 500 cells.");
   const d = (o.merges ?? []).filter((h) => doesRangeOverlap(h, a));
-  !n &&
-    d.length &&
-    throwSheetProtectionError("Unmerge overlapping areas first.");
+  !n && d.length && failWithMessage("Unmerge overlapping areas first.");
   const u = { ...o.cells };
   if (!n) {
     const h = `${columnIndexToLetters(s.firstCol)}${s.firstRow + 1}`;

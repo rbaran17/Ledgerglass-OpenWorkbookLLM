@@ -1329,7 +1329,7 @@ function createRecipeStep(e, r, t) {
       };
   }
 }
-const formatRecipeCellValue = (e) =>
+const formatCellValueForDisplay = (e) =>
   e === null
     ? "(blank)"
     : typeof e == "boolean"
@@ -1344,7 +1344,7 @@ export {
   recipeStepKindLabels,
   publishRecipeOutput,
   createRecipeStep,
-  formatRecipeCellValue,
+  formatCellValueForDisplay,
   normalizeRecipeRunRequest,
   RecipeStepEditor,
 };

@@ -1,3 +1,6 @@
+import { isFiniteNumber } from "./03-workbook-model.js";
+import { downloadBlobAsFile } from "./09-workbook-links.js";
+import { isCellInRange } from "./36-watch-window-and-goal-seek.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -13,7 +16,6 @@ import {
   parseRangeAddress,
   validateDataValidationRule,
   resolveDefinedNameValue,
-  qE,
   normalizeWorkbookInput,
   columnIndexToLetters,
   matrixResultFunctionNames,
@@ -41,7 +43,6 @@ import {
   renderReportSvg,
   renderReportPngBlob,
   validateReportSourceScope,
-  downloadReportFile,
 } from "./38-data-analysis-dialog.js";
 
 function ReportOutputsDialog(e) {
@@ -152,7 +153,7 @@ function ReportOutputsDialog(e) {
               })();
         if ((he(), de.onDownload !== a.current.onDownload))
           throw Error("The report destination changed. Export again.");
-        (await (a.current.onDownload ?? downloadReportFile)(Se),
+        (await (a.current.onDownload ?? downloadBlobAsFile)(Se),
           O(`${ae.toUpperCase()} snapshot exported.`));
       } catch (de) {
         F(de.message);
@@ -647,7 +648,7 @@ function ReportOutputsDialog(e) {
                           i.jsx("button", {
                             disabled: B,
                             onClick: () =>
-                              void (e.onDownload ?? downloadReportFile)({
+                              void (e.onDownload ?? downloadBlobAsFile)({
                                 filename: "Embedded-object-inventory.json",
                                 blob: new Blob([JSON.stringify(ae, null, 2)], {
                                   type: "application/json",
@@ -767,16 +768,7 @@ function ObjectInventoryTable({ items }) {
     }),
   });
 }
-const toRangeBounds = (e, r) => {
-  const t = parseRangeAddress(e),
-    n = _t(r);
-  return (
-    n.row >= t.firstRow &&
-    n.row <= t.lastRow &&
-    n.col >= t.firstCol &&
-    n.col <= t.lastCol
-  );
-};
+
 function resolveWhatIfHostScope(e, r) {
   if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
@@ -843,7 +835,7 @@ function computeWhatIfResult(e, r, t = {}) {
       const m = e.sheets.find((E) => E.id === f.sheetId),
         v = m.cells[f.address],
         g = _t(f.address);
-      if (!v || !qE(v.raw))
+      if (!v || !isFiniteNumber(v.raw))
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas, text, blanks or spill outputs.",
         );
@@ -851,16 +843,16 @@ function computeWhatIfResult(e, r, t = {}) {
         throw Error(
           "A changing worksheet is protected. Unprotect it before analyzing scenarios.",
         );
-      if ((w = m.merges) != null && w.some((E) => toRangeBounds(E, f.address)))
+      if ((w = m.merges) != null && w.some((E) => isCellInRange(E, f.address)))
         throw Error("Merged cells cannot be what-if inputs.");
       if (
         [...(m.pivots ?? []), ...(m.queries ?? [])].some((E) =>
-          toRangeBounds(E.outputRange, f.address),
+          isCellInRange(E.outputRange, f.address),
         )
       )
         throw Error("Generated pivot/query results cannot be what-if inputs.");
       for (const E of m.tables ?? []) {
-        if (!toRangeBounds(E.range, f.address)) continue;
+        if (!isCellInRange(E.range, f.address)) continue;
         const A = parseRangeAddress(E.range),
           k = E.columns[g.col - A.firstCol];
         if (
@@ -884,7 +876,7 @@ function computeWhatIfResult(e, r, t = {}) {
           );
       }
       const b = (m.validations ?? []).filter((E) =>
-        toRangeBounds(E.range, f.address),
+        isCellInRange(E.range, f.address),
       );
       if (
         [v.raw, ...a.map((E) => E.inputs[p])].some((E) =>
@@ -1020,7 +1012,7 @@ function computeWhatIfResult(e, r, t = {}) {
         throw Error(
           `Operational calculation error: ${g.getOperationalErrors().join(", ")}. An error handler cannot conceal this failure.`,
         );
-      if (b.some((y) => !qE(y)))
+      if (b.some((y) => !isFiniteNumber(y)))
         throw Error(
           `Each formula must return a finite number; received ${b.map(String).join(", ")}.`,
         );

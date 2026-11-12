@@ -1,3 +1,4 @@
+import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import Ox from "saxes";
 import {
   strFromU8,
@@ -732,10 +733,9 @@ function scanXlsxNumericTokens(e) {
     r
   );
 }
-const n3 = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  Jw = (e) => {
+const formatRangeCornerCells = (e) => {
     const r = parseRangeAddress(e);
-    return `${n3(r.firstRow, r.firstCol)}:${n3(r.lastRow, r.lastCol)}`;
+    return `${formatCellAddress(r.firstRow, r.firstCol)}:${formatCellAddress(r.lastRow, r.lastCol)}`;
   },
   countRangeCells = (e) => {
     const r = parseRangeAddress(e);
@@ -754,7 +754,7 @@ function parseXlsxDataValidations(e) {
       },
       o = (n("sqref") ?? "").trim().split(/\s+/).filter(Boolean);
     if (!o.length) continue;
-    const a = Jw(o[0]).split(":")[0];
+    const a = formatRangeCornerCells(o[0]).split(":")[0];
     if (r.length + o.length > 1e3)
       throw Error(
         "XLSX has more than 1,000 validation areas; narrow the source rules before import.",
@@ -766,7 +766,7 @@ function parseXlsxDataValidations(e) {
     ].map((d) => d[1].trim());
     for (const d of o)
       r.push({
-        range: Jw(d),
+        range: formatRangeCornerCells(d),
         anchor: a,
         operands: s,
         dropdown: !["1", "true"].includes(n("showDropDown") ?? "0"),
@@ -778,7 +778,10 @@ function parseXlsxDataValidations(e) {
 function applyValidationDropdownFlags(e, r) {
   return e.replace(/<dataValidation\b[^>]*>/g, (t) => {
     const n = /\bsqref="([^"]+)"/.exec(t)?.[1],
-      o = r.validations?.find((d) => n && Jw(d.range) === Jw(n));
+      o = r.validations?.find(
+        (d) =>
+          n && formatRangeCornerCells(d.range) === formatRangeCornerCells(n),
+      );
     return o?.kind === "list" && o.showDropdown === false
       ? t
           .replace(/\s+showDropDown="[^"]*"/, "")
@@ -865,8 +868,8 @@ function buildContainsTextFormula(e, r) {
 }
 function Wle(e, r) {
   const t = parseRangeAddress(r),
-    n = n3(t.firstRow, t.firstCol),
-    o = Jw(r).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2"),
+    n = formatCellAddress(t.firstRow, t.firstCol),
+    o = formatRangeCornerCells(r).replace(/([A-Z]+)(\d+)/g, "$$$1$$$2"),
     a =
       "SUBSTITUTE(SUBSTITUTE(SUBSTITUTE(" +
       n +
@@ -943,7 +946,7 @@ function serializeConditionalFormatRules(e, r) {
       font: { color: { argb: hexColorToArgb(e.color) } },
     },
     n = parseRangeAddress(e.range),
-    o = n3(n.firstRow, n.firstCol),
+    o = formatCellAddress(n.firstRow, n.firstCol),
     a = (u) => ({
       type: "expression",
       priority: r,
@@ -2856,3 +2859,4 @@ export {
   x7,
   getWorksheetUsedRange,
 };
+export { formatRangeCornerCells, countRangeCells };

@@ -113,7 +113,7 @@ export {
   isSameContentHash,
   formatNumberWithPattern,
   consolidationFormatVersion,
-  serializeTypedCategoryKey,
+  serializeTypedKeyValues,
   defaultCalculationSettings,
   getCurrentCalculatorRecord,
   isExternalSourceError,
@@ -174,10 +174,8 @@ export {
   analysisFormatVersion,
   validateExtractedSourceTables,
   assertTextCleanupEvidenceUnchanged,
-  createPrintSnapshotGuard,
   automationLimits,
   throwDaxError,
-  qE,
   expandHeaderFooterTemplate,
   daxExpressionLimits,
   dataModelLimits,
@@ -328,3 +326,23 @@ export {
   applyCellPatchTransaction,
   buildCanonicalWorkbookSnapshot,
 } from "./03-workbook-model/12-cell-patch-transactions.js";
+export {
+  isNonArrayObject,
+  isPlainObjectValue,
+  throwWithMessage,
+  isCellInsideRange,
+  failWithMessage,
+  throwWorkbookError,
+} from "./03-workbook-model/01-cell-styles-and-themes.js";
+export {
+  unquoteSheetName,
+  createUuid,
+  isNullOrEmptyValue,
+  quoteSheetName,
+} from "./03-workbook-model/03-defined-names.js";
+export {
+  throwErrorMessage,
+  isFiniteNumber,
+  isFormulaCellValue,
+} from "./03-workbook-model/04-pivot-tables-and-pictures.js";
+export { rangesIntersect } from "./03-workbook-model/08-chart-model.js";

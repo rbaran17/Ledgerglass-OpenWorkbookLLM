@@ -1,4 +1,9 @@
 import {
+  failWithMessage,
+  throwWorkbookError,
+} from "./01-cell-styles-and-themes.js";
+import { isNullOrEmptyValue } from "./03-defined-names.js";
+import {
   fingerprintCanonicalValue,
   normalizeDatePolicy,
 } from "../01-core-schemas-and-hashing.js";
@@ -16,13 +21,11 @@ import {
   validateBoundedStyleText,
   validateNamedStyleDefinition,
   assertNamedStyleBindingCurrent,
-  throwSheetProtectionError,
   cn,
   resolveReviewTimestamp,
   createDefaultStyleCatalog,
   rowHeightAt,
-  throwWorkbookStyleError,
-  ji,
+  throwWithMessage,
   assertSheetUnprotected,
   normalizeBoundedText,
   validateWorkbookTheme,
@@ -46,7 +49,6 @@ import {
   findRowOrigin,
   assertUniqueTableNames,
   computePivotRefreshFingerprint,
-  throwWorkbookError,
   findSourceFieldIndex,
   filterPivotSourceRows,
   buildPivotStatusRecord,
@@ -75,7 +77,6 @@ import {
   nonEmptyLabelSchema,
   validatePrintPageBreaks,
   headerFooterTokenPattern,
-  Hn,
   resolvePageDimensions,
   reportOutputLimits,
   hashRecordExcludingHash,
@@ -102,8 +103,7 @@ import {
   Cn,
   Dp,
   resolveSourceRange,
-  Mg,
-  Qf,
+  rangesIntersect,
   toA1RangeAddress,
   collectRangeValues,
   normalizeSourceReference,
@@ -587,7 +587,9 @@ function assertRangeCellBudget(e) {
     (lastRow - firstRow + 1) * (lastCol - firstCol + 1) >
     workbookLimits.maxCells
   )
-    return Hn("Range is too large. Select at most 100,000 cells.");
+    return throwWithMessage(
+      "Range is too large. Select at most 100,000 cells.",
+    );
   const a = [];
   for (let s = firstRow; s <= lastRow; s++)
     for (let d = firstCol; d <= lastCol; d++)
@@ -610,36 +612,28 @@ function validateRemoveDuplicatesRequest(e, r, t, n, o = true) {
   assertSheetUnprotected(a);
   const s = assertRangeCellBudget(t);
   s.length > 500 &&
-    throwSheetProtectionError("Select at most 500 cells to remove duplicates.");
+    failWithMessage("Select at most 500 cells to remove duplicates.");
   const d = parseRangeAddress(t);
   (!n.length || n.some((m) => m < d.firstCol || m > d.lastCol)) &&
-    throwSheetProtectionError(
-      "Choose one or more columns inside the selected range.",
-    );
+    failWithMessage("Choose one or more columns inside the selected range.");
   for (const m of a.tables ?? []) {
     const v = parseRangeAddress(m.range);
     doesRangeOverlap(t, m.range) &&
       ((d.firstCol > v.firstCol || d.lastCol < v.lastCol) &&
-        throwSheetProtectionError(
+        failWithMessage(
           "Include all table columns when removing duplicate table rows.",
         ),
       m.showTotals &&
         d.firstRow <= v.lastRow &&
         d.lastRow >= v.lastRow &&
-        throwSheetProtectionError(
-          "Select data rows above the table totals row.",
-        ),
+        failWithMessage("Select data rows above the table totals row."),
       !o &&
         d.firstRow <= v.firstRow &&
         d.lastRow >= v.firstRow &&
-        throwSheetProtectionError(
-          "Keep the table header row selected as headers.",
-        ));
+        failWithMessage("Keep the table header row selected as headers."));
   }
   (a.merges ?? []).some((m) => doesRangeOverlap(t, m)) &&
-    throwSheetProtectionError(
-      "Unmerge selected cells before removing duplicates.",
-    );
+    failWithMessage("Unmerge selected cells before removing duplicates.");
   const u = calculateWorkbookWithSettings(e),
     l = new Set(),
     c = [];
@@ -693,11 +687,14 @@ function validateRemoveDuplicatesRequest(e, r, t, n, o = true) {
   };
 }
 function findSheetOrThrow(e, r) {
-  return e.sheets.find((t) => t.id === r) ?? Hn(`Sheet not found: ${r}`);
+  return (
+    e.sheets.find((t) => t.id === r) ??
+    throwWithMessage(`Sheet not found: ${r}`)
+  );
 }
 function applyNamedStyleChange(e, r, t = {}) {
   var m;
-  t.readOnly && throwWorkbookStyleError("This workbook is read-only.");
+  t.readOnly && failWithMessage("This workbook is read-only.");
   for (const v of e.sheets)
     for (const g of Object.values(v.cells))
       assertNamedStyleBindingCurrent(e, g.style);
@@ -708,7 +705,7 @@ function applyNamedStyleChange(e, r, t = {}) {
     d = [],
     u = (v) =>
       o.styles.find((g) => g.id === v) ??
-      throwWorkbookStyleError("This named style no longer exists.");
+      failWithMessage("This named style no longer exists.");
   function l(v, g, b) {
     var E;
     const y = findSheetOrThrow(e, v),
@@ -728,7 +725,7 @@ function applyNamedStyleChange(e, r, t = {}) {
               A.col <= F.lastCol
             );
           }) &&
-          throwWorkbookStyleError(
+          failWithMessage(
             "Unmerge the intersecting cells before changing named-style border edges.",
           );
       }
@@ -739,7 +736,7 @@ function applyNamedStyleChange(e, r, t = {}) {
         after: cloneStyleValue(b),
       }),
         s.length > 500 &&
-          throwWorkbookStyleError(
+          failWithMessage(
             "This action changes more than 500 cells. Use smaller selections or fewer bound cells.",
           ));
     }
@@ -828,9 +825,7 @@ function applyNamedStyleChange(e, r, t = {}) {
       break;
     }
     default:
-      throwWorkbookStyleError(
-        "Choose a supported theme or named style action.",
-      );
+      failWithMessage("Choose a supported theme or named style action.");
   }
   const h = validateWorkbookStyleCatalog(o),
     f = a.kind === "detachStyle" && !n ? undefined : h,
@@ -857,7 +852,7 @@ function applyNamedStyleChange(e, r, t = {}) {
   };
 }
 function assertSheetWritable(e, r, t) {
-  (t.readOnly && ji("This workbook is read-only."),
+  (t.readOnly && throwWithMessage("This workbook is read-only."),
     assertSheetUnprotected(findSheetOrThrow(e, r)));
 }
 function nQ(e, r, t, n, o = "Reviewer", a = {}) {
@@ -891,20 +886,23 @@ function nQ(e, r, t, n, o = "Reviewer", a = {}) {
   return attachReviewThreadsToWorkbook(e, [...(e.reviewThreads ?? []), l]);
 }
 function findReviewThread(e, r, t) {
-  t.readOnly && ji("This workbook is read-only.");
+  t.readOnly && throwWithMessage("This workbook is read-only.");
   const n = e.reviewThreads?.find((a) => a.id === r);
   return n
     ? (n.orphaned &&
-        ji(
+        throwWithMessage(
           "This discussion is retained for review because its target was deleted.",
         ),
       assertSheetWritable(e, n.anchor.sheetId, t),
       n)
-    : ji("The discussion could not be found. Reopen the review tools.");
+    : throwWithMessage(
+        "The discussion could not be found. Reopen the review tools.",
+      );
 }
 function addReviewThreadReply(e, r, t, n = "Reviewer", o = {}) {
   const a = findReviewThread(e, r, o);
-  a.resolved && ji("Reopen the discussion before adding a reply.");
+  a.resolved &&
+    throwWithMessage("Reopen the discussion before adding a reply.");
   const s = resolveReviewTimestamp(o, a.updatedAt),
     d = {
       ...a,
@@ -931,7 +929,7 @@ function addReviewThreadReply(e, r, t, n = "Reviewer", o = {}) {
 }
 function setReviewThreadResolved(e, r, t, n = "Reviewer", o = {}) {
   typeof t != "boolean" &&
-    ji("Choose whether to resolve or reopen the discussion.");
+    throwWithMessage("Choose whether to resolve or reopen the discussion.");
   const a = findReviewThread(e, r, o);
   if (!!a.resolved === t) return e;
   const s = resolveReviewTimestamp(o, a.updatedAt),
@@ -964,7 +962,7 @@ function setCellHyperlink(e, r, t, n, o = {}) {
         (u.row !== m.firstRow || u.col !== m.firstCol)
       );
     }) &&
-    ji(
+    throwWithMessage(
       "Choose the merged area's first cell or unmerge it before changing its link.",
     );
   const l = n === null ? undefined : validateHyperlinkRecord(n);
@@ -976,7 +974,9 @@ function setCellHyperlink(e, r, t, n, o = {}) {
   !d &&
     e.sheets.reduce((p, m) => p + Object.keys(m.cells).length, 0) >=
       workbookLimits.maxCells &&
-    ji("Adding this link would exceed the workbook populated-cell limit.");
+    throwWithMessage(
+      "Adding this link would exceed the workbook populated-cell limit.",
+    );
   const c = { ...(d ?? { raw: null }) };
   l ? (c.hyperlink = l) : delete c.hyperlink;
   const h = { ...a.cells, [s]: c };
@@ -1086,7 +1086,7 @@ function suggestTableHeaderName(e, r, t) {
       c = l?.raw ?? null;
     let h = `Column${d - o.firstCol + 1}`;
     try {
-      Mg(c) || (h = validateColumnName(String(c)));
+      isNullOrEmptyValue(c) || (h = validateColumnName(String(c)));
     } catch {}
     let f = h,
       p = 2;
@@ -1143,7 +1143,7 @@ function renameTableHeaderField(e, r) {
               w = d.cells[Cn(h.firstRow, h.firstCol + v)],
               A =
                 y?.raw !== w?.raw || y?.literal !== w?.literal
-                  ? w && !Mg(w.raw)
+                  ? w && !isNullOrEmptyValue(w.raw)
                     ? validateColumnName(String(w.raw))
                     : throwWorkbookError(
                         "Table headers must be nonblank text. The header edit was not applied.",
@@ -1215,7 +1215,7 @@ function renameTableHeaderField(e, r) {
           const m = parseRangeAddress(p.range),
             v = $v(p.formula, s.old.name, u.name, s.names, false),
             g = $v(p.formula, s.old.name, u.name, s.names, true),
-            b = f.id === d.id && Qf(c, m),
+            b = f.id === d.id && rangesIntersect(c, m),
             y =
               b && Dp(c, m.firstRow, m.firstCol) && Dp(c, m.lastRow, m.lastCol);
           (v !== g &&
@@ -1308,9 +1308,11 @@ function buildPivotSource(e, r) {
           `Source calculation error ${p} at ${n.name}!${v}. Repair the source calculation before building or refreshing analysis; no totals were written.`,
         );
     }),
-      (f.some((p) => !Mg(p)) ||
+      (f.some((p) => !isNullOrEmptyValue(p)) ||
         d.some((p, m) => {
-          return !Mg(n.cells[Cn(h, a.firstCol + m)]?.raw ?? null);
+          return !isNullOrEmptyValue(
+            n.cells[Cn(h, a.firstCol + m)]?.raw ?? null,
+          );
         })) &&
         u.push({ index: h, values: f }));
   }
@@ -1510,7 +1512,11 @@ function buildPivotDrillDown(e, r, t) {
           j = config.dateGroups?.find((V) => V.field === k[I]);
         return (
           JSON.stringify(
-            j ? bucketPivotDateValue(O, j, E.index) : Mg(O) ? null : O,
+            j
+              ? bucketPivotDateValue(O, j, E.index)
+              : isNullOrEmptyValue(O)
+                ? null
+                : O,
           ) === JSON.stringify(F)
         );
       }),
@@ -1596,7 +1602,7 @@ function validateTotalsRowForAppend(e, r, t) {
         )
           continue;
         const m = parseRangeAddress(`${f[3]}:${f[4] ?? f[3]}`);
-        Qf(m, { ...o, firstRow: o.lastRow }) &&
+        rangesIntersect(m, { ...o, firstRow: o.lastRow }) &&
           throwWorkbookError(
             "A formula refers directly to the moving totals row. Use a structured table totals reference or move those references before appending.",
           );

@@ -28,7 +28,7 @@ import {
   validationLimits,
   DataValidationError,
   validateDataValidationRule,
-  n5,
+  isCellInsideRange,
   r5,
 } from "./01-cell-styles-and-themes.js";
 import {
@@ -1860,8 +1860,9 @@ function updateConditionalFormatRules(e, r, t, n = {}) {
   if (h.size < 50) {
     for (const m of Object.keys(o.cells))
       if (
-        ([...a, ...s].some((v) => n5(parseRangeAddress(v.range), _t(m))) &&
-          h.add(m),
+        ([...a, ...s].some((v) =>
+          isCellInsideRange(parseRangeAddress(v.range), _t(m)),
+        ) && h.add(m),
         h.size >= 50)
       )
         break;

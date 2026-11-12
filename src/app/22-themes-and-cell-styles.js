@@ -1,3 +1,4 @@
+import { cloneStructuredValue } from "./11-workbook-formats-dialog.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
@@ -167,7 +168,7 @@ function parseGoToReference(e, r, t, n = {}) {
     ranges: parseSelectionAreas(d.map((c) => c.range)),
   };
 }
-const cloneStyleSnapshot = (e) => structuredClone(e);
+
 function describeStyleFormatting(e) {
   const r = resolveEffectiveCellStyle(e);
   return (
@@ -547,7 +548,7 @@ function ThemesAndCellStylesDialog(e) {
       active: e.active,
     })),
     [d] = ne.useState(() =>
-      cloneStyleSnapshot(
+      cloneStructuredValue(
         e.workbook.styleCatalog ?? createDefaultStyleCatalog(e.workbook.id),
       ),
     ),
@@ -564,8 +565,8 @@ function ThemesAndCellStylesDialog(e) {
     ),
     v = d.styles.find((de) => de.id === p),
     [g, b] = ne.useState("Theme"),
-    [y, w] = ne.useState(cloneStyleSnapshot(d.theme)),
-    [E, A] = ne.useState(cloneStyleSnapshot(v?.definition ?? { base: {} })),
+    [y, w] = ne.useState(cloneStructuredValue(d.theme)),
+    [E, A] = ne.useState(cloneStructuredValue(v?.definition ?? { base: {} })),
     [k, F] = ne.useState("Custom style"),
     [I, O] = ne.useState(v?.name ?? ""),
     [j, z] = ne.useState(),
@@ -627,7 +628,7 @@ function ThemesAndCellStylesDialog(e) {
   function H(de) {
     m(de);
     const he = d.styles.find((Se) => Se.id === de);
-    (A(cloneStyleSnapshot(he?.definition ?? { base: {} })),
+    (A(cloneStructuredValue(he?.definition ?? { base: {} })),
       O(he?.name ?? ""),
       R());
   }
@@ -790,7 +791,7 @@ function ThemesAndCellStylesDialog(e) {
                                     const he = builtInWorkbookThemes.find(
                                       (Se) => Se.name === de.target.value,
                                     );
-                                    he && L(cloneStyleSnapshot(he));
+                                    he && L(cloneStructuredValue(he));
                                   },
                                   lang: language("Theme preset"),
                                   "data-ui-label": "Theme preset",
@@ -1164,7 +1165,7 @@ function ThemesAndCellStylesDialog(e) {
                                 i.jsx("button", {
                                   onClick: () => {
                                     return $({
-                                      base: cloneStyleSnapshot(
+                                      base: cloneStructuredValue(
                                         resolveEffectiveCellStyle(
                                           c?.cells[h]?.style,
                                         ),

@@ -1,3 +1,6 @@
+import { applyCellPreview } from "./04-cell-input-paste-and-fill.js";
+import { saveBlobToFile } from "./13-consolidation-dialog.js";
+import { createUuid, isFiniteNumber } from "./03-workbook-model.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import {
@@ -84,7 +87,6 @@ import {
   createEmptyAssistantConversation,
   LocalizedText,
   parseLocalizedCellEntry,
-  applyFillPreview,
   replaceFormulaReferenceSpan,
   formatCellEntryForEdit,
   LocalizedNumberField,
@@ -262,10 +264,7 @@ import {
 } from "./54-workbook-save-conflicts.js";
 import {
   isPromiseLike,
-  Jd,
   ExternalSourceStatusPanel,
-  NS,
-  createRandomUuid,
   workbookInstanceKey,
   chainMaybePromise,
   Vj,
@@ -753,7 +752,7 @@ function MainWorksheetEditor({
           : Pt().filter(({ row, col }) => fr.some((Be) => Tp(Be, row, col)))
         )
           .map(({ address }) => Qr(he.id, address))
-          .filter(NS),
+          .filter(isFiniteNumber),
       [Pt, fr, Jt, ie, Qr, he.id],
     ),
     Gt = er.reduce((fe, Oe) => fe + Oe, 0),
@@ -784,7 +783,7 @@ function MainWorksheetEditor({
             const gt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Ue + 1}`),
               Nt = Qr(he.id, `${columnIndexToLetters(kn.col)}${Xe + 1}`);
             return (
-              (NS(gt) && NS(Nt)
+              (isFiniteNumber(gt) && isFiniteNumber(Nt)
                 ? gt - Nt
                 : String(gt ?? "").localeCompare(String(Nt ?? ""))) *
               kn.direction
@@ -1471,7 +1470,7 @@ function MainWorksheetEditor({
     );
   }
   function Tn() {
-    Jd(
+    saveBlobToFile(
       new Blob([encodeNativeWorkbook(sr.current.book)], {
         type: "application/json",
       }),
@@ -2315,7 +2314,7 @@ function MainWorksheetEditor({
           (vn(
             "Native JSON exports the full workbook, including all filtered and hidden rows and any named filter views. Active session masks are not saved; load named criteria, preview and apply after reopening.",
           ),
-          Jd(
+          saveBlobToFile(
             new Blob([encodeNativeWorkbook(H)], { type: "application/json" }),
             `${Oe}.json`,
           )));
@@ -2762,7 +2761,7 @@ function MainWorksheetEditor({
       events: [
         ...Ue.events,
         {
-          id: createRandomUuid(),
+          id: createUuid(),
           timestamp: new Date().toISOString(),
           actor,
           action: Be,
@@ -3122,7 +3121,7 @@ function MainWorksheetEditor({
             On(() => {
               (rt(),
                 So(
-                  applyFillPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+                  applyCellPreview(H, buildFillPreview(H, he.id, Ye, "down")),
                   "Fill down",
                 ));
             }));
@@ -3134,7 +3133,7 @@ function MainWorksheetEditor({
             On(() => {
               (rt(),
                 So(
-                  applyFillPreview(H, buildFillPreview(H, he.id, Ye, "right")),
+                  applyCellPreview(H, buildFillPreview(H, he.id, Ye, "right")),
                   "Fill right",
                 ));
             }));
@@ -3959,7 +3958,7 @@ function MainWorksheetEditor({
                     ));
                 },
                 onDownload: (Ue, Xe) =>
-                  Jd(
+                  saveBlobToFile(
                     new Blob([Uint8Array.from(Ue)], {
                       type: "application/octet-stream",
                     }),
@@ -4040,7 +4039,7 @@ function MainWorksheetEditor({
               onWorkbookChange: ua,
               onCreateWorkbook: (Ue) => {
                 if (readOnly) throw new Error("This workbook is read-only.");
-                (Jd(
+                (saveBlobToFile(
                   new Blob([encodeNativeWorkbook(Ue)], {
                     type: "application/json",
                   }),
@@ -4525,7 +4524,7 @@ function MainWorksheetEditor({
                 : undefined,
           onClose: () => xs(null),
           onReport: (fe) =>
-            Jd(
+            saveBlobToFile(
               new Blob([JSON.stringify(fe, null, 2)], {
                 type: "application/json",
               }),
@@ -4562,7 +4561,7 @@ function MainWorksheetEditor({
                   "Calculated values or population membership changed. Preview the export again.",
                 );
             }
-            (Jd(
+            (saveBlobToFile(
               new Blob([Uint8Array.from(fe)], {
                 type: "application/octet-stream",
               }),
@@ -4581,7 +4580,7 @@ function MainWorksheetEditor({
           onOriginal: () =>
             On(() => {
               const fe = requireRetainedXlsxSource(vo.imported ?? vo.snapshot);
-              Jd(
+              saveBlobToFile(
                 new Blob([new Uint8Array(fe.bytes)], {
                   type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 }),
@@ -4596,7 +4595,7 @@ function MainWorksheetEditor({
                 : undefined,
           onClose: () => Ml(null),
           onReport: () =>
-            Jd(
+            saveBlobToFile(
               new Blob([JSON.stringify(vo.report, null, 2)], {
                 type: "application/json",
               }),
@@ -4616,7 +4615,7 @@ function MainWorksheetEditor({
                   ));
               } else
                 vo.blob &&
-                  (Jd(vo.blob, vo.fileName),
+                  (saveBlobToFile(vo.blob, vo.fileName),
                   vn(
                     "Derived XLSX downloaded. Keep a native JSON backup for full application metadata.",
                   ));
@@ -4678,7 +4677,7 @@ function MainWorksheetEditor({
               On(() => {
                 (rt(),
                   So(
-                    applyFillPreview(H, buildFillPreview(H, he.id, Ye, "down")),
+                    applyCellPreview(H, buildFillPreview(H, he.id, Ye, "down")),
                     "Fill down",
                   ));
               }),
@@ -5276,7 +5275,7 @@ function MainWorksheetEditor({
                         Hr &&
                           i.jsx("button", {
                             onClick: () =>
-                              Jd(
+                              saveBlobToFile(
                                 new Blob(
                                   [JSON.stringify(Hr.context, null, 2)],
                                   { type: "application/json" },
@@ -6077,7 +6076,7 @@ function MainWorksheetEditor({
                                       i.jsxs("button", {
                                         className: "lg-button full",
                                         onClick: () =>
-                                          Jd(
+                                          saveBlobToFile(
                                             new Blob(
                                               [JSON.stringify($c, null, 2)],
                                               { type: "application/json" },

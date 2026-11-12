@@ -1,3 +1,17 @@
+import {
+  unquoteSheetName,
+  rangesIntersect,
+  isCellInsideRange,
+  quoteSheetName,
+  throwWorkbookError,
+} from "./03-workbook-model.js";
+import {
+  assertWorkbookWritable,
+  eI,
+  formatCellAddress,
+} from "./04-cell-input-paste-and-fill.js";
+import { formatSortRangeAddress } from "./44-clean-and-reshape.js";
+import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
 import { X, Clipboard, Rows3, Grid2x2 } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -31,11 +45,10 @@ import {
   useWorkbookMessages,
   buildFillHandlePreview,
   LocalizedText,
-  applyFillPreview,
   buildSeriesPreview,
   LocalizedNumberField,
   buildPastePreview,
-  applyPastePreview,
+  applyCellPreview,
 } from "./04-cell-input-paste-and-fill.js";
 import {
   fillDirectionOptions,
@@ -233,7 +246,7 @@ function PasteSpecialDialog(e) {
     "sourceRange" in Ze
       ? ke(
           () =>
-            applyPastePreview(a.current.workbook, Ze, {
+            applyCellPreview(a.current.workbook, Ze, {
               readOnly: a.current.readOnly,
             }),
           "Paste Special",
@@ -241,7 +254,7 @@ function PasteSpecialDialog(e) {
         )
       : ke(
           () =>
-            applyFillPreview(a.current.workbook, Ze, {
+            applyCellPreview(a.current.workbook, Ze, {
               readOnly: a.current.readOnly,
             }),
           E === "series" ? "Fill series" : `Fill ${k}`,
@@ -1808,7 +1821,7 @@ function FillPreviewDialog(e) {
                   if (y.workbook !== a.current)
                     throw Error("The workbook changed. Review the fill again.");
                   if (!v) throw Error("Choose a valid fill first.");
-                  const w = applyFillPreview(y.workbook, v, {
+                  const w = applyCellPreview(y.workbook, v, {
                     readOnly: y.readOnly,
                   });
                   (y.onWorkbookChange(w, "Fill handle"),
@@ -1837,55 +1850,20 @@ const pasteOperationLimits = {
   formulaCells: 1e4,
   formulaCharacters: 1e7,
 };
-function throwCellOperationError(e) {
-  throw new Error(e);
-}
-const Hh = (e, r) => `${columnIndexToLetters(r)}${e + 1}`,
-  quoteSheetNameForFormula = (e) => `'${e.replace(/'/g, "''")}'`,
-  R3 = (e) => {
-    const r = parseRangeAddress(e),
-      t = Hh(r.firstRow, r.firstCol),
-      n = Hh(r.lastRow, r.lastCol);
-    return t === n ? t : `${t}:${n}`;
-  },
-  isCellInsideRange = (e, r) =>
-    r.row >= e.firstRow &&
-    r.row <= e.lastRow &&
-    r.col >= e.firstCol &&
-    r.col <= e.lastCol,
-  rangesIntersect = (e, r) =>
-    e.firstRow <= r.lastRow &&
-    e.lastRow >= r.firstRow &&
-    e.firstCol <= r.lastCol &&
-    e.lastCol >= r.firstCol,
-  rangeContainsRange = (e, r) =>
+
+const rangeContainsRange = (e, r) =>
     e.firstRow <= r.firstRow &&
     e.lastRow >= r.lastRow &&
     e.firstCol <= r.firstCol &&
     e.lastCol >= r.lastCol,
   hasCellContent = (e) =>
-    !!e && (e.raw !== null || Object.keys(e).some((r) => r !== "raw")),
-  PW = (e) =>
-    !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("=");
-function deepFreezeRecords(e) {
-  return (
-    e &&
-      typeof e == "object" &&
-      (Object.values(e).forEach(deepFreezeRecords), Object.freeze(e)),
-    e
-  );
-}
-function $W(e) {
-  (e !== undefined &&
-    typeof e != "boolean" &&
-    throwCellOperationError("Read-only must be boolean."),
-    e && throwCellOperationError("This workbook is read-only."));
-}
+    !!e && (e.raw !== null || Object.keys(e).some((r) => r !== "raw"));
+
 function assertRangeWithinBoundary(e, r) {
   const t = parseRangeAddress(r);
   return (
     (t.lastRow >= e.rowCount || t.lastCol >= e.colCount) &&
-      throwCellOperationError("The range exceeds the worksheet boundary."),
+      throwWorkbookError("The range exceeds the worksheet boundary."),
     t
   );
 }
@@ -1894,9 +1872,7 @@ function assertCutSourceWithinLimit(e, r) {
   return (
     (t.lastRow - t.firstRow + 1) * (t.lastCol - t.firstCol + 1) >
       pasteOperationLimits.sourceCells &&
-      throwCellOperationError(
-        "Cut and move supports at most 500 source cells.",
-      ),
+      throwWorkbookError("Cut and move supports at most 500 source cells."),
     t
   );
 }
@@ -1909,7 +1885,7 @@ function createCutSourceSnapshot(e, r, t) {
       revision: e.revision,
       snapshotGuard: JSON.stringify(e),
       sheetId: r,
-      range: R3(t),
+      range: formatSortRangeAddress(t),
     })
   );
 }
@@ -1919,9 +1895,9 @@ function verifyCutSourceSnapshot(e, r, t, n) {
     r.workbookId !== e.id ||
     r.revision !== e.revision ||
     r.sheetId !== t ||
-    r.range !== R3(n) ||
+    r.range !== formatSortRangeAddress(n) ||
     r.snapshotGuard !== JSON.stringify(e)) &&
-    throwCellOperationError(
+    throwWorkbookError(
       "The workbook changed after Cut. Cut the source again before moving it.",
     );
 }
@@ -1932,9 +1908,7 @@ const isUnsafeStructuredReference = (e) =>
   sheetRangePrefixPattern = new RegExp(
     `^(${sheetNameReferencePattern}):(${sheetNameReferencePattern})!`,
   ),
-  identifierCharPattern = /[A-Za-z0-9_.\\\u0080-\uffff]/,
-  unquoteSheetName = (e) =>
-    e.startsWith("'") ? e.slice(1, -1).replace(/''/g, "'") : e;
+  identifierCharPattern = /[A-Za-z0-9_.\\\u0080-\uffff]/;
 function assertBalancedStructuredReference(e, r) {
   let t = 0,
     n = r;
@@ -1942,7 +1916,7 @@ function assertBalancedStructuredReference(e, r) {
   while (n < e.length && t);
   return (
     t &&
-      throwCellOperationError(
+      throwWorkbookError(
         "An unbalanced structured reference prevents a safe move.",
       ),
     n
@@ -1966,7 +1940,7 @@ function assertFormulaReferencesMovable(e) {
     if (
       (s &&
         sheetRangePrefixPattern.test(a) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "Three-dimensional worksheet references must be replaced with explicit local references before moving cells.",
         ),
       o === "#")
@@ -1983,7 +1957,7 @@ function assertFormulaReferencesMovable(e) {
     l &&
       ((d = unquoteSheetName(l[1])),
       /[\[\]:]/.test(d) &&
-        throwCellOperationError(
+        throwWorkbookError(
           "External or three-dimensional references prevent a safe range move.",
         ),
       (u = l[0].length));
@@ -2000,11 +1974,11 @@ function assertFormulaReferencesMovable(e) {
     ) {
       const p = t + u + h[0].length;
       (e[p] === "#" &&
-        throwCellOperationError(
+        throwWorkbookError(
           "Dynamic spill references require an explicit stable range before moving cells.",
         ),
         e[p] === ":" &&
-          throwCellOperationError(
+          throwWorkbookError(
             "Separately qualified range endpoints are not supported for a safe move.",
           ),
         r.push({
@@ -2025,7 +1999,7 @@ function assertFormulaReferencesMovable(e) {
       if (e[p] === "[") {
         const v = assertBalancedStructuredReference(e, p);
         (e[v] === "!" &&
-          throwCellOperationError(
+          throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
           r.push({
@@ -2059,16 +2033,14 @@ function assertFormulaReferencesMovable(e) {
     if (o === "[") {
       const p = assertBalancedStructuredReference(e, t);
       (/^\s*(?:[^!+*/(),;]+)!/.test(e.slice(p)) &&
-        throwCellOperationError(
-          "External workbook references prevent a safe move.",
-        ),
+        throwWorkbookError("External workbook references prevent a safe move."),
         r.push({ start: n, end: p, text: e.slice(n, p), kind: "structured" }),
         (t = p));
       continue;
     }
     if (
       (l &&
-        throwCellOperationError(
+        throwWorkbookError(
           "A worksheet-qualified expression is not a supported reference for a safe move.",
         ),
       o === "'")
@@ -2077,7 +2049,7 @@ function assertFormulaReferencesMovable(e) {
       if (p) {
         (/\[[^\]]+\]/.test(p[0]) &&
           e[t + p[0].length] === "!" &&
-          throwCellOperationError(
+          throwWorkbookError(
             "External workbook references prevent a safe move.",
           ),
           (t += p[0].length));
@@ -2104,7 +2076,7 @@ function parseWholeColumnReference(e) {
     const [r, t] = e.replace(/\$/g, "").split(":").map(Number);
     return (
       (r > workbookLimits.maxRows || t > workbookLimits.maxRows) &&
-        throwCellOperationError("A reference exceeds Excel's row boundary."),
+        throwWorkbookError("A reference exceeds Excel's row boundary."),
       {
         firstRow: Math.min(r, t) - 1,
         lastRow: Math.max(r, t) - 1,
@@ -2121,7 +2093,7 @@ function parseMovableA1Rectangle(e, r, t) {
     .map((n) => {
       const o = /^(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)$/.exec(n);
       o ||
-        throwCellOperationError(
+        throwWorkbookError(
           "Only complete A1 cell rectangles can move to a new location.",
         );
       const a = _t(n);
@@ -2131,26 +2103,17 @@ function parseMovableA1Rectangle(e, r, t) {
 }
 
 export {
-  $W,
   pasteOperationLimits,
   hasCellContent,
   parseWholeColumnReference,
-  Hh,
-  PW,
-  R3,
-  deepFreezeRecords,
   assertCutSourceWithinLimit,
   createCutSourceSnapshot,
-  rangesIntersect,
   rangeContainsRange,
   parseMovableA1Rectangle,
-  quoteSheetNameForFormula,
-  isCellInsideRange,
   FillPreviewDialog,
   assertFormulaReferencesMovable,
   verifyCutSourceSnapshot,
   PasteSpecialDialog,
   isUnsafeStructuredReference,
   assertRangeWithinBoundary,
-  throwCellOperationError,
 };
