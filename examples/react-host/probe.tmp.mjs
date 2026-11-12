@@ -1,0 +1,18 @@
+import { chromium } from "playwright";
+import { startServer } from "./server.mjs";
+const server = await startServer({ port: 0 });
+const { port } = server.address();
+const browser = await chromium.launch(process.env.CHROME_PATH ? { executablePath: process.env.CHROME_PATH } : {});
+const page = await browser.newPage();
+const errors = [];
+page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
+page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") errors.push(m.type() + ": " + m.text()); });
+await page.goto(`http://127.0.0.1:${port}/`);
+await page.locator('[data-address="E2"]').first().waitFor({ timeout: 20000 });
+await page.waitForTimeout(1500);
+for (const a of ["A1","B2","E2","B5"]) console.log(a, await page.locator(`[data-address="${a}"]`).first().getAttribute("aria-label").catch(e=>"ERR "+e.message));
+console.log("rev:", await page.getByTestId("revision").textContent());
+console.log("box:", JSON.stringify(await page.locator("main.editor").boundingBox()));
+await page.screenshot({ path: "/tmp/claude-0/-home-user/b0e5ba0c-f5ff-59d2-96ce-2dbfa961e73e/scratchpad/probe/shot.png" });
+console.log(errors.join("\n") || "no errors");
+await browser.close(); server.close();
