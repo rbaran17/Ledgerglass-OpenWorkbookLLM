@@ -1,6 +1,6 @@
 # Ledgerglass — Docker and developer integration
 
-This package contains the complete current workbook source, compiled React SDK, browser application, portable HTML editions, tests, requirements, validation evidence and examples. No implemented workbook feature was removed. Deployment scaffolding does not change the published feature limits or coverage statuses.
+This repository contains the browser application (`src/`), the committed production build (`dist/`), portable HTML editions, the MCP server, deployment files and tests. Deployment scaffolding does not change the feature limits described in README.md.
 
 ## Run with Docker
 
@@ -21,15 +21,7 @@ Use `LEDGERGLASS_PORT=8081 docker compose up --build -d --wait` if port 8080 is 
 
 ## Integrate into your application
 
-From your React 19 project, install the tarball included in the kit's sibling `packages/` directory:
-
-```sh
-npm install /absolute/path/to/packages/ledgerglass-workbook-0.1.0.tgz
-```
-
-Use [deploy/ReactHost.example.tsx](deploy/ReactHost.example.tsx) as the component boundary. The parent application provides the authorized workbook, storage adapter, user identity and same-origin backend routes. React integration uses your own application deployment; the standalone web container is optional.
-
-The example expects `/api/workbook-assistant` and `/api/workbook-sources` in **your** backend. The static container does not implement or proxy these routes. Use the existing [assistant protocol](docs/CHAT-UI-INTEGRATION.md), [source gateway](docs/EXTERNAL-SOURCES-INTEGRATION.md), [source connectors](docs/SOURCE-CONNECTOR-INTEGRATION.md), [collaboration contract](docs/COLLABORATION-INTEGRATION.md) and [MCP integration](docs/MCP.md). Those guides describe the actual supported contracts and acceptance boundaries.
+There is no published or buildable React SDK in this repository. The application can be embedded as an iframe of the served app (`/?embedded`) if the host's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it; see [Embed in React](README.md#embed-in-react). The static container serves the application only. It does not implement backend routes for the assistant or the source gateway, so a host integration needs its own backend. For the MCP server, see [docs/MCP.md](docs/MCP.md).
 
 ## Files to give your developer
 
@@ -39,12 +31,8 @@ The example expects `/api/workbook-assistant` and `/api/workbook-sources` in **y
 | `deploy/kubernetes/` | Deployment, Service, HPA, disruption budget and optional ingress template |
 | `deploy/server.mjs`, `deploy/tests/` | Dependency-free HTTP runtime and executed runtime checks |
 | `deploy/verify-containers.mjs` | Docker build, three-replica, scale-down and MCP startup verification |
-| `.github/workflows/ci.yml` | Runs the runtime tests and a dependency audit; does not build images, publish or deploy |
-| `src/`, `lib/`, `examples/`, `tests/`, `scripts/` | Current implementation, SDK, workers, integration examples and regression tests |
-| `docs/BASE-EXCEL-COVERAGE.xlsx` | Current base Excel coverage, including remaining gaps |
-| `docs/DOCKER-AND-SCALING.md` | Deployment design, configuration, operations and developer acceptance |
-| `docs/DOCKER-PACKAGING-VERIFICATION.json` | Executed checks and explicit unexecuted Docker/cluster checks |
+| `.github/workflows/ci.yml` | Runs the runtime tests, a dependency audit, the unit tests and browser checks, and builds the web and MCP images; does not publish or deploy |
+| `src/`, `tests/`, `scripts/` | Current implementation, workers, regression tests and build/run scripts |
+| `docs/MCP.md` | MCP tools, configuration and integration |
 
-The kit root also contains `HANDOFF-MANIFEST.json`, `SHA256SUMS.txt`, the npm package and the packaging validation report. Verify these hashes after transfer.
-
-**Verification boundary:** Docker, kubectl and a cluster were unavailable on the preparation machine. Runtime HTTP tests, builds and package checks are performed locally; actual image builds, Compose behavior, Kubernetes scaling, production identity/storage and external-provider calls require the receiving environment. Run `npm ci`, `npm run test:deployment` and `npm run test:containers` there. See the executed record for exact results.
+**Verification boundary:** Docker, kubectl and a cluster were unavailable when these checks were last run, so container and cluster behavior was not verified here. Runtime HTTP tests and builds run locally; actual image builds, Compose behavior, Kubernetes scaling, production identity/storage and external-provider calls require the receiving environment. Run `npm ci`, `npm run test:deployment` and `npm run test:containers` there.

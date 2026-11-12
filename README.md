@@ -1,12 +1,12 @@
 # Ledgerglass
 
-**The open-source, Excel-style workbook you can embed in any React app and connect to any LLM.**
+**The open-source, Excel-style workbook you can run in the browser, embed in a larger web application and connect to any LLM.**
 
-[![CI](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml/badge.svg)](https://github.com/rbaran17/Ledgerglass-OpenWorkbookLLM/actions/workflows/ci.yml)
+[![CI](https://github.com/rbaran17/Ledgerglass/actions/workflows/ci.yml/badge.svg)](https://github.com/rbaran17/Ledgerglass/actions/workflows/ci.yml)
 
-> **Repository status:** the original TypeScript source, unit tests, examples and reference documents under `docs/` are not available. The code in `src/` was recovered from the compiled application: it is formatted and it rebuilds the same app, but identifiers are machine-generated, there are no types, and third-party libraries are still inlined. See [`src/README.md`](src/README.md) for the layout and the recovery roadmap. Working today: `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm test` and `npm run test:e2e`. Not working: the SDK build (`npm run build:lib`), the MCP server (`npm run mcp`), the Docker `mcp` target, and links into `docs/`.
+> **Repository status:** the original TypeScript source, SDK build, examples and most reference documents are not available. `src/` was recovered from the compiled application and reorganised into named modules; third-party libraries are imported from `node_modules`. The repository includes unit tests and browser checks. See [`src/README.md`](src/README.md) for the layout. Commands that run today include `npm run dev`, `npm run build`, `npm run build:portable`, `npm run build:container`, `npm start`, `npm run mcp`, `npm test` and `npm run test:e2e`.
 
-Ledgerglass is a TypeScript/React spreadsheet component with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
+Ledgerglass is a React spreadsheet application (JavaScript) with an Excel-style ribbon, formula bar, worksheet grid and sheet tabs. Run it as a standalone application, embed it in a larger application, or connect its workbook model to your own LLM through a provider-neutral adapter and Model Context Protocol (MCP).
 
 ![Demo: general ledger, trial balance formulas, range statistics, the AI assistant panel and the embedded workbook](docs/assets/demo.gif)
 
@@ -18,9 +18,7 @@ application (<code>?embedded</code>).</sub>
 desktop browser. Add `?demo` to the address to load the synthetic audit workbook. The AI assistant needs a connected
 provider (see [AI assistant and MCP](#ai-assistant-and-mcp)).
 
-See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement IDs and their status.
-
-> **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. The base Excel coverage register records **70 locally accepted, 5 Partial and 1 Planned** requirements. The full product register, including audit and AI extensions, records **78 locally accepted, 19 Partial and 11 Planned**. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
+> **Scope:** this is a substantial working implementation with documented limits, not full Microsoft Excel parity. Acceptance applies to the documented local scope; production, external-provider and independent accessibility acceptance remain separate.
 
 ## Screenshots
 
@@ -44,7 +42,7 @@ See the [complete feature index](docs/FEATURE-INDEX.md) for all 108 requirement 
 - [Screenshots](#screenshots)
 - [Quick start](#quick-start)
 - [Capabilities](#capabilities)
-- [Embed in React](#embed-in-react)
+- [Embedding](#embedding)
 - [AI assistant and MCP](#ai-assistant-and-mcp)
 - [Data, persistence and file exchange](#data-persistence-and-file-exchange)
 - [Docker and scaling](#docker-and-scaling)
@@ -69,7 +67,7 @@ Open **http://127.0.0.1:4173/** (add `?demo` or `?embedded`). Alternatively, ope
 
 ### Requirements
 
-- Node.js **22.16 or later in the Node 22 family** and npm. The SQLite connector demonstration requires Node 22.16+.
+- Node.js **22.16 or later in the Node 22 family** and npm.
 - A modern desktop browser. Browser APIs, clipboard, worker, storage and accessibility support must be validated in your target host.
 - Docker Engine with Compose v2 only if you want to use the container setup.
 
@@ -89,8 +87,6 @@ Open **http://127.0.0.1:4177/**. No model API key or backend service is required
 | `/?temporary` | Temporary workbook without browser persistence |
 | `/?demo` | Synthetic audit demonstration data |
 
-Select **File → Open** and load `examples/Advanced-features-demo.json` for tables, a PivotTable, charts, shapes, formulas and page layout. Its control total is **54,400**. The examples are synthetic validation fixtures, not client workbooks.
-
 ### Build and run locally
 
 ```sh
@@ -102,7 +98,7 @@ Open **http://127.0.0.1:4173/**. `npm start` serves the previously built `dist/`
 
 The portable build also creates `Ledgerglass.html`, which includes the application code and styles and can be opened directly, and `Embedded-Workbook.html`, a small launcher that opens the same file in embedded mode (keep both in one folder). Local file storage and browser coordination vary by browser; localhost or HTTPS provides the more predictable experience. Export native JSON as a portable backup.
 
-The prebuilt `dist/` and `Ledgerglass.html` are committed so the application can be tried without a build; installed dependencies and large handoff archives are omitted. With the source present, the commands above regenerate the application. Specialist validation pages have individual builders under `scripts/`; for example, after `npm run build:lib` and `npm run build`, run `node scripts/build-collaboration-host.mjs`, then `npm start` and open `/collaboration.html`.
+The prebuilt `dist/` and `Ledgerglass.html` are committed so the application can be tried without a build; installed dependencies are not included. `npm run build:portable` regenerates both.
 
 ## Capabilities
 
@@ -124,83 +120,25 @@ The links below document supported behavior and its boundaries; a feature family
 | Assistant | Chat built with assistant-ui, file staging/previews, history, Stop/Retry/Regenerate/Copy, selected-cell citations and explicit before/after proposal review |
 | LLM interoperability | Local deterministic demo, provider-neutral HTTP/custom adapters and nine scoped MCP tools; proposals require human approval before cell changes |
 | Collaboration | Host-authorized shared editing contracts, conflict review, presence, discussions and offline recovery; production authority/storage/transport are host responsibilities |
-| Embedding and operations | React SDK, browser/Node calculation integrations, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates |
+| Embedding and operations | Iframe embedding of the served application, browser/Node calculation integrations, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates |
 
-See [all features and acceptance criteria](docs/ALL-FEATURE-REGISTER.csv), the [base Excel coverage sheet](docs/BASE-EXCEL-COVERAGE.xlsx), and the [validation checklist](docs/VALIDATION-CHECKLIST.md).
+## Embedding
 
-## Embed in React
+There is currently no published or buildable SDK package. The SDK build and the `@ledgerglass/workbook` package are not in this repository, so the editor cannot be imported into a React application today.
 
-### Build the SDK
+The application can be embedded today as an iframe of the served app, if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). The editor component's source is in `src/app/`, and [`src/README.md`](src/README.md) describes it. Packaging it as a library is not done.
 
-```sh
-npm run build:lib
-npm pack
-```
+The `@ledgerglass/workbook/mcp` entry is the one package entry that exists; it points at `src/mcp/server.js`.
 
-Install the resulting package in your React 19 host:
-
-```sh
-npm install /absolute/path/to/ledgerglass-workbook-0.1.0.tgz
-```
-
-The package is named `@ledgerglass/workbook`. It is marked `private` and is not assumed to be available from the public npm registry. `npm pack` creates a local tarball. Preserve every generated file in `lib/`, including lazy chunks and workers.
-
-### Minimal editor
-
-```tsx
-import { AuditWorkbook } from '@ledgerglass/workbook';
-import '@ledgerglass/workbook/style.css';
-
-export function WorkbookEditor() {
-  return (
-    <div style={{ height: '80vh', minHeight: 420 }}>
-      <AuditWorkbook />
-    </div>
-  );
-}
-```
-
-The default assistant is a local deterministic demonstration. For an application integration, use the [complete React host example](deploy/ReactHost.example.tsx): it accepts an authorized initial workbook, a host store, an actor, persistence notifications and HTTP assistant/source adapters.
-
-`onChange` signals an in-memory change; it is not a durable-save acknowledgement. Implement the documented `WorkbookStoreLike` contract and wait for successful persistence before showing “Saved.” Load and authorize the workbook before mounting, and use a workbook identity key when switching documents. The host owns user identity, permissions, tenant boundaries and durable storage.
-
-| Package entry | Purpose |
-| --- | --- |
-| `@ledgerglass/workbook` | React editor, workbook model, operations, types and browser integration APIs |
-| `@ledgerglass/workbook/style.css` | Required editor styles |
-| `@ledgerglass/workbook/mcp` | Server-side MCP factory and proposal guards |
-| `@ledgerglass/workbook/calculation-node` | Node calculation integration |
-| `@ledgerglass/workbook/file-worker.js` | Packaged file-processing worker |
-| `@ledgerglass/workbook/source-gateway` | Server-side source gateway |
-| `@ledgerglass/workbook/source-connectors` | Server-side connector implementations |
-
-Keep server-only entries out of browser bundles. Review the [developer handoff](docs/DEVELOPER-HANDOFF.md), [calculation worker contract](docs/CALCULATION-RESOURCES-ACCEPTANCE.md), and [collaboration integration](docs/COLLABORATION-INTEGRATION.md) before adapting production services.
-
-An iframe can embed the served editor if its CSP permits the parent origin. It is a visual embed; no general-purpose `postMessage` workbook API is supplied. Use the React SDK for programmatic integration.
+An iframe can embed the served editor if its CSP permits the parent origin. It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
 
 ## AI assistant and MCP
 
 ### Connect your own model
 
-```tsx
-import { AuditWorkbook, createHttpAdapter } from '@ledgerglass/workbook';
-import '@ledgerglass/workbook/style.css';
-
-const adapter = createHttpAdapter({
-  endpoint: '/api/workbook-assistant',
-  chat: true,
-});
-
-export function ConnectedWorkbook() {
-  return <div style={{ height: '80vh' }}><AuditWorkbook adapter={adapter} /></div>;
-}
-```
-
-Your backend implements the endpoint. Authenticate and authorize the workbook and selected context, translate the request into your provider's API, and return the validated `LLMProposal` contract. Keep provider keys on the server. The component checks revision/scope, displays citations and before/after patches, and revalidates when the user chooses Apply.
+The built-in assistant is a local deterministic demonstration; it does not call an LLM. A real model needs a host adapter that sends the selected context to your provider, keeps provider keys on the server and returns a proposal for review.
 
 The chat supports text, CSV/TSV, JSON, PDF, DOCX, XLSX and common image attachments within explicit limits. The local demo acknowledges staged files but does not use an LLM to interpret them. The host must opt into chat, implement document handling and enforce authorization, request limits, scanning and retention. Responses currently complete as a single proposal; token streaming is not implemented.
-
-Read the [LLM protocol](docs/LLM-PROTOCOL.md), [chat integration guide](docs/CHAT-UI-INTEGRATION.md), and [citation acceptance](docs/CITATION-GROUNDING-ACCEPTANCE.md).
 
 ### MCP server
 
@@ -225,17 +163,6 @@ The server was rewritten after the original source was lost. It keeps the origin
 Native JSON preserves the application's workbook state, retained evidence and supported metadata more fully than exchange formats. XLSX import/export implements a documented subset, inventories unsupported original parts and reports losses when producing a derived file. Recovering an exact original is distinct from preserving every feature in an edited export.
 
 CSV/TSV exchange includes delimiter/encoding/type review and formula-injection controls. Alternate formats and document extraction use explicit supported paths or host converters. Macro/source retention does not execute native VBA, Office Scripts, ActiveX or OLE code.
-
-For real local connector demonstrations:
-
-```sh
-npm run build:lib
-npm run build
-node scripts/build-source-connectors-host.mjs
-npm run demo:sources
-```
-
-Open **http://127.0.0.1:4182/external-connectors.html**. The demo uses local HTTP, SQLite and CSV folder sources. Real ERP services, ODBC drivers and production identities require your environment. See [source connector integration](docs/SOURCE-CONNECTOR-INTEGRATION.md) and [Refresh All](docs/AW-052-REFRESH-ALL.md).
 
 Browser local/session storage is useful for demonstrations and recovery, but is not a shared database or backup service. Production integrations need a revision-aware durable store, authorization, concurrency handling, backups and a verified restore process.
 
@@ -284,7 +211,7 @@ FRAME_ANCESTORS="'self' https://test.example.com" \
 
 Kubernetes manifests include a two-replica Deployment, Service, disruption budget and HPA template for 2–10 replicas. Supply your registry image, namespace, TLS/ingress, Metrics API and platform policies. Scaling the asset server does not raise workbook limits or scale your database/model services. Shared backend state and retained assets across rolling releases require host implementation.
 
-The [Docker and scaling guide](docs/DOCKER-AND-SCALING.md) covers architecture, configuration, React integration, MCP isolation, Kubernetes, rollout/rollback and developer acceptance. Container/cluster execution was **not verified** in the recorded local handoff. The included GitHub Actions workflow runs container validation on pull requests or manual dispatch; it does not publish images or deploy the application.
+Container and cluster execution was **not verified** in the recorded local handoff. The included GitHub Actions workflow builds the web and MCP images and checks that the web image starts and serves the application; it does not publish images or deploy the application.
 
 ## Limits and compatibility
 
@@ -301,98 +228,70 @@ The [Docker and scaling guide](docs/DOCKER-AND-SCALING.md) covers architecture, 
 | Native JSON save/reopen | 50 MiB |
 | Chat attachments | Up to four per message, 5 MB per file, 10 MB across request attachments |
 
-Excel-sized addresses do not mean a fully populated Excel-sized worksheet can be processed. The [capacity source](src/core/capacity.ts), per-feature contracts and file-processing policies define the supported workload.
-
-### Remaining base Excel requirements
-
-| ID | Remaining gap |
-| --- | --- |
-| AW-040 | Named Excel-version reference acceptance and broader specialist-function fidelity |
-| AW-052 | Native ODBC, real vendor sources, production authorization and host acceptance; scheduled/incremental refresh remains outside this delivery |
-| AW-101 | Independent assistive-technology/zoom/device acceptance, complete localization and unresolved contrast checks |
-| AW-102 | Required hardware/browser performance matrix, scroll budget and production-host measurements |
-| AW-103 | Deployed diagnostics/alerts, durable backup and restore acceptance |
-| AW-053 | Power Query M compatibility requirements remain Planned |
-
-The [coverage summary](docs/COVERAGE-SUMMARY.md) details these six gaps. The [full register](docs/ALL-FEATURE-REGISTER.csv) separately tracks 30 open requirements across the complete product. Neither table is a claim of universal Microsoft compatibility, production readiness or accessibility certification.
+Excel-sized addresses do not mean a fully populated Excel-sized worksheet can be processed. The limits above define the supported workload.
 
 ## Testing and validation
 
 ```sh
-npm run build:lib
-npm run build:portable
-npm test                # server tests, then unit tests
-npm run test:deployment # the static web runtime (Node built-ins only)
-npm run test:unit       # core model and workers, in Node
-npm run test:e2e        # browser checks against a build
+npm test                 # server tests, then unit tests
+npm run test:deployment  # the static web runtime tests (Node built-ins only)
+npm run test:unit        # core model, formulas and workers, in Node
+npm run test:e2e         # browser checks against a build
+npm run test:containers  # Docker build, replica and MCP startup checks (needs a Docker daemon)
 ```
 
-Additional checks:
-
-```sh
-# Browser journeys: install a Playwright browser once if needed.
-npx playwright install chromium
-npm run test:e2e
-
-# Requires a working Docker daemon and image-registry access.
-npm run test:containers
-
-# Build, test and reconcile recorded release claims.
-npm run verify:release
-```
+The Playwright browser for `npm run test:e2e` may need a one-time install with `npx playwright install chromium`.
 
 The Playwright config starts a development server on port 4173 and supports `CHROME_PATH`. Close any unrelated server on that port before testing. Container checks create and remove their own disposable Compose project; Kubernetes and actual provider acceptance require separate target environments.
 
-**Recorded product evidence:** the 19 September 2026 checkpoint reports **8,734 passing tests across 326 files** and **14 deployment-server tests** (17 today). These are dated local records, not a claim that Docker, Kubernetes or external LLM integration has run successfully; GitHub CI covers the deployment-server tests, a dependency audit, and a build from `src/` followed by the browser checks in `tests/browser/`. The unit tests behind the recorded counts are not in this repository. The manual checklist contains **3,167 templates**, with none automatically marked manually Passed. Consult the individual verification records for exact environments and exclusions.
-
-| Validation resource | Use |
-| --- | --- |
-| [Validation checklist](docs/VALIDATION-CHECKLIST.md) | End-to-end user journeys and execution instructions |
-| [Test-case register](docs/VALIDATION-TEST-CASES.csv) | Individual cases, expected outcomes and recorded status |
-| [Base Excel feature matrix](docs/FEATURE-MATRIX.csv) | Requirement-level scope and acceptance |
-| [Full product register](docs/ALL-FEATURE-REGISTER.csv) | All requirements, including audit/AI/embedding |
-| [Refresh All evidence](docs/AW-052-REFRESH-ALL-VERIFICATION.json) | Latest recorded full-suite product checkpoint |
-| [Docker packaging evidence](docs/DOCKER-PACKAGING-VERIFICATION.json) | Build/runtime/consumer checks and explicit unexecuted deployment gates |
-| [Historical release notes](HISTORY.md) | Earlier remediation checkpoints; later checkpoints supersede earlier counts |
+GitHub CI runs the deployment-server tests, a dependency audit, the unit tests, a build with compressed assets followed by the browser checks in `tests/browser/`, and builds the web and MCP images.
 
 ## Repository layout
 
 ```text
 src/
-  components/        Workbook UI and feature dialogs
-  core/              Workbook model, formulas and deterministic operations
-  integrations/      Files, LLM, persistence, sources and collaboration
-  mcp/               Scoped MCP server
-scripts/              Worker/SDK builders, demos and validation-host generators
-tests/                Unit, component, integration and browser tests
-examples/             Synthetic workbooks, source fixtures and expected outputs
-docs/                 Requirements, acceptance stories, guides and evidence
-deploy/               Static runtime, React example, tests and Kubernetes templates
-.github/workflows/    Runtime tests and dependency audit
-Dockerfile            Separate web and MCP build targets
-compose.yaml          Local gateway and scalable web service
+  main.js            Application entry point
+  app/               Workbook editor modules (see src/app/README.md)
+  assistant/         Assistant chat components
+  workers/           Parser and calculation workers
+  mcp/               Scoped MCP server (server.js, model.js)
+  styles/            Application stylesheets
+tests/
+  browser/           Browser checks (Playwright)
+  unit/              Unit tests (Vitest)
+scripts/
+  serve.mjs          Static server for dist/ (npm start)
+  portable.mjs       Builds the portable HTML editions
+  mcp-stdio.mjs     MCP server over stdio (npm run mcp)
+  worker-source-plugin.mjs  Build plugin for worker sources
+deploy/              Container runtime, health checks, nginx config, Kubernetes templates and tests
+docs/MCP.md          MCP tools, configuration and integration
+docs/assets/         Images used in this README
+.github/workflows/   CI workflow
+Dockerfile           Separate web and MCP build targets
+compose.yaml         Local gateway and scalable web service
+dist/                Committed production build
+Ledgerglass.html     Committed portable application
+Embedded-Workbook.html  Launcher for the embedded mode
 ```
 
-`src/generated/`, `lib/`, `dist/`, `dist-container/`, portable HTML, dependencies and scratch reports are build outputs. Of these, `dist/` and the portable HTML are committed for convenience. The layout above describes the complete project; see the repository status note at the top for what is published today. Historical verification files may refer to the original preparation machine or packaged artifacts; those paths are evidence, not paths required by a fresh checkout.
+`dist/`, `dist-container/`, portable HTML, and `node_modules/` are build outputs. `dist/` and the portable HTML are committed for convenience.
 
 ## Documentation
 
-- **Start/integrate:** [developer handoff](docs/DEVELOPER-HANDOFF.md), [React host](deploy/ReactHost.example.tsx), [Docker and scaling](docs/DOCKER-AND-SCALING.md).
-- **Requirements:** [full specification](docs/REQUIREMENTS.md), [feature index](docs/FEATURE-INDEX.md), [current gaps](docs/COVERAGE-SUMMARY.md), [base coverage workbook](docs/BASE-EXCEL-COVERAGE.xlsx).
-- **AI:** [LLM protocol](docs/LLM-PROTOCOL.md), [chat UI](docs/CHAT-UI-INTEGRATION.md), [MCP](docs/MCP.md), [citation grounding](docs/CITATION-GROUNDING-ACCEPTANCE.md).
-- **Data:** [external sources](docs/EXTERNAL-SOURCES-INTEGRATION.md), [connectors](docs/SOURCE-CONNECTOR-INTEGRATION.md), [data models](docs/DATA-MODEL-INTEGRATION.md), [DAX subset](docs/DAX-INTEGRATION.md), [file preservation](docs/XLSX-PRESERVATION-ACCEPTANCE.md).
-- **Host acceptance:** [collaboration](docs/COLLABORATION-INTEGRATION.md), [accessibility/localization](docs/ACCESSIBILITY-LOCALIZATION-ACCEPTANCE.md), [performance](docs/INTERACTIVE-PERFORMANCE-ACCEPTANCE.md), [recovery runbook](docs/RELIABILITY-RUNBOOK.md), [file security](docs/FILE-SECURITY-ACCEPTANCE.md).
+- **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
+- **MCP:** [docs/MCP.md](docs/MCP.md) (tools, configuration and integration).
+- **Docker:** [START-HERE-DOCKER.md](START-HERE-DOCKER.md) (container run and developer integration notes).
+- **History and licensing:** [HISTORY.md](HISTORY.md) (earlier remediation checkpoints), [LICENSE](LICENSE) (MIT), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (dependency licenses).
 
 ## Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
 | `npm start` returns 404 | `dist/` is missing or incomplete; run `npm run build` |
-| SDK import cannot find `lib/` | Run `npm run build:lib`, then pack/install the complete package |
 | Worker or lazy chat load fails | Preserve generated chunks/workers and review host asset paths/CSP |
-| Blank or clipped embedded editor | Give the parent a definite height and import the package CSS |
+| Blank or clipped embedded editor | Give the parent element a definite height |
 | Iframe is blocked | Set `FRAME_ANCESTORS` to the exact authorized parent origin and serve over HTTPS |
-| Assistant/source endpoint returns 404 | The static server has no backend proxy; implement and route the host API |
 | Local demo does not interpret an uploaded PDF | Connect a host model/document adapter; the demo has no external model |
 | Source refresh fails | Check source registration, authorization, supported formats and row/field/batch limits |
 | Local file saves are unreliable | Use localhost/HTTPS and export native JSON; verify browser storage support |
@@ -400,7 +299,7 @@ compose.yaml          Local gateway and scalable web service
 
 ## Contributing and licensing
 
-Keep changes scoped and include relevant automated checks and synthetic reproduction fixtures. Preserve requirement IDs and historical acceptance evidence. Update the feature register and validation checklist when behavior changes; promote coverage only with evidence for the stated contract. Do not commit client data, model credentials, local workbooks or generated dependency folders.
+Keep changes scoped and include relevant automated checks. Do not commit client data, model credentials, local workbooks or generated dependency folders.
 
 Use your repository's approved private reporting channel for sensitive security findings. Production hosts must provide authentication, authorization, secret management, data retention and operational controls; client-side checks are not the security boundary.
 
