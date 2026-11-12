@@ -227,7 +227,18 @@ test("schedule PDF export produces a PDF file", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Page setup and print preview" });
   await dialog.getByRole("button", { name: "Create PDF", exact: true }).click();
   const link = dialog.getByRole("link", { name: /Download PDF/ });
-  await expect(link).toBeVisible({ timeout: 60_000 });
+  // If no PDF appears, say what the dialog reported instead of only timing out.
+  const appeared = await link
+    .waitFor({ state: "visible", timeout: 45_000 })
+    .then(() => true, () => false);
+  if (!appeared) {
+    const report = (await dialog.innerText())
+      .split("\n")
+      .filter((line) => /issue|warning|error|fail|block|cannot|unable|exceed|beyond/i.test(line))
+      .slice(0, 12)
+      .join(" | ");
+    throw new Error(`No PDF was produced. Dialog reported: ${report || "(nothing matching)"}; page errors: ${errors.join("; ") || "none"}`);
+  }
   const downloading = page.waitForEvent("download");
   await link.click();
   const download = await downloading;
