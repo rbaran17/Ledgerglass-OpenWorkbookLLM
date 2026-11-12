@@ -101,7 +101,7 @@ const edited = applyCellPatchTransaction(
 getWorkbookCalculation(edited).calculator.getTypedValue(sheet.id, "A1"); // { type: "number", value: 42 }
 ```
 
-The library entry also loads the editor and its stylesheet, so it is for browser bundles. In Node, import the model directly from `src/app/03-workbook-model.js`, as the MCP server and the unit tests do.
+The library entry also loads the editor and its stylesheet, so it is for browser bundles. In Node, import the same functions from [`@ledgerglass/workbook/node`](api/node.md), which leaves the interface out and adds file helpers that take a path.
 
 ## Exports
 
