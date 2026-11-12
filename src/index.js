@@ -14,6 +14,13 @@ export { WorkbookSyncBoundary as AuditWorkbook } from "./app/56-main-worksheet-e
 export { Vj as localDemoAdapter } from "./app/55-external-source-refresh.js";
 export { createHttpAdapter } from "./integrations/http-adapter.js";
 
+/**
+ * External data sources: the adapter for the editor's `externalSourceAdapter` prop, which talks
+ * to a source gateway on your server (see docs/SOURCES.md), and the error it reports.
+ */
+export { createHttpSourceAdapter } from "./integrations/http-source-adapter.js";
+export { ExternalSourceError } from "./app/03-workbook-model.js";
+
 /** Workbook model: create, normalise, calculate and edit workbooks without the interface. */
 export {
   applyCellPatchTransaction,

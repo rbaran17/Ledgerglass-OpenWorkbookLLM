@@ -99,6 +99,14 @@
     "./mcp": {
       "types": "./types/mcp.d.ts",
       "import": "./src/mcp/server.js"
+    },
+    "./source-gateway": {
+      "types": "./types/source-gateway.d.ts",
+      "import": "./src/sources/gateway.js"
+    },
+    "./source-connectors": {
+      "types": "./types/source-connectors.d.ts",
+      "import": "./src/sources/connectors.js"
     }
   },
   "files": [
@@ -111,6 +119,7 @@
     "types",
     "scripts/mcp-stdio.mjs",
     "src/mcp",
+    "src/sources",
     "src/app"
   ],
   "overrides": {
