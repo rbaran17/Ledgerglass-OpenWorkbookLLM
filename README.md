@@ -80,12 +80,12 @@ npm run dev -- --port 4177
 
 Open **http://127.0.0.1:4177/**. No model API key or backend service is required for the local demo.
 
-| URL | Experience |
-| --- | --- |
-| `/` | Standalone workbook; opens blank or restores locally saved work |
-| `/?embedded` | Workbook inside the Test example application |
-| `/?temporary` | Temporary workbook without browser persistence |
-| `/?demo` | Synthetic audit demonstration data |
+| URL           | Experience                                                      |
+| ------------- | --------------------------------------------------------------- |
+| `/`           | Standalone workbook; opens blank or restores locally saved work |
+| `/?embedded`  | Workbook inside the Test example application                    |
+| `/?temporary` | Temporary workbook without browser persistence                  |
+| `/?demo`      | Synthetic audit demonstration data                              |
 
 ### Build and run locally
 
@@ -104,33 +104,44 @@ The prebuilt `dist/` and `Ledgerglass.html` are committed so the application can
 
 The links below document supported behavior and its boundaries; a feature family does not imply every feature of the equivalent Microsoft product.
 
-| Area | Delivered capability |
-| --- | --- |
-| Workbook lifecycle | Create/open/save, sheet management, protection, revisions, undo/redo, recovery and concurrent-instance conflict handling |
-| Familiar editing | Keyboard navigation, multi-area selections, formula range selection, autocomplete after `=`, copy/cut/paste, fill, find/replace, freeze/split panes, outlines and row/column AutoFit |
-| Formulas | 395 catalogued local function names; arithmetic, logic, lookup, text, date/calendar, financial, statistical/database families, dynamic arrays, names and reusable formulas within declared limits |
-| Calculation review | Recalculation controls, dependency/error inspection, watches, evaluation steps, precision/date-system policies and bounded worker execution |
-| Formatting and layout | Cell/number styles, themes, conditional formatting, merges, pictures/shapes, page setup, print areas/titles, print preview and schedule PDF export |
-| Tables and preparation | Structured tables, calculated columns, safe sorting/filtering, saved views, validation, text cleanup/extraction, duplicate review, append/join and repeatable transformation recipes |
-| Connections | Registered external sources, reviewed single-source refresh and atomic Refresh All; server-side JSON/OData, SQLite, CSV/TSV folder and ODBC-compatible adapter contracts |
-| Models and analysis | Relational models, a documented 20-function DAX subset, PivotTables, pivot filtering/drill-through, charts/sparklines, consolidation/subtotals, scenarios, Goal Seek and bounded Solver/statistical tools |
-| Interoperability | Native workbook JSON, XLSX, delimited files, supported structured sources, original-source retention, explicit export-loss reports and host adapters for alternate formats/document extraction |
-| Links and extensions | Reviewed external-workbook snapshots, versioned custom-function/add-in adapters, reusable report outputs and bounded automation translation with inert unsupported source retention |
-| Audit extensions | Notes/tickmarks, evidence links, comparisons, aging/materiality screens, sampling and duplicate/gap/unusual-pattern checks; retained alongside base spreadsheet functionality |
-| Assistant | Chat built with assistant-ui, file staging/previews, history, Stop/Retry/Regenerate/Copy, selected-cell citations and explicit before/after proposal review |
-| LLM interoperability | Local deterministic demo, provider-neutral HTTP/custom adapters and nine scoped MCP tools; proposals require human approval before cell changes |
-| Collaboration | Host-authorized shared editing contracts, conflict review, presence, discussions and offline recovery; production authority/storage/transport are host responsibilities |
-| Embedding and operations | Iframe embedding of the served application, browser/Node calculation integrations, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates |
+| Area                     | Delivered capability                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Workbook lifecycle       | Create/open/save, sheet management, protection, revisions, undo/redo, recovery and concurrent-instance conflict handling                                                                                  |
+| Familiar editing         | Keyboard navigation, multi-area selections, formula range selection, autocomplete after `=`, copy/cut/paste, fill, find/replace, freeze/split panes, outlines and row/column AutoFit                      |
+| Formulas                 | 395 catalogued local function names; arithmetic, logic, lookup, text, date/calendar, financial, statistical/database families, dynamic arrays, names and reusable formulas within declared limits         |
+| Calculation review       | Recalculation controls, dependency/error inspection, watches, evaluation steps, precision/date-system policies and bounded worker execution                                                               |
+| Formatting and layout    | Cell/number styles, themes, conditional formatting, merges, pictures/shapes, page setup, print areas/titles, print preview and schedule PDF export                                                        |
+| Tables and preparation   | Structured tables, calculated columns, safe sorting/filtering, saved views, validation, text cleanup/extraction, duplicate review, append/join and repeatable transformation recipes                      |
+| Connections              | Registered external sources, reviewed single-source refresh and atomic Refresh All; server-side JSON/OData, SQLite, CSV/TSV folder and ODBC-compatible adapter contracts                                  |
+| Models and analysis      | Relational models, a documented 20-function DAX subset, PivotTables, pivot filtering/drill-through, charts/sparklines, consolidation/subtotals, scenarios, Goal Seek and bounded Solver/statistical tools |
+| Interoperability         | Native workbook JSON, XLSX, delimited files, supported structured sources, original-source retention, explicit export-loss reports and host adapters for alternate formats/document extraction            |
+| Links and extensions     | Reviewed external-workbook snapshots, versioned custom-function/add-in adapters, reusable report outputs and bounded automation translation with inert unsupported source retention                       |
+| Audit extensions         | Notes/tickmarks, evidence links, comparisons, aging/materiality screens, sampling and duplicate/gap/unusual-pattern checks; retained alongside base spreadsheet functionality                             |
+| Assistant                | Chat built with assistant-ui, file staging/previews, history, Stop/Retry/Regenerate/Copy, selected-cell citations and explicit before/after proposal review                                               |
+| LLM interoperability     | Local deterministic demo, provider-neutral HTTP/custom adapters and nine scoped MCP tools; proposals require human approval before cell changes                                                           |
+| Collaboration            | Host-authorized shared editing contracts, conflict review, presence, discussions and offline recovery; production authority/storage/transport are host responsibilities                                   |
+| Embedding and operations | Iframe embedding of the served application, browser/Node calculation integrations, parser workers, localization interfaces, diagnostics, stateless web container, Compose and Kubernetes templates        |
 
 ## Embedding
 
-There is currently no published or buildable SDK package. The SDK build and the `@ledgerglass/workbook` package are not in this repository, so the editor cannot be imported into a React application today.
+**As a React component.** `npm run build:lib` builds an ES module library into `lib/` that exports the editor (`AuditWorkbook`), the workbook model and the assistant protocol:
 
-The application can be embedded today as an iframe of the served app, if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). The editor component's source is in `src/app/`, and [`src/README.md`](src/README.md) describes it. Packaging it as a library is not done.
+```jsx
+import { AuditWorkbook, createBlankWorkbook } from "@ledgerglass/workbook";
+import "@ledgerglass/workbook/style.css";
 
-The `@ledgerglass/workbook/mcp` entry is the one package entry that exists; it points at `src/mcp/server.js`.
+export function Workbook() {
+  return (
+    <div style={{ height: "80vh" }}>
+      <AuditWorkbook initialWorkbook={createBlankWorkbook("Budget")} />
+    </div>
+  );
+}
+```
 
-An iframe can embed the served editor if its CSP permits the parent origin. It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
+The library was rebuilt after the original SDK source was lost: its export names were chosen for the rebuild, it has no TypeScript declarations, and it is not published to a registry. `npm run test:lib` mounts the built library in a host page and drives it in a browser. See [Using Ledgerglass as a library](docs/LIBRARY.md) for the props, the assistant adapter contract and the model functions.
+
+**As an iframe.** The served application can be embedded if the host page's Content-Security-Policy and the `FRAME_ANCESTORS` setting allow it (see [Docker and scaling](#docker-and-scaling)). It is a visual embed; no general-purpose `postMessage` workbook API is supplied.
 
 ## AI assistant and MCP
 
@@ -193,14 +204,14 @@ The `mcp` Docker target packages the scoped stdio server separately. The web ima
 
 ### Configuration
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `LEDGERGLASS_PORT` | `8080` | Compose localhost gateway port |
-| `HOST` / `PORT` | `0.0.0.0` / `8080` | Container HTTP listener |
-| `FRAME_ANCESTORS` | `'self'` | Explicit allowed iframe parent origins |
-| `CONNECT_ORIGINS` | empty | Additional CSP connection origins; does not configure adapters/CORS |
-| `SHUTDOWN_TIMEOUT_MS` | `10000` | HTTP connection drain limit |
-| `NODE_IMAGE` / `NGINX_IMAGE` | See Docker/Compose files | Build/gateway image overrides; pin approved digests for releases |
+| Variable                     | Default                  | Purpose                                                             |
+| ---------------------------- | ------------------------ | ------------------------------------------------------------------- |
+| `LEDGERGLASS_PORT`           | `8080`                   | Compose localhost gateway port                                      |
+| `HOST` / `PORT`              | `0.0.0.0` / `8080`       | Container HTTP listener                                             |
+| `FRAME_ANCESTORS`            | `'self'`                 | Explicit allowed iframe parent origins                              |
+| `CONNECT_ORIGINS`            | empty                    | Additional CSP connection origins; does not configure adapters/CORS |
+| `SHUTDOWN_TIMEOUT_MS`        | `10000`                  | HTTP connection drain limit                                         |
+| `NODE_IMAGE` / `NGINX_IMAGE` | See Docker/Compose files | Build/gateway image overrides; pin approved digests for releases    |
 
 Example:
 
@@ -215,18 +226,18 @@ Container and cluster execution was **not verified** in the recorded local hando
 
 ## Limits and compatibility
 
-| Limit | Current local contract |
-| --- | --- |
-| Worksheet address space | 1,048,576 rows × 16,384 columns, through XFD1048576 |
-| Sheets | No fixed tab count; memory and workbook/file budgets apply |
-| Stored cells | **100,000 per workbook**, including formatting-only or note-only cells |
-| Cell/formula text | 32,767 / 4,096 UTF-16 units |
-| Referenced formula rectangle | 20,000 cells; additional work/depth budgets apply |
-| Dynamic array output | 10,000 cells per array |
-| Assistant context/proposal | 500 selected cells / 500 proposed patches |
-| XLSX/CSV/TSV import | 10 MiB; archive expansion and parser budgets also apply |
-| Native JSON save/reopen | 50 MiB |
-| Chat attachments | Up to four per message, 5 MB per file, 10 MB across request attachments |
+| Limit                        | Current local contract                                                  |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| Worksheet address space      | 1,048,576 rows × 16,384 columns, through XFD1048576                     |
+| Sheets                       | No fixed tab count; memory and workbook/file budgets apply              |
+| Stored cells                 | **100,000 per workbook**, including formatting-only or note-only cells  |
+| Cell/formula text            | 32,767 / 4,096 UTF-16 units                                             |
+| Referenced formula rectangle | 20,000 cells; additional work/depth budgets apply                       |
+| Dynamic array output         | 10,000 cells per array                                                  |
+| Assistant context/proposal   | 500 selected cells / 500 proposed patches                               |
+| XLSX/CSV/TSV import          | 10 MiB; archive expansion and parser budgets also apply                 |
+| Native JSON save/reopen      | 50 MiB                                                                  |
+| Chat attachments             | Up to four per message, 5 MB per file, 10 MB across request attachments |
 
 Excel-sized addresses do not mean a fully populated Excel-sized worksheet can be processed. The limits above define the supported workload.
 
@@ -265,6 +276,7 @@ scripts/
   mcp-stdio.mjs     MCP server over stdio (npm run mcp)
   worker-source-plugin.mjs  Build plugin for worker sources
 deploy/              Container runtime, health checks, nginx config, Kubernetes templates and tests
+docs/LIBRARY.md      Building and embedding the library
 docs/MCP.md          MCP tools, configuration and integration
 docs/assets/         Images used in this README
 .github/workflows/   CI workflow
@@ -280,22 +292,23 @@ Embedded-Workbook.html  Launcher for the embedded mode
 ## Documentation
 
 - **Source:** [src/README.md](src/README.md) (layout and recovery notes), [src/app/README.md](src/app/README.md) (editor modules).
+- **Library:** [docs/LIBRARY.md](docs/LIBRARY.md) (building and embedding the React component, adapters and model functions).
 - **MCP:** [docs/MCP.md](docs/MCP.md) (tools, configuration and integration).
 - **Docker:** [START-HERE-DOCKER.md](START-HERE-DOCKER.md) (container run and developer integration notes).
 - **History and licensing:** [HISTORY.md](HISTORY.md) (earlier remediation checkpoints), [LICENSE](LICENSE) (MIT), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) (dependency licenses).
 
 ## Troubleshooting
 
-| Symptom | Check |
-| --- | --- |
-| `npm start` returns 404 | `dist/` is missing or incomplete; run `npm run build` |
-| Worker or lazy chat load fails | Preserve generated chunks/workers and review host asset paths/CSP |
-| Blank or clipped embedded editor | Give the parent element a definite height |
-| Iframe is blocked | Set `FRAME_ANCESTORS` to the exact authorized parent origin and serve over HTTPS |
-| Local demo does not interpret an uploaded PDF | Connect a host model/document adapter; the demo has no external model |
-| Source refresh fails | Check source registration, authorization, supported formats and row/field/batch limits |
-| Local file saves are unreliable | Use localhost/HTTPS and export native JSON; verify browser storage support |
-| Large workbook is refused | Check stored-cell, file, archive and calculation budgets; split or reduce the input |
+| Symptom                                       | Check                                                                                  |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `npm start` returns 404                       | `dist/` is missing or incomplete; run `npm run build`                                  |
+| Worker or lazy chat load fails                | Preserve generated chunks/workers and review host asset paths/CSP                      |
+| Blank or clipped embedded editor              | Give the parent element a definite height                                              |
+| Iframe is blocked                             | Set `FRAME_ANCESTORS` to the exact authorized parent origin and serve over HTTPS       |
+| Local demo does not interpret an uploaded PDF | Connect a host model/document adapter; the demo has no external model                  |
+| Source refresh fails                          | Check source registration, authorization, supported formats and row/field/batch limits |
+| Local file saves are unreliable               | Use localhost/HTTPS and export native JSON; verify browser storage support             |
+| Large workbook is refused                     | Check stored-cell, file, archive and calculation budgets; split or reduce the input    |
 
 ## Contributing and licensing
 

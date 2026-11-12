@@ -1,6 +1,5 @@
 import "./styles/workbook.css";
 import "./app/01-schemas-date-functions-and-validation.js";
-import "./app/01b-react-module-handles.js";
 import "./app/02-text-and-financial-functions.js";
 import "./app/03-workbook-model.js";
 import "./app/04-cell-input-paste-and-fill.js";
@@ -58,33 +57,3 @@ import "./app/54-workbook-save-conflicts.js";
 import "./app/55-external-source-refresh.js";
 import "./app/56-main-worksheet-editor.js";
 import "./app/57-workspace-shell.js";
-export {
-  ArrowUp as A,
-  Check as C,
-  FileText as F,
-  Plus as P,
-  Sparkles as S,
-  Table2 as T,
-  X,
-  createLucideIcon as c,
-  Copy as d,
-  RotateCcw as e,
-  ArrowDown as f,
-  Square as i,
-} from "lucide-react";
-export { default as j } from "react/jsx-runtime";
-export { default as r } from "react";
-export { default as b } from "react-dom";
-export { Gq as R, uEe as a } from "./app/01b-react-module-handles.js";
-export { unwrapDefaultExport as g } from "./app/01-schemas-date-functions-and-validation.js";
-export {
-  LocalizedText as W,
-  createEmptyAssistantConversation as k,
-  useWorkbookMessages as u,
-} from "./app/04-cell-input-paste-and-fill.js";
-export {
-  attachmentAcceptAttribute as h,
-  assistantRequestLimits as l,
-  prepareChatAttachment as p,
-  parseAssistantChatRequest as v,
-} from "./app/20-calculation-options-and-assistant.js";

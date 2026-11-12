@@ -13,3 +13,4 @@ coverage/
 *.key
 deploy/container-verification.json
 .DS_Store
+lib/
