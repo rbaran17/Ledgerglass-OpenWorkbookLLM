@@ -321,8 +321,10 @@ The [coverage summary](docs/COVERAGE-SUMMARY.md) details these six gaps. The [fu
 ```sh
 npm run build:lib
 npm run build:portable
-npm test
-npm run test:deployment
+npm test                # server tests, then unit tests
+npm run test:deployment # the static web runtime (Node built-ins only)
+npm run test:unit       # core model and workers, in Node
+npm run test:e2e        # browser checks against a build
 ```
 
 Additional checks:

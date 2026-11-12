@@ -60,6 +60,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Unit tests for the core model and the workers
+        run: npm run test:unit
       - name: Build the application from src/ with compressed assets
         run: npm run build:container
       - run: npx playwright install --with-deps chromium

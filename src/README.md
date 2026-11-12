@@ -51,6 +51,10 @@ compiled application in `dist/` and is now the source the build uses.
 
 ## Safety net
 
+`tests/unit/` holds unit tests for the core model and for both workers. They
+run in Node (`npm run test:unit`): the core modules need no browser, and the
+workers are loaded with a stand-in `self`.
+
 `tests/browser/` holds behavioural checks that run against any build. They
 passed identically against the original `dist/` and against a build of this
 directory. Run them before and after any change here:
@@ -69,4 +73,5 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
    and writing in `app/07-…` and `app/08-…` from the interface code they
    import, then drop the worker's remaining copies.
 3. Review the assigned names, name the remaining locals, and add types.
-4. Grow the browser checks and add unit tests around the core model.
+4. Keep growing the unit tests and browser checks; XLSX export, printing
+   and the data tools have the least coverage.
