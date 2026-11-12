@@ -434,10 +434,10 @@ function CombinePopulationsDialog(e) {
                                 value: key.left,
                                 onChange: (event) => {
                                   (E(
-                                    keys.map((je, $e) =>
+                                    keys.map((key, $e) =>
                                       Me === $e
-                                        ? { ...je, left: event.target.value }
-                                        : je,
+                                        ? { ...key, left: event.target.value }
+                                        : key,
                                     ),
                                   ),
                                     onClick());
@@ -456,10 +456,10 @@ function CombinePopulationsDialog(e) {
                                 value: key.right,
                                 onChange: (event) => {
                                   (E(
-                                    keys.map((je, $e) =>
+                                    keys.map((key, $e) =>
                                       Me === $e
-                                        ? { ...je, right: event.target.value }
-                                        : je,
+                                        ? { ...key, right: event.target.value }
+                                        : key,
                                     ),
                                   ),
                                     onClick());
@@ -471,7 +471,7 @@ function CombinePopulationsDialog(e) {
                             disabled: keys.length === 1,
                             "aria-label": `Remove key ${Me + 1}`,
                             onClick: () => {
-                              (E(keys.filter((ke, je) => je !== Me)),
+                              (E(keys.filter((key, je) => je !== Me)),
                                 j(0),
                                 onClick());
                             },
@@ -1861,15 +1861,15 @@ function previewTextCleanup(workbook, request, t = {}) {
     o = validateTextCleanupRequest(request);
   if (!context.allowNewSheet || workbook.structureProtection?.enabled)
     throw Error("Creating an output worksheet is not permitted.");
-  const a = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
-  if (!a) throw Error("Choose an existing source worksheet.");
-  assertSelectionInAuthorizedSheet(a, o.sourceRange, context);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
+  if (!sheet) throw Error("Choose an existing source worksheet.");
+  assertSelectionInAuthorizedSheet(sheet, o.sourceRange, context);
   const rangeAddress = parseRangeAddress(o.sourceRange),
     d = rangeAddress.lastRow - rangeAddress.firstRow + 1;
   if (rangeAddress.firstCol !== rangeAddress.lastCol || d > 500)
     throw Error("Select one source column containing at most 500 cells.");
   if (
-    a.merges?.some((merge) => {
+    sheet.merges?.some((merge) => {
       const y = parseRangeAddress(merge);
       return (
         y.firstRow <= rangeAddress.lastRow &&
@@ -1890,7 +1890,7 @@ function previewTextCleanup(workbook, request, t = {}) {
     (assertOutputNameUnreferenced(workbook, o.outputName),
     discoverArrayFormulaAnchors(
       workbook,
-      [{ sheet: a, range: o.sourceRange }],
+      [{ sheet: sheet, range: o.sourceRange }],
       context,
     ),
     workbook.sheets.reduce((b, y) => b + Object.keys(y.cells).length, 0) + d >
@@ -1905,7 +1905,7 @@ function previewTextCleanup(workbook, request, t = {}) {
   let f = 0;
   for (let b = 0; b < d; b++) {
     const sourceAddress = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + b + 1}`,
-      cell = a.cells[sourceAddress];
+      cell = sheet.cells[sourceAddress];
     if (
       cell &&
       typeof cell.raw == "string" &&
@@ -1930,7 +1930,11 @@ function previewTextCleanup(workbook, request, t = {}) {
       );
     (formulas.push(textCleanupFormula),
       (worksheetRecord.cells[`B${b + 1}`] = { raw: textCleanupFormula }));
-    const rowOrigin = findRowOrigin(workbook, a.id, rangeAddress.firstRow + b);
+    const rowOrigin = findRowOrigin(
+      workbook,
+      sheet.id,
+      rangeAddress.firstRow + b,
+    );
     rows.push({
       sourceAddress: sourceAddress,
       ...(cell ? { original: structuredClone(cell) } : {}),
@@ -1963,7 +1967,7 @@ function previewTextCleanup(workbook, request, t = {}) {
     snapshot: JSON.stringify(workbook),
     context: context,
     request: o,
-    sourceSheetName: a.name,
+    sourceSheetName: sheet.name,
     rows: rows,
     formulas: formulas,
     errors: errors,

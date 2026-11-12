@@ -114,13 +114,13 @@ function createCellEditActions({
       }));
   }
   function isFormulaEditingLocked() {
-    const fe = latestEditStateRef.current.book.sheets.find(
+    const sheet = latestEditStateRef.current.book.sheets.find(
       (sheet) =>
         sheet.id ===
         (formulaEntryState.activeCellEditRef.current?.sheetId ??
           activeSheet.id),
     );
-    return readOnly || !fe || !!fe.protection?.enabled;
+    return readOnly || !sheet || !!sheet.protection?.enabled;
   }
   function switchToEditSheet(fe) {
     fe.sheetId !== activeSheet.id &&

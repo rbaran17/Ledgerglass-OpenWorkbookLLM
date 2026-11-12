@@ -239,13 +239,15 @@ const compiledMigrationCache = new WeakMap(),
   };
 function assertAutomationSheetAllowed(workbookInput, scope, readOnly = false) {
   if (readOnly) throw Error("This workbook is read-only.");
-  const n = workbookInput.sheets.find((sheet) => sheet.id === scope.sheetId);
-  if (!n) throw Error("The approved worksheet does not exist.");
-  if (n.hidden || n.veryHidden)
+  const sheet = workbookInput.sheets.find(
+    (sheet) => sheet.id === scope.sheetId,
+  );
+  if (!sheet) throw Error("The approved worksheet does not exist.");
+  if (sheet.hidden || sheet.veryHidden)
     throw Error("Hidden worksheets are outside the automation scope.");
-  if (n.protection?.enabled)
+  if (sheet.protection?.enabled)
     throw Error("The approved worksheet is protected.");
-  return n;
+  return sheet;
 }
 const toApprovedRectangle = (e) => {
   const rangeAddress = parseRangeAddress(e.range),
@@ -383,14 +385,14 @@ function buildAutomationChanges(workbook, inspection, t, n = {}) {
   const patches = [...c.values()];
   if (!l.issues.length)
     try {
-      const m = applyCellPatchTransaction(
+      const workbook = applyCellPatchTransaction(
           workbookInput,
           patches,
           "Migration preview",
           "Preview migrated automation",
         ),
-        v = m.events.at(-1)?.changes ?? [],
-        workbookWithSettings = calculateWorkbookWithSettings(m);
+        v = workbook.events.at(-1)?.changes ?? [],
+        workbookWithSettings = calculateWorkbookWithSettings(workbook);
       for (const patch of patches) {
         if (
           typeof patch.cell.raw != "string" ||

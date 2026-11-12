@@ -30,7 +30,10 @@ import {
 function PivotExplorerDialog(e) {
   const { text, language } = useWorkbookMessages(),
     n = e.workbook.sheets.flatMap((sheet) =>
-      (sheet.pivots ?? []).map((l) => ({ sheet: sheet, definition: l })),
+      (sheet.pivots ?? []).map((definition) => ({
+        sheet: sheet,
+        definition: definition,
+      })),
     ),
     [o, a] = ne.useState(() => {
       const u = _t(e.range.split(":")[0]);
@@ -686,10 +689,10 @@ function PivotExplorerPanel(e) {
                         onChange: (event) =>
                           z(
                             "values",
-                            o.values.map((C, T) =>
+                            o.values.map((value, T) =>
                               T === B
-                                ? { ...C, showAs: event.target.value }
-                                : C,
+                                ? { ...value, showAs: event.target.value }
+                                : value,
                             ),
                           ),
                         children: Object.entries(pivotShowAsLabels).map(
@@ -2044,7 +2047,8 @@ function ChartSettingsPanel({ object, report, update }) {
                       checked: point.included,
                       onChange: (event) => {
                         const h =
-                          a.includedRows ?? report.points.map((f) => f.row);
+                          a.includedRows ??
+                          report.points.map((point) => point.row);
                         s({
                           includedRows: event.target.checked
                             ? [...h, point.row]

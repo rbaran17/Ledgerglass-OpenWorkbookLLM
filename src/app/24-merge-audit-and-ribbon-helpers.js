@@ -426,8 +426,8 @@ function applyWorkbookChange(workbook, r, actor, n, o = {}) {
       "The workbook changed while this tool was open. Reopen the tool and try again.",
     );
   if (workbook.structureProtection?.enabled) {
-    const f = (p) =>
-      p.sheets.map((sheet) => ({
+    const f = (workbook) =>
+      workbook.sheets.map((sheet) => ({
         id: sheet.id,
         name: sheet.name,
         hidden: !!sheet.hidden,
@@ -444,15 +444,15 @@ function applyWorkbookChange(workbook, r, actor, n, o = {}) {
     ...workbook.sheets.map((sheet) => sheet.id),
     ...r.sheets.map((sheet) => sheet.id),
   ])) {
-    const p = r.sheets.find((sheet) => sheet.id === sheetId),
+    const sheet = r.sheets.find((sheet) => sheet.id === sheetId),
       m = workbook.sheets.find((sheet) => sheet.id === sheetId);
-    if (m?.cells !== p?.cells)
+    if (m?.cells !== sheet?.cells)
       for (const address of new Set([
         ...Object.keys(m?.cells ?? {}),
-        ...Object.keys(p?.cells ?? {}),
+        ...Object.keys(sheet?.cells ?? {}),
       ])) {
         const before = m?.cells[address],
-          after = p?.cells[address];
+          after = sheet?.cells[address];
         if (
           !(
             before === after || JSON.stringify(before) === JSON.stringify(after)

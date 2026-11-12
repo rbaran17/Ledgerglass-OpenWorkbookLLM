@@ -2121,10 +2121,10 @@ function WorkbookRibbon(e) {
                       ) {
                         if ((J.preventDefault(), !u)) {
                           l(true);
-                          const he = ribbonCommands.commands.find(
+                          const command = ribbonCommands.commands.find(
                             (command) => !command.reason,
                           );
-                          he && (d.current = he.id);
+                          command && (d.current = command.id);
                           return;
                         }
                         const ae = Array.from(
@@ -2215,10 +2215,10 @@ function WorkbookRibbon(e) {
                                 document.getElementById(`${b}-${ae}`)?.focus());
                             } else if (W.key === "ArrowDown") {
                               (W.preventDefault(), A(J));
-                              const ae = N[J].commands.find(
+                              const command = N[J].commands.find(
                                 (command) => !command.reason,
                               );
-                              ae && (d.current = ae.id);
+                              command && (d.current = command.id);
                             }
                           }
                         },

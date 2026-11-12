@@ -50,17 +50,18 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
     throw Error("Choose 1–20 explicit worksheet/range mappings.");
   if (n.includeHidden !== undefined && typeof n.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
-  const o = (b, y) => {
+  const o = (workbook, y) => {
       if (
         y !== undefined &&
         (!Array.isArray(y) ||
           y.some(
             (w) =>
-              typeof w != "string" || !b.sheets.some((sheet) => sheet.id === w),
+              typeof w != "string" ||
+              !workbook.sheets.some((sheet) => sheet.id === w),
           ))
       )
         throw Error("The comparison worksheet access context is invalid.");
-      return [...new Set(y ?? b.sheets.map((sheet) => sheet.id))].sort();
+      return [...new Set(y ?? workbook.sheets.map((sheet) => sheet.id))].sort();
     },
     a = {
       before: o(before, n.beforeAllowedSheetIds),
@@ -127,8 +128,8 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
         throw Error(
           "Choose explicit worksheet and rectangular range references.",
         );
-      const E = s[b].sheets.find((sheet) => sheet.id === y.sheetId);
-      if (!E || !a[b].includes(E.id))
+      const sheet = s[b].sheets.find((sheet) => sheet.id === y.sheetId);
+      if (!sheet || !a[b].includes(sheet.id))
         throw Error(
           "A selected source is outside the authorized comparison context.",
         );
@@ -138,8 +139,8 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
       if (
         k > patternCheckBudgets.rowsPerRange ||
         F > patternCheckBudgets.columnsPerRange ||
-        rangeAddress.lastRow >= E.rowCount ||
-        rangeAddress.lastCol >= E.colCount
+        rangeAddress.lastRow >= sheet.rowCount ||
+        rangeAddress.lastCol >= sheet.colCount
       )
         throw Error(
           "Each comparison range supports at most 1,000 rows and 100 columns within the worksheet.",
@@ -151,11 +152,11 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
         throw Error(
           "Comparison supports at most 10,000 selected cells across both workbooks.",
         );
-      const I = h(E);
+      const I = h(sheet);
       if (
         !n.includeHidden &&
-        (E.hidden ||
-          E.veryHidden ||
+        (sheet.hidden ||
+          sheet.veryHidden ||
           I.rows.some(
             (row) =>
               row.start <= rangeAddress.lastRow &&
@@ -173,7 +174,7 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
       const headers = Array.from({ length: F }, (j, z) => {
         if (!w) return columnIndexToLetters(z);
         const cell =
-          E.cells[
+          sheet.cells[
             formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol + z)
           ];
         if (
@@ -194,7 +195,7 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
           "Duplicate headers are ambiguous; resolve them or compare without headers.",
         );
       return {
-        sheet: E,
+        sheet: sheet,
         range: `${formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol)}`,
         headers: headers,
         firstCol: rangeAddress.firstCol,
@@ -204,7 +205,7 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
             row: row,
             cells: headers.map(
               (header, B) =>
-                E.cells[formatCellAddress(row, rangeAddress.firstCol + B)],
+                sheet.cells[formatCellAddress(row, rangeAddress.firstCol + B)],
             ),
           };
         }),
@@ -507,8 +508,8 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
   }
   let v = 0;
   for (const b of ["before", "after"]) {
-    const y = s[b];
-    for (const sheet of y.sheets) {
+    const workbook = s[b];
+    for (const sheet of workbook.sheets) {
       if (!a[b].includes(sheet.id)) continue;
       const E = h(sheet),
         A = n.includeHidden || (!sheet.hidden && !sheet.veryHidden);
@@ -642,12 +643,12 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
                 },
                 C = (T, N) => {
                   const R =
-                    y.definedNames?.find(
+                    workbook.definedNames?.find(
                       (definedName) =>
                         definedName.scopeSheetId === N &&
                         definedName.name.toLowerCase() === T.toLowerCase(),
                     ) ??
-                    y.definedNames?.find(
+                    workbook.definedNames?.find(
                       (definedName) =>
                         !definedName.scopeSheetId &&
                         definedName.name.toLowerCase() === T.toLowerCase(),
@@ -724,10 +725,13 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
                     (z[B] === "[" && J++, z[B] === "]" && J--, B++);
                   const q = z.slice(X, B);
                   try {
-                    const W = !J && rewriteStructuredReferences(y, V, q, k);
+                    const W =
+                      !J && rewriteStructuredReferences(workbook, V, q, k);
                     W
                       ? _(
-                          y.sheets.find((K) => K.id === W.sheetId),
+                          workbook.sheets.find(
+                            (sheet) => sheet.id === W.sheetId,
+                          ),
                           W.range,
                         )
                       : O(
@@ -762,9 +766,10 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
                   const X = U[1] ? Bj(U[1]) : undefined;
                   (_(
                     X === undefined
-                      ? y.sheets.find((J) => J.id === V)
-                      : y.sheets.find(
-                          (J) => J.name.toLowerCase() === X.toLowerCase(),
+                      ? workbook.sheets.find((sheet) => sheet.id === V)
+                      : workbook.sheets.find(
+                          (sheet) =>
+                            sheet.name.toLowerCase() === X.toLowerCase(),
                         ),
                     U[2],
                   ),
@@ -778,17 +783,18 @@ function runWorkbookComparison(before, workbook, t, n = {}) {
                 }
                 const G = definedNameReferencePattern.exec(T);
                 if (G) {
-                  const X = y.sheets.find(
-                    (J) => J.name.toLowerCase() === Bj(G[1]).toLowerCase(),
+                  const sheet = workbook.sheets.find(
+                    (sheet) =>
+                      sheet.name.toLowerCase() === Bj(G[1]).toLowerCase(),
                   );
-                  (X
-                    ? !a[b].includes(X.id) ||
-                      (!n.includeHidden && (X.hidden || X.veryHidden))
+                  (sheet
+                    ? !a[b].includes(sheet.id) ||
+                      (!n.includeHidden && (sheet.hidden || sheet.veryHidden))
                       ? O(
                           "uncertain",
                           "Qualified name is outside the permitted context.",
                         )
-                      : C(G[2], X.id)
+                      : C(G[2], sheet.id)
                     : O(
                         "broken-link",
                         "Defined-name worksheet qualifier is missing.",
@@ -924,8 +930,8 @@ function WorkbookComparisonDialog(e) {
     H = () => {
       (w(null), F(""), D(0));
     },
-    Q = (oe, de = !!u) => {
-      const he = oe.sheets.find(
+    Q = (workbook, de = !!u) => {
+      const sheet = workbook.sheets.find(
         (sheet) =>
           (de ||
             !e.baselineAllowedSheetIds ||
@@ -934,8 +940,8 @@ function WorkbookComparisonDialog(e) {
       );
       return {
         before: {
-          sheetId: he?.id ?? "",
-          range: he ? formatOccupiedRangeAddress(he) : "A1",
+          sheetId: sheet?.id ?? "",
+          range: sheet ? formatOccupiedRangeAddress(sheet) : "A1",
         },
         after: { sheetId: e.sheetId, range: e.range },
         headers: true,
@@ -1366,14 +1372,14 @@ function WorkbookComparisonDialog(e) {
                                             X$1(de, {
                                               ...mapping,
                                               keys: mapping.keys.map(
-                                                (se, we) =>
+                                                (key, we) =>
                                                   we === ce
                                                     ? {
-                                                        ...se,
+                                                        ...key,
                                                         before:
                                                           event.target.value,
                                                       }
-                                                    : se,
+                                                    : key,
                                               ),
                                             }),
                                         }),
@@ -1393,14 +1399,14 @@ function WorkbookComparisonDialog(e) {
                                             X$1(de, {
                                               ...mapping,
                                               keys: mapping.keys.map(
-                                                (se, we) =>
+                                                (key, we) =>
                                                   we === ce
                                                     ? {
-                                                        ...se,
+                                                        ...key,
                                                         after:
                                                           event.target.value,
                                                       }
-                                                    : se,
+                                                    : key,
                                               ),
                                             }),
                                         }),
@@ -1412,7 +1418,7 @@ function WorkbookComparisonDialog(e) {
                                         X$1(de, {
                                           ...mapping,
                                           keys: mapping.keys.filter(
-                                            (ge, se) => se !== ce,
+                                            (key, se) => se !== ce,
                                           ),
                                         }),
                                       children: [
@@ -1451,7 +1457,7 @@ function WorkbookComparisonDialog(e) {
                       i.jsxs("button", {
                         disabled: mappings.length < 2,
                         onClick: () => {
-                          (b(mappings.filter((le, ce) => ce !== de)), H());
+                          (b(mappings.filter((mapping, ce) => ce !== de)), H());
                         },
                         children: [
                           i.jsx(LocalizedText, { children: "Remove mapping " }),

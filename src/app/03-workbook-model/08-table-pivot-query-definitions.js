@@ -67,13 +67,13 @@ function serializeDefinedNames(e, workbookInput) {
   }
   return insertDefinedNamesIntoWorkbookXml(e, builtinNameXml);
 }
-function inspectChartSource(sheet, r, t) {
-  (r.kind !== "chart" || !supportedChartKinds.includes(r.chart)) &&
+function inspectChartSource(sheet, object, t) {
+  (object.kind !== "chart" || !supportedChartKinds.includes(object.chart)) &&
     failWithMessage("Choose a supported chart type.");
-  const chart = r.chart,
-    range = r.range ?? "",
+  const chart = object.chart,
+    range = object.range ?? "",
     rangeAddress = parseRangeAddress(range),
-    s = validateChartSettings(r.chartOptions);
+    s = validateChartSettings(object.chartOptions);
   (rangeAddress.lastRow >= sheet.rowCount ||
     rangeAddress.lastCol >= sheet.colCount ||
     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
@@ -82,7 +82,7 @@ function inspectChartSource(sheet, r, t) {
     failWithMessage(
       "Select at most 500 cells inside this worksheet for a chart.",
     );
-  const d = rangeAddress.firstRow + (r.headers ? 1 : 0),
+  const d = rangeAddress.firstRow + (object.headers ? 1 : 0),
     u =
       rangeAddress.firstCol +
       (rangeAddress.lastCol > rangeAddress.firstCol ? 1 : 0);
@@ -104,7 +104,7 @@ function inspectChartSource(sheet, r, t) {
     series = Array.from({ length: rangeAddress.lastCol - u + 1 }, (z, V) => {
       const D = u + V,
         B = s.series?.find((sery) => sery.column === D + 1),
-        _ = r.headers
+        _ = object.headers
           ? l(rangeAddress.firstRow, D).value
           : columnIndexToLetters(D);
       return {
@@ -202,7 +202,8 @@ function inspectChartSource(sheet, r, t) {
         "Scatter requires a numeric X column followed by at least one Y column.",
       );
     for (const V of v) {
-      if (!V.values.some((B, _) => series[_].included && !y(B.value))) continue;
+      if (!V.values.some((value, _) => series[_].included && !y(value.value)))
+        continue;
       const value = V.category.value;
       typeof value != "number" || !Number.isFinite(value)
         ? b(
@@ -245,12 +246,12 @@ function inspectChartSource(sheet, r, t) {
     scope = `${sheet.name}!${range} · ${v.length}/${points.length} rows · ${m.length}/${series.length} series · ${population.hiddenRows} hidden rows in source`,
     A = {
       version: 1,
-      objectId: r.id,
+      objectId: object.id,
       kind: chart,
-      title: r.label,
+      title: object.label,
       altText:
         s.altText?.trim() ||
-        `${r.label || chart}. ${scope}. ${population.policy}`,
+        `${object.label || chart}. ${scope}. ${population.policy}`,
       source: { sheetId: sheet.id, sheetName: sheet.name, range: range },
       axes: {
         x: { title: s.xTitle ?? "", scale: s.xScale ?? "linear" },
@@ -340,11 +341,11 @@ function inspectChartSource(sheet, r, t) {
     A
   );
 }
-function measureChartSelection(range, r) {
+function measureChartSelection(range, sheet) {
   const rangeAddress = parseRangeAddress(range);
   if (
-    rangeAddress.lastRow >= r.rowCount ||
-    rangeAddress.lastCol >= r.colCount ||
+    rangeAddress.lastRow >= sheet.rowCount ||
+    rangeAddress.lastCol >= sheet.colCount ||
     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
       (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       Yne
@@ -444,11 +445,11 @@ function validateDrawingObjects(e, r) {
 }
 function setSheetDrawingObjects(workbook, sheetId, t, n = {}) {
   assertDrawingPreviewCurrent(workbook, sheetId, n);
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    a = { ...o };
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    a = { ...sheet };
   return (
     validateDrawingObjects(t, a),
-    JSON.stringify(o.objects ?? []) === JSON.stringify(a.objects ?? [])
+    JSON.stringify(sheet.objects ?? []) === JSON.stringify(a.objects ?? [])
       ? workbook
       : {
           ...workbook,
@@ -1022,20 +1023,22 @@ function rewriteStructuredReferences(workbook, r, t, address) {
   if (!o) return null;
   let a;
   if (o[1])
-    for (const b of workbook.sheets) {
-      const y = b.tables?.find(
-        (w) => w.name.toLowerCase() === o[1].toLowerCase(),
+    for (const sheet of workbook.sheets) {
+      const table = sheet.tables?.find(
+        (table) => table.name.toLowerCase() === o[1].toLowerCase(),
       );
-      if (y) {
-        a = { sheet: b, table: y };
+      if (table) {
+        a = { sheet: sheet, table: table };
         break;
       }
     }
   else if (address) {
-    const b = workbook.sheets.find((E) => E.id === r),
+    const sheet = workbook.sheets.find((sheet) => sheet.id === r),
       y = _t(address),
-      w = b?.tables?.find((E) => Dp(parseRangeAddress(E.range), y.row, y.col));
-    b && w && (a = { sheet: b, table: w });
+      table = sheet?.tables?.find((table) =>
+        Dp(parseRangeAddress(table.range), y.row, y.col),
+      );
+    sheet && table && (a = { sheet: sheet, table: table });
   }
   if (!a) return null;
   const { sheet, table } = a,

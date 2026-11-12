@@ -526,12 +526,12 @@ function normalizeReviewMetadata(e, workbook) {
       let m = reviewTimestamp;
       const messages = u.messages.map((message, y) => {
           const w = assertPlainReviewRecord(message, "Review message"),
-            E = normalizeBoundedText(w.id, "Review message ID", 100);
-          (o.has(E) &&
+            boundedText = normalizeBoundedText(w.id, "Review message ID", 100);
+          (o.has(boundedText) &&
             throwWithMessage(
               "Review message IDs must be unique within the workbook.",
             ),
-            o.add(E));
+            o.add(boundedText));
           const A = normalizeReviewTimestamp(w.createdAt);
           return (
             (A < m || A > f || (y === 0 && A !== reviewTimestamp)) &&
@@ -540,7 +540,7 @@ function normalizeReviewMetadata(e, workbook) {
               ),
             (m = A),
             {
-              id: E,
+              id: boundedText,
               author: normalizeReviewAuthor(
                 normalizeBoundedText(w.author, "Reviewer name", 100),
               ),
@@ -563,14 +563,14 @@ function normalizeReviewMetadata(e, workbook) {
         };
       if (u.resolved !== undefined) {
         const b = assertPlainReviewRecord(u.resolved, "Review resolution"),
-          y = normalizeReviewTimestamp(b.createdAt);
-        ((y < messages.at(-1).createdAt || y > f) &&
+          reviewTimestamp = normalizeReviewTimestamp(b.createdAt);
+        ((reviewTimestamp < messages.at(-1).createdAt || reviewTimestamp > f) &&
           throwWithMessage("Invalid review resolution time."),
           (g.resolved = {
             author: normalizeReviewAuthor(
               normalizeBoundedText(b.author, "Reviewer name", 100),
             ),
-            createdAt: y,
+            createdAt: reviewTimestamp,
           }));
       }
       if (u.orphaned !== undefined) {
@@ -600,7 +600,7 @@ function normalizeReviewMetadata(e, workbook) {
       if (o.hyperlink === undefined) continue;
       const a = validateHyperlinkRecord(o.hyperlink);
       (a.kind === "internal" &&
-        !workbook.sheets.some((s) => s.id === a.sheetId) &&
+        !workbook.sheets.some((sheet) => sheet.id === a.sheetId) &&
         throwWithMessage(
           "An internal hyperlink must target an existing worksheet.",
         ),
@@ -820,8 +820,8 @@ function validateFormulaWatches(formulaWatches, workbook) {
       throw Error("Invalid formula watch orphan reason.");
     const anchor = formulaWatch.anchor,
       formulaWatchAddress = normalizeFormulaWatchAddress(anchor.address),
-      d = workbook.sheets.find((sheet) => sheet.id === anchor.sheetId),
-      orphaned = formulaWatch.orphaned ?? (d ? undefined : "missing-sheet"),
+      sheet = workbook.sheets.find((sheet) => sheet.id === anchor.sheetId),
+      orphaned = formulaWatch.orphaned ?? (sheet ? undefined : "missing-sheet"),
       l = JSON.stringify([formulaWatch.anchor.sheetId, formulaWatchAddress]);
     if (!orphaned && n.has(l))
       throw Error("Active formula watches must not repeat the same cell.");
@@ -831,7 +831,8 @@ function validateFormulaWatches(formulaWatches, workbook) {
         id: formulaWatch.id,
         anchor: {
           sheetId: formulaWatch.anchor.sheetId,
-          sheetName: !orphaned && d ? d.name : formulaWatch.anchor.sheetName,
+          sheetName:
+            !orphaned && sheet ? sheet.name : formulaWatch.anchor.sheetName,
           address: formulaWatchAddress,
         },
         ...(orphaned ? { orphaned: orphaned } : {}),
@@ -1351,7 +1352,7 @@ function pQ(workbook, sourceSheetId, sortRangeAddress, sheetId, o) {
       );
     },
     changes = [],
-    l = workbook.sheets.find((sheet) => sheet.id === sheetId);
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   return {
     watches: workbook.formulaWatches?.map((formulaWatch) => {
       if (formulaWatch.orphaned) return formulaWatch;
@@ -1362,7 +1363,7 @@ function pQ(workbook, sourceSheetId, sortRangeAddress, sheetId, o) {
       ) {
         const m = _t(formulaWatch.anchor.address),
           address = `${columnIndexToLetters(m.col + s.firstCol - rangeAddress.firstCol)}${m.row + s.firstRow - rangeAddress.firstRow + 1}`,
-          after = `${l.name}!${address}`;
+          after = `${sheet.name}!${address}`;
         return before === after && sourceSheetId === sheetId
           ? formulaWatch
           : (changes.push({
@@ -1373,7 +1374,11 @@ function pQ(workbook, sourceSheetId, sortRangeAddress, sheetId, o) {
             }),
             {
               ...formulaWatch,
-              anchor: { sheetId: sheetId, sheetName: l.name, address: address },
+              anchor: {
+                sheetId: sheetId,
+                sheetName: sheet.name,
+                address: address,
+              },
             });
       }
       return formulaWatch.anchor.sheetId === sheetId &&
@@ -1443,10 +1448,10 @@ function validateFreezePanes(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
     e.frozenCols !== undefined && (r.frozenCols = c));
 }
 function updateWorksheetById(workbook, sheetId, t) {
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!n) throw Error("Worksheet not found.");
-  assertSheetUnprotected(n);
-  const o = t(structuredClone(n));
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
+  assertSheetUnprotected(sheet);
+  const o = t(structuredClone(sheet));
   return (
     validateFreezePanes(o, o),
     {
@@ -1605,15 +1610,15 @@ function setWorksheetReadOnly(workbook, sheetId, t, n = {}) {
   if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!o) throw Error("Worksheet not found.");
-  assertSheetUnprotected(o);
-  const a = structuredClone(o);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
+  assertSheetUnprotected(sheet);
+  const a = structuredClone(sheet);
   return (
     t(a),
     validateOutlineGroups(a, a),
     validateFreezePanes(a, a),
-    JSON.stringify(a) === JSON.stringify(o)
+    JSON.stringify(a) === JSON.stringify(sheet)
       ? workbook
       : {
           ...workbook,
@@ -1678,13 +1683,13 @@ function setOutlineGroupLevel(workbook, sheetId, t, n, o) {
     setWorksheetReadOnly(
       workbook,
       sheetId,
-      (a) => {
-        const s = addOutlineGroup(a, t),
+      (sheet) => {
+        const s = addOutlineGroup(sheet, t),
           d = Math.max(0, ...s.map((c) => c.depth)) + 1;
         if (!Number.isInteger(n) || n < 1 || n > d)
           throw Error("Choose an available outline level.");
         const u = new Map(s.map((c) => [c.id, c.depth]));
-        a.outlineGroups = a.outlineGroups?.map((outlineGroup) =>
+        sheet.outlineGroups = sheet.outlineGroups?.map((outlineGroup) =>
           outlineGroup.axis === t
             ? { ...outlineGroup, collapsed: u.get(outlineGroup.id) >= n }
             : outlineGroup,
@@ -2235,16 +2240,16 @@ function validateWorksheetFeatures(sheet, r) {
   }
 }
 function mergeWorksheetCells(workbook, sheetId, t, unmerge = false) {
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  assertSheetUnprotected(o);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  assertSheetUnprotected(sheet);
   const a = CE(t),
     rangeAddress = parseRangeAddress(a);
   (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
     (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
     500 && failWithMessage("Merge at most 500 cells.");
-  const d = (o.merges ?? []).filter((h) => doesRangeOverlap(h, a));
+  const d = (sheet.merges ?? []).filter((h) => doesRangeOverlap(h, a));
   !unmerge && d.length && failWithMessage("Unmerge overlapping areas first.");
-  const cells = { ...o.cells };
+  const cells = { ...sheet.cells };
   if (!unmerge) {
     const h = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`;
     cells[h] = {

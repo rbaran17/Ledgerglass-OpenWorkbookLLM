@@ -321,7 +321,9 @@ function TableToolsDialog({
       i.jsxs(i.Fragment, {
         children: [
           rt !== undefined && i.jsx("option", { value: "", children: rt }),
-          fields.map((Le) => i.jsx("option", { value: Le, children: Le }, Le)),
+          fields.map((field) =>
+            i.jsx("option", { value: field, children: field }, field),
+          ),
         ],
       }),
     cr = (rt, Le, et) =>
@@ -330,20 +332,20 @@ function TableToolsDialog({
         children: [
           i.jsx("legend", { children: rt }),
           fields.length
-            ? fields.map((st) =>
+            ? fields.map((field) =>
                 i.jsxs(
                   "label",
                   {
                     children: [
                       i.jsx("input", {
                         type: "checkbox",
-                        checked: Le.includes(st),
-                        onChange: () => et(toggleListValue(Le, st)),
+                        checked: Le.includes(field),
+                        onChange: () => et(toggleListValue(Le, field)),
                       }),
-                      st,
+                      field,
                     ],
                   },
-                  st,
+                  field,
                 ),
               )
             : i.jsx("p", {
@@ -571,18 +573,20 @@ function TableToolsDialog({
                                         value: header.suggested,
                                         onChange: (event) => {
                                           const headers = Fe.headers.map(
-                                            (kt, gr) =>
+                                            (header, gr) =>
                                               gr === Le
                                                 ? {
-                                                    ...kt,
+                                                    ...header,
                                                     suggested:
                                                       event.target.value,
                                                   }
-                                                : kt,
+                                                : header,
                                           );
                                           (nt({ ...Fe, headers: headers }),
                                             b(
-                                              headers.map((kt) => kt.suggested),
+                                              headers.map(
+                                                (header) => header.suggested,
+                                              ),
                                             ));
                                         },
                                       }),
@@ -626,31 +630,31 @@ function TableToolsDialog({
                   I &&
                     i.jsx("div", {
                       className: "lg-table-list",
-                      children: fields.map((rt) =>
+                      children: fields.map((field) =>
                         i.jsxs(
                           "label",
                           {
                             children: [
-                              rt,
+                              field,
                               " ",
                               i.jsx(LocalizedText, { children: "total" }),
                               i.jsxs("select", {
-                                "aria-label": `${rt} total`,
-                                value: Object.hasOwn(totals, rt)
-                                  ? totals[rt]
+                                "aria-label": `${field} total`,
+                                value: Object.hasOwn(totals, field)
+                                  ? totals[field]
                                   : "",
                                 onChange: (event) =>
                                   z((et) => {
                                     const st = { ...et };
                                     return (
                                       event.target.value
-                                        ? Object.defineProperty(st, rt, {
+                                        ? Object.defineProperty(st, field, {
                                             value: event.target.value,
                                             enumerable: true,
                                             writable: true,
                                             configurable: true,
                                           })
-                                        : delete st[rt],
+                                        : delete st[field],
                                       st
                                     );
                                   }),
@@ -676,7 +680,7 @@ function TableToolsDialog({
                               }),
                             ],
                           },
-                          rt,
+                          field,
                         ),
                       ),
                     }),
@@ -1225,10 +1229,10 @@ function TableToolsDialog({
                             setDateGroups: setDateGroups,
                             calculatedFields: calculatedFields,
                             setCalculatedFields: setCalculatedFields,
-                            onAdd: (rt) =>
+                            onAdd: (field) =>
                               T((Le) => [
                                 ...Le,
-                                { field: rt, operation: "sum" },
+                                { field: field, operation: "sum" },
                               ]),
                           }),
                         ],

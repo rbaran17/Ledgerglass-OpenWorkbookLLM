@@ -133,16 +133,18 @@ function TextCleanupDialog(e) {
         }
     },
     L = (e.workbook.textCleanups ?? []).filter((H) => {
-      const Q = e.workbook.sheets.find((sheet) => sheet.id === H.sourceSheetId);
+      const sheet = e.workbook.sheets.find(
+        (sheet) => sheet.id === H.sourceSheetId,
+      );
       return (
         (e.allowedSheetIds === undefined ||
           allowedSheetIds.includes(H.sourceSheetId)) &&
         (z.includeHidden ||
-          !Q ||
-          (!Q.hidden &&
-            !Q.veryHidden &&
-            !cn(Q, "row").length &&
-            !cn(Q, "column").length))
+          !sheet ||
+          (!sheet.hidden &&
+            !sheet.veryHidden &&
+            !cn(sheet, "row").length &&
+            !cn(sheet, "column").length))
       );
     }),
     $ = L.find((H) => H.id === k) ?? L.at(-1);
@@ -285,20 +287,22 @@ function TextCleanupDialog(e) {
                                   value: field.value,
                                   onChange: (event) => {
                                     (p(
-                                      steps.map((W, K) =>
+                                      steps.map((step, K) =>
                                         K === Q
                                           ? {
-                                              ...W,
-                                              fields: W.fields.map((te, ae) =>
-                                                ae === J
-                                                  ? {
-                                                      ...te,
-                                                      value: event.target.value,
-                                                    }
-                                                  : te,
+                                              ...step,
+                                              fields: step.fields.map(
+                                                (field, ae) =>
+                                                  ae === J
+                                                    ? {
+                                                        ...field,
+                                                        value:
+                                                          event.target.value,
+                                                      }
+                                                    : field,
                                               ),
                                             }
-                                          : W,
+                                          : step,
                                       ),
                                     ),
                                       C());
@@ -313,20 +317,22 @@ function TextCleanupDialog(e) {
                                   value: field.value,
                                   onChange: (event) => {
                                     (p(
-                                      steps.map((W, K) =>
+                                      steps.map((step, K) =>
                                         K === Q
                                           ? {
-                                              ...W,
-                                              fields: W.fields.map((te, ae) =>
-                                                ae === J
-                                                  ? {
-                                                      ...te,
-                                                      value: event.target.value,
-                                                    }
-                                                  : te,
+                                              ...step,
+                                              fields: step.fields.map(
+                                                (field, ae) =>
+                                                  ae === J
+                                                    ? {
+                                                        ...field,
+                                                        value:
+                                                          event.target.value,
+                                                      }
+                                                    : field,
                                               ),
                                             }
-                                          : W,
+                                          : step,
                                       ),
                                     ),
                                       C());
@@ -349,7 +355,7 @@ function TextCleanupDialog(e) {
                     i.jsx("button", {
                       "aria-label": `Remove step ${Q + 1}`,
                       onClick: () => {
-                        (p(steps.filter((X, J) => Q !== J)), C());
+                        (p(steps.filter((step, J) => Q !== J)), C());
                       },
                       children: i.jsx(LocalizedText, { children: "Remove" }),
                     }),

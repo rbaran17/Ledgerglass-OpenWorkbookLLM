@@ -407,10 +407,13 @@ function sumDecimalParts(e) {
   }
   const t = [...r].filter(([, a]) => a !== 0n);
   if (!t.length) return { coefficient: 0n, exponent: 0 };
-  const n = t.reduce((a, [s]) => Math.min(a, s), 1 / 0);
+  const exponent = t.reduce((a, [s]) => Math.min(a, s), 1 / 0);
   return {
-    coefficient: t.reduce((a, [s, d]) => a + d * 10n ** BigInt(s - n), 0n),
-    exponent: n,
+    coefficient: t.reduce(
+      (a, [s, d]) => a + d * 10n ** BigInt(s - exponent),
+      0n,
+    ),
+    exponent: exponent,
   };
 }
 function sumDecimalPartsToNumber(e) {
@@ -1062,33 +1065,40 @@ const frozenConversionUnits = Object.freeze(
     Yi: 80,
   };
 function findConversionUnit(symbol) {
-  const r = conversionUnits.find(
+  const conversionUnit = conversionUnits.find(
     (conversionUnit) => conversionUnit.symbol === symbol,
   );
-  if (r) return { ...r };
+  if (conversionUnit) return { ...conversionUnit };
   for (const [t, n] of Object.entries(binaryPrefixExponents)) {
     if (!symbol.startsWith(t)) continue;
-    const o = conversionUnits.find(
+    const conversionUnit = conversionUnits.find(
       (conversionUnit) =>
         conversionUnit.symbol === symbol.slice(t.length) &&
         conversionUnit.dimension === "information",
     );
-    if (o) return { ...o, symbol: symbol, factor: o.factor * 2 ** n };
+    if (conversionUnit)
+      return {
+        ...conversionUnit,
+        symbol: symbol,
+        factor: conversionUnit.factor * 2 ** n,
+      };
   }
   for (const t of Object.keys(siPrefixPowersOfTen).sort(
     (n, o) => o.length - n.length,
   )) {
     if (!symbol.startsWith(t)) continue;
-    const n = conversionUnits.find(
+    const conversionUnit = conversionUnits.find(
       (conversionUnit) =>
         conversionUnit.symbol === symbol.slice(t.length) &&
         conversionUnit.metric,
     );
-    if (n)
+    if (conversionUnit)
       return {
-        ...n,
+        ...conversionUnit,
         symbol: symbol,
-        factor: n.factor * 10 ** (siPrefixPowersOfTen[t] * n.power),
+        factor:
+          conversionUnit.factor *
+          10 ** (siPrefixPowersOfTen[t] * conversionUnit.power),
       };
   }
 }

@@ -353,14 +353,15 @@ function evaluateDefinedNameFunction(e, r, t) {
         E = [];
       for (let k = 1; k < u.length; k += 2) {
         u[k] === undefined && n();
-        const F = toMatrixArgument(u[k]),
+        const matrixArgument = toMatrixArgument(u[k]),
           order = o(u[k + 1], 1);
         ((y
-          ? F.length !== 1 || F[0].length !== w
-          : F.length !== w || F.some((z) => z.length !== 1)) ||
+          ? matrixArgument.length !== 1 || matrixArgument[0].length !== w
+          : matrixArgument.length !== w ||
+            matrixArgument.some((z) => z.length !== 1)) ||
           ![-1, 1].includes(order)) &&
           n();
-        const O = flattenNestedValues(F),
+        const O = flattenNestedValues(matrixArgument),
           j = O.find(t.isIssue);
         if (j) throw j;
         E.push({ data: O, order: order });
@@ -1133,7 +1134,7 @@ const localBindingFunctionNames = ["LET", "LAMBDA"],
   isFormulaClosure = (e) =>
     !!e && typeof e == "object" && "kind" in e && e.kind === "formula-closure",
   y5 = "__LGVALUE";
-function evaluateReusableFormula(e, workbook, t, n) {
+function evaluateReusableFormula(e, workbook, sheetId, n) {
   let o = 0,
     a = 0,
     s = 0;
@@ -1423,7 +1424,7 @@ function evaluateReusableFormula(e, workbook, t, n) {
       }
     };
   try {
-    const E = w(f(e), e, new Map(), t, 0);
+    const E = w(f(e), e, new Map(), sheetId, 0);
     return isFormulaClosure(E)
       ? l(
           "#CALC!",

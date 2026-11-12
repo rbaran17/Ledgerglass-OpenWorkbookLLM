@@ -577,13 +577,16 @@ function computeRangeMoveResult(
   let dependentCount = 0;
   if (!y)
     for (const sheet of workbook.sheets) {
-      const _ = findSheetOrThrow(book, sheet.id),
-        C = new Set([...Object.keys(_.cells), ...Object.keys(sheet.cells)]);
+      const sheetOrThrow = findSheetOrThrow(book, sheet.id),
+        C = new Set([
+          ...Object.keys(sheetOrThrow.cells),
+          ...Object.keys(sheet.cells),
+        ]);
       for (const address of C) {
-        const cell = _.cells[address],
+        const cell = sheetOrThrow.cells[address],
           R = sheet.cells[address];
         JSON.stringify(cell) !== JSON.stringify(R) &&
-          (assertSheetUnprotected(_),
+          (assertSheetUnprotected(sheetOrThrow),
           previewChanges.push({
             sheetId: sheet.id,
             sheetName: sheet.name,
@@ -1116,14 +1119,14 @@ function M4e(e) {
     [E, A] = ne.useState(d.negative ?? "minus"),
     [k, F] = ne.useState(d.pattern ?? "#,##0.00"),
     [I, O] = ne.useState(""),
-    j = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
     rangeAddress = parseRangeAddress(e.range),
     D =
       e.active && isCellAddressInRanges(selectionAreas, e.active)
         ? e.active
         : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
-    cell = j?.cells[D],
+    cell = sheet?.cells[D],
     _ = countSelectionCells(selectionAreas),
     importedNumberFormatWarning = getImportedNumberFormatWarning(cell),
     T =
@@ -1133,7 +1136,7 @@ function M4e(e) {
       s.current.sheet !== e.sheetId ||
       s.current.selection !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.current.active !== e.active,
-    N = e.readOnly || T || !!j?.protection?.enabled || !j || _ > 500,
+    N = e.readOnly || T || !!sheet?.protection?.enabled || !sheet || _ > 500,
     R = ne.useMemo(
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
@@ -1169,7 +1172,7 @@ function M4e(e) {
   }
   const X$1 = [
       {
-        name: `${j?.name ?? "Worksheet"}!${D}`,
+        name: `${sheet?.name ?? "Worksheet"}!${D}`,
         value: Q,
       },
       ...(U ||
@@ -1361,7 +1364,7 @@ function M4e(e) {
                           "This workbook is read-only. You can inspect format previews.",
                       }),
                     }),
-                  j?.protection?.enabled &&
+                  sheet?.protection?.enabled &&
                     i.jsx("p", {
                       className: "nf-notice",
                       children: i.jsx(LocalizedText, {

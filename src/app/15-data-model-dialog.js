@@ -555,10 +555,13 @@ function DataModelDialog(e) {
                                                 (we) =>
                                                   H(table.id, {
                                                     columns: table.columns.map(
-                                                      (Ee, Ae) =>
+                                                      (column, Ae) =>
                                                         Ae === se
-                                                          ? { ...Ee, type: we }
-                                                          : Ee,
+                                                          ? {
+                                                              ...column,
+                                                              type: we,
+                                                            }
+                                                          : column,
                                                     ),
                                                   }),
                                               ),
@@ -571,15 +574,15 @@ function DataModelDialog(e) {
                                                 onChange: (event) =>
                                                   H(table.id, {
                                                     columns: table.columns.map(
-                                                      (Ee, Ae) =>
+                                                      (column, Ae) =>
                                                         Ae === se
                                                           ? {
-                                                              ...Ee,
+                                                              ...column,
                                                               nullable:
                                                                 event.target
                                                                   .checked,
                                                             }
-                                                          : Ee,
+                                                          : column,
                                                     ),
                                                   }),
                                               }),
@@ -1068,8 +1071,8 @@ function DataModelDialog(e) {
                         const ge = (Ae) =>
                             C({
                               ...query,
-                              filters: query.filters.map((ye, Te) =>
-                                Te === ce ? Ae : ye,
+                              filters: query.filters.map((filter, Te) =>
+                                Te === ce ? Ae : filter,
                               ),
                             }),
                           se = T(filter.tableId)?.columns.find(
@@ -1163,7 +1166,7 @@ function DataModelDialog(e) {
                                   C({
                                     ...query,
                                     filters: query.filters.filter(
-                                      (Ae, ye) => ye !== ce,
+                                      (filter, ye) => ye !== ce,
                                     ),
                                   }),
                                 children: i.jsx(LocalizedText, {
@@ -1947,25 +1950,25 @@ function validateTextToColumnsPermissions(workbook, r) {
     }
   );
 }
-function assertSelectionInAuthorizedSheet(e, r, context) {
+function assertSelectionInAuthorizedSheet(sheet, r, context) {
   const rangeAddress = parseRangeAddress(r);
-  ((!context.allowedSheetIds.includes(e.id) ||
+  ((!context.allowedSheetIds.includes(sheet.id) ||
     (!context.includeHidden &&
-      (e.hidden ||
-        e.veryHidden ||
-        cn(e, "row").some(
+      (sheet.hidden ||
+        sheet.veryHidden ||
+        cn(sheet, "row").some(
           (o) =>
             o.start <= rangeAddress.lastRow && o.end >= rangeAddress.firstRow,
         ) ||
-        cn(e, "column").some(
+        cn(sheet, "column").some(
           (o) =>
             o.start <= rangeAddress.lastCol && o.end >= rangeAddress.firstCol,
         )))) &&
     failWithMessage(
       "The selected cells are outside the visible, authorized worksheet context.",
     ),
-    (rangeAddress.lastRow >= e.rowCount ||
-      rangeAddress.lastCol >= e.colCount) &&
+    (rangeAddress.lastRow >= sheet.rowCount ||
+      rangeAddress.lastCol >= sheet.colCount) &&
       failWithMessage("The selected cells exceed the worksheet boundary."));
 }
 function formatCellTextValue(e) {

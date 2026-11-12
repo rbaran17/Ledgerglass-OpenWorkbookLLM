@@ -115,20 +115,20 @@ function TransformationRecipesDialog(e) {
       () => oe(Math.max(0, y)),
       [e.workbook, definition, y, JSON.stringify($)],
     ),
-    he = definition.steps[y],
+    step = definition.steps[y],
     rightFields = ne.useMemo(() => {
-      if (!he || !["merge", "append"].includes(he.kind)) return [];
+      if (!step || !["merge", "append"].includes(step.kind)) return [];
       try {
         const ye = runTransformationRecipe(
           e.workbook,
-          { engine: recipeStoreFormatId, source: he.source, steps: [] },
+          { engine: recipeStoreFormatId, source: step.source, steps: [] },
           $,
         );
         return ye.status === "complete" ? ye.output.fields : [];
       } catch {
         return [];
       }
-    }, [e.workbook, he, JSON.stringify($)]);
+    }, [e.workbook, step, JSON.stringify($)]);
   (ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
@@ -177,23 +177,24 @@ function TransformationRecipesDialog(e) {
           recipeId || undefined,
           $,
         ),
-        Te = ye.transformationRecipes.find((transformationRecipe) =>
-          recipeId
-            ? transformationRecipe.id === recipeId
-            : transformationRecipe.name === u.trim(),
+        transformationRecipe = ye.transformationRecipes.find(
+          (transformationRecipe) =>
+            recipeId
+              ? transformationRecipe.id === recipeId
+              : transformationRecipe.name === u.trim(),
         );
       (e.onWorkbookChange(
         ye,
-        `Saved recipe ${Te.name} version ${Te.versions.length}`,
+        `Saved recipe ${transformationRecipe.name} version ${transformationRecipe.versions.length}`,
       ),
-        d(Te.versions.at(-1).definition),
-        h(Te.id),
-        p(Te.versions.length),
-        v(Te.id),
-        b(Te.versions.length),
+        d(transformationRecipe.versions.at(-1).definition),
+        h(transformationRecipe.id),
+        p(transformationRecipe.versions.length),
+        v(transformationRecipe.id),
+        b(transformationRecipe.versions.length),
         te(),
         _(
-          `Saved version ${Te.versions.length}. Preview this version before publishing.`,
+          `Saved version ${transformationRecipe.versions.length}. Preview this version before publishing.`,
         ));
     });
   }
@@ -522,7 +523,7 @@ function TransformationRecipesDialog(e) {
                                       (ae({
                                         ...definition,
                                         steps: definition.steps.filter(
-                                          (Pe, qe) => qe !== Te,
+                                          (step, qe) => qe !== Te,
                                         ),
                                       }),
                                         w(
@@ -593,14 +594,14 @@ function TransformationRecipesDialog(e) {
                   "aria-label": text("Recipe step editor"),
                   lang: language("Recipe step editor"),
                   "data-ui-label": "Recipe step editor",
-                  children: he
+                  children: step
                     ? i.jsxs(i.Fragment, {
                         children: [
                           i.jsxs("h3", {
                             children: [
                               y + 1,
                               ". ",
-                              recipeStepKindLabels[he.kind],
+                              recipeStepKindLabels[step.kind],
                             ],
                           }),
                           de.error &&
@@ -615,7 +616,7 @@ function TransformationRecipesDialog(e) {
                               ],
                             }),
                           i.jsx(RecipeStepEditor, {
-                            step: he,
+                            step: step,
                             fields: de.fields,
                             rightFields: rightFields,
                             sheets: sheets,

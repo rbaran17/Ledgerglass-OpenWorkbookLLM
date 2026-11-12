@@ -142,11 +142,17 @@ function saveTransformationRecipe(workbook, r, definition, n, o = {}) {
   const transformationRecipes = structuredClone(
       workbook.transformationRecipes ?? [],
     ),
-    d = n ? transformationRecipes.find((c) => c.id === n) : undefined;
+    d = n
+      ? transformationRecipes.find(
+          (transformationRecipe) => transformationRecipe.id === n,
+        )
+      : undefined;
   if (n && !d) throw Error("Saved recipe no longer exists.");
   if (
     transformationRecipes.some(
-      (c) => c.id !== n && c.name.toLowerCase() === r.toLowerCase(),
+      (transformationRecipe) =>
+        transformationRecipe.id !== n &&
+        transformationRecipe.name.toLowerCase() === r.toLowerCase(),
     )
   )
     throw Error("A recipe with this name already exists.");
@@ -197,7 +203,9 @@ function normalizeRecipeRunRequest(workbook, request, t = {}) {
     throw Error("Choose a saved recipe ID and version together.");
   if (request.recipeId) {
     const d = workbook.transformationRecipes
-      ?.find((u) => u.id === request.recipeId)
+      ?.find(
+        (transformationRecipe) => transformationRecipe.id === request.recipeId,
+      )
       ?.versions.find((version) => version.version === request.version);
     if (
       !d ||
@@ -285,14 +293,14 @@ Original source rows: ${h.sources.join("; ")}`;
           : {}),
       };
   }
-  const u = workbook.transformationRecipes.find(
+  const transformationRecipe = workbook.transformationRecipes.find(
     (transformationRecipe) =>
       transformationRecipe.id === recipeRunRequest.request.recipeId,
   );
   worksheetRecord.transformationRun = {
     engine: recipeStoreFormatId,
-    recipeId: u.id,
-    recipeName: u.name,
+    recipeId: transformationRecipe.id,
+    recipeName: transformationRecipe.name,
     version: recipeRunRequest.request.version,
     definition: recipeRunRequest.request.definition,
     definitionHash: recipeRunRequest.run.definitionHash,
@@ -363,7 +371,7 @@ function RecipeFieldChecklist({ label, fields, selected, onChange }) {
   });
 }
 function RecipeSourceSelector({ label, source, sheets, onChange }) {
-  const o = sheets.find((sheet) => sheet.id === source.sheetId);
+  const sheet = sheets.find((sheet) => sheet.id === source.sheetId);
   return i.jsxs("fieldset", {
     className: "recipe-source",
     children: [
@@ -375,10 +383,12 @@ function RecipeSourceSelector({ label, source, sheets, onChange }) {
             "aria-label": `${label} worksheet`,
             value: source.sheetId,
             onChange: (event) => {
-              const d = sheets.find((sheet) => sheet.id === event.target.value);
+              const sheet = sheets.find(
+                (sheet) => sheet.id === event.target.value,
+              );
               onChange({
                 sheetId: event.target.value,
-                range: d ? formatOccupiedRangeAddress(d) : "A1:B10",
+                range: sheet ? formatOccupiedRangeAddress(sheet) : "A1:B10",
               });
             },
             children: [
@@ -404,7 +414,7 @@ function RecipeSourceSelector({ label, source, sheets, onChange }) {
               onChange({ ...source, tableId: event.target.value || undefined }),
             children: [
               i.jsx("option", { value: "", children: "Explicit headed range" }),
-              o?.tables?.map((table) =>
+              sheet?.tables?.map((table) =>
                 i.jsxs(
                   "option",
                   {
@@ -549,16 +559,16 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
           }),
         ],
       }),
-    c = (f, selected, m) =>
+    c = (f, selected, onChange) =>
       i.jsx(RecipeFieldChecklist, {
         label: f,
         fields,
         selected: selected,
-        onChange: m,
+        onChange: onChange,
       });
   switch (step.kind) {
     case "select":
-      return c("Keep columns", step.fields, (f) => d({ fields: f }));
+      return c("Keep columns", step.fields, (fields) => d({ fields: fields }));
     case "rename":
       return i.jsxs(i.Fragment, {
         children: [
@@ -570,21 +580,23 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                 children: [
                   u(`Rename source ${p + 1}`, mapping.from, fields, (from) =>
                     d({
-                      mappings: step.mappings.map((v, g) =>
-                        p === g ? { ...v, from: from } : v,
+                      mappings: step.mappings.map((mapping, g) =>
+                        p === g ? { ...mapping, from: from } : mapping,
                       ),
                     }),
                   ),
                   l(`Rename to ${p + 1}`, mapping.to, (m) =>
                     d({
-                      mappings: step.mappings.map((v, g) =>
-                        p === g ? { ...v, to: m } : v,
+                      mappings: step.mappings.map((mapping, g) =>
+                        p === g ? { ...mapping, to: m } : mapping,
                       ),
                     }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ mappings: step.mappings.filter((m, v) => p !== v) }),
+                      d({
+                        mappings: step.mappings.filter((mapping, v) => p !== v),
+                      }),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove rename " }),
                       p + 1,
@@ -645,8 +657,8 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                   }),
                   u(`Filter field ${p + 1}`, condition.field, fields, (field) =>
                     d({
-                      conditions: step.conditions.map((v, g) =>
-                        p === g ? { ...v, field: field } : v,
+                      conditions: step.conditions.map((condition, g) =>
+                        p === g ? { ...condition, field: field } : condition,
                       ),
                     }),
                   ),
@@ -658,10 +670,10 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                         value: condition.operator,
                         onChange: (event) =>
                           d({
-                            conditions: step.conditions.map((v, g) =>
+                            conditions: step.conditions.map((condition, g) =>
                               p === g
-                                ? { ...v, operator: event.target.value }
-                                : v,
+                                ? { ...condition, operator: event.target.value }
+                                : condition,
                             ),
                           }),
                         children: [
@@ -686,15 +698,17 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                       value: condition.value,
                       onChange: (m) =>
                         d({
-                          conditions: step.conditions.map((v, g) =>
-                            p === g ? { ...v, value: m } : v,
+                          conditions: step.conditions.map((condition, g) =>
+                            p === g ? { ...condition, value: m } : condition,
                           ),
                         }),
                     }),
                   i.jsxs("button", {
                     onClick: () =>
                       d({
-                        conditions: step.conditions.filter((m, v) => v !== p),
+                        conditions: step.conditions.filter(
+                          (condition, v) => v !== p,
+                        ),
                       }),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove condition " }),
@@ -727,7 +741,7 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
     case "types":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Convert columns", step.fields, (f) => d({ fields: f })),
+          c("Convert columns", step.fields, (fields) => d({ fields: fields })),
           i.jsxs("label", {
             children: [
               i.jsx(LocalizedText, { children: "Output type" }),
@@ -813,7 +827,9 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
     case "replace":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Replace in columns", step.fields, (f) => d({ fields: f })),
+          c("Replace in columns", step.fields, (fields) =>
+            d({ fields: fields }),
+          ),
           i.jsxs("label", {
             children: [
               i.jsx(LocalizedText, { children: "Replacement mode" }),
@@ -882,10 +898,10 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
               {
                 className: "recipe-line",
                 children: [
-                  u(`Sort field ${p + 1}`, field.field, fields, (m) =>
+                  u(`Sort field ${p + 1}`, field.field, fields, (field) =>
                     d({
                       fields: step.fields.map((v, g) =>
-                        g === p ? { ...v, field: m } : v,
+                        g === p ? { ...v, field: field } : v,
                       ),
                     }),
                   ),
@@ -897,10 +913,10 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                         value: field.direction,
                         onChange: (event) =>
                           d({
-                            fields: step.fields.map((v, g) =>
+                            fields: step.fields.map((field, g) =>
                               g === p
-                                ? { ...v, direction: event.target.value }
-                                : v,
+                                ? { ...field, direction: event.target.value }
+                                : field,
                             ),
                           }),
                         children: [
@@ -918,7 +934,7 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                   }),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ fields: step.fields.filter((m, v) => v !== p) }),
+                      d({ fields: step.fields.filter((field, v) => v !== p) }),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove sort " }),
                       p + 1,
@@ -944,7 +960,7 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
     case "unpivot":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Unpivot columns", step.fields, (f) => d({ fields: f })),
+          c("Unpivot columns", step.fields, (fields) => d({ fields: fields })),
           l("Attribute column name", step.attribute, (attribute) =>
             d({ attribute: attribute }),
           ),
@@ -979,8 +995,8 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                   }),
                   u(`Aggregate field ${p + 1}`, value.field, fields, (field) =>
                     d({
-                      values: step.values.map((v, g) =>
-                        g === p ? { ...v, field: field } : v,
+                      values: step.values.map((value, g) =>
+                        g === p ? { ...value, field: field } : value,
                       ),
                     }),
                   ),
@@ -992,10 +1008,10 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                         value: value.operation,
                         onChange: (event) =>
                           d({
-                            values: step.values.map((v, g) =>
+                            values: step.values.map((value, g) =>
                               g === p
-                                ? { ...v, operation: event.target.value }
-                                : v,
+                                ? { ...value, operation: event.target.value }
+                                : value,
                             ),
                           }),
                         children: recipeAggregateOperations.map(
@@ -1011,14 +1027,14 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                   }),
                   l(`Aggregate name ${p + 1}`, value.name, (m) =>
                     d({
-                      values: step.values.map((v, g) =>
-                        g === p ? { ...v, name: m } : v,
+                      values: step.values.map((value, g) =>
+                        g === p ? { ...value, name: m } : value,
                       ),
                     }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ values: step.values.filter((m, v) => v !== p) }),
+                      d({ values: step.values.filter((value, v) => v !== p) }),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove aggregate " }),
                       p + 1,
@@ -1144,8 +1160,8 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                 children: [
                   u(`Recipe left key ${p + 1}`, key.left, fields, (left) =>
                     d({
-                      keys: step.keys.map((v, g) =>
-                        p === g ? { ...v, left: left } : v,
+                      keys: step.keys.map((key, g) =>
+                        p === g ? { ...key, left: left } : key,
                       ),
                     }),
                   ),
@@ -1155,14 +1171,14 @@ function RecipeStepEditor({ step, fields, rightFields, sheets, onChange }) {
                     rightFields,
                     (right) =>
                       d({
-                        keys: step.keys.map((v, g) =>
-                          p === g ? { ...v, right: right } : v,
+                        keys: step.keys.map((key, g) =>
+                          p === g ? { ...key, right: right } : key,
                         ),
                       }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ keys: step.keys.filter((m, v) => v !== p) }),
+                      d({ keys: step.keys.filter((key, v) => v !== p) }),
                     children: [
                       i.jsx(LocalizedText, { children: "Remove key " }),
                       p + 1,

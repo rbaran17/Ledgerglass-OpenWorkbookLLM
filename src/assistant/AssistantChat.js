@@ -292,16 +292,16 @@ function mb(t) {
   }
   const messages = React.useMemo(
       () =>
-        t.session.messages.map((v) => ({
-          id: v.id,
-          role: v.role,
+        t.session.messages.map((message) => ({
+          id: message.id,
+          role: message.role,
           content:
-            v.scope === t.scope
-              ? v.text
+            message.scope === t.scope
+              ? message.text
               : text(
                   "This message belongs to an earlier selection or workbook revision and is excluded from the current context.",
                 ),
-          metadata: { custom: { source: v } },
+          metadata: { custom: { source: message } },
         })),
       [t.session.messages, t.scope],
     ),
@@ -318,8 +318,10 @@ function mb(t) {
       onCancel: async () => t.onCancel(),
     }),
     k$1 = t.session.messages.some(
-      (v) =>
-        v.proposalId && v.proposalId === t.proposalId && v.scope === t.scope,
+      (message) =>
+        message.proposalId &&
+        message.proposalId === t.proposalId &&
+        message.scope === t.scope,
     ),
     onClick = () => {
       const v = [...t.session.messages]

@@ -1409,7 +1409,7 @@ function PasteSpecialDialog(e) {
                                   children: Te.plan.previewPatches
                                     .slice(Re * 12, (Re + 1) * 12)
                                     .map((patch) => {
-                                      const lt = findSheetOrThrow(
+                                      const sheetOrThrow = findSheetOrThrow(
                                         e.workbook,
                                         patch.sheetId,
                                       );
@@ -1421,7 +1421,7 @@ function PasteSpecialDialog(e) {
                                               children:
                                                 patch.sheetId === e.sheetId
                                                   ? patch.address
-                                                  : `${lt.name}!${patch.address}`,
+                                                  : `${sheetOrThrow.name}!${patch.address}`,
                                             }),
                                             i.jsx("td", {
                                               children:
@@ -1430,7 +1430,9 @@ function PasteSpecialDialog(e) {
                                                     patch.sheetId,
                                                     patch.address,
                                                   ),
-                                                  lt.cells[patch.address],
+                                                  sheetOrThrow.cells[
+                                                    patch.address
+                                                  ],
                                                   e.workbook.datePolicy
                                                     ?.dateSystem,
                                                 ) || "(blank)",
@@ -1447,8 +1449,9 @@ function PasteSpecialDialog(e) {
                                                   patch.cell.style,
                                                 ) !==
                                                   JSON.stringify(
-                                                    lt.cells[patch.address]
-                                                      ?.style,
+                                                    sheetOrThrow.cells[
+                                                      patch.address
+                                                    ]?.style,
                                                   ) &&
                                                   i.jsx("small", {
                                                     children: i.jsx(

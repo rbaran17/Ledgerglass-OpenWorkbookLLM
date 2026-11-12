@@ -1314,7 +1314,7 @@ function getFormulaCompletions(value, caret, workbook, sheetId) {
   if (a) return { items: [] };
   const installedExtensionFunctions = listInstalledExtensionFunctions(workbook),
     u = s.at(-1),
-    l = installedExtensionFunctions.find(
+    installedExtensionFunction = installedExtensionFunctions.find(
       (installedExtensionFunction) =>
         installedExtensionFunction.name === u?.name,
     ),
@@ -1328,12 +1328,15 @@ function getFormulaCompletions(value, caret, workbook, sheetId) {
       : undefined,
     h = c ? parseFormulaTree(c.refersTo) : undefined,
     hint =
-      u?.name && (builtinFunctionNames.includes(u.name) || h || l)
+      u?.name &&
+      (builtinFunctionNames.includes(u.name) || h || installedExtensionFunction)
         ? {
             ...u,
             signature:
-              (l
-                ? l.fn.parameters.map((parameter) => parameter.name).join(", ")
+              (installedExtensionFunction
+                ? installedExtensionFunction.fn.parameters
+                    .map((parameter) => parameter.name)
+                    .join(", ")
                 : h
                   ? h.join(", ")
                   : functionArgumentSignatures[u.name]) ??

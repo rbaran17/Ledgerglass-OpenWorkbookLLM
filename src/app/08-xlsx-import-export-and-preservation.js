@@ -679,10 +679,10 @@ function dateSerialToIsoText(raw, dateOrder, t = "1900") {
 }
 
 function getWorksheetUsedRange(workbook, sheetId) {
-  const t = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!t) throw Error("Worksheet not found.");
-  const occupiedRangeBounds = findOccupiedRangeBounds(t, false);
-  return `A1:${columnIndexToLetters(Math.max(occupiedRangeBounds?.lastCol ?? 0, (t.delimitedSource?.columns ?? 1) - 1))}${Math.max(occupiedRangeBounds?.lastRow ?? 0, (t.delimitedSource?.records ?? 1) - 1) + 1}`;
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
+  const occupiedRangeBounds = findOccupiedRangeBounds(sheet, false);
+  return `A1:${columnIndexToLetters(Math.max(occupiedRangeBounds?.lastCol ?? 0, (sheet.delimitedSource?.columns ?? 1) - 1))}${Math.max(occupiedRangeBounds?.lastRow ?? 0, (sheet.delimitedSource?.records ?? 1) - 1) + 1}`;
 }
 function encodeExportTextBytes(e, encoding, bom) {
   if (
@@ -751,8 +751,8 @@ function quoteDelimitedField(e, delimitedOptions) {
 }
 function exportWorksheetToCsv(workbook, sheetId, t = {}) {
   const workbookInput = normalizeWorkbookInput(workbook),
-    o = workbookInput.sheets.find((sheet) => sheet.id === sheetId);
-  if (!o) throw Error("Worksheet not found.");
+    sheet = workbookInput.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
   const delimitedOptions = {
     ...normalizeDelimitedOptions({
       ...t,
@@ -793,7 +793,7 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
     );
   const delimitedImportReport = buildDelimitedImportReport(
       "export",
-      `${o.name}.${delimitedOptions.delimiter === "	" ? "tsv" : "csv"}`,
+      `${sheet.name}.${delimitedOptions.delimiter === "	" ? "tsv" : "csv"}`,
       0,
       delimitedOptions,
     ),
@@ -843,7 +843,7 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
       "Values-only export: formulas are evaluated; formatting, notes, history and workbook metadata are not carried by CSV/TSV. Reimport with the visible schema; the file itself has no type schema.",
       "Safe export always prefixes an apostrophe to formula-like text, including whitespace/control-prefixed and full-width triggers. Numeric negatives stay numeric. Quotes alone do not neutralize spreadsheet formulas. Changed text is listed below; it is not automatically unescaped on reimport.",
     ),
-    o.delimitedSource &&
+    sheet.delimitedSource &&
       delimitedImportReport.warnings.push(
         "The default range includes the historical imported footprint so trailing blank records survive. Review the range after structural edits; this is not a live table binding.",
       ));
@@ -863,7 +863,7 @@ function exportWorksheetToCsv(workbook, sheetId, t = {}) {
     let O = true;
     for (let V = 0; V < u; V++) {
       const D = `${columnIndexToLetters(rangeAddress.firstCol + V)}${firstRow + 1}`,
-        B = o.cells[D],
+        B = sheet.cells[D],
         _ = workbookWithSettings(sheetId, D),
         C = delimitedOptions.columns[V] ?? "auto";
       if (

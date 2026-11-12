@@ -760,11 +760,11 @@ function buildSeriesPreview(workbook, sheetId, range, n) {
     if (y !== undefined && (p > 0 ? raw > y : raw < y)) break;
     Number.isFinite(raw) ||
       throwWorkbookError("The numeric series would overflow.");
-    const z = formatCellAddress(
+    const cellAddress = formatCellAddress(
       l + (d ? O * (direction === "up" ? -1 : 1) : 0),
       c + (d ? 0 : O * (direction === "left" ? -1 : 1)),
     );
-    (E.push(z), generatedCount++);
+    (E.push(cellAddress), generatedCount++);
     const cellRecordInput = normalizeCellRecordInput(
       mergeCellDecorations(
         {
@@ -775,11 +775,11 @@ function buildSeriesPreview(workbook, sheetId, range, n) {
             ? { format: "date", numFmt: "yyyy-mm-dd", numberFormat: undefined }
             : {}),
         },
-        sheetOrThrow.cells[z],
+        sheetOrThrow.cells[cellAddress],
       ),
     );
-    cellContentsDiffer(sheetOrThrow.cells[z], cellRecordInput) &&
-      w.push({ sheetId: sheetId, address: z, cell: cellRecordInput });
+    cellContentsDiffer(sheetOrThrow.cells[cellAddress], cellRecordInput) &&
+      w.push({ sheetId: sheetId, address: cellAddress, cell: cellRecordInput });
   }
   return (
     assertFillTargetUnmerged(workbook, sheetId, E),
@@ -1872,8 +1872,8 @@ const resolveExtensionSheetScope = (workbook, r) =>
   fingerprintCanonicalValue([
     r.grantedPermissions,
     [...r.allowedSheetIds].sort().map((t) => {
-      const n = workbook.sheets.find((sheet) => sheet.id === t);
-      return [t, !!n.hidden, !!n.veryHidden];
+      const sheet = workbook.sheets.find((sheet) => sheet.id === t);
+      return [t, !!sheet.hidden, !!sheet.veryHidden];
     }),
     !!r.includeHidden,
   ]);
@@ -1889,8 +1889,10 @@ function buildExtensionHostScope(workbook, r) {
       manifestHash: hashExtensionManifest(t.manifest),
       scopeHash: resolveExtensionSheetScope(workbook, t),
       sheetIds: t.allowedSheetIds.filter((allowedSheetId) => {
-        const o = workbook.sheets.find((sheet) => sheet.id === allowedSheetId);
-        return !(o.hidden || o.veryHidden) || !!t.includeHidden;
+        const sheet = workbook.sheets.find(
+          (sheet) => sheet.id === allowedSheetId,
+        );
+        return !(sheet.hidden || sheet.veryHidden) || !!t.includeHidden;
       }),
     }));
 }
@@ -1976,23 +1978,24 @@ function requireApprovedExtension(workbook, extensionId, t) {
     (s) => s.manifest.id === extensionId,
   );
   if (!n || !n.enabled) throw Error("The extension is missing or disabled.");
-  const o = validateExtensionHostPolicy(workbook, t).extensions.find(
+  const extension = validateExtensionHostPolicy(workbook, t).extensions.find(
     (extension) => extension.manifest.id === extensionId,
   );
   if (
-    !o ||
-    hashExtensionManifest(o.manifest) !== hashExtensionManifest(n.manifest)
+    !extension ||
+    hashExtensionManifest(extension.manifest) !==
+      hashExtensionManifest(n.manifest)
   )
     throw Error(
       "An approved adapter with the exact extension version and manifest is unavailable.",
     );
   if (
     !n.manifest.permissions.every((permission) =>
-      o.grantedPermissions.includes(permission),
+      extension.grantedPermissions.includes(permission),
     )
   )
     throw Error("The host has not granted all declared extension permissions.");
-  return o;
+  return extension;
 }
 function evaluateExtensionFunctionCall(workbook, r, call, binding) {
   const o = binding.manifest.functions.find(
@@ -2007,11 +2010,11 @@ function evaluateExtensionFunctionCall(workbook, r, call, binding) {
       "Nested custom calls and custom calls inside LET/LAMBDA require separate worksheet cells.",
     );
   const allowRead = (s) => {
-    const d = workbook.sheets.find((sheet) => sheet.id === s);
+    const sheet = workbook.sheets.find((sheet) => sheet.id === s);
     return (
-      !!d &&
+      !!sheet &&
       binding.allowedSheetIds.includes(s) &&
-      (!(d.hidden || d.veryHidden) || !!binding.includeHidden)
+      (!(sheet.hidden || sheet.veryHidden) || !!binding.includeHidden)
     );
   };
   if (!allowRead(r.sheetId))
@@ -2193,18 +2196,21 @@ function runExtensionOperation(workbook, extensionId, action, n = {}) {
     a = workbook.extensions?.installed.find(
       (m) => m.manifest.id === extensionId,
     ),
-    s = o.extensions.find((extension) => extension.manifest.id === extensionId);
+    extension = o.extensions.find(
+      (extension) => extension.manifest.id === extensionId,
+    );
   if (!["install", "enable", "disable", "remove"].includes(action))
     throw Error("Unknown extension operation.");
-  const d = action === "install" ? s?.manifest : a?.manifest;
+  const d = action === "install" ? extension?.manifest : a?.manifest;
   if (!d) throw Error("The requested extension is unavailable.");
   if (
     (validateExtensionManifest(d),
     ["install", "enable"].includes(action) &&
-      (!s ||
-        hashExtensionManifest(s.manifest) !== hashExtensionManifest(d) ||
+      (!extension ||
+        hashExtensionManifest(extension.manifest) !==
+          hashExtensionManifest(d) ||
         !d.permissions.every((permission) =>
-          s.grantedPermissions.includes(permission),
+          extension.grantedPermissions.includes(permission),
         )))
   )
     throw Error(

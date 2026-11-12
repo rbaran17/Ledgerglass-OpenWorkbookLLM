@@ -321,19 +321,19 @@ function zU(sheet, pageLayout) {
     printTitles = parsePrintTitles(pageLayout.repeatRows, "row", sheet),
     l = parsePrintTitles(pageLayout.repeatColumns, "column", sheet);
   for (const j of sheet.merges ?? []) {
-    const z = parseRangeAddress(j);
+    const rangeAddress = parseRangeAddress(j);
     for (const [V, D, B] of [
-      [printTitles, z.firstRow, z.lastRow],
-      [l, z.firstCol, z.lastCol],
+      [printTitles, rangeAddress.firstRow, rangeAddress.lastRow],
+      [l, rangeAddress.firstCol, rangeAddress.lastCol],
     ])
       if (V && D <= V.end && B >= V.start && (D < V.start || B > V.end))
         throw Error(
           "A merged area crosses a repeated-title boundary. Unmerge it or adjust the print titles first.",
         );
   }
-  for (const j of sheet.objects ?? []) {
-    const z = _t(j.anchor),
-      V = applyChartDrawingLayout(sheet, j);
+  for (const object of sheet.objects ?? []) {
+    const z = _t(object.anchor),
+      V = applyChartDrawingLayout(sheet, object);
     for (const [D, B, _, C, T] of [
       [printTitles, "row", z.row, V.offsetY, V.height],
       [l, "column", z.col, V.offsetX, V.width],
@@ -641,8 +641,8 @@ function validateRemoveDuplicatesRequest(
   n,
   checked = true,
 ) {
-  const a = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  assertSheetUnprotected(a);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  assertSheetUnprotected(sheet);
   const s = assertRangeCellBudget(t);
   s.length > 500 &&
     failWithMessage("Select at most 500 cells to remove duplicates.");
@@ -650,7 +650,7 @@ function validateRemoveDuplicatesRequest(
   (!n.length ||
     n.some((m) => m < rangeAddress.firstCol || m > rangeAddress.lastCol)) &&
     failWithMessage("Choose one or more columns inside the selected range.");
-  for (const m of a.tables ?? []) {
+  for (const m of sheet.tables ?? []) {
     const v = parseRangeAddress(m.range);
     doesRangeOverlap(t, m.range) &&
       ((rangeAddress.firstCol > v.firstCol ||
@@ -667,7 +667,7 @@ function validateRemoveDuplicatesRequest(
         rangeAddress.lastRow >= v.firstRow &&
         failWithMessage("Keep the table header row selected as headers."));
   }
-  (a.merges ?? []).some((m) => doesRangeOverlap(t, m)) &&
+  (sheet.merges ?? []).some((m) => doesRangeOverlap(t, m)) &&
     failWithMessage("Unmerge selected cells before removing duplicates.");
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
     l = new Set(),
@@ -698,7 +698,7 @@ function validateRemoveDuplicatesRequest(
         { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
         (g, b) => {
           const cell = structuredClone(
-            a.cells[
+            sheet.cells[
               `${columnIndexToLetters(rangeAddress.firstCol + b)}${firstRow + 1}`
             ] ?? {
               raw: null,
@@ -719,7 +719,7 @@ function validateRemoveDuplicatesRequest(
       ),
     );
   }
-  const cells = { ...a.cells };
+  const cells = { ...sheet.cells };
   for (const m of s) {
     const v = _t(m);
     cells[m] = c[v.row - rangeAddress.firstRow]?.[
@@ -815,14 +815,14 @@ function applyNamedStyleChange(workbook, request, t = {}) {
       break;
     case "createStyle": {
       const g = validateBoundedStyleText(a.name, "Style name"),
-        b =
+        styleId =
           a.styleId === undefined
             ? `style-${crypto.randomUUID()}`
             : validateBoundedStyleText(a.styleId, "Style ID", 100),
         definition = validateNamedStyleDefinition(a.definition);
-      (o.styles.push({ id: b, name: g, definition: definition }),
-        (a = { ...a, name: g, styleId: b, definition: definition }),
-        c(b));
+      (o.styles.push({ id: styleId, name: g, definition: definition }),
+        (a = { ...a, name: g, styleId: styleId, definition: definition }),
+        c(styleId));
       break;
     }
     case "updateStyle": {
@@ -990,7 +990,9 @@ function addReviewThreadReply(workbook, r, t, n = "Reviewer", o = {}) {
     };
   return attachReviewThreadsToWorkbook(
     workbook,
-    workbook.reviewThreads.map((u) => (u.id === r ? d : u)),
+    workbook.reviewThreads.map((reviewThread) =>
+      reviewThread.id === r ? d : reviewThread,
+    ),
   );
 }
 function setReviewThreadResolved(workbook, r, t, n = "Reviewer", o = {}) {
@@ -1009,7 +1011,9 @@ function setReviewThreadResolved(workbook, r, t, n = "Reviewer", o = {}) {
       : (normalizeReviewAuthor(n), delete d.resolved),
     attachReviewThreadsToWorkbook(
       workbook,
-      workbook.reviewThreads.map((u) => (u.id === r ? d : u)),
+      workbook.reviewThreads.map((reviewThread) =>
+        reviewThread.id === r ? d : reviewThread,
+      ),
     )
   );
 }
@@ -1096,10 +1100,12 @@ function applyAutoSum(activeWorkbook, sheetId, activeCellAddress) {
     throw new Error("Select an empty cell for AutoSum.");
   const d = (h, f) => {
     if (h < 0 || f < 0) return false;
-    const p = sheetOrThrow.cells[`${columnIndexToLetters(f)}${h + 1}`];
+    const cell = sheetOrThrow.cells[`${columnIndexToLetters(f)}${h + 1}`];
     return (
-      typeof p?.raw == "number" ||
-      (typeof p?.raw == "string" && p.raw.startsWith("=") && !p.literal)
+      typeof cell?.raw == "number" ||
+      (typeof cell?.raw == "string" &&
+        cell.raw.startsWith("=") &&
+        !cell.literal)
     );
   };
   let u, l;
@@ -1275,14 +1281,14 @@ function renameTableHeaderField(workbook, r) {
   const n = structuredClone(r);
   for (const s of t) {
     const sheetOrThrow = findSheetOrThrow(n, s.sheetId),
-      u = sheetOrThrow.tables.find((table) => table.id === s.current.id),
+      table = sheetOrThrow.tables.find((table) => table.id === s.current.id),
       l = (f) => (Object.hasOwn(s.names, f) ? s.names[f] : f);
-    ((u.columns = s.columns),
-      (u.totals = Object.fromEntries(
-        Object.entries(u.totals).map(([f, p]) => [l(f), p]),
+    ((table.columns = s.columns),
+      (table.totals = Object.fromEntries(
+        Object.entries(table.totals).map(([f, p]) => [l(f), p]),
       )));
-    const rangeAddress = parseRangeAddress(u.range);
-    u.columns.forEach((column, p) => {
+    const rangeAddress = parseRangeAddress(table.range);
+    table.columns.forEach((column, p) => {
       const m = Cn(rangeAddress.firstRow, rangeAddress.firstCol + p);
       sheetOrThrow.cells[m] = {
         ...(sheetOrThrow.cells[m] ?? { raw: column.name }),
@@ -1293,7 +1299,7 @@ function renameTableHeaderField(workbook, r) {
       };
     });
     const h = (f) =>
-      f.tableId === u.id ||
+      f.tableId === table.id ||
       (!f.tableId &&
         f.sheetId === sheetOrThrow.id &&
         toA1RangeAddress(f.range) === s.old.range);
@@ -1303,9 +1309,9 @@ function renameTableHeaderField(workbook, r) {
           column.calculatedFormula &&= $v(
             column.calculatedFormula,
             s.old.name,
-            u.name,
+            table.name,
             s.names,
-            p.id === u.id && sheet.id === sheetOrThrow.id,
+            p.id === table.id && sheet.id === sheetOrThrow.id,
           );
       for (const [p, cell] of Object.entries(sheet.cells)) {
         if (
@@ -1316,13 +1322,13 @@ function renameTableHeaderField(workbook, r) {
           continue;
         const v = _t(p),
           g = sheet.id === sheetOrThrow.id && Dp(rangeAddress, v.row, v.col);
-        cell.raw = $v(cell.raw, s.old.name, u.name, s.names, g);
+        cell.raw = $v(cell.raw, s.old.name, table.name, s.names, g);
       }
       for (const p of sheet.conditionalFormats ?? [])
         if (p.kind === "formula" && p.formula) {
           const m = parseRangeAddress(p.range),
-            v = $v(p.formula, s.old.name, u.name, s.names, false),
-            g = $v(p.formula, s.old.name, u.name, s.names, true),
+            v = $v(p.formula, s.old.name, table.name, s.names, false),
+            g = $v(p.formula, s.old.name, table.name, s.names, true),
             b =
               sheet.id === sheetOrThrow.id && rangesIntersect(rangeAddress, m),
             y =
@@ -1340,7 +1346,11 @@ function renameTableHeaderField(workbook, r) {
       for (const p of [...(sheet.pivots ?? []), ...(sheet.queries ?? [])])
         if (h(p.source))
           if (
-            ((p.source = { ...p.source, tableId: u.id, range: u.range }),
+            ((p.source = {
+              ...p.source,
+              tableId: table.id,
+              range: table.range,
+            }),
             (p.filters &&= p.filters.map((filter) => ({
               ...filter,
               field: l(filter.field),
@@ -1381,7 +1391,7 @@ function renameTableHeaderField(workbook, r) {
               }))));
     }
     for (const f of n.definedNames ?? [])
-      f.refersTo = $v(f.refersTo, s.old.name, u.name, s.names);
+      f.refersTo = $v(f.refersTo, s.old.name, table.name, s.names);
     normalizeTableDefinitions(sheetOrThrow, sheetOrThrow);
   }
   assertUniqueTableNames(n);
@@ -1495,12 +1505,13 @@ function aggregatePivotRows(workbook, r, pivotSource) {
   });
 }
 function getPivotRefreshState(workbook, pivotId) {
-  const t = workbook.sheets.find((sheet) =>
+  const sheet = workbook.sheets.find((sheet) =>
       sheet.pivots?.some((pivot) => pivot.id === pivotId),
     ),
-    definition = t?.pivots?.find((pivot) => pivot.id === pivotId);
+    definition = sheet?.pivots?.find((pivot) => pivot.id === pivotId);
   if (
-    ((!t || !definition) && throwWorkbookError("Pivot definition not found."),
+    ((!sheet || !definition) &&
+      throwWorkbookError("Pivot definition not found."),
     !definition.refresh)
   )
     return {
@@ -1511,7 +1522,7 @@ function getPivotRefreshState(workbook, pivotId) {
       definition: definition,
     };
   const outputModified =
-    collectRangeValues(t, definition.outputRange) !==
+    collectRangeValues(sheet, definition.outputRange) !==
     definition.refresh.outputFingerprint;
   try {
     const pivotSource = buildPivotSource(workbook, definition.source);
@@ -1856,9 +1867,9 @@ function resizeTableRange(workbook, sheetId, t, sourceRange, showTotals) {
     }
   }
 }
-function moveTotalsRowCells(workbook, next, sheetId, n, o) {
+function moveTotalsRowCells(workbook, next, sheetId, n, table) {
   const rangeAddress = parseRangeAddress(n.range),
-    s = parseRangeAddress(o.range),
+    s = parseRangeAddress(table.range),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     u = findSheetOrThrow(next, sheetId);
   for (
@@ -1872,7 +1883,7 @@ function moveTotalsRowCells(workbook, next, sheetId, n, o) {
     if (p) {
       const m = {
         ...structuredClone(p),
-        ...buildTableTotalCell(o, firstCol - rangeAddress.firstCol),
+        ...buildTableTotalCell(table, firstCol - rangeAddress.firstCol),
       };
       (delete m.literal, (u.cells[f] = m));
     }

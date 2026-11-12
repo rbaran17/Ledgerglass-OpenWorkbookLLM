@@ -637,12 +637,12 @@ function normalizeCellRecordInput(cell) {
   return normalizeCellRecord(cell, false);
 }
 function paintCellFormatting(workbook, sheetId, t, n) {
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  assertSheetUnprotected(o);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  assertSheetUnprotected(sheet);
   const a = assertRangeCellBudget(n);
   a.length > 500 && failWithMessage("Paint at most 500 cells.");
-  const s = o.cells[t] ?? {},
-    cells = { ...o.cells };
+  const s = sheet.cells[t] ?? {},
+    cells = { ...sheet.cells };
   for (const l of a)
     cells[l] = normalizeCellRecordInput({
       ...cells[l],
@@ -1182,17 +1182,17 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
     throwWorkbookError("Unknown calculated-table operation field.");
   let next = structuredClone(workbook),
     l = findSheetOrThrow(next, sheetId),
-    c = l.tables.find((table) => table.id === tableId);
+    table = l.tables.find((table) => table.id === tableId);
   if (
     request.kind === "setColumnFormula" ||
     request.kind === "clearColumnFormula"
   ) {
     const v =
-      c.columns.find((column) => column.id === request.columnId) ??
+      table.columns.find((column) => column.id === request.columnId) ??
       throwWorkbookError("Select an existing table column.");
     if (request.kind === "setColumnFormula") {
       v.calculatedFormula = validateCalculatedColumnFormula(request.formula);
-      const g = tableDataBodyRange(c);
+      const g = tableDataBodyRange(table);
       (g.lastRow - g.firstRow + 1 > tableMutationLimits.changedCells &&
         throwWorkbookError(
           "A calculated column fill supports at most 500 data-body rows.",
@@ -1200,8 +1200,8 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
         fillCalculatedTableColumns(
           l,
           {
-            ...c,
-            columns: c.columns.map((column) =>
+            ...table,
+            columns: table.columns.map((column) =>
               column.id === v.id
                 ? column
                 : { ...column, calculatedFormula: undefined },
@@ -1260,7 +1260,7 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
         resizeTableRange(workbook, sheetId, s, sourceRange, showTotals),
       (next = resizeTable(workbook, sheetId, tableId, w)),
       (l = findSheetOrThrow(next, sheetId)),
-      (c = l.tables.find((table) => table.id === tableId)),
+      (table = l.tables.find((table) => table.id === tableId)),
       request.kind === "appendRows" &&
         !s.columns.some((column) => column.calculatedFormula))
     ) {
@@ -1274,7 +1274,7 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
           sheetOrThrow.cells[I] &&
             (l.cells[I] = structuredClone(sheetOrThrow.cells[I]));
         }
-      s.showTotals && moveTotalsRowCells(workbook, next, sheetId, s, c);
+      s.showTotals && moveTotalsRowCells(workbook, next, sheetId, s, table);
     }
     if (b)
       for (let k = 0; k < b.length; k++)
@@ -1306,17 +1306,17 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
   (normalizeTableDefinitions(l, l), assertWithinCellBudget(next));
   const changes = [];
   for (const sheet of next.sheets) {
-    const g = findSheetOrThrow(workbook, sheet.id);
-    g.protection?.enabled &&
-      JSON.stringify(g) !== JSON.stringify(sheet) &&
+    const sheetOrThrow = findSheetOrThrow(workbook, sheet.id);
+    sheetOrThrow.protection?.enabled &&
+      JSON.stringify(sheetOrThrow) !== JSON.stringify(sheet) &&
       throwWorkbookError(
         "An affected worksheet is protected. Unprotect it before changing dependent table formulas.",
       );
     for (const address of new Set([
-      ...Object.keys(g.cells),
+      ...Object.keys(sheetOrThrow.cells),
       ...Object.keys(sheet.cells),
     ])) {
-      const y = g.cells[address],
+      const y = sheetOrThrow.cells[address],
         w = sheet.cells[address];
       (JSON.stringify(y) !== JSON.stringify(w) &&
         changes.push({
@@ -1354,9 +1354,9 @@ function applyTableOperation(workbook, sheetId, tableId, request, o = {}) {
     tableId: tableId,
     request: structuredClone(request),
     beforeRange: s.range,
-    afterRange: c.range,
+    afterRange: table.range,
     beforeColumns: structuredClone(s.columns),
-    afterColumns: structuredClone(c.columns),
+    afterColumns: structuredClone(table.columns),
     changes: changes,
     anchorChanges: anchorChanges,
     next: next,
@@ -2132,7 +2132,7 @@ function moveWorksheet(workbook, r, t) {
   )
     return workbook;
   visitTableFormulasOutsideSheet(workbook, (s) => {
-    parseWorksheetQualifiedReference(s).some((d) => d.sheets) &&
+    parseWorksheetQualifiedReference(s).some((workbook) => workbook.sheets) &&
       throwWorkbookError(
         "Reordering worksheets with three-dimensional references requires explicit references first.",
       );
@@ -2196,7 +2196,7 @@ function duplicateWorksheet(workbook, r, t) {
       createUniqueWorksheetName(workbook, worksheetById.name),
     );
   (visitTableFormulasOutsideSheet(workbook, (g) => {
-    parseWorksheetQualifiedReference(g).some((b) => b.sheets) &&
+    parseWorksheetQualifiedReference(g).some((workbook) => workbook.sheets) &&
       throwWorkbookError(
         "Duplicating worksheets with three-dimensional references requires explicit references first.",
       );
@@ -2207,10 +2207,10 @@ function duplicateWorksheet(workbook, r, t) {
       throwWorkbookError(
         "Duplicating this worksheet would exceed the 100,000 populated-cell budget.",
       ));
-  const s = structuredClone(worksheetById);
-  ((s.id = createUuid()),
-    (s.outlineGroups &&= regenerateOutlineGroupIds(s)),
-    (s.name = o));
+  const sheet = structuredClone(worksheetById);
+  ((sheet.id = createUuid()),
+    (sheet.outlineGroups &&= regenerateOutlineGroupIds(sheet)),
+    (sheet.name = o));
   const d = new Set([
       ...workbook.sheets.flatMap((sheet) =>
         (sheet.tables ?? []).map((b) => b.name.toLowerCase()),
@@ -2219,7 +2219,7 @@ function duplicateWorksheet(workbook, r, t) {
     ]),
     u = new Map(),
     l = new Map();
-  for (const g of s.tables ?? []) {
+  for (const g of sheet.tables ?? []) {
     const b = g.id,
       y = g.name;
     ((g.id = createUuid()),
@@ -2242,34 +2242,34 @@ function duplicateWorksheet(workbook, r, t) {
     for (const [y, w] of l) b = $v(b, y, w);
     return b;
   };
-  for (const g of s.tables ?? [])
+  for (const g of sheet.tables ?? [])
     for (const column of g.columns)
       column.calculatedFormula &&= c(column.calculatedFormula);
-  for (const cell of Object.values(s.cells))
+  for (const cell of Object.values(sheet.cells))
     !cell.literal &&
       typeof cell.raw == "string" &&
       cell.raw.startsWith("=") &&
       (cell.raw = c(cell.raw));
-  (s.objects?.forEach((object) => {
+  (sheet.objects?.forEach((object) => {
     object.id = createUuid();
   }),
-    s.validations?.forEach((validation) => {
+    sheet.validations?.forEach((validation) => {
       ((validation.id = createUuid()),
         validation.kind === "custom" &&
           validation.formula &&
           (validation.formula = c(validation.formula)));
     }),
-    s.conditionalFormats?.forEach((conditionalFormat) => {
+    sheet.conditionalFormats?.forEach((conditionalFormat) => {
       ((conditionalFormat.id = createUuid()),
         conditionalFormat.kind === "formula" &&
           conditionalFormat.formula &&
           (conditionalFormat.formula = c(conditionalFormat.formula)));
     }));
-  for (const g of [...(s.pivots ?? []), ...(s.queries ?? [])])
+  for (const g of [...(sheet.pivots ?? []), ...(sheet.queries ?? [])])
     ((g.id = createUuid()),
       (g.sourceRevision = workbook.revision),
       g.source.sheetId === worksheetById.id &&
-        ((g.source.sheetId = s.id),
+        ((g.source.sheetId = sheet.id),
         (g.source.tableId &&=
           u.get(g.source.tableId) ??
           throwWorkbookError(
@@ -2279,12 +2279,12 @@ function duplicateWorksheet(workbook, r, t) {
       .filter((g) => g.scopeSheetId === worksheetById.id)
       .map((g) => ({
         ...structuredClone(g),
-        scopeSheetId: s.id,
+        scopeSheetId: sheet.id,
         refersTo: c(g.refersTo),
       })),
     sheets = [...workbook.sheets];
   return (
-    sheets.splice(workbook.sheets.indexOf(worksheetById) + 1, 0, s),
+    sheets.splice(workbook.sheets.indexOf(worksheetById) + 1, 0, sheet),
     w0(
       collectHyperlinkEntries(
         {
@@ -2295,7 +2295,7 @@ function duplicateWorksheet(workbook, r, t) {
             : {}),
         },
         worksheetById.id,
-        s.id,
+        sheet.id,
       ),
     )
   );

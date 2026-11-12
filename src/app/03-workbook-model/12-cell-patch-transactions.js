@@ -82,14 +82,14 @@ function applyCellPatchTransaction(
         s ??= calculateWorkbookWithSettings(workbook);
         const k = s.getSpillAnchor(sheetOrThrow.id, address);
         if (k && k !== address) {
-          const F = patches.find(
-            (I) => I.sheetId === sheetOrThrow.id && I.address === k,
+          const patch = patches.find(
+            (patch) => patch.sheetId === sheetOrThrow.id && patch.address === k,
           );
           if (
-            !F ||
-            (!F.cell.literal &&
-              typeof F.cell.raw == "string" &&
-              F.cell.raw.startsWith("="))
+            !patch ||
+            (!patch.cell.literal &&
+              typeof patch.cell.raw == "string" &&
+              patch.cell.raw.startsWith("="))
           )
             return throwWithMessage(
               `Cell ${address} belongs to the array formula in ${k}. Edit the array formula instead.`,
@@ -142,7 +142,7 @@ function applyCellPatchTransaction(
       const sheetOrThrow = findSheetOrThrow(workbook, sheet.id);
       for (const [address, cell] of Object.entries(sheet.cells)) {
         const change = changes.find(
-          (y) => y.sheetId === sheet.id && y.address === address,
+          (change) => change.sheetId === sheet.id && change.address === address,
         );
         if (change) change.after = normalizeCellRecordInput(cell);
         else if (

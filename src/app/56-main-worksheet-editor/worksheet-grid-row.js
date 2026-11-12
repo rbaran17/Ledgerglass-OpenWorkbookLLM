@@ -119,22 +119,27 @@ function WorksheetGridRow({
             ],
           }),
         [...frozenColumns, ...columns].map((col, Pe) => {
-          const qe = mergeBounds.find((mergeBound) => Tp(mergeBound, row, col));
+          const mergeBound = mergeBounds.find((mergeBound) =>
+            Tp(mergeBound, row, col),
+          );
           let colSpan = 1,
             rowSpan = 1,
             Me = `${columnIndexToLetters(col)}${row + 1}`;
-          if (qe && !sortedView) {
+          if (mergeBound && !sortedView) {
             const lt = (
                 frozenColumns.includes(col) ? frozenColumns : columns
-              ).filter((ft) => ft >= qe.firstCol && ft <= qe.lastCol),
+              ).filter(
+                (ft) => ft >= mergeBound.firstCol && ft <= mergeBound.lastCol,
+              ),
               be = displayedRows.filter(
                 (displayedRow) =>
-                  displayedRow >= qe.firstRow && displayedRow <= qe.lastRow,
+                  displayedRow >= mergeBound.firstRow &&
+                  displayedRow <= mergeBound.lastRow,
               );
             if (col !== lt[0] || row !== be[0]) return null;
             ((colSpan = lt.length),
               (rowSpan = be.length),
-              (Me = `${columnIndexToLetters(qe.firstCol)}${qe.firstRow + 1}`));
+              (Me = `${columnIndexToLetters(mergeBound.firstCol)}${mergeBound.firstRow + 1}`));
           }
           const cell = cells[Me],
             je = {

@@ -965,9 +965,9 @@ function readPackageRelationships(e) {
     parseXmlPartStrict(e["xl/workbook.xml"], (a) => {
       if (a.local === "sheet") {
         const relationship = relationships.find(
-          (u) =>
-            u.owner === "xl/workbook.xml" &&
-            u.id ===
+          (relationship) =>
+            relationship.owner === "xl/workbook.xml" &&
+            relationship.id ===
               Object.values(a.attributes).find(
                 (attribute) =>
                   attribute.local === "id" && attribute.uri === z2.slice(0, -1),
@@ -1250,14 +1250,14 @@ function F$(e, sha256) {
           (reason =
             "Signatures cannot authenticate an edited workbook; retained only in the original file."));
       const features = [],
-        A = (feature, F, range, detail, j) => {
+        A = (feature, disposition, range, detail, j) => {
           if (++h > xlsxInspectionLimits.maxDetails)
             throw Error(
               "XLSX compatibility details exceed the 100,000-entry budget. Split the source workbook before importing.",
             );
           features.push({
             feature: feature,
-            disposition: F,
+            disposition: disposition,
             location: {
               ...locations[0],
               ...(range ? { range: range, scope: "cell" } : {}),
@@ -1265,7 +1265,7 @@ function F$(e, sha256) {
             },
             reason:
               j ??
-              (F === "editable"
+              (disposition === "editable"
                 ? "Supported subset is editable; review conversion notices for unsupported attributes."
                 : "This source feature is not preserved as an editable feature in the derived workbook."),
           });

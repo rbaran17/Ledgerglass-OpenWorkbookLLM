@@ -54,7 +54,7 @@ function DataValidationDialog({
   onNavigate,
 }) {
   const { text, language } = useWorkbookMessages(),
-    l = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
     [c, h] = ne.useState(),
     [f, p] = ne.useState(range),
     [m, v] = ne.useState("list"),
@@ -81,7 +81,7 @@ function DataValidationDialog({
       () => activeElement?.focus()
     );
   }, []);
-  const disabled = readOnly || !!l.protection?.enabled,
+  const disabled = readOnly || !!sheet.protection?.enabled,
     ae = (ce) => {
       J("");
       try {
@@ -98,7 +98,7 @@ function DataValidationDialog({
       ae(() => {
         if (disabled) throw Error("This worksheet is read-only or protected.");
         if (
-          (assertSheetUnprotected(l),
+          (assertSheetUnprotected(sheet),
           !["list", "custom"].includes(m) && (!E.trim() || !k.trim()))
         )
           throw Error("Enter finite validation bounds.");
@@ -127,8 +127,8 @@ function DataValidationDialog({
           },
           dataValidationRules = normalizeDataValidationRules(
             c
-              ? (l.validations ?? []).map((se) => (se.id === c ? ce : se))
-              : [...(l.validations ?? []), ce],
+              ? (sheet.validations ?? []).map((se) => (se.id === c ? ce : se))
+              : [...(sheet.validations ?? []), ce],
           );
         (onWorkbookChange(
           {
@@ -301,12 +301,12 @@ function DataValidationDialog({
               children: [
                 i.jsxs("summary", {
                   children: [
-                    l.validations?.length ?? 0,
+                    sheet.validations?.length ?? 0,
                     " ",
                     i.jsx(LocalizedText, { children: "existing rules" }),
                   ],
                 }),
-                l.validations?.map((validation) =>
+                sheet.validations?.map((validation) =>
                   i.jsxs(
                     "div",
                     {
@@ -333,7 +333,7 @@ function DataValidationDialog({
                           disabled: disabled,
                           onClick: () =>
                             ae(() => {
-                              (assertSheetUnprotected(l),
+                              (assertSheetUnprotected(sheet),
                                 onWorkbookChange(
                                   {
                                     ...workbook,
@@ -1528,7 +1528,7 @@ function Pz(workbook, r) {
   for (; t.has(`${r}-${o}`);) o++;
   return `${r}-${o}`;
 }
-function runDuplicateInspection(workbook, r, range, duplicateReviewScope) {
+function runDuplicateInspection(workbook, sheet, range, duplicateReviewScope) {
   const rangeAddress = parseRangeAddress(range),
     a = [];
   for (
@@ -1543,19 +1543,21 @@ function runDuplicateInspection(workbook, r, range, duplicateReviewScope) {
     )
       a.push(formatCellAddress(firstRow, firstCol));
   if (
-    (a.some((v) => !r.cells[v] || r.cells[v].raw === null) &&
+    (a.some((v) => !sheet.cells[v] || sheet.cells[v].raw === null) &&
       failWithMessage(
         "Calculated comparison requires populated source cells; blank or possible spill-child cells are outside this subset. Use raw comparison or a populated selection.",
       ),
-    !a.some((v) => isFormulaInputValue(r.cells[v])))
+    !a.some((v) => isFormulaInputValue(sheet.cells[v])))
   )
-    return new Map(a.map((v) => [v, r.cells[v].raw]));
+    return new Map(a.map((v) => [v, sheet.cells[v].raw]));
   const s = {
     id: Pz(workbook, "duplicate-inspection"),
     name: "Duplicate inspection",
     rowCount: workbookLimits.maxRows,
     colCount: workbookLimits.maxCols,
-    cells: { A1: { raw: `=SUM('${r.name.replace(/'/g, "''")}'!${range})` } },
+    cells: {
+      A1: { raw: `=SUM('${sheet.name.replace(/'/g, "''")}'!${range})` },
+    },
   };
   let d = false;
   for (let v = 0; v < 4; v++) {
@@ -1638,8 +1640,8 @@ function runDuplicateInspection(workbook, r, range, duplicateReviewScope) {
     "GET.CELL",
   ]);
   for (const node of u.nodes) {
-    const g = workbook.sheets.find((sheet) => sheet.id === node.sheetId),
-      cell = g.cells[node.address];
+    const sheet = workbook.sheets.find((sheet) => sheet.id === node.sheetId),
+      cell = sheet.cells[node.address];
     if (
       ((!cell || cell.raw === null) &&
         failWithMessage(
@@ -1650,7 +1652,7 @@ function runDuplicateInspection(workbook, r, range, duplicateReviewScope) {
       const y = resolveDefinedNameValue(
         String(cell.raw),
         workbook,
-        g.id,
+        sheet.id,
       ).replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
       (/[{}#]/.test(y) ||
         [...y.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)].some((w) =>
@@ -1706,7 +1708,7 @@ function runDuplicateInspection(workbook, r, range, duplicateReviewScope) {
       typeof g == "number" &&
         !Number.isFinite(g) &&
         failWithMessage("Nonfinite values cannot be used in duplicate review."),
-      node.sheetId === r.id &&
+      node.sheetId === sheet.id &&
         a.includes(node.address) &&
         p.set(node.address, g));
   }
@@ -1730,28 +1732,28 @@ function createDuplicateReviewSheet(workbook, request, t = {}) {
       request,
     ),
     duplicateReviewScope = resolveDuplicateReviewScope(workbook, t),
-    a = workbook.sheets.find(
+    sheet = workbook.sheets.find(
       (sheet) => sheet.id === duplicateReviewRequest.sheetId,
     );
-  a || failWithMessage("The source worksheet no longer exists.");
+  sheet || failWithMessage("The source worksheet no longer exists.");
   const rangeAddress = parseRangeAddress(duplicateReviewRequest.range),
     d = rangeAddress.lastCol - rangeAddress.firstCol + 1;
-  ((!duplicateReviewScope.allowedSheetIds.includes(a.id) ||
+  ((!duplicateReviewScope.allowedSheetIds.includes(sheet.id) ||
     (!duplicateReviewScope.includeHidden &&
-      (a.hidden ||
-        a.veryHidden ||
-        cn(a, "row").some(
+      (sheet.hidden ||
+        sheet.veryHidden ||
+        cn(sheet, "row").some(
           (j) =>
             j.start <= rangeAddress.lastRow && j.end >= rangeAddress.firstRow,
         ) ||
-        cn(a, "column").some(
+        cn(sheet, "column").some(
           (j) =>
             j.start <= rangeAddress.lastCol && j.end >= rangeAddress.firstCol,
         )))) &&
     failWithMessage(
       "The source range is outside the visible, authorized host context. Include hidden only within permitted host scope.",
     ),
-    (a.merges ?? []).some((j) => {
+    (sheet.merges ?? []).some((j) => {
       const z = parseRangeAddress(j);
       return (
         z.firstRow <= rangeAddress.lastRow &&
@@ -1767,14 +1769,14 @@ function createDuplicateReviewSheet(workbook, request, t = {}) {
       duplicateReviewRequest.comparison === "calculated"
         ? runDuplicateInspection(
             workbook,
-            a,
+            sheet,
             duplicateReviewRequest.range,
             duplicateReviewScope,
           )
         : null,
     l = (j, z) => {
       const cellAddress = formatCellAddress(j, z),
-        cell = structuredClone(a.cells[cellAddress] ?? { raw: null }),
+        cell = structuredClone(sheet.cells[cellAddress] ?? { raw: null }),
         B = u ? u.get(cellAddress) : cell.raw;
       return (
         typeof B == "number" &&
@@ -1930,8 +1932,8 @@ function createDuplicateReviewSheet(workbook, request, t = {}) {
           JSON.stringify({
             workbookId: workbook.id,
             revision: workbook.revision,
-            sheetId: a.id,
-            sheetName: a.name,
+            sheetId: sheet.id,
+            sheetName: sheet.name,
             range: j.sourceRange,
           }),
           j.groupId,

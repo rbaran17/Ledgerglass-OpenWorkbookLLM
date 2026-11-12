@@ -618,14 +618,17 @@ function normalizeWorkbookSnapshot(workbook) {
   return normalizeWorkbookInput(workbook);
 }
 function normalizeSavedSelection(workbookSnapshot, view) {
-  const t = workbookSnapshot.sheets.find((sheet) => !sheet.hidden);
-  if (!t)
+  const sheet = workbookSnapshot.sheets.find((sheet) => !sheet.hidden);
+  if (!sheet)
     return throwPersistenceError(
       "invalid",
       "A saved workbook needs a visible worksheet.",
     );
   if (view === undefined)
-    return { activeSheetId: t.id, selection: { sheetId: t.id, range: "A1" } };
+    return {
+      activeSheetId: sheet.id,
+      selection: { sheetId: sheet.id, range: "A1" },
+    };
   if (
     !isPlainRecord(view) ||
     typeof view.activeSheetId != "string" ||
@@ -803,15 +806,15 @@ function compareWorkbookVersions(e, workbook) {
     ...workbookSnapshot.sheets.map((sheet) => sheet.id),
     ...n.sheets.map((sheet) => sheet.id),
   ])) {
-    const v = workbookSnapshot.sheets.find((sheet) => sheet.id === sheetId),
+    const sheet = workbookSnapshot.sheets.find((sheet) => sheet.id === sheetId),
       g = n.sheets.find((sheet) => sheet.id === sheetId),
       b = (E) =>
         E
           ? Object.fromEntries(Object.entries(E).filter(([A]) => A !== "cells"))
           : undefined,
-      before = b(v),
+      before = b(sheet),
       after = b(g);
-    if (!v || !g)
+    if (!sheet || !g)
       o.structuralChanges.push({
         path: `sheets.${sheetId}`,
         before: before,
@@ -828,10 +831,10 @@ function compareWorkbookVersions(e, workbook) {
             attribution: h(),
           });
     for (const address of new Set([
-      ...Object.keys(v?.cells ?? {}),
+      ...Object.keys(sheet?.cells ?? {}),
       ...Object.keys(g?.cells ?? {}),
     ])) {
-      const A = v?.cells[address],
+      const A = sheet?.cells[address],
         k = g?.cells[address];
       a(A, k) &&
         o.cellChanges.push({
@@ -1319,13 +1322,14 @@ function createWorkbookSession(e = {}) {
   }
   return {
     load: () => t,
-    save(f, p, guard, v = {}) {
+    save(workbook, p, guard, v = {}) {
       l(guard);
-      const canonicalWorkbookSnapshot = buildCanonicalWorkbookSnapshot(f),
-        b = canonicalWorkbookSnapshot.sheets.find(
+      const canonicalWorkbookSnapshot =
+          buildCanonicalWorkbookSnapshot(workbook),
+        sheet = canonicalWorkbookSnapshot.sheets.find(
           (sheet) => sheet.id === p.activeSheetId && !sheet.hidden,
         );
-      if (!b || p.selection.sheetId !== b.id)
+      if (!sheet || p.selection.sheetId !== sheet.id)
         throw new WorkbookRevisionConflictError(
           "invalid",
           "Saved selection must belong to the active visible worksheet.",
@@ -1350,9 +1354,9 @@ function createWorkbookSession(e = {}) {
           t.guard,
         );
       const view = validateSavedSelection(canonicalWorkbookSnapshot, p),
-        E = (workbook, O) => ({
+        E = (workbook, view) => ({
           workbook: workbook,
-          view: O,
+          view: view,
           savedAt: "1970-01-01T00:00:00.000Z",
           digest: "0".repeat(40),
         }),
@@ -1428,11 +1432,14 @@ function createWorkbookSession(e = {}) {
   };
 }
 function validateSavedSelection(canonicalWorkbookSnapshot, r) {
-  const t = canonicalWorkbookSnapshot.sheets.find(
+  const sheet = canonicalWorkbookSnapshot.sheets.find(
       (sheet) => sheet.id === r.activeSheetId,
     ),
     rangeAddress = parseRangeAddress(r.selection.range);
-  if (rangeAddress.lastRow >= t.rowCount || rangeAddress.lastCol >= t.colCount)
+  if (
+    rangeAddress.lastRow >= sheet.rowCount ||
+    rangeAddress.lastCol >= sheet.colCount
+  )
     throw new WorkbookRevisionConflictError(
       "invalid",
       "Saved selection exceeds worksheet dimensions.",
@@ -1440,8 +1447,8 @@ function validateSavedSelection(canonicalWorkbookSnapshot, r) {
   const o = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     a = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
   return {
-    activeSheetId: t.id,
-    selection: { sheetId: t.id, range: o === a ? o : `${o}:${a}` },
+    activeSheetId: sheet.id,
+    selection: { sheetId: sheet.id, range: o === a ? o : `${o}:${a}` },
   };
 }
 const buildCompositeKey = (e, r) => JSON.stringify([e, r]),

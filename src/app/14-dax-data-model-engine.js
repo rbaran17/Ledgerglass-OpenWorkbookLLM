@@ -58,11 +58,11 @@ function evaluateDaxExpression(e) {
           "A fully qualified model column is required.",
         );
       const R = u(N.table),
-        L = R.columns.find(
+        column = R.columns.find(
           (column) => caseFoldText(column.name) === caseFoldText(N.column),
         );
-      return L
-        ? { tableId: R.id, column: L.name }
+      return column
+        ? { tableId: R.id, column: column.name }
         : throwDaxError(
             "DAX_REFERENCE",
             `Unknown model column ${N.table}[${N.column}].`,
@@ -193,8 +193,9 @@ function evaluateDaxExpression(e) {
     y = (N, R) => {
       e.tick();
       const L = t.get(N.tableId),
-        $ = L.columns.find((column) => column.name === N.column);
-      if ($.expression === undefined) return e.value(N.tableId, N.column, R);
+        column = L.columns.find((column) => column.name === N.column);
+      if (column.expression === undefined)
+        return e.value(N.tableId, N.column, R);
       const tableColumnKey = buildTableColumnKey(N),
         G = `${tableColumnKey}:${R}`;
       let H = o.get(tableColumnKey);
@@ -217,10 +218,10 @@ function evaluateDaxExpression(e) {
           }),
         );
         return (
-          isValidColumnValue(Q, $) ||
+          isValidColumnValue(Q, column) ||
             throwDaxError(
               "DAX_TYPE",
-              `${L.name}[${$.name}] row ${R + 1} does not match its declared ${$.type}${$.nullable ? " or BLANK" : ""} type.`,
+              `${L.name}[${column.name}] row ${R + 1} does not match its declared ${column.type}${column.nullable ? " or BLANK" : ""} type.`,
             ),
           (H[R] = Q),
           Q
@@ -560,8 +561,8 @@ function evaluateDaxExpression(e) {
         const G = l(U),
           H = new Set(),
           rows = b(G.tableId).filter((X) => {
-            const J = buildTypedValueKey(y(G, X));
-            return H.has(J) ? false : (H.add(J), true);
+            const typedValueKey = buildTypedValueKey(y(G, X));
+            return H.has(typedValueKey) ? false : (H.add(typedValueKey), true);
           });
         return {
           kind: "rows",
@@ -746,19 +747,23 @@ function evaluateDaxExpression(e) {
         ),
         $ = new Set(L.flatMap((X) => [...T(X)])),
         filters = N.filters.map((filter) => {
-          const J = t
+          const column = t
             .get(filter.tableId)
             .columns.find((column) => column.name === filter.column);
           return (
             !["blank", "notBlank"].includes(filter.operator) &&
               (filter.value === undefined ||
-                !isValidColumnValue(filter.value, { ...J, nullable: true })) &&
+                !isValidColumnValue(filter.value, {
+                  ...column,
+                  nullable: true,
+                })) &&
               throwDaxError(
                 "DAX_FILTER",
                 "Filter value does not match its declared column type.",
               ),
             ["gt", "gte", "lt", "lte"].includes(filter.operator) &&
-              (!["number", "date"].includes(J.type) || filter.value == null) &&
+              (!["number", "date"].includes(column.type) ||
+                filter.value == null) &&
               throwDaxError(
                 "DAX_FILTER",
                 "Ordered query filters require a nonblank number or date.",
@@ -849,14 +854,14 @@ function evaluateDaxExpression(e) {
     },
   };
 }
-function isValidColumnValue(e, r) {
+function isValidColumnValue(e, column) {
   return e === null
-    ? r.nullable
-    : r.type === "number"
+    ? column.nullable
+    : column.type === "number"
       ? typeof e == "number" && Number.isFinite(e)
-      : r.type === "boolean"
+      : column.type === "boolean"
         ? typeof e == "boolean"
-        : r.type === "text"
+        : column.type === "text"
           ? typeof e == "string" && e.length <= 32767
           : typeof e == "string" &&
             /^\d{4}-\d{2}-\d{2}$/.test(e) &&
@@ -969,8 +974,8 @@ function encodeColumnDictionary(definition, values) {
   );
 }
 function resolveModelTableRange(workbook, r) {
-  const t = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-  if (!t)
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  if (!sheet)
     return throwDaxModelError(
       "SOURCE",
       `Model table ${r.name} has a missing worksheet.`,
@@ -979,7 +984,7 @@ function resolveModelTableRange(workbook, r) {
       },
     );
   if (!r.tableId) return r.range;
-  const n = t.tables?.find((table) => table.id === r.tableId);
+  const n = sheet.tables?.find((table) => table.id === r.tableId);
   if (!n)
     return throwDaxModelError(
       "SOURCE",
@@ -992,13 +997,13 @@ function resolveModelTableRange(workbook, r) {
   return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (n.showTotals ? 1 : 0)}`;
 }
 function buildModelTableFromRange(workbook, sheetId, t, tableId, o = {}) {
-  const a = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!a) throw Error("Choose a source worksheet.");
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Choose a source worksheet.");
   const s = {
       id: crypto.randomUUID(),
-      name: a.name,
+      name: sheet.name,
       sheetId: sheetId,
-      range: t ?? formatOccupiedRangeAddress(a),
+      range: t ?? formatOccupiedRangeAddress(sheet),
       ...(tableId ? { tableId: tableId } : {}),
       columns: [],
     },
@@ -1722,9 +1727,9 @@ function removeDataModelFromWorkbook(workbook, r = {}) {
   );
 }
 function getModelReportStatus(workbook, sheetId, options = {}) {
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    o = n?.dataModelReport;
-  if (!n || !o) return { status: "none", message: "No model report." };
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    o = sheet?.dataModelReport;
+  if (!sheet || !o) return { status: "none", message: "No model report." };
   try {
     if (
       !workbook.dataModel ||
@@ -1741,7 +1746,7 @@ function getModelReportStatus(workbook, sheetId, options = {}) {
     });
     return a.complete
       ? a.sourceHash !== o.sourceHash ||
-        buildModelReportCells(n, o.outputRange) !== o.outputHash ||
+        buildModelReportCells(sheet, o.outputRange) !== o.outputHash ||
         fingerprintCanonicalValue(a.totals) !==
           fingerprintCanonicalValue(o.totals)
         ? {
@@ -1942,10 +1947,14 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                     value: column.name,
                                     onChange: (event) =>
                                       o(table.id, {
-                                        columns: table.columns.map((c, h) =>
-                                          h === d
-                                            ? { ...c, name: event.target.value }
-                                            : c,
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  name: event.target.value,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                   }),
@@ -1961,10 +1970,14 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                     value: column.type,
                                     onChange: (event) =>
                                       o(table.id, {
-                                        columns: table.columns.map((c, h) =>
-                                          h === d
-                                            ? { ...c, type: event.target.value }
-                                            : c,
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  type: event.target.value,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                     children: [
@@ -1992,13 +2005,15 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                     checked: column.nullable,
                                     onChange: (event) =>
                                       o(table.id, {
-                                        columns: table.columns.map((c, h) =>
-                                          h === d
-                                            ? {
-                                                ...c,
-                                                nullable: event.target.checked,
-                                              }
-                                            : c,
+                                        columns: table.columns.map(
+                                          (column, h) =>
+                                            h === d
+                                              ? {
+                                                  ...column,
+                                                  nullable:
+                                                    event.target.checked,
+                                                }
+                                              : column,
                                         ),
                                       }),
                                   }),
@@ -2014,7 +2029,7 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                                 onClick: () =>
                                   o(table.id, {
                                     columns: table.columns.filter(
-                                      (l, c) => c !== d,
+                                      (column, c) => c !== d,
                                     ),
                                   }),
                                 children: i.jsx(LocalizedText, {
@@ -2028,10 +2043,10 @@ function DataModelDefinitionEditor({ definition, onChange }) {
                             value: column.expression,
                             onChange: (expression) =>
                               o(table.id, {
-                                columns: table.columns.map((c, h) =>
+                                columns: table.columns.map((column, h) =>
                                   h === d
-                                    ? { ...c, expression: expression }
-                                    : c,
+                                    ? { ...column, expression: expression }
+                                    : column,
                                 ),
                               }),
                           }),

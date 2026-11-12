@@ -418,9 +418,9 @@ function resolveAssistantSelection(workbook, r) {
     !r.ranges || (r.ranges.length === 1 && r.ranges[0] === r.range),
     "Select one rectangular range before using an assistant.",
   );
-  const t = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
   assertCondition(
-    t && !t.hidden,
+    sheet && !sheet.hidden,
     "Select a visible worksheet before using an assistant.",
   );
   const n = r.range.toUpperCase().split(":");
@@ -432,7 +432,7 @@ function resolveAssistantSelection(workbook, r) {
     "Selection range must run from top left to bottom right.",
   ),
     assertCondition(
-      a.row <= t.rowCount && a.col <= t.colCount,
+      a.row <= sheet.rowCount && a.col <= sheet.colCount,
       "Selection exceeds worksheet dimensions.",
     ),
     assertCondition(
@@ -448,10 +448,10 @@ function resolveAssistantSelection(workbook, r) {
 }
 function buildAssistantSelectionContext(workbook, r) {
   const assistantSelection = resolveAssistantSelection(workbook, r),
-    n = workbook.sheets.find((sheet) => sheet.id === r.sheetId),
+    sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId),
     workbookWithSettings = calculateWorkbookWithSettings(workbook);
   for (const a of assistantSelection) {
-    const s = workbookWithSettings.getTypedValue(n.id, a);
+    const s = workbookWithSettings.getTypedValue(sheet.id, a);
     (assertCondition(
       !(s.type === "error" && s.value === "#PENDING!"),
       "Calculation is pending in the approved selection. Choose Calculate Now before sharing current values with an assistant.",
@@ -473,13 +473,13 @@ function buildAssistantSelectionContext(workbook, r) {
       ? { calculationClock: workbookWithSettings.getDateContext() }
       : {}),
     revision: workbook.revision,
-    sheetId: n.id,
-    sheetName: n.name,
+    sheetId: sheet.id,
+    sheetName: sheet.name,
     range: r.range.toUpperCase(),
     cells: assistantSelection.map((address) => ({
       address: address,
-      raw: n.cells[address]?.raw ?? null,
-      value: workbookWithSettings(n.id, address),
+      raw: sheet.cells[address]?.raw ?? null,
+      value: workbookWithSettings(sheet.id, address),
     })),
   };
 }

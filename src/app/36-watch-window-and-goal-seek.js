@@ -41,8 +41,8 @@ function applyFormulaWatchAction(workbook, request, t = {}) {
     added = [],
     removed = [];
   if (request.kind === "add") {
-    const l = workbook.sheets.find((sheet) => sheet.id === request.sheetId);
-    if (!l)
+    const sheet = workbook.sheets.find((sheet) => sheet.id === request.sheetId);
+    if (!sheet)
       throw Error("The worksheet selected for watching no longer exists.");
     if (!Array.isArray(request.ranges))
       throw Error("Provide a list of selected ranges to watch.");
@@ -53,7 +53,7 @@ function applyFormulaWatchAction(workbook, request, t = {}) {
         o.some(
           (v) =>
             !v.orphaned &&
-            v.anchor.sheetId === l.id &&
+            v.anchor.sheetId === sheet.id &&
             v.anchor.address === address,
         )
       )
@@ -62,7 +62,7 @@ function applyFormulaWatchAction(workbook, request, t = {}) {
       for (; h.has(`watch-${p}`);) p++;
       const m = {
         id: `watch-${p}`,
-        anchor: { sheetId: l.id, sheetName: l.name, address: address },
+        anchor: { sheetId: sheet.id, sheetName: sheet.name, address: address },
       };
       if (classifyWatchedCell(workbook, m, formulaWatchContext) !== "ready")
         throw Error(
@@ -888,13 +888,14 @@ function solveGoalSeek(workbook, request, t = {}) {
       "This workbook is read-only. Goal Seek cannot propose a writable input.",
     );
   const goalSeekRequest = normalizeGoalSeekRequest(request),
-    o = workbook.sheets.find(
+    sheet = workbook.sheets.find(
       (sheet) => sheet.id === goalSeekRequest.formulaSheetId,
     ),
     a = workbook.sheets.find(
       (sheet) => sheet.id === goalSeekRequest.variableSheetId,
     );
-  if (!o || !a) throw Error("A selected Goal Seek worksheet no longer exists.");
+  if (!sheet || !a)
+    throw Error("A selected Goal Seek worksheet no longer exists.");
   if (t.includeHidden !== undefined && typeof t.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
@@ -914,7 +915,7 @@ function solveGoalSeek(workbook, request, t = {}) {
     ].sort(),
   };
   for (const [z, V] of [
-    [o, goalSeekRequest.formulaAddress],
+    [sheet, goalSeekRequest.formulaAddress],
     [a, goalSeekRequest.variableAddress],
   ]) {
     const D = _t(V);
@@ -930,7 +931,7 @@ function solveGoalSeek(workbook, request, t = {}) {
         "A Goal Seek source is outside the visible, authorized host context.",
       );
   }
-  const cell = o.cells[goalSeekRequest.formulaAddress],
+  const cell = sheet.cells[goalSeekRequest.formulaAddress],
     u = a.cells[goalSeekRequest.variableAddress];
   if (
     !cell ||
@@ -963,15 +964,15 @@ function solveGoalSeek(workbook, request, t = {}) {
       D.row === rangeAddress.firstRow ||
       (z.showTotals && D.row === rangeAddress.lastRow) ||
       _ ||
-      Object.entries(a.cells).some(([C, T]) => {
+      Object.entries(a.cells).some(([C, cell]) => {
         const N = _t(C);
         return (
           N.col === D.col &&
           N.row > rangeAddress.firstRow &&
           N.row <= rangeAddress.lastRow - (z.showTotals ? 1 : 0) &&
-          !T.literal &&
-          typeof T.raw == "string" &&
-          T.raw.startsWith("=")
+          !cell.literal &&
+          typeof cell.raw == "string" &&
+          cell.raw.startsWith("=")
         );
       })
     )
@@ -1015,7 +1016,7 @@ function solveGoalSeek(workbook, request, t = {}) {
         ),
       },
       {
-        sheetId: o.id,
+        sheetId: sheet.id,
         address: goalSeekRequest.formulaAddress,
         direction: "precedents",
         depth: goalSeekLimits.maxDepth,
@@ -1038,10 +1039,10 @@ function solveGoalSeek(workbook, request, t = {}) {
     throw Error(
       "Goal Seek requires a complete dependency closure within 500 cells, 5,000 scanned formulas and depth 8.",
     );
-  const p = c.issues.find((issue) => f.has(issue.from));
-  if (p || c.cycles.length)
+  const issue = c.issues.find((issue) => f.has(issue.from));
+  if (issue || c.cycles.length)
     throw Error(
-      `Goal Seek requires supported static dependencies: ${p?.message ?? "the dependency graph contains a cycle."}`,
+      `Goal Seek requires supported static dependencies: ${issue?.message ?? "the dependency graph contains a cycle."}`,
     );
   if (!f.has(buildCompositeKey(a.id, goalSeekRequest.variableAddress)))
     throw Error(
@@ -1070,14 +1071,18 @@ function solveGoalSeek(workbook, request, t = {}) {
     "GET.CELL",
   ]);
   for (const z of h) {
-    const V = workbook.sheets.find((sheet) => sheet.id === z.sheetId),
-      D = V.cells[z.address];
-    if (D?.raw === null || !D)
+    const sheet = workbook.sheets.find((sheet) => sheet.id === z.sheetId),
+      cell = sheet.cells[z.address];
+    if (cell?.raw === null || !cell)
       throw Error(
         "Goal Seek requires populated static dependency cells; blank or possible spill-child dependencies are not supported.",
       );
-    if (!D.literal && typeof D.raw == "string" && D.raw.startsWith("=")) {
-      const B = resolveDefinedNameValue(D.raw, workbook, V.id).replace(
+    if (
+      !cell.literal &&
+      typeof cell.raw == "string" &&
+      cell.raw.startsWith("=")
+    ) {
+      const B = resolveDefinedNameValue(cell.raw, workbook, sheet.id).replace(
         /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
         "",
       );
@@ -1133,7 +1138,7 @@ function solveGoalSeek(workbook, request, t = {}) {
           "The Goal Seek evaluation/work budget was reached.",
         );
       (evaluations++, (workUnits += h.length));
-      const D = {
+      const workbook = {
           ...v,
           sheets: v.sheets.map((sheet) =>
             sheet.id === a.id
@@ -1147,8 +1152,8 @@ function solveGoalSeek(workbook, request, t = {}) {
               : sheet,
           ),
         },
-        workbookWithSettings = calculateWorkbookWithSettings(D),
-        _ = workbookWithSettings(o.id, goalSeekRequest.formulaAddress);
+        workbookWithSettings = calculateWorkbookWithSettings(workbook),
+        _ = workbookWithSettings(sheet.id, goalSeekRequest.formulaAddress);
       if (workbookWithSettings.getOperationalErrors().length)
         throw new k(
           "calculation-error",
@@ -1883,8 +1888,8 @@ function normalizeAnalysisPermissions(workbook, r = {}) {
 }
 function validateAnalysisSource(workbook, r, t) {
   const analysisPermissions = normalizeAnalysisPermissions(workbook, t),
-    o = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-  if (!o || !analysisPermissions.allowedSheetIds.includes(o.id))
+    sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  if (!sheet || !analysisPermissions.allowedSheetIds.includes(sheet.id))
     throw Error("A source is outside the authorized host context.");
   if (!/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(r.address))
     throw Error("Use a canonical cell address.");
@@ -1893,21 +1898,21 @@ function validateAnalysisSource(workbook, r, t) {
     throw Error("The cell address exceeds Excel dimensions.");
   if (
     !analysisPermissions.includeHidden &&
-    (o.hidden ||
-      o.veryHidden ||
-      cn(o, "row").some((d) => d.start <= a.row && a.row <= d.end) ||
-      cn(o, "column").some((d) => d.start <= a.col && a.col <= d.end))
+    (sheet.hidden ||
+      sheet.veryHidden ||
+      cn(sheet, "row").some((d) => d.start <= a.row && a.row <= d.end) ||
+      cn(sheet, "column").some((d) => d.start <= a.col && a.col <= d.end))
   )
     throw Error(
       "A source is hidden. Explicitly include hidden cells within the authorized scope.",
     );
-  if (o.analysisReport || o.dataModelReport)
+  if (sheet.analysisReport || sheet.dataModelReport)
     throw Error(
       "Analysis and model report snapshots cannot be analysis inputs. Use the original source cells.",
     );
-  if (o.merges?.some((merge) => parseRangeBounds(merge, r.address)))
+  if (sheet.merges?.some((merge) => parseRangeBounds(merge, r.address)))
     throw Error("Merged analysis sources are ambiguous.");
-  return o;
+  return sheet;
 }
 function parseRangeBounds(e, address) {
   const rangeAddress = parseRangeAddress(e),

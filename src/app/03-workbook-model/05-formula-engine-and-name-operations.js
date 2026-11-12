@@ -504,8 +504,8 @@ function createWorkbookFormulaEngine(
         if (u === "RANDBETWEEN") {
           if (l.length !== 2) return issue("#VALUE!");
           const D = l.map(retrieve),
-            B = findFormulaErrorArg(D);
-          if (B) return B;
+            formulaErrorArg = findFormulaErrorArg(D);
+          if (formulaErrorArg) return formulaErrorArg;
           if (
             D.some(
               (T) =>

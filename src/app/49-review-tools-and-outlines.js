@@ -53,12 +53,12 @@ function OutlineToolsPanel(e) {
   const [d, u] = ne.useState(/column/i.test(e.mode) ? "column" : "row"),
     [l, c] = ne.useState(0),
     [h, f] = ne.useState(""),
-    p = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    m = ne.useMemo(() => (p ? addOutlineGroup(p, d) : []), [p, d]),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    m = ne.useMemo(() => (sheet ? addOutlineGroup(sheet, d) : []), [sheet, d]),
     rangeAddress = parseRangeAddress(e.range),
     g = d === "row" ? rangeAddress.firstRow : rangeAddress.firstCol,
     b = d === "row" ? rangeAddress.lastRow : rangeAddress.lastCol,
-    y = e.readOnly || !!p?.protection?.enabled,
+    y = e.readOnly || !!sheet?.protection?.enabled,
     w = s.current,
     E = ne.useMemo(
       () => JSON.stringify(e.workbook) !== w.snapshot,
@@ -70,7 +70,7 @@ function OutlineToolsPanel(e) {
       w.sheetId !== e.sheetId ||
       w.range !== e.range ||
       E ||
-      !p,
+      !sheet,
     disabled = y || A,
     F = Math.max(0, ...m.map((V) => V.depth)) + 1,
     I = Math.max(1, Math.ceil(m.length / wS)),
@@ -491,9 +491,9 @@ function ReviewToolsPanel(e) {
       active: e.active,
       content: JSON.stringify(e.workbook),
     }),
-    d = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     selectionAnchorAddress = resolveSelectionAnchorAddress(e),
-    l = d?.cells[selectionAnchorAddress]?.hyperlink,
+    l = sheet?.cells[selectionAnchorAddress]?.hyperlink,
     [c, h] = ne.useState(e.mode ?? "comments"),
     [f, p] = ne.useState("cell"),
     [m, v] = ne.useState(0),
@@ -521,7 +521,7 @@ function ReviewToolsPanel(e) {
       s.current.range !== e.range ||
       s.current.active !== e.active ||
       s.current.content !== JSON.stringify(e.workbook),
-    disabled = e.readOnly || !!d?.protection?.enabled || L || !d,
+    disabled = e.readOnly || !!sheet?.protection?.enabled || L || !sheet,
     G = [...(e.workbook.reviewThreads ?? [])]
       .sort((se, we) => we.updatedAt.localeCompare(se.updatedAt))
       .filter(
@@ -637,7 +637,7 @@ function ReviewToolsPanel(e) {
                 }),
                 i.jsxs("p", {
                   children: [
-                    d?.name ?? "Worksheet unavailable",
+                    sheet?.name ?? "Worksheet unavailable",
                     "!",
                     selectionAnchorAddress,
                   ],
@@ -721,7 +721,7 @@ function ReviewToolsPanel(e) {
                 }),
               }),
             !e.readOnly &&
-              d?.protection?.enabled &&
+              sheet?.protection?.enabled &&
               i.jsx("p", {
                 className: "rv-muted",
                 children: i.jsx(LocalizedText, {
@@ -1118,7 +1118,7 @@ function ReviewToolsPanel(e) {
                             i.jsx(LocalizedText, {
                               children: "New comment on ",
                             }),
-                            d?.name,
+                            sheet?.name,
                             "!",
                             selectionAnchorAddress,
                             i.jsx("textarea", {

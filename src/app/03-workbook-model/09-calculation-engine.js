@@ -782,14 +782,14 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
               for (let nt = 0; nt < at.length && !Ze; nt++)
                 for (let mt = 0; mt < _e; mt++) {
                   const obstruction = `${columnIndexToLetters(firstCol + mt)}${firstRow + nt + 1}`,
-                    Zt = sheet.cells[obstruction];
+                    cell = sheet.cells[obstruction];
                   if (E.get(Se)?.has(`${sheetId}:${obstruction}`)) {
                     lt = true;
                     break;
                   }
                   if (
                     obstruction !== ae &&
-                    ((Zt && Zt.raw !== null) ||
+                    ((cell && cell.raw !== null) ||
                       v.has(`${sheetId}:${obstruction}`))
                   ) {
                     ((Ze = true),
@@ -1922,12 +1922,12 @@ function calculateWorkbookWithSettings(workbook, r = {}, t) {
 }
 function updateConditionalFormatRules(workbook, sheetId, rules, n = {}) {
   if (n.readOnly) throw Error("This workbook is read-only.");
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!o) throw Error("Worksheet no longer exists.");
-  if (o.protection?.enabled)
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet no longer exists.");
+  if (sheet.protection?.enabled)
     throw Error("Unprotect the worksheet before changing conditional formats.");
   const conditionalRules = normalizeConditionalRules(rules),
-    s = o.conditionalFormats ?? [],
+    s = sheet.conditionalFormats ?? [],
     changes = [];
   for (const m of new Set([
     ...s.map((v) => v.id),
@@ -1947,9 +1947,9 @@ function updateConditionalFormatRules(workbook, sheetId, rules, n = {}) {
       });
   }
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    l = evaluateConditionalFormatRules(o, workbookWithSettings),
+    l = evaluateConditionalFormatRules(sheet, workbookWithSettings),
     c = evaluateConditionalFormatRules(
-      { ...o, conditionalFormats: conditionalRules },
+      { ...sheet, conditionalFormats: conditionalRules },
       workbookWithSettings,
     ),
     h = new Set();
@@ -1964,7 +1964,7 @@ function updateConditionalFormatRules(workbook, sheetId, rules, n = {}) {
       break;
   }
   if (h.size < 50) {
-    for (const cell of Object.keys(o.cells))
+    for (const cell of Object.keys(sheet.cells))
       if (
         ([...conditionalRules, ...s].some((v) =>
           isCellInsideRange(parseRangeAddress(v.range), _t(cell)),
@@ -2017,9 +2017,9 @@ function buildCalculationEvidence(workbook, report) {
     );
   const importedCalculationCaches = workbook.importedCalculationCaches,
     entries = (importedCalculationCaches?.entries ?? []).map((a) => {
-      const s = workbook.sheets.find((sheet) => sheet.id === a.sheetId),
-        cell = s?.cells[a.address],
-        u = s
+      const sheet = workbook.sheets.find((sheet) => sheet.id === a.sheetId),
+        cell = sheet?.cells[a.address],
+        u = sheet
           ? workbookCalculation.calculator.getTypedValue(a.sheetId, a.address)
           : undefined,
         l =
@@ -2030,7 +2030,7 @@ function buildCalculationEvidence(workbook, report) {
             ? Math.abs(a.cache.value - u.value) <=
               1e-10 * Math.max(1, Math.abs(a.cache.value), Math.abs(u.value))
             : a.cache.value === u.value),
-        c = s
+        c = sheet
           ? cell?.literal
             ? "neutralized-or-literal"
             : cell?.raw !== a.formula

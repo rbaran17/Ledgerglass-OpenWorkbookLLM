@@ -228,26 +228,26 @@ function normalizeMaterialityConfig(workbook, r) {
   );
 }
 function resolveMaterialitySourceRange(workbook, r, screenHostScope) {
-  const n = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-  (!n || !screenHostScope.allowedSheetIds.includes(n.id)) &&
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  (!sheet || !screenHostScope.allowedSheetIds.includes(sheet.id)) &&
     failWithMessage("The source is outside the authorized host context.");
   const rangeAddress = parseRangeAddress(r.range);
   return (
     !screenHostScope.includeHidden &&
-      (n.hidden ||
-        n.veryHidden ||
-        cn(n, "row").some(
+      (sheet.hidden ||
+        sheet.veryHidden ||
+        cn(sheet, "row").some(
           (a) =>
             a.start <= rangeAddress.lastRow && a.end >= rangeAddress.firstRow,
         ) ||
-        cn(n, "column").some(
+        cn(sheet, "column").some(
           (a) =>
             a.start <= rangeAddress.lastCol && a.end >= rangeAddress.firstCol,
         )) &&
       failWithMessage(
         "The source range includes hidden content. Explicitly include hidden content only within authorized host scope.",
       ),
-    (n.merges ?? []).some((a) => {
+    (sheet.merges ?? []).some((a) => {
       const s = parseRangeAddress(a);
       return (
         s.firstRow <= rangeAddress.lastRow &&
@@ -259,7 +259,7 @@ function resolveMaterialitySourceRange(workbook, r, screenHostScope) {
       failWithMessage(
         "Unmerge the source range before screening so every record has unambiguous fields.",
       ),
-    n
+    sheet
   );
 }
 function inspectScreenFormulaCells(
@@ -462,10 +462,10 @@ function buildMaterialitySourceEvidence(workbook, r, t = {}) {
       "Provide a bounded source range and scalar field selection.",
     );
   const rangeAddress = parseRangeAddress(r.range),
-    o = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-  (!o ||
-    rangeAddress.lastRow >= o.rowCount ||
-    rangeAddress.lastCol >= o.colCount ||
+    sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  (!sheet ||
+    rangeAddress.lastRow >= sheet.rowCount ||
+    rangeAddress.lastCol >= sheet.colCount ||
     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
       (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       materialityScreenLimits.sourceCells ||
@@ -1016,7 +1016,7 @@ function buildAgingSchedule(workbook, r, t = {}) {
           reasons.push(
             `Currency is missing, invalid or differs from declared ${agingConfiguration.currency}; no conversion or cross-currency aggregation is performed.`,
           )));
-      const V = exceptions.length
+      const bucket = exceptions.length
         ? null
         : agingConfiguration.buckets.findIndex(
             (bucket) =>
@@ -1024,7 +1024,7 @@ function buildAgingSchedule(workbook, r, t = {}) {
               (bucket.to === null || ageDays <= bucket.to),
           );
       return (
-        V === -1 &&
+        bucket === -1 &&
           throwErrorMessage(
             "The configured aging buckets do not cover a valid source row.",
           ),
@@ -1037,7 +1037,7 @@ function buildAgingSchedule(workbook, r, t = {}) {
           currency: currency,
           date: agingDateInput,
           ageDays: ageDays,
-          bucket: V,
+          bucket: bucket,
           disposition: exceptions.length ? "excluded" : "aged",
           exceptions: exceptions,
           reasons: reasons,
@@ -1258,16 +1258,16 @@ function AgingScheduleScreen(e) {
       includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
-    ae = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     oe = [
       ...new Set(
         e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
     de =
-      !!ae &&
-      oe.includes(ae.id) &&
-      (te.includeHidden || (!ae.hidden && !ae.veryHidden)),
+      !!sheet &&
+      oe.includes(sheet.id) &&
+      (te.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     he = JSON.stringify([e.sheetId, e.range]),
     Se = JSON.stringify([e.workbook, oe, te.includeHidden, he]),
     le = JSON.stringify([Se, K]);
@@ -1458,7 +1458,7 @@ function AgingScheduleScreen(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: de ? ae.name : "Outside current context",
+                  children: de ? sheet.name : "Outside current context",
                 }),
               ],
             }),

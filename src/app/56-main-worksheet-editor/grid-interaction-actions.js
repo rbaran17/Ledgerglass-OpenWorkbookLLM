@@ -435,18 +435,19 @@ function createGridInteractionActions({
           !filterSortState.filterValueSearch &&
           !filterSortState.activeColumnSort)
       ) {
-        const rr = mergeRanges.find((mergeRange) =>
+        const mergeRange = mergeRanges.find((mergeRange) =>
           Tp(mergeRange, Ue.row, Ue.col),
         );
-        rr &&
+        mergeRange &&
           (col > Ue.col &&
-            (col = columnVisibilityIndex.next(rr.lastCol, 1) ?? Ue.col),
+            (col = columnVisibilityIndex.next(mergeRange.lastCol, 1) ?? Ue.col),
           col < Ue.col &&
-            (col = columnVisibilityIndex.next(rr.firstCol, -1) ?? Ue.col),
+            (col =
+              columnVisibilityIndex.next(mergeRange.firstCol, -1) ?? Ue.col),
           row > Ue.row &&
-            (row = rowVisibilityIndex.next(rr.lastRow, 1) ?? Ue.row),
+            (row = rowVisibilityIndex.next(mergeRange.lastRow, 1) ?? Ue.row),
           row < Ue.row &&
-            (row = rowVisibilityIndex.next(rr.firstRow, -1) ?? Ue.row));
+            (row = rowVisibilityIndex.next(mergeRange.firstRow, -1) ?? Ue.row));
       }
       const jt = `${columnIndexToLetters(Math.max(0, Math.min(activeSheet.colCount - 1, col)))}${Math.max(1, Math.min(activeSheet.rowCount, row + 1))}`;
       navigationActions.selectCellAddress(

@@ -112,9 +112,9 @@ function discoverArrayFormulaAnchors(workbook, r, context) {
         "Array discovery requires a complete, authorized static dependency closure. Resolve hidden, dynamic, cyclic or unsupported formula dependencies before splitting.",
       );
     for (const v of p) {
-      const g = workbook.sheets.find((sheet) => sheet.id === v.sheetId);
-      (assertSelectionInAuthorizedSheet(g, v.address, context),
-        (!g.cells[v.address] || g.cells[v.address].raw === null) &&
+      const sheet = workbook.sheets.find((sheet) => sheet.id === v.sheetId);
+      (assertSelectionInAuthorizedSheet(sheet, v.address, context),
+        (!sheet.cells[v.address] || sheet.cells[v.address].raw === null) &&
           failWithMessage(
             "Array discovery cannot infer blank or possible spill-child dependencies. Use a reviewed values snapshot before splitting.",
           ),
@@ -153,15 +153,15 @@ function discoverArrayFormulaAnchors(workbook, r, context) {
 function buildTextSplitResult(workbook, request, t = {}) {
   const context = validateTextToColumnsPermissions(workbook, t),
     o = validateTextToColumnsRequest(request),
-    a = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
-  (a || failWithMessage("Choose an existing source worksheet."),
-    assertSelectionInAuthorizedSheet(a, o.sourceRange, context));
+    sheet = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
+  (sheet || failWithMessage("Choose an existing source worksheet."),
+    assertSelectionInAuthorizedSheet(sheet, o.sourceRange, context));
   const rangeAddress = parseRangeAddress(o.sourceRange),
     height = rangeAddress.lastRow - rangeAddress.firstRow + 1;
   ((rangeAddress.firstCol !== rangeAddress.lastCol ||
     height > dataModelBudgets.sourceCells) &&
     failWithMessage("Select one source column containing at most 500 cells."),
-    a.merges?.some((merge) => rangesOverlap(merge, o.sourceRange)) &&
+    sheet.merges?.some((merge) => rangesOverlap(merge, o.sourceRange)) &&
       failWithMessage("Unmerge the source before splitting text."));
   const sources = [],
     l = [],
@@ -174,7 +174,7 @@ function buildTextSplitResult(workbook, request, t = {}) {
     firstRow++
   ) {
     const cellAddress = formatCellAddress(firstRow, rangeAddress.firstCol),
-      cell = a.cells[cellAddress];
+      cell = sheet.cells[cellAddress];
     cell &&
       typeof cell.raw == "string" &&
       cell.raw.startsWith("=") &&
@@ -242,7 +242,7 @@ function buildTextSplitResult(workbook, request, t = {}) {
   const b = `${formatCellAddress(g.row, g.col)}:${formatCellAddress(g.row + height - 1, g.col + h - 1)}`;
   (m &&
     (assertSelectionInAuthorizedSheet(m, b, context),
-    m.id === a.id &&
+    m.id === sheet.id &&
       rangesOverlap(o.sourceRange, b) &&
       failWithMessage(
         "Choose a separate destination so the original source cells remain intact.",
@@ -274,7 +274,7 @@ function buildTextSplitResult(workbook, request, t = {}) {
     discoverArrayFormulaAnchors(
       workbook,
       [
-        { sheet: a, range: o.sourceRange },
+        { sheet: sheet, range: o.sourceRange },
         ...(m ? [{ sheet: m, range: b }] : []),
       ],
       context,
@@ -300,8 +300,8 @@ function buildTextSplitResult(workbook, request, t = {}) {
       const note = `Text to Columns derivation
 Workbook ID: ${JSON.stringify(workbook.id)}
 Source revision: ${workbook.revision}
-Worksheet ID: ${JSON.stringify(a.id)}
-Worksheet name: ${JSON.stringify(a.name)}
+Worksheet ID: ${JSON.stringify(sheet.id)}
+Worksheet name: ${JSON.stringify(sheet.name)}
 Source cell: ${sources[O].address}
 Field: ${j + 1}
 Conversion: ${format}
@@ -347,12 +347,12 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
     m)
   ) {
     const book = structuredClone(workbook),
-      j = book.sheets.find((sheet) => sheet.id === m.id);
-    for (const output of outputs) j.cells[output.address] = output.cell;
+      sheet = book.sheets.find((sheet) => sheet.id === m.id);
+    for (const output of outputs) sheet.cells[output.address] = output.cell;
     checkDataValidationBatch(
       book,
       outputs.map((output) => ({
-        sheetId: j.id,
+        sheetId: sheet.id,
         address: output.address,
         after: output.cell,
       })),
@@ -362,7 +362,7 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
     snapshot: JSON.stringify(workbook),
     request: o,
     context: context,
-    sourceSheetName: a.name,
+    sourceSheetName: sheet.name,
     targetSheetName: targetSheetName,
     targetRange: b,
     width: h,
@@ -708,8 +708,8 @@ function convertFieldToTypedValue(value, r, dateSystem = "1900") {
 function prepareTransformationInput(workbook, r, t) {
   const request = validateFieldTransformRecipe(r),
     context = validateTextToColumnsPermissions(workbook, t),
-    a = workbook.sheets.find((sheet) => sheet.id === request.sourceSheetId);
-  if (!a) throw Error("Choose an existing source worksheet.");
+    sheet = workbook.sheets.find((sheet) => sheet.id === request.sourceSheetId);
+  if (!sheet) throw Error("Choose an existing source worksheet.");
   if (!context.allowNewSheet || workbook.structureProtection?.enabled)
     throw Error("Creating a derived worksheet is not permitted.");
   if (
@@ -729,8 +729,8 @@ function prepareTransformationInput(workbook, r, t) {
   if (u <= Number(request.header))
     throw Error("Select at least one data row in addition to the heading row.");
   if (
-    (assertSelectionInAuthorizedSheet(a, request.sourceRange, context),
-    a.merges?.some((merge) => {
+    (assertSelectionInAuthorizedSheet(sheet, request.sourceRange, context),
+    sheet.merges?.some((merge) => {
       const g = parseRangeAddress(merge);
       return (
         g.firstRow <= rangeAddress.lastRow &&
@@ -744,7 +744,7 @@ function prepareTransformationInput(workbook, r, t) {
   (assertOutputNameUnreferenced(workbook, request.outputName),
     discoverArrayFormulaAnchors(
       workbook,
-      [{ sheet: a, range: request.sourceRange }],
+      [{ sheet: sheet, range: request.sourceRange }],
       context,
     ));
   const sources = [],
@@ -762,7 +762,7 @@ function prepareTransformationInput(workbook, r, t) {
       firstCol++
     ) {
       const cellAddress = formatCellAddress(firstRow, firstCol),
-        cell = a.cells[cellAddress];
+        cell = sheet.cells[cellAddress];
       if (
         cell &&
         typeof cell.raw == "string" &&
@@ -776,7 +776,7 @@ function prepareTransformationInput(workbook, r, t) {
         throw Error(
           "Source text exceeds the 200,000-character processing budget.",
         );
-      const rowOrigin = findRowOrigin(workbook, a.id, firstRow);
+      const rowOrigin = findRowOrigin(workbook, sheet.id, firstRow);
       (sources.push({
         address: cellAddress,
         ...(cell ? { original: structuredClone(cell) } : {}),
@@ -798,7 +798,7 @@ function prepareTransformationInput(workbook, r, t) {
   return {
     request: request,
     context: context,
-    source: a,
+    source: sheet,
     sources: sources,
     rows: rows,
     headers: headers,
@@ -940,7 +940,7 @@ function applyTransformationSteps(rows, headers, steps, dateSystem = "1900") {
           throw Error("The inferred output would exceed 50 fields.");
         const g = new Set();
         for (const example of d.examples) {
-          const row = rows.find((w) => w.row === example.row);
+          const row = rows.find((row) => row.row === example.row);
           if (!row || g.has(example.row))
             throw Error(
               "An inference example is outside the data rows or duplicated.",
@@ -1176,8 +1176,8 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
         (output) =>
           output.sources.length !== 1 ||
           JSON.stringify(
-            sources.find((y) => y.address === output.sources[0])?.original
-              ?.raw ?? null,
+            sources.find((source) => source.address === output.sources[0])
+              ?.original?.raw ?? null,
           ) !== JSON.stringify(output.value),
       ).length,
       exceptions: exceptions.length,
@@ -1659,12 +1659,12 @@ function validateRecipeOutputTable(e) {
   return e;
 }
 function resolveRecipeSourceTable(workbook, source, t) {
-  const n = workbook.sheets.find((sheet) => sheet.id === source.sheetId);
-  if (!n || (t.allowedSheetIds && !t.allowedSheetIds.includes(n.id)))
+  const sheet = workbook.sheets.find((sheet) => sheet.id === source.sheetId);
+  if (!sheet || (t.allowedSheetIds && !t.allowedSheetIds.includes(sheet.id)))
     throw Error("A recipe source is outside the authorized host context.");
   let range = source.range;
   if (source.tableId) {
-    const c = n.tables?.find((table) => table.id === source.tableId);
+    const c = sheet.tables?.find((table) => table.id === source.tableId);
     if (!c)
       throw Error(
         "The selected source table no longer exists. Review the recipe source.",
@@ -1689,7 +1689,7 @@ function resolveRecipeSourceTable(workbook, source, t) {
     evidence = {
       source: source,
       resolvedRange: snapshot.source.range,
-      sheetName: n.name,
+      sheetName: sheet.name,
       hash: fingerprintCanonicalValue({
         workbookId: workbook.id,
         source: source,

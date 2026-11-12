@@ -43,9 +43,9 @@ function createViewAndSelectionActions({
       selectionState.setCompletedSelectionAreas([]));
   }
   function applySelectionAreas(fe) {
-    const Oe = parseSelectionAreas(fe);
-    (selectionState.setCompletedSelectionAreas(Oe.slice(0, -1)),
-      selectionState.setActiveSelectionRange(Oe.at(-1)));
+    const selectionAreas = parseSelectionAreas(fe);
+    (selectionState.setCompletedSelectionAreas(selectionAreas.slice(0, -1)),
+      selectionState.setActiveSelectionRange(selectionAreas.at(-1)));
   }
   function requireSingleSelectionRange() {
     if (selectionAreas.length > 1)
@@ -144,13 +144,15 @@ function createViewAndSelectionActions({
       ).logicalOffset,
       Nt = {};
     for (const wt of Pv(sheetSplitPanes)) {
-      const jt = computeGridViewport(splitPaneSizes.current.current[wt]),
+      const gridViewport = computeGridViewport(
+          splitPaneSizes.current.current[wt],
+        ),
         rr = splitPaneSizes.current.current[wt],
         Mr = anchorsMatchOnAxis(fe, wt, "row")
           ? logicalToPhysicalPixels(
               logicalOffset,
               scrollableRowLayout.total,
-              jt.rowViewport,
+              gridViewport.rowViewport,
               zoomScale,
             )
           : rr.top,
@@ -158,7 +160,7 @@ function createViewAndSelectionActions({
           ? logicalToPhysicalPixels(
               gt,
               scrollableColumnLayout.total,
-              jt.columnViewport,
+              gridViewport.columnViewport,
               zoomScale,
             )
           : rr.left;

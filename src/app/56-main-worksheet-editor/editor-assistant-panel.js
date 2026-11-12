@@ -266,7 +266,7 @@ function EditorAssistantPanel({
                                   viewAndSelectionActions.runGuardedAction(
                                     () => {
                                       const fe = latestEditStateRef.current,
-                                        Oe = {
+                                        assistantSelection = {
                                           sheetId: fe.sheetId,
                                           range: fe.range,
                                         };
@@ -276,7 +276,7 @@ function EditorAssistantPanel({
                                           .current ||
                                         !evaluateAnswerEvidence(
                                           fe.book,
-                                          Oe,
+                                          assistantSelection,
                                           assistantState.answerCitations,
                                         ).current
                                       )
@@ -285,7 +285,7 @@ function EditorAssistantPanel({
                                         );
                                       const Be = validateProposedCalculation(
                                         fe.book,
-                                        Oe,
+                                        assistantSelection,
                                         assistantState.assistantProposal,
                                       );
                                       (cellEditActions.applyCellPatches(

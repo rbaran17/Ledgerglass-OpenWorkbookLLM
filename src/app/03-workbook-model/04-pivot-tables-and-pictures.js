@@ -286,9 +286,9 @@ function F2(workbook, sheetId, selection) {
 }
 function assertDrawingPreviewCurrent(workbook, sheetId, t = {}) {
   if (t.readOnly) throw Error("This workbook is read-only.");
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!n) throw Error("The worksheet no longer exists.");
-  assertSheetUnprotected(n);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("The worksheet no longer exists.");
+  assertSheetUnprotected(sheet);
   const snapshot = t.snapshot;
   if (
     snapshot &&
@@ -1141,13 +1141,14 @@ const computePivotRefreshFingerprint = (e) => {
   );
 };
 function findPivotDefinition(workbook, pivotId) {
-  const t = workbook.sheets.find((sheet) =>
+  const sheet = workbook.sheets.find((sheet) =>
       sheet.pivots?.some((pivot) => pivot.id === pivotId),
     ),
-    definition = t?.pivots?.find((pivot) => pivot.id === pivotId);
+    definition = sheet?.pivots?.find((pivot) => pivot.id === pivotId);
   return (
-    (!t || !definition) && throwWorkbookError("Pivot definition not found."),
-    { owner: t, definition: definition }
+    (!sheet || !definition) &&
+      throwWorkbookError("Pivot definition not found."),
+    { owner: sheet, definition: definition }
   );
 }
 function buildPivotStatusRecord(workbook, definition, pivotRefreshState) {
@@ -1945,14 +1946,14 @@ function resolveDefinedNameValue(e, workbook, t, n = [], o) {
       o,
     );
     if (l !== t) {
-      const h = workbook.sheets.find((sheet) => sheet.id === l),
+      const sheet = workbook.sheets.find((sheet) => sheet.id === l),
         f = m5(definedNameValue);
       definedNameValue = replaceTextSpans(definedNameValue, f, (p) => {
         const m = f.indexOf(p),
           v = f[m - 1],
           g = v?.cell && definedNameValue.slice(v.end, p.start).trim() === ":";
         return p.cell && !p.qualifier && !g
-          ? formatQuotedSheetPrefix(h.name) + p.text
+          ? formatQuotedSheetPrefix(sheet.name) + p.text
           : p.text;
       });
     }

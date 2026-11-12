@@ -1567,13 +1567,13 @@ function FunctionAndNameDialog({
   onInsertFormula,
 }) {
   const { text, language } = useWorkbookMessages(),
-    c = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
     [h, f] = ne.useState(""),
     [functionName, m] = ne.useState("SUM"),
     [v, g] = ne.useState(range),
     [b, y] = ne.useState(""),
     [refersTo, E] = ne.useState(
-      `='${(c?.name ?? "Sheet1").replace(/'/g, "''")}'!${range}`,
+      `='${(sheet?.name ?? "Sheet1").replace(/'/g, "''")}'!${range}`,
     ),
     [scopeSheetId, k] = ne.useState(""),
     [comment, I] = ne.useState(""),
@@ -1588,7 +1588,7 @@ function FunctionAndNameDialog({
     H = (se, we) => {
       (_ || B(JSON.stringify(workbook)), C(true), N(null), U(""), se(we));
     },
-    Q = readOnly || !c || !!workbook.structureProtection?.enabled,
+    Q = readOnly || !sheet || !!workbook.structureProtection?.enabled,
     X$1 = (se) =>
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
@@ -1716,8 +1716,8 @@ function FunctionAndNameDialog({
             definition: definition,
           }).next,
           ye = scopeSheetId || sheetId,
-          Te = next.sheets.find((sheet) => sheet.id === ye);
-        Te.cells[se] = { raw: `=${b.trim()}${formulaTree ? `(${R})` : ""}` };
+          sheet = next.sheets.find((sheet) => sheet.id === ye);
+        sheet.cells[se] = { raw: `=${b.trim()}${formulaTree ? `(${R})` : ""}` };
         const workbookWithSettings = calculateWorkbookWithSettings(next),
           qe = workbookWithSettings(ye, se),
           ht = workbookWithSettings

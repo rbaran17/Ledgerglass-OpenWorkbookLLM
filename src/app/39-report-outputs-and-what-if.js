@@ -79,7 +79,7 @@ function ReportOutputsDialog(e) {
     },
     T = JSON.stringify([C, e.filter]),
     N = !!m && y === e.workbook && E === T,
-    R = e.workbook.sheets.find((sheet) => sheet.id === u.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === u.sheetId),
     L = e.workbook.reportOutputs?.find((reportOutput) => reportOutput.id === j),
     $ = L ? describeReportOutputStatus(e.workbook, L.id, C) : null,
     U =
@@ -163,8 +163,11 @@ function ReportOutputsDialog(e) {
     J = async (ae) => {
       (_(true), D(null), F(""));
       try {
-        const oe = await importAutomationFile(ae, cancellableOperation.begin());
-        (inspectEmbeddedObjects(oe), D(oe));
+        const inspection = await importAutomationFile(
+          ae,
+          cancellableOperation.begin(),
+        );
+        (inspectEmbeddedObjects(inspection), D(inspection));
       } catch (error) {
         F(error.message);
       } finally {
@@ -295,7 +298,7 @@ function ReportOutputsDialog(e) {
                           i.jsxs("select", {
                             value: u.kind === "range" ? "range" : u.objectId,
                             onChange: (event) => {
-                              const oe = R?.objects?.find(
+                              const oe = sheet?.objects?.find(
                                 (object) => object.id === event.target.value,
                               );
                               H(
@@ -316,7 +319,7 @@ function ReportOutputsDialog(e) {
                                 value: "range",
                                 children: "Cell range / table",
                               }),
-                              R?.objects?.map((object) =>
+                              sheet?.objects?.map((object) =>
                                 i.jsxs(
                                   "option",
                                   {
@@ -809,15 +812,16 @@ function resolveWhatIfHostScope(workbook, r) {
   };
 }
 function isVisibleAuthorizedCell(workbook, r, whatIfHostScope) {
-  const n = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
-  if (!n || !whatIfHostScope.allowedSheetIds.includes(n.id)) return false;
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.sheetId);
+  if (!sheet || !whatIfHostScope.allowedSheetIds.includes(sheet.id))
+    return false;
   const o = _t(r.address);
   return (
     whatIfHostScope.includeHidden ||
-    (!n.hidden &&
-      !n.veryHidden &&
-      !cn(n, "row").some((a) => a.start <= o.row && o.row <= a.end) &&
-      !cn(n, "column").some((a) => a.start <= o.col && o.col <= a.end))
+    (!sheet.hidden &&
+      !sheet.veryHidden &&
+      !cn(sheet, "row").some((a) => a.start <= o.row && o.row <= a.end) &&
+      !cn(sheet, "column").some((a) => a.start <= o.col && o.col <= a.end))
   );
 }
 const whatIfAllowedFunctions = new Set([
@@ -852,26 +856,26 @@ function computeWhatIfResult(workbook, request, t = {}) {
         "A what-if source is missing or outside the visible, authorized host context.",
       );
   const s = n.inputs.map((input, p) => {
-      const m = workbook.sheets.find((sheet) => sheet.id === input.sheetId),
-        cell = m.cells[input.address],
+      const sheet = workbook.sheets.find((sheet) => sheet.id === input.sheetId),
+        cell = sheet.cells[input.address],
         g = _t(input.address);
       if (!cell || !isFiniteNumber(cell.raw))
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas, text, blanks or spill outputs.",
         );
-      if (m.protection?.enabled)
+      if (sheet.protection?.enabled)
         throw Error(
           "A changing worksheet is protected. Unprotect it before analyzing scenarios.",
         );
-      if (m.merges?.some((merge) => isCellInRange(merge, input.address)))
+      if (sheet.merges?.some((merge) => isCellInRange(merge, input.address)))
         throw Error("Merged cells cannot be what-if inputs.");
       if (
-        [...(m.pivots ?? []), ...(m.queries ?? [])].some((E) =>
+        [...(sheet.pivots ?? []), ...(sheet.queries ?? [])].some((E) =>
           isCellInRange(E.outputRange, input.address),
         )
       )
         throw Error("Generated pivot/query results cannot be what-if inputs.");
-      for (const E of m.tables ?? []) {
+      for (const E of sheet.tables ?? []) {
         if (!isCellInRange(E.range, input.address)) continue;
         const rangeAddress = parseRangeAddress(E.range),
           k = E.columns[g.col - rangeAddress.firstCol];
@@ -879,15 +883,15 @@ function computeWhatIfResult(workbook, request, t = {}) {
           g.row === rangeAddress.firstRow ||
           (E.showTotals && g.row === rangeAddress.lastRow) ||
           k?.calculatedFormula ||
-          Object.entries(m.cells).some(([F, I]) => {
+          Object.entries(sheet.cells).some(([F, cell]) => {
             const O = _t(F);
             return (
               O.col === g.col &&
               O.row > rangeAddress.firstRow &&
               O.row <= rangeAddress.lastRow - (E.showTotals ? 1 : 0) &&
-              !I.literal &&
-              typeof I.raw == "string" &&
-              I.raw.startsWith("=")
+              !cell.literal &&
+              typeof cell.raw == "string" &&
+              cell.raw.startsWith("=")
             );
           })
         )
@@ -895,7 +899,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
             "Table headers, totals and calculated columns cannot be what-if inputs.",
           );
       }
-      const b = (m.validations ?? []).filter((E) =>
+      const b = (sheet.validations ?? []).filter((E) =>
         isCellInRange(E.range, input.address),
       );
       if (
@@ -904,7 +908,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
         )
       )
         throw Error(
-          `An assumption for ${m.name}!${input.address} violates its data validation constraints. Baseline unchanged.`,
+          `An assumption for ${sheet.name}!${input.address} violates its data validation constraints. Baseline unchanged.`,
         );
       return cell.raw;
     }),
@@ -946,10 +950,10 @@ function computeWhatIfResult(workbook, request, t = {}) {
       throw Error(
         "What-if analysis requires a complete dependency closure within 500 cells, 5,000 scanned formulas and depth 8.",
       );
-    const b = m.issues.find((issue) => g.has(issue.from));
-    if (b || m.cycles.length)
+    const issue = m.issues.find((issue) => g.has(issue.from));
+    if (issue || m.cycles.length)
       throw Error(
-        `What-if analysis requires supported static dependencies: ${b?.message ?? "a cycle was found."}`,
+        `What-if analysis requires supported static dependencies: ${issue?.message ?? "a cycle was found."}`,
       );
     for (const y of v) d.set(y.key, { sheetId: y.sheetId, address: y.address });
   }
@@ -966,8 +970,8 @@ function computeWhatIfResult(workbook, request, t = {}) {
         throw Error(
           "A formula dependency is outside the visible, authorized host context.",
         );
-      const p = workbook.sheets.find((sheet) => sheet.id === f.sheetId),
-        cell = p.cells[f.address];
+      const sheet = workbook.sheets.find((sheet) => sheet.id === f.sheetId),
+        cell = sheet.cells[f.address];
       if (!cell || cell.raw === null)
         throw Error(
           "What-if analysis requires populated static dependencies; blank or possible spill-child cells are unsupported.",
@@ -977,7 +981,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
         typeof cell.raw == "string" &&
         cell.raw.startsWith("=")
       ) {
-        const v = resolveDefinedNameValue(cell.raw, workbook, p.id).replace(
+        const v = resolveDefinedNameValue(cell.raw, workbook, sheet.id).replace(
           /"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g,
           "",
         );
@@ -998,7 +1002,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
       }
       return {
         ...f,
-        sheetName: p.name,
+        sheetName: sheet.name,
         raw: cell.raw,
         ...(cell.literal === undefined ? {} : { literal: cell.literal }),
       };
@@ -1026,7 +1030,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
       const m = new Map(
           n.inputs.map((input, w) => [cellAddressKey(input), p[w]]),
         ),
-        v = {
+        workbook = {
           ...c,
           sheets: c.sheets.map((sheet) => ({
             ...sheet,
@@ -1040,7 +1044,7 @@ function computeWhatIfResult(workbook, request, t = {}) {
             ),
           })),
         },
-        workbookWithSettings = calculateWorkbookWithSettings(v),
+        workbookWithSettings = calculateWorkbookWithSettings(workbook),
         outputs = n.outputs.map((output) =>
           workbookWithSettings(output.sheetId, output.address),
         );

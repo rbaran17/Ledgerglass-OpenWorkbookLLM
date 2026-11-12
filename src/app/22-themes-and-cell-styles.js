@@ -76,18 +76,18 @@ function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
   const allowedSheetIds = n.allowedSheetIds,
     a = (c) => !allowedSheetIds || allowedSheetIds.includes(c),
     s = (c) => {
-      const h = activeWorkbook.sheets.find(
+      const sheet = activeWorkbook.sheets.find(
         (sheet) => sheet.id === c && a(sheet.id),
       );
-      if (!h)
+      if (!sheet)
         throw Error(
           "The destination is outside the available worksheet scope.",
         );
-      if (h.hidden || h.veryHidden)
+      if (sheet.hidden || sheet.veryHidden)
         throw Error(
           "The destination worksheet is hidden. Make it visible before navigating.",
         );
-      return h;
+      return sheet;
     };
   s(r);
   const d = [],
@@ -121,15 +121,15 @@ function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
           w = g;
         if (b) {
           const k = b[1]?.replace(/''/g, "'") ?? b[2].trim(),
-            F = activeWorkbook.sheets.find(
+            sheet = activeWorkbook.sheets.find(
               (sheet) =>
                 a(sheet.id) && sheet.name.toLowerCase() === k.toLowerCase(),
             );
-          if (!F)
+          if (!sheet)
             throw Error(
               "The destination is outside the available worksheet scope.",
             );
-          ((sheetId = F.id), (w = b[3].trim()));
+          ((sheetId = sheet.id), (w = b[3].trim()));
         }
         if (
           (s(sheetId),
@@ -293,7 +293,7 @@ function CellStyleSummary({ style, catalog }) {
               children: [
                 i.jsx(LocalizedText, { children: "Named style:" }),
                 " ",
-                catalog?.styles.find((s) => s.id === t.styleId)?.name ??
+                catalog?.styles.find((style) => style.id === t.styleId)?.name ??
                   "Missing style",
               ],
             }),
@@ -575,23 +575,23 @@ function ThemesAndCellStylesDialog(e) {
     ),
     selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
     rangeAddress = parseRangeAddress(e.range),
-    c = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     h =
       e.active && isCellAddressInRanges(selectionAreas, e.active)
         ? e.active
         : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
-    f = c?.cells[h]?.style?.binding?.styleId,
+    f = sheet?.cells[h]?.style?.binding?.styleId,
     [styleId, m] = ne.useState(
       d.styles.some((style) => style.id === f) ? f : (d.styles[0]?.id ?? ""),
     ),
-    v = d.styles.find((style) => style.id === styleId),
+    style = d.styles.find((style) => style.id === styleId),
     [g, b] = ne.useState("Theme"),
     [theme, w] = ne.useState(cloneStructuredValue(d.theme)),
     [definition, A] = ne.useState(
-      cloneStructuredValue(v?.definition ?? { base: {} }),
+      cloneStructuredValue(style?.definition ?? { base: {} }),
     ),
     [k, F] = ne.useState("Custom style"),
-    [I, O] = ne.useState(v?.name ?? ""),
+    [I, O] = ne.useState(style?.name ?? ""),
     [plan, z] = ne.useState(),
     [V, D] = ne.useState(""),
     [B, _] = ne.useState(0),
@@ -600,10 +600,10 @@ function ThemesAndCellStylesDialog(e) {
       s.sheet !== e.sheetId ||
       s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.active !== e.active,
-    disabled = e.readOnly || C || !c,
+    disabled = e.readOnly || C || !sheet,
     N =
       disabled ||
-      !!c?.protection?.enabled ||
+      !!sheet?.protection?.enabled ||
       countSelectionCells(selectionAreas) > 500;
   function R() {
     (z(undefined), D(""), _(0));
@@ -652,9 +652,9 @@ function ThemesAndCellStylesDialog(e) {
   }
   function H(de) {
     m(de);
-    const he = d.styles.find((style) => style.id === de);
-    (A(cloneStructuredValue(he?.definition ?? { base: {} })),
-      O(he?.name ?? ""),
+    const style = d.styles.find((style) => style.id === de);
+    (A(cloneStructuredValue(style?.definition ?? { base: {} })),
+      O(style?.name ?? ""),
       R());
   }
   ne.useEffect(() => {
@@ -722,7 +722,7 @@ function ThemesAndCellStylesDialog(e) {
         i.jsxs("div", {
           className: "ts-location",
           children: [
-            c?.name ?? "Missing sheet",
+            sheet?.name ?? "Missing sheet",
             " · ",
             selectionAreas.join(", "),
             " ·",
@@ -816,12 +816,18 @@ function ThemesAndCellStylesDialog(e) {
                                     : "Custom",
                                   disabled: disabled,
                                   onChange: (event) => {
-                                    const he = builtInWorkbookThemes.find(
-                                      (builtInWorkbookTheme) =>
-                                        builtInWorkbookTheme.name ===
-                                        event.target.value,
-                                    );
-                                    he && L(cloneStructuredValue(he));
+                                    const builtInWorkbookTheme =
+                                      builtInWorkbookThemes.find(
+                                        (builtInWorkbookTheme) =>
+                                          builtInWorkbookTheme.name ===
+                                          event.target.value,
+                                      );
+                                    builtInWorkbookTheme &&
+                                      L(
+                                        cloneStructuredValue(
+                                          builtInWorkbookTheme,
+                                        ),
+                                      );
                                   },
                                   lang: language("Theme preset"),
                                   "data-ui-label": "Theme preset",
@@ -1005,7 +1011,7 @@ function ThemesAndCellStylesDialog(e) {
                           className: "ts-actions",
                           children: [
                             i.jsx("button", {
-                              disabled: N || !v,
+                              disabled: N || !style,
                               onClick: () =>
                                 U({
                                   kind: "applyStyle",
@@ -1018,7 +1024,7 @@ function ThemesAndCellStylesDialog(e) {
                               }),
                             }),
                             i.jsx("button", {
-                              disabled: N || !v,
+                              disabled: N || !style,
                               onClick: () =>
                                 U({
                                   kind: "reapplyStyle",
@@ -1051,7 +1057,7 @@ function ThemesAndCellStylesDialog(e) {
                               "Apply keeps direct formatting. Reapply clears direct font, fill, alignment and border overrides. Values, formulas, number formats and review evidence are preserved.",
                           }),
                         }),
-                        c?.protection?.enabled &&
+                        sheet?.protection?.enabled &&
                           i.jsx("p", {
                             className: "ts-notice",
                             children: i.jsx(LocalizedText, {
@@ -1212,7 +1218,7 @@ function ThemesAndCellStylesDialog(e) {
                                     $({
                                       base: cloneStructuredValue(
                                         resolveEffectiveCellStyle(
-                                          c?.cells[h]?.style,
+                                          sheet?.cells[h]?.style,
                                         ),
                                       ),
                                     }),
@@ -1232,7 +1238,7 @@ function ThemesAndCellStylesDialog(e) {
                                   }),
                                 }),
                                 i.jsx("button", {
-                                  disabled: !v,
+                                  disabled: !style,
                                   onClick: () =>
                                     U({
                                       kind: "updateStyle",
@@ -1255,7 +1261,7 @@ function ThemesAndCellStylesDialog(e) {
                           ],
                         }),
                         i.jsxs("fieldset", {
-                          disabled: disabled || !v,
+                          disabled: disabled || !style,
                           children: [
                             i.jsx("legend", {
                               children: i.jsx(LocalizedText, {

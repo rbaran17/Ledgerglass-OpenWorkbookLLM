@@ -87,8 +87,8 @@ function ChartInspectionPanel({
               2,
             ),
           });
-      } catch (b) {
-        c(b instanceof Error ? b.message : String(b));
+      } catch (error) {
+        c(error instanceof Error ? error.message : String(error));
       }
     };
   return i.jsxs("section", {
@@ -359,7 +359,7 @@ function PicturePropertiesDialog(e) {
         : /chart/i.test(e.mode)
           ? "chart"
           : "shape"),
-    s = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     [d] = ne.useState(() => ({ current: F2(e.workbook, e.sheetId, e.range) })),
     u = ne.useRef(e.mode),
     l = ne.useRef(e.objectId),
@@ -368,7 +368,7 @@ function PicturePropertiesDialog(e) {
     f = ne.useRef(true),
     p = ne.useRef(0);
   (ne.useRef(null), (c.current = e));
-  const [m, v] = ne.useState(() =>
+  const [object, v] = ne.useState(() =>
       o
         ? structuredClone(o)
         : {
@@ -387,7 +387,7 @@ function PicturePropertiesDialog(e) {
       d.current.selection !== e.range ||
       u.current !== e.mode ||
       l.current !== e.objectId,
-    F = e.readOnly || k || !s || !!s?.protection?.enabled,
+    F = e.readOnly || k || !sheet || !!sheet?.protection?.enabled,
     I = () => {
       const L = c.current;
       if (u.current !== L.mode || l.current !== L.objectId)
@@ -477,30 +477,37 @@ function PicturePropertiesDialog(e) {
     try {
       if ((I(), E)) return;
       const $ = c.current,
-        U = $.workbook.sheets.find((sheet) => sheet.id === $.sheetId);
+        sheet = $.workbook.sheets.find((sheet) => sheet.id === $.sheetId);
       if (
         (a === "chart" &&
-          (measureChartSelection(m.range, U),
+          (measureChartSelection(object.range, sheet),
           formatDiagnosticsMessage(
-            inspectChartSource(U, m, calculateWorkbookWithSettings($.workbook)),
+            inspectChartSource(
+              sheet,
+              object,
+              calculateWorkbookWithSettings($.workbook),
+            ),
           )),
-        a === "picture" && !m.dataURL)
+        a === "picture" && !object.dataURL)
       )
         throw Error("Choose a picture first.");
-      const G = structuredClone(m);
+      const G = structuredClone(object);
       if (
         (a === "picture" &&
           (G.evidence = {
-            ...(m.evidence ??
-              createPictureEvidence(m.dataURL, { origin: "legacy-native" })),
+            ...(object.evidence ??
+              createPictureEvidence(object.dataURL, {
+                origin: "legacy-native",
+              })),
             sourceLocator: sourceLocator || undefined,
           }),
-        e.objectId && !U.objects?.some((object) => object.id === e.objectId))
+        e.objectId &&
+          !sheet.objects?.some((object) => object.id === e.objectId))
       )
         throw Error("The drawing no longer exists.");
       const H = e.objectId
-          ? (U.objects ?? []).map((X) => (X.id === e.objectId ? G : X))
-          : [...(U.objects ?? []), G],
+          ? (sheet.objects ?? []).map((X) => (X.id === e.objectId ? G : X))
+          : [...(sheet.objects ?? []), G],
         Q = setSheetDrawingObjects($.workbook, $.sheetId, H, {
           readOnly: $.readOnly,
           snapshot: d.current,
@@ -521,17 +528,17 @@ function PicturePropertiesDialog(e) {
     }
   }
   const V =
-      m.evidence ??
-      (m.dataURL
-        ? createPictureEvidence(m.dataURL, { origin: "legacy-native" })
+      object.evidence ??
+      (object.dataURL
+        ? createPictureEvidence(object.dataURL, { origin: "legacy-native" })
         : undefined),
     D = ne.useMemo(() => {
-      if (a !== "chart" || !s) return { report: null, error: "" };
+      if (a !== "chart" || !sheet) return { report: null, error: "" };
       try {
         return {
           report: inspectChartSource(
-            s,
-            m,
+            sheet,
+            object,
             calculateWorkbookWithSettings(e.workbook),
           ),
           error: "",
@@ -542,7 +549,7 @@ function PicturePropertiesDialog(e) {
           error: error instanceof Error ? error.message : String(error),
         };
       }
-    }, [a, s, m, e.workbook]),
+    }, [a, sheet, object, e.workbook]),
     B = a[0].toUpperCase() + a.slice(1) + " properties";
   return i.jsx("div", {
     className: "dg-backdrop",
@@ -617,7 +624,7 @@ function PicturePropertiesDialog(e) {
                     "This workbook is read-only. Object properties remain available to view.",
                 }),
               }),
-            s?.protection?.enabled &&
+            sheet?.protection?.enabled &&
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
@@ -673,11 +680,11 @@ function PicturePropertiesDialog(e) {
                           }),
                         ],
                       }),
-                      m.dataURL &&
+                      object.dataURL &&
                         i.jsx("img", {
                           className: "dg-picture-preview",
-                          src: m.dataURL,
-                          alt: m.label,
+                          src: object.dataURL,
+                          alt: object.label,
                         }),
                     ],
                   }),
@@ -687,7 +694,7 @@ function PicturePropertiesDialog(e) {
                       i.jsx(LocalizedText, { children: "Shape" }),
                       i.jsxs("select", {
                         "aria-label": text("Shape type"),
-                        value: m.shape,
+                        value: object.shape,
                         onChange: (event) =>
                           update({ shape: event.target.value }),
                         lang: language("Shape type"),
@@ -715,7 +722,7 @@ function PicturePropertiesDialog(e) {
                   }),
                 a === "chart" &&
                   i.jsx(ChartSettingsPanel, {
-                    object: m,
+                    object: object,
                     report: D.report,
                     update: update,
                   }),
@@ -724,7 +731,7 @@ function PicturePropertiesDialog(e) {
                     a === "chart" ? "Chart title" : "Label",
                     i.jsx("input", {
                       "aria-label": text("Object label"),
-                      value: m.label,
+                      value: object.label,
                       maxLength: 500,
                       onChange: (event) =>
                         update({ label: event.target.value }),
@@ -733,7 +740,7 @@ function PicturePropertiesDialog(e) {
                     }),
                   ],
                 }),
-                m.chart !== "sparkline" &&
+                object.chart !== "sparkline" &&
                   i.jsxs("div", {
                     className: "dg-two",
                     children: [
@@ -744,7 +751,7 @@ function PicturePropertiesDialog(e) {
                             min: 24,
                             max: 4e3,
                             "aria-label": text("Object width"),
-                            value: m.width,
+                            value: object.width,
                             onValueChange: (L) => update({ width: Number(L) }),
                             lang: language("Object width"),
                             "data-ui-label": "Object width",
@@ -758,7 +765,7 @@ function PicturePropertiesDialog(e) {
                             min: 24,
                             max: 4e3,
                             "aria-label": text("Object height"),
-                            value: m.height,
+                            value: object.height,
                             onValueChange: (L) => update({ height: Number(L) }),
                             lang: language("Object height"),
                             "data-ui-label": "Object height",
@@ -777,7 +784,7 @@ function PicturePropertiesDialog(e) {
                           i.jsx("input", {
                             type: "color",
                             "aria-label": text("Object fill"),
-                            value: m.fill,
+                            value: object.fill,
                             onChange: (event) =>
                               update({ fill: event.target.value }),
                             lang: language("Object fill"),
@@ -791,7 +798,7 @@ function PicturePropertiesDialog(e) {
                           i.jsx("input", {
                             type: "color",
                             "aria-label": text("Object outline"),
-                            value: m.stroke,
+                            value: object.stroke,
                             onChange: (event) =>
                               update({ stroke: event.target.value }),
                             lang: language("Object outline"),
@@ -805,7 +812,7 @@ function PicturePropertiesDialog(e) {
                   className: "dg-muted",
                   children: [
                     i.jsx(LocalizedText, { children: "Anchor: " }),
-                    m.anchor,
+                    object.anchor,
                     i.jsx(LocalizedText, {
                       children:
                         ". Select the object to move, resize, rename, or delete it.",
@@ -1021,10 +1028,10 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
 }
 function DrawingObjectOverlay(e) {
   const { text, language } = useWorkbookMessages(),
-    n = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     o = ne.useRef(e);
   o.current = e;
-  const a = e.readOnly || !n || !!n?.protection?.enabled,
+  const a = e.readOnly || !sheet || !!sheet?.protection?.enabled,
     [s, d] = ne.useState(null),
     [u, l] = ne.useState(""),
     [objectId, h] = ne.useState(null),
@@ -1034,13 +1041,13 @@ function DrawingObjectOverlay(e) {
   function v(E, A, k) {
     try {
       const I = o.current,
-        O = I.workbook.sheets.find((sheet) => sheet.id === I.sheetId);
-      if (!O?.objects?.some((object) => object.id === E.id))
+        sheet = I.workbook.sheets.find((sheet) => sheet.id === I.sheetId);
+      if (!sheet?.objects?.some((object) => object.id === E.id))
         throw Error("The selected drawing no longer exists.");
       const j = setSheetDrawingObjects(
         I.workbook,
         I.sheetId,
-        O.objects.map((object) => (object.id === E.id ? E : object)),
+        sheet.objects.map((object) => (object.id === E.id ? E : object)),
         {
           readOnly: I.readOnly,
           snapshot: k ?? F2(I.workbook, I.sheetId, I.selection),
@@ -1055,11 +1062,11 @@ function DrawingObjectOverlay(e) {
   function g(E) {
     try {
       const A = o.current,
-        k = A.workbook.sheets.find((sheet) => sheet.id === A.sheetId),
+        sheet = A.workbook.sheets.find((sheet) => sheet.id === A.sheetId),
         F = setSheetDrawingObjects(
           A.workbook,
           A.sheetId,
-          (k?.objects ?? []).filter((I) => I.id !== E),
+          (sheet?.objects ?? []).filter((I) => I.id !== E),
           {
             readOnly: A.readOnly,
             snapshot: F2(A.workbook, A.sheetId, A.selection),
@@ -1193,12 +1200,12 @@ function DrawingObjectOverlay(e) {
           lang: language("Worksheet drawings"),
           "data-ui-label": "Worksheet drawings",
           children: [
-            (n?.objects ?? []).map((E) => {
+            (sheet?.objects ?? []).map((E) => {
               const object = f?.id === E.id ? f.next : E,
                 k = e.positionForCell(object.anchor),
                 disabled =
                   object.kind === "chart" && object.chart === "sparkline",
-                I = applyChartDrawingLayout(n, object);
+                I = applyChartDrawingLayout(sheet, object);
               return k
                 ? i.jsxs(
                     "div",
@@ -1226,7 +1233,7 @@ function DrawingObjectOverlay(e) {
                       children: [
                         i.jsx(DrawingObjectSvg, {
                           object: object,
-                          sheet: n,
+                          sheet: sheet,
                           calc: e.calc,
                           textScale: e.scale,
                         }),
@@ -1330,7 +1337,7 @@ function DrawingObjectOverlay(e) {
           ],
         }),
         objectId &&
-          n?.objects?.some((object) => object.id === objectId) &&
+          sheet?.objects?.some((object) => object.id === objectId) &&
           i.jsx(PicturePropertiesDialog, {
             mode: "drawing-properties",
             objectId: objectId,
@@ -1338,7 +1345,7 @@ function DrawingObjectOverlay(e) {
             sheetId: e.sheetId,
             range:
               e.selection ??
-              n.objects.find((object) => object.id === objectId).anchor,
+              sheet.objects.find((object) => object.id === objectId).anchor,
             readOnly: e.readOnly,
             onClose: () => h(null),
             onWorkbookChange: e.onWorkbookChange,
@@ -1388,9 +1395,13 @@ function PrintPagePreview({
   for (const E of p) b.push(b.at(-1) + rowHeightAt(sheet, E));
   const y = new Map();
   for (const E of sheet.merges ?? []) {
-    const A = parseRangeAddress(E),
-      k = p.filter((O) => O >= A.firstRow && O <= A.lastRow),
-      F = m.filter((O) => O >= A.firstCol && O <= A.lastCol);
+    const rangeAddress = parseRangeAddress(E),
+      k = p.filter(
+        (O) => O >= rangeAddress.firstRow && O <= rangeAddress.lastRow,
+      ),
+      F = m.filter(
+        (O) => O >= rangeAddress.firstCol && O <= rangeAddress.lastCol,
+      );
     if (!k.length || !F.length) continue;
     const I = {
       firstRow: k[0],
@@ -1400,8 +1411,9 @@ function PrintPagePreview({
       rowSpan: k.length,
       colSpan: F.length,
       suppressContent:
-        axisVisibilityIndex.isHidden(A.firstRow) || c.isHidden(A.firstCol),
-      anchor: `${columnIndexToLetters(A.firstCol)}${A.firstRow + 1}`,
+        axisVisibilityIndex.isHidden(rangeAddress.firstRow) ||
+        c.isHidden(rangeAddress.firstCol),
+      anchor: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     };
     if (!(I.firstRow > I.lastRow || I.firstCol > I.lastCol))
       for (const O of k) for (const j of F) y.set(O * 16384 + j, I);

@@ -96,12 +96,12 @@ function inspectFormulaDependencies(workbook, r) {
     },
     cellReference = parseCellReference(r.address);
   if (cellReference.includes(":")) throw Error("Choose one cell to inspect.");
-  const h = s.get(r.sheetId);
-  if (!h || !l(h, cellReference))
+  const sheet = s.get(r.sheetId);
+  if (!sheet || !l(sheet, cellReference))
     throw Error(
       "The selected cell is outside the visible, authorized inspection context.",
     );
-  const compositeKey = buildCompositeKey(h.id, cellReference),
+  const compositeKey = buildCompositeKey(sheet.id, cellReference),
     issues = [],
     m = [],
     v = new Map(),
@@ -192,13 +192,13 @@ function inspectFormulaDependencies(workbook, r) {
           return;
         }
         try {
-          const he = parseCellReference(address),
-            rangeAddress = parseRangeAddress(he);
+          const cellReference = parseCellReference(address),
+            rangeAddress = parseRangeAddress(cellReference);
           (X.push({
             from: cell.key,
             token: token,
             sheetId: sheetId,
-            range: he,
+            range: cellReference,
             kind: oe,
             cellCount:
               (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
@@ -360,19 +360,19 @@ function inspectFormulaDependencies(workbook, r) {
             );
           if (Re && !/^[A-Za-z]{1,3}[1-9]\d*$/i.test(Re[3])) {
             const Je = (Re[1] ?? Re[2]).replace(/''/g, "'"),
-              ze = workbook.sheets.find(
+              sheet = workbook.sheets.find(
                 (sheet) => sheet.name.toLowerCase() === Je.toLowerCase(),
               ),
               at = Re[0],
               _e = Re[3];
-            if (!ze)
+            if (!sheet)
               A(
                 cell.key,
                 "missing",
                 "The referenced worksheet does not exist.",
                 at,
               );
-            else if (!d.has(ze.id) || (ze.hidden && !r.includeHidden))
+            else if (!d.has(sheet.id) || (sheet.hidden && !r.includeHidden))
               A(
                 cell.key,
                 "excluded",
@@ -382,7 +382,7 @@ function inspectFormulaDependencies(workbook, r) {
               const Ze =
                 workbook.definedNames?.find(
                   (definedName) =>
-                    definedName.scopeSheetId === ze.id &&
+                    definedName.scopeSheetId === sheet.id &&
                     definedName.name.toLowerCase() === _e.toLowerCase(),
                 ) ??
                 workbook.definedNames?.find(
@@ -408,7 +408,7 @@ function inspectFormulaDependencies(workbook, r) {
                     )
                   : W(
                       Ze.refersTo,
-                      Ze.scopeSheetId ?? ze.id,
+                      Ze.scopeSheetId ?? sheet.id,
                       [...ae, lt],
                       oe ?? at,
                     );
@@ -571,19 +571,19 @@ function inspectFormulaDependencies(workbook, r) {
     (W(cell.raw, cell.sheet.id), m.push(...X));
   }
   const I = new Map([
-      [compositeKey, { sheet: h, address: cellReference, depth: 0 }],
+      [compositeKey, { sheet: sheet, address: cellReference, depth: 0 }],
     ]),
     O = new Map();
   let j = [compositeKey];
-  const z = (sheet, address, J, from, W) => {
+  const z = (sheet, address, depth, from, W) => {
     if (!l(sheet, address)) return;
-    const K = buildCompositeKey(sheet.id, address);
-    if (!I.has(K)) {
+    const compositeKey = buildCompositeKey(sheet.id, address);
+    if (!I.has(compositeKey)) {
       if (I.size - 1 >= o) {
         truncated = true;
         return;
       }
-      I.set(K, { sheet: sheet, address: address, depth: J });
+      I.set(compositeKey, { sheet: sheet, address: address, depth: depth });
     }
     O.set(JSON.stringify([from, W]), { from: from, to: W });
   };
@@ -1150,12 +1150,12 @@ function parseSourceRectangle(e) {
     }
   );
 }
-function isCellVisible(e, firstRow, firstCol) {
+function isCellVisible(sheet, firstRow, firstCol) {
   return (
-    !e.hidden &&
-    !e.veryHidden &&
-    !cn(e, "row").some((n) => firstRow >= n.start && firstRow <= n.end) &&
-    !cn(e, "column").some((n) => firstCol >= n.start && firstCol <= n.end)
+    !sheet.hidden &&
+    !sheet.veryHidden &&
+    !cn(sheet, "row").some((n) => firstRow >= n.start && firstRow <= n.end) &&
+    !cn(sheet, "column").some((n) => firstCol >= n.start && firstCol <= n.end)
   );
 }
 function inspectOutputNameSafety(workbook, r) {
@@ -1254,8 +1254,10 @@ function readSourceRectangles(workbookInput, r, t = {}) {
       ].sort(),
     },
     a = n.map((y) => {
-      const w = workbookInput.sheets.find((sheet) => sheet.id === y.sheetId);
-      (!w || !o.allowedSheetIds.includes(w.id)) &&
+      const sheet = workbookInput.sheets.find(
+        (sheet) => sheet.id === y.sheetId,
+      );
+      (!sheet || !o.allowedSheetIds.includes(sheet.id)) &&
         failWithMessage("A source is outside the authorized host context.");
       const rangeAddress = parseRangeAddress(y.range);
       if (!o.includeHidden)
@@ -1269,12 +1271,12 @@ function readSourceRectangles(workbookInput, r, t = {}) {
             firstCol <= rangeAddress.lastCol;
             firstCol++
           )
-            isCellVisible(w, firstRow, firstCol) ||
+            isCellVisible(sheet, firstRow, firstCol) ||
               failWithMessage(
                 "A source includes hidden cells. Explicitly include hidden records before previewing.",
               );
       return (
-        w.merges?.some((merge) => {
+        sheet.merges?.some((merge) => {
           const F = parseRangeAddress(merge);
           return (
             F.firstRow <= rangeAddress.lastRow &&
@@ -1286,7 +1288,7 @@ function readSourceRectangles(workbookInput, r, t = {}) {
           failWithMessage(
             "Merged source cells are ambiguous; use an unmerged headed population.",
           ),
-        w
+        sheet
       );
     }),
     s = new Set(),
@@ -1397,8 +1399,10 @@ function readSourceRectangles(workbookInput, r, t = {}) {
           failWithMessage(
             "Combined source formula dependencies exceed 2,000 cells.",
           ));
-      const F = workbookInput.sheets.find((sheet) => sheet.id === k.sheetId),
-        cell = F.cells[k.address];
+      const sheet = workbookInput.sheets.find(
+          (sheet) => sheet.id === k.sheetId,
+        ),
+        cell = sheet.cells[k.address];
       if (
         ((!cell || cell.raw === null) &&
           failWithMessage(
@@ -1409,7 +1413,7 @@ function readSourceRectangles(workbookInput, r, t = {}) {
         const O = resolveDefinedNameValue(
           String(cell.raw),
           workbookInput,
-          F.id,
+          sheet.id,
         ).replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
         ([...O.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)]
           .map((z) =>
@@ -1530,10 +1534,10 @@ function readSourceHeaders(workbookInput, r, t = {}) {
           source,
           sheetName,
           headers: headers,
-          records: values.slice(1).map((h, f) => ({
+          records: values.slice(1).map((values, f) => ({
             row: rangeAddress.firstRow + f + 2,
             locator: `'${sheetName.replace(/'/g, "''")}'!${formatCellAddress(rangeAddress.firstRow + f + 1, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.firstRow + f + 1, rangeAddress.lastCol)}`,
-            values: h,
+            values: values,
           })),
         }
       );
@@ -1909,21 +1913,21 @@ function readSourceTableRecords(workbook, source, options) {
       "Source workbook is missing or has not been approved. Attach and approve the exact workbook identity before refreshing.",
     );
   const allowedSheetIds = a ? authorizedContext.allowed : o.allowedSheetIds,
-    u = book.sheets.find((sheet) => sheet.id === source.sheetId);
-  if (!u || !allowedSheetIds.includes(source.sheetId))
+    sheet = book.sheets.find((sheet) => sheet.id === source.sheetId);
+  if (!sheet || !allowedSheetIds.includes(source.sheetId))
     throw Error(
       "Source worksheet is missing or outside the approved worksheet scope.",
     );
   let range = source.range;
   if (source.tableId) {
-    const p = u.tables?.find((table) => table.id === source.tableId);
+    const p = sheet.tables?.find((table) => table.id === source.tableId);
     if (!p) throw Error("Source table is missing. Review the source mapping.");
     const rangeAddress = parseRangeAddress(p.range);
     range = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (p.showTotals ? 1 : 0)}`;
   }
   const sourceHeaders = readSourceHeaders(
       book,
-      [{ sheetId: u.id, range: range }],
+      [{ sheetId: sheet.id, range: range }],
       {
         allowedSheetIds: allowedSheetIds,
         includeHidden: a
@@ -1934,7 +1938,7 @@ function readSourceTableRecords(workbook, source, options) {
     snapshot = sourceHeaders.snapshots[0];
   return {
     book: book,
-    sheet: u,
+    sheet: sheet,
     snapshot: snapshot,
     fingerprint: fingerprintCanonicalValue({
       workbookId: book.id,

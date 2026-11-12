@@ -58,7 +58,7 @@ function createNavigationActions({
   function commitWorkbookEdit(workbook, Oe) {
     const book = latestEditStateRef.current.book,
       Ue = applyWorkbookChange(book, workbook, actor, Oe),
-      Xe = workbook.sheets.find(
+      sheet = workbook.sheets.find(
         (sheet) => !book.sheets.some((jt) => jt.id === sheet.id),
       );
     (persistenceActions.commitWorkbookChange(
@@ -69,8 +69,9 @@ function createNavigationActions({
           ?.protection?.enabled,
     ),
       operationStatusState.setStatusNotice(Oe),
-      Xe &&
-        (dialogState.setActiveDialogMode(null), switchActiveWorksheet(Xe.id)));
+      sheet &&
+        (dialogState.setActiveDialogMode(null),
+        switchActiveWorksheet(sheet.id)));
   }
   function replaceWorkbookSnapshot(workbook, Oe) {
     if (readOnly) throw new Error("This workbook is read-only.");
@@ -94,15 +95,16 @@ function createNavigationActions({
       operationStatusState.setStatusNotice(Oe));
   }
   function commitWorkbookWithNewSheet(workbook, Oe) {
-    const Be = workbook.sheets.find(
+    const sheet = workbook.sheets.find(
       (sheet) =>
         !latestEditStateRef.current.book.sheets.some(
           (Xe) => Xe.id === sheet.id,
         ),
     );
     (replaceWorkbookSnapshot(workbook, Oe),
-      Be &&
-        (dialogState.setActiveDialogMode(null), switchActiveWorksheet(Be.id)));
+      sheet &&
+        (dialogState.setActiveDialogMode(null),
+        switchActiveWorksheet(sheet.id)));
   }
   function applyZoomPercent(fe) {
     if (!Number.isFinite(fe) || fe < 50 || fe > 200) return;
@@ -205,17 +207,21 @@ function createNavigationActions({
       viewAndSelectionActions.focusGridSurface());
   }
   function navigateToSheetCell(fe, Oe) {
-    const Be = latestEditStateRef.current.book.sheets.find(
+    const sheet = latestEditStateRef.current.book.sheets.find(
       (sheet) => sheet.id === fe,
     );
-    if (!Be || Be.hidden)
+    if (!sheet || sheet.hidden)
       throw Error(
         "Unhide the target worksheet with Manage worksheets before navigating to it.",
       );
     const Ue = _t(Oe);
     if (
-      createAxisVisibilityIndex(Be.rowCount, cn(Be, "row")).isHidden(Ue.row) ||
-      createAxisVisibilityIndex(Be.colCount, cn(Be, "column")).isHidden(Ue.col)
+      createAxisVisibilityIndex(sheet.rowCount, cn(sheet, "row")).isHidden(
+        Ue.row,
+      ) ||
+      createAxisVisibilityIndex(sheet.colCount, cn(sheet, "column")).isHidden(
+        Ue.col,
+      )
     )
       throw Error(
         "The target cell is hidden. Unhide its row/column or expand its outline before navigating.",
@@ -235,9 +241,9 @@ function createNavigationActions({
       navigationState.setPendingScrollAddress(Oe));
   }
   function selectSheetRanges(fe, Oe) {
-    const Be = parseSelectionAreas(Oe);
-    (navigateToSheetCell(fe, Be.at(-1).split(":")[0]),
-      viewAndSelectionActions.applySelectionAreas(Be),
+    const selectionAreas = parseSelectionAreas(Oe);
+    (navigateToSheetCell(fe, selectionAreas.at(-1).split(":")[0]),
+      viewAndSelectionActions.applySelectionAreas(selectionAreas),
       dialogState.setActiveDialogMode(null),
       viewAndSelectionActions.focusGridSurface());
   }
@@ -352,13 +358,15 @@ function createNavigationActions({
   function moveSelectionAfterCommit(fe, Oe) {
     const Be = navigationState.pendingCrossSheetTargetRef.current;
     if (((navigationState.pendingCrossSheetTargetRef.current = null), Be)) {
-      const Nt = activeWorkbook.sheets.find((sheet) => sheet.id === Be.sheetId),
+      const sheet = activeWorkbook.sheets.find(
+          (sheet) => sheet.id === Be.sheetId,
+        ),
         wt = _t(Be.address),
         jt = fe === "Enter" ? "row" : "column",
         Mr =
           createAxisVisibilityIndex(
-            jt === "row" ? Nt.rowCount : Nt.colCount,
-            cn(Nt, jt),
+            jt === "row" ? sheet.rowCount : sheet.colCount,
+            cn(sheet, jt),
           ).next(jt === "row" ? wt.row : wt.col, Oe ? -1 : 1) ??
           (jt === "row" ? wt.row : wt.col),
         Br = `${columnIndexToLetters(jt === "column" ? Mr : wt.col)}${(jt === "row" ? Mr : wt.row) + 1}`;

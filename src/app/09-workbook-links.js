@@ -1064,10 +1064,10 @@ function buildSourceReview(workbook, inspection, t) {
       ))
   )
     throw Error("Choose a unique worksheet name of 1–31 characters.");
-  const o = inspection.tables.find((table) => table.id === t.tableId);
-  if (!o) throw Error("Select a source table.");
+  const table = inspection.tables.find((table) => table.id === t.tableId);
+  if (!table) throw Error("Select a source table.");
   if (
-    (o.ambiguous || inspection.tables.length > 1) &&
+    (table.ambiguous || inspection.tables.length > 1) &&
     t.ambiguityReviewed !== true
   )
     throw Error("Review and confirm the ambiguous table selection.");
@@ -1079,14 +1079,14 @@ function buildSourceReview(workbook, inspection, t) {
     excluded = 0,
     corrected = 0;
   if (
-    (o.columns.forEach((column, m) => {
+    (table.columns.forEach((column, m) => {
       cells[columnIndexToLetters(m) + "1"] = {
         raw: column.name,
         literal: true,
         style: { bold: true },
       };
     }),
-    o.rows.forEach((row, m) =>
+    table.rows.forEach((row, m) =>
       row.forEach((v, g) => {
         const b = `${m}:${g}`;
         s.add(b);
@@ -1106,7 +1106,7 @@ function buildSourceReview(workbook, inspection, t) {
     Object.keys(t.resolutions).some((resolution) => !s.has(resolution)))
   )
     throw Error("A review decision refers to an unknown cell.");
-  const c = {
+  const sheet = {
       id: crypto.randomUUID(),
       name: t.sheetName.trim(),
       cells: cells,
@@ -1115,8 +1115,8 @@ function buildSourceReview(workbook, inspection, t) {
     },
     record = {
       id: crypto.randomUUID(),
-      sheetId: c.id,
-      sheetName: c.name,
+      sheetId: sheet.id,
+      sheetName: sheet.name,
       importedAt: new Date().toISOString(),
       original: buildRetainedSourceRecord(
         n,
@@ -1126,13 +1126,13 @@ function buildSourceReview(workbook, inspection, t) {
       method: inspection.method,
       extractor: inspection.extractor,
       ...(inspection.pageCount ? { pageCount: inspection.pageCount } : {}),
-      table: structuredClone(o),
+      table: structuredClone(table),
       resolutions: structuredClone(t.resolutions),
       ambiguityReviewed: t.ambiguityReviewed,
     };
   normalizeWorkbookInput({
     ...workbook,
-    sheets: [...workbook.sheets, c],
+    sheets: [...workbook.sheets, sheet],
     sourceImports: [...(workbook.sourceImports ?? []), record],
   });
   const f = {
@@ -1140,7 +1140,7 @@ function buildSourceReview(workbook, inspection, t) {
     inspection: inspection,
     review: structuredClone(t),
     record: record,
-    sheet: c,
+    sheet: sheet,
     accepted: accepted,
     excluded: excluded,
     corrected: corrected,
@@ -1181,8 +1181,8 @@ function resolveImportedSourceCell(workbook, r, t, n) {
     source = o?.table.rows[t]?.[n];
   if (!o || !source) throw Error("Imported source cell is unavailable.");
   const address = columnIndexToLetters(n) + (t + 2),
-    d = workbook.sheets.find((sheet) => sheet.id === o.sheetId),
-    cell = d?.cells[address],
+    sheet = workbook.sheets.find((sheet) => sheet.id === o.sheetId),
+    cell = sheet?.cells[address],
     l = o.resolutions[`${t}:${n}`],
     extractedCellValue = resolveExtractedCellValue(source, l);
   return {
@@ -1193,7 +1193,7 @@ function resolveImportedSourceCell(workbook, r, t, n) {
     decision: l?.decision ?? "accepted",
     importedValue: extractedCellValue,
     currentValue: cell?.raw ?? null,
-    status: d
+    status: sheet
       ? cell?.raw === extractedCellValue &&
         (typeof extractedCellValue != "string" || cell.literal === true)
         ? "matches-import"

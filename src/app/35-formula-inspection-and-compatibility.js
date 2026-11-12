@@ -2098,16 +2098,17 @@ function normalizeFormulaWatchContext(workbook, r) {
   };
 }
 function classifyWatchedCell(workbook, r, formulaWatchContext) {
-  const n = workbook.sheets.find((sheet) => sheet.id === r.anchor.sheetId);
-  if (!n) return "orphaned";
-  if (!formulaWatchContext.allowedSheetIds.includes(n.id)) return "excluded";
+  const sheet = workbook.sheets.find((sheet) => sheet.id === r.anchor.sheetId);
+  if (!sheet) return "orphaned";
+  if (!formulaWatchContext.allowedSheetIds.includes(sheet.id))
+    return "excluded";
   if (!formulaWatchContext.includeHidden) {
     const o = _t(r.anchor.address);
     if (
-      n.hidden ||
-      n.veryHidden ||
-      cn(n, "row").some((a) => a.start <= o.row && a.end >= o.row) ||
-      cn(n, "column").some((a) => a.start <= o.col && a.end >= o.col)
+      sheet.hidden ||
+      sheet.veryHidden ||
+      cn(sheet, "row").some((a) => a.start <= o.row && a.end >= o.row) ||
+      cn(sheet, "column").some((a) => a.start <= o.col && a.end >= o.col)
     )
       return "hidden";
   }

@@ -91,16 +91,16 @@ function MaterialityRiskScreen(e) {
       includeHidden: !!e.allowHidden && checked,
       allowedSheetIds: e.allowedSheetIds,
     },
-    de = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     he = [
       ...new Set(
         e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
       ),
     ].sort(),
     Se =
-      !!de &&
-      he.includes(de.id) &&
-      (oe.includeHidden || (!de.hidden && !de.veryHidden)),
+      !!sheet &&
+      he.includes(sheet.id) &&
+      (oe.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     le = JSON.stringify([e.sheetId, e.range]),
     ce = JSON.stringify([e.workbook, he, oe.includeHidden, le]),
     ge = JSON.stringify([ce, ae]);
@@ -285,7 +285,7 @@ function MaterialityRiskScreen(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: Se ? de.name : "Outside current context",
+                  children: Se ? sheet.name : "Outside current context",
                 }),
               ],
             }),
@@ -1040,10 +1040,10 @@ function normalizePatternCheckSettings(workbook, r) {
     );
   const data = t.data,
     rangeAddress = parseRangeAddress(data.range),
-    a = workbook.sheets.find((sheet) => sheet.id === data.sheetId);
-  ((!a ||
-    rangeAddress.lastRow >= a.rowCount ||
-    rangeAddress.lastCol >= a.colCount) &&
+    sheet = workbook.sheets.find((sheet) => sheet.id === data.sheetId);
+  ((!sheet ||
+    rangeAddress.lastRow >= sheet.rowCount ||
+    rangeAddress.lastCol >= sheet.colCount) &&
     throwErrorMessage(
       "Pattern source is outside current worksheet dimensions.",
     ),

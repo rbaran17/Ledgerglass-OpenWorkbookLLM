@@ -103,7 +103,7 @@ function PatternCheckDialog(e) {
     Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
     X$1 = Math.min(B, Q - 1),
     rangeColumnIndexes = listRangeColumnIndexes(C.range),
-    q = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     W = (ce) => h((ge) => ({ ...ge, ...ce })),
     K = (ce, ge) =>
       h((se) => ({
@@ -179,8 +179,9 @@ function PatternCheckDialog(e) {
       try {
         const rangeAddress = parseRangeAddress(C.range),
           we =
-            q?.cells[`${columnIndexToLetters(ce)}${rangeAddress.firstRow + 1}`]
-              ?.raw;
+            sheet?.cells[
+              `${columnIndexToLetters(ce)}${rangeAddress.firstRow + 1}`
+            ]?.raw;
         return `${columnIndexToLetters(ce)}${C.headers && we !== null && we !== undefined ? " — " + String(we).slice(0, 60) : ""}`;
       } catch {
         return columnIndexToLetters(ce);
@@ -442,7 +443,7 @@ function PatternCheckDialog(e) {
                       disabled: C.rules.length === 1,
                       onClick: () =>
                         W({
-                          rules: C.rules.filter((se, we) => we !== ge),
+                          rules: C.rules.filter((rule, we) => we !== ge),
                           combination: {
                             ...C.combination,
                             ruleIds: C.combination.ruleIds.filter(
@@ -1286,11 +1287,11 @@ const citationRangeCache = new WeakMap(),
       e.ranges && e.ranges.length !== 1 ? e.ranges : undefined,
     ]);
 function validateCitationVisibility(workbook, sheetId, t) {
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!n || n.hidden || n.veryHidden)
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet || sheet.hidden || sheet.veryHidden)
     throw Error("Citation worksheet is unavailable or hidden.");
-  const o = cn(n, "row"),
-    a = cn(n, "column");
+  const o = cn(sheet, "row"),
+    a = cn(sheet, "column");
   for (const s of t) {
     const d = _t(s);
     if (
@@ -1301,7 +1302,7 @@ function validateCitationVisibility(workbook, sheetId, t) {
         "Citation includes hidden cells. Make the cited evidence visible and request a fresh answer.",
       );
   }
-  return n;
+  return sheet;
 }
 function buildAnswerCitations(
   activeWorkbook,
@@ -1321,7 +1322,7 @@ function buildAnswerCitations(
     );
   if (assistantSelection.ranges && assistantSelection.ranges.length !== 1)
     throw Error("Citations require one approved rectangle.");
-  const d = activeWorkbook.sheets.find(
+  const sheet = activeWorkbook.sheets.find(
       (sheet) => sheet.id === assistantSelectionContext.sheetId,
     ),
     citationContext = buildCitationContext(assistantSelectionContext),
@@ -1355,7 +1356,7 @@ function buildAnswerCitations(
           contextSha256: citationContext,
           cells: b.map((E) => {
             const cell = l.get(E),
-              k = d.cells[E],
+              k = sheet.cells[E],
               literal = !!k?.literal;
             return {
               ...cell,
@@ -1369,7 +1370,7 @@ function buildAnswerCitations(
               sourceOrigin:
                 o.includeSourceOrigins === false
                   ? null
-                  : findRowOrigin(activeWorkbook, d.id, _t(E).row),
+                  : findRowOrigin(activeWorkbook, sheet.id, _t(E).row),
             };
           }),
         }),
@@ -1473,9 +1474,9 @@ function evaluateAnswerEvidence(workbook, r, t) {
 function getCitationStatus(workbook, selection, evidence, n) {
   const o = evaluateAnswerEvidence(workbook, selection, evidence);
   if (!o.current) throw Error(o.reason);
-  const a = evidence.citations.find((citation) => citation.id === n);
-  if (!a) throw Error("Unknown citation.");
-  return structuredClone(a);
+  const citation = evidence.citations.find((citation) => citation.id === n);
+  if (!citation) throw Error("Unknown citation.");
+  return structuredClone(citation);
 }
 function serializeCurrentCitation(workbook, selection, evidence) {
   const n = evaluateAnswerEvidence(workbook, selection, evidence);
@@ -1498,8 +1499,8 @@ function AssistantAnswerEvidence(e) {
       children: h.reason,
     });
   const evidence = e.evidence,
-    p = evidence.citations.find((citation) => citation.id === n),
-    m = Math.max(1, Math.ceil((p?.cells.length ?? 0) / 20)),
+    citation = evidence.citations.find((citation) => citation.id === n),
+    m = Math.max(1, Math.ceil((citation?.cells.length ?? 0) / 20)),
     v = Math.min(l, m - 1),
     g = (b, y) => {
       try {
@@ -1567,22 +1568,22 @@ function AssistantAnswerEvidence(e) {
               i.jsx("div", {
                 className: "lg-citations",
                 children: claim.citationIds.map((citationId) => {
-                  const w = evidence.citations.find(
+                  const citation = evidence.citations.find(
                     (citation) => citation.id === citationId,
                   );
                   return i.jsxs(
                     "button",
                     {
                       type: "button",
-                      "aria-label": `Inspect citation ${w.sheetName}!${w.range}`,
+                      "aria-label": `Inspect citation ${citation.sheetName}!${citation.range}`,
                       onClick: () => g(citationId),
                       children: [
-                        w.sheetName,
+                        citation.sheetName,
                         "!",
-                        w.range,
+                        citation.range,
                         " ",
                         i.jsx(LocalizedText, { children: "· revision " }),
-                        w.revision,
+                        citation.revision,
                       ],
                     },
                     citationId,
@@ -1590,7 +1591,7 @@ function AssistantAnswerEvidence(e) {
                 }),
               }),
               claim.sourceIds.map((sourceId) => {
-                const w = evidence.externalSources.find(
+                const externalSource = evidence.externalSources.find(
                   (externalSource) => externalSource.id === sourceId,
                 );
                 return i.jsxs(
@@ -1599,14 +1600,14 @@ function AssistantAnswerEvidence(e) {
                     className: "lg-external-source",
                     children: [
                       i.jsx("a", {
-                        href: w.url,
+                        href: externalSource.url,
                         target: "_blank",
                         rel: "noopener noreferrer",
                         referrerPolicy: "no-referrer",
-                        children: w.title,
+                        children: externalSource.title,
                       }),
                       i.jsx("br", {}),
-                      w.url,
+                      externalSource.url,
                       i.jsx("br", {}),
                       i.jsx("small", {
                         children: i.jsx(LocalizedText, {
@@ -1631,28 +1632,30 @@ function AssistantAnswerEvidence(e) {
           children: a,
         }),
       d && i.jsx("p", { role: "status", children: d }),
-      p &&
+      citation &&
         i.jsxs("section", {
           className: "lg-citation-inspector",
           "aria-label": text("Citation source details"),
           lang: language("Citation source details"),
           "data-ui-label": "Citation source details",
           children: [
-            i.jsxs("h4", { children: [p.sheetName, "!", p.range] }),
+            i.jsxs("h4", {
+              children: [citation.sheetName, "!", citation.range],
+            }),
             i.jsxs("dl", {
               children: [
                 i.jsx("dt", {
                   children: i.jsx(LocalizedText, { children: "Workbook" }),
                 }),
-                i.jsx("dd", { children: p.workbookId }),
+                i.jsx("dd", { children: citation.workbookId }),
                 i.jsx("dt", {
                   children: i.jsx(LocalizedText, { children: "Revision" }),
                 }),
-                i.jsx("dd", { children: p.revision }),
+                i.jsx("dd", { children: citation.revision }),
                 i.jsx("dt", {
                   children: i.jsx(LocalizedText, { children: "Sheet ID" }),
                 }),
-                i.jsx("dd", { children: p.sheetId }),
+                i.jsx("dd", { children: citation.sheetId }),
                 i.jsx("dt", {
                   children: i.jsx(LocalizedText, { children: "Captured" }),
                 }),
@@ -1669,14 +1672,14 @@ function AssistantAnswerEvidence(e) {
                 ".",
               ],
             }),
-            p.cells.slice(v * 20, (v + 1) * 20).map((cell) =>
+            citation.cells.slice(v * 20, (v + 1) * 20).map((cell) =>
               i.jsxs(
                 "article",
                 {
                   className: "lg-citation-cell",
                   children: [
                     i.jsx("button", {
-                      onClick: () => g(p.id, cell.address),
+                      onClick: () => g(citation.id, cell.address),
                       "aria-label": `Focus cited cell ${cell.address}`,
                       children: cell.address,
                     }),

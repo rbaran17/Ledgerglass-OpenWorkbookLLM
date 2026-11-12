@@ -47,7 +47,7 @@ function DuplicateReviewDialog(e) {
     [C, T] = ne.useState("all"),
     [N, R] = ne.useState(0),
     L = qk(range),
-    $ = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     U = [
       ...new Set(
         e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
@@ -58,9 +58,9 @@ function DuplicateReviewDialog(e) {
       allowedSheetIds: e.allowedSheetIds,
     },
     H =
-      !!$ &&
-      U.includes($.id) &&
-      (G.includeHidden || (!$.hidden && !$.veryHidden)),
+      !!sheet &&
+      U.includes(sheet.id) &&
+      (G.includeHidden || (!sheet.hidden && !sheet.veryHidden)),
     Q = JSON.stringify([e.sheetId, e.range]),
     X$1 = JSON.stringify([e.workbook, e.readOnly, U, G.includeHidden, Q]),
     J =
@@ -261,7 +261,7 @@ function DuplicateReviewDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Source worksheet" }),
                 i.jsx("strong", {
-                  children: H ? $.name : "Outside current context",
+                  children: H ? sheet.name : "Outside current context",
                 }),
               ],
             }),
@@ -827,10 +827,10 @@ function buildStructurePreview(workbook, sheetId, t, n = {}) {
     throw Error(
       "Structural preview can verify up to 5,000 formula cells. Reduce or separate the formula population before changing worksheet structure.",
     );
-  const u = workbook.sheets.find((sheet) => sheet.id === sheetId),
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
     action =
       t.moveBefore !== undefined
-        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
+        ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? sheet.rowCount : sheet.colCount) ? "worksheet end" : formatAxisAddress(t, t.moveBefore)}`
         : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
     c = {
       sheetId: sheetId,
@@ -932,7 +932,7 @@ function buildStructurePreview(workbook, sheetId, t, n = {}) {
   }
   const h = new Map((workbook.rowOrigins ?? []).map((v) => [v.id, v]));
   if (t.axis === "row")
-    for (const [v, g] of Object.entries(u.rowOriginIds ?? {})) {
+    for (const [v, g] of Object.entries(sheet.rowOriginIds ?? {})) {
       const b = assertInsertionWithinSheet(`A${Number(v) + 1}`, t),
         afterRow = b ? _t(b).row + 1 : null;
       if (afterRow === Number(v) + 1) continue;
@@ -988,7 +988,7 @@ function StructureToolDialog({
     [j, z] = ne.useState("formulas"),
     [checked, D] = ne.useState(false),
     B = ne.useRef(null),
-    _ = workbook.sheets.find((sheet) => sheet.id === sheetId);
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
@@ -1119,7 +1119,11 @@ function StructureToolDialog({
           className: "st-header",
           children: [
             i.jsxs("h2", {
-              children: [axis === "row" ? "Rows" : "Columns", " · ", _.name],
+              children: [
+                axis === "row" ? "Rows" : "Columns",
+                " · ",
+                sheet.name,
+              ],
             }),
             i.jsx("button", {
               "aria-label": text("Close structure tool"),

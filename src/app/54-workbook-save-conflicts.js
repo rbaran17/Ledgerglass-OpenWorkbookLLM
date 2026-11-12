@@ -1100,18 +1100,22 @@ const invalidStorageAckError = () =>
   workbookSnapshotsEqual = (e, r) =>
     e === r || JSON.stringify(e) === JSON.stringify(r);
 function captureWorkbookView(workbook, view) {
-  const t = workbook.sheets.find(
+  const sheet = workbook.sheets.find(
     (sheet) => !sheet.hidden && sheet.id === view.activeSheetId,
   );
-  if (!t || view.selection.sheetId !== t.id) throw invalidStorageAckError();
+  if (!sheet || view.selection.sheetId !== sheet.id)
+    throw invalidStorageAckError();
   const rangeAddress = parseRangeAddress(view.selection.range);
-  if (rangeAddress.lastRow >= t.rowCount || rangeAddress.lastCol >= t.colCount)
+  if (
+    rangeAddress.lastRow >= sheet.rowCount ||
+    rangeAddress.lastCol >= sheet.colCount
+  )
     throw invalidStorageAckError();
   const o = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     a = `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`;
   return {
-    activeSheetId: t.id,
-    selection: { sheetId: t.id, range: o === a ? o : `${o}:${a}` },
+    activeSheetId: sheet.id,
+    selection: { sheetId: sheet.id, range: o === a ? o : `${o}:${a}` },
   };
 }
 function normalizeCheckpointRecord(e, r) {
@@ -1440,17 +1444,17 @@ function WorkbookHealthDialog({ monitor, onClose }) {
   });
 }
 const cellSnapshotCache = new WeakMap();
-function snapshotSheetContent(e) {
+function snapshotSheetContent(sheet) {
   return fingerprintCanonicalValue({
     cells: Object.fromEntries(
-      Object.entries(e.cells).map(([r, t]) => [
+      Object.entries(sheet.cells).map(([r, t]) => [
         r,
         { ...t, style: undefined, numFmt: undefined, format: undefined },
       ]),
     ),
-    tables: e.tables,
-    merges: e.merges,
-    rowOrigins: e.rowOriginIds,
+    tables: sheet.tables,
+    merges: sheet.merges,
+    rowOrigins: sheet.rowOriginIds,
   });
 }
 function checkSourceSheetAccess(workbook, sheetId, t) {
@@ -1459,17 +1463,17 @@ function checkSourceSheetAccess(workbook, sheetId, t) {
     assertWorkbookStructureEditable(workbook);
     return;
   }
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   if (
-    !n ||
-    n.hidden ||
-    n.veryHidden ||
-    n.protection?.enabled ||
+    !sheet ||
+    sheet.hidden ||
+    sheet.veryHidden ||
+    sheet.protection?.enabled ||
     (t.allowedSheetIds && !t.allowedSheetIds.includes(sheetId))
   )
     throw new ExternalSourceError("refused");
-  if (!n.externalConnection) throw new ExternalSourceError("invalid");
-  if (snapshotSheetContent(n) !== n.externalConnection.outputHash)
+  if (!sheet.externalConnection) throw new ExternalSourceError("invalid");
+  if (snapshotSheetContent(sheet) !== sheet.externalConnection.outputHash)
     throw new ExternalSourceError("stale");
 }
 function EH(workbook, snapshot, grant, n, o = {}) {
@@ -1572,8 +1576,8 @@ function grantSheetSnapshotSource(workbook, r, t, n = {}) {
   return (cellSnapshotCache.delete(r), workbookInput);
 }
 function buildSourceSheetSnapshot(workbook, plan) {
-  const t = workbook.sheets.find((sheet) => sheet.id === plan.sheetId),
-    n = t ? { ...t } : createWorksheetRecord(plan.outputName),
+  const sheet = workbook.sheets.find((sheet) => sheet.id === plan.sheetId),
+    n = sheet ? { ...sheet } : createWorksheetRecord(plan.outputName),
     o = {};
   ([
     plan.snapshot.source.columns.map((column) => column.name),
@@ -1581,7 +1585,7 @@ function buildSourceSheetSnapshot(workbook, plan) {
   ].forEach((d, u) =>
     d.forEach((raw, c) => {
       const h = `${columnIndexToLetters(c)}${u + 1}`,
-        f = t?.cells[h];
+        f = sheet?.cells[h];
       o[h] = {
         raw: raw,
         ...(typeof raw == "string" && /^[=+@-]/.test(raw)
@@ -1904,12 +1908,14 @@ async function runSourceRefreshBatch(workbook, adapter, t, n = {}) {
     return { entries: entries, error: isExternalSourceError(error).code };
   }
 }
-async function G2e(adapter, r, t = {}) {
+async function G2e(adapter, plan, t = {}) {
   return runSourceWithTimeout(
     "authorize",
     async (signal) => {
       const o = [];
-      for (const a of new Set(r.plans.map((plan) => plan.snapshot.source.id))) {
+      for (const a of new Set(
+        plan.plans.map((plan) => plan.snapshot.source.id),
+      )) {
         if (signal.aborted) throw new ExternalSourceError("cancelled");
         o.push(
           await authorizeSourceAccess(adapter, a, { ...t, signal: signal }),

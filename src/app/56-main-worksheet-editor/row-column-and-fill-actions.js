@@ -63,15 +63,15 @@ function createRowColumnAndFillActions({
   }
   function applyAxisSizes(fe, Oe, action) {
     const book = latestEditStateRef.current.book,
-      Xe = book.sheets.find((sheet) => sheet.id === activeSheet.id),
+      sheet = book.sheets.find((sheet) => sheet.id === activeSheet.id),
       gt = fe === "column" ? "columnWidths" : "rowHeights";
     if (
       !Object.entries(Oe).some(
         ([rr, Mr]) =>
-          (Xe[gt]?.[rr] ??
+          (sheet[gt]?.[rr] ??
             (fe === "column"
-              ? defaultColumnWidthOf(Xe)
-              : defaultRowHeightOf(Xe))) !== Mr,
+              ? defaultColumnWidthOf(sheet)
+              : defaultRowHeightOf(sheet))) !== Mr,
       )
     )
       return;
@@ -113,7 +113,7 @@ function createRowColumnAndFillActions({
       )
         return;
       const selectedAxisIndexes = resolveSelectedAxisIndexes(fe, Oe),
-        Ue = latestEditStateRef.current.book.sheets.find(
+        sheet = latestEditStateRef.current.book.sheets.find(
           (sheet) => sheet.id === activeSheet.id,
         ),
         workbookWithSettings = calculateWorkbookWithSettings(
@@ -122,7 +122,7 @@ function createRowColumnAndFillActions({
         gt =
           fe === "column"
             ? autoFitColumnWidths(
-                Ue,
+                sheet,
                 selectedAxisIndexes,
                 workbookWithSettings,
                 textMeasurer,
@@ -130,7 +130,7 @@ function createRowColumnAndFillActions({
                 latestEditStateRef.current.book.datePolicy?.dateSystem,
               )
             : autoFitRowHeights(
-                Ue,
+                sheet,
                 selectedAxisIndexes,
                 workbookWithSettings,
                 textMeasurer,

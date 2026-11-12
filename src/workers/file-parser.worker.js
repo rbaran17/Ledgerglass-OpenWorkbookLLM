@@ -2094,8 +2094,8 @@ function buildConditionalFormatRule(e, t) {
       );
     if (u) {
       let h = u[1].replace(/""/g, '"'),
-        m = parseRangeAddress(t),
-        cellAddress = Ks(m.firstRow, m.firstCol);
+        rangeAddress = parseRangeAddress(t),
+        cellAddress = Ks(rangeAddress.firstRow, rangeAddress.firstCol);
       if (
         h.length <= 1e3 &&
         c.toUpperCase() ===
@@ -3566,13 +3566,16 @@ function convertXlsxCellToRecord(e, xlsxWorkbookPackage = [], n, i = false) {
       );
       continue;
     }
-    let b = normalizeArgbHexColor(g.color?.argb);
+    let argbHexColor = normalizeArgbHexColor(g.color?.argb);
     (g.color &&
-      !b &&
+      !argbHexColor &&
       r(
         "A theme/indexed border color used a black fallback; theme bindings are not preserved.",
       ),
-      (c[cellBorderEdge] = { style: g.style, color: b ?? "#000000" }));
+      (c[cellBorderEdge] = {
+        style: g.style,
+        color: argbHexColor ?? "#000000",
+      }));
   }
   let u = Object.keys(c),
     d = u.every(
@@ -3632,8 +3635,8 @@ function convertXlsxCellToRecord(e, xlsxWorkbookPackage = [], n, i = false) {
     (argbHexColor && (l.color = argbHexColor),
     e.fill?.type === "pattern" && e.fill.pattern === "solid")
   ) {
-    let m = normalizeArgbHexColor(e.fill.fgColor?.argb);
-    m && (l.fill = m);
+    let argbHexColor = normalizeArgbHexColor(e.fill.fgColor?.argb);
+    argbHexColor && (l.fill = argbHexColor);
   }
   e.alignment &&
     ["left", "center", "right"].includes(e.alignment.horizontal ?? "") &&

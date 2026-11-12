@@ -412,11 +412,11 @@ function CleanAndReshapeDialog(e) {
     },
     Ir = (e.workbook.fieldTransforms ?? []).filter((Qe) => {
       try {
-        const Dt = e.workbook.sheets.find(
+        const sheet = e.workbook.sheets.find(
           (sheet) => sheet.id === Qe.sourceSheetId,
         );
-        return Dt
-          ? (assertSelectionInAuthorizedSheet(Dt, Qe.request.sourceRange, {
+        return sheet
+          ? (assertSelectionInAuthorizedSheet(sheet, Qe.request.sourceRange, {
               allowedSheetIds: allowedSheetIds,
               includeHidden: xt.includeHidden,
               allowNewSheet: xt.allowNewSheet,
@@ -662,7 +662,7 @@ function CleanAndReshapeDialog(e) {
                                 disabled: e.readOnly,
                                 onClick: () => {
                                   (Jt(),
-                                    y(steps.filter((It, ar) => ar !== Dt)),
+                                    y(steps.filter((step, ar) => ar !== Dt)),
                                     E(null));
                                 },
                                 children: [

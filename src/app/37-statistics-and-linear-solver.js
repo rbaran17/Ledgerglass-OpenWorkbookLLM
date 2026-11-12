@@ -76,7 +76,7 @@ function linearizeSolverFormula(workbook, analysisRequest, t) {
           { sheetId: sheetId, address: address },
           t,
         ),
-        F = k.cells[address],
+        cell = k.cells[address],
         I = analysisRequest.variables.findIndex(
           (variable) =>
             variable.cell.sheetId === sheetId &&
@@ -86,20 +86,20 @@ function linearizeSolverFormula(workbook, analysisRequest, t) {
         const j = d(0);
         return ((j.coefficients[I] = 1), o.set(compositeKey, j), j);
       }
-      if (!F || F.raw === null)
+      if (!cell || cell.raw === null)
         throw Error(
           "Solver dependencies must be populated numeric cells; blanks and spill children are excluded.",
         );
       let O;
-      if (typeof F.raw == "number") O = d(F.raw);
+      if (typeof cell.raw == "number") O = d(cell.raw);
       else if (
-        typeof F.raw == "string" &&
-        F.raw.startsWith("=") &&
-        !F.literal
+        typeof cell.raw == "string" &&
+        cell.raw.startsWith("=") &&
+        !cell.literal
       ) {
-        if (F.raw.length > analysisLimits.expressionCharacters)
+        if (cell.raw.length > analysisLimits.expressionCharacters)
           throw Error("Solver expression budget exceeded.");
-        const j = resolveDefinedNameValue(F.raw, workbook, sheetId).slice(1);
+        const j = resolveDefinedNameValue(cell.raw, workbook, sheetId).slice(1);
         if (j.length > 4096)
           throw Error("Expanded Solver expression budget exceeded.");
         (a.add(compositeKey),
@@ -265,9 +265,9 @@ function linearizeSolverFormula(workbook, analysisRequest, t) {
     },
     baseline = analysisRequest.variables.map((variable) => {
       const w = validateAnalysisSource(workbook, variable.cell, t),
-        E = w.cells[variable.cell.address],
+        cell = w.cells[variable.cell.address],
         A = _t(variable.cell.address);
-      if (!E || typeof E.raw != "number" || !Number.isFinite(E.raw))
+      if (!cell || typeof cell.raw != "number" || !Number.isFinite(cell.raw))
         throw Error(
           "Changing cells must contain finite numeric inputs, not formulas or text.",
         );
@@ -286,15 +286,15 @@ function linearizeSolverFormula(workbook, analysisRequest, t) {
           A.row === rangeAddress.firstRow ||
           (I.showTotals && A.row === rangeAddress.lastRow) ||
           I.columns[A.col - rangeAddress.firstCol]?.calculatedFormula ||
-          Object.entries(w.cells).some(([j, z]) => {
+          Object.entries(w.cells).some(([j, cell]) => {
             const V = _t(j);
             return (
               V.col === A.col &&
               V.row > rangeAddress.firstRow &&
               V.row <= rangeAddress.lastRow - +!!I.showTotals &&
-              !z.literal &&
-              typeof z.raw == "string" &&
-              z.raw.startsWith("=")
+              !cell.literal &&
+              typeof cell.raw == "string" &&
+              cell.raw.startsWith("=")
             );
           })
         )
@@ -310,7 +310,7 @@ function linearizeSolverFormula(workbook, analysisRequest, t) {
         throw Error(
           "Changing cells with validation rules are excluded. Use explicit Solver bounds and constraints on a reviewed input copy.",
         );
-      return E.raw;
+      return cell.raw;
     }),
     m = validateAnalysisSource(workbook, analysisRequest.objective, t),
     cell = m.cells[analysisRequest.objective.address];
@@ -786,7 +786,7 @@ function computeDescriptiveStatistics(workbook, analysisRequest, t = {}) {
       [analysisRequest.method, ...headers],
       ...headers.map((header, E) => [
         header,
-        ...headers.map((A, k) => {
+        ...headers.map((header, k) => {
           const F = assertFiniteStatistic(
             sumDecimalPartsToNumber(
               h.map((I) => (I[E] - b[E]) * (I[k] - b[k])),
@@ -1216,11 +1216,11 @@ function commitAnalysisResult(workbook, r, t, n = {}) {
   t === "apply-solution" &&
     r.request.kind === "solver" &&
     r.request.variables.forEach((variable, f) => {
-      const p = workbookInput.sheets.find(
+      const sheet = workbookInput.sheets.find(
         (sheet) => sheet.id === variable.cell.sheetId,
       );
-      p.cells[variable.cell.address] = {
-        ...p.cells[variable.cell.address],
+      sheet.cells[variable.cell.address] = {
+        ...sheet.cells[variable.cell.address],
         raw: r.result.solution[f],
       };
     });
@@ -1269,14 +1269,14 @@ function commitAnalysisResult(workbook, r, t, n = {}) {
   return (analysisResultCache.delete(r), c);
 }
 function readSavedAnalysisReport(workbook, sheetId, t = {}) {
-  const n = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    o = n?.analysisReport;
-  if (!n || !o)
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    o = sheet?.analysisReport;
+  if (!sheet || !o)
     return { status: "unavailable", message: "No saved analysis report." };
   const analysisPermissions = normalizeAnalysisPermissions(workbook, t);
   if (
     !analysisPermissions.allowedSheetIds.includes(sheetId) ||
-    (!analysisPermissions.includeHidden && (n.hidden || n.veryHidden))
+    (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
   )
     return {
       status: "unavailable",
@@ -1294,7 +1294,7 @@ function readSavedAnalysisReport(workbook, sheetId, t = {}) {
   if (
     o.definitionHash !== fingerprintCanonicalValue(o.request) ||
     o.sourceHash !== p_(workbook) ||
-    o.outputHash !== buildAnalysisReportCells(n, o.outputRange)
+    o.outputHash !== buildAnalysisReportCells(sheet, o.outputRange)
   )
     return {
       status: "stale",

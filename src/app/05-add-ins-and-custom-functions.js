@@ -55,14 +55,14 @@ function buildExtensionCallReview(workbook, extensionId, t = {}) {
     u = hashExtensionManifest(manifest);
   let l = 0;
   for (const h of reviewExtensionFormulas(workbook))
-    for (const f of h.calls.filter((call) =>
+    for (const call of h.calls.filter((call) =>
       call.name.startsWith(manifest.namespace + "."),
     )) {
       if ((assertExtensionWriteScope(workbook, [h.sheetId], t), h.literal))
         throw Error(
           "Inert imported formulas must be deliberately entered as active formulas before extension execution.",
         );
-      const p = evaluateExtensionFunctionCall(s, h, f, binding);
+      const p = evaluateExtensionFunctionCall(s, h, call, binding);
       if (
         ((l += p.reduce(
           (v, g) => v + (Array.isArray(g) ? g.length * (g[0]?.length ?? 0) : 1),
@@ -78,7 +78,7 @@ function buildExtensionCallReview(workbook, extensionId, t = {}) {
         h.sheetId,
         h.address,
         h.formula,
-        f.name,
+        call.name,
         p,
         u,
       );
@@ -92,7 +92,7 @@ function buildExtensionCallReview(workbook, extensionId, t = {}) {
             requestId: m,
             extensionId: extensionId,
             version: manifest.version,
-            functionName: f.name,
+            functionName: call.name,
             arguments: p,
           },
         });
@@ -1136,7 +1136,7 @@ function buildWorkbookLinkReview(workbook, r = {}) {
         ),
       ),
     ].map((target) => {
-      const d = workbookLinkPolicy.sources.find(
+      const source = workbookLinkPolicy.sources.find(
           (source) => source.target === target,
         ),
         u = workbook.workbookLinks?.sources.find(
@@ -1152,34 +1152,35 @@ function buildWorkbookLinkReview(workbook, r = {}) {
             })),
         ),
         c =
-          d &&
+          source &&
           references.some(
             (reference) =>
-              !d.workbook.sheets.some(
+              !source.workbook.sheets.some(
                 (sheet) =>
                   sheet.name.toLowerCase() === reference.sheet.toLowerCase(),
               ),
           ),
         h =
-          d &&
+          source &&
           references.some((reference) => {
-            const y = d.workbook.sheets.find(
+            const sheet = source.workbook.sheets.find(
               (sheet) =>
                 sheet.name.toLowerCase() === reference.sheet.toLowerCase(),
             );
             return (
-              y &&
-              (!d.allowedSheetIds.includes(y.id) ||
-                ((y.hidden || y.veryHidden) && !d.includeHidden))
+              sheet &&
+              (!source.allowedSheetIds.includes(sheet.id) ||
+                ((sheet.hidden || sheet.veryHidden) && !source.includeHidden))
             );
           }),
-        f = d
+        f = source
           ? c
             ? "missing-worksheet"
             : h
               ? "unauthorized-worksheet"
               : u
-                ? u.sourceFingerprint !== encodeWorkbookFingerprint(d.workbook)
+                ? u.sourceFingerprint !==
+                  encodeWorkbookFingerprint(source.workbook)
                   ? "stale"
                   : references.some(
                         (reference) =>
@@ -1220,15 +1221,15 @@ function buildWorkbookLinkReview(workbook, r = {}) {
 }
 const workbookLinkPreviewRecords = new WeakMap();
 function resolveLinkedSourceCalculation(workbook, r, target, n) {
-  const o = buildWorkbookLinkPolicy(workbook, n).sources.find(
+  const source = buildWorkbookLinkPolicy(workbook, n).sources.find(
     (source) => source.target === target,
   );
-  if (!o)
+  if (!source)
     throw Error(
       `Source ${target} is missing or not approved. Attach the exact source and approve its worksheets.`,
     );
-  const workbookInput = normalizeWorkbookInput(o.workbook),
-    s = new Set(o.allowedSheetIds);
+  const workbookInput = normalizeWorkbookInput(source.workbook),
+    s = new Set(source.allowedSheetIds);
   if (
     normalizeDatePolicy(workbookInput.datePolicy).dateSystem !==
     normalizeDatePolicy(workbook.datePolicy).dateSystem
@@ -1237,9 +1238,11 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
       "Source and destination date systems differ. Convert and review the source date system before linking.",
     );
   const allowRead = (h) => {
-      const f = workbookInput.sheets.find((sheet) => sheet.id === h);
+      const sheet = workbookInput.sheets.find((sheet) => sheet.id === h);
       return (
-        !!f && s.has(h) && (!(f.hidden || f.veryHidden) || !!o.includeHidden)
+        !!sheet &&
+        s.has(h) &&
+        (!(sheet.hidden || sheet.veryHidden) || !!source.includeHidden)
       );
     },
     u = evaluateWorkbookFormulas(
@@ -1256,10 +1259,11 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
     if (!f) throw Error(`Source worksheet ${h.sheet} is missing.`);
     if (!allowRead(f.id))
       throw Error(`Source worksheet ${h.sheet} is outside the approved scope.`);
-    let p = sheets.find((sheet) => sheet.id === f.id);
-    p || ((p = { id: f.id, name: f.name, cells: {} }), sheets.push(p));
+    let sheet = sheets.find((sheet) => sheet.id === f.id);
+    sheet ||
+      ((sheet = { id: f.id, name: f.name, cells: {} }), sheets.push(sheet));
     for (const m of parseExternalLinkRange(h.range))
-      if (!Object.hasOwn(p.cells, m)) {
+      if (!Object.hasOwn(sheet.cells, m)) {
         if (++c > workbookLinkLimits.cells)
           throw Error("External link refresh exceeds 5,000 source cells.");
         const v = u.getTypedValue(f.id, m);
@@ -1276,7 +1280,7 @@ function resolveLinkedSourceCalculation(workbook, r, target, n) {
           throw Error(
             "Source calculation is unavailable, unauthorized, cyclic or over its resource limit.",
           );
-        p.cells[m] = v;
+        sheet.cells[m] = v;
       }
   }
   if (u.getOperationalErrors().length)
@@ -1350,9 +1354,9 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
     workbookInput.workbookLinks ?? { schemaVersion: 1, sources: [] },
   );
   for (const p of a) {
-    const m = workbookInput.sheets.find((sheet) => sheet.id === p.sheetId);
-    ((m.cells[p.address] = {
-      ...m.cells[p.address],
+    const sheet = workbookInput.sheets.find((sheet) => sheet.id === p.sheetId);
+    ((sheet.cells[p.address] = {
+      ...sheet.cells[p.address],
       raw:
         r.action === "replace"
           ? rewriteExternalReferences(p.formula, (v) =>
@@ -1366,7 +1370,7 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
             )
           : p.formula,
     }),
-      delete m.cells[p.address].literal);
+      delete sheet.cells[p.address].literal);
   }
   if (r.action !== "break") {
     const p = collectWorkbookLinkFormulas(workbookInput)
@@ -1424,21 +1428,23 @@ function previewWorkbookLinkOperation(workbook, r, t = {}) {
     }),
     c = [];
   for (const cell of cells) {
-    const m = workbookInput.sheets.find((sheet) => sheet.id === cell.sheetId),
+    const sheet = workbookInput.sheets.find(
+        (sheet) => sheet.id === cell.sheetId,
+      ),
       before = workbook.sheets.find((sheet) => sheet.id === cell.sheetId).cells[
         cell.address
       ];
     (r.action === "break" &&
-      (m.cells[cell.address] = {
-        ...m.cells[cell.address],
+      (sheet.cells[cell.address] = {
+        ...sheet.cells[cell.address],
         raw: cell.result.value,
         literal: typeof cell.result.value == "string",
       }),
       c.push({
-        sheetId: m.id,
+        sheetId: sheet.id,
         address: cell.address,
         before: before,
-        after: m.cells[cell.address],
+        after: sheet.cells[cell.address],
       }));
   }
   const h = new Set(

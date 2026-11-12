@@ -48,8 +48,8 @@ function DataAnalysisDialog(e) {
   const { text } = useWorkbookMessages(),
     t = ne.useId(),
     n = ne.useRef(null),
-    o = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    analysisReport = o.analysisReport,
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    analysisReport = sheet.analysisReport,
     [s, d] = ne.useState(
       analysisReport?.request.kind ?? e.initialKind ?? "statistics",
     ),
@@ -79,7 +79,7 @@ function DataAnalysisDialog(e) {
             objective: {
               sheetId: e.sheetId,
               address:
-                Object.entries(o.cells).find(
+                Object.entries(sheet.cells).find(
                   ([, cell]) =>
                     !cell.literal &&
                     typeof cell.raw == "string" &&
@@ -87,7 +87,7 @@ function DataAnalysisDialog(e) {
                 )?.[0] ?? "C2",
             },
             direction: "maximize",
-            variables: Object.entries(o.cells)
+            variables: Object.entries(sheet.cells)
               .filter(([, cell]) => typeof cell.raw == "number")
               .slice(0, 2)
               .map(([address]) => ({
@@ -110,7 +110,7 @@ function DataAnalysisDialog(e) {
             sheetId: e.sheetId,
             range: e.range.includes(":")
               ? e.range
-              : formatOccupiedRangeAddress(o),
+              : formatOccupiedRangeAddress(sheet),
             method: "descriptive",
             missing: "reject",
           },
@@ -464,16 +464,16 @@ function DataAnalysisDialog(e) {
                                             (sheetId) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           cell: {
-                                                            ...de.cell,
+                                                            ...variable.cell,
                                                             sheetId: sheetId,
                                                           },
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                             `Variable ${ae + 1} worksheet`,
@@ -486,12 +486,12 @@ function DataAnalysisDialog(e) {
                                             onChange: (event) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           cell: {
-                                                            ...de.cell,
+                                                            ...variable.cell,
                                                             address:
                                                               event.target.value
                                                                 .replace(
@@ -501,7 +501,7 @@ function DataAnalysisDialog(e) {
                                                                 .toUpperCase(),
                                                           },
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                           }),
@@ -515,10 +515,13 @@ function DataAnalysisDialog(e) {
                                               (de) =>
                                                 G({
                                                   variables: A.variables.map(
-                                                    (he, Se) =>
+                                                    (variable, Se) =>
                                                       Se === ae
-                                                        ? { ...he, [oe]: de }
-                                                        : he,
+                                                        ? {
+                                                            ...variable,
+                                                            [oe]: de,
+                                                          }
+                                                        : variable,
                                                   ),
                                                 }),
                                             ),
@@ -531,10 +534,10 @@ function DataAnalysisDialog(e) {
                                             onChange: (event) =>
                                               G({
                                                 variables: A.variables.map(
-                                                  (de, he) =>
+                                                  (variable, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...variable,
                                                           domain:
                                                             event.target.value,
                                                           ...(event.target
@@ -545,7 +548,7 @@ function DataAnalysisDialog(e) {
                                                               }
                                                             : {}),
                                                         }
-                                                      : de,
+                                                      : variable,
                                                 ),
                                               }),
                                             children: [
@@ -571,7 +574,7 @@ function DataAnalysisDialog(e) {
                                           onClick: () =>
                                             G({
                                               variables: A.variables.filter(
-                                                (oe, de) => de !== ae,
+                                                (variable, de) => de !== ae,
                                               ),
                                             }),
                                           children: "×",
@@ -625,16 +628,16 @@ function DataAnalysisDialog(e) {
                                             (sheetId) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           left: {
-                                                            ...de.left,
+                                                            ...constraint.left,
                                                             sheetId: sheetId,
                                                           },
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                             `Constraint ${ae + 1} worksheet`,
@@ -647,12 +650,12 @@ function DataAnalysisDialog(e) {
                                             onChange: (event) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           left: {
-                                                            ...de.left,
+                                                            ...constraint.left,
                                                             address:
                                                               event.target.value
                                                                 .replace(
@@ -662,7 +665,7 @@ function DataAnalysisDialog(e) {
                                                                 .toUpperCase(),
                                                           },
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                           }),
@@ -674,14 +677,14 @@ function DataAnalysisDialog(e) {
                                             onChange: (event) =>
                                               G({
                                                 constraints: A.constraints.map(
-                                                  (de, he) =>
+                                                  (constraint, he) =>
                                                     he === ae
                                                       ? {
-                                                          ...de,
+                                                          ...constraint,
                                                           operator:
                                                             event.target.value,
                                                         }
-                                                      : de,
+                                                      : constraint,
                                                 ),
                                               }),
                                             children: ["<=", ">=", "="].map(
@@ -747,13 +750,13 @@ function DataAnalysisDialog(e) {
                                                   G({
                                                     constraints:
                                                       A.constraints.map(
-                                                        (de, he) =>
+                                                        (constraint, he) =>
                                                           he === ae
                                                             ? {
-                                                                ...de,
+                                                                ...constraint,
                                                                 right: right,
                                                               }
-                                                            : de,
+                                                            : constraint,
                                                       ),
                                                   }),
                                               ),
@@ -822,7 +825,7 @@ function DataAnalysisDialog(e) {
                                           onClick: () =>
                                             G({
                                               constraints: A.constraints.filter(
-                                                (oe, de) => de !== ae,
+                                                (constraint, de) => de !== ae,
                                               ),
                                             }),
                                           children: "×",
@@ -1449,10 +1452,10 @@ function buildReportSnapshot(workbook, r, t = {}) {
   const request = validateObjectReportRequest(r),
     analysisPermissions = normalizeAnalysisPermissions(workbook, t),
     workbookInput = normalizeWorkbookInput(workbook),
-    s = workbookInput.sheets.find((sheet) => sheet.id === request.sheetId);
-  if (!s || !analysisPermissions.allowedSheetIds.includes(s.id))
+    sheet = workbookInput.sheets.find((sheet) => sheet.id === request.sheetId);
+  if (!sheet || !analysisPermissions.allowedSheetIds.includes(sheet.id))
     throw Error("The report source is outside the authorized host context.");
-  if (!analysisPermissions.includeHidden && (s.hidden || s.veryHidden))
+  if (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
     throw Error("The report source worksheet is hidden.");
   if (
     workbookInput.calculation?.mode === "manual" ||
@@ -1461,20 +1464,21 @@ function buildReportSnapshot(workbook, r, t = {}) {
     throw Error(
       "Report capture requires automatic, non-iterative calculation. Recalculate and retry.",
     );
-  const d =
+  const object =
     request.kind === "object"
       ? structuredClone(
-          s.objects?.find((object) => object.id === request.objectId),
+          sheet.objects?.find((object) => object.id === request.objectId),
         )
       : undefined;
-  if (request.kind === "object" && !d)
+  if (request.kind === "object" && !object)
     throw Error("The source drawing no longer exists.");
   if (
-    d &&
-    parseReportRange(d.kind === "chart" ? d.range : d.anchor) !== request.range
+    object &&
+    parseReportRange(object.kind === "chart" ? object.range : object.anchor) !==
+      request.range
   )
     throw Error("The report range must match the drawing source.");
-  if (d && d.kind !== "chart" && request.filter)
+  if (object && object.kind !== "chart" && request.filter)
     throw Error("Pictures and shapes do not use population filters.");
   const rangeAddress = parseRangeAddress(request.range),
     columns = Array.from(
@@ -1483,19 +1487,19 @@ function buildReportSnapshot(workbook, r, t = {}) {
     );
   let c,
     h = [];
-  if (d && d.kind !== "chart") {
+  if (object && object.kind !== "chart") {
     if (
       !analysisPermissions.includeHidden &&
-      isCellHiddenInSheet(s, rangeAddress.firstRow, rangeAddress.firstCol)
+      isCellHiddenInSheet(sheet, rangeAddress.firstRow, rangeAddress.firstCol)
     )
       throw Error(
         "The drawing anchor is hidden. Explicit authorization is required.",
       );
-    ((c = [[null]]), (h = [{ sheetId: s.id, address: d.anchor }]));
+    ((c = [[null]]), (h = [{ sheetId: sheet.id, address: object.anchor }]));
   } else {
     const sourceRectangles = readSourceRectangles(
       workbookInput,
-      [{ sheetId: s.id, range: request.range }],
+      [{ sheetId: sheet.id, range: request.range }],
       t,
     );
     ((c = sourceRectangles.grids[0].values),
@@ -1511,12 +1515,12 @@ function buildReportSnapshot(workbook, r, t = {}) {
     ),
   );
   const p = (j, z) => {
-      if (j !== s.id || !f.has(z))
+      if (j !== sheet.id || !f.has(z))
         throw Error("Report calculation is outside the captured range.");
       return f.get(z);
     },
     m = request.filter
-      ? applyFilterConditions(workbookInput, s.id, request.filter, p)
+      ? applyFilterConditions(workbookInput, sheet.id, request.filter, p)
       : undefined;
   m && (request.filter = m.context.definition);
   const v = c.map((j, z) => rangeAddress.firstRow + z + 1),
@@ -1524,28 +1528,30 @@ function buildReportSnapshot(workbook, r, t = {}) {
       request.population === "visible"
         ? v.filter(
             (j) =>
-              !cn(s, "row").some((z) => z.start <= j - 1 && z.end >= j - 1) &&
+              !cn(sheet, "row").some(
+                (z) => z.start <= j - 1 && z.end >= j - 1,
+              ) &&
               (!m ||
                 j === rangeAddress.firstRow + 1 ||
                 m.context.matchingSourceRows.includes(j)),
           )
         : v;
   let b = g;
-  if (d?.kind === "chart") {
-    const j = d.chartOptions?.includedRows,
+  if (object?.kind === "chart") {
+    const j = object.chartOptions?.includedRows,
       z = g.filter(
         (D) =>
-          (d.headers !== false && D === rangeAddress.firstRow + 1) ||
+          (object.headers !== false && D === rangeAddress.firstRow + 1) ||
           !j ||
           j.includes(D),
       );
-    d.chartOptions = {
-      ...d.chartOptions,
+    object.chartOptions = {
+      ...object.chartOptions,
       includedRows: z.filter(
-        (D) => !(d.headers !== false && D === rangeAddress.firstRow + 1),
+        (D) => !(object.headers !== false && D === rangeAddress.firstRow + 1),
       ),
     };
-    const V = inspectChartSource(s, d, p);
+    const V = inspectChartSource(sheet, object, p);
     (formatDiagnosticsMessage(V), (b = z));
   }
   if (!b.length) throw Error("No rows remain in the report population.");
@@ -1553,10 +1559,10 @@ function buildReportSnapshot(workbook, r, t = {}) {
     "Fixed values and formatting captured locally; links refresh only after host authorization and explicit review. No network access or remote refresh is performed.",
     "Table images use readable, wrapped cell text with portable fonts. Merges are refused; conditional formatting, layout fidelity and native Office OLE links are not represented.",
   ];
-  ((s.analysisReport ||
-    s.dataModelReport ||
-    s.pivots?.length ||
-    s.queries?.length) &&
+  ((sheet.analysisReport ||
+    sheet.dataModelReport ||
+    sheet.pivots?.length ||
+    sheet.queries?.length) &&
     warnings.push(
       "This worksheet contains generated report output. Captured cells are historical source values; verify the underlying analysis, model, pivot or query freshness separately.",
     ),
@@ -1566,7 +1572,7 @@ function buildReportSnapshot(workbook, r, t = {}) {
           ? "Filter criteria are recorded, but full population was selected: filtered rows are included."
           : "Only matching visible rows are retained; excluded rows have locators but no values in this snapshot.",
       ),
-    d?.kind === "chart" &&
+    object?.kind === "chart" &&
       warnings.push(
         "Chart row selections are preserved. Explicitly excluded chart rows are omitted from retained cells.",
       ));
@@ -1577,18 +1583,20 @@ function buildReportSnapshot(workbook, r, t = {}) {
     workbookId: workbookInput.id,
     workbookName: workbookInput.name,
     revision: workbookInput.revision,
-    sheetName: s.name,
+    sheetName: sheet.name,
     calculatedAt: new Date().toISOString(),
     sourceHash: captureAnalysisWorkbookState(workbookInput),
     includeHidden: analysisPermissions.includeHidden,
-    authorizedSheetIds: [...new Set([s.id, ...h.map((j) => j.sheetId)])].sort(),
+    authorizedSheetIds: [
+      ...new Set([sheet.id, ...h.map((j) => j.sheetId)]),
+    ].sort(),
     sourceCells: h.map((j) => ({ sheetId: j.sheetId, address: j.address })),
     rows: b.map((row) => ({
       row: row,
       cells: columns.map((column, V) => {
         const address = `${columnIndexToLetters(column)}${row}`,
           B = c[row - rangeAddress.firstRow - 1][V],
-          cell = s.cells[address];
+          cell = sheet.cells[address];
         return {
           address: address,
           value: B,
@@ -1604,9 +1612,9 @@ function buildReportSnapshot(workbook, r, t = {}) {
       }),
     })),
     columns: columns,
-    widths: columns.map((column) => s.columnWidths?.[String(column)] ?? 84),
+    widths: columns.map((column) => sheet.columnWidths?.[String(column)] ?? 84),
     excludedRows: v.filter((j) => !b.includes(j)),
-    ...(d ? { object: d } : {}),
+    ...(object ? { object: object } : {}),
     warnings: warnings,
     hash: "",
   };
@@ -1721,23 +1729,27 @@ function validateReportSourceScope(workbook, snapshot, t = {}) {
   )
     throw Error("The report is outside the current authorized source context.");
   for (const sourceCell of snapshot.sourceCells) {
-    const a = workbook.sheets.find((sheet) => sheet.id === sourceCell.sheetId),
+    const sheet = workbook.sheets.find(
+        (sheet) => sheet.id === sourceCell.sheetId,
+      ),
       s = _t(sourceCell.address);
     if (
-      !a ||
+      !sheet ||
       !analysisPermissions.allowedSheetIds.includes(sourceCell.sheetId) ||
       (!analysisPermissions.includeHidden &&
-        isCellHiddenInSheet(a, s.row, s.col))
+        isCellHiddenInSheet(sheet, s.row, s.col))
     )
       throw Error(
         "A report source cell is missing, hidden or outside the authorized context.",
       );
   }
   for (const authorizedSheetId of snapshot.authorizedSheetIds) {
-    const a = workbook.sheets.find((sheet) => sheet.id === authorizedSheetId);
+    const sheet = workbook.sheets.find(
+      (sheet) => sheet.id === authorizedSheetId,
+    );
     if (
-      !a ||
-      (!analysisPermissions.includeHidden && (a.hidden || a.veryHidden))
+      !sheet ||
+      (!analysisPermissions.includeHidden && (sheet.hidden || sheet.veryHidden))
     )
       throw Error("The report source is missing or hidden.");
   }

@@ -356,7 +356,7 @@ function CustomSortDialog(e) {
     [E, A] = ne.useState(""),
     [k, F] = ne.useState(""),
     [I, O] = ne.useState(0),
-    j = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     z = e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
     V = z.includes(e.sheetId),
     D = JSON.stringify([
@@ -424,7 +424,10 @@ function CustomSortDialog(e) {
           readOnly: e.readOnly,
           allowedSheetIds: e.allowedSheetIds,
         });
-        (e.onWorkbookChange(X, `Sort ${j?.name}: ${y.movedRows} records moved`),
+        (e.onWorkbookChange(
+          X,
+          `Sort ${sheet?.name}: ${y.movedRows} records moved`,
+        ),
           e.onClose());
       } catch (error) {
         (w(null), F(error.message));
@@ -517,7 +520,7 @@ function CustomSortDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Worksheet" }),
                 i.jsx("strong", {
-                  children: V ? j?.name : "Outside current context",
+                  children: V ? sheet?.name : "Outside current context",
                 }),
               ],
             }),
@@ -670,7 +673,7 @@ function CustomSortDialog(e) {
                                   children: [
                                     columnIndexToLetters(q),
                                     headers && T
-                                      ? ` · ${String(j?.cells[`${columnIndexToLetters(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
+                                      ? ` · ${String(sheet?.cells[`${columnIndexToLetters(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
                                       : "",
                                   ],
                                 },

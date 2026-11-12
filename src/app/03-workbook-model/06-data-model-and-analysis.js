@@ -676,8 +676,8 @@ function validateDataModel(e) {
       );
   }
   const n = (s) => {
-    const d = data.tables.find((table) => table.id === s.tableId),
-      u = d?.columns.find((column) => column.name === s.column);
+    const table = data.tables.find((table) => table.id === s.tableId),
+      u = table?.columns.find((column) => column.name === s.column);
     if (!u) throw Error(`Unknown model field ${s.tableId}.${s.column}.`);
     return u;
   };

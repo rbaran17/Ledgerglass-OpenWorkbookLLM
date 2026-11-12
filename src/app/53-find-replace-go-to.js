@@ -1910,7 +1910,7 @@ function measureTextWithTabs(e, cellFontString, textMeasurer) {
   );
 }
 function resolveDisplayedCellText(
-  e,
+  sheet,
   r,
   cell,
   workbookWithSettings,
@@ -1922,7 +1922,7 @@ function resolveDisplayedCellText(
     cell.raw.startsWith("=") &&
     !cell.literal
     ? cell.raw
-    : formatNumberWithPattern(workbookWithSettings(e.id, r), cell, a);
+    : formatNumberWithPattern(workbookWithSettings(sheet.id, r), cell, a);
 }
 function measureNoteIndicatorWidth(e, textMeasurer) {
   return Math.max(
@@ -1955,23 +1955,27 @@ function validateAutoFitIndices(selectedAxisIndexes, r, t) {
   return new Set(selectedAxisIndexes);
 }
 function autoFitColumnWidths(
-  e,
+  sheet,
   selectedAxisIndexes,
   workbookWithSettings,
   textMeasurer,
   isShowingFormulas = false,
   a = "1900",
 ) {
-  const s = validateAutoFitIndices(selectedAxisIndexes, e.colCount, "column"),
+  const s = validateAutoFitIndices(
+      selectedAxisIndexes,
+      sheet.colCount,
+      "column",
+    ),
     d = Object.fromEntries(
-      [...s].map((l) => [String(l), defaultColumnWidthOf(e)]),
+      [...s].map((l) => [String(l), defaultColumnWidthOf(sheet)]),
     ),
     u = new Set();
-  for (const [l, c] of Object.entries(vx(e, workbookWithSettings))) {
+  for (const [l, c] of Object.entries(vx(sheet, workbookWithSettings))) {
     const { col } = _t(l);
     if (!s.has(col)) continue;
     const displayedCellText = resolveDisplayedCellText(
-      e,
+      sheet,
       l,
       c,
       workbookWithSettings,
@@ -2049,23 +2053,23 @@ function countWrappedTextLines(
   return Math.max(1, a);
 }
 function autoFitRowHeights(
-  e,
+  sheet,
   selectedAxisIndexes,
   workbookWithSettings,
   textMeasurer,
   isShowingFormulas = false,
   a = "1900",
 ) {
-  const s = validateAutoFitIndices(selectedAxisIndexes, e.rowCount, "row"),
+  const s = validateAutoFitIndices(selectedAxisIndexes, sheet.rowCount, "row"),
     d = Object.fromEntries(
-      [...s].map((l) => [String(l), defaultRowHeightOf(e)]),
+      [...s].map((l) => [String(l), defaultRowHeightOf(sheet)]),
     ),
     u = new Set();
-  for (const [l, c] of Object.entries(vx(e, workbookWithSettings))) {
+  for (const [l, c] of Object.entries(vx(sheet, workbookWithSettings))) {
     const { row, col } = _t(l);
     if (!s.has(row)) continue;
     const displayedCellText = resolveDisplayedCellText(
-      e,
+      sheet,
       l,
       c,
       workbookWithSettings,
@@ -2083,7 +2087,7 @@ function autoFitRowHeights(
       y = Math.ceil((maxRowHeight - vertical) / g),
       w = Math.max(
         1,
-        columnWidthAt(e, col) - computeCellTextAlignment(c, textMeasurer),
+        columnWidthAt(sheet, col) - computeCellTextAlignment(c, textMeasurer),
       ),
       E = resolveEffectiveCellStyle(c.style).wrap
         ? countWrappedTextLines(

@@ -48,7 +48,7 @@ function FormatCellsDialog(e) {
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
   a.current = e.onClose;
-  const s = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+  const sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
     rangeAddress = parseRangeAddress(e.range),
     l =
@@ -64,7 +64,7 @@ function FormatCellsDialog(e) {
       active: e.active,
     }),
     [h] = ne.useState(() =>
-      validateCellStyle(resolveEffectiveCellStyle(s?.cells[l]?.style)),
+      validateCellStyle(resolveEffectiveCellStyle(sheet?.cells[l]?.style)),
     ),
     [f, p] = ne.useState(
       e.mode === "alignment"
@@ -84,7 +84,7 @@ function FormatCellsDialog(e) {
       () => calculateWorkbookWithSettings(e.workbook),
       [e.workbook],
     ),
-    V = s ? z(s.id, l) : null,
+    V = sheet ? z(sheet.id, l) : null,
     D =
       c.current.book !== e.workbook.id ||
       c.current.revision !== e.workbook.revision ||
@@ -92,7 +92,7 @@ function FormatCellsDialog(e) {
       c.current.sheet !== e.sheetId ||
       c.current.selection !== JSON.stringify(e.ranges ?? [e.range]) ||
       c.current.active !== e.active,
-    B = e.readOnly || D || !!s?.protection?.enabled || !s || j > 500;
+    B = e.readOnly || D || !!sheet?.protection?.enabled || !sheet || j > 500;
   let _ = h,
     C = "";
   try {
@@ -293,7 +293,7 @@ function FormatCellsDialog(e) {
                           "This workbook is read-only. You can inspect style previews.",
                       }),
                     }),
-                  s?.protection?.enabled &&
+                  sheet?.protection?.enabled &&
                     i.jsx("p", {
                       className: "cs-notice",
                       children: i.jsx(LocalizedText, {
@@ -775,7 +775,7 @@ function FormatCellsDialog(e) {
                       i.jsxs("h3", {
                         children: [
                           i.jsx(LocalizedText, { children: "Preview · " }),
-                          s?.name,
+                          sheet?.name,
                           "!",
                           l,
                         ],
@@ -833,7 +833,7 @@ function FormatCellsDialog(e) {
                                         e.workbook.datePolicy?.dateSystem,
                                       value: V === null ? "Audit evidence" : V,
                                       cell: {
-                                        ...(s?.cells[l] ?? { raw: null }),
+                                        ...(sheet?.cells[l] ?? { raw: null }),
                                         style: _,
                                       },
                                     }),
@@ -944,12 +944,12 @@ function ConditionalFormattingRulesManager(e) {
     [c, h] = ne.useState(""),
     [f, p] = ne.useState(null),
     [m, v] = ne.useState(0),
-    g = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
     b =
       a.current.guard !== JSON.stringify(e.workbook) ||
       a.current.sheetId !== e.sheetId ||
       a.current.range !== e.range,
-    disabled = e.readOnly || b || !g || !!g.protection?.enabled,
+    disabled = e.readOnly || b || !sheet || !!sheet.protection?.enabled,
     w = sortConditionalRulesByPriority(rules),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
@@ -1046,7 +1046,7 @@ function ConditionalFormattingRulesManager(e) {
         }),
         i.jsxs("p", {
           children: [
-            g?.name ?? "Worksheet removed",
+            sheet?.name ?? "Worksheet removed",
             " ",
             i.jsx(LocalizedText, {
               children:
@@ -1069,7 +1069,7 @@ function ConditionalFormattingRulesManager(e) {
               children: "This workbook is read-only.",
             }),
           }),
-        g?.protection?.enabled &&
+        sheet?.protection?.enabled &&
           i.jsx("p", {
             role: "alert",
             children: i.jsx(LocalizedText, {

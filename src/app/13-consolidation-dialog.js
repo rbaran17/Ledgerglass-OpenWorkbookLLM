@@ -341,12 +341,12 @@ function ConsolidationStatusBanner({
   onReview,
 }) {
   const { text, language } = useWorkbookMessages(),
-    s = workbook.sheets.find((sheet) => sheet.id === sheetId),
-    d = s?.consolidation ? JSON.stringify([workbook, options]) : "",
+    sheet = workbook.sheets.find((sheet) => sheet.id === sheetId),
+    d = sheet?.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
       () =>
-        s?.consolidation
-          ? checkConsolidationFreshness(workbook, s, options)
+        sheet?.consolidation
+          ? checkConsolidationFreshness(workbook, sheet, options)
           : null,
       [d, sheetId],
     );
@@ -409,7 +409,7 @@ function ConsolidationDialog(e) {
         e.workbook.sheets.find((sheet) => sheet.id === e.sheetId)?.consolidation
           ?.definition;
       if (K) return structuredClone(K);
-      const te = {
+      const definition = {
           engine: consolidationFormatVersion,
           categoryLabels: ["Category"],
           period: "2026-Q1",
@@ -419,15 +419,20 @@ function ConsolidationDialog(e) {
           collapseDetails: false,
           sources: [],
         },
-        ae = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+        sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
         range = e.range.includes(":")
           ? e.range
-          : formatOccupiedRangeAddress(ae);
+          : formatOccupiedRangeAddress(sheet);
       return (
-        (te.sources = [
-          createConsolidationDefinition(e.workbook, ae.id, range, te),
+        (definition.sources = [
+          createConsolidationDefinition(
+            e.workbook,
+            sheet.id,
+            range,
+            definition,
+          ),
         ]),
-        te
+        definition
       );
     }),
     [outputName, m] = ne.useState(() => {
@@ -516,20 +521,20 @@ function ConsolidationDialog(e) {
   async function H(K) {
     if (!K) return;
     const te = ++s.current,
-      ae = d.current;
+      stamp = d.current;
     (E(null), k(true), I(""));
     try {
       if (!/\.(json|xlsx)$/i.test(K.name))
         throw Error("Choose a native workbook JSON or an XLSX file.");
       const oe = await importWorkbookFile(K, cancellableOperation.begin());
-      if (!u.current || te !== s.current || ae !== d.current) return;
+      if (!u.current || te !== s.current || stamp !== d.current) return;
       if (oe.workbook.id === e.workbook.id)
         throw Error(
           "This is the current workbook identity. Use the current workbook source instead.",
         );
-      E({ ...oe, stamp: ae });
+      E({ ...oe, stamp: stamp });
     } catch (error) {
-      u.current && te === s.current && ae === d.current && I(error.message);
+      u.current && te === s.current && stamp === d.current && I(error.message);
     } finally {
       u.current && te === s.current && k(false);
     }
@@ -702,8 +707,10 @@ function ConsolidationDialog(e) {
                             $({
                               ...definition,
                               categoryLabels: definition.categoryLabels.map(
-                                (oe, de) =>
-                                  de === te ? event.target.value : oe,
+                                (categoryLabel, de) =>
+                                  de === te
+                                    ? event.target.value
+                                    : categoryLabel,
                               ),
                             }),
                         }),
@@ -837,7 +844,7 @@ function ConsolidationDialog(e) {
                                 $({
                                   ...definition,
                                   sources: definition.sources.filter(
-                                    (se, we) => te !== we,
+                                    (source, we) => te !== we,
                                   ),
                                 }),
                               children: [
@@ -863,7 +870,7 @@ function ConsolidationDialog(e) {
                                         (Ae) =>
                                           Ae.workbook.id === event.target.value,
                                       ),
-                                      Ee = we.workbook.sheets.find(
+                                      sheet = we.workbook.sheets.find(
                                         (sheet) =>
                                           we.allowedSheetIds.includes(
                                             sheet.id,
@@ -871,12 +878,12 @@ function ConsolidationDialog(e) {
                                           !sheet.hidden &&
                                           !sheet.veryHidden,
                                       );
-                                    Ee &&
+                                    sheet &&
                                       U(te, {
                                         ...createConsolidationDefinition(
                                           we.workbook,
-                                          Ee.id,
-                                          formatOccupiedRangeAddress(Ee),
+                                          sheet.id,
+                                          formatOccupiedRangeAddress(sheet),
                                           definition,
                                         ),
                                         id: source.id,
@@ -1142,21 +1149,21 @@ function ConsolidationDialog(e) {
                 i.jsx("button", {
                   disabled: definition.sources.length >= 8,
                   onClick: () => {
-                    const K = e.workbook.sheets.find(
+                    const sheet = e.workbook.sheets.find(
                       (sheet) =>
                         allowedSheetIds.includes(sheet.id) &&
                         !sheet.hidden &&
                         !sheet.veryHidden,
                     );
-                    K &&
+                    sheet &&
                       $({
                         ...definition,
                         sources: [
                           ...definition.sources,
                           createConsolidationDefinition(
                             e.workbook,
-                            K.id,
-                            formatOccupiedRangeAddress(K),
+                            sheet.id,
+                            formatOccupiedRangeAddress(sheet),
                             definition,
                           ),
                         ],

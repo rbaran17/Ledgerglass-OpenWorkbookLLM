@@ -718,7 +718,7 @@ function mapIndexAfterMove(e, r) {
         ? e - count
         : e;
 }
-function planMoveSegments(e, r, t) {
+function planMoveSegments(start, end, t) {
   if (t.permutation) {
     const o = [],
       a = (start, end, offset) => {
@@ -728,19 +728,19 @@ function planMoveSegments(e, r, t) {
           ? (l.end = end)
           : o.push({ start: start, end: end, offset: offset });
       };
-    a(e, Math.min(r, t.index - 1), 0);
+    a(start, Math.min(end, t.index - 1), 0);
     for (
-      let s = Math.max(e, t.index);
-      s <= Math.min(r, t.index + t.count - 1);
+      let s = Math.max(start, t.index);
+      s <= Math.min(end, t.index + t.count - 1);
       s++
     )
       a(s, s, mapIndexAfterMove(s, t) - s);
-    return (a(Math.max(e, t.index + t.count), r, 0), o);
+    return (a(Math.max(start, t.index + t.count), end, 0), o);
   }
   const n = [
     ...new Set(
-      [e, r + 1, t.index, t.index + t.count, t.moveBefore].filter(
-        (o) => o >= e && o <= r + 1,
+      [start, end + 1, t.index, t.index + t.count, t.moveBefore].filter(
+        (o) => o >= start && o <= end + 1,
       ),
     ),
   ].sort((o, a) => o - a);
@@ -1270,10 +1270,10 @@ function validateOutlineGroups(
     assertOutlineGroupNesting(o, "column"),
     (r.outlineGroups = o));
 }
-function addOutlineGroup(e, r) {
+function addOutlineGroup(sheet, r) {
   return (
     assertWorksheetAxis(r),
-    assertOutlineGroupNesting(e.outlineGroups ?? [], r)
+    assertOutlineGroupNesting(sheet.outlineGroups ?? [], r)
   );
 }
 function cn(e, r) {
@@ -1678,10 +1678,10 @@ function applySheetSizeEdits(workbook, sheetId, t, n = {}) {
     throw Error(
       "The workbook changed after these sizes were opened. Close the dialog and reopen it before applying sizes.",
     );
-  const a = workbook.sheets.find((sheet) => sheet.id === sheetId);
-  if (!a) throw Error("Worksheet not found.");
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  if (!sheet) throw Error("Worksheet not found.");
   if (
-    (assertSheetUnprotected(a),
+    (assertSheetUnprotected(sheet),
     !t ||
       typeof t != "object" ||
       Array.isArray(t) ||
@@ -1709,28 +1709,28 @@ function applySheetSizeEdits(workbook, sheetId, t, n = {}) {
       t.columnWidth === undefined
         ? undefined
         : validateDefaultSizePixels(t.columnWidth, "column"),
-    u = { ...a };
+    u = { ...sheet };
   return (
     s !== undefined &&
-      s !== defaultRowHeightOf(a) &&
+      s !== defaultRowHeightOf(sheet) &&
       (s === defaultRowHeight
         ? delete u.defaultRowHeight
         : (u.defaultRowHeight = s)),
     d !== undefined &&
-      d !== defaultColumnWidthOf(a) &&
+      d !== defaultColumnWidthOf(sheet) &&
       (d === defaultColumnWidth
         ? delete u.defaultColumnWidth
         : (u.defaultColumnWidth = d)),
     t.resetRowOverrides &&
-      Object.keys(a.rowHeights ?? {}).length &&
+      Object.keys(sheet.rowHeights ?? {}).length &&
       delete u.rowHeights,
     t.resetColumnOverrides &&
-      Object.keys(a.columnWidths ?? {}).length &&
+      Object.keys(sheet.columnWidths ?? {}).length &&
       delete u.columnWidths,
-    u.defaultRowHeight === a.defaultRowHeight &&
-    u.defaultColumnWidth === a.defaultColumnWidth &&
-    u.rowHeights === a.rowHeights &&
-    u.columnWidths === a.columnWidths
+    u.defaultRowHeight === sheet.defaultRowHeight &&
+    u.defaultColumnWidth === sheet.defaultColumnWidth &&
+    u.rowHeights === sheet.rowHeights &&
+    u.columnWidths === sheet.columnWidths
       ? workbook
       : {
           ...workbook,
@@ -1750,16 +1750,17 @@ async function hashSheetPassword(e, salt) {
     .join("");
 }
 async function updateSheetProtection(workbook, sheetId, t, n) {
-  const o = workbook.sheets.find((sheet) => sheet.id === sheetId);
+  const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   (n &&
-    o.protection?.enabled &&
+    sheet.protection?.enabled &&
     failWithMessage(
       "Unprotect this sheet before changing its protection settings.",
     ),
     t.length > 200 && failWithMessage("Password is too long."),
     !n &&
-      o.protection?.hash &&
-      (await hashSheetPassword(t, o.protection.salt)) !== o.protection.hash &&
+      sheet.protection?.hash &&
+      (await hashSheetPassword(t, sheet.protection.salt)) !==
+        sheet.protection.hash &&
       failWithMessage("The password does not match."));
   const salt = crypto.randomUUID(),
     protection = n
