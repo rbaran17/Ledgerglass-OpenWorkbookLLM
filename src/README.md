@@ -42,8 +42,8 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-2. Split `main.js` into modules along the original boundaries.
-3. Share the core model between `main.js` and the workers instead of keeping
+1. Split `main.js` into modules along the original boundaries.
+2. Share the core model between `main.js` and the workers instead of keeping
    three copies.
-4. Give exported and frequently used identifiers meaningful names; add types.
-5. Grow the browser checks and add unit tests around the core model.
+3. Give exported and frequently used identifiers meaningful names; add types.
+4. Grow the browser checks and add unit tests around the core model.
