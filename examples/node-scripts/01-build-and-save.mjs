@@ -23,7 +23,8 @@ import {
 
 // Use the folder given on the command line, or a temporary one we remove later.
 const givenFolder = process.argv[2];
-const folder = givenFolder ?? (await mkdtemp(join(tmpdir(), "ledgerglass-01-")));
+const folder =
+  givenFolder ?? (await mkdtemp(join(tmpdir(), "ledgerglass-01-")));
 await mkdir(folder, { recursive: true });
 
 // A new workbook has one sheet, "Sheet1". Rename it to "Budget".
@@ -60,7 +61,13 @@ workbook = addWorksheet(workbook, "Notes");
 const notes = workbook.sheets[1];
 workbook = applyCellPatchTransaction(
   workbook,
-  [{ sheetId: notes.id, address: "A1", cell: { raw: "Figures are in euros." } }],
+  [
+    {
+      sheetId: notes.id,
+      address: "A1",
+      cell: { raw: "Figures are in euros." },
+    },
+  ],
   "Example",
   "Add note",
 );

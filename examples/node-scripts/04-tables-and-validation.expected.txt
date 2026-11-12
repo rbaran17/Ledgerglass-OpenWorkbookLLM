@@ -1,0 +1,8 @@
+Table: Sales
+Range: A1:C4
+Columns: Region, Units, Price
+Rule accepts 7: true
+Rule accepts 150: false
+Batch check of B2 (7): 0 problems
+Batch check of B3 (150): 1 problem(s)
+Message: Sheet1!B3: Units must be between 0 and 100. Value does not satisfy the rule.

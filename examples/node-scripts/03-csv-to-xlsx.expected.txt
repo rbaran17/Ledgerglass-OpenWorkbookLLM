@@ -1,0 +1,6 @@
+Imported sheet: Imported data
+Revision before total: 0
+Events before total: 0
+Revision after total: 1
+Events after total: 1
+Total read back from XLSX: 1951.25

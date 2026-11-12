@@ -116,7 +116,10 @@ export function getWorkbookCalculation(workbook: Workbook): {
   calculator: Calculator;
   report: CalculationReport;
 };
-/** Returns a new workbook with the changes applied and recorded; the original is not modified. */
+/**
+ * Returns a new workbook with the changes applied and recorded; the original is not modified.
+ * Throws a `DataValidationError` if a value breaks a data validation rule whose style is "stop".
+ */
 export function applyCellPatchTransaction(
   workbook: Workbook,
   patches: CellPatch[],

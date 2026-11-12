@@ -1,0 +1,28 @@
+Title: Budget
+Read only: false
+Sheets: Plan
+Summary for the agent:
+{
+  "workbookId": "budget-demo",
+  "title": "Budget",
+  "sheets": [
+    {
+      "name": "Plan",
+      "filledCells": 8,
+      "formulaCount": 2
+    }
+  ],
+  "formulaErrorCount": 1,
+  "formulaErrors": [
+    {
+      "sheet": "Plan",
+      "address": "C4",
+      "formula": "=1/0",
+      "error": "#DIV/0!"
+    }
+  ]
+}
+Rejected with 3 problem(s):
+- Sheet 1: the name may not contain : \ / ? * [ ].
+- Sheet 3: the name "costs" is used twice.
+- Sheet 4 needs a name.
