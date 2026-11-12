@@ -33,23 +33,23 @@ import {
 
 function ConnectionStatusNotice() {
   const { text, language } = useWorkbookMessages(),
-    [t, n] = ne.useState(
+    [isOnline, setIsOnline] = ne.useState(
       () => typeof navigator > "u" || navigator.onLine !== false,
     );
   return (
     ne.useEffect(() => {
-      const o = () => n(true),
-        a = () => n(false);
+      const handleOnline = () => setIsOnline(true),
+        handleOffline = () => setIsOnline(false);
       return (
-        window.addEventListener("online", o),
-        window.addEventListener("offline", a),
+        window.addEventListener("online", handleOnline),
+        window.addEventListener("offline", handleOffline),
         () => {
-          (window.removeEventListener("online", o),
-            window.removeEventListener("offline", a));
+          (window.removeEventListener("online", handleOnline),
+            window.removeEventListener("offline", handleOffline));
         }
       );
     }, []),
-    t
+    isOnline
       ? null
       : i.jsx("div", {
           className: "lg-notice",
@@ -64,7 +64,12 @@ function ConnectionStatusNotice() {
         })
   );
 }
-function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
+function parseGoToReference(
+  activeWorkbook,
+  currentSheetId,
+  goToReferenceText,
+  options = {},
+) {
   if (
     typeof goToReferenceText != "string" ||
     !goToReferenceText.trim() ||
@@ -73,11 +78,12 @@ function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
     throw Error(
       "Enter an address, range, or defined range name (up to 8,192 characters).",
     );
-  const allowedSheetIds = n.allowedSheetIds,
-    a = (c) => !allowedSheetIds || allowedSheetIds.includes(c),
-    s = (c) => {
+  const allowedSheetIds = options.allowedSheetIds,
+    isSheetAllowed = (candidateSheetId) =>
+      !allowedSheetIds || allowedSheetIds.includes(candidateSheetId),
+    getVisibleSheet = (requestedSheetId) => {
       const sheet = activeWorkbook.sheets.find(
-        (sheet) => sheet.id === c && a(sheet.id),
+        (sheet) => sheet.id === requestedSheetId && isSheetAllowed(sheet.id),
       );
       if (!sheet)
         throw Error(
@@ -89,101 +95,121 @@ function parseGoToReference(activeWorkbook, r, goToReferenceText, n = {}) {
         );
       return sheet;
     };
-  s(r);
-  const d = [],
-    u = (c) => {
-      const h = [];
-      let f = false,
-        p = 0;
-      for (let m = 0; m < c.length; m++)
-        c[m] === "'"
-          ? f && c[m + 1] === "'"
-            ? m++
-            : (f = !f)
-          : c[m] === "," && !f && (h.push(c.slice(p, m).trim()), (p = m + 1));
+  getVisibleSheet(currentSheetId);
+  const targetAreas = [],
+    splitReferenceItems = (listText) => {
+      const referenceItems = [];
+      let insideQuotes = false,
+        itemStart = 0;
+      for (let charIndex = 0; charIndex < listText.length; charIndex++)
+        listText[charIndex] === "'"
+          ? insideQuotes && listText[charIndex + 1] === "'"
+            ? charIndex++
+            : (insideQuotes = !insideQuotes)
+          : listText[charIndex] === "," &&
+            !insideQuotes &&
+            (referenceItems.push(listText.slice(itemStart, charIndex).trim()),
+            (itemStart = charIndex + 1));
       if (
-        (h.push(c.slice(p).trim()),
-        f || h.some((m) => !m) || h.length > maxSelectionAreas)
+        (referenceItems.push(listText.slice(itemStart).trim()),
+        insideQuotes ||
+          referenceItems.some((referenceItem) => !referenceItem) ||
+          referenceItems.length > maxSelectionAreas)
       )
         throw Error(
           "Enter valid comma-separated addresses or defined range names.",
         );
-      return h;
+      return referenceItems;
     },
-    l = (c, h, f) => {
-      if (f.length > 32)
+    resolveReferenceText = (addressText, defaultSheetId, nameChain) => {
+      if (nameChain.length > 32)
         throw Error(
           "The defined-name chain exceeds the 32-name navigation limit.",
         );
-      for (const g of u(c)) {
-        const b = /^(?:'((?:[^']|'')+)'|([^'!,:\[\]()]+))!(.+)$/.exec(g);
-        let sheetId = h,
-          w = g;
-        if (b) {
-          const k = b[1]?.replace(/''/g, "'") ?? b[2].trim(),
+      for (const listItem of splitReferenceItems(addressText)) {
+        const sheetPrefixMatch =
+          /^(?:'((?:[^']|'')+)'|([^'!,:\[\]()]+))!(.+)$/.exec(listItem);
+        let sheetId = defaultSheetId,
+          addressPart = listItem;
+        if (sheetPrefixMatch) {
+          const sheetName =
+              sheetPrefixMatch[1]?.replace(/''/g, "'") ??
+              sheetPrefixMatch[2].trim(),
             sheet = activeWorkbook.sheets.find(
               (sheet) =>
-                a(sheet.id) && sheet.name.toLowerCase() === k.toLowerCase(),
+                isSheetAllowed(sheet.id) &&
+                sheet.name.toLowerCase() === sheetName.toLowerCase(),
             );
           if (!sheet)
             throw Error(
               "The destination is outside the available worksheet scope.",
             );
-          ((sheetId = sheet.id), (w = b[3].trim()));
+          ((sheetId = sheet.id), (addressPart = sheetPrefixMatch[3].trim()));
         }
         if (
-          (s(sheetId),
+          (getVisibleSheet(sheetId),
           /^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
-            w,
+            addressPart,
           ))
         ) {
           if (
-            (d.push({ sheetId: sheetId, range: parseSelectionAreas(w)[0] }),
-            d.length > maxSelectionAreas)
+            (targetAreas.push({
+              sheetId: sheetId,
+              range: parseSelectionAreas(addressPart)[0],
+            }),
+            targetAreas.length > maxSelectionAreas)
           )
             throw Error(
               `Select at most ${maxSelectionAreas} rectangular areas.`,
             );
           continue;
         }
-        if (!/^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(w))
+        if (!/^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(addressPart))
           throw Error(
             "The Name Box accepts cell addresses and static range names. Computed, external, or three-dimensional destinations cannot be selected.",
           );
-        const E =
+        const matchedDefinedName =
           activeWorkbook.definedNames?.find(
             (definedName) =>
               definedName.scopeSheetId === sheetId &&
-              definedName.name.toLowerCase() === w.toLowerCase(),
+              definedName.name.toLowerCase() === addressPart.toLowerCase(),
           ) ??
           activeWorkbook.definedNames?.find(
             (definedName) =>
               !definedName.scopeSheetId &&
-              definedName.name.toLowerCase() === w.toLowerCase(),
+              definedName.name.toLowerCase() === addressPart.toLowerCase(),
           );
-        if (!E)
+        if (!matchedDefinedName)
           throw Error(
             "The address or defined range name was not found in the current worksheet scope.",
           );
-        const A = `${E.scopeSheetId ?? "global"}:${E.name.toLowerCase()}`;
-        if (f.includes(A))
+        const chainKey = `${matchedDefinedName.scopeSheetId ?? "global"}:${matchedDefinedName.name.toLowerCase()}`;
+        if (nameChain.includes(chainKey))
           throw Error("The defined range name contains a circular reference.");
-        l(E.refersTo.slice(1).trim(), E.scopeSheetId ?? sheetId, [...f, A]);
+        resolveReferenceText(
+          matchedDefinedName.refersTo.slice(1).trim(),
+          matchedDefinedName.scopeSheetId ?? sheetId,
+          [...nameChain, chainKey],
+        );
       }
     };
   if (
-    (l(goToReferenceText.trim(), r, []),
-    d.some((c) => c.sheetId !== d[0].sheetId))
+    (resolveReferenceText(goToReferenceText.trim(), currentSheetId, []),
+    targetAreas.some(
+      (targetArea) => targetArea.sheetId !== targetAreas[0].sheetId,
+    ))
   )
     throw Error("Select ranges on one worksheet at a time.");
   return {
-    sheetId: d[0].sheetId,
-    ranges: parseSelectionAreas(d.map((c) => c.range)),
+    sheetId: targetAreas[0].sheetId,
+    ranges: parseSelectionAreas(
+      targetAreas.map((targetEntry) => targetEntry.range),
+    ),
   };
 }
 
-function describeStyleFormatting(e) {
-  const effectiveCellStyle = resolveEffectiveCellStyle(e);
+function describeStyleFormatting(cellStyle) {
+  const effectiveCellStyle = resolveEffectiveCellStyle(cellStyle);
   return (
     [
       effectiveCellStyle.fontFamily,
@@ -223,27 +249,28 @@ function CellStylePreview({ style }) {
   return i.jsxs("dl", {
     className: "ts-detail-fields",
     children: [
-      Object.entries(styleFormattingLabels).map(([t, n]) =>
-        i.jsxs(
-          "div",
-          {
-            children: [
-              i.jsx("dt", { children: n }),
-              i.jsx("dd", {
-                children:
-                  effectiveCellStyle[t] === undefined
-                    ? "Default"
-                    : typeof effectiveCellStyle[t] == "boolean"
-                      ? effectiveCellStyle[t]
-                        ? "On"
-                        : "Off"
-                      : String(effectiveCellStyle[t]) +
-                        (t === "fontSize" ? " pt" : ""),
-              }),
-            ],
-          },
-          t,
-        ),
+      Object.entries(styleFormattingLabels).map(
+        ([propertyName, propertyLabel]) =>
+          i.jsxs(
+            "div",
+            {
+              children: [
+                i.jsx("dt", { children: propertyLabel }),
+                i.jsx("dd", {
+                  children:
+                    effectiveCellStyle[propertyName] === undefined
+                      ? "Default"
+                      : typeof effectiveCellStyle[propertyName] == "boolean"
+                        ? effectiveCellStyle[propertyName]
+                          ? "On"
+                          : "Off"
+                        : String(effectiveCellStyle[propertyName]) +
+                          (propertyName === "fontSize" ? " pt" : ""),
+                }),
+              ],
+            },
+            propertyName,
+          ),
       ),
       ["top", "right", "bottom", "left"].map((cellBorderEdge) => {
         const borderEdge = resolveBorderEdge(
@@ -275,8 +302,8 @@ function CellStylePreview({ style }) {
   });
 }
 function CellStyleSummary({ style, catalog }) {
-  const t = style?.binding,
-    { binding, ...o } = style ?? {};
+  const styleBinding = style?.binding,
+    { binding, ...directOverrides } = style ?? {};
   return i.jsxs("details", {
     children: [
       i.jsx("summary", {
@@ -286,57 +313,61 @@ function CellStyleSummary({ style, catalog }) {
         children: i.jsx(LocalizedText, { children: "Displayed formatting" }),
       }),
       i.jsx(CellStylePreview, { style }),
-      t &&
+      styleBinding &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsxs("h4", {
               children: [
                 i.jsx(LocalizedText, { children: "Named style:" }),
                 " ",
-                catalog?.styles.find((style) => style.id === t.styleId)?.name ??
-                  "Missing style",
+                catalog?.styles.find(
+                  (style) => style.id === styleBinding.styleId,
+                )?.name ?? "Missing style",
               ],
             }),
-            t.themeFallback &&
+            styleBinding.themeFallback &&
               i.jsx("p", {
                 children: i.jsx(LocalizedText, {
                   children: "Office theme fallback",
                 }),
               }),
-            i.jsx(CellStylePreview, { style: t.base }),
+            i.jsx(CellStylePreview, { style: styleBinding.base }),
             i.jsx("h4", {
               children: i.jsx(LocalizedText, { children: "Direct overrides" }),
             }),
-            Object.keys(o).length
+            Object.keys(directOverrides).length
               ? i.jsx("dl", {
                   className: "ts-detail-fields",
-                  children: Object.entries(o).map(([s, d]) =>
-                    i.jsxs(
-                      "div",
-                      {
-                        children: [
-                          i.jsx("dt", {
-                            children: styleFormattingLabels[s] ?? s,
-                          }),
-                          i.jsx("dd", {
-                            children:
-                              s === "borders"
-                                ? Object.entries(d)
-                                    .map(
-                                      ([u, l]) =>
-                                        `${u}: ${l.style}${l.color ? ` ${l.color}` : ""}`,
-                                    )
-                                    .join("; ")
-                                : typeof d == "boolean"
-                                  ? d
-                                    ? "On"
-                                    : "Off"
-                                  : String(d),
-                          }),
-                        ],
-                      },
-                      s,
-                    ),
+                  children: Object.entries(directOverrides).map(
+                    ([overrideProperty, overrideValue]) =>
+                      i.jsxs(
+                        "div",
+                        {
+                          children: [
+                            i.jsx("dt", {
+                              children:
+                                styleFormattingLabels[overrideProperty] ??
+                                overrideProperty,
+                            }),
+                            i.jsx("dd", {
+                              children:
+                                overrideProperty === "borders"
+                                  ? Object.entries(overrideValue)
+                                      .map(
+                                        ([borderEdgeName, borderEdgeValue]) =>
+                                          `${borderEdgeName}: ${borderEdgeValue.style}${borderEdgeValue.color ? ` ${borderEdgeValue.color}` : ""}`,
+                                      )
+                                      .join("; ")
+                                  : typeof overrideValue == "boolean"
+                                    ? overrideValue
+                                      ? "On"
+                                      : "Off"
+                                    : String(overrideValue),
+                            }),
+                          ],
+                        },
+                        overrideProperty,
+                      ),
                   ),
                 })
               : i.jsx("p", {
@@ -391,14 +422,14 @@ function ThemeRoleBindings({ definition }) {
                   }),
                 ],
               }),
-              ["top", "right", "bottom", "left"].map((r) =>
+              ["top", "right", "bottom", "left"].map((borderEdge) =>
                 i.jsxs(
                   "div",
                   {
                     children: [
                       i.jsxs("dt", {
                         children: [
-                          r,
+                          borderEdge,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "border color role",
@@ -407,11 +438,12 @@ function ThemeRoleBindings({ definition }) {
                       }),
                       i.jsx("dd", {
                         children:
-                          definition.borderRoles?.[r] ?? "Stored border color",
+                          definition.borderRoles?.[borderEdge] ??
+                          "Stored border color",
                       }),
                     ],
                   },
-                  r,
+                  borderEdge,
                 ),
               ),
             ],
@@ -425,7 +457,7 @@ function ThemeChangePreview({ plan }) {
     catalogAfter = plan.catalogAfter;
   if (JSON.stringify(catalogBefore) === JSON.stringify(catalogAfter))
     return null;
-  const n = [
+  const themeSettingRows = [
       {
         name: "Theme name",
         before: catalogBefore?.theme.name,
@@ -451,8 +483,8 @@ function ThemeChangePreview({ plan }) {
         before: catalogBefore?.missingTheme ? "Office fallback" : "None",
         after: catalogAfter?.missingTheme ? "Office fallback" : "None",
       },
-    ].filter((a) => a.before !== a.after),
-    o = [
+    ].filter((changeRow) => changeRow.before !== changeRow.after),
+    styleIds = [
       ...new Set([
         ...(catalogBefore?.styles.map((style) => style.id) ?? []),
         ...(catalogAfter?.styles.map((style) => style.id) ?? []),
@@ -465,7 +497,7 @@ function ThemeChangePreview({ plan }) {
       i.jsx("summary", {
         children: i.jsx(LocalizedText, { children: "Workbook style settings" }),
       }),
-      n.length > 0 &&
+      themeSettingRows.length > 0 &&
         i.jsxs("table", {
           children: [
             i.jsx("thead", {
@@ -486,26 +518,30 @@ function ThemeChangePreview({ plan }) {
               }),
             }),
             i.jsx("tbody", {
-              children: n.map((a) =>
+              children: themeSettingRows.map((settingRow) =>
                 i.jsxs(
                   "tr",
                   {
                     children: [
-                      i.jsx("th", { children: a.name }),
-                      i.jsx("td", { children: a.before ?? "Not set" }),
-                      i.jsx("td", { children: a.after ?? "Not set" }),
+                      i.jsx("th", { children: settingRow.name }),
+                      i.jsx("td", { children: settingRow.before ?? "Not set" }),
+                      i.jsx("td", { children: settingRow.after ?? "Not set" }),
                     ],
                   },
-                  a.name,
+                  settingRow.name,
                 ),
               ),
             }),
           ],
         }),
-      o.map((a) => {
-        const s = catalogBefore?.styles.find((style) => style.id === a),
-          d = catalogAfter?.styles.find((style) => style.id === a);
-        return JSON.stringify(s) === JSON.stringify(d)
+      styleIds.map((styleId) => {
+        const styleBefore = catalogBefore?.styles.find(
+            (style) => style.id === styleId,
+          ),
+          styleAfter = catalogAfter?.styles.find(
+            (style) => style.id === styleId,
+          );
+        return JSON.stringify(styleBefore) === JSON.stringify(styleAfter)
           ? null
           : i.jsxs(
               "details",
@@ -513,11 +549,11 @@ function ThemeChangePreview({ plan }) {
                 className: "ts-style-definition",
                 children: [
                   i.jsx("summary", {
-                    children: s
-                      ? d
-                        ? `${s.name} → ${d.name}`
-                        : `Delete ${s.name}`
-                      : `Create ${d?.name}`,
+                    children: styleBefore
+                      ? styleAfter
+                        ? `${styleBefore.name} → ${styleAfter.name}`
+                        : `Delete ${styleBefore.name}`
+                      : `Create ${styleAfter?.name}`,
                   }),
                   i.jsxs("div", {
                     className: "ts-definition-columns",
@@ -530,7 +566,7 @@ function ThemeChangePreview({ plan }) {
                             }),
                           }),
                           i.jsx(ThemeRoleBindings, {
-                            definition: s?.definition,
+                            definition: styleBefore?.definition,
                           }),
                         ],
                       }),
@@ -542,7 +578,7 @@ function ThemeChangePreview({ plan }) {
                             }),
                           }),
                           i.jsx(ThemeRoleBindings, {
-                            definition: d?.definition,
+                            definition: styleAfter?.definition,
                           }),
                         ],
                       }),
@@ -550,81 +586,88 @@ function ThemeChangePreview({ plan }) {
                   }),
                 ],
               },
-              a,
+              styleId,
             );
       }),
     ],
   });
 }
-function ThemesAndCellStylesDialog(e) {
+function ThemesAndCellStylesDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e.onClose);
-  a.current = e.onClose;
-  const [s] = ne.useState(() => ({
-      snapshot: JSON.stringify(e.workbook),
-      sheet: e.sheetId,
-      ranges: JSON.stringify(e.ranges ?? [e.range]),
-      active: e.active,
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    onCloseRef = ne.useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const [openSnapshot] = ne.useState(() => ({
+      snapshot: JSON.stringify(props.workbook),
+      sheet: props.sheetId,
+      ranges: JSON.stringify(props.ranges ?? [props.range]),
+      active: props.active,
     })),
-    [d] = ne.useState(() =>
+    [styleCatalog] = ne.useState(() =>
       cloneStructuredValue(
-        e.workbook.styleCatalog ?? createDefaultStyleCatalog(e.workbook.id),
+        props.workbook.styleCatalog ??
+          createDefaultStyleCatalog(props.workbook.id),
       ),
     ),
-    selectionAreas = parseSelectionAreas(e.ranges ?? [e.range]),
-    rangeAddress = parseRangeAddress(e.range),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    h =
-      e.active && isCellAddressInRanges(selectionAreas, e.active)
-        ? e.active
+    selectionAreas = parseSelectionAreas(props.ranges ?? [props.range]),
+    rangeAddress = parseRangeAddress(props.range),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    activeAddress =
+      props.active && isCellAddressInRanges(selectionAreas, props.active)
+        ? props.active
         : `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
-    f = sheet?.cells[h]?.style?.binding?.styleId,
-    [styleId, m] = ne.useState(
-      d.styles.some((style) => style.id === f) ? f : (d.styles[0]?.id ?? ""),
+    activeStyleId = sheet?.cells[activeAddress]?.style?.binding?.styleId,
+    [styleId, setStyleId] = ne.useState(
+      styleCatalog.styles.some((style) => style.id === activeStyleId)
+        ? activeStyleId
+        : (styleCatalog.styles[0]?.id ?? ""),
     ),
-    style = d.styles.find((style) => style.id === styleId),
-    [g, b] = ne.useState("Theme"),
-    [theme, w] = ne.useState(cloneStructuredValue(d.theme)),
-    [definition, A] = ne.useState(
+    style = styleCatalog.styles.find((style) => style.id === styleId),
+    [activeTab, setActiveTab] = ne.useState("Theme"),
+    [theme, setTheme] = ne.useState(cloneStructuredValue(styleCatalog.theme)),
+    [definition, setDefinition] = ne.useState(
       cloneStructuredValue(style?.definition ?? { base: {} }),
     ),
-    [k, F] = ne.useState("Custom style"),
-    [I, O] = ne.useState(style?.name ?? ""),
-    [plan, z] = ne.useState(),
-    [V, D] = ne.useState(""),
-    [B, _] = ne.useState(0),
-    C =
-      s.snapshot !== JSON.stringify(e.workbook) ||
-      s.sheet !== e.sheetId ||
-      s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
-      s.active !== e.active,
-    disabled = e.readOnly || C || !sheet,
-    N =
+    [newStyleName, setNewStyleName] = ne.useState("Custom style"),
+    [renamedStyleName, setRenamedStyleName] = ne.useState(style?.name ?? ""),
+    [plan, setPlan] = ne.useState(),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    isStale =
+      openSnapshot.snapshot !== JSON.stringify(props.workbook) ||
+      openSnapshot.sheet !== props.sheetId ||
+      openSnapshot.ranges !== JSON.stringify(props.ranges ?? [props.range]) ||
+      openSnapshot.active !== props.active,
+    disabled = props.readOnly || isStale || !sheet,
+    isStyleChangeBlocked =
       disabled ||
       !!sheet?.protection?.enabled ||
       countSelectionCells(selectionAreas) > 500;
-  function R() {
-    (z(undefined), D(""), _(0));
+  function resetPreview() {
+    (setPlan(undefined), setErrorMessage(""), setPageIndex(0));
   }
-  function L(de) {
-    (w(de), R());
+  function updateTheme(nextTheme) {
+    (setTheme(nextTheme), resetPreview());
   }
-  function $(de) {
-    (A(de), R());
+  function updateDefinition(nextDefinition) {
+    (setDefinition(nextDefinition), resetPreview());
   }
-  function U(request) {
-    (D(""), _(0));
+  function previewStyleChange(request) {
+    (setErrorMessage(""), setPageIndex(0));
     try {
-      if (C)
+      if (isStale)
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      z(applyNamedStyleChange(e.workbook, request, { readOnly: e.readOnly }));
+      setPlan(
+        applyNamedStyleChange(props.workbook, request, {
+          readOnly: props.readOnly,
+        }),
+      );
     } catch (error) {
-      (z(undefined),
-        D(
+      (setPlan(undefined),
+        setErrorMessage(
           error instanceof Error
             ? error.message
             : "Unable to preview this style change.",
@@ -634,70 +677,77 @@ function ThemesAndCellStylesDialog(e) {
   function onClick() {
     try {
       if (!plan) return;
-      if (C)
+      if (isStale)
         throw Error(
           "The workbook or selection changed. Close and reopen Themes & Cell Styles.",
         );
-      const de = assertThemePreviewCurrent(e.workbook, plan, {
-        readOnly: e.readOnly,
+      const nextWorkbook = assertThemePreviewCurrent(props.workbook, plan, {
+        readOnly: props.readOnly,
       });
-      (de !== e.workbook && e.onWorkbookChange(de, plan.summary), e.onClose());
+      (nextWorkbook !== props.workbook &&
+        props.onWorkbookChange(nextWorkbook, plan.summary),
+        props.onClose());
     } catch (error) {
-      D(
+      setErrorMessage(
         error instanceof Error
           ? error.message
           : "Unable to apply this style change.",
       );
     }
   }
-  function H(de) {
-    m(de);
-    const style = d.styles.find((style) => style.id === de);
-    (A(cloneStructuredValue(style?.definition ?? { base: {} })),
-      O(style?.name ?? ""),
-      R());
+  function selectStyle(nextStyleId) {
+    setStyleId(nextStyleId);
+    const style = styleCatalog.styles.find((style) => style.id === nextStyleId);
+    (setDefinition(cloneStructuredValue(style?.definition ?? { base: {} })),
+      setRenamedStyleName(style?.name ?? ""),
+      resetPreview());
   }
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
+      dialogRef.current
+        ?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const styleFallbackWarnings = collectStyleFallbackWarnings(e.workbook),
+  const styleFallbackWarnings = collectStyleFallbackWarnings(props.workbook),
     X$1 = Math.max(1, Math.ceil((plan?.count ?? 0) / 20));
-  let J = {};
+  let previewAppearance = {};
   try {
-    J = resolveNamedStyleAppearance(definition, theme);
+    previewAppearance = resolveNamedStyleAppearance(definition, theme);
   } catch {}
   return i.jsx("div", {
     className: "ts-backdrop",
     children: i.jsxs("div", {
-      ref: o,
+      ref: dialogRef,
       className: "ts-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${dialogId}-title`,
       onKeyDown: (event) => {
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Escape" &&
+            (event.preventDefault(), onCloseRef.current()),
           event.key === "Tab")
         ) {
-          const Se = Array.from(
-              o.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
               ) ?? [],
-            ).filter((ge) => !ge.hidden),
-            le = Se[0],
-            ce = Se.at(-1);
-          event.shiftKey && document.activeElement === le
-            ? (event.preventDefault(), ce == null || ce.focus())
+            ).filter((focusableElement) => !focusableElement.hidden),
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === ce &&
-              (event.preventDefault(), le == null || le.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -705,14 +755,14 @@ function ThemesAndCellStylesDialog(e) {
           className: "ts-header",
           children: [
             i.jsx("h2", {
-              id: `${n}-title`,
+              id: `${dialogId}-title`,
               children: i.jsx(LocalizedText, {
                 children: "Themes & Cell Styles",
               }),
             }),
             i.jsx("button", {
               "aria-label": text("Close Themes and Cell Styles"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close Themes and Cell Styles"),
               "data-ui-label": "Close Themes and Cell Styles",
               children: i.jsx(X, { size: 18 }),
@@ -738,15 +788,15 @@ function ThemesAndCellStylesDialog(e) {
           "aria-label": text("Theme settings"),
           lang: language("Theme settings"),
           "data-ui-label": "Theme settings",
-          children: ["Theme", "Cell Styles"].map((de, he) =>
+          children: ["Theme", "Cell Styles"].map((tabLabel, tabIndex) =>
             i.jsx(
               "button",
               {
                 role: "tab",
-                "aria-selected": g === de,
-                "aria-controls": `${n}-panel`,
-                tabIndex: g === de ? 0 : -1,
-                onClick: () => b(de),
+                "aria-selected": activeTab === tabLabel,
+                "aria-controls": `${dialogId}-panel`,
+                tabIndex: activeTab === tabLabel ? 0 : -1,
+                onClick: () => setActiveTab(tabLabel),
                 onKeyDown: (event) => {
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(
@@ -754,41 +804,45 @@ function ThemesAndCellStylesDialog(e) {
                     )
                   ) {
                     event.preventDefault();
-                    const ge =
+                    const targetTabIndex =
                       event.key === "Home"
                         ? 0
                         : event.key === "End"
                           ? 1
-                          : 1 - he;
-                    (b(ge === 0 ? "Theme" : "Cell Styles"),
-                      event.currentTarget.parentElement?.children[ge]?.focus());
+                          : 1 - tabIndex;
+                    (setActiveTab(
+                      targetTabIndex === 0 ? "Theme" : "Cell Styles",
+                    ),
+                      event.currentTarget.parentElement?.children[
+                        targetTabIndex
+                      ]?.focus());
                   }
                 },
-                children: de,
+                children: tabLabel,
               },
-              de,
+              tabLabel,
             ),
           ),
         }),
         i.jsxs("div", {
           className: "ts-body",
           children: [
-            (e.readOnly || C || styleFallbackWarnings.length > 0) &&
+            (props.readOnly || isStale || styleFallbackWarnings.length > 0) &&
               i.jsx("div", {
                 role: "status",
                 className: "ts-notice",
-                children: e.readOnly
+                children: props.readOnly
                   ? "This workbook is read-only."
-                  : C
+                  : isStale
                     ? "The workbook or selection changed. Close and reopen this dialog."
                     : styleFallbackWarnings.join(" "),
               }),
             i.jsx("section", {
-              id: `${n}-panel`,
+              id: `${dialogId}-panel`,
               role: "tabpanel",
-              "aria-label": g,
+              "aria-label": activeTab,
               children:
-                g === "Theme"
+                activeTab === "Theme"
                   ? i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("p", {
@@ -823,7 +877,7 @@ function ThemesAndCellStylesDialog(e) {
                                           event.target.value,
                                       );
                                     builtInWorkbookTheme &&
-                                      L(
+                                      updateTheme(
                                         cloneStructuredValue(
                                           builtInWorkbookTheme,
                                         ),
@@ -860,31 +914,34 @@ function ThemesAndCellStylesDialog(e) {
                                   maxLength: 80,
                                   disabled: disabled,
                                   onChange: (event) =>
-                                    L({ ...theme, name: event.target.value }),
+                                    updateTheme({
+                                      ...theme,
+                                      name: event.target.value,
+                                    }),
                                 }),
                               ],
                             }),
-                            ["body", "heading"].map((de) =>
+                            ["body", "heading"].map((fontRole) =>
                               i.jsxs(
                                 "label",
                                 {
                                   children: [
-                                    de === "body"
+                                    fontRole === "body"
                                       ? "Body font"
                                       : "Heading font",
                                     i.jsx("select", {
                                       "aria-label":
-                                        de === "body"
+                                        fontRole === "body"
                                           ? "Body font"
                                           : "Heading font",
-                                      value: theme.fonts[de],
+                                      value: theme.fonts[fontRole],
                                       disabled: disabled,
                                       onChange: (event) =>
-                                        L({
+                                        updateTheme({
                                           ...theme,
                                           fonts: {
                                             ...theme.fonts,
-                                            [de]: event.target.value,
+                                            [fontRole]: event.target.value,
                                           },
                                         }),
                                       children: supportedFontFamilies.map(
@@ -898,7 +955,7 @@ function ThemesAndCellStylesDialog(e) {
                                     }),
                                   ],
                                 },
-                                de,
+                                fontRole,
                               ),
                             ),
                           ],
@@ -928,7 +985,7 @@ function ThemesAndCellStylesDialog(e) {
                                       type: "color",
                                       value: theme.palette[themePaletteRole],
                                       onChange: (event) =>
-                                        L({
+                                        updateTheme({
                                           ...theme,
                                           palette: {
                                             ...theme.palette,
@@ -947,7 +1004,11 @@ function ThemesAndCellStylesDialog(e) {
                         i.jsx("button", {
                           className: "ts-command",
                           disabled: disabled,
-                          onClick: () => U({ kind: "setTheme", theme: theme }),
+                          onClick: () =>
+                            previewStyleChange({
+                              kind: "setTheme",
+                              theme: theme,
+                            }),
                           children: i.jsx(LocalizedText, {
                             children: "Preview theme change",
                           }),
@@ -974,17 +1035,19 @@ function ThemesAndCellStylesDialog(e) {
                                 i.jsxs("select", {
                                   "aria-label": text("Named style"),
                                   value: styleId,
-                                  disabled: disabled || !d.styles.length,
-                                  onChange: (event) => H(event.target.value),
+                                  disabled:
+                                    disabled || !styleCatalog.styles.length,
+                                  onChange: (event) =>
+                                    selectStyle(event.target.value),
                                   lang: language("Named style"),
                                   "data-ui-label": "Named style",
                                   children: [
-                                    !d.styles.length &&
+                                    !styleCatalog.styles.length &&
                                       i.jsx("option", {
                                         value: "",
                                         children: "No named styles",
                                       }),
-                                    d.styles.map((style) =>
+                                    styleCatalog.styles.map((style) =>
                                       i.jsx(
                                         "option",
                                         {
@@ -1000,7 +1063,7 @@ function ThemesAndCellStylesDialog(e) {
                             }),
                             i.jsx("div", {
                               className: "ts-sample",
-                              style: cellStyleToCss(J),
+                              style: cellStyleToCss(previewAppearance),
                               children: i.jsx(LocalizedText, {
                                 children: "Audit schedule · 1,234.50",
                               }),
@@ -1011,11 +1074,11 @@ function ThemesAndCellStylesDialog(e) {
                           className: "ts-actions",
                           children: [
                             i.jsx("button", {
-                              disabled: N || !style,
+                              disabled: isStyleChangeBlocked || !style,
                               onClick: () =>
-                                U({
+                                previewStyleChange({
                                   kind: "applyStyle",
-                                  sheetId: e.sheetId,
+                                  sheetId: props.sheetId,
                                   ranges: selectionAreas,
                                   styleId: styleId,
                                 }),
@@ -1024,11 +1087,11 @@ function ThemesAndCellStylesDialog(e) {
                               }),
                             }),
                             i.jsx("button", {
-                              disabled: N || !style,
+                              disabled: isStyleChangeBlocked || !style,
                               onClick: () =>
-                                U({
+                                previewStyleChange({
                                   kind: "reapplyStyle",
-                                  sheetId: e.sheetId,
+                                  sheetId: props.sheetId,
                                   ranges: selectionAreas,
                                   styleId: styleId,
                                 }),
@@ -1037,11 +1100,11 @@ function ThemesAndCellStylesDialog(e) {
                               }),
                             }),
                             i.jsx("button", {
-                              disabled: N,
+                              disabled: isStyleChangeBlocked,
                               onClick: () =>
-                                U({
+                                previewStyleChange({
                                   kind: "detachStyle",
-                                  sheetId: e.sheetId,
+                                  sheetId: props.sheetId,
                                   ranges: selectionAreas,
                                 }),
                               children: i.jsx(LocalizedText, {
@@ -1082,10 +1145,11 @@ function ThemesAndCellStylesDialog(e) {
                                       children: "New style name",
                                     }),
                                     i.jsx("input", {
-                                      value: k,
+                                      value: newStyleName,
                                       maxLength: 80,
                                       onChange: (event) => {
-                                        (F(event.target.value), R());
+                                        (setNewStyleName(event.target.value),
+                                          resetPreview());
                                       },
                                     }),
                                   ],
@@ -1099,7 +1163,7 @@ function ThemesAndCellStylesDialog(e) {
                                       "aria-label": text("Style font"),
                                       value: definition.fontRole ?? "fixed",
                                       onChange: (event) =>
-                                        $({
+                                        updateDefinition({
                                           ...definition,
                                           fontRole:
                                             event.target.value === "fixed"
@@ -1125,24 +1189,25 @@ function ThemesAndCellStylesDialog(e) {
                                     }),
                                   ],
                                 }),
-                                ["fillRole", "colorRole"].map((de) =>
+                                ["fillRole", "colorRole"].map((roleField) =>
                                   i.jsxs(
                                     "label",
                                     {
                                       children: [
-                                        de === "fillRole"
+                                        roleField === "fillRole"
                                           ? "Style fill"
                                           : "Style text color",
                                         i.jsxs("select", {
                                           "aria-label":
-                                            de === "fillRole"
+                                            roleField === "fillRole"
                                               ? "Style fill"
                                               : "Style text color",
-                                          value: definition[de] ?? "fixed",
+                                          value:
+                                            definition[roleField] ?? "fixed",
                                           onChange: (event) =>
-                                            $({
+                                            updateDefinition({
                                               ...definition,
-                                              [de]:
+                                              [roleField]:
                                                 event.target.value === "fixed"
                                                   ? undefined
                                                   : event.target.value,
@@ -1167,7 +1232,7 @@ function ThemesAndCellStylesDialog(e) {
                                         }),
                                       ],
                                     },
-                                    de,
+                                    roleField,
                                   ),
                                 ),
                                 i.jsxs("label", {
@@ -1177,7 +1242,7 @@ function ThemesAndCellStylesDialog(e) {
                                       type: "checkbox",
                                       checked: definition.base.bold ?? false,
                                       onChange: (event) =>
-                                        $({
+                                        updateDefinition({
                                           ...definition,
                                           base: {
                                             ...definition.base,
@@ -1195,7 +1260,7 @@ function ThemesAndCellStylesDialog(e) {
                                       type: "checkbox",
                                       checked: definition.base.italic ?? false,
                                       onChange: (event) =>
-                                        $({
+                                        updateDefinition({
                                           ...definition,
                                           base: {
                                             ...definition.base,
@@ -1215,10 +1280,10 @@ function ThemesAndCellStylesDialog(e) {
                               children: [
                                 i.jsx("button", {
                                   onClick: () =>
-                                    $({
+                                    updateDefinition({
                                       base: cloneStructuredValue(
                                         resolveEffectiveCellStyle(
-                                          sheet?.cells[h]?.style,
+                                          sheet?.cells[activeAddress]?.style,
                                         ),
                                       ),
                                     }),
@@ -1228,9 +1293,9 @@ function ThemesAndCellStylesDialog(e) {
                                 }),
                                 i.jsx("button", {
                                   onClick: () =>
-                                    U({
+                                    previewStyleChange({
                                       kind: "createStyle",
-                                      name: k,
+                                      name: newStyleName,
                                       definition: definition,
                                     }),
                                   children: i.jsx(LocalizedText, {
@@ -1240,7 +1305,7 @@ function ThemesAndCellStylesDialog(e) {
                                 i.jsx("button", {
                                   disabled: !style,
                                   onClick: () =>
-                                    U({
+                                    previewStyleChange({
                                       kind: "updateStyle",
                                       styleId: styleId,
                                       definition: definition,
@@ -1277,10 +1342,13 @@ function ThemesAndCellStylesDialog(e) {
                                       children: "Rename style",
                                     }),
                                     i.jsx("input", {
-                                      value: I,
+                                      value: renamedStyleName,
                                       maxLength: 80,
                                       onChange: (event) => {
-                                        (O(event.target.value), R());
+                                        (setRenamedStyleName(
+                                          event.target.value,
+                                        ),
+                                          resetPreview());
                                       },
                                     }),
                                   ],
@@ -1290,10 +1358,10 @@ function ThemesAndCellStylesDialog(e) {
                                   children: [
                                     i.jsx("button", {
                                       onClick: () =>
-                                        U({
+                                        previewStyleChange({
                                           kind: "renameStyle",
                                           styleId: styleId,
-                                          name: I,
+                                          name: renamedStyleName,
                                         }),
                                       children: i.jsx(LocalizedText, {
                                         children: "Preview rename",
@@ -1301,7 +1369,7 @@ function ThemesAndCellStylesDialog(e) {
                                     }),
                                     i.jsx("button", {
                                       onClick: () =>
-                                        U({
+                                        previewStyleChange({
                                           kind: "deleteStyle",
                                           styleId: styleId,
                                         }),
@@ -1318,11 +1386,11 @@ function ThemesAndCellStylesDialog(e) {
                       ],
                     }),
             }),
-            V &&
+            errorMessage &&
               i.jsx("div", {
                 role: "alert",
                 className: "ts-error",
-                children: V,
+                children: errorMessage,
               }),
             plan &&
               i.jsxs("section", {
@@ -1385,29 +1453,30 @@ function ThemesAndCellStylesDialog(e) {
                               }),
                               i.jsx("tbody", {
                                 children: plan.changes
-                                  .slice(B * 20, B * 20 + 20)
-                                  .map((de) =>
+                                  .slice(pageIndex * 20, pageIndex * 20 + 20)
+                                  .map((planChange) =>
                                     i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsxs("th", {
                                             children: [
-                                              e.workbook.sheets.find(
+                                              props.workbook.sheets.find(
                                                 (sheet) =>
-                                                  sheet.id === de.sheetId,
+                                                  sheet.id ===
+                                                  planChange.sheetId,
                                               )?.name,
                                               "!",
-                                              de.address,
+                                              planChange.address,
                                             ],
                                           }),
                                           i.jsxs("td", {
                                             children: [
                                               describeStyleFormatting(
-                                                de.before?.style,
+                                                planChange.before?.style,
                                               ),
                                               i.jsx(CellStyleSummary, {
-                                                style: de.before?.style,
+                                                style: planChange.before?.style,
                                                 catalog: plan.catalogBefore,
                                               }),
                                             ],
@@ -1415,17 +1484,17 @@ function ThemesAndCellStylesDialog(e) {
                                           i.jsxs("td", {
                                             children: [
                                               describeStyleFormatting(
-                                                de.after.style,
+                                                planChange.after.style,
                                               ),
                                               i.jsx(CellStyleSummary, {
-                                                style: de.after.style,
+                                                style: planChange.after.style,
                                                 catalog: plan.catalogAfter,
                                               }),
                                             ],
                                           }),
                                         ],
                                       },
-                                      `${de.sheetId}:${de.address}`,
+                                      `${planChange.sheetId}:${planChange.address}`,
                                     ),
                                   ),
                               }),
@@ -1436,8 +1505,9 @@ function ThemesAndCellStylesDialog(e) {
                           className: "ts-pager",
                           children: [
                             i.jsx("button", {
-                              disabled: B === 0,
-                              onClick: () => _((de) => de - 1),
+                              disabled: pageIndex === 0,
+                              onClick: () =>
+                                setPageIndex((currentPage) => currentPage - 1),
                               children: i.jsx(LocalizedText, {
                                 children: "Previous changes",
                               }),
@@ -1445,15 +1515,18 @@ function ThemesAndCellStylesDialog(e) {
                             i.jsxs("span", {
                               children: [
                                 i.jsx(LocalizedText, { children: "Page " }),
-                                B + 1,
+                                pageIndex + 1,
                                 " ",
                                 i.jsx(LocalizedText, { children: "of " }),
                                 X$1,
                               ],
                             }),
                             i.jsx("button", {
-                              disabled: B + 1 >= X$1,
-                              onClick: () => _((de) => de + 1),
+                              disabled: pageIndex + 1 >= X$1,
+                              onClick: () =>
+                                setPageIndex(
+                                  (currentPageIndex) => currentPageIndex + 1,
+                                ),
                               children: i.jsx(LocalizedText, {
                                 children: "Next changes",
                               }),
@@ -1475,7 +1548,7 @@ function ThemesAndCellStylesDialog(e) {
                 : "Choose a change to preview.",
             }),
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
@@ -1492,15 +1565,15 @@ function ThemesAndCellStylesDialog(e) {
 }
 function CellValuePreview({ value, cell, dateSystem }) {
   const workbookMessages = useWorkbookMessages(),
-    o = cell?.numberFormat
+    formattedValue = cell?.numberFormat
       ? formatCellValueWithNumberFormat(value, cell.numberFormat, dateSystem)
       : undefined,
-    a = cell ? getImportedNumberFormatWarning(cell) : undefined;
-  if (o?.accounting) {
-    const { symbol, amount, symbolPosition } = o.accounting;
+    importWarning = cell ? getImportedNumberFormatWarning(cell) : undefined;
+  if (formattedValue?.accounting) {
+    const { symbol, amount, symbolPosition } = formattedValue.accounting;
     return i.jsxs("span", {
-      title: a || undefined,
-      "aria-label": o.text,
+      title: importWarning || undefined,
+      "aria-label": formattedValue.text,
       style: {
         display: "inline-flex",
         width: "100%",
@@ -1523,9 +1596,9 @@ function CellValuePreview({ value, cell, dateSystem }) {
     });
   }
   return i.jsx("span", {
-    title: a || undefined,
+    title: importWarning || undefined,
     children:
-      o?.text ??
+      formattedValue?.text ??
       formatLocalizedNumberDisplay(
         value,
         cell,
@@ -1538,18 +1611,19 @@ const cellFormatTabs = ["Font", "Alignment", "Border"],
   sampleGridAddresses = new Set(
     Array.from(
       { length: 9 },
-      (e, r) => `${columnIndexToLetters(r % 3)}${Math.floor(r / 3) + 1}`,
+      (e, cellIndex) =>
+        `${columnIndexToLetters(cellIndex % 3)}${Math.floor(cellIndex / 3) + 1}`,
     ),
   ),
-  expandShortHexColor = (e, r) =>
-    e?.length === 4
+  expandShortHexColor = (hexColor, fallbackColor) =>
+    hexColor?.length === 4
       ? "#" +
-        e
+        hexColor
           .slice(1)
           .split("")
-          .map((t) => t + t)
+          .map((hexDigit) => hexDigit + hexDigit)
           .join("")
-      : (e ?? r);
+      : (hexColor ?? fallbackColor);
 
 export {
   expandShortHexColor,

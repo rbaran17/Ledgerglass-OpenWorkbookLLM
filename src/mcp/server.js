@@ -332,16 +332,22 @@ function createWorkbookMcpServer(host) {
       if (!formula.startsWith("=")) throw Error('A formula starts with "=".');
       const current = context();
       const approved = new Set(current.cells.map((cell) => cell.address));
-      const at = (address ?? current.cells[0].address).toUpperCase();
-      if (!approved.has(at))
+      const evaluationAddress = (
+        address ?? current.cells[0].address
+      ).toUpperCase();
+      if (!approved.has(evaluationAddress))
         throw Error("That address is outside the approved selection.");
       validateAssistantFormula(formula, approved);
       const { calculator } = getWorkbookCalculation(host.getWorkbook());
       return {
         formula,
-        address: at,
+        address: evaluationAddress,
         revision: current.revision,
-        result: calculator.evaluateFormula(current.sheetId, at, formula),
+        result: calculator.evaluateFormula(
+          current.sheetId,
+          evaluationAddress,
+          formula,
+        ),
       };
     }),
   );

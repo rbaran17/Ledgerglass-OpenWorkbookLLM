@@ -36,77 +36,85 @@ import {
   wS,
 } from "./48-move-cells-and-reference-repair.js";
 
-function OutlineToolsPanel(e) {
+function OutlineToolsPanel(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e);
-  a.current = e;
-  const s = ne.useRef(null);
-  s.current ||= {
-    workbookId: e.workbook.id,
-    revision: e.workbook.revision,
-    snapshot: JSON.stringify(e.workbook),
-    sheetId: e.sheetId,
-    range: e.range,
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    latestPropsRef = ne.useRef(props);
+  latestPropsRef.current = props;
+  const baselineRef = ne.useRef(null);
+  baselineRef.current ||= {
+    workbookId: props.workbook.id,
+    revision: props.workbook.revision,
+    snapshot: JSON.stringify(props.workbook),
+    sheetId: props.sheetId,
+    range: props.range,
   };
-  const [d, u] = ne.useState(/column/i.test(e.mode) ? "column" : "row"),
-    [l, c] = ne.useState(0),
-    [h, f] = ne.useState(""),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    m = ne.useMemo(() => (sheet ? addOutlineGroup(sheet, d) : []), [sheet, d]),
-    rangeAddress = parseRangeAddress(e.range),
-    g = d === "row" ? rangeAddress.firstRow : rangeAddress.firstCol,
-    b = d === "row" ? rangeAddress.lastRow : rangeAddress.lastCol,
-    y = e.readOnly || !!sheet?.protection?.enabled,
-    w = s.current,
-    E = ne.useMemo(
-      () => JSON.stringify(e.workbook) !== w.snapshot,
-      [e.workbook, w.snapshot],
+  const [axis, setAxis] = ne.useState(
+      /column/i.test(props.mode) ? "column" : "row",
     ),
-    A =
-      w.workbookId !== e.workbook.id ||
-      w.revision !== e.workbook.revision ||
-      w.sheetId !== e.sheetId ||
-      w.range !== e.range ||
-      E ||
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    groups = ne.useMemo(
+      () => (sheet ? addOutlineGroup(sheet, axis) : []),
+      [sheet, axis],
+    ),
+    rangeAddress = parseRangeAddress(props.range),
+    rangeStart = axis === "row" ? rangeAddress.firstRow : rangeAddress.firstCol,
+    rangeEnd = axis === "row" ? rangeAddress.lastRow : rangeAddress.lastCol,
+    isReadOnly = props.readOnly || !!sheet?.protection?.enabled,
+    baseline = baselineRef.current,
+    hasWorkbookChanged = ne.useMemo(
+      () => JSON.stringify(props.workbook) !== baseline.snapshot,
+      [props.workbook, baseline.snapshot],
+    ),
+    isStale =
+      baseline.workbookId !== props.workbook.id ||
+      baseline.revision !== props.workbook.revision ||
+      baseline.sheetId !== props.sheetId ||
+      baseline.range !== props.range ||
+      hasWorkbookChanged ||
       !sheet,
-    disabled = y || A,
-    F = Math.max(0, ...m.map((V) => V.depth)) + 1,
-    I = Math.max(1, Math.ceil(m.length / wS)),
-    O = Math.min(l, I - 1);
+    disabled = isReadOnly || isStale,
+    levelCount = Math.max(0, ...groups.map((group) => group.depth)) + 1,
+    pageCount = Math.max(1, Math.ceil(groups.length / wS)),
+    currentPage = Math.min(pageIndex, pageCount - 1);
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector("button:not(:disabled)")?.focus(),
+      dialogRef.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  function j(V, D) {
+  function applyOutlineChange(updateWorkbook, changeLabel) {
     try {
-      const C = a.current;
+      const latestProps = latestPropsRef.current;
       if (
-        C.readOnly ||
-        C.workbook.sheets.find((sheet) => sheet.id === C.sheetId)?.protection
-          ?.enabled
+        latestProps.readOnly ||
+        latestProps.workbook.sheets.find(
+          (sheet) => sheet.id === latestProps.sheetId,
+        )?.protection?.enabled
       )
         throw Error(
           "This worksheet is read-only. Unlock it before changing outlines.",
         );
       if (
-        C.workbook.id !== w.workbookId ||
-        C.workbook.revision !== w.revision ||
-        C.sheetId !== w.sheetId ||
-        C.range !== w.range ||
-        JSON.stringify(C.workbook) !== w.snapshot
+        latestProps.workbook.id !== baseline.workbookId ||
+        latestProps.workbook.revision !== baseline.revision ||
+        latestProps.sheetId !== baseline.sheetId ||
+        latestProps.range !== baseline.range ||
+        JSON.stringify(latestProps.workbook) !== baseline.snapshot
       )
         throw Error(staleOutlineMessage);
-      const T = V(C.workbook);
-      (T !== C.workbook && C.onWorkbookChange(T, D), C.onClose());
+      const nextWorkbook = updateWorkbook(latestProps.workbook);
+      (nextWorkbook !== latestProps.workbook &&
+        latestProps.onWorkbookChange(nextWorkbook, changeLabel),
+        latestProps.onClose());
     } catch (error) {
-      f(
+      setErrorMessage(
         error instanceof Error
           ? error.message
           : "The outline could not be changed.",
@@ -117,32 +125,35 @@ function OutlineToolsPanel(e) {
     className: "ot-backdrop",
     children: i.jsxs("section", {
       className: "ot-dialog",
-      ref: o,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
+      "aria-labelledby": titleId,
       tabIndex: -1,
       onKeyDown: (event) => {
         if (
           (event.key === "Escape" &&
             (event.preventDefault(),
             event.stopPropagation(),
-            a.current.onClose()),
+            latestPropsRef.current.onClose()),
           event.key === "Tab")
         ) {
-          const B = Array.from(
-              o.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 "button:not(:disabled),select:not(:disabled),input:not(:disabled),[tabindex='0']",
               ) ?? [],
             ),
-            _ = B[0],
-            C = B.at(-1);
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
           event.shiftKey &&
-          (document.activeElement === _ || document.activeElement === o.current)
-            ? (event.preventDefault(), C == null || C.focus())
+          (document.activeElement === firstFocusable ||
+            document.activeElement === dialogRef.current)
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === C &&
-              (event.preventDefault(), _ == null || _.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -151,7 +162,7 @@ function OutlineToolsPanel(e) {
           children: [
             i.jsx(ListTree, { size: 20 }),
             i.jsx("h2", {
-              id: n,
+              id: titleId,
               children: i.jsx(LocalizedText, {
                 children: "Row and column outlines",
               }),
@@ -159,7 +170,7 @@ function OutlineToolsPanel(e) {
             i.jsx("button", {
               type: "button",
               "aria-label": text("Close outline tools"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close outline tools"),
               "data-ui-label": "Close outline tools",
               children: i.jsx(X, { size: 18 }),
@@ -175,7 +186,7 @@ function OutlineToolsPanel(e) {
                   "Group detail rows or columns, leaving summary cells outside the group. Collapsing changes visibility only; formulas and totals remain unchanged.",
               }),
             }),
-            y &&
+            isReadOnly &&
               i.jsx("p", {
                 className: "ot-notice",
                 role: "status",
@@ -184,11 +195,11 @@ function OutlineToolsPanel(e) {
                     "This worksheet is read-only. Outline details can be inspected.",
                 }),
               }),
-            (h || A) &&
+            (errorMessage || isStale) &&
               i.jsx("p", {
                 role: "alert",
                 className: "ot-error",
-                children: h || staleOutlineMessage,
+                children: errorMessage || staleOutlineMessage,
               }),
             i.jsxs("div", {
               className: "ot-create",
@@ -198,9 +209,11 @@ function OutlineToolsPanel(e) {
                     i.jsx(LocalizedText, { children: "Group by" }),
                     i.jsxs("select", {
                       "aria-label": text("Outline axis"),
-                      value: d,
+                      value: axis,
                       onChange: (event) => {
-                        (u(event.target.value), c(0), f(""));
+                        (setAxis(event.target.value),
+                          setPageIndex(0),
+                          setErrorMessage(""));
                       },
                       lang: language("Outline axis"),
                       "data-ui-label": "Outline axis",
@@ -222,7 +235,9 @@ function OutlineToolsPanel(e) {
                         children: "Selected range",
                       }),
                     }),
-                    i.jsx("strong", { children: formatRowColumnSpan(d, g, b) }),
+                    i.jsx("strong", {
+                      children: formatRowColumnSpan(axis, rangeStart, rangeEnd),
+                    }),
                   ],
                 }),
                 i.jsx("button", {
@@ -230,9 +245,15 @@ function OutlineToolsPanel(e) {
                   className: "ot-primary",
                   disabled: disabled,
                   onClick: () =>
-                    j(
-                      (workbook) => EQ(workbook, e.sheetId, d, g, b),
-                      "Group " + formatRowColumnSpan(d, g, b).toLowerCase(),
+                    applyOutlineChange(
+                      (workbook) =>
+                        EQ(workbook, props.sheetId, axis, rangeStart, rangeEnd),
+                      "Group " +
+                        formatRowColumnSpan(
+                          axis,
+                          rangeStart,
+                          rangeEnd,
+                        ).toLowerCase(),
                     ),
                   children: i.jsx(LocalizedText, {
                     children: "Group selection",
@@ -246,22 +267,27 @@ function OutlineToolsPanel(e) {
                 i.jsx("strong", {
                   children: i.jsx(LocalizedText, { children: "Show level" }),
                 }),
-                Array.from({ length: F }, (V, D) =>
+                Array.from({ length: levelCount }, (V, levelIndex) =>
                   i.jsx(
                     "button",
                     {
                       type: "button",
-                      disabled: disabled || !m.length,
-                      "aria-label": "Show outline level " + (D + 1),
+                      disabled: disabled || !groups.length,
+                      "aria-label": "Show outline level " + (levelIndex + 1),
                       onClick: () =>
-                        j(
+                        applyOutlineChange(
                           (workbook) =>
-                            setOutlineGroupLevel(workbook, e.sheetId, d, D + 1),
-                          "Show " + d + " outline level " + (D + 1),
+                            setOutlineGroupLevel(
+                              workbook,
+                              props.sheetId,
+                              axis,
+                              levelIndex + 1,
+                            ),
+                          "Show " + axis + " outline level " + (levelIndex + 1),
                         ),
-                      children: D + 1,
+                      children: levelIndex + 1,
                     },
-                    D,
+                    levelIndex,
                   ),
                 ),
               ],
@@ -273,7 +299,7 @@ function OutlineToolsPanel(e) {
                   children:
                     "Level 1 hides all grouped details. Higher levels reveal nested detail; level ",
                 }),
-                F,
+                levelCount,
                 " ",
                 i.jsx(LocalizedText, {
                   children:
@@ -286,123 +312,133 @@ function OutlineToolsPanel(e) {
               children: [
                 i.jsxs("h3", {
                   children: [
-                    m.length,
+                    groups.length,
                     " ",
-                    d === "row" ? "row" : "column",
+                    axis === "row" ? "row" : "column",
                     " ",
-                    m.length === 1 ? "group" : "groups",
+                    groups.length === 1 ? "group" : "groups",
                   ],
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: disabled || !m.length,
+                  disabled: disabled || !groups.length,
                   onClick: () =>
-                    j(
+                    applyOutlineChange(
                       (workbook) =>
-                        clearAxisOutlineGroups(workbook, e.sheetId, d),
-                      "Clear " + d + " outline groups",
+                        clearAxisOutlineGroups(workbook, props.sheetId, axis),
+                      "Clear " + axis + " outline groups",
                     ),
                   children: i.jsx(LocalizedText, { children: "Clear groups" }),
                 }),
               ],
             }),
-            m.length
+            groups.length
               ? i.jsx("ul", {
                   className: "ot-list",
-                  children: m.slice(O * wS, (O + 1) * wS).map((V) =>
-                    i.jsxs(
-                      "li",
-                      {
-                        style: { paddingLeft: 12 + (V.depth - 1) * 12 },
-                        children: [
-                          i.jsxs("div", {
-                            children: [
-                              i.jsx("strong", {
-                                children: formatRowColumnSpan(
-                                  d,
-                                  V.start,
-                                  V.end,
-                                ),
-                              }),
-                              i.jsxs("span", {
-                                className: "ot-small",
-                                children: [
-                                  i.jsx(LocalizedText, { children: "Depth " }),
-                                  V.depth,
-                                  " ·",
-                                  " ",
-                                  V.collapsed ? "Collapsed" : "Expanded",
-                                ],
-                              }),
-                            ],
-                          }),
-                          i.jsxs("div", {
-                            className: "ot-actions",
-                            children: [
-                              i.jsx("button", {
-                                type: "button",
-                                disabled: disabled,
-                                "aria-label":
-                                  (V.collapsed ? "Expand " : "Collapse ") +
-                                  formatRowColumnSpan(
-                                    d,
-                                    V.start,
-                                    V.end,
-                                  ).toLowerCase(),
-                                onClick: () =>
-                                  j(
-                                    (workbook) =>
-                                      setOutlineGroupCollapsed(
-                                        workbook,
-                                        e.sheetId,
-                                        V.id,
-                                        !V.collapsed,
-                                      ),
-                                    (V.collapsed ? "Expand " : "Collapse ") +
-                                      formatRowColumnSpan(
-                                        d,
-                                        V.start,
-                                        V.end,
-                                      ).toLowerCase(),
+                  children: groups
+                    .slice(currentPage * wS, (currentPage + 1) * wS)
+                    .map((group) =>
+                      i.jsxs(
+                        "li",
+                        {
+                          style: { paddingLeft: 12 + (group.depth - 1) * 12 },
+                          children: [
+                            i.jsxs("div", {
+                              children: [
+                                i.jsx("strong", {
+                                  children: formatRowColumnSpan(
+                                    axis,
+                                    group.start,
+                                    group.end,
                                   ),
-                                children: V.collapsed ? "Expand" : "Collapse",
-                              }),
-                              i.jsx("button", {
-                                type: "button",
-                                disabled: disabled,
-                                "aria-label":
-                                  "Ungroup " +
-                                  formatRowColumnSpan(
-                                    d,
-                                    V.start,
-                                    V.end,
-                                  ).toLowerCase(),
-                                onClick: () =>
-                                  j(
-                                    (workbook) =>
-                                      removeOutlineGroup(
-                                        workbook,
-                                        e.sheetId,
-                                        V.id,
-                                      ),
-                                    "Ungroup " +
-                                      formatRowColumnSpan(
-                                        d,
-                                        V.start,
-                                        V.end,
-                                      ).toLowerCase(),
-                                  ),
-                                children: i.jsx(LocalizedText, {
-                                  children: "Ungroup",
                                 }),
-                              }),
-                            ],
-                          }),
-                        ],
-                      },
-                      V.id,
+                                i.jsxs("span", {
+                                  className: "ot-small",
+                                  children: [
+                                    i.jsx(LocalizedText, {
+                                      children: "Depth ",
+                                    }),
+                                    group.depth,
+                                    " ·",
+                                    " ",
+                                    group.collapsed ? "Collapsed" : "Expanded",
+                                  ],
+                                }),
+                              ],
+                            }),
+                            i.jsxs("div", {
+                              className: "ot-actions",
+                              children: [
+                                i.jsx("button", {
+                                  type: "button",
+                                  disabled: disabled,
+                                  "aria-label":
+                                    (group.collapsed
+                                      ? "Expand "
+                                      : "Collapse ") +
+                                    formatRowColumnSpan(
+                                      axis,
+                                      group.start,
+                                      group.end,
+                                    ).toLowerCase(),
+                                  onClick: () =>
+                                    applyOutlineChange(
+                                      (workbook) =>
+                                        setOutlineGroupCollapsed(
+                                          workbook,
+                                          props.sheetId,
+                                          group.id,
+                                          !group.collapsed,
+                                        ),
+                                      (group.collapsed
+                                        ? "Expand "
+                                        : "Collapse ") +
+                                        formatRowColumnSpan(
+                                          axis,
+                                          group.start,
+                                          group.end,
+                                        ).toLowerCase(),
+                                    ),
+                                  children: group.collapsed
+                                    ? "Expand"
+                                    : "Collapse",
+                                }),
+                                i.jsx("button", {
+                                  type: "button",
+                                  disabled: disabled,
+                                  "aria-label":
+                                    "Ungroup " +
+                                    formatRowColumnSpan(
+                                      axis,
+                                      group.start,
+                                      group.end,
+                                    ).toLowerCase(),
+                                  onClick: () =>
+                                    applyOutlineChange(
+                                      (workbook) =>
+                                        removeOutlineGroup(
+                                          workbook,
+                                          props.sheetId,
+                                          group.id,
+                                        ),
+                                      "Ungroup " +
+                                        formatRowColumnSpan(
+                                          axis,
+                                          group.start,
+                                          group.end,
+                                        ).toLowerCase(),
+                                    ),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Ungroup",
+                                  }),
+                                }),
+                              ],
+                            }),
+                          ],
+                        },
+                        group.id,
+                      ),
                     ),
-                  ),
                 })
               : i.jsx("p", {
                   className: "ot-empty",
@@ -411,14 +447,14 @@ function OutlineToolsPanel(e) {
                       "Select detail cells in the worksheet, then choose Group selection.",
                   }),
                 }),
-            I > 1 &&
+            pageCount > 1 &&
               i.jsxs("div", {
                 className: "ot-pager",
                 children: [
                   i.jsx("button", {
                     type: "button",
-                    disabled: O === 0,
-                    onClick: () => c(O - 1),
+                    disabled: currentPage === 0,
+                    onClick: () => setPageIndex(currentPage - 1),
                     children: i.jsx(LocalizedText, {
                       children: "Previous groups",
                     }),
@@ -426,16 +462,16 @@ function OutlineToolsPanel(e) {
                   i.jsxs("span", {
                     children: [
                       i.jsx(LocalizedText, { children: "Page " }),
-                      O + 1,
+                      currentPage + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      I,
+                      pageCount,
                     ],
                   }),
                   i.jsx("button", {
                     type: "button",
-                    disabled: O + 1 === I,
-                    onClick: () => c(O + 1),
+                    disabled: currentPage + 1 === pageCount,
+                    onClick: () => setPageIndex(currentPage + 1),
                     children: i.jsx(LocalizedText, { children: "Next groups" }),
                   }),
                 ],
@@ -452,7 +488,7 @@ function OutlineToolsPanel(e) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Done" }),
             }),
           ],
@@ -462,133 +498,154 @@ function OutlineToolsPanel(e) {
   });
 }
 const reviewPageSize = 20;
-function resolveSelectionAnchorAddress(e) {
-  const rangeAddress = parseRangeAddress(e.range);
-  if (e.active) {
-    const t = _t(e.active);
+function resolveSelectionAnchorAddress(selection) {
+  const rangeAddress = parseRangeAddress(selection.range);
+  if (selection.active) {
+    const activeCell = _t(selection.active);
     if (
-      t.row >= rangeAddress.firstRow &&
-      t.row <= rangeAddress.lastRow &&
-      t.col >= rangeAddress.firstCol &&
-      t.col <= rangeAddress.lastCol
+      activeCell.row >= rangeAddress.firstRow &&
+      activeCell.row <= rangeAddress.lastRow &&
+      activeCell.col >= rangeAddress.firstCol &&
+      activeCell.col <= rangeAddress.lastCol
     )
-      return `${columnIndexToLetters(t.col)}${t.row + 1}`;
+      return `${columnIndexToLetters(activeCell.col)}${activeCell.row + 1}`;
   }
   return `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`;
 }
-const formatLocalDateTime = (e) => new Date(e).toLocaleString();
-function ReviewToolsPanel(e) {
+const formatLocalDateTime = (timestamp) => new Date(timestamp).toLocaleString();
+function ReviewToolsPanel(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(e.onClose);
-  a.current = e.onClose;
-  const s = ne.useRef({
-      id: e.workbook.id,
-      revision: e.workbook.revision,
-      sheetId: e.sheetId,
-      range: e.range,
-      active: e.active,
-      content: JSON.stringify(e.workbook),
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    onCloseRef = ne.useRef(props.onClose);
+  onCloseRef.current = props.onClose;
+  const baselineRef = ne.useRef({
+      id: props.workbook.id,
+      revision: props.workbook.revision,
+      sheetId: props.sheetId,
+      range: props.range,
+      active: props.active,
+      content: JSON.stringify(props.workbook),
     }),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    selectionAnchorAddress = resolveSelectionAnchorAddress(e),
-    l = sheet?.cells[selectionAnchorAddress]?.hyperlink,
-    [c, h] = ne.useState(e.mode ?? "comments"),
-    [f, p] = ne.useState("cell"),
-    [m, v] = ne.useState(0),
-    [g, b] = ne.useState(
-      e.workbook.reviewThreads?.find(
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    selectionAnchorAddress = resolveSelectionAnchorAddress(props),
+    hyperlink = sheet?.cells[selectionAnchorAddress]?.hyperlink,
+    [activeTab, setActiveTab] = ne.useState(props.mode ?? "comments"),
+    [threadFilter, setThreadFilter] = ne.useState("cell"),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [selectedThreadId, setSelectedThreadId] = ne.useState(
+      props.workbook.reviewThreads?.find(
         (reviewThread) =>
           !reviewThread.orphaned &&
-          reviewThread.anchor.sheetId === e.sheetId &&
+          reviewThread.anchor.sheetId === props.sheetId &&
           reviewThread.anchor.address === selectionAnchorAddress,
       )?.id ?? "",
     ),
-    [y, w] = ne.useState(0),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(""),
-    [j, z] = ne.useState(l?.kind ?? "external"),
-    [url, D] = ne.useState(l?.kind === "external" ? l.url : ""),
-    [sheetId, _] = ne.useState(l?.kind === "internal" ? l.sheetId : e.sheetId),
-    [address, T] = ne.useState(l?.kind === "internal" ? l.address : "A1"),
-    [N, R] = ne.useState(l?.label ?? ""),
-    L =
-      s.current.id !== e.workbook.id ||
-      s.current.revision !== e.workbook.revision ||
-      s.current.sheetId !== e.sheetId ||
-      s.current.range !== e.range ||
-      s.current.active !== e.active ||
-      s.current.content !== JSON.stringify(e.workbook),
-    disabled = e.readOnly || !!sheet?.protection?.enabled || L || !sheet,
-    G = [...(e.workbook.reviewThreads ?? [])]
-      .sort((se, we) => we.updatedAt.localeCompare(se.updatedAt))
+    [messagePageIndex, setMessagePageIndex] = ne.useState(0),
+    [newCommentText, setNewCommentText] = ne.useState(""),
+    [replyText, setReplyText] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [linkKind, setLinkKind] = ne.useState(hyperlink?.kind ?? "external"),
+    [url, setUrl] = ne.useState(
+      hyperlink?.kind === "external" ? hyperlink.url : "",
+    ),
+    [sheetId, setLinkSheetId] = ne.useState(
+      hyperlink?.kind === "internal" ? hyperlink.sheetId : props.sheetId,
+    ),
+    [address, setLinkAddress] = ne.useState(
+      hyperlink?.kind === "internal" ? hyperlink.address : "A1",
+    ),
+    [linkLabel, setLinkLabel] = ne.useState(hyperlink?.label ?? ""),
+    isStale =
+      baselineRef.current.id !== props.workbook.id ||
+      baselineRef.current.revision !== props.workbook.revision ||
+      baselineRef.current.sheetId !== props.sheetId ||
+      baselineRef.current.range !== props.range ||
+      baselineRef.current.active !== props.active ||
+      baselineRef.current.content !== JSON.stringify(props.workbook),
+    disabled =
+      props.readOnly || !!sheet?.protection?.enabled || isStale || !sheet,
+    visibleThreads = [...(props.workbook.reviewThreads ?? [])]
+      .sort((thread, otherThread) =>
+        otherThread.updatedAt.localeCompare(thread.updatedAt),
+      )
       .filter(
-        (se) =>
-          f === "all" ||
-          (f === "orphaned"
-            ? !!se.orphaned
-            : f === "unresolved"
-              ? !se.resolved && !se.orphaned
-              : !se.orphaned &&
-                se.anchor.sheetId === e.sheetId &&
-                se.anchor.address === selectionAnchorAddress),
+        (thread) =>
+          threadFilter === "all" ||
+          (threadFilter === "orphaned"
+            ? !!thread.orphaned
+            : threadFilter === "unresolved"
+              ? !thread.resolved && !thread.orphaned
+              : !thread.orphaned &&
+                thread.anchor.sheetId === props.sheetId &&
+                thread.anchor.address === selectionAnchorAddress),
       ),
-    H = G.find((se) => se.id === g),
-    Q = e.workbook.sheets.find((sheet) => sheet.id === H?.anchor.sheetId),
-    X$1 = e.readOnly || L || !!H?.orphaned || !Q || !!Q.protection?.enabled,
-    J = e.actor?.trim() || "Reviewer";
+    selectedThread = visibleThreads.find(
+      (thread) => thread.id === selectedThreadId,
+    ),
+    anchorSheet = props.workbook.sheets.find(
+      (sheet) => sheet.id === selectedThread?.anchor.sheetId,
+    ),
+    X$1 =
+      props.readOnly ||
+      isStale ||
+      !!selectedThread?.orphaned ||
+      !anchorSheet ||
+      !!anchorSheet.protection?.enabled,
+    actorName = props.actor?.trim() || "Reviewer";
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector("button:not(:disabled)")?.focus(),
+      dialogRef.current?.querySelector("button:not(:disabled)")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const q = (se, we) => {
+  const applyReviewChange = (buildNextWorkbook, changeLabel) => {
       try {
-        if ((O(""), e.readOnly)) throw new Error("This workbook is read-only.");
-        if (L)
+        if ((setErrorMessage(""), props.readOnly))
+          throw new Error("This workbook is read-only.");
+        if (isStale)
           throw new Error(
             "The workbook or selection changed. Close and reopen the review tools.",
           );
-        const Ee = se();
-        (Ee !== e.workbook &&
-          JSON.stringify(Ee) !== JSON.stringify(e.workbook) &&
-          e.onWorkbookChange(Ee, we),
-          e.onClose());
+        const nextWorkbook = buildNextWorkbook();
+        (nextWorkbook !== props.workbook &&
+          JSON.stringify(nextWorkbook) !== JSON.stringify(props.workbook) &&
+          props.onWorkbookChange(nextWorkbook, changeLabel),
+          props.onClose());
       } catch (error) {
-        O(
+        setErrorMessage(
           error instanceof Error
             ? error.message
             : "The review change could not be saved.",
         );
       }
     },
-    K = (() => {
+    validatedLink = (() => {
       try {
         return validateHyperlinkRecord(
-          j === "external"
-            ? { kind: "external", url: url, label: N }
+          linkKind === "external"
+            ? { kind: "external", url: url, label: linkLabel }
             : {
                 kind: "internal",
                 sheetId: sheetId,
                 address: address,
-                label: N,
+                label: linkLabel,
               },
         );
       } catch {
         return null;
       }
     })(),
-    te = (se, we) => {
+    navigateToLink = (targetSheetId, targetAddress) => {
       try {
-        (O(""), e.onNavigate?.(se, we), e.onClose());
+        (setErrorMessage(""),
+          props.onNavigate?.(targetSheetId, targetAddress),
+          props.onClose());
       } catch (error) {
-        O(
+        setErrorMessage(
           error instanceof Error
             ? error.message
             : "The link target could not be opened.",
@@ -599,28 +656,31 @@ function ReviewToolsPanel(e) {
     className: "rv-backdrop",
     children: i.jsxs("div", {
       className: "rv-dialog",
-      ref: o,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
+      "aria-labelledby": `${titleId}-title`,
       onKeyDown: (event) => {
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), a.current()),
+          event.key === "Escape" &&
+            (event.preventDefault(), onCloseRef.current()),
           event.key === "Tab")
         ) {
-          const Ee = [
-              ...(o.current?.querySelectorAll(
+          const focusableElements = [
+              ...(dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),a[href],[tabindex="0"]',
               ) ?? []),
             ],
-            Ae = Ee[0],
-            ye = Ee.at(-1);
-          event.shiftKey && document.activeElement === Ae
-            ? (event.preventDefault(), ye == null || ye.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === ye &&
-              (event.preventDefault(), Ae == null || Ae.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -630,7 +690,7 @@ function ReviewToolsPanel(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${titleId}-title`,
                   children: i.jsx(LocalizedText, {
                     children: "Comments & links",
                   }),
@@ -646,7 +706,7 @@ function ReviewToolsPanel(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close review tools"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close review tools"),
               "data-ui-label": "Close review tools",
               children: i.jsx(X, { size: 18 }),
@@ -659,17 +719,17 @@ function ReviewToolsPanel(e) {
           "aria-label": text("Review tools"),
           lang: language("Review tools"),
           "data-ui-label": "Review tools",
-          children: ["comments", "hyperlink"].map((se, we) =>
+          children: ["comments", "hyperlink"].map((tab, tabIndex) =>
             i.jsxs(
               "button",
               {
                 role: "tab",
-                id: `${n}-${se}-tab`,
-                "aria-controls": `${n}-${se}-panel`,
-                "aria-selected": c === se,
-                tabIndex: c === se ? 0 : -1,
+                id: `${titleId}-${tab}-tab`,
+                "aria-controls": `${titleId}-${tab}-panel`,
+                "aria-selected": activeTab === tab,
+                tabIndex: activeTab === tab ? 0 : -1,
                 onClick: () => {
-                  (h(se), O(""));
+                  (setActiveTab(tab), setErrorMessage(""));
                 },
                 onKeyDown: (event) => {
                   if (
@@ -678,32 +738,35 @@ function ReviewToolsPanel(e) {
                     )
                   ) {
                     event.preventDefault();
-                    const ye =
+                    const targetTab =
                       event.key === "Home"
                         ? "comments"
                         : event.key === "End"
                           ? "hyperlink"
-                          : we
+                          : tabIndex
                             ? "comments"
                             : "hyperlink";
-                    (h(ye), document.getElementById(`${n}-${ye}-tab`)?.focus());
+                    (setActiveTab(targetTab),
+                      document
+                        .getElementById(`${titleId}-${targetTab}-tab`)
+                        ?.focus());
                   }
                 },
                 children: [
-                  se === "comments"
+                  tab === "comments"
                     ? i.jsx(MessageSquare, { size: 15 })
                     : i.jsx(Link2, { size: 15 }),
-                  se === "comments" ? "Comments" : "Hyperlink",
+                  tab === "comments" ? "Comments" : "Hyperlink",
                 ],
               },
-              se,
+              tab,
             ),
           ),
         }),
         i.jsxs("div", {
           className: "rv-body",
           children: [
-            L &&
+            isStale &&
               i.jsx("p", {
                 className: "rv-error",
                 role: "alert",
@@ -712,7 +775,7 @@ function ReviewToolsPanel(e) {
                     "The workbook or selection changed. Close and reopen the review tools.",
                 }),
               }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 className: "rv-muted",
                 children: i.jsx(LocalizedText, {
@@ -720,7 +783,7 @@ function ReviewToolsPanel(e) {
                     "This workbook is read-only. Discussions and links remain available for inspection.",
                 }),
               }),
-            !e.readOnly &&
+            !props.readOnly &&
               sheet?.protection?.enabled &&
               i.jsx("p", {
                 className: "rv-muted",
@@ -729,17 +792,17 @@ function ReviewToolsPanel(e) {
                     "This worksheet is protected. Unprotect it before adding comments or changing links.",
                 }),
               }),
-            c === "comments"
+            activeTab === "comments"
               ? i.jsxs("section", {
                   role: "tabpanel",
-                  id: `${n}-comments-panel`,
-                  "aria-labelledby": `${n}-comments-tab`,
+                  id: `${titleId}-comments-panel`,
+                  "aria-labelledby": `${titleId}-comments-tab`,
                   children: [
                     i.jsxs("p", {
                       className: "rv-muted",
                       children: [
                         i.jsx(LocalizedText, { children: "Posting as " }),
-                        i.jsx("strong", { children: J }),
+                        i.jsx("strong", { children: actorName }),
                         i.jsx(LocalizedText, {
                           children:
                             ". Names and times come from this application; they are not verified identities. Comments stay separate from cell notes.",
@@ -752,9 +815,12 @@ function ReviewToolsPanel(e) {
                         i.jsx(LocalizedText, { children: "Show discussions" }),
                         i.jsxs("select", {
                           "aria-label": text("Show discussions"),
-                          value: f,
+                          value: threadFilter,
                           onChange: (event) => {
-                            (p(event.target.value), v(0), b(""), F(""));
+                            (setThreadFilter(event.target.value),
+                              setPageIndex(0),
+                              setSelectedThreadId(""),
+                              setReplyText(""));
                           },
                           lang: language("Show discussions"),
                           "data-ui-label": "Show discussions",
@@ -788,87 +854,96 @@ function ReviewToolsPanel(e) {
                           lang: language("Discussions"),
                           "data-ui-label": "Discussions",
                           children: [
-                            !G.length &&
+                            !visibleThreads.length &&
                               i.jsx("p", {
                                 className: "rv-empty",
                                 children: i.jsx(LocalizedText, {
                                   children: "No discussions in this view.",
                                 }),
                               }),
-                            G.slice(
-                              m * reviewPageSize,
-                              (m + 1) * reviewPageSize,
-                            ).map((se) =>
-                              i.jsxs(
-                                "button",
-                                {
-                                  "aria-pressed": se.id === g,
-                                  className: "rv-thread-button",
-                                  onClick: () => {
-                                    (b(se.id), F(""), w(0), O(""));
+                            visibleThreads
+                              .slice(
+                                pageIndex * reviewPageSize,
+                                (pageIndex + 1) * reviewPageSize,
+                              )
+                              .map((thread) =>
+                                i.jsxs(
+                                  "button",
+                                  {
+                                    "aria-pressed":
+                                      thread.id === selectedThreadId,
+                                    className: "rv-thread-button",
+                                    onClick: () => {
+                                      (setSelectedThreadId(thread.id),
+                                        setReplyText(""),
+                                        setMessagePageIndex(0),
+                                        setErrorMessage(""));
+                                    },
+                                    children: [
+                                      i.jsxs("span", {
+                                        children: [
+                                          i.jsxs("strong", {
+                                            children: [
+                                              thread.anchor.sheetName,
+                                              "!",
+                                              thread.anchor.address,
+                                            ],
+                                          }),
+                                          i.jsx("small", {
+                                            children: thread.orphaned
+                                              ? "Deleted target"
+                                              : thread.resolved
+                                                ? "Resolved"
+                                                : "Open",
+                                          }),
+                                        ],
+                                      }),
+                                      i.jsx("span", {
+                                        className: "rv-thread-summary",
+                                        children: thread.messages[0].text,
+                                      }),
+                                      i.jsxs("small", {
+                                        children: [
+                                          thread.messages.length,
+                                          " ",
+                                          thread.messages.length === 1
+                                            ? "message"
+                                            : "messages",
+                                          " ",
+                                          "· ",
+                                          thread.messages.at(-1).author,
+                                        ],
+                                      }),
+                                    ],
                                   },
-                                  children: [
-                                    i.jsxs("span", {
-                                      children: [
-                                        i.jsxs("strong", {
-                                          children: [
-                                            se.anchor.sheetName,
-                                            "!",
-                                            se.anchor.address,
-                                          ],
-                                        }),
-                                        i.jsx("small", {
-                                          children: se.orphaned
-                                            ? "Deleted target"
-                                            : se.resolved
-                                              ? "Resolved"
-                                              : "Open",
-                                        }),
-                                      ],
-                                    }),
-                                    i.jsx("span", {
-                                      className: "rv-thread-summary",
-                                      children: se.messages[0].text,
-                                    }),
-                                    i.jsxs("small", {
-                                      children: [
-                                        se.messages.length,
-                                        " ",
-                                        se.messages.length === 1
-                                          ? "message"
-                                          : "messages",
-                                        " ",
-                                        "· ",
-                                        se.messages.at(-1).author,
-                                      ],
-                                    }),
-                                  ],
-                                },
-                                se.id,
+                                  thread.id,
+                                ),
                               ),
-                            ),
-                            G.length > reviewPageSize &&
+                            visibleThreads.length > reviewPageSize &&
                               i.jsxs("div", {
                                 className: "rv-pages",
                                 children: [
                                   i.jsx("button", {
-                                    disabled: !m,
-                                    onClick: () => v(m - 1),
+                                    disabled: !pageIndex,
+                                    onClick: () => setPageIndex(pageIndex - 1),
                                     children: i.jsx(LocalizedText, {
                                       children: "Previous discussions",
                                     }),
                                   }),
                                   i.jsxs("span", {
                                     children: [
-                                      m + 1,
+                                      pageIndex + 1,
                                       " / ",
-                                      Math.ceil(G.length / reviewPageSize),
+                                      Math.ceil(
+                                        visibleThreads.length / reviewPageSize,
+                                      ),
                                     ],
                                   }),
                                   i.jsx("button", {
                                     disabled:
-                                      (m + 1) * reviewPageSize >= G.length,
-                                    onClick: () => v(m + 1),
+                                      (pageIndex + 1) * reviewPageSize >=
+                                      visibleThreads.length,
+                                    onClick: () => setPageIndex(pageIndex + 1),
                                     children: i.jsx(LocalizedText, {
                                       children: "Next discussions",
                                     }),
@@ -879,7 +954,7 @@ function ReviewToolsPanel(e) {
                         }),
                         i.jsx("div", {
                           className: "rv-thread-detail",
-                          children: H
+                          children: selectedThread
                             ? i.jsxs("section", {
                                 "aria-label": text("Selected discussion"),
                                 lang: language("Selected discussion"),
@@ -890,18 +965,18 @@ function ReviewToolsPanel(e) {
                                     children: [
                                       i.jsxs("h3", {
                                         children: [
-                                          H.anchor.sheetName,
+                                          selectedThread.anchor.sheetName,
                                           "!",
-                                          H.anchor.address,
+                                          selectedThread.anchor.address,
                                         ],
                                       }),
-                                      !H.orphaned &&
-                                        e.onNavigate &&
+                                      !selectedThread.orphaned &&
+                                        props.onNavigate &&
                                         i.jsx("button", {
                                           onClick: () =>
-                                            te(
-                                              H.anchor.sheetId,
-                                              H.anchor.address,
+                                            navigateToLink(
+                                              selectedThread.anchor.sheetId,
+                                              selectedThread.anchor.address,
                                             ),
                                           children: i.jsx(LocalizedText, {
                                             children: "Go to cell",
@@ -909,11 +984,11 @@ function ReviewToolsPanel(e) {
                                         }),
                                     ],
                                   }),
-                                  H.orphaned &&
+                                  selectedThread.orphaned &&
                                     i.jsxs("p", {
                                       className: "rv-orphan",
                                       children: [
-                                        H.orphaned.reason ===
+                                        selectedThread.orphaned.reason ===
                                         "worksheet-deleted"
                                           ? "The original worksheet was deleted."
                                           : "The original row or column was deleted.",
@@ -924,7 +999,7 @@ function ReviewToolsPanel(e) {
                                         }),
                                       ],
                                     }),
-                                  H.resolved &&
+                                  selectedThread.resolved &&
                                     i.jsxs("p", {
                                       className: "rv-resolution",
                                       children: [
@@ -934,21 +1009,26 @@ function ReviewToolsPanel(e) {
                                           children: "Resolved by",
                                         }),
                                         " ",
-                                        H.resolved.author,
+                                        selectedThread.resolved.author,
                                         " ·",
                                         " ",
                                         i.jsx("time", {
-                                          dateTime: H.resolved.createdAt,
-                                          title: H.resolved.createdAt,
+                                          dateTime:
+                                            selectedThread.resolved.createdAt,
+                                          title:
+                                            selectedThread.resolved.createdAt,
                                           children: formatLocalDateTime(
-                                            H.resolved.createdAt,
+                                            selectedThread.resolved.createdAt,
                                           ),
                                         }),
                                       ],
                                     }),
-                                  H.messages
-                                    .slice(y * 10, (y + 1) * 10)
-                                    .map((se) =>
+                                  selectedThread.messages
+                                    .slice(
+                                      messagePageIndex * 10,
+                                      (messagePageIndex + 1) * 10,
+                                    )
+                                    .map((message) =>
                                       i.jsxs(
                                         "article",
                                         {
@@ -957,96 +1037,108 @@ function ReviewToolsPanel(e) {
                                             i.jsxs("div", {
                                               children: [
                                                 i.jsx("strong", {
-                                                  children: se.author,
+                                                  children: message.author,
                                                 }),
                                                 i.jsx("time", {
-                                                  dateTime: se.createdAt,
-                                                  title: se.createdAt,
+                                                  dateTime: message.createdAt,
+                                                  title: message.createdAt,
                                                   children: formatLocalDateTime(
-                                                    se.createdAt,
+                                                    message.createdAt,
                                                   ),
                                                 }),
                                               ],
                                             }),
-                                            i.jsx("p", { children: se.text }),
+                                            i.jsx("p", {
+                                              children: message.text,
+                                            }),
                                           ],
                                         },
-                                        se.id,
+                                        message.id,
                                       ),
                                     ),
-                                  H.messages.length > 10 &&
+                                  selectedThread.messages.length > 10 &&
                                     i.jsxs("div", {
                                       className: "rv-pages",
                                       children: [
                                         i.jsx("button", {
-                                          disabled: !y,
-                                          onClick: () => w(y - 1),
+                                          disabled: !messagePageIndex,
+                                          onClick: () =>
+                                            setMessagePageIndex(
+                                              messagePageIndex - 1,
+                                            ),
                                           children: i.jsx(LocalizedText, {
                                             children: "Previous messages",
                                           }),
                                         }),
                                         i.jsxs("span", {
                                           children: [
-                                            y + 1,
+                                            messagePageIndex + 1,
                                             " /",
                                             " ",
-                                            Math.ceil(H.messages.length / 10),
+                                            Math.ceil(
+                                              selectedThread.messages.length /
+                                                10,
+                                            ),
                                           ],
                                         }),
                                         i.jsx("button", {
                                           disabled:
-                                            (y + 1) * 10 >= H.messages.length,
-                                          onClick: () => w(y + 1),
+                                            (messagePageIndex + 1) * 10 >=
+                                            selectedThread.messages.length,
+                                          onClick: () =>
+                                            setMessagePageIndex(
+                                              messagePageIndex + 1,
+                                            ),
                                           children: i.jsx(LocalizedText, {
                                             children: "Next messages",
                                           }),
                                         }),
                                       ],
                                     }),
-                                  !H.orphaned &&
+                                  !selectedThread.orphaned &&
                                     i.jsx("div", {
                                       className: "rv-thread-actions",
                                       children: i.jsxs("button", {
                                         disabled: X$1,
                                         onClick: () =>
-                                          q(
+                                          applyReviewChange(
                                             () =>
                                               setReviewThreadResolved(
-                                                e.workbook,
-                                                H.id,
-                                                !H.resolved,
-                                                J,
-                                                { readOnly: e.readOnly },
+                                                props.workbook,
+                                                selectedThread.id,
+                                                !selectedThread.resolved,
+                                                actorName,
+                                                { readOnly: props.readOnly },
                                               ),
-                                            H.resolved
+                                            selectedThread.resolved
                                               ? "Reopen review discussion"
                                               : "Resolve review discussion",
                                           ),
                                         children: [
-                                          H.resolved
+                                          selectedThread.resolved
                                             ? i.jsx(RotateCcw, { size: 14 })
                                             : i.jsx(Check, { size: 14 }),
-                                          H.resolved
+                                          selectedThread.resolved
                                             ? "Reopen discussion"
                                             : "Resolve discussion",
                                         ],
                                       }),
                                     }),
-                                  !H.resolved &&
-                                    !H.orphaned &&
+                                  !selectedThread.resolved &&
+                                    !selectedThread.orphaned &&
                                     i.jsxs("form", {
                                       className: "rv-compose",
                                       onSubmit: (event) => {
                                         (event.preventDefault(),
-                                          q(
+                                          applyReviewChange(
                                             () =>
                                               addReviewThreadReply(
-                                                e.workbook,
-                                                H.id,
-                                                k,
-                                                J,
+                                                props.workbook,
+                                                selectedThread.id,
+                                                replyText,
+                                                actorName,
                                                 {
-                                                  readOnly: e.readOnly,
+                                                  readOnly: props.readOnly,
                                                 },
                                               ),
                                             "Reply to review discussion",
@@ -1063,10 +1155,12 @@ function ReviewToolsPanel(e) {
                                               rows: 3,
                                               maxLength:
                                                 reviewThreadLimits.textLength,
-                                              value: k,
+                                              value: replyText,
                                               disabled: X$1,
                                               onChange: (event) =>
-                                                F(event.target.value),
+                                                setReplyText(
+                                                  event.target.value,
+                                                ),
                                               lang: language("Reply"),
                                               "data-ui-label": "Reply",
                                             }),
@@ -1074,7 +1168,7 @@ function ReviewToolsPanel(e) {
                                         }),
                                         i.jsx("button", {
                                           className: "rv-primary",
-                                          disabled: X$1 || !k.trim(),
+                                          disabled: X$1 || !replyText.trim(),
                                           children: i.jsx(LocalizedText, {
                                             children: "Post reply",
                                           }),
@@ -1097,16 +1191,16 @@ function ReviewToolsPanel(e) {
                       className: "rv-compose rv-new",
                       onSubmit: (event) => {
                         (event.preventDefault(),
-                          q(
+                          applyReviewChange(
                             () =>
                               nQ(
-                                e.workbook,
-                                e.sheetId,
+                                props.workbook,
+                                props.sheetId,
                                 selectionAnchorAddress,
-                                E,
-                                J,
+                                newCommentText,
+                                actorName,
                                 {
-                                  readOnly: e.readOnly,
+                                  readOnly: props.readOnly,
                                 },
                               ),
                             "Add review discussion",
@@ -1125,9 +1219,10 @@ function ReviewToolsPanel(e) {
                               "aria-label": text("New comment"),
                               rows: 3,
                               maxLength: reviewThreadLimits.textLength,
-                              value: E,
+                              value: newCommentText,
                               disabled: disabled,
-                              onChange: (event) => A(event.target.value),
+                              onChange: (event) =>
+                                setNewCommentText(event.target.value),
                               lang: language("New comment"),
                               "data-ui-label": "New comment",
                             }),
@@ -1138,14 +1233,14 @@ function ReviewToolsPanel(e) {
                           children: [
                             i.jsxs("small", {
                               children: [
-                                E.length,
+                                newCommentText.length,
                                 " / ",
                                 reviewThreadLimits.textLength,
                               ],
                             }),
                             i.jsx("button", {
                               className: "rv-primary",
-                              disabled: disabled || !E.trim(),
+                              disabled: disabled || !newCommentText.trim(),
                               children: i.jsx(LocalizedText, {
                                 children: "Post comment",
                               }),
@@ -1165,8 +1260,8 @@ function ReviewToolsPanel(e) {
                 })
               : i.jsxs("section", {
                   role: "tabpanel",
-                  id: `${n}-hyperlink-panel`,
-                  "aria-labelledby": `${n}-hyperlink-tab`,
+                  id: `${titleId}-hyperlink-panel`,
+                  "aria-labelledby": `${titleId}-hyperlink-tab`,
                   children: [
                     i.jsx("p", {
                       children: i.jsx(LocalizedText, {
@@ -1178,21 +1273,25 @@ function ReviewToolsPanel(e) {
                       className: "rv-link-form",
                       onSubmit: (event) => {
                         (event.preventDefault(),
-                          q(
+                          applyReviewChange(
                             () =>
                               setCellHyperlink(
-                                e.workbook,
-                                e.sheetId,
+                                props.workbook,
+                                props.sheetId,
                                 selectionAnchorAddress,
-                                j === "external"
-                                  ? { kind: "external", url: url, label: N }
+                                linkKind === "external"
+                                  ? {
+                                      kind: "external",
+                                      url: url,
+                                      label: linkLabel,
+                                    }
                                   : {
                                       kind: "internal",
                                       sheetId: sheetId,
                                       address: address,
-                                      label: N,
+                                      label: linkLabel,
                                     },
-                                { readOnly: e.readOnly },
+                                { readOnly: props.readOnly },
                               ),
                             "Update cell hyperlink",
                           ));
@@ -1203,9 +1302,10 @@ function ReviewToolsPanel(e) {
                             i.jsx(LocalizedText, { children: "Link type" }),
                             i.jsxs("select", {
                               "aria-label": text("Link type"),
-                              value: j,
+                              value: linkKind,
                               disabled: disabled,
-                              onChange: (event) => z(event.target.value),
+                              onChange: (event) =>
+                                setLinkKind(event.target.value),
                               lang: language("Link type"),
                               "data-ui-label": "Link type",
                               children: [
@@ -1221,7 +1321,7 @@ function ReviewToolsPanel(e) {
                             }),
                           ],
                         }),
-                        j === "external"
+                        linkKind === "external"
                           ? i.jsxs("label", {
                               children: [
                                 i.jsx(LocalizedText, { children: "Address" }),
@@ -1234,7 +1334,8 @@ function ReviewToolsPanel(e) {
                                     "https://example.com/evidence",
                                   ),
                                   maxLength: reviewThreadLimits.urlLength,
-                                  onChange: (event) => D(event.target.value),
+                                  onChange: (event) =>
+                                    setUrl(event.target.value),
                                   lang: language("Link address"),
                                   "data-ui-label": "Link address",
                                 }),
@@ -1253,21 +1354,22 @@ function ReviewToolsPanel(e) {
                                       value: sheetId,
                                       disabled: disabled,
                                       onChange: (event) =>
-                                        _(event.target.value),
+                                        setLinkSheetId(event.target.value),
                                       lang: language("Link worksheet"),
                                       "data-ui-label": "Link worksheet",
-                                      children: e.workbook.sheets.map((sheet) =>
-                                        i.jsxs(
-                                          "option",
-                                          {
-                                            value: sheet.id,
-                                            children: [
-                                              sheet.name,
-                                              sheet.hidden ? " (hidden)" : "",
-                                            ],
-                                          },
-                                          sheet.id,
-                                        ),
+                                      children: props.workbook.sheets.map(
+                                        (sheet) =>
+                                          i.jsxs(
+                                            "option",
+                                            {
+                                              value: sheet.id,
+                                              children: [
+                                                sheet.name,
+                                                sheet.hidden ? " (hidden)" : "",
+                                              ],
+                                            },
+                                            sheet.id,
+                                          ),
                                       ),
                                     }),
                                   ],
@@ -1283,7 +1385,7 @@ function ReviewToolsPanel(e) {
                                       maxLength: 12,
                                       disabled: disabled,
                                       onChange: (event) =>
-                                        T(event.target.value),
+                                        setLinkAddress(event.target.value),
                                       lang: language("Link cell address"),
                                       "data-ui-label": "Link cell address",
                                     }),
@@ -1298,16 +1400,17 @@ function ReviewToolsPanel(e) {
                             }),
                             i.jsx("input", {
                               "aria-label": text("Link display text"),
-                              value: N,
+                              value: linkLabel,
                               disabled: disabled,
                               maxLength: reviewThreadLimits.labelLength,
-                              onChange: (event) => R(event.target.value),
+                              onChange: (event) =>
+                                setLinkLabel(event.target.value),
                               lang: language("Link display text"),
                               "data-ui-label": "Link display text",
                             }),
                           ],
                         }),
-                        K &&
+                        validatedLink &&
                           i.jsxs("div", {
                             className: "rv-link-preview",
                             "aria-label": text("Link preview"),
@@ -1317,14 +1420,14 @@ function ReviewToolsPanel(e) {
                               i.jsx(Link2, { size: 15 }),
                               i.jsx("span", {
                                 children:
-                                  K.label ||
-                                  (K.kind === "external"
-                                    ? K.url
-                                    : `${e.workbook.sheets.find((sheet) => sheet.id === K.sheetId)?.name ?? "Missing worksheet"}!${K.address}`),
+                                  validatedLink.label ||
+                                  (validatedLink.kind === "external"
+                                    ? validatedLink.url
+                                    : `${props.workbook.sheets.find((sheet) => sheet.id === validatedLink.sheetId)?.name ?? "Missing worksheet"}!${validatedLink.address}`),
                               }),
-                              K.kind === "external"
+                              validatedLink.kind === "external"
                                 ? i.jsxs("a", {
-                                    href: K.url,
+                                    href: validatedLink.url,
                                     target: "_blank",
                                     rel: "noopener noreferrer",
                                     "aria-label": text("Open link preview"),
@@ -1337,10 +1440,14 @@ function ReviewToolsPanel(e) {
                                       }),
                                     ],
                                   })
-                                : e.onNavigate &&
+                                : props.onNavigate &&
                                   i.jsx("button", {
                                     type: "button",
-                                    onClick: () => te(K.sheetId, K.address),
+                                    onClick: () =>
+                                      navigateToLink(
+                                        validatedLink.sheetId,
+                                        validatedLink.address,
+                                      ),
                                     children: i.jsx(LocalizedText, {
                                       children: "Go to target",
                                     }),
@@ -1359,17 +1466,17 @@ function ReviewToolsPanel(e) {
                           children: [
                             i.jsx("button", {
                               type: "button",
-                              disabled: disabled || !l,
+                              disabled: disabled || !hyperlink,
                               onClick: () =>
-                                q(
+                                applyReviewChange(
                                   () =>
                                     setCellHyperlink(
-                                      e.workbook,
-                                      e.sheetId,
+                                      props.workbook,
+                                      props.sheetId,
                                       selectionAnchorAddress,
                                       null,
                                       {
-                                        readOnly: e.readOnly,
+                                        readOnly: props.readOnly,
                                       },
                                     ),
                                   "Remove cell hyperlink",
@@ -1382,7 +1489,7 @@ function ReviewToolsPanel(e) {
                               className: "rv-primary",
                               disabled:
                                 disabled ||
-                                !(j === "external"
+                                !(linkKind === "external"
                                   ? url.trim()
                                   : address.trim()),
                               children: i.jsx(LocalizedText, {
@@ -1395,16 +1502,24 @@ function ReviewToolsPanel(e) {
                     }),
                   ],
                 }),
-            I &&
-              i.jsx("p", { role: "alert", className: "rv-error", children: I }),
+            errorMessage &&
+              i.jsx("p", {
+                role: "alert",
+                className: "rv-error",
+                children: errorMessage,
+              }),
           ],
         }),
       ],
     }),
   });
 }
-const formatCellValueLabel = (e) =>
-    e === null ? "Blank" : typeof e == "string" ? JSON.stringify(e) : String(e),
+const formatCellValueLabel = (value) =>
+    value === null
+      ? "Blank"
+      : typeof value == "string"
+        ? JSON.stringify(value)
+        : String(value),
   comparatorSymbols = { gt: ">", gte: "≥", lt: "<", lte: "≤", eq: "=" };
 
 export {

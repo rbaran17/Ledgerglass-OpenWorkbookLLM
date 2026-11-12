@@ -31,18 +31,18 @@ import {
   DaxExpressionInput,
 } from "./14-dax-data-model-engine.js";
 
-function DataModelDialog(e) {
+function DataModelDialog(props) {
   const { text } = useWorkbookMessages(),
-    t = ne.useRef(e);
-  t.current = e;
-  const n = ne.useId(),
-    o = e.workbook.sheets.find(
-      (sheet) => sheet.id === e.sheetId,
+    propsRef = ne.useRef(props);
+  propsRef.current = props;
+  const titleId = ne.useId(),
+    savedReport = props.workbook.sheets.find(
+      (sheet) => sheet.id === props.sheetId,
     )?.dataModelReport,
-    [definition, s] = ne.useState(() =>
+    [definition, setDefinition] = ne.useState(() =>
       structuredClone(
-        o?.definition ??
-          e.workbook.dataModel ?? {
+        savedReport?.definition ??
+          props.workbook.dataModel ?? {
             engine: columnarModelFormatVersion,
             name: "Workbook model",
             tables: [],
@@ -51,123 +51,138 @@ function DataModelDialog(e) {
           },
       ),
     ),
-    [query, u] = ne.useState(() =>
+    [query, setQuery] = ne.useState(() =>
       structuredClone(
-        o?.query ?? {
+        savedReport?.query ?? {
           groupBy: [],
           filters: [],
           measureIds: definition.measures.map((measure) => measure.id),
         },
       ),
     ),
-    [l, c] = ne.useState("Tables"),
-    [sheetId, f] = ne.useState(e.sheetId),
-    [p, m] = ne.useState(
-      e.range.includes(":")
-        ? e.range
+    [activeSection, setActiveSection] = ne.useState("Tables"),
+    [sheetId, setSheetId] = ne.useState(props.sheetId),
+    [rangeAddress, setRangeAddress] = ne.useState(
+      props.range.includes(":")
+        ? props.range
         : formatOccupiedRangeAddress(
-            e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+            props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
           ),
     ),
-    [v, g] = ne.useState(""),
-    [checked, y] = ne.useState(false),
-    [w, E] = ne.useState(""),
-    [A, k] = ne.useState(null),
-    [F, I] = ne.useState(0),
-    [outputName, j] = ne.useState(() => {
-      let le = 1;
+    [structuredSourceId, setStructuredSourceId] = ne.useState(""),
+    [checked, setChecked] = ne.useState(false),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [previewResult, setPreviewResult] = ne.useState(null),
+    [resultPage, setResultPage] = ne.useState(0),
+    [outputName, setOutputName] = ne.useState(() => {
+      let resultNumber = 1;
       for (
         ;
-        e.workbook.sheets.some(
-          (sheet) => sheet.name.toLowerCase() === `model result ${le}`,
+        props.workbook.sheets.some(
+          (sheet) =>
+            sheet.name.toLowerCase() === `model result ${resultNumber}`,
         );
       )
-        le++;
-      return `Model result ${le}`;
+        resultNumber++;
+      return `Model result ${resultNumber}`;
     }),
-    z = ne.useRef(null),
-    V = ne.useRef(false);
+    dialogRef = ne.useRef(null),
+    hasPublished = ne.useRef(false);
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      z.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []);
-  const D = {
-      readOnly: e.readOnly,
-      allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
+  const modelOptions = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+      includeHidden: !!props.allowHidden && checked,
     },
-    B = () => {
-      (k(null), E(""), (V.current = false));
+    resetPreview = () => {
+      (setPreviewResult(null),
+        setErrorMessage(""),
+        (hasPublished.current = false));
     },
-    onChange = (le) => {
-      (s(le), B());
+    onChange = (nextDefinition) => {
+      (setDefinition(nextDefinition), resetPreview());
     },
-    C = (le) => {
-      (u(le), B());
+    updateQuery = (nextQuery) => {
+      (setQuery(nextQuery), resetPreview());
     },
-    T = (le) => definition.tables.find((table) => table.id === le),
-    N = (le) => T(le)?.columns[0]?.name ?? "",
-    R = (le, ce, ge) =>
+    findTable = (tableId) =>
+      definition.tables.find((table) => table.id === tableId),
+    defaultColumnName = (tableId) => findTable(tableId)?.columns[0]?.name ?? "",
+    renderTextInput = (label, value, onValueChange) =>
       i.jsx("input", {
-        "aria-label": text(le),
-        value: ce,
-        onChange: (event) => ge(event.target.value),
+        "aria-label": text(label),
+        value: value,
+        onChange: (event) => onValueChange(event.target.value),
       }),
-    L = (le, ce, ge, se) =>
+    renderSelect = (label, value, options, onValueChange) =>
       i.jsx("select", {
-        "aria-label": text(le),
-        value: ce,
-        onChange: (event) => se(event.target.value),
-        children: ge.map((we) =>
+        "aria-label": text(label),
+        value: value,
+        onChange: (event) => onValueChange(event.target.value),
+        children: options.map((option) =>
           i.jsx(
             "option",
-            { value: we.value, children: text(we.label) },
-            we.value,
+            { value: option.value, children: text(option.label) },
+            option.value,
           ),
         ),
       }),
-    $ = (le) => le.map((ce) => ({ value: ce, label: ce })),
-    U = (le, ce, ge) =>
-      L(
-        le,
-        ce,
+    toStringOptions = (values) =>
+      values.map((optionValue) => ({ value: optionValue, label: optionValue })),
+    renderTableSelect = (label, value, onValueChange) =>
+      renderSelect(
+        label,
+        value,
         definition.tables.map((table) => ({
           value: table.id,
           label: table.name,
         })),
-        ge,
+        onValueChange,
       ),
-    G = (le, ce, ge, se) =>
-      L(le, ge, $(T(ce)?.columns.map((column) => column.name) ?? []), se),
-    H = (le, ce) =>
+    renderColumnSelect = (label, tableId, value, onValueChange) =>
+      renderSelect(
+        label,
+        value,
+        toStringOptions(
+          findTable(tableId)?.columns.map((column) => column.name) ?? [],
+        ),
+        onValueChange,
+      ),
+    updateTable = (tableId, changes) =>
       onChange({
         ...definition,
         tables: definition.tables.map((table) =>
-          table.id === le ? { ...table, ...ce } : table,
+          table.id === tableId ? { ...table, ...changes } : table,
         ),
       }),
-    Q = (le) => {
+    deleteTable = (tableId) => {
       const measures = definition.measures.filter(
-        (measure) => measure.tableId !== le,
+        (measure) => measure.tableId !== tableId,
       );
       (onChange({
         ...definition,
-        tables: definition.tables.filter((table) => table.id !== le),
+        tables: definition.tables.filter((table) => table.id !== tableId),
         relationships: definition.relationships.filter(
           (relationship) =>
-            relationship.one.tableId !== le && relationship.many.tableId !== le,
+            relationship.one.tableId !== tableId &&
+            relationship.many.tableId !== tableId,
         ),
         measures: measures,
       }),
-        C({
+        updateQuery({
           ...query,
-          groupBy: query.groupBy.filter((ge) => ge.tableId !== le),
-          filters: query.filters.filter((filter) => filter.tableId !== le),
+          groupBy: query.groupBy.filter(
+            (groupField) => groupField.tableId !== tableId,
+          ),
+          filters: query.filters.filter((filter) => filter.tableId !== tableId),
           measureIds: query.measureIds.filter((measureId) =>
             measures.some((measure) => measure.id === measureId),
           ),
@@ -176,74 +191,85 @@ function DataModelDialog(e) {
   function X$1() {
     try {
       const modelTableFromRange = buildModelTableFromRange(
-        e.workbook,
+        props.workbook,
         sheetId,
-        p,
-        v || undefined,
-        D,
+        rangeAddress,
+        structuredSourceId || undefined,
+        modelOptions,
       );
-      let ce = modelTableFromRange.name,
-        ge = 2;
+      let tableName = modelTableFromRange.name,
+        nameSuffix = 2;
       for (
         ;
         definition.tables.some(
-          (table) => table.name.toLowerCase() === ce.toLowerCase(),
+          (table) => table.name.toLowerCase() === tableName.toLowerCase(),
         );
       )
-        ce = `${modelTableFromRange.name} ${ge++}`;
+        tableName = `${modelTableFromRange.name} ${nameSuffix++}`;
       onChange({
         ...definition,
-        tables: [...definition.tables, { ...modelTableFromRange, name: ce }],
+        tables: [
+          ...definition.tables,
+          { ...modelTableFromRange, name: tableName },
+        ],
       });
     } catch (error) {
-      E(error.message);
+      setErrorMessage(error.message);
     }
   }
   function onClick() {
     try {
-      (E(""),
-        I(0),
-        (V.current = false),
-        k(
+      (setErrorMessage(""),
+        setResultPage(0),
+        (hasPublished.current = false),
+        setPreviewResult(
           previewDataModelOutput(
-            e.workbook,
+            props.workbook,
             { definition: definition, query: query, outputName: outputName },
-            D,
+            modelOptions,
           ),
         ),
-        c("Preview"));
+        setActiveSection("Preview"));
     } catch (error) {
-      (k(null), E(error.message));
+      (setPreviewResult(null), setErrorMessage(error.message));
     }
   }
-  function q(le) {
-    if (!(!A || V.current))
+  function commitModelReport(mode) {
+    if (!(!previewResult || hasPublished.current))
       try {
-        const ce = t.current,
-          ge = publishDataModelReport(ce.workbook, A, le, {
-            readOnly: ce.readOnly,
-            allowedSheetIds: ce.allowedSheetIds,
-            includeHidden: !!ce.allowHidden && checked,
-          });
-        ((V.current = true),
-          ce.onWorkbookChange(
-            ge,
-            le === "save"
+        const latestProps = propsRef.current,
+          nextWorkbook = publishDataModelReport(
+            latestProps.workbook,
+            previewResult,
+            mode,
+            {
+              readOnly: latestProps.readOnly,
+              allowedSheetIds: latestProps.allowedSheetIds,
+              includeHidden: !!latestProps.allowHidden && checked,
+            },
+          );
+        ((hasPublished.current = true),
+          latestProps.onWorkbookChange(
+            nextWorkbook,
+            mode === "save"
               ? "Save relational data model"
               : "Publish relational model result",
           ),
-          ce.onClose());
+          latestProps.onClose());
       } catch (error) {
-        E(error.message);
+        setErrorMessage(error.message);
       }
   }
-  const W = A?.result,
-    K =
-      !!W?.complete && !e.readOnly && !e.workbook.structureProtection?.enabled,
-    te = e.workbook.sheets.filter(
+  const reportResult = previewResult?.result,
+    canPublish =
+      !!reportResult?.complete &&
+      !props.readOnly &&
+      !props.workbook.structureProtection?.enabled,
+    selectableSheets = props.workbook.sheets.filter(
       (sheet) =>
-        (!e.allowedSheetIds || e.allowedSheetIds.includes(sheet.id)) &&
-        ((!sheet.hidden && !sheet.veryHidden) || (e.allowHidden && checked)),
+        (!props.allowedSheetIds || props.allowedSheetIds.includes(sheet.id)) &&
+        ((!sheet.hidden && !sheet.veryHidden) ||
+          (props.allowHidden && checked)),
     );
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -251,29 +277,31 @@ function DataModelDialog(e) {
       className: "lg-data-model",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
-      ref: z,
+      "aria-labelledby": titleId,
+      ref: dialogRef,
       onKeyDown: (event) => {
         if (
-          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const ce = [
-              ...z.current.querySelectorAll(
+          const focusableElements = [
+              ...dialogRef.current.querySelectorAll(
                 "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
               ),
             ].filter(
-              (we) =>
-                we.getClientRects().length ||
+              (element) =>
+                element.getClientRects().length ||
                 navigator.userAgent.includes("jsdom"),
             ),
-            ge = ce[0],
-            se = ce.at(-1);
-          event.shiftKey && document.activeElement === ge
-            ? (event.preventDefault(), se == null || se.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === se &&
-              (event.preventDefault(), ge == null || ge.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -288,7 +316,7 @@ function DataModelDialog(e) {
                   }),
                 }),
                 i.jsx("h2", {
-                  id: n,
+                  id: titleId,
                   children: i.jsx(LocalizedText, { children: "Data Model" }),
                 }),
                 i.jsx("p", {
@@ -301,7 +329,7 @@ function DataModelDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close data model"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
@@ -315,28 +343,28 @@ function DataModelDialog(e) {
             "Measures",
             "Query",
             "Preview",
-          ].map((le) =>
+          ].map((sectionName) =>
             i.jsx(
               "button",
               {
-                "aria-pressed": l === le,
-                onClick: () => c(le),
-                children: i.jsx(LocalizedText, { children: le }),
+                "aria-pressed": activeSection === sectionName,
+                onClick: () => setActiveSection(sectionName),
+                children: i.jsx(LocalizedText, { children: sectionName }),
               },
-              le,
+              sectionName,
             ),
           ),
         }),
         i.jsxs("div", {
           className: "lg-model-body",
           children: [
-            w &&
+            errorMessage &&
               i.jsx("p", {
                 role: "alert",
                 className: "lg-model-error",
-                children: text(w),
+                children: text(errorMessage),
               }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 role: "status",
                 children: i.jsx(LocalizedText, {
@@ -344,7 +372,7 @@ function DataModelDialog(e) {
                     "This workbook is read-only. Preview remains available.",
                 }),
               }),
-            l === "Tables" &&
+            activeSection === "Tables" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("div", {
@@ -352,23 +380,29 @@ function DataModelDialog(e) {
                     children: [
                       LabeledField(
                         "Model name",
-                        R("Model name", definition.name, (le) =>
-                          onChange({ ...definition, name: le }),
+                        renderTextInput(
+                          "Model name",
+                          definition.name,
+                          (modelName) =>
+                            onChange({ ...definition, name: modelName }),
                         ),
                       ),
                       LabeledField(
                         "Source worksheet",
-                        L(
+                        renderSelect(
                           "Model source worksheet",
                           sheetId,
-                          te.map((le) => ({ value: le.id, label: le.name })),
-                          (le) => {
-                            (f(le),
-                              g(""),
-                              m(
+                          selectableSheets.map((sheet) => ({
+                            value: sheet.id,
+                            label: sheet.name,
+                          })),
+                          (nextSheetId) => {
+                            (setSheetId(nextSheetId),
+                              setStructuredSourceId(""),
+                              setRangeAddress(
                                 formatOccupiedRangeAddress(
-                                  e.workbook.sheets.find(
-                                    (sheet) => sheet.id === le,
+                                  props.workbook.sheets.find(
+                                    (sheet) => sheet.id === nextSheetId,
                                   ),
                                 ),
                               ));
@@ -377,24 +411,31 @@ function DataModelDialog(e) {
                       ),
                       LabeledField(
                         "Source table or range",
-                        L(
+                        renderSelect(
                           "Model structured source",
-                          v,
+                          structuredSourceId,
                           [
                             { value: "", label: "Cell range" },
                             ...(
-                              e.workbook.sheets.find(
+                              props.workbook.sheets.find(
                                 (sheet) => sheet.id === sheetId,
                               )?.tables ?? []
-                            ).map((le) => ({ value: le.id, label: le.name })),
+                            ).map((table) => ({
+                              value: table.id,
+                              label: table.name,
+                            })),
                           ],
-                          g,
+                          setStructuredSourceId,
                         ),
                       ),
-                      !v &&
+                      !structuredSourceId &&
                         LabeledField(
                           "Headed range",
-                          R("Model source range", p, m),
+                          renderTextInput(
+                            "Model source range",
+                            rangeAddress,
+                            setRangeAddress,
+                          ),
                         ),
                       i.jsx("button", {
                         disabled:
@@ -413,15 +454,15 @@ function DataModelDialog(e) {
                         "Values are never converted silently. Each table supports 500 records and 2,000 cells including headers.",
                     }),
                   }),
-                  o &&
-                    e.workbook.dataModel &&
+                  savedReport &&
+                    props.workbook.dataModel &&
                     i.jsx("button", {
                       onClick: () => {
-                        (onChange(structuredClone(e.workbook.dataModel)),
-                          C({
+                        (onChange(structuredClone(props.workbook.dataModel)),
+                          updateQuery({
                             groupBy: [],
                             filters: [],
-                            measureIds: e.workbook.dataModel.measures.map(
+                            measureIds: props.workbook.dataModel.measures.map(
                               (measure) => measure.id,
                             ),
                           }));
@@ -430,22 +471,23 @@ function DataModelDialog(e) {
                         children: "Use workbook model",
                       }),
                     }),
-                  e.workbook.dataModel &&
+                  props.workbook.dataModel &&
                     i.jsx("button", {
                       disabled:
-                        e.readOnly || e.workbook.structureProtection?.enabled,
+                        props.readOnly ||
+                        props.workbook.structureProtection?.enabled,
                       onClick: () => {
                         try {
-                          const le = t.current;
-                          (le.onWorkbookChange(
-                            removeDataModelFromWorkbook(le.workbook, {
-                              readOnly: le.readOnly,
+                          const latestProps = propsRef.current;
+                          (latestProps.onWorkbookChange(
+                            removeDataModelFromWorkbook(latestProps.workbook, {
+                              readOnly: latestProps.readOnly,
                             }),
                             "Remove relational data model",
                           ),
-                            le.onClose());
+                            latestProps.onClose());
                         } catch (error) {
-                          E(error.message);
+                          setErrorMessage(error.message);
                         }
                       },
                       children: i.jsx(LocalizedText, {
@@ -463,15 +505,16 @@ function DataModelDialog(e) {
                             children: [
                               LabeledField(
                                 "Table name",
-                                R(
+                                renderTextInput(
                                   `${table.name} table name`,
                                   table.name,
-                                  (ge) => H(table.id, { name: ge }),
+                                  (nextName) =>
+                                    updateTable(table.id, { name: nextName }),
                                 ),
                               ),
                               i.jsxs("span", {
                                 children: [
-                                  e.workbook.sheets.find(
+                                  props.workbook.sheets.find(
                                     (sheet) => sheet.id === table.sheetId,
                                   )?.name ?? text("Missing worksheet"),
                                   " ",
@@ -485,15 +528,16 @@ function DataModelDialog(e) {
                               !table.tableId &&
                                 LabeledField(
                                   "Headed range",
-                                  R(
+                                  renderTextInput(
                                     `${table.name} source range`,
                                     table.range,
-                                    (range) => H(table.id, { range: range }),
+                                    (range) =>
+                                      updateTable(table.id, { range: range }),
                                   ),
                                 ),
                               i.jsx("button", {
                                 "aria-label": `Remove table ${table.name}`,
-                                onClick: () => Q(table.id),
+                                onClick: () => deleteTable(table.id),
                                 children: i.jsx(LocalizedText, {
                                   children: "Remove table",
                                 }),
@@ -519,78 +563,89 @@ function DataModelDialog(e) {
                                         "Column",
                                         "Type",
                                         "Nullable",
-                                      ].map((ge) =>
+                                      ].map((headerLabel) =>
                                         i.jsx(
                                           "th",
                                           {
                                             children: i.jsx(LocalizedText, {
-                                              children: ge,
+                                              children: headerLabel,
                                             }),
                                           },
-                                          ge,
+                                          headerLabel,
                                         ),
                                       ),
                                     }),
                                   }),
                                   i.jsx("tbody", {
-                                    children: table.columns.map((column, se) =>
-                                      i.jsxs(
-                                        "tr",
-                                        {
-                                          children: [
-                                            i.jsx("th", {
-                                              scope: "row",
-                                              children: column.name,
-                                            }),
-                                            i.jsx("td", {
-                                              children: L(
-                                                `${table.name}.${column.name} type`,
-                                                column.type,
-                                                $([
-                                                  "text",
-                                                  "number",
-                                                  "boolean",
-                                                  "date",
-                                                ]),
-                                                (we) =>
-                                                  H(table.id, {
-                                                    columns: table.columns.map(
-                                                      (column, Ae) =>
-                                                        Ae === se
-                                                          ? {
-                                                              ...column,
-                                                              type: we,
-                                                            }
-                                                          : column,
-                                                    ),
-                                                  }),
-                                              ),
-                                            }),
-                                            i.jsx("td", {
-                                              children: i.jsx("input", {
-                                                type: "checkbox",
-                                                "aria-label": `${table.name}.${column.name} nullable`,
-                                                checked: column.nullable,
-                                                onChange: (event) =>
-                                                  H(table.id, {
-                                                    columns: table.columns.map(
-                                                      (column, Ae) =>
-                                                        Ae === se
-                                                          ? {
-                                                              ...column,
-                                                              nullable:
-                                                                event.target
-                                                                  .checked,
-                                                            }
-                                                          : column,
-                                                    ),
-                                                  }),
+                                    children: table.columns.map(
+                                      (column, columnIndex) =>
+                                        i.jsxs(
+                                          "tr",
+                                          {
+                                            children: [
+                                              i.jsx("th", {
+                                                scope: "row",
+                                                children: column.name,
                                               }),
-                                            }),
-                                          ],
-                                        },
-                                        column.name,
-                                      ),
+                                              i.jsx("td", {
+                                                children: renderSelect(
+                                                  `${table.name}.${column.name} type`,
+                                                  column.type,
+                                                  toStringOptions([
+                                                    "text",
+                                                    "number",
+                                                    "boolean",
+                                                    "date",
+                                                  ]),
+                                                  (nextType) =>
+                                                    updateTable(table.id, {
+                                                      columns:
+                                                        table.columns.map(
+                                                          (
+                                                            column,
+                                                            itemIndex,
+                                                          ) =>
+                                                            itemIndex ===
+                                                            columnIndex
+                                                              ? {
+                                                                  ...column,
+                                                                  type: nextType,
+                                                                }
+                                                              : column,
+                                                        ),
+                                                    }),
+                                                ),
+                                              }),
+                                              i.jsx("td", {
+                                                children: i.jsx("input", {
+                                                  type: "checkbox",
+                                                  "aria-label": `${table.name}.${column.name} nullable`,
+                                                  checked: column.nullable,
+                                                  onChange: (event) =>
+                                                    updateTable(table.id, {
+                                                      columns:
+                                                        table.columns.map(
+                                                          (
+                                                            column,
+                                                            itemIndex,
+                                                          ) =>
+                                                            itemIndex ===
+                                                            columnIndex
+                                                              ? {
+                                                                  ...column,
+                                                                  nullable:
+                                                                    event.target
+                                                                      .checked,
+                                                                }
+                                                              : column,
+                                                        ),
+                                                    }),
+                                                }),
+                                              }),
+                                            ],
+                                          },
+                                          column.name,
+                                        ),
                                     ),
                                   }),
                                 ],
@@ -604,7 +659,7 @@ function DataModelDialog(e) {
                   ),
                 ],
               }),
-            l === "Relationships" &&
+            activeSection === "Relationships" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -614,133 +669,143 @@ function DataModelDialog(e) {
                         "Filters flow from the unique one side to the related side. Missing, blank or duplicate keys block calculation. Cycles and competing paths are refused.",
                     }),
                   }),
-                  definition.relationships.map((relationship, ce) => {
-                    const ge = (se) =>
-                      onChange({
-                        ...definition,
-                        relationships: definition.relationships.map((we) =>
-                          we.id === relationship.id ? se : we,
-                        ),
-                      });
-                    return i.jsxs(
-                      "fieldset",
-                      {
-                        children: [
-                          i.jsxs("legend", {
-                            children: [
-                              i.jsx(LocalizedText, {
-                                children: "Relationship",
-                              }),
-                              " ",
-                              ce + 1,
-                            ],
-                          }),
-                          i.jsxs("div", {
-                            className: "lg-model-controls",
-                            children: [
-                              LabeledField(
-                                "One table",
-                                U(
-                                  `Relationship ${ce + 1} one table`,
-                                  relationship.one.tableId,
-                                  (tableId) =>
-                                    ge({
-                                      ...relationship,
-                                      one: {
-                                        tableId: tableId,
-                                        column: N(tableId),
-                                      },
-                                    }),
-                                ),
-                              ),
-                              LabeledField(
-                                "Unique key",
-                                G(
-                                  `Relationship ${ce + 1} one key`,
-                                  relationship.one.tableId,
-                                  relationship.one.column,
-                                  (column) =>
-                                    ge({
-                                      ...relationship,
-                                      one: {
-                                        ...relationship.one,
-                                        column: column,
-                                      },
-                                    }),
-                                ),
-                              ),
-                              i.jsx("span", {
-                                "aria-hidden": "true",
-                                children: "1 → *",
-                              }),
-                              LabeledField(
-                                "Related table",
-                                U(
-                                  `Relationship ${ce + 1} related table`,
-                                  relationship.many.tableId,
-                                  (tableId) =>
-                                    ge({
-                                      ...relationship,
-                                      many: {
-                                        tableId: tableId,
-                                        column: N(tableId),
-                                      },
-                                    }),
-                                ),
-                              ),
-                              LabeledField(
-                                "Foreign key",
-                                G(
-                                  `Relationship ${ce + 1} foreign key`,
-                                  relationship.many.tableId,
-                                  relationship.many.column,
-                                  (column) =>
-                                    ge({
-                                      ...relationship,
-                                      many: {
-                                        ...relationship.many,
-                                        column: column,
-                                      },
-                                    }),
-                                ),
-                              ),
-                              LabeledField(
-                                "Cardinality",
-                                L(
-                                  `Relationship ${ce + 1} cardinality`,
-                                  relationship.cardinality,
-                                  [
-                                    { value: "one-to-many", label: "1 → many" },
-                                    { value: "one-to-one", label: "1 → 1" },
-                                  ],
-                                  (cardinality) =>
-                                    ge({
-                                      ...relationship,
-                                      cardinality: cardinality,
-                                    }),
-                                ),
-                              ),
-                              i.jsx("button", {
-                                "aria-label": `Remove relationship ${ce + 1}`,
-                                onClick: () =>
-                                  onChange({
-                                    ...definition,
-                                    relationships:
-                                      definition.relationships.filter(
-                                        (se) => se.id !== relationship.id,
-                                      ),
-                                  }),
-                                children: i.jsx(LocalizedText, {
-                                  children: "Remove",
+                  definition.relationships.map(
+                    (relationship, relationshipIndex) => {
+                      const updateRelationship = (nextRelationship) =>
+                        onChange({
+                          ...definition,
+                          relationships: definition.relationships.map(
+                            (existingRelationship) =>
+                              existingRelationship.id === relationship.id
+                                ? nextRelationship
+                                : existingRelationship,
+                          ),
+                        });
+                      return i.jsxs(
+                        "fieldset",
+                        {
+                          children: [
+                            i.jsxs("legend", {
+                              children: [
+                                i.jsx(LocalizedText, {
+                                  children: "Relationship",
                                 }),
-                              }),
-                            ],
-                          }),
-                        ],
-                      },
-                      relationship.id,
-                    );
-                  }),
+                                " ",
+                                relationshipIndex + 1,
+                              ],
+                            }),
+                            i.jsxs("div", {
+                              className: "lg-model-controls",
+                              children: [
+                                LabeledField(
+                                  "One table",
+                                  renderTableSelect(
+                                    `Relationship ${relationshipIndex + 1} one table`,
+                                    relationship.one.tableId,
+                                    (tableId) =>
+                                      updateRelationship({
+                                        ...relationship,
+                                        one: {
+                                          tableId: tableId,
+                                          column: defaultColumnName(tableId),
+                                        },
+                                      }),
+                                  ),
+                                ),
+                                LabeledField(
+                                  "Unique key",
+                                  renderColumnSelect(
+                                    `Relationship ${relationshipIndex + 1} one key`,
+                                    relationship.one.tableId,
+                                    relationship.one.column,
+                                    (column) =>
+                                      updateRelationship({
+                                        ...relationship,
+                                        one: {
+                                          ...relationship.one,
+                                          column: column,
+                                        },
+                                      }),
+                                  ),
+                                ),
+                                i.jsx("span", {
+                                  "aria-hidden": "true",
+                                  children: "1 → *",
+                                }),
+                                LabeledField(
+                                  "Related table",
+                                  renderTableSelect(
+                                    `Relationship ${relationshipIndex + 1} related table`,
+                                    relationship.many.tableId,
+                                    (tableId) =>
+                                      updateRelationship({
+                                        ...relationship,
+                                        many: {
+                                          tableId: tableId,
+                                          column: defaultColumnName(tableId),
+                                        },
+                                      }),
+                                  ),
+                                ),
+                                LabeledField(
+                                  "Foreign key",
+                                  renderColumnSelect(
+                                    `Relationship ${relationshipIndex + 1} foreign key`,
+                                    relationship.many.tableId,
+                                    relationship.many.column,
+                                    (column) =>
+                                      updateRelationship({
+                                        ...relationship,
+                                        many: {
+                                          ...relationship.many,
+                                          column: column,
+                                        },
+                                      }),
+                                  ),
+                                ),
+                                LabeledField(
+                                  "Cardinality",
+                                  renderSelect(
+                                    `Relationship ${relationshipIndex + 1} cardinality`,
+                                    relationship.cardinality,
+                                    [
+                                      {
+                                        value: "one-to-many",
+                                        label: "1 → many",
+                                      },
+                                      { value: "one-to-one", label: "1 → 1" },
+                                    ],
+                                    (cardinality) =>
+                                      updateRelationship({
+                                        ...relationship,
+                                        cardinality: cardinality,
+                                      }),
+                                  ),
+                                ),
+                                i.jsx("button", {
+                                  "aria-label": `Remove relationship ${relationshipIndex + 1}`,
+                                  onClick: () =>
+                                    onChange({
+                                      ...definition,
+                                      relationships:
+                                        definition.relationships.filter(
+                                          (otherRelationship) =>
+                                            otherRelationship.id !==
+                                            relationship.id,
+                                        ),
+                                    }),
+                                  children: i.jsx(LocalizedText, {
+                                    children: "Remove",
+                                  }),
+                                }),
+                              ],
+                            }),
+                          ],
+                        },
+                        relationship.id,
+                      );
+                    },
+                  ),
                   i.jsx("button", {
                     disabled:
                       definition.tables.length < 2 ||
@@ -772,12 +837,12 @@ function DataModelDialog(e) {
                   }),
                 ],
               }),
-            l === "Calculated columns" &&
+            activeSection === "Calculated columns" &&
               i.jsx(DataModelDefinitionEditor, {
                 definition: definition,
                 onChange: onChange,
               }),
-            l === "Measures" &&
+            activeSection === "Measures" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("p", {
@@ -787,12 +852,14 @@ function DataModelDialog(e) {
                         "Each measure aggregates its own filtered table, preventing fact-row multiplication. Choose DAX for expressions with row and filter context. Totals are recalculated in their own context.",
                     }),
                   }),
-                  definition.measures.map((measure, ce) => {
-                    const ge = (se) =>
+                  definition.measures.map((measure, measureIndex) => {
+                    const updateMeasure = (nextMeasure) =>
                       onChange({
                         ...definition,
-                        measures: definition.measures.map((we) =>
-                          we.id === measure.id ? se : we,
+                        measures: definition.measures.map((existingMeasure) =>
+                          existingMeasure.id === measure.id
+                            ? nextMeasure
+                            : existingMeasure,
                         ),
                       });
                     return i.jsxs(
@@ -803,7 +870,7 @@ function DataModelDialog(e) {
                             children: [
                               i.jsx(LocalizedText, { children: "Measure" }),
                               " ",
-                              ce + 1,
+                              measureIndex + 1,
                             ],
                           }),
                           i.jsxs("div", {
@@ -811,34 +878,40 @@ function DataModelDialog(e) {
                             children: [
                               LabeledField(
                                 "Name",
-                                R(
-                                  `Measure ${ce + 1} name`,
+                                renderTextInput(
+                                  `Measure ${measureIndex + 1} name`,
                                   measure.name,
-                                  (se) => ge({ ...measure, name: se }),
+                                  (nextName) =>
+                                    updateMeasure({
+                                      ...measure,
+                                      name: nextName,
+                                    }),
                                 ),
                               ),
                               LabeledField(
                                 "Table",
-                                U(
-                                  `Measure ${ce + 1} table`,
+                                renderTableSelect(
+                                  `Measure ${measureIndex + 1} table`,
                                   measure.tableId,
                                   (tableId) =>
-                                    ge({
+                                    updateMeasure({
                                       ...measure,
                                       tableId: tableId,
                                       ...(measure.operation === "countRows" ||
                                       measure.operation === "dax"
                                         ? {}
-                                        : { column: N(tableId) }),
+                                        : {
+                                            column: defaultColumnName(tableId),
+                                          }),
                                     }),
                                 ),
                               ),
                               LabeledField(
                                 "Operation",
-                                L(
-                                  `Measure ${ce + 1} operation`,
+                                renderSelect(
+                                  `Measure ${measureIndex + 1} operation`,
                                   measure.operation,
-                                  $([
+                                  toStringOptions([
                                     "sum",
                                     "count",
                                     "countRows",
@@ -849,20 +922,22 @@ function DataModelDialog(e) {
                                     "dax",
                                   ]),
                                   (operation) => {
-                                    const we = {
+                                    const updatedMeasure = {
                                       ...measure,
                                       operation: operation,
                                     };
                                     (operation === "countRows" ||
                                     operation === "dax"
-                                      ? delete we.column
-                                      : (we.column =
-                                          we.column ?? N(measure.tableId)),
+                                      ? delete updatedMeasure.column
+                                      : (updatedMeasure.column =
+                                          updatedMeasure.column ??
+                                          defaultColumnName(measure.tableId)),
                                       operation === "dax"
-                                        ? (we.expression =
-                                            we.expression ?? "BLANK()")
-                                        : delete we.expression,
-                                      ge(we));
+                                        ? (updatedMeasure.expression =
+                                            updatedMeasure.expression ??
+                                            "BLANK()")
+                                        : delete updatedMeasure.expression,
+                                      updateMeasure(updatedMeasure));
                                   },
                                 ),
                               ),
@@ -870,24 +945,28 @@ function DataModelDialog(e) {
                                 measure.operation !== "dax" &&
                                 LabeledField(
                                   "Column",
-                                  G(
-                                    `Measure ${ce + 1} column`,
+                                  renderColumnSelect(
+                                    `Measure ${measureIndex + 1} column`,
                                     measure.tableId,
                                     measure.column ?? "",
                                     (column) =>
-                                      ge({ ...measure, column: column }),
+                                      updateMeasure({
+                                        ...measure,
+                                        column: column,
+                                      }),
                                   ),
                                 ),
                               i.jsx("button", {
-                                "aria-label": `Remove measure ${ce + 1}`,
+                                "aria-label": `Remove measure ${measureIndex + 1}`,
                                 onClick: () => {
                                   (onChange({
                                     ...definition,
                                     measures: definition.measures.filter(
-                                      (se) => se.id !== measure.id,
+                                      (otherMeasure) =>
+                                        otherMeasure.id !== measure.id,
                                     ),
                                   }),
-                                    C({
+                                    updateQuery({
                                       ...query,
                                       measureIds: query.measureIds.filter(
                                         (measureId) => measureId !== measure.id,
@@ -902,10 +981,13 @@ function DataModelDialog(e) {
                           }),
                           measure.operation === "dax" &&
                             i.jsx(DaxExpressionInput, {
-                              label: `Measure ${ce + 1} DAX expression`,
+                              label: `Measure ${measureIndex + 1} DAX expression`,
                               value: measure.expression ?? "",
                               onChange: (expression) =>
-                                ge({ ...measure, expression: expression }),
+                                updateMeasure({
+                                  ...measure,
+                                  expression: expression,
+                                }),
                             }),
                         ],
                       },
@@ -917,7 +999,7 @@ function DataModelDialog(e) {
                       !definition.tables.length ||
                       definition.measures.length >= dataModelLimits.measures,
                     onClick: () => {
-                      const le = {
+                      const newMeasure = {
                         id: createUuid(),
                         name: `Measure ${definition.measures.length + 1}`,
                         tableId: definition.tables.at(-1).id,
@@ -925,18 +1007,18 @@ function DataModelDialog(e) {
                       };
                       (onChange({
                         ...definition,
-                        measures: [...definition.measures, le],
+                        measures: [...definition.measures, newMeasure],
                       }),
-                        C({
+                        updateQuery({
                           ...query,
-                          measureIds: [...query.measureIds, le.id],
+                          measureIds: [...query.measureIds, newMeasure.id],
                         }));
                     },
                     children: i.jsx(LocalizedText, { children: "Add measure" }),
                   }),
                 ],
               }),
-            l === "Query" &&
+            activeSection === "Query" &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsxs("fieldset", {
@@ -959,7 +1041,7 @@ function DataModelDialog(e) {
                                     measure.id,
                                   ),
                                   onChange: (event) =>
-                                    C({
+                                    updateQuery({
                                       ...query,
                                       measureIds: event.target.checked
                                         ? [...query.measureIds, measure.id]
@@ -985,49 +1067,53 @@ function DataModelDialog(e) {
                           children: "Group by shared dimensions",
                         }),
                       }),
-                      query.groupBy.map((le, ce) =>
+                      query.groupBy.map((groupField, groupIndex) =>
                         i.jsxs(
                           "div",
                           {
                             className: "lg-model-controls",
                             children: [
-                              U(
-                                `Group ${ce + 1} table`,
-                                le.tableId,
+                              renderTableSelect(
+                                `Group ${groupIndex + 1} table`,
+                                groupField.tableId,
                                 (tableId) =>
-                                  C({
+                                  updateQuery({
                                     ...query,
-                                    groupBy: query.groupBy.map((se, we) =>
-                                      we === ce
-                                        ? {
-                                            tableId: tableId,
-                                            column: N(tableId),
-                                          }
-                                        : se,
+                                    groupBy: query.groupBy.map(
+                                      (existingGroup, candidateIndex) =>
+                                        candidateIndex === groupIndex
+                                          ? {
+                                              tableId: tableId,
+                                              column:
+                                                defaultColumnName(tableId),
+                                            }
+                                          : existingGroup,
                                     ),
                                   }),
                               ),
-                              G(
-                                `Group ${ce + 1} column`,
-                                le.tableId,
-                                le.column,
+                              renderColumnSelect(
+                                `Group ${groupIndex + 1} column`,
+                                groupField.tableId,
+                                groupField.column,
                                 (column) =>
-                                  C({
+                                  updateQuery({
                                     ...query,
-                                    groupBy: query.groupBy.map((se, we) =>
-                                      we === ce
-                                        ? { ...se, column: column }
-                                        : se,
+                                    groupBy: query.groupBy.map(
+                                      (existingGroup, candidateIndex) =>
+                                        candidateIndex === groupIndex
+                                          ? { ...existingGroup, column: column }
+                                          : existingGroup,
                                     ),
                                   }),
                               ),
                               i.jsx("button", {
-                                "aria-label": `Remove group ${ce + 1}`,
+                                "aria-label": `Remove group ${groupIndex + 1}`,
                                 onClick: () =>
-                                  C({
+                                  updateQuery({
                                     ...query,
                                     groupBy: query.groupBy.filter(
-                                      (ge, se) => se !== ce,
+                                      (group, entryIndex) =>
+                                        entryIndex !== groupIndex,
                                     ),
                                   }),
                                 children: i.jsx(LocalizedText, {
@@ -1036,7 +1122,7 @@ function DataModelDialog(e) {
                               }),
                             ],
                           },
-                          ce,
+                          groupIndex,
                         ),
                       ),
                       i.jsx("button", {
@@ -1044,7 +1130,7 @@ function DataModelDialog(e) {
                           !definition.tables.length ||
                           query.groupBy.length >= 3,
                         onClick: () =>
-                          C({
+                          updateQuery({
                             ...query,
                             groupBy: [
                               ...query.groupBy,
@@ -1067,15 +1153,15 @@ function DataModelDialog(e) {
                           children: "Filters (all must match)",
                         }),
                       }),
-                      query.filters.map((filter, ce) => {
-                        const ge = (Ae) =>
-                            C({
+                      query.filters.map((filter, filterIndex) => {
+                        const updateFilter = (nextFilter) =>
+                            updateQuery({
                               ...query,
-                              filters: query.filters.map((filter, Te) =>
-                                Te === ce ? Ae : filter,
+                              filters: query.filters.map((filter, itemIndex) =>
+                                itemIndex === filterIndex ? nextFilter : filter,
                               ),
                             }),
-                          se = T(filter.tableId)?.columns.find(
+                          columnType = findTable(filter.tableId)?.columns.find(
                             (column) => column.name === filter.column,
                           )?.type;
                         return i.jsxs(
@@ -1083,34 +1169,34 @@ function DataModelDialog(e) {
                           {
                             className: "lg-model-controls",
                             children: [
-                              U(
-                                `Filter ${ce + 1} table`,
+                              renderTableSelect(
+                                `Filter ${filterIndex + 1} table`,
                                 filter.tableId,
                                 (tableId) =>
-                                  ge({
+                                  updateFilter({
                                     ...filter,
                                     tableId: tableId,
-                                    column: N(tableId),
+                                    column: defaultColumnName(tableId),
                                     operator: "blank",
                                     value: undefined,
                                   }),
                               ),
-                              G(
-                                `Filter ${ce + 1} column`,
+                              renderColumnSelect(
+                                `Filter ${filterIndex + 1} column`,
                                 filter.tableId,
                                 filter.column,
                                 (column) =>
-                                  ge({
+                                  updateFilter({
                                     ...filter,
                                     column: column,
                                     operator: "blank",
                                     value: undefined,
                                   }),
                               ),
-                              L(
-                                `Filter ${ce + 1} operator`,
+                              renderSelect(
+                                `Filter ${filterIndex + 1} operator`,
                                 filter.operator,
-                                $([
+                                toStringOptions([
                                   "equals",
                                   "notEquals",
                                   "gt",
@@ -1121,16 +1207,16 @@ function DataModelDialog(e) {
                                   "notBlank",
                                 ]),
                                 (operator) =>
-                                  ge({
+                                  updateFilter({
                                     ...filter,
                                     operator: operator,
                                     value: ["blank", "notBlank"].includes(
                                       operator,
                                     )
                                       ? undefined
-                                      : se === "number"
+                                      : columnType === "number"
                                         ? 0
-                                        : se === "boolean"
+                                        : columnType === "boolean"
                                           ? false
                                           : "",
                                   }),
@@ -1138,35 +1224,39 @@ function DataModelDialog(e) {
                               !["blank", "notBlank"].includes(
                                 filter.operator,
                               ) &&
-                                (se === "boolean"
-                                  ? L(
-                                      `Filter ${ce + 1} value`,
+                                (columnType === "boolean"
+                                  ? renderSelect(
+                                      `Filter ${filterIndex + 1} value`,
                                       String(filter.value),
-                                      $(["true", "false"]),
-                                      (Ae) =>
-                                        ge({ ...filter, value: Ae === "true" }),
+                                      toStringOptions(["true", "false"]),
+                                      (nextValue) =>
+                                        updateFilter({
+                                          ...filter,
+                                          value: nextValue === "true",
+                                        }),
                                     )
-                                  : R(
-                                      `Filter ${ce + 1} value`,
+                                  : renderTextInput(
+                                      `Filter ${filterIndex + 1} value`,
                                       String(filter.value ?? ""),
-                                      (Ae) =>
-                                        ge({
+                                      (nextText) =>
+                                        updateFilter({
                                           ...filter,
                                           value:
-                                            se === "number"
-                                              ? Ae.trim()
-                                                ? Number(Ae)
+                                            columnType === "number"
+                                              ? nextText.trim()
+                                                ? Number(nextText)
                                                 : null
-                                              : Ae,
+                                              : nextText,
                                         }),
                                     )),
                               i.jsx("button", {
-                                "aria-label": `Remove filter ${ce + 1}`,
+                                "aria-label": `Remove filter ${filterIndex + 1}`,
                                 onClick: () =>
-                                  C({
+                                  updateQuery({
                                     ...query,
                                     filters: query.filters.filter(
-                                      (filter, ye) => ye !== ce,
+                                      (filter, candidateIndex) =>
+                                        candidateIndex !== filterIndex,
                                     ),
                                   }),
                                 children: i.jsx(LocalizedText, {
@@ -1175,7 +1265,7 @@ function DataModelDialog(e) {
                               }),
                             ],
                           },
-                          ce,
+                          filterIndex,
                         );
                       }),
                       i.jsx("button", {
@@ -1183,7 +1273,7 @@ function DataModelDialog(e) {
                           !definition.tables.length ||
                           query.filters.length >= dataModelLimits.filters,
                         onClick: () =>
-                          C({
+                          updateQuery({
                             ...query,
                             filters: [
                               ...query.filters,
@@ -1202,8 +1292,8 @@ function DataModelDialog(e) {
                   }),
                 ],
               }),
-            l === "Preview" &&
-              (W
+            activeSection === "Preview" &&
+              (reportResult
                 ? i.jsxs(i.Fragment, {
                     children: [
                       i.jsxs("div", {
@@ -1211,22 +1301,22 @@ function DataModelDialog(e) {
                         "aria-label": text("Model preview status"),
                         className: "lg-model-summary",
                         children: [
-                          W.complete
+                          reportResult.complete
                             ? text("Model checks passed")
                             : text("Model blocked"),
                           " ",
                           "· ",
-                          W.tables.length,
+                          reportResult.tables.length,
                           " ",
                           text("tables"),
                           " ·",
                           " ",
-                          W.operations.toLocaleString(),
+                          reportResult.operations.toLocaleString(),
                           " ",
                           text("operations"),
                         ],
                       }),
-                      W.diagnostics.length > 0 &&
+                      reportResult.diagnostics.length > 0 &&
                         i.jsxs("table", {
                           "aria-label": text("Model diagnostics"),
                           children: [
@@ -1252,28 +1342,30 @@ function DataModelDialog(e) {
                               }),
                             }),
                             i.jsx("tbody", {
-                              children: W.diagnostics.map((diagnostic, ce) =>
-                                i.jsxs(
-                                  "tr",
-                                  {
-                                    children: [
-                                      i.jsx("td", {
-                                        children: diagnostic.code,
-                                      }),
-                                      i.jsxs("td", {
-                                        children: [
-                                          T(diagnostic.tableId ?? "")?.name,
-                                          " ",
-                                          diagnostic.row ?? "",
-                                        ],
-                                      }),
-                                      i.jsx("td", {
-                                        children: text(diagnostic.message),
-                                      }),
-                                    ],
-                                  },
-                                  ce,
-                                ),
+                              children: reportResult.diagnostics.map(
+                                (diagnostic, diagnosticIndex) =>
+                                  i.jsxs(
+                                    "tr",
+                                    {
+                                      children: [
+                                        i.jsx("td", {
+                                          children: diagnostic.code,
+                                        }),
+                                        i.jsxs("td", {
+                                          children: [
+                                            findTable(diagnostic.tableId ?? "")
+                                              ?.name,
+                                            " ",
+                                            diagnostic.row ?? "",
+                                          ],
+                                        }),
+                                        i.jsx("td", {
+                                          children: text(diagnostic.message),
+                                        }),
+                                      ],
+                                    },
+                                    diagnosticIndex,
+                                  ),
                               ),
                             }),
                           ],
@@ -1290,21 +1382,21 @@ function DataModelDialog(e) {
                                 "Included",
                                 "Excluded",
                                 "Column storage (bytes)",
-                              ].map((le) =>
+                              ].map((headerLabel) =>
                                 i.jsx(
                                   "th",
                                   {
                                     children: i.jsx(LocalizedText, {
-                                      children: le,
+                                      children: headerLabel,
                                     }),
                                   },
-                                  le,
+                                  headerLabel,
                                 ),
                               ),
                             }),
                           }),
                           i.jsx("tbody", {
-                            children: W.tables.map((table) =>
+                            children: reportResult.tables.map((table) =>
                               i.jsxs(
                                 "tr",
                                 {
@@ -1315,7 +1407,7 @@ function DataModelDialog(e) {
                                     }),
                                     i.jsxs("td", {
                                       children: [
-                                        e.workbook.sheets.find(
+                                        props.workbook.sheets.find(
                                           (sheet) => sheet.id === table.sheetId,
                                         )?.name,
                                         "!",
@@ -1336,8 +1428,8 @@ function DataModelDialog(e) {
                           }),
                         ],
                       }),
-                      W.complete &&
-                        !!W.calculatedColumns?.length &&
+                      reportResult.complete &&
+                        !!reportResult.calculatedColumns?.length &&
                         i.jsxs("details", {
                           children: [
                             i.jsx("summary", {
@@ -1372,7 +1464,7 @@ function DataModelDialog(e) {
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: W.calculatedColumns.map(
+                                  children: reportResult.calculatedColumns.map(
                                     (calculatedColumn) =>
                                       i.jsxs(
                                         "tr",
@@ -1381,8 +1473,9 @@ function DataModelDialog(e) {
                                             i.jsxs("th", {
                                               scope: "row",
                                               children: [
-                                                T(calculatedColumn.tableId)
-                                                  ?.name,
+                                                findTable(
+                                                  calculatedColumn.tableId,
+                                                )?.name,
                                                 ".",
                                                 calculatedColumn.name,
                                               ],
@@ -1390,10 +1483,10 @@ function DataModelDialog(e) {
                                             i.jsx("td", {
                                               children: calculatedColumn.values
                                                 .slice(0, 25)
-                                                .map((ge) =>
-                                                  ge === null
+                                                .map((calculatedValue) =>
+                                                  calculatedValue === null
                                                     ? text("Blank")
-                                                    : String(ge),
+                                                    : String(calculatedValue),
                                                 )
                                                 .join(", "),
                                             }),
@@ -1407,7 +1500,7 @@ function DataModelDialog(e) {
                             }),
                           ],
                         }),
-                      W.complete &&
+                      reportResult.complete &&
                         query.measureIds.length > 0 &&
                         i.jsxs(i.Fragment, {
                           children: [
@@ -1416,35 +1509,43 @@ function DataModelDialog(e) {
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsx("tr", {
-                                    children: W.headers.map((header) =>
-                                      i.jsx("th", { children: header }, header),
+                                    children: reportResult.headers.map(
+                                      (header) =>
+                                        i.jsx(
+                                          "th",
+                                          { children: header },
+                                          header,
+                                        ),
                                     ),
                                   }),
                                 }),
                                 i.jsx("tbody", {
-                                  children: W.rows
-                                    .slice(F * 25, (F + 1) * 25)
-                                    .map((le, ce) =>
+                                  children: reportResult.rows
+                                    .slice(
+                                      resultPage * 25,
+                                      (resultPage + 1) * 25,
+                                    )
+                                    .map((row, rowIndex) =>
                                       i.jsx(
                                         "tr",
                                         {
                                           children: [
-                                            ...le.keys,
-                                            ...le.values,
-                                          ].map((ge, se) =>
+                                            ...row.keys,
+                                            ...row.values,
+                                          ].map((cellValue, cellIndex) =>
                                             i.jsx(
                                               "td",
                                               {
                                                 children:
-                                                  ge === null
+                                                  cellValue === null
                                                     ? text("Blank")
-                                                    : String(ge),
+                                                    : String(cellValue),
                                               },
-                                              se,
+                                              cellIndex,
                                             ),
                                           ),
                                         },
-                                        ce,
+                                        rowIndex,
                                       ),
                                     ),
                                 }),
@@ -1458,17 +1559,18 @@ function DataModelDialog(e) {
                                             children: "Grand total",
                                           }),
                                         }),
-                                        W.totals.map((total, ce) =>
-                                          i.jsx(
-                                            "td",
-                                            {
-                                              children:
-                                                total === null
-                                                  ? text("Blank")
-                                                  : total,
-                                            },
-                                            ce,
-                                          ),
+                                        reportResult.totals.map(
+                                          (total, totalIndex) =>
+                                            i.jsx(
+                                              "td",
+                                              {
+                                                children:
+                                                  total === null
+                                                    ? text("Blank")
+                                                    : total,
+                                              },
+                                              totalIndex,
+                                            ),
                                         ),
                                       ],
                                     }),
@@ -1479,23 +1581,34 @@ function DataModelDialog(e) {
                               className: "lg-model-controls",
                               children: [
                                 i.jsx("button", {
-                                  disabled: !F,
-                                  onClick: () => I((le) => le - 1),
+                                  disabled: !resultPage,
+                                  onClick: () =>
+                                    setResultPage(
+                                      (currentPage) => currentPage - 1,
+                                    ),
                                   children: i.jsx(LocalizedText, {
                                     children: "Previous results",
                                   }),
                                 }),
                                 i.jsxs("span", {
                                   children: [
-                                    F + 1,
+                                    resultPage + 1,
                                     " /",
                                     " ",
-                                    Math.max(1, Math.ceil(W.rows.length / 25)),
+                                    Math.max(
+                                      1,
+                                      Math.ceil(reportResult.rows.length / 25),
+                                    ),
                                   ],
                                 }),
                                 i.jsx("button", {
-                                  disabled: (F + 1) * 25 >= W.rows.length,
-                                  onClick: () => I((le) => le + 1),
+                                  disabled:
+                                    (resultPage + 1) * 25 >=
+                                    reportResult.rows.length,
+                                  onClick: () =>
+                                    setResultPage(
+                                      (currentPage) => currentPage + 1,
+                                    ),
                                   children: i.jsx(LocalizedText, {
                                     children: "Next results",
                                   }),
@@ -1523,14 +1636,14 @@ function DataModelDialog(e) {
         }),
         i.jsxs("footer", {
           children: [
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
                     checked: checked,
                     onChange: (event) => {
-                      (y(event.target.checked), B());
+                      (setChecked(event.target.checked), resetPreview());
                     },
                   }),
                   i.jsx(LocalizedText, { children: "Include hidden sources" }),
@@ -1538,23 +1651,27 @@ function DataModelDialog(e) {
               }),
             LabeledField(
               "Output worksheet",
-              R("Model output worksheet", outputName, (le) => {
-                (j(le), B());
-              }),
+              renderTextInput(
+                "Model output worksheet",
+                outputName,
+                (nextOutputName) => {
+                  (setOutputName(nextOutputName), resetPreview());
+                },
+              ),
             ),
             i.jsx("button", {
               onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Preview model" }),
             }),
             i.jsx("button", {
-              disabled: !K,
-              onClick: () => q("save"),
+              disabled: !canPublish,
+              onClick: () => commitModelReport("save"),
               children: i.jsx(LocalizedText, { children: "Save model" }),
             }),
             i.jsx("button", {
               className: "lg-model-primary",
-              disabled: !K || !query.measureIds.length,
-              onClick: () => q("publish"),
+              disabled: !canPublish || !query.measureIds.length,
+              onClick: () => commitModelReport("publish"),
               children: i.jsx(LocalizedText, {
                 children: "Publish model result",
               }),
@@ -1566,11 +1683,11 @@ function DataModelDialog(e) {
   });
 }
 function DataModelSnapshotNotice({ workbook, sheetId, options, onReview }) {
-  const o = ne.useMemo(
+  const reportStatus = ne.useMemo(
     () => getModelReportStatus(workbook, sheetId, options),
     [workbook, sheetId, options?.includeHidden, options?.allowedSheetIds],
   );
-  return o.status === "none"
+  return reportStatus.status === "none"
     ? null
     : i.jsxs("div", {
         className: "lg-notice",
@@ -1581,12 +1698,12 @@ function DataModelSnapshotNotice({ workbook, sheetId, options, onReview }) {
             children: [
               i.jsx("strong", {
                 children: i.jsx(LocalizedText, {
-                  children: `Model snapshot · ${o.status}`,
+                  children: `Model snapshot · ${reportStatus.status}`,
                 }),
               }),
               " ",
               "· ",
-              i.jsx(LocalizedText, { children: o.message }),
+              i.jsx(LocalizedText, { children: reportStatus.message }),
             ],
           }),
           i.jsx("button", {
@@ -1598,166 +1715,190 @@ function DataModelSnapshotNotice({ workbook, sheetId, options, onReview }) {
 }
 const focusableElementSelector =
   'button:not(:disabled),a[href],input:not(:disabled):not([type="hidden"]),select:not(:disabled),textarea:not(:disabled),summary,[tabindex]:not([tabindex="-1"])';
-function isElementVisibleForFocus(e) {
-  for (let r = e; r; r = r.parentElement) {
-    const computedStyle = getComputedStyle(r);
+function isElementVisibleForFocus(element) {
+  for (let ancestor = element; ancestor; ancestor = ancestor.parentElement) {
+    const computedStyle = getComputedStyle(ancestor);
     if (
-      r.hidden ||
+      ancestor.hidden ||
       computedStyle.display === "none" ||
       computedStyle.visibility === "hidden" ||
       computedStyle.visibility === "collapse"
     )
       return false;
-    if (r.tagName === "DETAILS" && !r.hasAttribute("open")) {
-      const n = Array.from(r.children).find((o) => o.tagName === "SUMMARY");
-      if (!n?.contains(e)) return false;
+    if (ancestor.tagName === "DETAILS" && !ancestor.hasAttribute("open")) {
+      const summary = Array.from(ancestor.children).find(
+        (child) => child.tagName === "SUMMARY",
+      );
+      if (!summary?.contains(element)) return false;
     }
   }
   return true;
 }
-function getFocusableElements(e) {
-  return Array.from(e.querySelectorAll(focusableElementSelector)).filter(
-    (r) =>
+function getFocusableElements(container) {
+  return Array.from(
+    container.querySelectorAll(focusableElementSelector),
+  ).filter(
+    (element) =>
       !(
-        r.tabIndex < 0 ||
-        r.matches(":disabled") ||
-        !isElementVisibleForFocus(r) ||
-        r.closest('[hidden],[inert],[aria-hidden="true"]')
+        element.tabIndex < 0 ||
+        element.matches(":disabled") ||
+        !isElementVisibleForFocus(element) ||
+        element.closest('[hidden],[inert],[aria-hidden="true"]')
       ),
   );
 }
 function useDialogFocusTrap(appRootRef) {
-  const r = ne.useRef(undefined);
+  const syncFocusRef = ne.useRef(undefined);
   (ne.useLayoutEffect(() => {
-    const t = appRootRef.current;
-    if (!t) return;
-    let n,
-      o = null;
-    const a = new Map();
-    let s =
+    const appRoot = appRootRef.current;
+    if (!appRoot) return;
+    let activeDialog,
+      focusBeforeDialog = null;
+    const focusByDialog = new Map();
+    let lastFocusedElement =
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null;
-    const d = new Map(),
-      u = () => {
-        for (const [p, m] of d)
-          (m.inert === null
-            ? p.removeAttribute("inert")
-            : p.setAttribute("inert", m.inert),
-            m.hidden === null
-              ? p.removeAttribute("aria-hidden")
-              : p.setAttribute("aria-hidden", m.hidden));
-        d.clear();
+    const inertedSiblings = new Map(),
+      restoreInertSiblings = () => {
+        for (const [siblingElement, savedAttributes] of inertedSiblings)
+          (savedAttributes.inert === null
+            ? siblingElement.removeAttribute("inert")
+            : siblingElement.setAttribute("inert", savedAttributes.inert),
+            savedAttributes.hidden === null
+              ? siblingElement.removeAttribute("aria-hidden")
+              : siblingElement.setAttribute(
+                  "aria-hidden",
+                  savedAttributes.hidden,
+                ));
+        inertedSiblings.clear();
       },
-      l = () => {
-        const p = Array.from(
-          t.querySelectorAll('[role="dialog"][aria-modal="true"]'),
+      syncFocusTrap = () => {
+        const nextDialog = Array.from(
+          appRoot.querySelectorAll('[role="dialog"][aria-modal="true"]'),
         )
           .filter(isElementVisibleForFocus)
           .at(-1);
-        if (p === n) {
-          p &&
+        if (nextDialog === activeDialog) {
+          nextDialog &&
             (!isElementVisibleForFocus(document.activeElement) ||
               document.activeElement?.matches(":disabled")) &&
-            (getFocusableElements(p)[0] ?? p).focus({ preventScroll: true });
+            (getFocusableElements(nextDialog)[0] ?? nextDialog).focus({
+              preventScroll: true,
+            });
           return;
         }
-        const m = n;
-        if ((u(), (n = p), p)) {
-          m || (o = s);
-          const g = a.has(p);
-          g || a.set(p, s);
-          let b = p;
-          for (; b !== t && b.parentElement;) {
-            for (const w of Array.from(b.parentElement.children))
-              w instanceof HTMLElement &&
-                w !== b &&
-                (d.set(w, {
-                  inert: w.getAttribute("inert"),
-                  hidden: w.getAttribute("aria-hidden"),
+        const previousDialog = activeDialog;
+        if ((restoreInertSiblings(), (activeDialog = nextDialog), nextDialog)) {
+          previousDialog || (focusBeforeDialog = lastFocusedElement);
+          const hasSavedFocus = focusByDialog.has(nextDialog);
+          hasSavedFocus || focusByDialog.set(nextDialog, lastFocusedElement);
+          let ancestor = nextDialog;
+          for (; ancestor !== appRoot && ancestor.parentElement;) {
+            for (const sibling of Array.from(ancestor.parentElement.children))
+              sibling instanceof HTMLElement &&
+                sibling !== ancestor &&
+                (inertedSiblings.set(sibling, {
+                  inert: sibling.getAttribute("inert"),
+                  hidden: sibling.getAttribute("aria-hidden"),
                 }),
-                w.setAttribute("inert", ""),
-                w.setAttribute("aria-hidden", "true"));
-            b = b.parentElement;
+                sibling.setAttribute("inert", ""),
+                sibling.setAttribute("aria-hidden", "true"));
+            ancestor = ancestor.parentElement;
           }
-          const y = m ? a.get(m) : undefined;
-          if (!p.contains(document.activeElement)) {
-            const w =
-              g &&
-              y &&
-              p.contains(y) &&
-              isElementVisibleForFocus(y) &&
-              !y.matches(":disabled")
-                ? y
-                : (getFocusableElements(p)[0] ?? p);
-            (w === p && (p.tabIndex = -1), w.focus({ preventScroll: true }));
+          const previousDialogFocus = previousDialog
+            ? focusByDialog.get(previousDialog)
+            : undefined;
+          if (!nextDialog.contains(document.activeElement)) {
+            const focusTarget =
+              hasSavedFocus &&
+              previousDialogFocus &&
+              nextDialog.contains(previousDialogFocus) &&
+              isElementVisibleForFocus(previousDialogFocus) &&
+              !previousDialogFocus.matches(":disabled")
+                ? previousDialogFocus
+                : (getFocusableElements(nextDialog)[0] ?? nextDialog);
+            (focusTarget === nextDialog && (nextDialog.tabIndex = -1),
+              focusTarget.focus({ preventScroll: true }));
           }
         } else if (
-          m &&
+          previousDialog &&
           (document.activeElement === document.body ||
-            m.contains(document.activeElement))
+            previousDialog.contains(document.activeElement))
         ) {
-          const g =
-            o?.isConnected &&
-            isElementVisibleForFocus(o) &&
-            !o.matches(":disabled")
-              ? o
-              : t.querySelector(".lg-grid-scroll");
-          g?.focus({ preventScroll: true });
+          const restoreTarget =
+            focusBeforeDialog?.isConnected &&
+            isElementVisibleForFocus(focusBeforeDialog) &&
+            !focusBeforeDialog.matches(":disabled")
+              ? focusBeforeDialog
+              : appRoot.querySelector(".lg-grid-scroll");
+          restoreTarget?.focus({ preventScroll: true });
         }
-        (m && (!m.isConnected || !isElementVisibleForFocus(m)) && a.delete(m),
-          p || a.clear());
+        (previousDialog &&
+          (!previousDialog.isConnected ||
+            !isElementVisibleForFocus(previousDialog)) &&
+          focusByDialog.delete(previousDialog),
+          nextDialog || focusByDialog.clear());
       },
-      c = (event) => {
+      handleFocusIn = (event) => {
         const target = event.target;
         if (target instanceof HTMLElement) {
-          if (n && t.contains(target) && !n.contains(target)) {
-            (getFocusableElements(n)[0] ?? n).focus({ preventScroll: true });
+          if (
+            activeDialog &&
+            appRoot.contains(target) &&
+            !activeDialog.contains(target)
+          ) {
+            (getFocusableElements(activeDialog)[0] ?? activeDialog).focus({
+              preventScroll: true,
+            });
             return;
           }
-          ((!n && !target.closest('[role="dialog"][aria-modal="true"]')) ||
-            n?.contains(target)) &&
-            (s = target);
+          ((!activeDialog &&
+            !target.closest('[role="dialog"][aria-modal="true"]')) ||
+            activeDialog?.contains(target)) &&
+            (lastFocusedElement = target);
         }
       },
-      h = (event) => {
-        if ((l(), !n || event.key !== "Tab")) return;
-        const focusableElements = getFocusableElements(n),
-          v = focusableElements[0],
-          g = focusableElements.at(-1);
-        if (!v) {
-          (event.preventDefault(), (n.tabIndex = -1), n.focus());
+      handleKeyDown = (event) => {
+        if ((syncFocusTrap(), !activeDialog || event.key !== "Tab")) return;
+        const focusableElements = getFocusableElements(activeDialog),
+          firstFocusable = focusableElements[0],
+          lastFocusable = focusableElements.at(-1);
+        if (!firstFocusable) {
+          (event.preventDefault(),
+            (activeDialog.tabIndex = -1),
+            activeDialog.focus());
           return;
         }
-        (!n.contains(document.activeElement) ||
-          (event.shiftKey && document.activeElement === v) ||
-          (!event.shiftKey && document.activeElement === g)) &&
+        (!activeDialog.contains(document.activeElement) ||
+          (event.shiftKey && document.activeElement === firstFocusable) ||
+          (!event.shiftKey && document.activeElement === lastFocusable)) &&
           (event.preventDefault(),
           event.stopPropagation(),
-          (event.shiftKey ? g : v)?.focus());
+          (event.shiftKey ? lastFocusable : firstFocusable)?.focus());
       };
-    (t.addEventListener("keydown", h, true),
-      document.addEventListener("focusin", c, true));
-    const f = new MutationObserver(l);
+    (appRoot.addEventListener("keydown", handleKeyDown, true),
+      document.addEventListener("focusin", handleFocusIn, true));
+    const observer = new MutationObserver(syncFocusTrap);
     return (
-      f.observe(t, {
+      observer.observe(appRoot, {
         childList: true,
         subtree: true,
         attributes: true,
         attributeFilter: ["hidden", "style", "class", "open", "disabled"],
       }),
-      l(),
-      (r.current = l),
+      syncFocusTrap(),
+      (syncFocusRef.current = syncFocusTrap),
       () => {
-        (f.disconnect(),
-          t.removeEventListener("keydown", h, true),
-          document.removeEventListener("focusin", c, true),
-          u(),
-          (r.current = undefined));
+        (observer.disconnect(),
+          appRoot.removeEventListener("keydown", handleKeyDown, true),
+          document.removeEventListener("focusin", handleFocusIn, true),
+          restoreInertSiblings(),
+          (syncFocusRef.current = undefined));
       }
     );
   }, [appRootRef]),
-    ne.useLayoutEffect(() => r.current?.()));
+    ne.useLayoutEffect(() => syncFocusRef.current?.()));
 }
 const dataModelBudgets = {
   sourceCells: 500,
@@ -1771,19 +1912,19 @@ const dataModelBudgets = {
   dependencyCells: 2e3,
 };
 
-function assertRecordKeys(destination, r, t) {
+function assertRecordKeys(destination, allowedKeys, errorMessage) {
   (!isNonArrayObject(destination) ||
-    Object.keys(destination).some((n) => !r.includes(n))) &&
-    failWithMessage(t);
+    Object.keys(destination).some((key) => !allowedKeys.includes(key))) &&
+    failWithMessage(errorMessage);
 }
-const rangesOverlap = (e, r) => {
-  const rangeAddress = parseRangeAddress(e),
-    n = parseRangeAddress(r);
+const rangesOverlap = (firstRange, secondRange) => {
+  const rangeAddress = parseRangeAddress(firstRange),
+    secondAddress = parseRangeAddress(secondRange);
   return (
-    rangeAddress.firstRow <= n.lastRow &&
-    rangeAddress.lastRow >= n.firstRow &&
-    rangeAddress.firstCol <= n.lastCol &&
-    rangeAddress.lastCol >= n.firstCol
+    rangeAddress.firstRow <= secondAddress.lastRow &&
+    rangeAddress.lastRow >= secondAddress.firstRow &&
+    rangeAddress.firstCol <= secondAddress.lastCol &&
+    rangeAddress.lastCol >= secondAddress.firstCol
   );
 };
 function assertDelimiterCharacter(delimiter) {
@@ -1800,52 +1941,56 @@ function splitDelimitedCell(cellTextValue, delimiter) {
       failWithMessage(
         "A source cell must contain text of at most 32,767 characters.",
       ));
-  const t = [];
-  let n = "",
-    o = false,
-    a = false,
-    s = false;
-  const d = [...cellTextValue],
-    u = () => {
-      (t.push(n),
-        t.length > dataModelBudgets.fields &&
+  const fields = [];
+  let fieldText = "",
+    inQuotes = false,
+    afterClosingQuote = false,
+    fieldStarted = false;
+  const characters = [...cellTextValue],
+    endField = () => {
+      (fields.push(fieldText),
+        fields.length > dataModelBudgets.fields &&
           failWithMessage(
             "A source cell contains more than 50 fields. Choose a different delimiter or split a smaller record.",
           ),
-        (n = ""),
-        (s = false),
-        (a = false));
+        (fieldText = ""),
+        (fieldStarted = false),
+        (afterClosingQuote = false));
     };
-  for (let l = 0; l < d.length; l++) {
-    const c = d[l];
-    o
-      ? c !== '"'
-        ? (n += c)
-        : d[l + 1] === '"'
-          ? ((n += '"'), l++)
-          : ((o = false), (a = true))
-      : c === delimiter
-        ? u()
-        : a
+  for (
+    let characterIndex = 0;
+    characterIndex < characters.length;
+    characterIndex++
+  ) {
+    const character = characters[characterIndex];
+    inQuotes
+      ? character !== '"'
+        ? (fieldText += character)
+        : characters[characterIndex + 1] === '"'
+          ? ((fieldText += '"'), characterIndex++)
+          : ((inQuotes = false), (afterClosingQuote = true))
+      : character === delimiter
+        ? endField()
+        : afterClosingQuote
           ? failWithMessage(
               "Unexpected text after a closing quote. A closing quote must be followed by the delimiter or end of the cell.",
             )
-          : c === '"'
-            ? (s &&
+          : character === '"'
+            ? (fieldStarted &&
                 failWithMessage(
                   "A quote must begin a field; escape embedded quotes by doubling them inside a quoted field.",
                 ),
-              (o = true),
-              (s = true))
-            : ((n += c), (s = true));
+              (inQuotes = true),
+              (fieldStarted = true))
+            : ((fieldText += character), (fieldStarted = true));
   }
   return (
-    o &&
+    inQuotes &&
       failWithMessage(
         "A quoted field is not closed. Check the source cell before splitting.",
       ),
-    u(),
-    t
+    endField(),
+    fields
   );
 }
 function validateTextToColumnsRequest(request) {
@@ -1890,16 +2035,16 @@ function validateTextToColumnsRequest(request) {
     ),
       typeof request.destination.name != "string" &&
         failWithMessage("Enter an output worksheet name."));
-    const t = request.destination.name.trim();
-    ((!t ||
-      t.length > 31 ||
-      /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(t) ||
-      t.startsWith("'") ||
-      t.endsWith("'")) &&
+    const trimmedName = request.destination.name.trim();
+    ((!trimmedName ||
+      trimmedName.length > 31 ||
+      /[\u0000-\u001f\u007f\\/\[\]*?:]/.test(trimmedName) ||
+      trimmedName.startsWith("'") ||
+      trimmedName.endsWith("'")) &&
       failWithMessage(
         "Output worksheet names need 1–31 characters without control/Excel-reserved characters or leading/trailing apostrophes.",
       ),
-      (destination = { kind: "new-sheet", name: t }));
+      (destination = { kind: "new-sheet", name: trimmedName }));
   } else if (request.destination.kind === "range") {
     (assertRecordKeys(
       request.destination,
@@ -1909,11 +2054,11 @@ function validateTextToColumnsRequest(request) {
       (typeof request.destination.sheetId != "string" ||
         typeof request.destination.address != "string") &&
         failWithMessage("Choose an output worksheet and one starting cell."));
-    const t = _t(request.destination.address.trim());
+    const startCell = _t(request.destination.address.trim());
     destination = {
       kind: "range",
       sheetId: request.destination.sheetId,
-      address: formatCellAddress(t.row, t.col),
+      address: formatCellAddress(startCell.row, startCell.col),
     };
   } else failWithMessage("Choose a separate output range or a new worksheet.");
   return {
@@ -1925,44 +2070,50 @@ function validateTextToColumnsRequest(request) {
     destination: destination,
   };
 }
-function validateTextToColumnsPermissions(workbook, r) {
+function validateTextToColumnsPermissions(workbook, permissions) {
   return (
-    [r.readOnly, r.includeHidden, r.allowNewSheet].some(
-      (t) => t !== undefined && typeof t != "boolean",
-    ) && failWithMessage("Text to Columns permissions must be boolean."),
-    r.readOnly && failWithMessage("This workbook is read-only."),
-    r.allowedSheetIds !== undefined &&
-      (!Array.isArray(r.allowedSheetIds) ||
-        r.allowedSheetIds.some(
+    [
+      permissions.readOnly,
+      permissions.includeHidden,
+      permissions.allowNewSheet,
+    ].some((flag) => flag !== undefined && typeof flag != "boolean") &&
+      failWithMessage("Text to Columns permissions must be boolean."),
+    permissions.readOnly && failWithMessage("This workbook is read-only."),
+    permissions.allowedSheetIds !== undefined &&
+      (!Array.isArray(permissions.allowedSheetIds) ||
+        permissions.allowedSheetIds.some(
           (allowedSheetId) =>
             typeof allowedSheetId != "string" ||
             !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
         )) &&
       failWithMessage("The authorized worksheet context is invalid."),
     {
-      includeHidden: r.includeHidden ?? false,
-      allowNewSheet: r.allowNewSheet ?? true,
+      includeHidden: permissions.includeHidden ?? false,
+      allowNewSheet: permissions.allowNewSheet ?? true,
       allowedSheetIds: [
         ...new Set(
-          r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+          permissions.allowedSheetIds ??
+            workbook.sheets.map((sheet) => sheet.id),
         ),
       ].sort(),
     }
   );
 }
-function assertSelectionInAuthorizedSheet(sheet, r, context) {
-  const rangeAddress = parseRangeAddress(r);
+function assertSelectionInAuthorizedSheet(sheet, rangeText, context) {
+  const rangeAddress = parseRangeAddress(rangeText);
   ((!context.allowedSheetIds.includes(sheet.id) ||
     (!context.includeHidden &&
       (sheet.hidden ||
         sheet.veryHidden ||
         cn(sheet, "row").some(
-          (o) =>
-            o.start <= rangeAddress.lastRow && o.end >= rangeAddress.firstRow,
+          (rowSpan) =>
+            rowSpan.start <= rangeAddress.lastRow &&
+            rowSpan.end >= rangeAddress.firstRow,
         ) ||
         cn(sheet, "column").some(
-          (o) =>
-            o.start <= rangeAddress.lastCol && o.end >= rangeAddress.firstCol,
+          (columnSpan) =>
+            columnSpan.start <= rangeAddress.lastCol &&
+            columnSpan.end >= rangeAddress.firstCol,
         )))) &&
     failWithMessage(
       "The selected cells are outside the visible, authorized worksheet context.",
@@ -1971,96 +2122,104 @@ function assertSelectionInAuthorizedSheet(sheet, r, context) {
       rangeAddress.lastCol >= sheet.colCount) &&
       failWithMessage("The selected cells exceed the worksheet boundary."));
 }
-function formatCellTextValue(e) {
-  return e === null
+function formatCellTextValue(cellValue) {
+  return cellValue === null
     ? ""
-    : typeof e == "boolean"
-      ? e
+    : typeof cellValue == "boolean"
+      ? cellValue
         ? "TRUE"
         : "FALSE"
-      : String(e);
+      : String(cellValue);
 }
-function stripFormulaLiterals(e) {
-  let r = "",
-    t = 0;
-  for (; t < e.length;) {
-    const n = t,
-      o = e[t++];
-    if (o === '"' || o === "'") {
-      for (; t < e.length;)
-        if (e[t++] === o)
-          if (e[t] === o) t++;
+function stripFormulaLiterals(formula) {
+  let result = "",
+    position = 0;
+  for (; position < formula.length;) {
+    const tokenStart = position,
+      character = formula[position++];
+    if (character === '"' || character === "'") {
+      for (; position < formula.length;)
+        if (formula[position++] === character)
+          if (formula[position] === character) position++;
           else break;
-      r += o === '"' ? '""' : e.slice(n, t);
-    } else if (o === "[") {
-      let a = 1;
-      for (; t < e.length && a;)
-        (e[t] === "[" && a++, e[t] === "]" && a--, t++);
-      r +=
-        !a && !/^[\p{L}\p{M}\p{N}_.!\\]/u.test(e.slice(t))
+      result += character === '"' ? '""' : formula.slice(tokenStart, position);
+    } else if (character === "[") {
+      let bracketDepth = 1;
+      for (; position < formula.length && bracketDepth;)
+        (formula[position] === "[" && bracketDepth++,
+          formula[position] === "]" && bracketDepth--,
+          position++);
+      result +=
+        !bracketDepth &&
+        !/^[\p{L}\p{M}\p{N}_.!\\]/u.test(formula.slice(position))
           ? "0"
-          : e.slice(n, t);
-    } else r += o;
+          : formula.slice(tokenStart, position);
+    } else result += character;
   }
-  return r;
+  return result;
 }
 function assertOutputNameUnreferenced(workbook, outputName) {
-  let t = 0;
-  const n = (a) => (
-      (t += a.length) > dataModelBudgets.nameFormulaCharacters &&
+  let characterCount = 0;
+  const formulaReferencesOutput = (formulaText) => (
+      (characterCount += formulaText.length) >
+        dataModelBudgets.nameFormulaCharacters &&
         failWithMessage(
           "Output-name safety checking exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ),
       [
-        ...stripFormulaLiterals(a).matchAll(
+        ...stripFormulaLiterals(formulaText).matchAll(
           /('(?:[^']|'')*'|[\p{L}\p{M}\p{N}_\\][\p{L}\p{M}\p{N}_.\\]*)\s*!/gu,
         ),
-      ].some((d) => {
-        const u = d[1];
+      ].some((match) => {
+        const referencedSheetName = match[1];
         return (
-          (u.startsWith("'")
-            ? u.slice(1, -1).replace(/''/g, "'")
-            : u
+          (referencedSheetName.startsWith("'")
+            ? referencedSheetName.slice(1, -1).replace(/''/g, "'")
+            : referencedSheetName
           ).toLowerCase() === outputName.toLowerCase()
         );
       })
     ),
-    o = [];
+    formulaTexts = [];
   for (const sheet of workbook.sheets) {
     for (const cell of Object.values(sheet.cells))
       typeof cell.raw == "string" &&
         cell.raw.startsWith("=") &&
         !cell.literal &&
-        o.push(cell.raw);
-    for (const s of sheet.conditionalFormats ?? [])
-      s.kind === "formula" && s.formula && o.push(s.formula);
-    for (const s of sheet.tables ?? [])
-      for (const column of s.columns)
-        column.calculatedFormula && o.push(column.calculatedFormula);
+        formulaTexts.push(cell.raw);
+    for (const conditionalFormat of sheet.conditionalFormats ?? [])
+      conditionalFormat.kind === "formula" &&
+        conditionalFormat.formula &&
+        formulaTexts.push(conditionalFormat.formula);
+    for (const table of sheet.tables ?? [])
+      for (const column of table.columns)
+        column.calculatedFormula && formulaTexts.push(column.calculatedFormula);
   }
-  for (const a of workbook.definedNames ?? []) o.push(a.refersTo);
-  o.some(n) &&
+  for (const definedName of workbook.definedNames ?? [])
+    formulaTexts.push(definedName.refersTo);
+  formulaTexts.some(formulaReferencesOutput) &&
     failWithMessage(
       "The output worksheet name is already referenced by workbook formulas or formula metadata. Choose another name to avoid reconnecting an unresolved source reference.",
     );
 }
 function parseImportedCellValue(raw, format) {
   if (format === "general") {
-    const t = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw);
+    const isNumericText =
+      /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(raw);
     if (/^(TRUE|FALSE)$/i.test(raw))
       return { raw: raw.toUpperCase() === "TRUE", precision: false };
-    if (t) {
-      const n = raw
+    if (isNumericText) {
+      const digitCount = raw
           .split(/[eE]/)[0]
           .replace(/[^0-9]/g, "")
           .replace(/^0+/, "").length,
-        o = Number(raw);
-      return n > 15 ||
-        !Number.isFinite(o) ||
-        (o === 0 && /[1-9]/.test(raw.split(/[eE]/)[0])) ||
-        (Number.isInteger(o) && !Number.isSafeInteger(o))
+        numericValue = Number(raw);
+      return digitCount > 15 ||
+        !Number.isFinite(numericValue) ||
+        (numericValue === 0 && /[1-9]/.test(raw.split(/[eE]/)[0])) ||
+        (Number.isInteger(numericValue) && !Number.isSafeInteger(numericValue))
         ? { raw: raw, precision: true }
-        : { raw: o, precision: false };
+        : { raw: numericValue, precision: false };
     }
   }
   return { raw: raw, precision: false };

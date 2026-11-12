@@ -25,53 +25,57 @@ import { sha256HexDigest } from "./01-schemas-date-functions-and-validation.js";
 import { fileProcessingErrorMessages } from "./06-unsupported-marker-and-message-catalog.js";
 import { fileParserWorkerSource } from "./06b-file-parser-worker-source.js";
 
-function workerErrorToFileError(e) {
-  const r = e,
-    t =
-      r && Object.hasOwn(fileProcessingErrorMessages, r.code ?? "")
-        ? r.code
+function workerErrorToFileError(workerError) {
+  const rawError = workerError,
+    errorCode =
+      rawError &&
+      Object.hasOwn(fileProcessingErrorMessages, rawError.code ?? "")
+        ? rawError.code
         : "FILE_WORKER",
-    n =
-      typeof r?.message == "string"
-        ? (sanitizeFileMessage(r.message) ??
-          (Object.values(fileProcessingErrorMessages).includes(r.message)
-            ? r.message
-            : fileProcessingErrorMessages[t]))
-        : fileProcessingErrorMessages[t];
-  return new FileProcessingError(t, n);
+    errorMessage =
+      typeof rawError?.message == "string"
+        ? (sanitizeFileMessage(rawError.message) ??
+          (Object.values(fileProcessingErrorMessages).includes(rawError.message)
+            ? rawError.message
+            : fileProcessingErrorMessages[errorCode]))
+        : fileProcessingErrorMessages[errorCode];
+  return new FileProcessingError(errorCode, errorMessage);
 }
 
-function createBrowserFileWorker(e = {}) {
-  const r = e.url === undefined,
-    t =
-      e.url ??
+function createBrowserFileWorker(options = {}) {
+  const shouldRevokeUrl = options.url === undefined,
+    workerUrl =
+      options.url ??
       URL.createObjectURL(
         new Blob([fileParserWorkerSource], { type: "text/javascript" }),
       );
   try {
-    const n = new Worker(t, { name: "workbook-file-parser" }),
-      o = {
-        postMessage: (a, s) => n.postMessage(a, s ?? []),
+    const worker = new Worker(workerUrl, { name: "workbook-file-parser" }),
+      fileWorker = {
+        postMessage: (message, transfer) =>
+          worker.postMessage(message, transfer ?? []),
         terminate: () => {
-          (n.terminate(), r && URL.revokeObjectURL(String(t)));
+          (worker.terminate(),
+            shouldRevokeUrl && URL.revokeObjectURL(String(workerUrl)));
         },
         onmessage: null,
         onerror: null,
       };
     return (
-      (n.onmessage = (a) => o.onmessage?.({ data: a.data })),
-      (n.onerror = () => o.onerror?.({})),
-      (n.onmessageerror = () => o.onerror?.({})),
-      o
+      (worker.onmessage = (messageEvent) =>
+        fileWorker.onmessage?.({ data: messageEvent.data })),
+      (worker.onerror = () => fileWorker.onerror?.({})),
+      (worker.onmessageerror = () => fileWorker.onerror?.({})),
+      fileWorker
     );
   } catch (error) {
-    throw (r && URL.revokeObjectURL(String(t)), error);
+    throw (shouldRevokeUrl && URL.revokeObjectURL(String(workerUrl)), error);
   }
 }
 async function createNodeFileWorker() {
-  const e = "node:worker_threads",
-    { Worker } = await import(e),
-    t = new Worker(
+  const moduleName = "node:worker_threads",
+    { Worker } = await import(moduleName),
+    worker = new Worker(
       `const {parentPort}=require("node:worker_threads");globalThis.self=globalThis;globalThis.postMessage=v=>parentPort.postMessage(v);parentPort.on("message",data=>globalThis.onmessage({data}));
 ` + fileParserWorkerSource,
       {
@@ -85,18 +89,20 @@ async function createNodeFileWorker() {
         },
       },
     ),
-    n = {
-      postMessage: (o, a) => t.postMessage(o, a),
-      terminate: () => t.terminate(),
+    fileWorker = {
+      postMessage: (message, transfer) => worker.postMessage(message, transfer),
+      terminate: () => worker.terminate(),
       onmessage: null,
       onerror: null,
     };
   return (
-    t.on("message", (o) => n.onmessage?.({ data: o })),
-    t.on("error", () => n.onerror?.({})),
-    t.on("messageerror", () => n.onerror?.({})),
-    t.on("exit", () => n.onerror?.({})),
-    n
+    worker.on("message", (messageData) =>
+      fileWorker.onmessage?.({ data: messageData }),
+    ),
+    worker.on("error", () => fileWorker.onerror?.({})),
+    worker.on("messageerror", () => fileWorker.onerror?.({})),
+    worker.on("exit", () => fileWorker.onerror?.({})),
+    fileWorker
   );
 }
 function createFileWorker() {
@@ -106,211 +112,250 @@ function createFileWorker() {
   throw Error("File worker unavailable.");
 }
 const inspectionSignatureCache = new WeakMap();
-function registerIsolatedInspection(e, bytes, t) {
+function registerIsolatedInspection(inspection, bytes, fileName) {
   if (
-    e.schemaVersion !== 1 ||
-    e.fileName !== t ||
-    e.fileBytes !== bytes.length ||
-    e.sha256 !== sha256HexDigest(bytes)
+    inspection.schemaVersion !== 1 ||
+    inspection.fileName !== fileName ||
+    inspection.fileBytes !== bytes.length ||
+    inspection.sha256 !== sha256HexDigest(bytes)
   )
     throw Error("Invalid isolated inspection.");
-  inspectionSignatureCache.set(e, {
-    signature: JSON.stringify(e),
+  inspectionSignatureCache.set(inspection, {
+    signature: JSON.stringify(inspection),
     bytes: bytes,
   });
 }
 let activeFileImportCount = 0;
-function readFileAsArrayBuffer(e, signal) {
-  return typeof e.arrayBuffer == "function"
-    ? e.arrayBuffer()
-    : new Promise((t, n) => {
-        const o = new FileReader(),
-          a = () => o.abort(),
-          s = () => signal.removeEventListener("abort", a);
-        ((o.onload = () => {
-          (s(), t(o.result));
+function readFileAsArrayBuffer(file, signal) {
+  return typeof file.arrayBuffer == "function"
+    ? file.arrayBuffer()
+    : new Promise((resolve, reject) => {
+        const reader = new FileReader(),
+          abortReader = () => reader.abort(),
+          removeAbortListener = () =>
+            signal.removeEventListener("abort", abortReader);
+        ((reader.onload = () => {
+          (removeAbortListener(), resolve(reader.result));
         }),
-          (o.onerror = () => {
-            (s(), n(new FileProcessingError("FILE_READ")));
+          (reader.onerror = () => {
+            (removeAbortListener(),
+              reject(new FileProcessingError("FILE_READ")));
           }),
-          (o.onabort = o.onerror),
-          signal.addEventListener("abort", a, { once: true }),
-          o.readAsArrayBuffer(e));
+          (reader.onabort = reader.onerror),
+          signal.addEventListener("abort", abortReader, { once: true }),
+          reader.readAsArrayBuffer(file));
       });
 }
-async function runFileImport(operation, r, t = {}, n) {
-  if (t.reliability) {
-    const { reliability, ...d } = t;
+async function runFileImport(
+  operation,
+  file,
+  importOptions = {},
+  parserOptions,
+) {
+  if (importOptions.reliability) {
+    const { reliability, ...restOptions } = importOptions;
     return reliability.run("file", operation, () =>
-      runFileImport(operation, r, d, n),
+      runFileImport(operation, file, restOptions, parserOptions),
     );
   }
-  assertImportFileAllowed(operation, r.name, r.size);
-  const o = t.timeoutMs ?? u1.defaultTimeoutMs;
-  if (!Number.isInteger(o) || o < 1 || o > u1.maxTimeoutMs)
+  assertImportFileAllowed(operation, file.name, file.size);
+  const timeoutMs = importOptions.timeoutMs ?? u1.defaultTimeoutMs;
+  if (
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > u1.maxTimeoutMs
+  )
     throw new FileProcessingError("FILE_LIMIT");
-  if (t.signal?.aborted) throw new FileProcessingError("FILE_CANCELLED");
+  if (importOptions.signal?.aborted)
+    throw new FileProcessingError("FILE_CANCELLED");
   if (activeFileImportCount >= u1.maxConcurrent)
     throw new FileProcessingError("FILE_BUSY");
   return (
     activeFileImportCount++,
-    new Promise((s, d) => {
-      let u = false,
-        l;
-      const c = new AbortController(),
-        h = crypto.randomUUID(),
-        f = performance.now(),
-        p = (y, w) => {
-          if (!u) {
+    new Promise((resolve, reject) => {
+      let isSettled = false,
+        fileWorker;
+      const abortController = new AbortController(),
+        requestId = crypto.randomUUID(),
+        startedAt = performance.now(),
+        settle = (failure, result) => {
+          if (!isSettled) {
             if (
-              ((u = true),
+              ((isSettled = true),
               activeFileImportCount--,
-              clearTimeout(v),
-              t.signal?.removeEventListener("abort", m),
-              c.abort(),
-              l)
+              clearTimeout(timeoutId),
+              importOptions.signal?.removeEventListener("abort", handleAbort),
+              abortController.abort(),
+              fileWorker)
             ) {
-              ((l.onmessage = null), (l.onerror = null));
+              ((fileWorker.onmessage = null), (fileWorker.onerror = null));
               try {
-                Promise.resolve(l.terminate()).catch(() => {});
+                Promise.resolve(fileWorker.terminate()).catch(() => {});
               } catch {}
             }
-            y ? d(y) : s(w);
+            failure ? reject(failure) : resolve(result);
           }
         },
-        m = () => p(new FileProcessingError("FILE_CANCELLED")),
-        v = setTimeout(() => p(new FileProcessingError("FILE_TIMEOUT")), o);
+        handleAbort = () => settle(new FileProcessingError("FILE_CANCELLED")),
+        timeoutId = setTimeout(
+          () => settle(new FileProcessingError("FILE_TIMEOUT")),
+          timeoutMs,
+        );
       if (
-        (t.signal?.addEventListener("abort", m, { once: true }),
-        t.signal?.aborted)
+        (importOptions.signal?.addEventListener("abort", handleAbort, {
+          once: true,
+        }),
+        importOptions.signal?.aborted)
       ) {
-        m();
+        handleAbort();
         return;
       }
       (async () => {
         let bytes;
         try {
-          bytes = new Uint8Array(await readFileAsArrayBuffer(r, c.signal));
+          bytes = new Uint8Array(
+            await readFileAsArrayBuffer(file, abortController.signal),
+          );
         } catch {
-          p(new FileProcessingError("FILE_READ"));
+          settle(new FileProcessingError("FILE_READ"));
           return;
         }
-        if (u) return;
+        if (isSettled) return;
         try {
-          assertImportFileAllowed(operation, r.name, bytes.byteLength);
+          assertImportFileAllowed(operation, file.name, bytes.byteLength);
         } catch (error) {
-          p(error);
+          settle(error);
           return;
         }
-        if (bytes.byteLength !== r.size) {
-          p(new FileProcessingError("FILE_READ"));
+        if (bytes.byteLength !== file.size) {
+          settle(new FileProcessingError("FILE_READ"));
           return;
         }
         bytes = bytes.slice();
-        const w =
+        const isolatedBytes =
           operation === "automation" ||
           operation === "formats" ||
           operation === "source"
             ? bytes.slice()
             : undefined;
         try {
-          const E = await (t.workerFactory ?? createFileWorker)();
-          if (u) {
+          const worker = await (
+            importOptions.workerFactory ?? createFileWorker
+          )();
+          if (isSettled) {
             try {
-              Promise.resolve(E.terminate()).catch(() => {});
+              Promise.resolve(worker.terminate()).catch(() => {});
             } catch {}
             return;
           }
-          ((l = E),
-            (l.onerror = () => p(new FileProcessingError("FILE_WORKER"))),
-            (l.onmessage = ({ data }) => {
-              if (u) return;
-              const k = data;
-              if (!(!k || k.id !== h)) {
-                if (performance.now() - f > o) {
-                  p(new FileProcessingError("FILE_TIMEOUT"));
+          ((fileWorker = worker),
+            (fileWorker.onerror = () =>
+              settle(new FileProcessingError("FILE_WORKER"))),
+            (fileWorker.onmessage = ({ data }) => {
+              if (isSettled) return;
+              const response = data;
+              if (!(!response || response.id !== requestId)) {
+                if (performance.now() - startedAt > timeoutMs) {
+                  settle(new FileProcessingError("FILE_TIMEOUT"));
                   return;
                 }
-                if (k.ok !== true) {
-                  p(workerErrorToFileError(k.error));
+                if (response.ok !== true) {
+                  settle(workerErrorToFileError(response.error));
                   return;
                 }
-                if (!Object.hasOwn(k, "value")) {
-                  p(new FileProcessingError("FILE_WORKER"));
+                if (!Object.hasOwn(response, "value")) {
+                  settle(new FileProcessingError("FILE_WORKER"));
                   return;
                 }
                 try {
-                  (w &&
+                  (isolatedBytes &&
                     operation === "source" &&
-                    recordSourceInspection(k.value, w, r.name),
-                    w &&
+                    recordSourceInspection(
+                      response.value,
+                      isolatedBytes,
+                      file.name,
+                    ),
+                    isolatedBytes &&
                       operation === "formats" &&
-                      validateIsolatedFormatInspection(k.value, w, r.name),
-                    w &&
+                      validateIsolatedFormatInspection(
+                        response.value,
+                        isolatedBytes,
+                        file.name,
+                      ),
+                    isolatedBytes &&
                       operation === "automation" &&
-                      registerIsolatedInspection(k.value, w, r.name),
-                    p(undefined, k.value));
+                      registerIsolatedInspection(
+                        response.value,
+                        isolatedBytes,
+                        file.name,
+                      ),
+                    settle(undefined, response.value));
                 } catch {
-                  p(new FileProcessingError("FILE_WORKER"));
+                  settle(new FileProcessingError("FILE_WORKER"));
                 }
               }
             }),
-            l.postMessage(
+            fileWorker.postMessage(
               {
-                id: h,
+                id: requestId,
                 operation: operation,
-                fileName: r.name,
+                fileName: file.name,
                 bytes: bytes,
-                options: n,
+                options: parserOptions,
               },
               [bytes.buffer],
             ));
         } catch {
-          p(new FileProcessingError("FILE_WORKER"));
+          settle(new FileProcessingError("FILE_WORKER"));
         }
       })();
     })
   );
 }
-function importWorkbookFile(e, r) {
-  return runFileImport("workbook", e, r);
+function importWorkbookFile(file, importOptions) {
+  return runFileImport("workbook", file, importOptions);
 }
-function importAutomationFile(e, r) {
-  return runFileImport("automation", e, r);
+function importAutomationFile(file, importOptions) {
+  return runFileImport("automation", file, importOptions);
 }
-function importDelimitedFile(file, r = {}, t) {
-  return runFileImport("delimited", file, t, r);
+function importDelimitedFile(file, parserOptions = {}, importOptions) {
+  return runFileImport("delimited", file, importOptions, parserOptions);
 }
-function importNativeJsonFile(e, r) {
-  return runFileImport("json", e, r);
+function importNativeJsonFile(file, importOptions) {
+  return runFileImport("json", file, importOptions);
 }
-function importPictureFile(e, r) {
-  return runFileImport("picture", e, r);
+function importPictureFile(file, importOptions) {
+  return runFileImport("picture", file, importOptions);
 }
-function detectSupportedFileFormats(e, r) {
-  return runFileImport("formats", e, r);
+function detectSupportedFileFormats(file, importOptions) {
+  return runFileImport("formats", file, importOptions);
 }
 
 function readGeneratedTemplateBuffer(blob) {
   return typeof blob.arrayBuffer == "function"
     ? blob.arrayBuffer()
-    : new Promise((r, t) => {
-        const n = new FileReader();
-        ((n.onload = () => r(n.result)),
-          (n.onerror = () =>
-            t(Error("Unable to read the generated template copy."))),
-          n.readAsArrayBuffer(blob));
+    : new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        ((reader.onload = () => resolve(reader.result)),
+          (reader.onerror = () =>
+            reject(Error("Unable to read the generated template copy."))),
+          reader.readAsArrayBuffer(blob));
       });
 }
-function describeImportSource(workbook, r) {
-  const t =
+function describeImportSource(workbook, extension) {
+  const baseName =
       workbook.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook",
-    n = [workbook.xlsxSource?.fileName, workbook.alternateSource?.fileName].map(
-      (d) => d?.toLowerCase(),
-    );
-  let o = t + "-derived";
-  for (; n.includes((o + "." + r).toLowerCase());) o += "-copy";
-  return o + "." + r;
+    sourceFileNames = [
+      workbook.xlsxSource?.fileName,
+      workbook.alternateSource?.fileName,
+    ].map((fileName) => fileName?.toLowerCase());
+  let derivedName = baseName + "-derived";
+  for (
+    ;
+    sourceFileNames.includes((derivedName + "." + extension).toLowerCase());
+  )
+    derivedName += "-copy";
+  return derivedName + "." + extension;
 }
 
 export {

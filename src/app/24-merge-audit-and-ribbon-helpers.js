@@ -46,32 +46,32 @@ import {
   assertMergePreviewCurrent,
 } from "./23-format-cells-and-conditional-formatting.js";
 
-function MergeCellsPreviewDialog(e) {
+function MergeCellsPreviewDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef({
-      book: structuredClone(e.workbook),
-      sheetId: e.sheetId,
-      range: e.range,
+    titleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    snapshotRef = ne.useRef({
+      book: structuredClone(props.workbook),
+      sheetId: props.sheetId,
+      range: props.range,
     }),
-    s = ne.useRef(e);
-  s.current = e;
-  const [unmerge, u] = ne.useState(false),
-    [l, c] = ne.useState(0),
-    [h, f] = ne.useState(""),
-    p = JSON.stringify(a.current.book),
-    m =
-      p !== JSON.stringify(e.workbook) ||
-      a.current.sheetId !== e.sheetId ||
-      a.current.range !== e.range,
-    v = ne.useMemo(() => {
+    latestPropsRef = ne.useRef(props);
+  latestPropsRef.current = props;
+  const [unmerge, setUnmerge] = ne.useState(false),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [actionError, setActionError] = ne.useState(""),
+    snapshotBookJson = JSON.stringify(snapshotRef.current.book),
+    isSnapshotStale =
+      snapshotBookJson !== JSON.stringify(props.workbook) ||
+      snapshotRef.current.sheetId !== props.sheetId ||
+      snapshotRef.current.range !== props.range,
+    previewState = ne.useMemo(() => {
       try {
         return {
           plan: previewMergeCells(
-            a.current.book,
-            a.current.sheetId,
-            a.current.range,
+            snapshotRef.current.book,
+            snapshotRef.current.sheetId,
+            snapshotRef.current.range,
             unmerge,
           ),
           error: "",
@@ -84,13 +84,13 @@ function MergeCellsPreviewDialog(e) {
         };
       }
     }, [unmerge]),
-    plan = v.plan,
-    b = Math.max(1, Math.ceil((plan?.cells.length ?? 0) / 12)),
-    y = Math.min(l, b - 1);
+    plan = previewState.plan,
+    pageCount = Math.max(1, Math.ceil((plan?.cells.length ?? 0) / 12)),
+    currentPage = Math.min(pageIndex, pageCount - 1);
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
@@ -98,52 +98,58 @@ function MergeCellsPreviewDialog(e) {
   }, []);
   function onClick() {
     try {
-      const E = s.current;
+      const latestProps = latestPropsRef.current;
       if (
-        p !== JSON.stringify(E.workbook) ||
-        a.current.sheetId !== E.sheetId ||
-        a.current.range !== E.range
+        snapshotBookJson !== JSON.stringify(latestProps.workbook) ||
+        snapshotRef.current.sheetId !== latestProps.sheetId ||
+        snapshotRef.current.range !== latestProps.range
       )
         throw Error(
           "The workbook or selection changed. Close and reopen this preview.",
         );
-      if (!plan) throw Error(v.error);
-      (E.onWorkbookChange(
-        assertMergePreviewCurrent(E.workbook, plan, { readOnly: E.readOnly }),
+      if (!plan) throw Error(previewState.error);
+      (latestProps.onWorkbookChange(
+        assertMergePreviewCurrent(latestProps.workbook, plan, {
+          readOnly: latestProps.readOnly,
+        }),
         unmerge ? "Unmerge cells" : "Merge cells",
       ),
-        E.onClose());
+        latestProps.onClose());
     } catch (error) {
-      f(error instanceof Error ? error.message : "Unable to apply merge.");
+      setActionError(
+        error instanceof Error ? error.message : "Unable to apply merge.",
+      );
     }
   }
   return i.jsx("div", {
     className: "et-backdrop",
     children: i.jsxs("section", {
-      ref: o,
+      ref: dialogRef,
       className: "et-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": n,
+      "aria-labelledby": titleId,
       tabIndex: -1,
       onKeyDown: (event) => {
         if (
           (event.key === "Escape" &&
-            (event.preventDefault(), event.stopPropagation(), e.onClose()),
+            (event.preventDefault(), event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const k = Array.from(
-              o.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 'button:not(:disabled),[tabindex="0"]',
               ) ?? [],
             ),
-            F = k[0],
-            I = k.at(-1);
-          event.shiftKey && document.activeElement === F
-            ? (event.preventDefault(), I == null || I.focus())
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === I &&
-              (event.preventDefault(), F == null || F.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -151,12 +157,12 @@ function MergeCellsPreviewDialog(e) {
           className: "et-header",
           children: [
             i.jsx("h2", {
-              id: n,
+              id: titleId,
               children: unmerge ? "Unmerge cells" : "Merge & Center",
             }),
             i.jsx("button", {
               "aria-label": text("Close merge preview"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close merge preview"),
               "data-ui-label": "Close merge preview",
               children: i.jsx(X, { size: 18 }),
@@ -171,7 +177,7 @@ function MergeCellsPreviewDialog(e) {
                 children: [
                   plan?.sheetName ?? "Worksheet",
                   "!",
-                  a.current.range,
+                  snapshotRef.current.range,
                 ],
               }),
             }),
@@ -186,14 +192,14 @@ function MergeCellsPreviewDialog(e) {
               children: [
                 i.jsx("button", {
                   onClick: () => {
-                    (u(false), c(0), f(""));
+                    (setUnmerge(false), setPageIndex(0), setActionError(""));
                   },
                   "aria-pressed": !unmerge,
                   children: i.jsx(LocalizedText, { children: "Preview merge" }),
                 }),
                 i.jsx("button", {
                   onClick: () => {
-                    (u(true), c(0), f(""));
+                    (setUnmerge(true), setPageIndex(0), setActionError(""));
                   },
                   "aria-pressed": unmerge,
                   children: i.jsx(LocalizedText, {
@@ -253,61 +259,67 @@ function MergeCellsPreviewDialog(e) {
                       }),
                       i.jsx("tbody", {
                         children: plan.cells
-                          .slice(y * 12, y * 12 + 12)
-                          .map((E) =>
+                          .slice(currentPage * 12, currentPage * 12 + 12)
+                          .map((previewCell) =>
                             i.jsxs(
                               "tr",
                               {
                                 children: [
-                                  i.jsx("th", { children: E.address }),
+                                  i.jsx("th", {
+                                    children: previewCell.address,
+                                  }),
                                   i.jsxs("td", {
                                     style: { overflowWrap: "anywhere" },
                                     children: [
                                       i.jsx("div", {
-                                        children: E.display || "(blank)",
+                                        children:
+                                          previewCell.display || "(blank)",
                                       }),
                                       i.jsxs("div", {
                                         children: [
                                           i.jsx(LocalizedText, {
                                             children: "Raw: ",
                                           }),
-                                          String(E.cell.raw ?? "(blank)"),
+                                          String(
+                                            previewCell.cell.raw ?? "(blank)",
+                                          ),
                                         ],
                                       }),
-                                      E.cell.note !== undefined &&
+                                      previewCell.cell.note !== undefined &&
                                         i.jsxs("div", {
                                           children: [
                                             i.jsx(LocalizedText, {
                                               children: "Note: ",
                                             }),
-                                            E.cell.note,
+                                            previewCell.cell.note,
                                           ],
                                         }),
-                                      E.cell.tickmark !== undefined &&
+                                      previewCell.cell.tickmark !== undefined &&
                                         i.jsxs("div", {
                                           children: [
                                             i.jsx(LocalizedText, {
                                               children: "Tickmark: ",
                                             }),
-                                            E.cell.tickmark,
+                                            previewCell.cell.tickmark,
                                           ],
                                         }),
-                                      E.cell.hyperlink &&
+                                      previewCell.cell.hyperlink &&
                                         i.jsxs("div", {
                                           children: [
                                             i.jsx(LocalizedText, {
                                               children: "Link:",
                                             }),
                                             " ",
-                                            E.cell.hyperlink.kind === "external"
-                                              ? E.cell.hyperlink.url
-                                              : `${E.cell.hyperlink.sheetId}!${E.cell.hyperlink.address}`,
+                                            previewCell.cell.hyperlink.kind ===
+                                            "external"
+                                              ? previewCell.cell.hyperlink.url
+                                              : `${previewCell.cell.hyperlink.sheetId}!${previewCell.cell.hyperlink.address}`,
                                           ],
                                         }),
-                                      E.discussions > 0 &&
+                                      previewCell.discussions > 0 &&
                                         i.jsxs("div", {
                                           children: [
-                                            E.discussions,
+                                            previewCell.discussions,
                                             " ",
                                             i.jsx(LocalizedText, {
                                               children:
@@ -315,14 +327,14 @@ function MergeCellsPreviewDialog(e) {
                                             }),
                                           ],
                                         }),
-                                      Object.keys(E.cell).some(
-                                        (A) =>
+                                      Object.keys(previewCell.cell).some(
+                                        (key) =>
                                           ![
                                             "raw",
                                             "note",
                                             "tickmark",
                                             "hyperlink",
-                                          ].includes(A),
+                                          ].includes(key),
                                       ) &&
                                         i.jsxs("details", {
                                           children: [
@@ -335,7 +347,7 @@ function MergeCellsPreviewDialog(e) {
                                             i.jsx("pre", {
                                               style: { whiteSpace: "pre-wrap" },
                                               children: JSON.stringify(
-                                                E.cell,
+                                                previewCell.cell,
                                                 null,
                                                 2,
                                               ),
@@ -344,10 +356,10 @@ function MergeCellsPreviewDialog(e) {
                                         }),
                                     ],
                                   }),
-                                  i.jsx("td", { children: E.effect }),
+                                  i.jsx("td", { children: previewCell.effect }),
                                 ],
                               },
-                              E.address,
+                              previewCell.address,
                             ),
                           ),
                       }),
@@ -357,8 +369,8 @@ function MergeCellsPreviewDialog(e) {
                     className: "et-pagination",
                     children: [
                       i.jsx("button", {
-                        disabled: y === 0,
-                        onClick: () => c(y - 1),
+                        disabled: currentPage === 0,
+                        onClick: () => setPageIndex(currentPage - 1),
                         children: i.jsx(LocalizedText, {
                           children: "Previous preview page",
                         }),
@@ -366,15 +378,15 @@ function MergeCellsPreviewDialog(e) {
                       i.jsxs("span", {
                         children: [
                           i.jsx(LocalizedText, { children: "Page " }),
-                          y + 1,
+                          currentPage + 1,
                           " ",
                           i.jsx(LocalizedText, { children: "of " }),
-                          b,
+                          pageCount,
                         ],
                       }),
                       i.jsx("button", {
-                        disabled: y === b - 1,
-                        onClick: () => c(y + 1),
+                        disabled: currentPage === pageCount - 1,
+                        onClick: () => setPageIndex(currentPage + 1),
                         children: i.jsx(LocalizedText, {
                           children: "Next preview page",
                         }),
@@ -383,13 +395,16 @@ function MergeCellsPreviewDialog(e) {
                   }),
                 ],
               }),
-            (h || v.error || m || e.readOnly) &&
+            (actionError ||
+              previewState.error ||
+              isSnapshotStale ||
+              props.readOnly) &&
               i.jsx("p", {
                 role: "alert",
                 children:
-                  h ||
-                  v.error ||
-                  (m
+                  actionError ||
+                  previewState.error ||
+                  (isSnapshotStale
                     ? "The workbook or selection changed. Close and reopen this preview."
                     : "This workbook is read-only."),
               }),
@@ -399,12 +414,12 @@ function MergeCellsPreviewDialog(e) {
           className: "et-footer",
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "et-primary",
-              disabled: !plan || m || e.readOnly,
+              disabled: !plan || isSnapshotStale || props.readOnly,
               onClick: onClick,
               children: i.jsx(LocalizedText, { children: "Apply" }),
             }),
@@ -414,19 +429,29 @@ function MergeCellsPreviewDialog(e) {
     }),
   });
 }
-function applyWorkbookChange(workbook, r, actor, n, o = {}) {
+function applyWorkbookChange(
+  workbook,
+  nextWorkbook,
+  actor,
+  actionLabel,
+  options = {},
+) {
   if (
-    ((r = assertTextCleanupEvidenceUnchanged(workbook, r)),
-    (r = assertFieldTransformsUnchanged(workbook, r)),
-    (r = applyTableSourceEvidence(workbook, r)),
-    validateRowOrigins(workbook, r),
-    workbook.id !== r.id || workbook.revision !== r.revision)
+    ((nextWorkbook = assertTextCleanupEvidenceUnchanged(
+      workbook,
+      nextWorkbook,
+    )),
+    (nextWorkbook = assertFieldTransformsUnchanged(workbook, nextWorkbook)),
+    (nextWorkbook = applyTableSourceEvidence(workbook, nextWorkbook)),
+    validateRowOrigins(workbook, nextWorkbook),
+    workbook.id !== nextWorkbook.id ||
+      workbook.revision !== nextWorkbook.revision)
   )
     throw new Error(
       "The workbook changed while this tool was open. Reopen the tool and try again.",
     );
   if (workbook.structureProtection?.enabled) {
-    const f = (workbook) =>
+    const readSheetStructure = (workbook) =>
       workbook.sheets.map((sheet) => ({
         id: sheet.id,
         name: sheet.name,
@@ -434,36 +459,39 @@ function applyWorkbookChange(workbook, r, actor, n, o = {}) {
         veryHidden: !!sheet.veryHidden,
         tabColor: sheet.tabColor ?? null,
       }));
-    if (JSON.stringify(f(workbook)) !== JSON.stringify(f(r)))
+    if (
+      JSON.stringify(readSheetStructure(workbook)) !==
+      JSON.stringify(readSheetStructure(nextWorkbook))
+    )
       throw new Error(
         "Workbook structure is protected. Unprotect it before adding, deleting, renaming, moving or hiding worksheets.",
       );
   }
-  const a = [];
+  const cellChanges = [];
   for (const sheetId of new Set([
     ...workbook.sheets.map((sheet) => sheet.id),
-    ...r.sheets.map((sheet) => sheet.id),
+    ...nextWorkbook.sheets.map((sheet) => sheet.id),
   ])) {
-    const sheet = r.sheets.find((sheet) => sheet.id === sheetId),
-      m = workbook.sheets.find((sheet) => sheet.id === sheetId);
-    if (m?.cells !== sheet?.cells)
+    const sheet = nextWorkbook.sheets.find((sheet) => sheet.id === sheetId),
+      beforeSheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
+    if (beforeSheet?.cells !== sheet?.cells)
       for (const address of new Set([
-        ...Object.keys(m?.cells ?? {}),
+        ...Object.keys(beforeSheet?.cells ?? {}),
         ...Object.keys(sheet?.cells ?? {}),
       ])) {
-        const before = m?.cells[address],
+        const before = beforeSheet?.cells[address],
           after = sheet?.cells[address];
         if (
           !(
             before === after || JSON.stringify(before) === JSON.stringify(after)
           ) &&
-          (a.push({
+          (cellChanges.push({
             sheetId: sheetId,
             address: address,
             ...(before ? { before: before } : {}),
             ...(after ? { after: after } : {}),
           }),
-          a.length > workbookLimits.maxCells)
+          cellChanges.length > workbookLimits.maxCells)
         )
           throw new Error(
             "This operation exceeds the 100,000 cell-change history limit.",
@@ -471,50 +499,77 @@ function applyWorkbookChange(workbook, r, actor, n, o = {}) {
       }
   }
   if (
-    workbook.events.reduce((f, p) => f + p.changes.length, 0) + a.length >
+    workbook.events.reduce(
+      (total, historyEvent) => total + historyEvent.changes.length,
+      0,
+    ) +
+      cellChanges.length >
     workbookLimits.maxCells
   )
     throw new Error(
       "Change history has reached its 100,000 cell-change limit. Export this workbook before continuing.",
     );
-  const s = Math.max(1, Math.ceil(a.length / workbookLimits.maxPatches));
-  if (workbook.events.length + s > 2e3)
+  const patchCount = Math.max(
+    1,
+    Math.ceil(cellChanges.length / workbookLimits.maxPatches),
+  );
+  if (workbook.events.length + patchCount > 2e3)
     throw new Error(
       "Change history is full. Export this workbook before continuing.",
     );
-  const d = new Set(),
-    u = (f, p, m) => JSON.stringify([f, p, m ?? { raw: null }]);
-  if (o.restoringHistory)
-    for (const f of workbook.events)
-      for (const change of f.changes)
-        (d.add(u(change.sheetId, change.address, change.before)),
-          d.add(u(change.sheetId, change.address, change.after)));
+  const restoredChangeKeys = new Set(),
+    changeKey = (changeSheetId, changeAddress, cellSnapshot) =>
+      JSON.stringify([
+        changeSheetId,
+        changeAddress,
+        cellSnapshot ?? { raw: null },
+      ]);
+  if (options.restoringHistory)
+    for (const pastEvent of workbook.events)
+      for (const change of pastEvent.changes)
+        (restoredChangeKeys.add(
+          changeKey(change.sheetId, change.address, change.before),
+        ),
+          restoredChangeKeys.add(
+            changeKey(change.sheetId, change.address, change.after),
+          ));
   checkDataValidationBatch(
-    r,
-    a.filter(
-      (f) =>
-        r.sheets.some((sheet) => sheet.id === f.sheetId) &&
-        !(o.restoringHistory && d.has(u(f.sheetId, f.address, f.after))) &&
-        ((f.before?.raw ?? null) !== (f.after?.raw ?? null) ||
-          !!f.before?.literal != !!f.after?.literal),
+    nextWorkbook,
+    cellChanges.filter(
+      (cellChange) =>
+        nextWorkbook.sheets.some((sheet) => sheet.id === cellChange.sheetId) &&
+        !(
+          options.restoringHistory &&
+          restoredChangeKeys.has(
+            changeKey(cellChange.sheetId, cellChange.address, cellChange.after),
+          )
+        ) &&
+        ((cellChange.before?.raw ?? null) !== (cellChange.after?.raw ?? null) ||
+          !!cellChange.before?.literal != !!cellChange.after?.literal),
     ),
   );
-  const l = Array.from({ length: s }, (f, p) => ({
+  const historyEvents = Array.from({ length: patchCount }, (f, patchIndex) => ({
       id: crypto.randomUUID(),
       timestamp: new Date().toISOString(),
       actor: actor,
-      action: s > 1 ? `${n} (${p + 1}/${s})` : n,
-      changes: a.slice(
-        p * workbookLimits.maxPatches,
-        (p + 1) * workbookLimits.maxPatches,
+      action:
+        patchCount > 1
+          ? `${actionLabel} (${patchIndex + 1}/${patchCount})`
+          : actionLabel,
+      changes: cellChanges.slice(
+        patchIndex * workbookLimits.maxPatches,
+        (patchIndex + 1) * workbookLimits.maxPatches,
       ),
     })),
-    c = {
-      ...touchWorkbookModifiedAt(r),
+    updatedWorkbook = {
+      ...touchWorkbookModifiedAt(nextWorkbook),
       revision: workbook.revision + 1,
-      events: [...workbook.events, ...l],
+      events: [...workbook.events, ...historyEvents],
     };
-  return (carryCalculatorRecordForward(workbook, c), c);
+  return (
+    carryCalculatorRecordForward(workbook, updatedWorkbook),
+    updatedWorkbook
+  );
 }
 function buildWorkbookSnapshot(workbook) {
   return {
@@ -534,8 +589,8 @@ function buildWorkbookSnapshot(workbook) {
       rowCount: sheet.rowCount,
       colCount: sheet.colCount,
       cells: Object.fromEntries(
-        Object.entries(sheet.cells).map(([t, cell]) => [
-          t,
+        Object.entries(sheet.cells).map(([address, cell]) => [
+          address,
           { raw: cell.raw, ...(cell.literal ? { literal: true } : {}) },
         ]),
       ),
@@ -549,7 +604,7 @@ function buildWorkbookSnapshot(workbook) {
     })),
   };
 }
-function buildCalculationRequest(workbook, completed, t, force) {
+function buildCalculationRequest(workbook, completed, requestId, force) {
   if (
     !completed ||
     !isDeepFrozenValue(workbook) ||
@@ -557,34 +612,38 @@ function buildCalculationRequest(workbook, completed, t, force) {
     completed.id !== workbook.id
   )
     return {
-      id: t,
+      id: requestId,
       force: force,
       workbook: buildWorkbookSnapshot(workbook),
       extensionAvailability: getExtensionCacheEntries(workbook),
     };
   const removedCells = {},
     sheets = workbook.sheets.map((sheet) => {
-      const d = completed.sheets.find((l) => l.id === sheet.id),
+      const completedSheet = completed.sheets.find(
+          (candidateSheet) => candidateSheet.id === sheet.id,
+        ),
         cells = {};
-      if (d?.cells !== sheet.cells) {
-        for (const l in sheet.cells) {
-          const cell = sheet.cells[l],
-            h = d?.cells[l];
-          (!h || cell.raw !== h.raw || !!cell.literal != !!h.literal) &&
-            (cells[l] = {
+      if (completedSheet?.cells !== sheet.cells) {
+        for (const cellAddress in sheet.cells) {
+          const cell = sheet.cells[cellAddress],
+            completedCell = completedSheet?.cells[cellAddress];
+          (!completedCell ||
+            cell.raw !== completedCell.raw ||
+            !!cell.literal != !!completedCell.literal) &&
+            (cells[cellAddress] = {
               raw: cell.raw,
               ...(cell.literal ? { literal: true } : {}),
             });
         }
-        d &&
-          (removedCells[sheet.id] = Object.keys(d.cells).filter(
+        completedSheet &&
+          (removedCells[sheet.id] = Object.keys(completedSheet.cells).filter(
             (cell) => !Object.prototype.hasOwnProperty.call(sheet.cells, cell),
           ));
       }
       return { ...sheet, cells: cells };
     });
   return {
-    id: t,
+    id: requestId,
     force: force,
     extensionAvailability: getExtensionCacheEntries(workbook),
     baseRevision: completed.revision,
@@ -593,12 +652,12 @@ function buildCalculationRequest(workbook, completed, t, force) {
   };
 }
 class CalculationWorkerSession {
-  constructor(r, t) {
+  constructor(factory, reliability) {
     defineDataPropertyByKey(this, "worker");
     defineDataPropertyByKey(this, "nextId", 0);
     defineDataPropertyByKey(this, "completed");
     defineDataPropertyByKey(this, "active");
-    ((this.factory = r), (this.reliability = t));
+    ((this.factory = factory), (this.reliability = reliability));
   }
   terminateWorker() {
     const worker = this.worker;
@@ -608,88 +667,94 @@ class CalculationWorkerSession {
     } catch {}
   }
   cancel(
-    r = "Calculation cancelled. Inputs are intact; use Calculate Now to retry.",
+    reason = "Calculation cancelled. Inputs are intact; use Calculate Now to retry.",
   ) {
-    this.active?.cancel(r);
+    this.active?.cancel(reason);
   }
   dispose() {
     (this.cancel(), this.terminateWorker());
   }
-  run(workbook, t = {}) {
+  run(workbook, options = {}) {
     this.cancel("A newer calculation replaced this request.");
     const report = getIsolatedCalculation(workbook).report,
-      o = ++this.nextId,
+      runId = ++this.nextId,
       monotonicClockMs = readMonotonicClockMs(),
       { memoryBudgetBytes } = resolveCalculationBudget(workbook.calculation),
-      d = this.reliability?.start("calculation", "run");
-    return new Promise((l) => {
-      let c = false,
-        h;
-      const f = (y, w = false) => {
-          c ||
-            ((c = true),
-            h && clearTimeout(h),
-            t.signal?.removeEventListener("abort", m),
+      reliabilityRun = this.reliability?.start("calculation", "run");
+    return new Promise((resolvePromise) => {
+      let isSettled = false,
+        timeoutId;
+      const settle = (result, shouldTerminateWorker = false) => {
+          isSettled ||
+            ((isSettled = true),
+            timeoutId && clearTimeout(timeoutId),
+            options.signal?.removeEventListener("abort", cancelFromSignal),
             (this.active = undefined),
             this.worker &&
               ((this.worker.onmessage = null),
               (this.worker.onerror = null),
-              w && this.terminateWorker()),
-            l(y));
+              shouldTerminateWorker && this.terminateWorker()),
+            resolvePromise(result));
         },
-        p = (y, w) => {
-          const E =
-            y === "#TIMEOUT!"
+        settleWithSentinel = (errorSentinel, message) => {
+          const failureKind =
+            errorSentinel === "#TIMEOUT!"
               ? "timeout"
-              : y === "#LIMIT!"
+              : errorSentinel === "#LIMIT!"
                 ? "limit"
-                : y === "#PENDING!"
+                : errorSentinel === "#PENDING!"
                   ? "cancelled"
                   : "unavailable";
-          (d?.finish(E === "cancelled" ? "cancelled" : "failed", E),
-            f(
+          (reliabilityRun?.finish(
+            failureKind === "cancelled" ? "cancelled" : "failed",
+            failureKind,
+          ),
+            settle(
               runIterativeCalculation(
                 workbook,
                 report,
-                y,
-                w,
+                errorSentinel,
+                message,
                 readMonotonicClockMs() - monotonicClockMs,
               ),
               true,
             ));
         },
-        m = () =>
-          p(
+        cancelFromSignal = () =>
+          settleWithSentinel(
             "#PENDING!",
             "Calculation cancelled. Inputs are intact; use Calculate Now to retry.",
           );
       if (
         ((this.active = {
-          cancel: (y) =>
-            p(
+          cancel: (cancelReason) =>
+            settleWithSentinel(
               "#PENDING!",
-              y ?? "Calculation cancelled; source inputs are intact.",
+              cancelReason ??
+                "Calculation cancelled; source inputs are intact.",
             ),
         }),
-        t.signal?.aborted)
+        options.signal?.aborted)
       ) {
-        m();
+        cancelFromSignal();
         return;
       }
       if (
-        (t.signal?.addEventListener("abort", m, { once: true }),
+        (options.signal?.addEventListener("abort", cancelFromSignal, {
+          once: true,
+        }),
         estimateWorkbookMemoryBytes(workbook, memoryBudgetBytes) >
           memoryBudgetBytes)
       ) {
-        p(
+        settleWithSentinel(
           "#LIMIT!",
           "Calculation inputs exceed the working-data budget. Reduce the data or increase the budget in Calculation Options.",
         );
         return;
       }
-      h = setTimeout(
+      timeoutId = setTimeout(
         () =>
-          p(
+          settleWithSentinel(
             "#TIMEOUT!",
             "Calculation exceeded its time budget and its worker was terminated. Inputs are intact; simplify formulas or increase the budget, then retry.",
           ),
@@ -698,22 +763,23 @@ class CalculationWorkerSession {
       try {
         ((this.worker ??= this.factory()),
           (this.worker.onmessage = ({ data }) => {
-            if (c) return;
-            const w = data;
-            if (!(!w || w.id !== o)) {
+            if (isSettled) return;
+            const workerMessage = data;
+            if (!(!workerMessage || workerMessage.id !== runId)) {
               if (
                 readMonotonicClockMs() - monotonicClockMs >
                 (workbook.calculation?.timeBudgetMs ?? 2500)
               ) {
-                p(
+                settleWithSentinel(
                   "#TIMEOUT!",
                   "The worker result arrived after the calculation deadline and was discarded.",
                 );
                 return;
               }
-              if (!w.result) {
-                p(
-                  typeof w.error == "string" && w.error.startsWith("#LIMIT!")
+              if (!workerMessage.result) {
+                settleWithSentinel(
+                  typeof workerMessage.error == "string" &&
+                    workerMessage.error.startsWith("#LIMIT!")
                     ? "#LIMIT!"
                     : "#BLOCKED!",
                   "The calculation worker returned no usable result. Inputs are intact; retry the calculation.",
@@ -721,47 +787,67 @@ class CalculationWorkerSession {
                 return;
               }
               if (
-                estimateValueFootprintBytes(w.result, memoryBudgetBytes) >
-                memoryBudgetBytes
+                estimateValueFootprintBytes(
+                  workerMessage.result,
+                  memoryBudgetBytes,
+                ) > memoryBudgetBytes
               ) {
-                p(
+                settleWithSentinel(
                   "#LIMIT!",
                   "Calculation results exceed the working-data budget; no partial results were published.",
                 );
                 return;
               }
               try {
-                const O = {
-                    ...w.result.report,
+                const completedReport = {
+                    ...workerMessage.result.report,
                     execution: {
                       mode: "worker",
                       state:
-                        w.result.report.execution?.state === "pending"
+                        workerMessage.result.report.execution?.state ===
+                        "pending"
                           ? "complete"
-                          : (w.result.report.execution?.state ?? "complete"),
-                      message: w.result.report.resources?.stopped
-                        ? (w.result.report.resources.reason ??
+                          : (workerMessage.result.report.execution?.state ??
+                            "complete"),
+                      message: workerMessage.result.report.resources?.stopped
+                        ? (workerMessage.result.report.resources.reason ??
                           "Calculation stopped at a resource limit.")
-                        : w.result.report.pending > 0
+                        : workerMessage.result.report.pending > 0
                           ? "Manual calculation is pending. Use Calculate Now to refresh results. Source inputs were not modified."
                           : "Calculated in an isolated worker. Source inputs were not modified.",
                       wallElapsedMs: readMonotonicClockMs() - monotonicClockMs,
                     },
-                    limits: { ...w.result.report.limits, hardInterrupt: true },
+                    limits: {
+                      ...workerMessage.result.report.limits,
+                      hardInterrupt: true,
+                    },
                   },
-                  j = acceptWorkerCalculationResult(workbook, report, {
-                    ...w.result,
-                    report: O,
-                  });
-                j && (this.completed = workbook);
-                const z = j?.report.resources?.stopped;
-                (d?.finish(
-                  j ? (z ? "failed" : "succeeded") : "cancelled",
-                  z ? (z === "#TIMEOUT!" ? "timeout" : "limit") : undefined,
+                  acceptedCalculation = acceptWorkerCalculationResult(
+                    workbook,
+                    report,
+                    {
+                      ...workerMessage.result,
+                      report: completedReport,
+                    },
+                  );
+                acceptedCalculation && (this.completed = workbook);
+                const stoppedSentinel =
+                  acceptedCalculation?.report.resources?.stopped;
+                (reliabilityRun?.finish(
+                  acceptedCalculation
+                    ? stoppedSentinel
+                      ? "failed"
+                      : "succeeded"
+                    : "cancelled",
+                  stoppedSentinel
+                    ? stoppedSentinel === "#TIMEOUT!"
+                      ? "timeout"
+                      : "limit"
+                    : undefined,
                 ),
-                  f(j));
+                  settle(acceptedCalculation));
               } catch {
-                p(
+                settleWithSentinel(
                   "#BLOCKED!",
                   "The calculation worker returned an invalid result. Inputs are intact; retry the calculation.",
                 );
@@ -769,15 +855,20 @@ class CalculationWorkerSession {
             }
           }),
           (this.worker.onerror = () =>
-            p(
+            settleWithSentinel(
               "#BLOCKED!",
               "The calculation worker could not run. Check the host's worker policy, then retry; inputs are intact.",
             )),
           this.worker.postMessage(
-            buildCalculationRequest(workbook, this.completed, o, !!t.force),
+            buildCalculationRequest(
+              workbook,
+              this.completed,
+              runId,
+              !!options.force,
+            ),
           ));
       } catch {
-        p(
+        settleWithSentinel(
           "#BLOCKED!",
           "Isolated calculation is unavailable. The host must allow or provide a calculation worker; source inputs are intact.",
         );
@@ -787,26 +878,28 @@ class CalculationWorkerSession {
 }
 const calculationWorkerSourceText = __calculationWorkerSource;
 function createCalculationWorker() {
-  const e = URL.createObjectURL(
+  const workerUrl = URL.createObjectURL(
     new Blob([calculationWorkerSourceText], { type: "text/javascript" }),
   );
   try {
-    const r = new Worker(e, { name: "workbook-calculation" }),
-      t = {
-        postMessage: (n) => r.postMessage(n),
+    const worker = new Worker(workerUrl, { name: "workbook-calculation" }),
+      workerHandle = {
+        postMessage: (message) => worker.postMessage(message),
         terminate: () => {
-          (r.terminate(), URL.revokeObjectURL(e));
+          (worker.terminate(), URL.revokeObjectURL(workerUrl));
         },
         onmessage: null,
         onerror: null,
       };
     return (
-      (r.onmessage = (n) => t.onmessage?.({ data: n.data })),
-      (r.onerror = (n) => t.onerror?.({ message: n.message })),
-      t
+      (worker.onmessage = (messageEvent) =>
+        workerHandle.onmessage?.({ data: messageEvent.data })),
+      (worker.onerror = (errorEvent) =>
+        workerHandle.onerror?.({ message: errorEvent.message })),
+      workerHandle
     );
   } catch (error) {
-    throw (URL.revokeObjectURL(e), error);
+    throw (URL.revokeObjectURL(workerUrl), error);
   }
 }
 function useCalculationRun(
@@ -815,117 +908,157 @@ function useCalculationRun(
   handleCalculationCompleted,
   activeReliabilityMonitor,
 ) {
-  const a =
+  const resolvedWorkerFactory =
       calculationWorkerFactory === null
         ? undefined
         : (calculationWorkerFactory ??
           (typeof Worker == "function" ? createCalculationWorker : undefined)),
-    s = ne.useMemo(
+    workerSession = ne.useMemo(
       () =>
-        a
-          ? new CalculationWorkerSession(a, activeReliabilityMonitor)
+        resolvedWorkerFactory
+          ? new CalculationWorkerSession(
+              resolvedWorkerFactory,
+              activeReliabilityMonitor,
+            )
           : undefined,
-      [a, activeReliabilityMonitor],
+      [resolvedWorkerFactory, activeReliabilityMonitor],
     ),
-    [d, u] = ne.useState(0),
-    l = ne.useRef(handleCalculationCompleted);
-  l.current = handleCalculationCompleted;
-  const c = ne.useRef(undefined),
-    h = ne.useRef(undefined);
-  s &&
-    h.current !== activeWorkbook &&
-    (getIsolatedCalculation(activeWorkbook), (h.current = activeWorkbook));
-  const f = (g = false) => {
-      const b = activeReliabilityMonitor?.start("calculation", "run");
+    [calculationVersion, setCalculationVersion] = ne.useState(0),
+    completedHandlerRef = ne.useRef(handleCalculationCompleted);
+  completedHandlerRef.current = handleCalculationCompleted;
+  const debounceTimerRef = ne.useRef(undefined),
+    isolatedWorkbookRef = ne.useRef(undefined);
+  workerSession &&
+    isolatedWorkbookRef.current !== activeWorkbook &&
+    (getIsolatedCalculation(activeWorkbook),
+    (isolatedWorkbookRef.current = activeWorkbook));
+  const readCalculation = (shouldRefreshReport = false) => {
+      const reliabilityRun = activeReliabilityMonitor?.start(
+        "calculation",
+        "run",
+      );
       try {
-        const w = g
+        const workbookCalculation = shouldRefreshReport
             ? refreshCalculationReport(activeWorkbook)
             : getWorkbookCalculation(activeWorkbook),
-          E = w.report.resources?.stopped;
+          stoppedSentinel = workbookCalculation.report.resources?.stopped;
         return (
-          b?.finish(
-            E ? "failed" : "succeeded",
-            E === "#TIMEOUT!" ? "timeout" : E ? "limit" : undefined,
+          reliabilityRun?.finish(
+            stoppedSentinel ? "failed" : "succeeded",
+            stoppedSentinel === "#TIMEOUT!"
+              ? "timeout"
+              : stoppedSentinel
+                ? "limit"
+                : undefined,
           ),
-          w
+          workbookCalculation
         );
       } catch (error) {
-        throw (b?.fail(error), error);
+        throw (reliabilityRun?.fail(error), error);
       }
     },
     calculation = ne.useMemo(
       () =>
-        s
+        workerSession
           ? (getCurrentCalculatorRecord(activeWorkbook) ??
             getIsolatedCalculation(activeWorkbook))
-          : f(),
-      [activeWorkbook, s, d],
+          : readCalculation(),
+      [activeWorkbook, workerSession, calculationVersion],
     );
   return (
-    ne.useEffect(() => () => s?.dispose(), [s]),
+    ne.useEffect(() => () => workerSession?.dispose(), [workerSession]),
     ne.useEffect(() => {
-      if (!s) return;
-      const g = new AbortController(),
-        b = setTimeout(() => {
-          ((c.current = undefined),
-            s.run(activeWorkbook, { signal: g.signal }).then((y) => {
-              !g.signal.aborted && y && (u((w) => w + 1), l.current());
-            }));
+      if (!workerSession) return;
+      const abortController = new AbortController(),
+        debounceTimeoutId = setTimeout(() => {
+          ((debounceTimerRef.current = undefined),
+            workerSession
+              .run(activeWorkbook, { signal: abortController.signal })
+              .then((runResult) => {
+                !abortController.signal.aborted &&
+                  runResult &&
+                  (setCalculationVersion(
+                    (previousVersion) => previousVersion + 1,
+                  ),
+                  completedHandlerRef.current());
+              }));
         }, 60);
       return (
-        (c.current = b),
+        (debounceTimerRef.current = debounceTimeoutId),
         () => {
-          (clearTimeout(b),
-            c.current === b && (c.current = undefined),
-            g.abort());
+          (clearTimeout(debounceTimeoutId),
+            debounceTimerRef.current === debounceTimeoutId &&
+              (debounceTimerRef.current = undefined),
+            abortController.abort());
         }
       );
-    }, [activeWorkbook, s]),
+    }, [activeWorkbook, workerSession]),
     {
       calculation: calculation,
       run: () => {
-        if ((clearTimeout(c.current), (c.current = undefined), !s)) {
-          (f(true), u((g) => g + 1), l.current());
+        if (
+          (clearTimeout(debounceTimerRef.current),
+          (debounceTimerRef.current = undefined),
+          !workerSession)
+        ) {
+          (readCalculation(true),
+            setCalculationVersion((priorVersion) => priorVersion + 1),
+            completedHandlerRef.current());
           return;
         }
-        (s.run(activeWorkbook, { force: true }).then((g) => {
-          g && (u((b) => b + 1), l.current());
-        }),
-          u((g) => g + 1),
-          l.current());
+        (workerSession
+          .run(activeWorkbook, { force: true })
+          .then((runOutcome) => {
+            runOutcome &&
+              (setCalculationVersion((currentVersion) => currentVersion + 1),
+              completedHandlerRef.current());
+          }),
+          setCalculationVersion((priorVersion) => priorVersion + 1),
+          completedHandlerRef.current());
       },
       cancel: () => {
-        if (c.current !== undefined && s) {
-          (clearTimeout(c.current), (c.current = undefined));
-          const g = new AbortController();
-          (g.abort(),
-            s
-              .run(activeWorkbook, { signal: g.signal })
-              .then(() => u((b) => b + 1)));
-        } else s?.cancel();
-        (u((g) => g + 1), l.current());
+        if (debounceTimerRef.current !== undefined && workerSession) {
+          (clearTimeout(debounceTimerRef.current),
+            (debounceTimerRef.current = undefined));
+          const abortController = new AbortController();
+          (abortController.abort(),
+            workerSession
+              .run(activeWorkbook, { signal: abortController.signal })
+              .then(() =>
+                setCalculationVersion((currentVersion) => currentVersion + 1),
+              ));
+        } else workerSession?.cancel();
+        (setCalculationVersion((priorVersion) => priorVersion + 1),
+          completedHandlerRef.current());
       },
-      isolated: !!s,
+      isolated: !!workerSession,
     }
   );
 }
 const headerCellStyle = { bold: true, fill: "#163c45", color: "#ffffff" };
-function buildSampleSheetCells(e, r, t) {
+function buildSampleSheetCells(sheetId, sheetName, rows) {
   const cells = {};
   return (
-    t.forEach((o, a) =>
-      o.forEach((raw, d) => {
-        cells[`${columnIndexToLetters(d)}${a + 1}`] = {
+    rows.forEach((row, rowIndex) =>
+      row.forEach((raw, columnIndex) => {
+        cells[`${columnIndexToLetters(columnIndex)}${rowIndex + 1}`] = {
           raw: raw,
-          ...(a === 0 ? { style: headerCellStyle } : {}),
+          ...(rowIndex === 0 ? { style: headerCellStyle } : {}),
         };
       }),
     ),
-    { id: e, name: r, cells: cells, rowCount: 100, colCount: 10, frozenRows: 1 }
+    {
+      id: sheetId,
+      name: sheetName,
+      cells: cells,
+      rowCount: 100,
+      colCount: 10,
+      frozenRows: 1,
+    }
   );
 }
 function buildSampleLedgerWorkbook() {
-  const e = [
+  const journalEntries = [
       [
         "2025-01-03",
         "Cash",
@@ -1087,7 +1220,7 @@ function buildSampleLedgerWorkbook() {
         "FA-2025",
       ],
     ],
-    r = [
+    ledgerRows = [
       [
         "Journal ID",
         "Date",
@@ -1101,26 +1234,38 @@ function buildSampleLedgerWorkbook() {
         "Review",
       ],
     ];
-  (e.forEach(([l, c, h, f, p, m], v) => {
-    const g = `JE-25-${String(v + 1).padStart(3, "0")}`;
-    for (const b of [0, 1]) {
-      const y = r.length + 1;
-      r.push([
-        `${g}/${b + 1}`,
-        l,
-        b === 0 ? c : h,
-        f,
-        b === 0 ? p : 0,
-        b === 1 ? p : 0,
-        `=E${y}-F${y}`,
-        v % 2 === 0 ? "A. Patel" : "J. Morgan",
-        m,
-        v === 1 || v === 8 ? "Pending" : "Reviewed",
-      ]);
-    }
-  }),
-    (r[17][0] = r[15][0]),
-    r.push([
+  (journalEntries.forEach(
+    (
+      [
+        entryDate,
+        debitAccount,
+        creditAccount,
+        description,
+        amount,
+        sourceReference,
+      ],
+      entryIndex,
+    ) => {
+      const journalId = `JE-25-${String(entryIndex + 1).padStart(3, "0")}`;
+      for (const lineSide of [0, 1]) {
+        const newRowNumber = ledgerRows.length + 1;
+        ledgerRows.push([
+          `${journalId}/${lineSide + 1}`,
+          entryDate,
+          lineSide === 0 ? debitAccount : creditAccount,
+          description,
+          lineSide === 0 ? amount : 0,
+          lineSide === 1 ? amount : 0,
+          `=E${newRowNumber}-F${newRowNumber}`,
+          entryIndex % 2 === 0 ? "A. Patel" : "J. Morgan",
+          sourceReference,
+          entryIndex === 1 || entryIndex === 8 ? "Pending" : "Reviewed",
+        ]);
+      }
+    },
+  ),
+    (ledgerRows[17][0] = ledgerRows[15][0]),
+    ledgerRows.push([
       "Total",
       null,
       null,
@@ -1135,48 +1280,66 @@ function buildSampleLedgerWorkbook() {
   const sampleSheetCells = buildSampleSheetCells(
     "general-ledger",
     "General ledger",
-    r,
+    ledgerRows,
   );
-  for (let l = 2; l <= 42; l++)
-    for (const c of ["E", "F", "G"])
-      sampleSheetCells.cells[`${c}${l}`].format = "number";
+  for (let rowNumber = 2; rowNumber <= 42; rowNumber++)
+    for (const amountColumn of ["E", "F", "G"])
+      sampleSheetCells.cells[`${amountColumn}${rowNumber}`].format = "number";
   ((sampleSheetCells.cells.A18.note =
     "Identifier repeats A16. Inspect source documentation and posting sequence before resolving."),
     (sampleSheetCells.cells.A18.style = { fill: "#fff0d1" }),
     (sampleSheetCells.cells.E4.note =
       "Agreed acquisition amount to equipment invoice INV-4821."),
     (sampleSheetCells.cells.E4.tickmark = "V"));
-  for (const l of ["A", "E", "F", "G"])
-    sampleSheetCells.cells[`${l}42`].style = { bold: true, fill: "#e4eef0" };
-  const n = [...new Set(e.flatMap((l) => [l[1], l[2]]))].sort(),
-    o = [
+  for (const totalRowColumn of ["A", "E", "F", "G"])
+    sampleSheetCells.cells[`${totalRowColumn}42`].style = {
+      bold: true,
+      fill: "#e4eef0",
+    };
+  const accountNames = [
+      ...new Set(journalEntries.flatMap((entry) => [entry[1], entry[2]])),
+    ].sort(),
+    trialBalanceRows = [
       ["Account", "Debit activity", "Credit activity", "Net balance", "Status"],
     ];
-  n.forEach((l, c) => {
-    const h = c + 2;
-    o.push([
-      l,
-      `=SUMIF('General ledger'!$C$2:$C$41,A${h},'General ledger'!$E$2:$E$41)`,
-      `=SUMIF('General ledger'!$C$2:$C$41,A${h},'General ledger'!$F$2:$F$41)`,
-      `=B${h}-C${h}`,
+  accountNames.forEach((accountName, accountIndex) => {
+    const accountRowNumber = accountIndex + 2;
+    trialBalanceRows.push([
+      accountName,
+      `=SUMIF('General ledger'!$C$2:$C$41,A${accountRowNumber},'General ledger'!$E$2:$E$41)`,
+      `=SUMIF('General ledger'!$C$2:$C$41,A${accountRowNumber},'General ledger'!$F$2:$F$41)`,
+      `=B${accountRowNumber}-C${accountRowNumber}`,
       "Ready for review",
     ]);
   });
-  const a = n.length + 1,
-    s = a + 1;
-  o.push([
+  const lastAccountRowNumber = accountNames.length + 1,
+    totalRowNumber = lastAccountRowNumber + 1;
+  trialBalanceRows.push([
     "Total",
-    `=SUM(B2:B${a})`,
-    `=SUM(C2:C${a})`,
-    `=SUM(D2:D${a})`,
-    `=IF(ABS(D${s})<0.01,"Balanced","Investigate")`,
+    `=SUM(B2:B${lastAccountRowNumber})`,
+    `=SUM(C2:C${lastAccountRowNumber})`,
+    `=SUM(D2:D${lastAccountRowNumber})`,
+    `=IF(ABS(D${totalRowNumber})<0.01,"Balanced","Investigate")`,
   ]);
-  const d = buildSampleSheetCells("trial-balance", "Trial balance", o);
-  for (let l = 2; l <= s; l++)
-    for (const c of ["B", "C", "D"]) d.cells[`${c}${l}`].format = "number";
-  for (const l of ["A", "B", "C", "D", "E"])
-    d.cells[`${l}${s}`].style = { bold: true, fill: "#e4eef0" };
-  const u = buildSampleSheetCells("audit-plan", "Audit plan", [
+  const trialBalanceSheet = buildSampleSheetCells(
+    "trial-balance",
+    "Trial balance",
+    trialBalanceRows,
+  );
+  for (
+    let balanceRowNumber = 2;
+    balanceRowNumber <= totalRowNumber;
+    balanceRowNumber++
+  )
+    for (const balanceColumn of ["B", "C", "D"])
+      trialBalanceSheet.cells[`${balanceColumn}${balanceRowNumber}`].format =
+        "number";
+  for (const balanceTotalColumn of ["A", "B", "C", "D", "E"])
+    trialBalanceSheet.cells[`${balanceTotalColumn}${totalRowNumber}`].style = {
+      bold: true,
+      fill: "#e4eef0",
+    };
+  const auditPlanSheet = buildSampleSheetCells("audit-plan", "Audit plan", [
     ["Procedure", "Purpose", "Owner", "Status", "Reference"],
     [
       "Ledger reconciliation",
@@ -1234,87 +1397,109 @@ function buildSampleLedgerWorkbook() {
     name: "Northstar Advisory · FY2025",
     revision: 0,
     metadata: createWorkbookMetadata(),
-    sheets: [sampleSheetCells, d, u],
+    sheets: [sampleSheetCells, trialBalanceSheet, auditPlanSheet],
     events: [],
   });
 }
-const formatAmountTwoDecimals = (e) =>
+const formatAmountTwoDecimals = (amount) =>
     new Intl.NumberFormat("en-US", {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
-    }).format(e),
-  normalizeHeaderLabel = (e) =>
-    String(e ?? "")
+    }).format(amount),
+  normalizeHeaderLabel = (label) =>
+    String(label ?? "")
       .trim()
       .toLowerCase()
       .replace(/[ _-]+/g, " "),
-  parseDateOnlyText = (e) => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(e)) return NaN;
-    const r = Date.parse(`${e}T00:00:00Z`);
-    return Number.isFinite(r) && new Date(r).toISOString().slice(0, 10) === e
-      ? r
+  parseDateOnlyText = (dateText) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateText)) return NaN;
+    const timestamp = Date.parse(`${dateText}T00:00:00Z`);
+    return Number.isFinite(timestamp) &&
+      new Date(timestamp).toISOString().slice(0, 10) === dateText
+      ? timestamp
       : NaN;
   };
-function runAuditAnalysis(activeWorkbook, r, selectedAuditKind, n = {}) {
-  const sheetOrThrow = findSheetOrThrow(activeWorkbook, r),
+function runAuditAnalysis(
+  activeWorkbook,
+  sheetRef,
+  selectedAuditKind,
+  analysisOptions = {},
+) {
+  const sheetOrThrow = findSheetOrThrow(activeWorkbook, sheetRef),
     workbookWithSettings = calculateWorkbookWithSettings(activeWorkbook),
     occupiedRangeAddress = formatOccupiedRangeAddress(sheetOrThrow, false),
-    d = n.range ?? n.population?.definition.range ?? occupiedRangeAddress;
+    analysisRange =
+      analysisOptions.range ??
+      analysisOptions.population?.definition.range ??
+      occupiedRangeAddress;
   if (
-    n.population &&
-    n.population.scope !== "full" &&
-    n.population.scope !== "visible"
+    analysisOptions.population &&
+    analysisOptions.population.scope !== "full" &&
+    analysisOptions.population.scope !== "visible"
   )
     throw Error("Choose full or visible analysis scope.");
-  const u = n.population
+  const filterContext = analysisOptions.population
     ? applyFilterConditions(
         activeWorkbook,
-        r,
-        n.population.definition,
+        sheetRef,
+        analysisOptions.population.definition,
         workbookWithSettings,
       ).context
     : undefined;
-  if (u && d !== u.range && d !== n.population.definition.range)
+  if (
+    filterContext &&
+    analysisRange !== filterContext.range &&
+    analysisRange !== analysisOptions.population.definition.range
+  )
     throw Error(
       "The analysis range must match the declared filter population.",
     );
-  const l =
-      n.population?.scope === "visible" ? new Set(u.visibleSourceRows) : null,
-    c = assertRangeCellBudget(d);
+  const visibleRowSet =
+      analysisOptions.population?.scope === "visible"
+        ? new Set(filterContext.visibleSourceRows)
+        : null,
+    rangeAddresses = assertRangeCellBudget(analysisRange);
   if (
-    c.some((U) => {
-      const G = _t(U);
-      return G.row >= sheetOrThrow.rowCount || G.col >= sheetOrThrow.colCount;
+    rangeAddresses.some((cellAddress) => {
+      const cellPosition = _t(cellAddress);
+      return (
+        cellPosition.row >= sheetOrThrow.rowCount ||
+        cellPosition.col >= sheetOrThrow.colCount
+      );
     })
   )
     throw new Error("Audit range exceeds sheet dimensions.");
-  const h = new Map();
-  for (const U of c) {
-    const row = _t(U).row;
-    (h.has(row) || h.set(row, { row: row, values: [], addresses: [] }),
-      h.get(row).values.push(workbookWithSettings(r, U)),
-      h.get(row).addresses.push(U));
+  const rowsByIndex = new Map();
+  for (const rangeAddress of rangeAddresses) {
+    const row = _t(rangeAddress).row;
+    (rowsByIndex.has(row) ||
+      rowsByIndex.set(row, { row: row, values: [], addresses: [] }),
+      rowsByIndex
+        .get(row)
+        .values.push(workbookWithSettings(sheetRef, rangeAddress)),
+      rowsByIndex.get(row).addresses.push(rangeAddress));
   }
-  const f = [...h.values()],
-    p = f.shift(),
-    m = p.values.map(normalizeHeaderLabel),
-    v = f.filter(
-      (U) =>
-        (!l || l.has(U.row + 1)) &&
-        U.values.some((value) => value !== null && value !== ""),
+  const rowGroups = [...rowsByIndex.values()],
+    headerRow = rowGroups.shift(),
+    headerLabels = headerRow.values.map(normalizeHeaderLabel),
+    nonemptyDataRows = rowGroups.filter(
+      (rowGroup) =>
+        (!visibleRowSet || visibleRowSet.has(rowGroup.row + 1)) &&
+        rowGroup.values.some((value) => value !== null && value !== ""),
     ),
-    g = (address) => ({
+    citeCell = (address) => ({
       workbookId: activeWorkbook.id,
       sheetId: sheetOrThrow.id,
       sheetName: sheetOrThrow.name,
       address: address,
-      value: workbookWithSettings(r, address),
+      value: workbookWithSettings(sheetRef, address),
     }),
-    b = (U) => U.addresses.map(g),
-    y = (...U) => m.findIndex((G) => U.includes(G)),
-    w = y("debit", "debits"),
-    E = y("credit", "credits"),
-    A = y(
+    citeRow = (rowToCite) => rowToCite.addresses.map(citeCell),
+    findHeaderIndex = (...labels) =>
+      headerLabels.findIndex((headerLabel) => labels.includes(headerLabel)),
+    debitColumn = findHeaderIndex("debit", "debits"),
+    creditColumn = findHeaderIndex("credit", "credits"),
+    amountColumn = findHeaderIndex(
       "net",
       "net amount",
       "amount",
@@ -1322,55 +1507,75 @@ function runAuditAnalysis(activeWorkbook, r, selectedAuditKind, n = {}) {
       "outstanding",
       "outstanding amount",
     ),
-    k =
-      w >= 0 && E >= 0
-        ? [w, E]
-        : A >= 0
-          ? [A]
-          : w >= 0
-            ? [w]
-            : E >= 0
-              ? [E]
+    amountColumns =
+      debitColumn >= 0 && creditColumn >= 0
+        ? [debitColumn, creditColumn]
+        : amountColumn >= 0
+          ? [amountColumn]
+          : debitColumn >= 0
+            ? [debitColumn]
+            : creditColumn >= 0
+              ? [creditColumn]
               : [];
-  if (!k.length) {
-    const U = p.values.findIndex((value, H) =>
-      v.some((Q) => typeof Q.values[H] == "number"),
+  if (!amountColumns.length) {
+    const firstNumericColumn = headerRow.values.findIndex(
+      (value, columnIndex) =>
+        nonemptyDataRows.some(
+          (dataRow) => typeof dataRow.values[columnIndex] == "number",
+        ),
     );
-    U >= 0 && k.push(U);
+    firstNumericColumn >= 0 && amountColumns.push(firstNumericColumn);
   }
-  const F =
-      w >= 0 && E >= 0
+  const amountLabel =
+      debitColumn >= 0 && creditColumn >= 0
         ? "Debit minus Credit"
-        : k.length
-          ? `${String(p.values[k[0]] ?? "unnamed column")} (${columnIndexToLetters(_t(p.addresses[k[0]]).col)})${A < 0 && w < 0 && E < 0 ? "; first numeric column fallback" : ""}`
+        : amountColumns.length
+          ? `${String(headerRow.values[amountColumns[0]] ?? "unnamed column")} (${columnIndexToLetters(_t(headerRow.addresses[amountColumns[0]]).col)})${amountColumn < 0 && debitColumn < 0 && creditColumn < 0 ? "; first numeric column fallback" : ""}`
           : "no numeric amount column",
-    I = (U) => {
-      if (!k.length) return null;
-      const G = k.map((H) => U.values[H]);
-      return G.some((H) => H !== null && H !== "" && typeof H != "number") ||
-        G.every((H) => H === null || H === "")
+    readAmount = (amountRow) => {
+      if (!amountColumns.length) return null;
+      const amountValues = amountColumns.map(
+        (amountColumnIndex) => amountRow.values[amountColumnIndex],
+      );
+      return amountValues.some(
+        (amountValue) =>
+          amountValue !== null &&
+          amountValue !== "" &&
+          typeof amountValue != "number",
+      ) ||
+        amountValues.every(
+          (amountItem) => amountItem === null || amountItem === "",
+        )
         ? null
-        : k.length === 2
-          ? Number(G[0] ?? 0) - Number(G[1] ?? 0)
-          : Number(G[0]);
+        : amountColumns.length === 2
+          ? Number(amountValues[0] ?? 0) - Number(amountValues[1] ?? 0)
+          : Number(amountValues[0]);
     },
-    O = (U) => k.map((G) => g(U.addresses[G])),
+    citeAmounts = (rowForAmounts) =>
+      amountColumns.map((amountColumnPosition) =>
+        citeCell(rowForAmounts.addresses[amountColumnPosition]),
+      ),
     findings = [],
-    z = `${sheetOrThrow.name}!${d}; first selected row is the header; ${v.length} nonempty data rows. Population scope: ${n.population?.scope === "visible" ? `visible filter population (${u.visibleRows} visible / ${u.totalRows} total data rows); original source addresses retained.` : "full selected source range, including hidden and filtered rows."}`,
-    V = v.filter(
-      (U) =>
+    scopeNote = `${sheetOrThrow.name}!${analysisRange}; first selected row is the header; ${nonemptyDataRows.length} nonempty data rows. Population scope: ${analysisOptions.population?.scope === "visible" ? `visible filter population (${filterContext.visibleRows} visible / ${filterContext.totalRows} total data rows); original source addresses retained.` : "full selected source range, including hidden and filtered rows."}`,
+    analysisRows = nonemptyDataRows.filter(
+      (candidateRow) =>
         !["total", "grand total", "totals"].includes(
-          normalizeHeaderLabel(U.values[0]),
+          normalizeHeaderLabel(candidateRow.values[0]),
         ),
     ),
-    D = v.length - V.length,
-    B = `${z}${D ? ` Excluded ${D} row(s) labelled Total, Totals, or Grand total in the first selected column.` : ""}`,
-    _ = V.map((row) => ({ row: row, amount: I(row) })),
-    C = _.filter((U) => U.amount !== null),
-    T = _.length - C.length,
-    N = ` Amount: ${F}.${T ? ` Excluded ${T} row(s) with blank, nonnumeric, or error amount cells.` : ""}`;
+    excludedTotalCount = nonemptyDataRows.length - analysisRows.length,
+    scopeSummary = `${scopeNote}${excludedTotalCount ? ` Excluded ${excludedTotalCount} row(s) labelled Total, Totals, or Grand total in the first selected column.` : ""}`,
+    rowsWithAmounts = analysisRows.map((row) => ({
+      row: row,
+      amount: readAmount(row),
+    })),
+    numericRows = rowsWithAmounts.filter(
+      (rowWithAmount) => rowWithAmount.amount !== null,
+    ),
+    excludedAmountCount = rowsWithAmounts.length - numericRows.length,
+    amountNote = ` Amount: ${amountLabel}.${excludedAmountCount ? ` Excluded ${excludedAmountCount} row(s) with blank, nonnumeric, or error amount cells.` : ""}`;
   if (selectedAuditKind === "duplicates") {
-    const U = y(
+    const identifierColumn = findHeaderIndex(
         "invoice id",
         "invoice number",
         "invoice no",
@@ -1379,207 +1584,268 @@ function runAuditAnalysis(activeWorkbook, r, selectedAuditKind, n = {}) {
         "transaction id",
         "document number",
       ),
-      G = new Map();
-    for (const H of V) {
-      if (U >= 0 && (H.values[U] === null || H.values[U] === "")) continue;
-      const Q =
-        U >= 0
-          ? String(H.values[U]).trim().toLowerCase()
-          : JSON.stringify(H.values);
-      (G.has(Q) || G.set(Q, []), G.get(Q).push(H));
+      groupsByKey = new Map();
+    for (const analysisRow of analysisRows) {
+      if (
+        identifierColumn >= 0 &&
+        (analysisRow.values[identifierColumn] === null ||
+          analysisRow.values[identifierColumn] === "")
+      )
+        continue;
+      const groupKey =
+        identifierColumn >= 0
+          ? String(analysisRow.values[identifierColumn]).trim().toLowerCase()
+          : JSON.stringify(analysisRow.values);
+      (groupsByKey.has(groupKey) || groupsByKey.set(groupKey, []),
+        groupsByKey.get(groupKey).push(analysisRow));
     }
-    for (const [H, Q] of G)
-      Q.length > 1 &&
+    for (const [duplicateKey, duplicateRows] of groupsByKey)
+      duplicateRows.length > 1 &&
         findings.push({
-          id: `duplicate-${Q[0].row + 1}`,
-          title: `${U >= 0 ? String(p.values[U]) : "Repeated row"}: ${H}`,
-          detail: `${Q.length} occurrences on rows ${Q.map((X) => X.row + 1).join(", ")}. Repeated journal IDs can be valid for multi-line journals; inspect the source before concluding an error.`,
+          id: `duplicate-${duplicateRows[0].row + 1}`,
+          title: `${identifierColumn >= 0 ? String(headerRow.values[identifierColumn]) : "Repeated row"}: ${duplicateKey}`,
+          detail: `${duplicateRows.length} occurrences on rows ${duplicateRows.map((rowEntry) => rowEntry.row + 1).join(", ")}. Repeated journal IDs can be valid for multi-line journals; inspect the source before concluding an error.`,
           severity: "warning",
-          citations: Q.flatMap((X) =>
-            U >= 0 ? [g(X.addresses[U]), ...O(X)] : b(X),
+          citations: duplicateRows.flatMap((duplicateRow) =>
+            identifierColumn >= 0
+              ? [
+                  citeCell(duplicateRow.addresses[identifierColumn]),
+                  ...citeAmounts(duplicateRow),
+                ]
+              : citeRow(duplicateRow),
           ),
         });
     return {
       title: "Duplicate scan",
-      summary: `${B} ${findings.length} repeated ${U >= 0 ? `${String(p.values[U])} group(s), matching trimmed identifiers without case sensitivity` : "entire-row group(s), matching exact evaluated values"}.`,
+      summary: `${scopeSummary} ${findings.length} repeated ${identifierColumn >= 0 ? `${String(headerRow.values[identifierColumn])} group(s), matching trimmed identifiers without case sensitivity` : "entire-row group(s), matching exact evaluated values"}.`,
       findings: findings,
     };
   }
   if (selectedAuditKind === "materiality") {
-    const U = n.threshold ?? 5e4;
-    if (!Number.isFinite(U) || U < 0)
+    const materialityThreshold = analysisOptions.threshold ?? 5e4;
+    if (!Number.isFinite(materialityThreshold) || materialityThreshold < 0)
       throw new Error(
         "Materiality threshold must be a nonnegative finite number.",
       );
-    if (!k.length)
+    if (!amountColumns.length)
       throw new Error(
         "No numeric amount column found. Include a Debit/Credit, Amount, Net, or Balance column.",
       );
-    for (const { row, amount } of C)
-      Math.abs(amount) >= U &&
+    for (const { row, amount } of numericRows)
+      Math.abs(amount) >= materialityThreshold &&
         findings.push({
           id: `materiality-${row.row + 1}`,
           title: `Row ${row.row + 1} · ${formatAmountTwoDecimals(amount)}`,
-          detail: `Absolute row amount ${formatAmountTwoDecimals(Math.abs(amount))} meets or exceeds the screening threshold ${formatAmountTwoDecimals(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
+          detail: `Absolute row amount ${formatAmountTwoDecimals(Math.abs(amount))} meets or exceeds the screening threshold ${formatAmountTwoDecimals(materialityThreshold)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
           severity: "high",
-          citations: b(row),
+          citations: citeRow(row),
         });
     return {
       title: "Materiality screen",
-      summary: `${B}${N} ${findings.length} row(s) meet the absolute-value threshold of ${formatAmountTwoDecimals(U)}.`,
+      summary: `${scopeSummary}${amountNote} ${findings.length} row(s) meet the absolute-value threshold of ${formatAmountTwoDecimals(materialityThreshold)}.`,
       findings: findings,
     };
   }
   if (selectedAuditKind === "sample") {
-    const U = n.sampleSize ?? 8,
-      G = n.seed ?? "audit-2025";
-    if (!Number.isInteger(U) || U < 1 || U > 500)
+    const sampleSize = analysisOptions.sampleSize ?? 8,
+      sampleSeed = analysisOptions.seed ?? "audit-2025";
+    if (!Number.isInteger(sampleSize) || sampleSize < 1 || sampleSize > 500)
       throw new Error("Sample size must be a whole number from 1 to 500.");
-    if (G.length > 200)
+    if (sampleSeed.length > 200)
       throw new Error("Sample seed must contain at most 200 characters.");
-    let H = 2166136261;
-    for (let J = 0; J < G.length; J++)
-      ((H ^= G.charCodeAt(J)), (H = Math.imul(H, 16777619)));
-    const Q = () => {
-        H += 1831565813;
-        let J = H;
+    let seedHash = 2166136261;
+    for (let seedIndex = 0; seedIndex < sampleSeed.length; seedIndex++)
+      ((seedHash ^= sampleSeed.charCodeAt(seedIndex)),
+        (seedHash = Math.imul(seedHash, 16777619)));
+    const nextRandom = () => {
+        seedHash += 1831565813;
+        let mixedValue = seedHash;
         return (
-          (J = Math.imul(J ^ (J >>> 15), J | 1)),
-          (J ^= J + Math.imul(J ^ (J >>> 7), J | 61)),
-          ((J ^ (J >>> 14)) >>> 0) / 4294967296
+          (mixedValue = Math.imul(
+            mixedValue ^ (mixedValue >>> 15),
+            mixedValue | 1,
+          )),
+          (mixedValue ^=
+            mixedValue +
+            Math.imul(mixedValue ^ (mixedValue >>> 7), mixedValue | 61)),
+          ((mixedValue ^ (mixedValue >>> 14)) >>> 0) / 4294967296
         );
       },
-      X = [...V];
-    for (let J = X.length - 1; J > 0; J--) {
-      const q = Math.floor(Q() * (J + 1));
-      [X[J], X[q]] = [X[q], X[J]];
+      shuffledRows = [...analysisRows];
+    for (
+      let shuffleIndex = shuffledRows.length - 1;
+      shuffleIndex > 0;
+      shuffleIndex--
+    ) {
+      const swapIndex = Math.floor(nextRandom() * (shuffleIndex + 1));
+      [shuffledRows[shuffleIndex], shuffledRows[swapIndex]] = [
+        shuffledRows[swapIndex],
+        shuffledRows[shuffleIndex],
+      ];
     }
     return (
-      X.slice(0, U)
-        .sort((J, q) => J.row - q.row)
-        .forEach((J) =>
+      shuffledRows
+        .slice(0, sampleSize)
+        .sort((leftRow, rightRow) => leftRow.row - rightRow.row)
+        .forEach((selectedRow) =>
           findings.push({
-            id: `sample-${J.row + 1}`,
-            title: `Selected row ${J.row + 1}`,
-            detail: `Selected without replacement using seed “${G}”. Preserve the workbook revision, population range, row order, and seed to reproduce.`,
+            id: `sample-${selectedRow.row + 1}`,
+            title: `Selected row ${selectedRow.row + 1}`,
+            detail: `Selected without replacement using seed “${sampleSeed}”. Preserve the workbook revision, population range, row order, and seed to reproduce.`,
             severity: "info",
-            citations: b(J),
+            citations: citeRow(selectedRow),
           }),
         ),
       {
         title: "Reproducible sample",
-        summary: `${B} Selected ${findings.length} of ${V.length} rows (requested ${U}), seed “${G}”, FNV-1a seed + Mulberry32/Fisher–Yates. Simple random row selection; no statistical confidence or population conclusion is inferred.${workbookHasVolatileFunctions(activeWorkbook) ? " This workbook contains volatile formulas. The seed reproduces row selection for the same population and order, not changing formula values; preserve a reviewed value snapshot for evidence." : ""}`,
+        summary: `${scopeSummary} Selected ${findings.length} of ${analysisRows.length} rows (requested ${sampleSize}), seed “${sampleSeed}”, FNV-1a seed + Mulberry32/Fisher–Yates. Simple random row selection; no statistical confidence or population conclusion is inferred.${workbookHasVolatileFunctions(activeWorkbook) ? " This workbook contains volatile formulas. The seed reproduces row selection for the same population and order, not changing formula values; preserve a reviewed value snapshot for evidence." : ""}`,
         findings: findings,
       }
     );
   }
   if (selectedAuditKind === "summary") {
-    if (!k.length)
+    if (!amountColumns.length)
       throw new Error(
         "No numeric amount column found. Include a Debit/Credit, Amount, Net, or Balance column.",
       );
-    const U = y("account", "account name", "gl account", "category"),
-      G = new Map();
-    for (const { row, amount } of C) {
-      const X = U < 0 ? "All rows" : String(row.values[U] ?? "(blank account)");
-      G.has(X) || G.set(X, { total: 0, rows: [] });
-      const J = G.get(X);
-      ((J.total += amount), J.rows.push(row));
+    const accountColumn = findHeaderIndex(
+        "account",
+        "account name",
+        "gl account",
+        "category",
+      ),
+      totalsByAccount = new Map();
+    for (const { row, amount } of numericRows) {
+      const accountLabel =
+        accountColumn < 0
+          ? "All rows"
+          : String(row.values[accountColumn] ?? "(blank account)");
+      totalsByAccount.has(accountLabel) ||
+        totalsByAccount.set(accountLabel, { total: 0, rows: [] });
+      const accountTotal = totalsByAccount.get(accountLabel);
+      ((accountTotal.total += amount), accountTotal.rows.push(row));
     }
     return (
-      [...G]
-        .sort(([H], [Q]) => H.localeCompare(Q))
-        .forEach(([H, Q], X) =>
+      [...totalsByAccount]
+        .sort(([leftAccount], [rightAccount]) =>
+          leftAccount.localeCompare(rightAccount),
+        )
+        .forEach(([accountName, accountGroup], groupIndex) =>
           findings.push({
-            id: `summary-${X}`,
-            title: `${H} · ${formatAmountTwoDecimals(Q.total)}`,
-            detail: `${Q.rows.length} row(s); signed ${F} totals ${formatAmountTwoDecimals(Q.total)}.`,
+            id: `summary-${groupIndex}`,
+            title: `${accountName} · ${formatAmountTwoDecimals(accountGroup.total)}`,
+            detail: `${accountGroup.rows.length} row(s); signed ${amountLabel} totals ${formatAmountTwoDecimals(accountGroup.total)}.`,
             severity: "info",
-            citations: Q.rows.flatMap((row) => [
-              ...(U >= 0 ? [g(row.addresses[U])] : []),
-              ...O(row),
+            citations: accountGroup.rows.flatMap((row) => [
+              ...(accountColumn >= 0
+                ? [citeCell(row.addresses[accountColumn])]
+                : []),
+              ...citeAmounts(row),
             ]),
           }),
         ),
       {
         title: "Account summary",
-        summary: `${B}${N} ${G.size} group(s); signed total ${formatAmountTwoDecimals(C.reduce((H, Q) => H + Q.amount, 0))}. Groups use exact evaluated account labels.`,
+        summary: `${scopeSummary}${amountNote} ${totalsByAccount.size} group(s); signed total ${formatAmountTwoDecimals(numericRows.reduce((runningTotal, signedEntry) => runningTotal + signedEntry.amount, 0))}. Groups use exact evaluated account labels.`,
         findings: findings,
       }
     );
   }
   if (selectedAuditKind === "aging") {
-    if (!n.asOf || !Number.isFinite(parseDateOnlyText(n.asOf)))
+    if (
+      !analysisOptions.asOf ||
+      !Number.isFinite(parseDateOnlyText(analysisOptions.asOf))
+    )
       throw new Error(
         "Aging requires a valid as-of date in YYYY-MM-DD format.",
       );
-    if (!k.length) throw new Error("Aging requires a numeric amount column.");
-    const U = y("due date", "invoice date", "date", "posting date");
-    if (U < 0)
+    if (!amountColumns.length)
+      throw new Error("Aging requires a numeric amount column.");
+    const dateColumn = findHeaderIndex(
+      "due date",
+      "invoice date",
+      "date",
+      "posting date",
+    );
+    if (dateColumn < 0)
       throw new Error(
         "Aging requires a Date, Due date, Invoice date, or Posting date column.",
       );
-    const G = Date.parse(`${n.asOf}T00:00:00Z`),
-      H = new Map(
+    const asOfTime = Date.parse(`${analysisOptions.asOf}T00:00:00Z`),
+      agingBuckets = new Map(
         [
           "Future / not due",
           "0–30 days",
           "31–60 days",
           "61–90 days",
           "Over 90 days",
-        ].map((X) => [X, { total: 0, rows: [] }]),
+        ].map((bucketLabel) => [bucketLabel, { total: 0, rows: [] }]),
       );
-    let Q = 0;
-    for (const { row, amount } of C) {
-      const q = row.values[U],
-        W =
-          typeof q == "number"
+    let excludedDateCount = 0;
+    for (const { row, amount } of numericRows) {
+      const dateValue = row.values[dateColumn],
+        dateTimestamp =
+          typeof dateValue == "number"
             ? Date.UTC(1899, 11, 31) +
-              (Math.floor(q) > 60 ? Math.floor(q) - 1 : Math.floor(q)) * 864e5
-            : typeof q == "string"
-              ? parseDateOnlyText(q)
+              (Math.floor(dateValue) > 60
+                ? Math.floor(dateValue) - 1
+                : Math.floor(dateValue)) *
+                864e5
+            : typeof dateValue == "string"
+              ? parseDateOnlyText(dateValue)
               : NaN;
-      if (!Number.isFinite(W) || q === 60) {
-        Q++;
+      if (!Number.isFinite(dateTimestamp) || dateValue === 60) {
+        excludedDateCount++;
         continue;
       }
-      const K = Math.floor((G - W) / 864e5),
-        te =
-          K < 0
+      const ageDays = Math.floor((asOfTime - dateTimestamp) / 864e5),
+        ageBucket =
+          ageDays < 0
             ? "Future / not due"
-            : K <= 30
+            : ageDays <= 30
               ? "0–30 days"
-              : K <= 60
+              : ageDays <= 60
                 ? "31–60 days"
-                : K <= 90
+                : ageDays <= 90
                   ? "61–90 days"
                   : "Over 90 days",
-        ae = H.get(te);
-      ((ae.total += amount), ae.rows.push(row));
+        bucketEntry = agingBuckets.get(ageBucket);
+      ((bucketEntry.total += amount), bucketEntry.rows.push(row));
     }
     return (
-      [...H].forEach(([X, J], q) =>
+      [...agingBuckets].forEach(([bucketName, bucketGroup], bucketIndex) =>
         findings.push({
-          id: `aging-${q}`,
-          title: `${X} · ${formatAmountTwoDecimals(J.total)}`,
-          detail: `${J.rows.length} row(s) as of ${n.asOf}, based on ${String(p.values[U])}. ${m[U] !== "due date" ? "Age since transaction date; this is not a days-past-due assessment." : "Days relative to due date."}`,
-          severity: X === "Over 90 days" && J.rows.length ? "warning" : "info",
-          citations: J.rows.flatMap((row) => [g(row.addresses[U]), ...O(row)]),
+          id: `aging-${bucketIndex}`,
+          title: `${bucketName} · ${formatAmountTwoDecimals(bucketGroup.total)}`,
+          detail: `${bucketGroup.rows.length} row(s) as of ${analysisOptions.asOf}, based on ${String(headerRow.values[dateColumn])}. ${headerLabels[dateColumn] !== "due date" ? "Age since transaction date; this is not a days-past-due assessment." : "Days relative to due date."}`,
+          severity:
+            bucketName === "Over 90 days" && bucketGroup.rows.length
+              ? "warning"
+              : "info",
+          citations: bucketGroup.rows.flatMap((row) => [
+            citeCell(row.addresses[dateColumn]),
+            ...citeAmounts(row),
+          ]),
         }),
       ),
       {
         title: "Aging analysis",
-        summary: `${B}${N} As of ${n.asOf}; ${Q} additional row(s) excluded for invalid or missing dates. Signed amounts are used; for receivables aging select an open-item population and outstanding amounts.`,
+        summary: `${scopeSummary}${amountNote} As of ${analysisOptions.asOf}; ${excludedDateCount} additional row(s) excluded for invalid or missing dates. Signed amounts are used; for receivables aging select an open-item population and outstanding amounts.`,
         findings: findings,
       }
     );
   }
   throw new Error("Unsupported audit analysis.");
 }
-function recordCrossWorkbookImport(activeWorkbook, r, actor, n) {
-  if (activeWorkbook.id === r.id)
+function recordCrossWorkbookImport(
+  activeWorkbook,
+  sourceWorkbook,
+  actor,
+  historyDirection,
+) {
+  if (activeWorkbook.id === sourceWorkbook.id)
     throw Error("Use the ordinary transaction path for the same workbook.");
-  const workbookInput = normalizeWorkbookInput(structuredClone(r)),
+  const workbookInput = normalizeWorkbookInput(structuredClone(sourceWorkbook)),
     revision = Math.max(activeWorkbook.revision, workbookInput.revision) + 1;
   if (!Number.isSafeInteger(revision))
     throw Error("The workbook revision limit has been reached.");
@@ -1597,7 +1863,7 @@ function recordCrossWorkbookImport(activeWorkbook, r, actor, n) {
           id: crypto.randomUUID(),
           timestamp: new Date().toISOString(),
           actor: actor,
-          action: `${n === "undo" ? "Undo" : "Redo"} file import; previous ID [${activeWorkbook.id}] rev ${activeWorkbook.revision}; source rev ${r.revision}`,
+          action: `${historyDirection === "undo" ? "Undo" : "Redo"} file import; previous ID [${activeWorkbook.id}] rev ${activeWorkbook.revision}; source rev ${sourceWorkbook.revision}`,
           changes: [],
         },
       ],
@@ -1679,46 +1945,53 @@ const keyboardShortcutGroups = [
   ["Ctrl / Command + 1", "Open Format Cells", "Grid"],
   ["F6 / Shift + F6", "Cycle worksheet panes", "Split grid"],
 ];
-function handleDialogKeyDown(e, onClose) {
-  if (!e.defaultPrevented) {
-    if (e.key === "Escape")
-      (e.preventDefault(), e.stopPropagation(), onClose());
-    else if (e.key === "Tab") {
-      const t = Array.from(
-          e.currentTarget.querySelectorAll(
+function handleDialogKeyDown(keyboardEvent, onClose) {
+  if (!keyboardEvent.defaultPrevented) {
+    if (keyboardEvent.key === "Escape")
+      (keyboardEvent.preventDefault(),
+        keyboardEvent.stopPropagation(),
+        onClose());
+    else if (keyboardEvent.key === "Tab") {
+      const focusableElements = Array.from(
+          keyboardEvent.currentTarget.querySelectorAll(
             'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
           ),
-        ).filter((a) => !a.closest("[hidden]")),
-        n = t[0],
-        o = t.at(-1);
-      e.shiftKey && document.activeElement === n
-        ? (e.preventDefault(), o == null || o.focus())
-        : !e.shiftKey &&
-          document.activeElement === o &&
-          (e.preventDefault(), n == null || n.focus());
+        ).filter((focusableElement) => !focusableElement.closest("[hidden]")),
+        firstFocusable = focusableElements[0],
+        lastFocusable = focusableElements.at(-1);
+      keyboardEvent.shiftKey && document.activeElement === firstFocusable
+        ? (keyboardEvent.preventDefault(),
+          lastFocusable == null || lastFocusable.focus())
+        : !keyboardEvent.shiftKey &&
+          document.activeElement === lastFocusable &&
+          (keyboardEvent.preventDefault(),
+          firstFocusable == null || firstFocusable.focus());
     }
   }
 }
 function CommandReferenceDialog({ commands, onClose, onLocate }) {
-  const [n, o] = ne.useState(""),
-    a = ne.useRef(null),
-    s = ne.useId();
+  const [searchQuery, setSearchQuery] = ne.useState(""),
+    searchInputRef = ne.useRef(null),
+    dialogTitleId = ne.useId();
   ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      a.current?.focus(),
+      searchInputRef.current?.focus(),
       () => {
         activeElement?.isConnected &&
           activeElement.focus({ preventScroll: true });
       }
     );
   }, []);
-  const d = (c) => c.toLowerCase().includes(n.trim().toLowerCase()),
-    u = commands.filter((command) =>
-      d(`${command.name} ${command.location} ${command.reason ?? ""}`),
+  const matchesSearch = (text) =>
+      text.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+    matchingCommands = commands.filter((command) =>
+      matchesSearch(
+        `${command.name} ${command.location} ${command.reason ?? ""}`,
+      ),
     ),
-    l = keyboardShortcutGroups.filter((keyboardShortcutGroup) =>
-      d(keyboardShortcutGroup.join(" ")),
+    matchingShortcutGroups = keyboardShortcutGroups.filter(
+      (keyboardShortcutGroup) => matchesSearch(keyboardShortcutGroup.join(" ")),
     );
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -1726,13 +1999,13 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
       className: "lg-command-reference",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": s,
-      onKeyDown: (c) => handleDialogKeyDown(c, onClose),
+      "aria-labelledby": dialogTitleId,
+      onKeyDown: (keyEvent) => handleDialogKeyDown(keyEvent, onClose),
       children: [
         i.jsxs("header", {
           children: [
             i.jsx("h2", {
-              id: s,
+              id: dialogTitleId,
               children: i.jsx(LocalizedText, {
                 children: "Commands & shortcuts",
               }),
@@ -1756,19 +2029,19 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
           children: [
             i.jsx(LocalizedText, { children: "Search commands and shortcuts" }),
             i.jsx("input", {
-              ref: a,
-              value: n,
-              onChange: (event) => o(event.target.value),
+              ref: searchInputRef,
+              value: searchQuery,
+              onChange: (event) => setSearchQuery(event.target.value),
             }),
           ],
         }),
         i.jsxs("p", {
           role: "status",
           children: [
-            u.length,
+            matchingCommands.length,
             " ",
             i.jsx(LocalizedText, { children: "commands and " }),
-            l.length,
+            matchingShortcutGroups.length,
             " ",
             i.jsx(LocalizedText, { children: "shortcuts" }),
           ],
@@ -1776,7 +2049,7 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
         i.jsxs("div", {
           className: "lg-command-results",
           children: [
-            l.length > 0 &&
+            matchingShortcutGroups.length > 0 &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
@@ -1808,70 +2081,75 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: l.map(([c, h, f]) =>
-                          i.jsxs(
-                            "tr",
-                            {
-                              children: [
-                                i.jsx("th", { children: c }),
-                                i.jsx("td", { children: h }),
-                                i.jsx("td", { children: f }),
-                              ],
-                            },
-                            c,
-                          ),
+                        children: matchingShortcutGroups.map(
+                          ([shortcutKeys, shortcutAction, shortcutWhere]) =>
+                            i.jsxs(
+                              "tr",
+                              {
+                                children: [
+                                  i.jsx("th", { children: shortcutKeys }),
+                                  i.jsx("td", { children: shortcutAction }),
+                                  i.jsx("td", { children: shortcutWhere }),
+                                ],
+                              },
+                              shortcutKeys,
+                            ),
                         ),
                       }),
                     ],
                   }),
                 ],
               }),
-            u.length > 0 &&
+            matchingCommands.length > 0 &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
                     children: i.jsx(LocalizedText, { children: "Commands" }),
                   }),
                   i.jsx("ul", {
-                    children: u.map((c) =>
+                    children: matchingCommands.map((commandEntry) =>
                       i.jsxs(
                         "li",
                         {
                           children: [
                             i.jsxs("div", {
                               children: [
-                                i.jsx("strong", { children: c.name }),
-                                i.jsx("span", { children: c.location }),
-                                c.reason &&
+                                i.jsx("strong", {
+                                  children: commandEntry.name,
+                                }),
+                                i.jsx("span", {
+                                  children: commandEntry.location,
+                                }),
+                                commandEntry.reason &&
                                   i.jsxs("p", {
                                     children: [
                                       i.jsx(LocalizedText, {
                                         children: "Unavailable: ",
                                       }),
-                                      c.reason,
+                                      commandEntry.reason,
                                     ],
                                   }),
                               ],
                             }),
-                            !c.reason &&
+                            !commandEntry.reason &&
                               i.jsx("button", {
                                 type: "button",
-                                "aria-label": `Show ${c.name} in ${c.location}`,
-                                onClick: () => onLocate(c),
+                                "aria-label": `Show ${commandEntry.name} in ${commandEntry.location}`,
+                                onClick: () => onLocate(commandEntry),
                                 children: i.jsx(LocalizedText, {
                                   children: "Show command",
                                 }),
                               }),
                           ],
                         },
-                        c.id,
+                        commandEntry.id,
                       ),
                     ),
                   }),
                 ],
               }),
-            !u.length &&
-              !l.length &&
+            !matchingCommands.length &&
+              !matchingShortcutGroups.length &&
               i.jsx("p", {
                 children: i.jsx(LocalizedText, {
                   children:
@@ -1890,77 +2168,95 @@ function CommandReferenceDialog({ commands, onClose, onLocate }) {
     }),
   });
 }
-function extractElementText(e) {
-  return ne.Children.toArray(e)
-    .map((r) =>
-      typeof r == "string" || typeof r == "number"
-        ? String(r)
-        : ne.isValidElement(r)
-          ? extractElementText(r.props.children)
+function extractElementText(children) {
+  return ne.Children.toArray(children)
+    .map((child) =>
+      typeof child == "string" || typeof child == "number"
+        ? String(child)
+        : ne.isValidElement(child)
+          ? extractElementText(child.props.children)
           : "",
     )
     .filter(Boolean)
     .join(" ")
     .trim();
 }
-function collectRibbonCommands(e, r, t, n) {
+function collectRibbonCommands(
+  ribbonContent,
+  tabName,
+  componentTypes,
+  getDisabledReason,
+) {
   const commands = [];
-  function a(s, d = r, u) {
-    return ne.Children.map(s, (l) => {
-      if (!ne.isValidElement(l)) return l;
-      const props = l.props;
-      if (props["data-workbook-command"]) return l;
-      let h = "",
+  function mapCommandChildren(
+    children,
+    locationLabel = tabName,
+    inheritedLabel,
+  ) {
+    return ne.Children.map(children, (childElement) => {
+      if (!ne.isValidElement(childElement)) return childElement;
+      const props = childElement.props;
+      if (props["data-workbook-command"]) return childElement;
+      let commandLabel = "",
         disabled = props.disabled,
-        p = {};
+        injectedProps = {};
       if (
-        (l.type === t.group
-          ? ((d = `${r} → ${props.label}`),
+        (childElement.type === componentTypes.group
+          ? ((locationLabel = `${tabName} → ${props.label}`),
             props.onDialog &&
-              ((h = props.dialogLabel ?? `${props.label} settings`),
+              ((commandLabel = props.dialogLabel ?? `${props.label} settings`),
               (disabled = props.dialogDisabled)))
-          : l.type === t.command || l.type === t.icon
-            ? (h = props.label ?? "")
-            : l.type === t.color
-              ? (h = props.kind === "fill" ? "Fill Color" : "Font Color")
-              : ["button", "select", "input"].includes(l.type) &&
+          : childElement.type === componentTypes.command ||
+              childElement.type === componentTypes.icon
+            ? (commandLabel = props.label ?? "")
+            : childElement.type === componentTypes.color
+              ? (commandLabel =
+                  props.kind === "fill" ? "Fill Color" : "Font Color")
+              : ["button", "select", "input"].includes(childElement.type) &&
                 props.role !== "tab" &&
-                (h =
+                (commandLabel =
                   props["aria-label"] ??
                   props.title ??
-                  u ??
+                  inheritedLabel ??
                   extractElementText(props.children)),
-        h)
+        commandLabel)
       ) {
-        h = h.replace(/ \(Ctrl\+[A-Z]\)$/, "");
-        const commandId = `${r}:${commands.length}`,
-          reason = disabled ? n(h) : undefined;
-        (commands.push({ id: commandId, name: h, location: d, reason: reason }),
-          l.type === t.group
-            ? (p = { commandId: commandId, reason: reason })
-            : typeof l.type == "string"
-              ? (p = {
+        commandLabel = commandLabel.replace(/ \(Ctrl\+[A-Z]\)$/, "");
+        const commandId = `${tabName}:${commands.length}`,
+          reason = disabled ? getDisabledReason(commandLabel) : undefined;
+        (commands.push({
+          id: commandId,
+          name: commandLabel,
+          location: locationLabel,
+          reason: reason,
+        }),
+          childElement.type === componentTypes.group
+            ? (injectedProps = { commandId: commandId, reason: reason })
+            : typeof childElement.type == "string"
+              ? (injectedProps = {
                   "data-workbook-command": commandId,
-                  "aria-label": props["aria-label"] ?? h,
+                  "aria-label": props["aria-label"] ?? commandLabel,
                   "aria-description": reason,
-                  ...(reason ? { title: `${h}: ${reason}` } : {}),
+                  ...(reason ? { title: `${commandLabel}: ${reason}` } : {}),
                 })
-              : (p = { commandId: commandId, reason: reason }));
+              : (injectedProps = { commandId: commandId, reason: reason }));
       }
       return ne.cloneElement(
-        l,
-        p,
+        childElement,
+        injectedProps,
         props.children === undefined
           ? undefined
-          : a(
+          : mapCommandChildren(
               props.children,
-              d,
-              l.type === "label" ? extractElementText(props.children) : u,
+              locationLabel,
+              childElement.type === "label"
+                ? extractElementText(props.children)
+                : inheritedLabel,
             ),
       );
     });
   }
-  return { content: a(e), commands: commands };
+  return { content: mapCommandChildren(ribbonContent), commands: commands };
 }
 const Uh = [
     "Home",
@@ -2003,7 +2299,7 @@ const Uh = [
     "#002060",
     "#7030A0",
   ],
-  resolveRibbonCommandLabel = (e) =>
+  resolveRibbonCommandLabel = (label) =>
     ({
       "New Note": "Add note",
       "New / Edit Note": "Add note",
@@ -2015,7 +2311,7 @@ const Uh = [
       "Sort Z to A": "Sort descending view",
       "AI Assistant": "AI assistant",
       "Ask AI Assistant": "AI assistant",
-    })[e] ?? e.replace(/ \(Ctrl\+[A-Z]\)$/, "");
+    })[label] ?? label.replace(/ \(Ctrl\+[A-Z]\)$/, "");
 function RibbonGroup({
   commandId,
   reason,

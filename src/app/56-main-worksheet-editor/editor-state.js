@@ -267,7 +267,7 @@ function useViewDisplayState() {
     [isHeadingsVisible, setIsHeadingsVisible] = ne.useState(true),
     [zoomPercent, setZoomPercent] = ne.useState(100),
     [axisResizeState, setAxisResizeState] = ne.useState(null),
-    [bn, setAutoFitRowHeights] = ne.useState({});
+    [autoFitRowHeights, setAutoFitRowHeights] = ne.useState({});
   return {
     isShowingFormulas,
     setIsShowingFormulas,
@@ -279,7 +279,7 @@ function useViewDisplayState() {
     setZoomPercent,
     axisResizeState,
     setAxisResizeState,
-    bn,
+    bn: autoFitRowHeights,
     setAutoFitRowHeights,
   };
 }

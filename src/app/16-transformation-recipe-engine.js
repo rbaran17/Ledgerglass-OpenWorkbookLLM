@@ -45,11 +45,13 @@ import {
   assertOutputNameUnreferenced,
 } from "./15-data-model-dialog.js";
 
-function discoverArrayFormulaAnchors(workbook, r, context) {
-  const n = [];
-  let o = 0,
-    a = 0;
-  for (const sheet of new Map(r.map((f) => [f.sheet.id, f.sheet])).values())
+function discoverArrayFormulaAnchors(workbook, sheetRanges, context) {
+  const arrayAnchors = [];
+  let formulaCellCount = 0,
+    formulaCharacterCount = 0;
+  for (const sheet of new Map(
+    sheetRanges.map((sheetRange) => [sheetRange.sheet.id, sheetRange.sheet]),
+  ).values())
     for (const [anchor, cell] of Object.entries(sheet.cells)) {
       if (
         typeof cell.raw != "string" ||
@@ -57,90 +59,109 @@ function discoverArrayFormulaAnchors(workbook, r, context) {
         cell.literal
       )
         continue;
-      (++o > dataModelBudgets.formulaCells ||
-        (a += cell.raw.length) > dataModelBudgets.formulaCharacters) &&
+      (++formulaCellCount > dataModelBudgets.formulaCells ||
+        (formulaCharacterCount += cell.raw.length) >
+          dataModelBudgets.formulaCharacters) &&
         failWithMessage(
           "Array checking supports at most 1,000 formulas and 100,000 formula characters on the participating worksheets.",
         );
-      const m = _t(anchor);
-      r.some((g) => {
-        if (g.sheet.id !== sheet.id) return false;
-        const rangeAddress = parseRangeAddress(g.range),
-          y = Math.max(m.row, rangeAddress.firstRow),
-          w = Math.max(m.col, rangeAddress.firstCol);
+      const anchorPosition = _t(anchor);
+      sheetRanges.some((rangeEntry) => {
+        if (rangeEntry.sheet.id !== sheet.id) return false;
+        const rangeAddress = parseRangeAddress(rangeEntry.range),
+          overlapFirstRow = Math.max(anchorPosition.row, rangeAddress.firstRow),
+          overlapFirstCol = Math.max(anchorPosition.col, rangeAddress.firstCol);
         return (
-          y <= rangeAddress.lastRow &&
-          w <= rangeAddress.lastCol &&
-          (y - m.row + 1) * (w - m.col + 1) <= 1e4
+          overlapFirstRow <= rangeAddress.lastRow &&
+          overlapFirstCol <= rangeAddress.lastCol &&
+          (overlapFirstRow - anchorPosition.row + 1) *
+            (overlapFirstCol - anchorPosition.col + 1) <=
+            1e4
         );
-      }) && n.push({ sheet: sheet, anchor: anchor });
+      }) && arrayAnchors.push({ sheet: sheet, anchor: anchor });
     }
   if (
-    (n.length > dataModelBudgets.discoveryAnchors &&
+    (arrayAnchors.length > dataModelBudgets.discoveryAnchors &&
       failWithMessage(
         "The selection has more than 50 possible array anchors. Choose a new output sheet or a smaller reviewed region.",
       ),
-    !n.length)
+    !arrayAnchors.length)
   )
     return;
-  const s = new Set(),
-    d = (h, f) => JSON.stringify([h, f]),
-    u = {
+  const dependencyKeys = new Set(),
+    dependencyKey = (keySheetId, keyAddress) =>
+      JSON.stringify([keySheetId, keyAddress]),
+    dependencyWorkbook = {
       ...workbook,
       sheets: workbook.sheets.map((sheet) =>
         sheet.veryHidden ? { ...sheet, hidden: true } : sheet,
       ),
     };
-  for (const h of n) {
-    assertSelectionInAuthorizedSheet(h.sheet, h.anchor, context);
-    const f = inspectFormulaDependencies(u, {
-        sheetId: h.sheet.id,
-        address: h.anchor,
+  for (const arrayAnchor of arrayAnchors) {
+    assertSelectionInAuthorizedSheet(
+      arrayAnchor.sheet,
+      arrayAnchor.anchor,
+      context,
+    );
+    const dependencyReport = inspectFormulaDependencies(dependencyWorkbook, {
+        sheetId: arrayAnchor.sheet.id,
+        address: arrayAnchor.anchor,
         direction: "precedents",
         depth: 8,
         includeHidden: context.includeHidden,
         allowedSheetIds: context.allowedSheetIds,
         limits: { maxFormulaCells: 1e3, maxNodes: 500, maxReferences: 2e3 },
       }),
-      p = [f.target, ...f.nodes],
-      m = new Set(p.map((event) => event.key));
-    (f.coverage.truncated ||
-      f.coverage.depthLimited ||
-      f.cycles.length ||
-      f.issues.some((issue) => m.has(issue.from))) &&
+      closureNodes = [dependencyReport.target, ...dependencyReport.nodes],
+      closureKeys = new Set(closureNodes.map((event) => event.key));
+    (dependencyReport.coverage.truncated ||
+      dependencyReport.coverage.depthLimited ||
+      dependencyReport.cycles.length ||
+      dependencyReport.issues.some((issue) => closureKeys.has(issue.from))) &&
       failWithMessage(
         "Array discovery requires a complete, authorized static dependency closure. Resolve hidden, dynamic, cyclic or unsupported formula dependencies before splitting.",
       );
-    for (const v of p) {
-      const sheet = workbook.sheets.find((sheet) => sheet.id === v.sheetId);
-      (assertSelectionInAuthorizedSheet(sheet, v.address, context),
-        (!sheet.cells[v.address] || sheet.cells[v.address].raw === null) &&
+    for (const closureNode of closureNodes) {
+      const sheet = workbook.sheets.find(
+        (sheet) => sheet.id === closureNode.sheetId,
+      );
+      (assertSelectionInAuthorizedSheet(sheet, closureNode.address, context),
+        (!sheet.cells[closureNode.address] ||
+          sheet.cells[closureNode.address].raw === null) &&
           failWithMessage(
             "Array discovery cannot infer blank or possible spill-child dependencies. Use a reviewed values snapshot before splitting.",
           ),
-        s.add(d(v.sheetId, v.address)),
-        s.size > dataModelBudgets.dependencyCells &&
+        dependencyKeys.add(
+          dependencyKey(closureNode.sheetId, closureNode.address),
+        ),
+        dependencyKeys.size > dataModelBudgets.dependencyCells &&
           failWithMessage(
             "Array discovery exceeds 2,000 dependency cells. Use a smaller reviewed values snapshot.",
           ));
     }
   }
-  const l = {
+  const allowedWorkbook = {
       ...workbook,
       sheets: workbook.sheets
         .filter((sheet) => context.allowedSheetIds.includes(sheet.id))
-        .map((h) => ({
-          ...h,
+        .map((allowedSheet) => ({
+          ...allowedSheet,
           cells: Object.fromEntries(
-            Object.entries(h.cells).filter(([f]) => s.has(d(h.id, f))),
+            Object.entries(allowedSheet.cells).filter(([cellAddress]) =>
+              dependencyKeys.has(dependencyKey(allowedSheet.id, cellAddress)),
+            ),
           ),
         })),
     },
-    workbookWithSettings = calculateWorkbookWithSettings(l);
-  for (const { sheet, anchor } of n) {
-    const p = workbookWithSettings.getSpillRange(sheet.id, anchor);
-    p &&
-      r.some((m) => m.sheet.id === sheet.id && rangesOverlap(m.range, p)) &&
+    workbookWithSettings = calculateWorkbookWithSettings(allowedWorkbook);
+  for (const { sheet, anchor } of arrayAnchors) {
+    const spillRange = workbookWithSettings.getSpillRange(sheet.id, anchor);
+    spillRange &&
+      sheetRanges.some(
+        (selectionEntry) =>
+          selectionEntry.sheet.id === sheet.id &&
+          rangesOverlap(selectionEntry.range, spillRange),
+      ) &&
       failWithMessage(
         "The selected source or destination intersects a generated array. Convert its results to ordinary values explicitly before splitting.",
       );
@@ -150,24 +171,27 @@ function discoverArrayFormulaAnchors(workbook, r, context) {
       "Array discovery encountered an operational calculation error. Resolve the uncertain formula state before splitting text.",
     );
 }
-function buildTextSplitResult(workbook, request, t = {}) {
-  const context = validateTextToColumnsPermissions(workbook, t),
-    o = validateTextToColumnsRequest(request),
-    sheet = workbook.sheets.find((sheet) => sheet.id === o.sourceSheetId);
+function buildTextSplitResult(workbook, request, permissionOptions = {}) {
+  const context = validateTextToColumnsPermissions(workbook, permissionOptions),
+    splitRequest = validateTextToColumnsRequest(request),
+    sheet = workbook.sheets.find(
+      (sheet) => sheet.id === splitRequest.sourceSheetId,
+    );
   (sheet || failWithMessage("Choose an existing source worksheet."),
-    assertSelectionInAuthorizedSheet(sheet, o.sourceRange, context));
-  const rangeAddress = parseRangeAddress(o.sourceRange),
+    assertSelectionInAuthorizedSheet(sheet, splitRequest.sourceRange, context));
+  const rangeAddress = parseRangeAddress(splitRequest.sourceRange),
     height = rangeAddress.lastRow - rangeAddress.firstRow + 1;
   ((rangeAddress.firstCol !== rangeAddress.lastCol ||
     height > dataModelBudgets.sourceCells) &&
     failWithMessage("Select one source column containing at most 500 cells."),
-    sheet.merges?.some((merge) => rangesOverlap(merge, o.sourceRange)) &&
-      failWithMessage("Unmerge the source before splitting text."));
+    sheet.merges?.some((merge) =>
+      rangesOverlap(merge, splitRequest.sourceRange),
+    ) && failWithMessage("Unmerge the source before splitting text."));
   const sources = [],
-    l = [],
+    fieldsByRow = [],
     diagnostics = [];
-  let h = 0,
-    f = 0;
+  let maxFieldCount = 0,
+    sourceCharacterCount = 0;
   for (
     let firstRow = rangeAddress.firstRow;
     firstRow <= rangeAddress.lastRow;
@@ -183,43 +207,47 @@ function buildTextSplitResult(workbook, request, t = {}) {
         `Source ${cellAddress} contains a formula. Copy its results to ordinary values explicitly before splitting.`,
       );
     const cellTextValue = formatCellTextValue(cell?.raw ?? null);
-    (f += cellTextValue.length) > dataModelBudgets.sourceCharacters &&
+    (sourceCharacterCount += cellTextValue.length) >
+      dataModelBudgets.sourceCharacters &&
       failWithMessage(
         "Selected source text exceeds the 200,000-character processing budget.",
       );
-    let D;
+    let fields;
     try {
-      D = splitDelimitedCell(cellTextValue, o.delimiter);
+      fields = splitDelimitedCell(cellTextValue, splitRequest.delimiter);
     } catch (error) {
       failWithMessage(`Source ${cellAddress}: ${error.message}`);
     }
-    ((h = Math.max(h, D.length)),
-      l.push(D),
+    ((maxFieldCount = Math.max(maxFieldCount, fields.length)),
+      fieldsByRow.push(fields),
       sources.push({
         address: cellAddress,
         ...(cell ? { cell: structuredClone(cell) } : {}),
         text: cellTextValue,
-        fields: D.length,
+        fields: fields.length,
       }));
   }
-  (h * height > dataModelBudgets.outputCells &&
+  (maxFieldCount * height > dataModelBudgets.outputCells &&
     failWithMessage(
       "Split output may contain at most 500 cells. Select fewer source rows or fields.",
     ),
-    (o.formats?.length ?? 0) > h &&
+    (splitRequest.formats?.length ?? 0) > maxFieldCount &&
       failWithMessage(
         "A column conversion refers to a field outside the split result.",
       ));
-  const formats = Array.from({ length: h }, (O, j) => o.formats?.[j] ?? "text");
-  let m,
+  const formats = Array.from(
+    { length: maxFieldCount },
+    (O, fieldPosition) => splitRequest.formats?.[fieldPosition] ?? "text",
+  );
+  let targetSheet,
     targetSheetName,
-    g = { row: 0, col: 0 };
-  if (o.destination.kind === "new-sheet")
+    targetOrigin = { row: 0, col: 0 };
+  if (splitRequest.destination.kind === "new-sheet")
     ((!context.allowNewSheet || workbook.structureProtection?.enabled) &&
       failWithMessage(
         "Creating an output worksheet is not permitted while workbook structure is protected or the host disallows new worksheets.",
       ),
-      (targetSheetName = o.destination.name),
+      (targetSheetName = splitRequest.destination.name),
       workbook.sheets.some(
         (sheet) => sheet.name.toLowerCase() === targetSheetName.toLowerCase(),
       ) &&
@@ -228,34 +256,41 @@ function buildTextSplitResult(workbook, request, t = {}) {
         ),
       assertOutputNameUnreferenced(workbook, targetSheetName));
   else {
-    const destination = o.destination;
-    ((m = workbook.sheets.find((sheet) => sheet.id === destination.sheetId)),
-      m || failWithMessage("Choose an existing output worksheet."),
-      (g = _t(o.destination.address)),
-      (targetSheetName = m.name),
-      m.protection?.enabled &&
+    const destination = splitRequest.destination;
+    ((targetSheet = workbook.sheets.find(
+      (sheet) => sheet.id === destination.sheetId,
+    )),
+      targetSheet || failWithMessage("Choose an existing output worksheet."),
+      (targetOrigin = _t(splitRequest.destination.address)),
+      (targetSheetName = targetSheet.name),
+      targetSheet.protection?.enabled &&
         failWithMessage("The output worksheet is protected."));
   }
-  (g.row + height > workbookLimits.maxRows ||
-    g.col + h > workbookLimits.maxCols) &&
+  (targetOrigin.row + height > workbookLimits.maxRows ||
+    targetOrigin.col + maxFieldCount > workbookLimits.maxCols) &&
     failWithMessage("Split output exceeds the worksheet boundary.");
-  const b = `${formatCellAddress(g.row, g.col)}:${formatCellAddress(g.row + height - 1, g.col + h - 1)}`;
-  (m &&
-    (assertSelectionInAuthorizedSheet(m, b, context),
-    m.id === sheet.id &&
-      rangesOverlap(o.sourceRange, b) &&
+  const targetRange = `${formatCellAddress(targetOrigin.row, targetOrigin.col)}:${formatCellAddress(targetOrigin.row + height - 1, targetOrigin.col + maxFieldCount - 1)}`;
+  (targetSheet &&
+    (assertSelectionInAuthorizedSheet(targetSheet, targetRange, context),
+    targetSheet.id === sheet.id &&
+      rangesOverlap(splitRequest.sourceRange, targetRange) &&
       failWithMessage(
         "Choose a separate destination so the original source cells remain intact.",
       ),
-    (m.tables?.some((table) => rangesOverlap(table.range, b)) ||
-      m.merges?.some((merge) => rangesOverlap(merge, b)) ||
-      [...(m.pivots ?? []), ...(m.queries ?? [])].some((O) =>
-        rangesOverlap(O.outputRange, b),
+    (targetSheet.tables?.some((table) =>
+      rangesOverlap(table.range, targetRange),
+    ) ||
+      targetSheet.merges?.some((merge) => rangesOverlap(merge, targetRange)) ||
+      [...(targetSheet.pivots ?? []), ...(targetSheet.queries ?? [])].some(
+        (analysisResult) =>
+          rangesOverlap(analysisResult.outputRange, targetRange),
       )) &&
       failWithMessage(
         "Choose an output outside tables, merged areas and generated analysis results.",
       ),
-    Object.keys(m.cells).some((cell) => rangesOverlap(cell, b)) &&
+    Object.keys(targetSheet.cells).some((cell) =>
+      rangesOverlap(cell, targetRange),
+    ) &&
       failWithMessage(
         "The destination contains cells or their formatting. Choose an empty range or new worksheet.",
       ),
@@ -263,10 +298,10 @@ function buildTextSplitResult(workbook, request, t = {}) {
       ...(workbook.reviewThreads ?? []),
       ...(workbook.formulaWatches ?? []),
     ].some(
-      (O) =>
-        !O.orphaned &&
-        O.anchor.sheetId === m.id &&
-        rangesOverlap(O.anchor.address, b),
+      (anchoredItem) =>
+        !anchoredItem.orphaned &&
+        anchoredItem.anchor.sheetId === targetSheet.id &&
+        rangesOverlap(anchoredItem.anchor.address, targetRange),
     ) &&
       failWithMessage(
         "The destination contains a saved watch or discussion anchor. Choose another range to preserve its evidence context.",
@@ -274,38 +309,41 @@ function buildTextSplitResult(workbook, request, t = {}) {
     discoverArrayFormulaAnchors(
       workbook,
       [
-        { sheet: sheet, range: o.sourceRange },
-        ...(m ? [{ sheet: m, range: b }] : []),
+        { sheet: sheet, range: splitRequest.sourceRange },
+        ...(targetSheet ? [{ sheet: targetSheet, range: targetRange }] : []),
       ],
       context,
     ));
   const outputs = [];
-  for (let O = 0; O < height; O++) {
-    l[O].length !== h &&
+  for (let recordIndex = 0; recordIndex < height; recordIndex++) {
+    fieldsByRow[recordIndex].length !== maxFieldCount &&
       diagnostics.push({
         code: "padded-row",
-        sourceAddress: sources[O].address,
-        message: `This record has ${l[O].length} fields; ${h - l[O].length} missing fields are padded with empty text.`,
+        sourceAddress: sources[recordIndex].address,
+        message: `This record has ${fieldsByRow[recordIndex].length} fields; ${maxFieldCount - fieldsByRow[recordIndex].length} missing fields are padded with empty text.`,
       });
-    for (let j = 0; j < h; j++) {
-      const field = l[O][j] ?? "",
-        format = o.header === "first-row" && O === 0 ? "text" : formats[j],
+    for (let fieldIndex = 0; fieldIndex < maxFieldCount; fieldIndex++) {
+      const field = fieldsByRow[recordIndex][fieldIndex] ?? "",
+        format =
+          splitRequest.header === "first-row" && recordIndex === 0
+            ? "text"
+            : formats[fieldIndex],
         importedCellValue = parseImportedCellValue(field, format);
       importedCellValue.precision &&
         diagnostics.push({
           code: "numeric-text-retained",
-          sourceAddress: sources[O].address,
-          message: `Field ${j + 1} remains text because numeric conversion would exceed the supported finite precision.`,
+          sourceAddress: sources[recordIndex].address,
+          message: `Field ${fieldIndex + 1} remains text because numeric conversion would exceed the supported finite precision.`,
         });
       const note = `Text to Columns derivation
 Workbook ID: ${JSON.stringify(workbook.id)}
 Source revision: ${workbook.revision}
 Worksheet ID: ${JSON.stringify(sheet.id)}
 Worksheet name: ${JSON.stringify(sheet.name)}
-Source cell: ${sources[O].address}
-Field: ${j + 1}
+Source cell: ${sources[recordIndex].address}
+Field: ${fieldIndex + 1}
 Conversion: ${format}
-${j >= l[O].length ? "Padded missing field." : "Original source cell and evidence remain in place."}`,
+${fieldIndex >= fieldsByRow[recordIndex].length ? "Padded missing field." : "Original source cell and evidence remain in place."}`,
         cellRecordInput = normalizeCellRecordInput({
           raw: importedCellValue.raw,
           note: note,
@@ -317,15 +355,18 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
                   : {}),
               }
             : {}),
-          ...(o.header === "first-row" && O === 0
+          ...(splitRequest.header === "first-row" && recordIndex === 0
             ? { style: { bold: true } }
             : {}),
         });
       outputs.push({
-        sourceAddress: sources[O].address,
-        address: formatCellAddress(g.row + O, g.col + j),
+        sourceAddress: sources[recordIndex].address,
+        address: formatCellAddress(
+          targetOrigin.row + recordIndex,
+          targetOrigin.col + fieldIndex,
+        ),
         field: field,
-        padded: j >= l[O].length,
+        padded: fieldIndex >= fieldsByRow[recordIndex].length,
         format: format,
         type:
           typeof importedCellValue.raw == "number"
@@ -338,16 +379,19 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
     }
   }
   if (
-    (workbook.sheets.reduce((O, j) => O + Object.keys(j.cells).length, 0) +
+    (workbook.sheets.reduce(
+      (total, existingSheet) => total + Object.keys(existingSheet.cells).length,
+      0,
+    ) +
       outputs.length >
       workbookLimits.maxCells &&
       failWithMessage(
         "The split would exceed the workbook's 100,000 stored-cell budget.",
       ),
-    m)
+    targetSheet)
   ) {
     const book = structuredClone(workbook),
-      sheet = book.sheets.find((sheet) => sheet.id === m.id);
+      sheet = book.sheets.find((sheet) => sheet.id === targetSheet.id);
     for (const output of outputs) sheet.cells[output.address] = output.cell;
     checkDataValidationBatch(
       book,
@@ -360,12 +404,12 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
   }
   return {
     snapshot: JSON.stringify(workbook),
-    request: o,
+    request: splitRequest,
     context: context,
     sourceSheetName: sheet.name,
     targetSheetName: targetSheetName,
-    targetRange: b,
-    width: h,
+    targetRange: targetRange,
+    width: maxFieldCount,
     height: height,
     formats: formats,
     sources: sources,
@@ -373,121 +417,148 @@ ${j >= l[O].length ? "Padded missing field." : "Original source cell and evidenc
     diagnostics: diagnostics,
   };
 }
-function applyTextSplitPreview(workbook, r, t = {}) {
-  r.snapshot !== JSON.stringify(workbook) &&
+function applyTextSplitPreview(workbook, preview, permissionOptions = {}) {
+  preview.snapshot !== JSON.stringify(workbook) &&
     failWithMessage(
       "The workbook changed after the split preview. Preview again.",
     );
-  const textSplitResult = buildTextSplitResult(workbook, r.request, t);
-  JSON.stringify(textSplitResult) !== JSON.stringify(r) &&
+  const textSplitResult = buildTextSplitResult(
+    workbook,
+    preview.request,
+    permissionOptions,
+  );
+  JSON.stringify(textSplitResult) !== JSON.stringify(preview) &&
     failWithMessage(
       "The split preview or authorized context changed. Preview again.",
     );
-  const o = structuredClone(workbook),
-    destination = r.request.destination,
-    s =
+  const nextWorkbook = structuredClone(workbook),
+    destination = preview.request.destination,
+    targetSheet =
       destination.kind === "new-sheet"
         ? createWorksheetRecord(destination.name)
-        : o.sheets.find((sheet) => sheet.id === destination.sheetId);
-  destination.kind === "new-sheet" && o.sheets.push(s);
-  for (const output of r.outputs)
-    s.cells[output.address] = structuredClone(output.cell);
-  return (normalizeWorkbookInput(o), o);
+        : nextWorkbook.sheets.find((sheet) => sheet.id === destination.sheetId);
+  destination.kind === "new-sheet" && nextWorkbook.sheets.push(targetSheet);
+  for (const output of preview.outputs)
+    targetSheet.cells[output.address] = structuredClone(output.cell);
+  return (normalizeWorkbookInput(nextWorkbook), nextWorkbook);
 }
-const coerceCellValueToText = (e) =>
-  e === null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
-function applyTextCasing(e, r) {
-  return r === "upper"
-    ? e.toLocaleUpperCase("en-US")
-    : r === "lower"
-      ? e.toLocaleLowerCase("en-US")
-      : r === "proper"
-        ? e
+const coerceCellValueToText = (value) =>
+  value === null
+    ? ""
+    : typeof value == "boolean"
+      ? value
+        ? "TRUE"
+        : "FALSE"
+      : String(value);
+function applyTextCasing(text, casing) {
+  return casing === "upper"
+    ? text.toLocaleUpperCase("en-US")
+    : casing === "lower"
+      ? text.toLocaleLowerCase("en-US")
+      : casing === "proper"
+        ? text
             .toLocaleLowerCase("en-US")
-            .replace(new RegExp("\\p{L}[\\p{L}\\p{M}]*", "gu"), (t) => {
-              const [n, ...o] = [...t];
-              return n.toLocaleUpperCase("en-US") + o.join("");
+            .replace(new RegExp("\\p{L}[\\p{L}\\p{M}]*", "gu"), (word) => {
+              const [firstCharacter, ...restCharacters] = [...word];
+              return (
+                firstCharacter.toLocaleUpperCase("en-US") +
+                restCharacters.join("")
+              );
             })
-        : e;
+        : text;
 }
-function extractInferredFieldPart(e, part) {
-  if (part.column >= e.length)
+function extractInferredFieldPart(rowValues, part) {
+  if (part.column >= rowValues.length)
     throw Error("The inferred rule refers to a missing field.");
-  const t = coerceCellValueToText(e[part.column]).trim();
-  if (part.mode === "whole") return t;
+  const fieldText = coerceCellValueToText(rowValues[part.column]).trim();
+  if (part.mode === "whole") return fieldText;
   if (part.mode === "slice") {
-    const s = [...t];
-    if (s.length < part.start + part.length)
+    const characters = [...fieldText];
+    if (characters.length < part.start + part.length)
       throw Error(
         "The value is too short for the inferred character extraction.",
       );
-    return s.slice(part.start, part.start + part.length).join("");
+    return characters.slice(part.start, part.start + part.length).join("");
   }
-  const n = t.indexOf(part.delimiter);
+  const delimiterIndex = fieldText.indexOf(part.delimiter);
   if (part.mode === "before" || part.mode === "after") {
-    if (n < 0) throw Error("The inferred separator is absent.");
+    if (delimiterIndex < 0) throw Error("The inferred separator is absent.");
     return (
       part.mode === "before"
-        ? t.slice(0, n)
-        : t.slice(n + part.delimiter.length)
+        ? fieldText.slice(0, delimiterIndex)
+        : fieldText.slice(delimiterIndex + part.delimiter.length)
     ).trim();
   }
-  const o = part.delimiter === " " ? t.split(/ +/) : t.split(part.delimiter),
-    a = part.index < 0 ? o.length + part.index : part.index;
-  if (a < 0 || a >= o.length || !o[a])
+  const tokens =
+      part.delimiter === " "
+        ? fieldText.split(/ +/)
+        : fieldText.split(part.delimiter),
+    tokenIndex = part.index < 0 ? tokens.length + part.index : part.index;
+  if (tokenIndex < 0 || tokenIndex >= tokens.length || !tokens[tokenIndex])
     throw Error("The inferred token is absent.");
-  return o[a].trim();
+  return tokens[tokenIndex].trim();
 }
-function applyInferredTextPattern(e, pattern) {
-  const t = textJoinSpecSchema.parse(pattern),
-    n =
-      t.prefix +
+function applyInferredTextPattern(rowValues, pattern) {
+  const patternSpec = textJoinSpecSchema.parse(pattern),
+    patternText =
+      patternSpec.prefix +
       applyTextCasing(
-        t.parts
-          .map((part) => extractInferredFieldPart(e, part))
-          .join(t.separator),
-        t.casing,
+        patternSpec.parts
+          .map((part) => extractInferredFieldPart(rowValues, part))
+          .join(patternSpec.separator),
+        patternSpec.casing,
       ) +
-      t.suffix;
-  if (n.length > 32767)
+      patternSpec.suffix;
+  if (patternText.length > 32767)
     throw Error("The inferred result exceeds the cell text limit.");
-  return n;
+  return patternText;
 }
 function describeInferredTextRule(pattern) {
-  const r = pattern.parts
+  const partsDescription = pattern.parts
     .map(
       (part) =>
         `field ${part.column + 1}${part.mode === "whole" ? "" : part.mode === "token" ? ` token ${part.index < 0 ? "last" : part.index + 1} by ${JSON.stringify(part.delimiter)}` : part.mode === "slice" ? ` characters ${part.start + 1}–${part.start + part.length}` : ` ${part.mode} ${JSON.stringify(part.delimiter)}`}`,
     )
     .join(` + ${JSON.stringify(pattern.separator)} + `);
-  return `${pattern.prefix ? JSON.stringify(pattern.prefix) + " + " : ""}${pattern.casing === "none" ? "" : pattern.casing + "("}${r}${pattern.casing === "none" ? "" : ")"}${pattern.suffix ? " + " + JSON.stringify(pattern.suffix) : ""}`;
+  return `${pattern.prefix ? JSON.stringify(pattern.prefix) + " + " : ""}${pattern.casing === "none" ? "" : pattern.casing + "("}${partsDescription}${pattern.casing === "none" ? "" : ")"}${pattern.suffix ? " + " + JSON.stringify(pattern.suffix) : ""}`;
 }
-function inferTextPatternFromExamples(e, r, t) {
-  if (!Array.isArray(t) || t.length < 2 || t.length > 10)
+function inferTextPatternFromExamples(dataRows, fieldColumns, exampleInputs) {
+  if (
+    !Array.isArray(exampleInputs) ||
+    exampleInputs.length < 2 ||
+    exampleInputs.length > 10
+  )
     throw Error("Provide 2–10 examples from distinct source rows.");
-  const n = t.map((f) => sourceRowValueSchema.parse(f));
-  if (new Set(n.map((f) => f.row)).size !== n.length)
+  const examples = exampleInputs.map((rawExample) =>
+    sourceRowValueSchema.parse(rawExample),
+  );
+  if (
+    new Set(examples.map((parsedExample) => parsedExample.row)).size !==
+    examples.length
+  )
     throw Error("Provide examples from distinct source rows.");
-  const o = n.map((example) => ({
+  const exampleRows = examples.map((example) => ({
     example: example,
-    row: e.find((p) => p.row === example.row),
+    row: dataRows.find((dataRow) => dataRow.row === example.row),
   }));
-  if (o.some((f) => !f.row))
+  if (exampleRows.some((exampleRowEntry) => !exampleRowEntry.row))
     throw Error("An example row is outside the selected data rows.");
   if (
-    !r.length ||
-    r.length > 8 ||
-    new Set(r).size !== r.length ||
-    r.some(
-      (f) =>
-        !Number.isInteger(f) ||
-        f < 0 ||
-        o.some((p) => f >= p.row.values.length),
+    !fieldColumns.length ||
+    fieldColumns.length > 8 ||
+    new Set(fieldColumns).size !== fieldColumns.length ||
+    fieldColumns.some(
+      (candidateField) =>
+        !Number.isInteger(candidateField) ||
+        candidateField < 0 ||
+        exampleRows.some(
+          (exampleEntry) => candidateField >= exampleEntry.row.values.length,
+        ),
     )
   )
     throw Error("Choose 1–8 available fields for inference.");
-  const a = [],
-    s = (column) => ({
+  const singleParts = [],
+    makeColumnPart = (column) => ({
       column: column,
       mode: "whole",
       delimiter: " ",
@@ -495,68 +566,99 @@ function inferTextPatternFromExamples(e, r, t) {
       start: 0,
       length: 1,
     });
-  for (const f of r) {
-    a.push(s(f));
+  for (const fieldColumn of fieldColumns) {
+    singleParts.push(makeColumnPart(fieldColumn));
     for (const delimiter of [" ", ",", "-", "/", "_", "@"]) {
-      for (const m of [0, 1, -1])
-        a.push({ ...s(f), mode: "token", delimiter: delimiter, index: m });
+      for (const tokenIndex of [0, 1, -1])
+        singleParts.push({
+          ...makeColumnPart(fieldColumn),
+          mode: "token",
+          delimiter: delimiter,
+          index: tokenIndex,
+        });
       for (const mode of ["before", "after"])
-        a.push({ ...s(f), mode: mode, delimiter: delimiter });
+        singleParts.push({
+          ...makeColumnPart(fieldColumn),
+          mode: mode,
+          delimiter: delimiter,
+        });
     }
-    for (const p of [1, 2, 3, 4, 5, 6, 8, 10])
-      a.push({ ...s(f), mode: "slice", length: p });
+    for (const sliceLength of [1, 2, 3, 4, 5, 6, 8, 10])
+      singleParts.push({
+        ...makeColumnPart(fieldColumn),
+        mode: "slice",
+        length: sliceLength,
+      });
   }
-  const d = a.map((f) => ({ parts: [f], separator: "" }));
-  for (const f of r)
-    for (const p of r)
-      if (f !== p)
+  const partPatterns = singleParts.map((singlePart) => ({
+    parts: [singlePart],
+    separator: "",
+  }));
+  for (const leftColumn of fieldColumns)
+    for (const rightColumn of fieldColumns)
+      if (leftColumn !== rightColumn)
         for (const separator of [" ", "", ", ", ".", "-", "_", "/"])
-          d.push({ parts: [s(f), s(p)], separator: separator });
+          partPatterns.push({
+            parts: [makeColumnPart(leftColumn), makeColumnPart(rightColumn)],
+            separator: separator,
+          });
   const candidates = [],
-    l = new Set();
+    seenPatterns = new Set();
   let searched = 0,
     truncated = false;
-  e: for (const f of d)
+  e: for (const partPattern of partPatterns)
     for (const casing of ["none", "upper", "lower", "proper"]) {
       if (++searched > textInferenceLimits.inferencePatterns) {
         (searched--, (truncated = true));
         break e;
       }
-      const m = { ...f, casing: casing, prefix: "", suffix: "" };
-      let v;
+      const basePattern = {
+        ...partPattern,
+        casing: casing,
+        prefix: "",
+        suffix: "",
+      };
+      let patternValues;
       try {
-        v = o.map((E) => applyInferredTextPattern(E.row.values, m));
+        patternValues = exampleRows.map((exampleItem) =>
+          applyInferredTextPattern(exampleItem.row.values, basePattern),
+        );
       } catch {
         continue;
       }
-      if (v.some((E) => !E) || new Set(v).size < 2) continue;
-      const value = o[0].example.value,
-        b = v[0];
-      let y = value.indexOf(b),
-        w = 0;
-      for (; y >= 0 && w++ < 3;) {
+      if (
+        patternValues.some((patternValue) => !patternValue) ||
+        new Set(patternValues).size < 2
+      )
+        continue;
+      const value = exampleRows[0].example.value,
+        firstValue = patternValues[0];
+      let matchStart = value.indexOf(firstValue),
+        occurrenceCount = 0;
+      for (; matchStart >= 0 && occurrenceCount++ < 3;) {
         const pattern = {
-          ...m,
-          prefix: value.slice(0, y),
-          suffix: value.slice(y + b.length),
+          ...basePattern,
+          prefix: value.slice(0, matchStart),
+          suffix: value.slice(matchStart + firstValue.length),
         };
         if (
           pattern.prefix.length <= 1e3 &&
           pattern.suffix.length <= 1e3 &&
-          o.every(
-            (A, k) =>
-              pattern.prefix + v[k] + pattern.suffix === A.example.value,
+          exampleRows.every(
+            (exampleRecord, valueIndex) =>
+              pattern.prefix + patternValues[valueIndex] + pattern.suffix ===
+              exampleRecord.example.value,
           )
         ) {
-          const A = JSON.stringify(pattern);
+          const patternKey = JSON.stringify(pattern);
           if (
-            !l.has(A) &&
-            (l.add(A),
+            !seenPatterns.has(patternKey) &&
+            (seenPatterns.add(patternKey),
             candidates.push({
               id: `pattern-${candidates.length + 1}`,
               pattern: pattern,
               description: describeInferredTextRule(pattern),
-              matchedExamples: n.length,
+              matchedExamples: examples.length,
             }),
             candidates.length >= textInferenceLimits.inferenceCandidates)
           ) {
@@ -564,84 +666,105 @@ function inferTextPatternFromExamples(e, r, t) {
             break e;
           }
         }
-        y = value.indexOf(b, y + 1);
+        matchStart = value.indexOf(firstValue, matchStart + 1);
       }
     }
   return { candidates: candidates, searched: searched, truncated: truncated };
 }
-const inferCellValueType = (e) =>
-    e === null
+const inferCellValueType = (value) =>
+    value === null
       ? "blank"
-      : typeof e == "number"
+      : typeof value == "number"
         ? "number"
-        : typeof e == "boolean"
+        : typeof value == "boolean"
           ? "boolean"
           : "text",
-  uniqueSourceReferences = (e) => [...new Set(e.flatMap((r) => r.sources))],
-  createSourcedValue = (e, sources, t = inferCellValueType(e)) => ({
-    value: e,
-    type: t,
+  uniqueSourceReferences = (sourcedValues) => [
+    ...new Set(sourcedValues.flatMap((sourcedValue) => sourcedValue.sources)),
+  ],
+  createSourcedValue = (
+    value,
+    sources,
+    valueType = inferCellValueType(value),
+  ) => ({
+    value: value,
+    type: valueType,
     sources: sources,
     exception: false,
   });
-function assertRecipeFieldInRange(e, r) {
-  if (e.some((t) => t >= r))
+function assertRecipeFieldInRange(fieldIndexes, columnCount) {
+  if (fieldIndexes.some((fieldIndex) => fieldIndex >= columnCount))
     throw Error(
-      `A recipe field exceeds the current ${r} columns. Review steps in order.`,
+      `A recipe field exceeds the current ${columnCount} columns. Review steps in order.`,
     );
 }
-function splitTextWithQuoteRules(e, r) {
-  if (r.mode === "fixed") {
-    const h = [...e],
-      f = [0, ...r.breaks, h.length];
-    return f
+function splitTextWithQuoteRules(text, rule) {
+  if (rule.mode === "fixed") {
+    const fieldCharacters = [...text],
+      boundaries = [0, ...rule.breaks, fieldCharacters.length];
+    return boundaries
       .slice(0, -1)
-      .map((p, m) => h.slice(p, Math.max(p, f[m + 1])).join(""));
+      .map((segmentStart, segmentIndex) =>
+        fieldCharacters
+          .slice(
+            segmentStart,
+            Math.max(segmentStart, boundaries[segmentIndex + 1]),
+          )
+          .join(""),
+      );
   }
-  const t = new Set([...r.delimiters]),
-    n = [...e],
-    o = [];
-  let a = "",
-    s = false,
-    d = false,
-    u = false,
-    l = false;
-  const c = () => {
-    if ((o.push(a), (a = ""), (d = false), (u = false), o.length >= 50))
+  const delimiterSet = new Set([...rule.delimiters]),
+    characters = [...text],
+    fields = [];
+  let fieldText = "",
+    isInQuotes = false,
+    hasClosedQuote = false,
+    hasFieldStarted = false,
+    isAfterDelimiter = false;
+  const finishField = () => {
+    if (
+      (fields.push(fieldText),
+      (fieldText = ""),
+      (hasClosedQuote = false),
+      (hasFieldStarted = false),
+      fields.length >= 50)
+    )
       throw Error("More than 50 split fields.");
   };
-  for (let h = 0; h < n.length; h++) {
-    const f = n[h];
-    if (s)
-      (f !== '"'
-        ? (a += f)
-        : n[h + 1] === '"'
-          ? ((a += '"'), h++)
-          : ((s = false), (d = true)),
-        (l = false));
-    else if (t.has(f)) ((r.collapse && l) || c(), (l = true));
+  for (let charIndex = 0; charIndex < characters.length; charIndex++) {
+    const character = characters[charIndex];
+    if (isInQuotes)
+      (character !== '"'
+        ? (fieldText += character)
+        : characters[charIndex + 1] === '"'
+          ? ((fieldText += '"'), charIndex++)
+          : ((isInQuotes = false), (hasClosedQuote = true)),
+        (isAfterDelimiter = false));
+    else if (delimiterSet.has(character))
+      ((rule.collapse && isAfterDelimiter) || finishField(),
+        (isAfterDelimiter = true));
     else {
-      if (d) throw Error("Unexpected text after a closing quote.");
-      if (f === '"') {
-        if (u) throw Error("A quote must begin a field.");
-        ((s = true), (u = true));
-      } else ((a += f), (u = true));
-      l = false;
+      if (hasClosedQuote) throw Error("Unexpected text after a closing quote.");
+      if (character === '"') {
+        if (hasFieldStarted) throw Error("A quote must begin a field.");
+        ((isInQuotes = true), (hasFieldStarted = true));
+      } else ((fieldText += character), (hasFieldStarted = true));
+      isAfterDelimiter = false;
     }
   }
-  if (s) throw Error("The quoted field is not closed.");
-  return (o.push(a), o);
+  if (isInQuotes) throw Error("The quoted field is not closed.");
+  return (fields.push(fieldText), fields);
 }
-function convertFieldToTypedValue(value, r, dateSystem = "1900") {
-  if (r.to === "text") return coerceCellValueToText(value);
+function convertFieldToTypedValue(value, conversion, dateSystem = "1900") {
+  if (conversion.to === "text") return coerceCellValueToText(value);
   if (isNullOrEmptyValue(value)) return null;
-  if (r.to === "boolean") {
+  if (conversion.to === "boolean") {
     if (typeof value == "boolean") return value;
     if (typeof value == "string" && /^(true|false)$/i.test(value.trim()))
       return value.trim().toUpperCase() === "TRUE";
     throw Error("Expected TRUE or FALSE.");
   }
-  if (r.to === "date") {
+  if (conversion.to === "date") {
     if (
       typeof value == "number" &&
       Number.isInteger(value) &&
@@ -657,7 +780,7 @@ function convertFieldToTypedValue(value, r, dateSystem = "1900") {
         "Expected a full-year ISO date or an explicitly ordered slash date.",
       );
     const dateText = parseDateText(value, {
-      textDateOrder: r.dateOrder,
+      textDateOrder: conversion.dateOrder,
       dateSystem: dateSystem,
     });
     if (dateText === undefined)
@@ -666,48 +789,70 @@ function convertFieldToTypedValue(value, r, dateSystem = "1900") {
   }
   if (typeof value == "boolean")
     throw Error("Boolean values are not numeric fields.");
-  let n;
-  if (typeof value == "number") n = value;
+  let numericValue;
+  if (typeof value == "number") numericValue = value;
   else {
-    let d = value.trim();
-    /^\(.*\)$/.test(d) && (d = "-" + d.slice(1, -1));
-    const u = /[eE][+-]?\d+$/.exec(d)?.[0] ?? "",
-      c = (u ? d.slice(0, -u.length) : d).split(r.decimal);
-    if (c.length > 2) throw Error("More than one decimal separator.");
-    const h = /^[+-]/.exec(c[0])?.[0] ?? "",
-      f = c[0].slice(h.length),
-      p = c[1];
-    if (r.group && f.includes(r.group)) {
-      const b = f.split(r.group);
-      if (!/^\d{1,3}$/.test(b[0]) || b.slice(1).some((y) => !/^\d{3}$/.test(y)))
+    let numericText = value.trim();
+    /^\(.*\)$/.test(numericText) &&
+      (numericText = "-" + numericText.slice(1, -1));
+    const exponentSuffix = /[eE][+-]?\d+$/.exec(numericText)?.[0] ?? "",
+      decimalParts = (
+        exponentSuffix
+          ? numericText.slice(0, -exponentSuffix.length)
+          : numericText
+      ).split(conversion.decimal);
+    if (decimalParts.length > 2)
+      throw Error("More than one decimal separator.");
+    const sign = /^[+-]/.exec(decimalParts[0])?.[0] ?? "",
+      integerText = decimalParts[0].slice(sign.length),
+      fractionText = decimalParts[1];
+    if (conversion.group && integerText.includes(conversion.group)) {
+      const groups = integerText.split(conversion.group);
+      if (
+        !/^\d{1,3}$/.test(groups[0]) ||
+        groups.slice(1).some((group) => !/^\d{3}$/.test(group))
+      )
         throw Error(
           "Grouping separators must separate groups of three digits.",
         );
     }
-    const m = r.group ? f.split(r.group).join("") : f;
-    if (!/^\d*$/.test(m) || (p !== undefined && !/^\d+$/.test(p)) || (!m && !p))
+    const digits = conversion.group
+      ? integerText.split(conversion.group).join("")
+      : integerText;
+    if (
+      !/^\d*$/.test(digits) ||
+      (fractionText !== undefined && !/^\d+$/.test(fractionText)) ||
+      (!digits && !fractionText)
+    )
       throw Error("The field does not match the explicit numeric separators.");
-    if ((m + (p ?? "")).replace(/^0+/, "").replace(/0+$/, "").length > 15)
+    if (
+      (digits + (fractionText ?? "")).replace(/^0+/, "").replace(/0+$/, "")
+        .length > 15
+    )
       throw Error(
         "More than 15 significant digits; original text is retained.",
       );
-    const g = h + (m || "0") + (p === undefined ? "" : "." + p) + u;
+    const normalizedText =
+      sign +
+      (digits || "0") +
+      (fractionText === undefined ? "" : "." + fractionText) +
+      exponentSuffix;
     if (
-      ((n = Number(g)),
-      !Number.isFinite(n) ||
-        (n === 0 && /[1-9]/.test(m + (p ?? ""))) ||
-        (Number.isInteger(n) && !Number.isSafeInteger(n)))
+      ((numericValue = Number(normalizedText)),
+      !Number.isFinite(numericValue) ||
+        (numericValue === 0 && /[1-9]/.test(digits + (fractionText ?? ""))) ||
+        (Number.isInteger(numericValue) && !Number.isSafeInteger(numericValue)))
     )
       throw Error("Numeric conversion exceeds supported precision or range.");
   }
-  if (!Number.isFinite(n)) throw Error("Expected a finite number.");
-  if (r.to === "integer" && !Number.isSafeInteger(n))
+  if (!Number.isFinite(numericValue)) throw Error("Expected a finite number.");
+  if (conversion.to === "integer" && !Number.isSafeInteger(numericValue))
     throw Error("Expected a safe whole number.");
-  return n;
+  return numericValue;
 }
-function prepareTransformationInput(workbook, r, t) {
-  const request = validateFieldTransformRecipe(r),
-    context = validateTextToColumnsPermissions(workbook, t),
+function prepareTransformationInput(workbook, recipe, permissions) {
+  const request = validateFieldTransformRecipe(recipe),
+    context = validateTextToColumnsPermissions(workbook, permissions),
     sheet = workbook.sheets.find((sheet) => sheet.id === request.sourceSheetId);
   if (!sheet) throw Error("Choose an existing source worksheet.");
   if (!context.allowNewSheet || workbook.structureProtection?.enabled)
@@ -719,24 +864,24 @@ function prepareTransformationInput(workbook, r, t) {
   )
     throw Error("The output worksheet name is already used.");
   const rangeAddress = parseRangeAddress(request.sourceRange),
-    d = rangeAddress.lastCol - rangeAddress.firstCol + 1,
-    u = rangeAddress.lastRow - rangeAddress.firstRow + 1;
+    columnCount = rangeAddress.lastCol - rangeAddress.firstCol + 1,
+    rowCount = rangeAddress.lastRow - rangeAddress.firstRow + 1;
   if (
     ((request.sourceRange = `${formatCellAddress(rangeAddress.firstRow, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.lastRow, rangeAddress.lastCol)}`),
-    d > 50 || d * u > 500)
+    columnCount > 50 || columnCount * rowCount > 500)
   )
     throw Error("Select at most 500 source cells and 50 fields.");
-  if (u <= Number(request.header))
+  if (rowCount <= Number(request.header))
     throw Error("Select at least one data row in addition to the heading row.");
   if (
     (assertSelectionInAuthorizedSheet(sheet, request.sourceRange, context),
     sheet.merges?.some((merge) => {
-      const g = parseRangeAddress(merge);
+      const mergeRange = parseRangeAddress(merge);
       return (
-        g.firstRow <= rangeAddress.lastRow &&
-        g.lastRow >= rangeAddress.firstRow &&
-        g.firstCol <= rangeAddress.lastCol &&
-        g.lastCol >= rangeAddress.firstCol
+        mergeRange.firstRow <= rangeAddress.lastRow &&
+        mergeRange.lastRow >= rangeAddress.firstRow &&
+        mergeRange.firstCol <= rangeAddress.lastCol &&
+        mergeRange.lastCol >= rangeAddress.firstCol
       );
     }))
   )
@@ -749,7 +894,7 @@ function prepareTransformationInput(workbook, r, t) {
     ));
   const sources = [],
     rows = [];
-  let h = 0;
+  let sourceTextLength = 0;
   for (
     let firstRow = rangeAddress.firstRow;
     firstRow <= rangeAddress.lastRow;
@@ -772,7 +917,10 @@ function prepareTransformationInput(workbook, r, t) {
         throw Error(
           `Source ${cellAddress} is a formula. Create a reviewed values snapshot first.`,
         );
-      if ((h += coerceCellValueToText(cell?.raw ?? null).length) > 2e5)
+      if (
+        (sourceTextLength += coerceCellValueToText(cell?.raw ?? null).length) >
+        2e5
+      )
         throw Error(
           "Source text exceeds the 200,000-character processing budget.",
         );
@@ -790,9 +938,13 @@ function prepareTransformationInput(workbook, r, t) {
     ? rows
         .shift()
         .fields.map(
-          (field, g) => coerceCellValueToText(field.value) || `Field ${g + 1}`,
+          (field, columnIndex) =>
+            coerceCellValueToText(field.value) || `Field ${columnIndex + 1}`,
         )
-    : Array.from({ length: d }, (v, g) => `Field ${g + 1}`);
+    : Array.from(
+        { length: columnCount },
+        (_, fieldIndex) => `Field ${fieldIndex + 1}`,
+      );
   if (headers.some((header) => header.length > 100))
     throw Error("Source headings must be at most 100 characters.");
   return {
@@ -807,130 +959,174 @@ function prepareTransformationInput(workbook, r, t) {
 function applyTransformationSteps(rows, headers, steps, dateSystem = "1900") {
   const exceptions = [],
     stages = [],
-    s = (d, row, field, step, h) => {
+    recordException = (inputValue, row, field, step, parseError) => {
       const reason =
-        h instanceof Error
-          ? h.message
+        parseError instanceof Error
+          ? parseError.message
           : "The transformation could not parse this value.";
       return (
         exceptions.push({
           step: step,
           row: row,
           field: field,
-          raw: d.value,
-          sources: [...d.sources],
+          raw: inputValue.value,
+          sources: [...inputValue.sources],
           reason: reason,
         }),
-        { ...d, exception: true }
+        { ...inputValue, exception: true }
       );
     };
   return (
-    steps.forEach((d, u) => {
-      const step = u + 1,
-        c = JSON.stringify(rows),
-        h = exceptions.length,
-        f =
-          "columns" in d
-            ? d.columns
-            : "column" in d
-              ? [d.column]
-              : d.pattern.parts.map((part) => part.column);
-      if ((assertRecipeFieldInRange(f, headers.length), d.kind === "split")) {
-        let g = d.mode === "fixed" ? d.breaks.length + 1 : 1;
-        const b = rows.map((row) => {
-          const E = row.fields[d.column];
-          if (E.exception) return [E];
+    steps.forEach((transformStep, stepIndex) => {
+      const step = stepIndex + 1,
+        rowsSnapshot = JSON.stringify(rows),
+        exceptionCountBefore = exceptions.length,
+        stepColumns =
+          "columns" in transformStep
+            ? transformStep.columns
+            : "column" in transformStep
+              ? [transformStep.column]
+              : transformStep.pattern.parts.map((part) => part.column);
+      if (
+        (assertRecipeFieldInRange(stepColumns, headers.length),
+        transformStep.kind === "split")
+      ) {
+        let splitFieldCount =
+          transformStep.mode === "fixed" ? transformStep.breaks.length + 1 : 1;
+        const splitResults = rows.map((row) => {
+          const sourceField = row.fields[transformStep.column];
+          if (sourceField.exception) return [sourceField];
           try {
-            const A = splitTextWithQuoteRules(
-              coerceCellValueToText(E.value),
-              d,
+            const pieces = splitTextWithQuoteRules(
+              coerceCellValueToText(sourceField.value),
+              transformStep,
             );
             return (
-              (g = Math.max(g, A.length)),
-              A.map((k) => createSourcedValue(k, [...E.sources]))
+              (splitFieldCount = Math.max(splitFieldCount, pieces.length)),
+              pieces.map((piece) =>
+                createSourcedValue(piece, [...sourceField.sources]),
+              )
             );
           } catch (error) {
-            return [s(E, row.row, headers[d.column], step, error)];
+            return [
+              recordException(
+                sourceField,
+                row.row,
+                headers[transformStep.column],
+                step,
+                error,
+              ),
+            ];
           }
         });
-        if (headers.length - 1 + g > 50)
+        if (headers.length - 1 + splitFieldCount > 50)
           throw Error("The split would exceed 50 fields.");
-        rows.forEach((row, E) => {
-          const A = row.fields[d.column],
-            k = b[E];
-          for (; k.length < g;)
-            k.push({
-              ...createSourcedValue("", [...A.sources]),
-              exception: k[0].exception,
+        rows.forEach((row, splitRowIndex) => {
+          const originalField = row.fields[transformStep.column],
+            replacementFields = splitResults[splitRowIndex];
+          for (; replacementFields.length < splitFieldCount;)
+            replacementFields.push({
+              ...createSourcedValue("", [...originalField.sources]),
+              exception: replacementFields[0].exception,
             });
-          row.fields.splice(d.column, 1, ...k);
+          row.fields.splice(transformStep.column, 1, ...replacementFields);
         });
-        const y = headers[d.column];
+        const originalHeader = headers[transformStep.column];
         headers.splice(
-          d.column,
+          transformStep.column,
           1,
-          ...Array.from({ length: g }, (w, E) => `${y.slice(0, 130)}.${E + 1}`),
+          ...Array.from(
+            { length: splitFieldCount },
+            (_, splitIndex) =>
+              `${originalHeader.slice(0, 130)}.${splitIndex + 1}`,
+          ),
         );
-      } else if (d.kind === "concat") {
+      } else if (transformStep.kind === "concat") {
         if (headers.length >= 50)
           throw Error("Concatenation would exceed 50 fields.");
         for (const row of rows) {
-          const b = d.columns.map((column) => row.fields[column]),
+          const concatInputs = transformStep.columns.map(
+              (column) => row.fields[column],
+            ),
             sourcedValue = createSourcedValue(
-              b
-                .filter((w) => !d.skipBlank || !isNullOrEmptyValue(w.value))
-                .map((w) => coerceCellValueToText(w.value))
-                .join(d.separator),
-              uniqueSourceReferences(b),
+              concatInputs
+                .filter(
+                  (candidateField) =>
+                    !transformStep.skipBlank ||
+                    !isNullOrEmptyValue(candidateField.value),
+                )
+                .map((joinedField) => coerceCellValueToText(joinedField.value))
+                .join(transformStep.separator),
+              uniqueSourceReferences(concatInputs),
             );
-          ((sourcedValue.exception = b.some((w) => w.exception)),
+          ((sourcedValue.exception = concatInputs.some(
+            (failedField) => failedField.exception,
+          )),
             row.fields.push(sourcedValue));
         }
-        headers.push(d.name);
-      } else if (d.kind === "select") {
+        headers.push(transformStep.name);
+      } else if (transformStep.kind === "select") {
         for (const row of rows)
-          row.fields = d.columns.map((column) => row.fields[column]);
+          row.fields = transformStep.columns.map(
+            (column) => row.fields[column],
+          );
         headers.splice(
           0,
           headers.length,
-          ...d.columns.map((column) => headers[column]),
+          ...transformStep.columns.map((column) => headers[column]),
         );
-      } else if (d.kind === "fill") {
-        assertRecipeFieldInRange(d.groupColumns, headers.length);
-        const g = d.direction === "up" ? [...rows].reverse() : rows;
-        for (const column of d.columns) {
-          let y,
-            w = "";
-          for (const E of g) {
-            const A = d.groupColumns.map(
-                (groupColumn) => E.fields[groupColumn],
+      } else if (transformStep.kind === "fill") {
+        assertRecipeFieldInRange(transformStep.groupColumns, headers.length);
+        const orderedRows =
+          transformStep.direction === "up" ? [...rows].reverse() : rows;
+        for (const column of transformStep.columns) {
+          let lastFilledField,
+            previousGroupKey = "";
+          for (const orderedRow of orderedRows) {
+            const groupFields = transformStep.groupColumns.map(
+                (groupColumn) => orderedRow.fields[groupColumn],
               ),
-              k = JSON.stringify(A.map((I) => I.value));
-            (k !== w || A.some((I) => I.exception)) &&
-              ((y = undefined), (w = k));
-            const F = E.fields[column];
-            if (F.exception) {
-              y = undefined;
+              groupKey = JSON.stringify(
+                groupFields.map((groupField) => groupField.value),
+              );
+            (groupKey !== previousGroupKey ||
+              groupFields.some(
+                (checkedGroupField) => checkedGroupField.exception,
+              )) &&
+              ((lastFilledField = undefined), (previousGroupKey = groupKey));
+            const currentField = orderedRow.fields[column];
+            if (currentField.exception) {
+              lastFilledField = undefined;
               continue;
             }
-            if (!isNullOrEmptyValue(F.value)) {
-              y = F;
+            if (!isNullOrEmptyValue(currentField.value)) {
+              lastFilledField = currentField;
               continue;
             }
-            d.direction === "value"
-              ? (E.fields[column] = createSourcedValue(d.value, [...F.sources]))
-              : y &&
-                (E.fields[column] = {
-                  ...y,
-                  sources: uniqueSourceReferences([F, y, ...A]),
+            transformStep.direction === "value"
+              ? (orderedRow.fields[column] = createSourcedValue(
+                  transformStep.value,
+                  [...currentField.sources],
+                ))
+              : lastFilledField &&
+                (orderedRow.fields[column] = {
+                  ...lastFilledField,
+                  sources: uniqueSourceReferences([
+                    currentField,
+                    lastFilledField,
+                    ...groupFields,
+                  ]),
                 });
           }
         }
-      } else if (d.kind === "pattern") {
+      } else if (transformStep.kind === "pattern") {
         if (
-          (assertRecipeFieldInRange(d.inferenceColumns, headers.length),
-          d.pattern.parts.some(
-            (part) => !d.inferenceColumns.includes(part.column),
+          (assertRecipeFieldInRange(
+            transformStep.inferenceColumns,
+            headers.length,
+          ),
+          transformStep.pattern.parts.some(
+            (part) => !transformStep.inferenceColumns.includes(part.column),
           ))
         )
           throw Error(
@@ -938,19 +1134,21 @@ function applyTransformationSteps(rows, headers, steps, dateSystem = "1900") {
           );
         if (headers.length >= 50)
           throw Error("The inferred output would exceed 50 fields.");
-        const g = new Set();
-        for (const example of d.examples) {
+        const seenExampleRows = new Set();
+        for (const example of transformStep.examples) {
           const row = rows.find((row) => row.row === example.row);
-          if (!row || g.has(example.row))
+          if (!row || seenExampleRows.has(example.row))
             throw Error(
               "An inference example is outside the data rows or duplicated.",
             );
           if (
-            (g.add(example.row),
-            d.pattern.parts.some((part) => row.fields[part.column].exception) ||
+            (seenExampleRows.add(example.row),
+            transformStep.pattern.parts.some(
+              (part) => row.fields[part.column].exception,
+            ) ||
               applyInferredTextPattern(
                 row.fields.map((field) => field.value),
-                d.pattern,
+                transformStep.pattern,
               ) !== example.value)
           )
             throw Error(
@@ -958,63 +1156,90 @@ function applyTransformationSteps(rows, headers, steps, dateSystem = "1900") {
             );
         }
         for (const row of rows) {
-          const y = d.pattern.parts.map((part) => row.fields[part.column]),
-            w = { ...y[0], sources: uniqueSourceReferences(y) };
+          const inputFields = transformStep.pattern.parts.map(
+              (part) => row.fields[part.column],
+            ),
+            patternField = {
+              ...inputFields[0],
+              sources: uniqueSourceReferences(inputFields),
+            };
           try {
-            if (y.some((E) => E.exception))
+            if (
+              inputFields.some(
+                (patternInputField) => patternInputField.exception,
+              )
+            )
               throw Error("An inferred input has an earlier parse exception.");
             row.fields.push(
               createSourcedValue(
                 applyInferredTextPattern(
                   row.fields.map((field) => field.value),
-                  d.pattern,
+                  transformStep.pattern,
                 ),
-                w.sources,
+                patternField.sources,
               ),
             );
           } catch (error) {
-            row.fields.push(s(w, row.row, d.name, step, error));
+            row.fields.push(
+              recordException(
+                patternField,
+                row.row,
+                transformStep.name,
+                step,
+                error,
+              ),
+            );
           }
         }
-        headers.push(d.name);
+        headers.push(transformStep.name);
       } else
         for (const row of rows)
-          for (const column of d.columns) {
-            const y = row.fields[column];
-            if (!y.exception)
+          for (const column of transformStep.columns) {
+            const targetField = row.fields[column];
+            if (!targetField.exception)
               try {
-                let value = y.value,
-                  type = y.type;
-                if (d.kind === "convert")
-                  ((value = convertFieldToTypedValue(y.value, d, dateSystem)),
+                let value = targetField.value,
+                  type = targetField.type;
+                if (transformStep.kind === "convert")
+                  ((value = convertFieldToTypedValue(
+                    targetField.value,
+                    transformStep,
+                    dateSystem,
+                  )),
                     (type =
                       value === null
                         ? "blank"
-                        : d.to === "date"
+                        : transformStep.to === "date"
                           ? "date"
                           : inferCellValueType(value)));
-                else if (!isNullOrEmptyValue(y.value)) {
-                  const A = coerceCellValueToText(y.value);
+                else if (!isNullOrEmptyValue(targetField.value)) {
+                  const sourceText = coerceCellValueToText(targetField.value);
                   ((value =
-                    d.kind === "trim"
-                      ? d.mode === "collapse"
-                        ? A.trim().replace(/\s+/gu, " ")
-                        : A.trim()
-                      : d.kind === "clean"
-                        ? A.replace(/[\u0000-\u001f]/g, "")
-                        : d.kind === "case"
-                          ? applyTextCasing(A, d.mode)
-                          : A.split(d.find).join(d.replacement)),
+                    transformStep.kind === "trim"
+                      ? transformStep.mode === "collapse"
+                        ? sourceText.trim().replace(/\s+/gu, " ")
+                        : sourceText.trim()
+                      : transformStep.kind === "clean"
+                        ? sourceText.replace(/[\u0000-\u001f]/g, "")
+                        : transformStep.kind === "case"
+                          ? applyTextCasing(sourceText, transformStep.mode)
+                          : sourceText
+                              .split(transformStep.find)
+                              .join(transformStep.replacement)),
                     (type = "text"));
                 }
                 if (typeof value == "string" && value.length > 32767)
                   throw Error(
                     "The transformed value exceeds the cell text limit.",
                   );
-                row.fields[column] = { ...y, value: value, type: type };
+                row.fields[column] = {
+                  ...targetField,
+                  value: value,
+                  type: type,
+                };
               } catch (error) {
-                row.fields[column] = s(
-                  y,
+                row.fields[column] = recordException(
+                  targetField,
                   row.row,
                   headers[column],
                   step,
@@ -1024,48 +1249,53 @@ function applyTransformationSteps(rows, headers, steps, dateSystem = "1900") {
           }
       if (rows.length * headers.length > 5e3)
         throw Error("The intermediate result exceeds 5,000 cells.");
-      let p = 0;
+      let intermediateTextLength = 0;
       for (const row of rows)
         for (const field of row.fields) {
           if (typeof field.value == "string" && field.value.length > 32767)
             throw Error("A result exceeds the 32,767-character cell limit.");
-          if ((p += coerceCellValueToText(field.value).length) > 1e6)
+          if (
+            (intermediateTextLength += coerceCellValueToText(
+              field.value,
+            ).length) > 1e6
+          )
             throw Error(
               "Intermediate results exceed the 1,000,000-character limit.",
             );
         }
-      const m = JSON.parse(c);
+      const previousRows = JSON.parse(rowsSnapshot);
       let changedCells = 0;
-      (rows.forEach((row, b) =>
-        row.fields.forEach((field, w) => {
-          JSON.stringify(field) !== JSON.stringify(m[b].fields[w]) &&
+      (rows.forEach((row, rowIndex) =>
+        row.fields.forEach((field, fieldIndex) => {
+          JSON.stringify(field) !==
+            JSON.stringify(previousRows[rowIndex].fields[fieldIndex]) &&
             changedCells++;
         }),
       ),
         stages.push({
           step: step,
-          kind: d.kind,
+          kind: transformStep.kind,
           fields: [...headers],
           changedCells: changedCells,
-          exceptions: exceptions.length - h,
+          exceptions: exceptions.length - exceptionCountBefore,
         }));
     }),
     { exceptions: exceptions, stages: stages }
   );
 }
-function createAnnotatedCellValue(raw, note, t) {
+function createAnnotatedCellValue(raw, note, valueType) {
   return normalizeCellRecordInput({
     raw: raw,
     note: note,
-    ...(t === "date" ? { format: "date" } : {}),
+    ...(valueType === "date" ? { format: "date" } : {}),
     ...(typeof raw == "string"
       ? { numFmt: "@", ...(raw.startsWith("=") ? { literal: true } : {}) }
       : {}),
   });
 }
-function buildTransformationPreview(workbook, r, t = {}) {
+function buildTransformationPreview(workbook, recipe, permissions = {}) {
   const { request, context, source, sources, rows, headers } =
-    prepareTransformationInput(workbook, r, t);
+    prepareTransformationInput(workbook, recipe, permissions);
   if (!request.steps.length)
     throw Error("Add at least one transformation step before previewing.");
   const { exceptions, stages } = applyTransformationSteps(
@@ -1077,20 +1307,20 @@ function buildTransformationPreview(workbook, r, t = {}) {
     outputs = [],
     cells = {};
   if (
-    (headers.forEach((header, g) => {
-      cells[formatCellAddress(0, g)] = {
+    (headers.forEach((header, columnIndex) => {
+      cells[formatCellAddress(0, columnIndex)] = {
         raw: header,
         literal: true,
         style: { bold: true },
       };
     }),
-    rows.forEach((row, g) =>
-      row.fields.forEach((field, y) => {
-        const cellAddress = formatCellAddress(g + 1, y);
+    rows.forEach((row, rowIndex) =>
+      row.fields.forEach((field, fieldIndex) => {
+        const cellAddress = formatCellAddress(rowIndex + 1, fieldIndex);
         outputs.push({
           address: cellAddress,
           row: row.row,
-          field: headers[y],
+          field: headers[fieldIndex],
           ...field,
         });
         const note = `Clean & Reshape derivation
@@ -1109,8 +1339,8 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
     ),
     exceptions.length)
   ) {
-    const v = rows.length + 3;
-    ((cells[formatCellAddress(v, 0)] = {
+    const exceptionTitleRow = rows.length + 3;
+    ((cells[formatCellAddress(exceptionTitleRow, 0)] = {
       raw: "Transformation exceptions",
       style: { bold: true },
     }),
@@ -1122,23 +1352,31 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
         "Original cells",
         "Reason",
       ].forEach(
-        (raw, y) =>
-          (cells[formatCellAddress(v + 1, y)] = {
-            raw: raw,
-            style: { bold: true },
-          }),
+        (raw, headerColumnIndex) =>
+          (cells[formatCellAddress(exceptionTitleRow + 1, headerColumnIndex)] =
+            {
+              raw: raw,
+              style: { bold: true },
+            }),
       ),
-      exceptions.forEach((exception, y) =>
+      exceptions.forEach((exception, exceptionIndex) =>
         [
           exception.row,
           exception.field,
           exception.step,
           exception.raw,
-          exception.sources.map((w) => `${source.name}!${w}`).join(", "),
+          exception.sources
+            .map((sourceAddress) => `${source.name}!${sourceAddress}`)
+            .join(", "),
           exception.reason,
         ].forEach(
-          (raw, E) =>
-            (cells[formatCellAddress(v + 2 + y, E)] = createAnnotatedCellValue(
+          (raw, exceptionColumnIndex) =>
+            (cells[
+              formatCellAddress(
+                exceptionTitleRow + 2 + exceptionIndex,
+                exceptionColumnIndex,
+              )
+            ] = createAnnotatedCellValue(
               raw,
               `Retained parsing exception at source revision ${workbook.revision}`,
               inferCellValueType(raw),
@@ -1149,14 +1387,17 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
   if (Object.keys(cells).length > 5e3)
     throw Error("Results and exception appendix exceed 5,000 output cells.");
   if (
-    workbook.sheets.reduce((v, g) => v + Object.keys(g.cells).length, 0) +
+    workbook.sheets.reduce(
+      (total, sheet) => total + Object.keys(sheet.cells).length,
+      0,
+    ) +
       Object.keys(cells).length >
     workbookLimits.maxCells
   )
     throw Error(
       "Derived output exceeds the 100,000 stored-cell workbook budget.",
     );
-  const p = {
+  const preview = {
     snapshot: JSON.stringify(workbook),
     context,
     request,
@@ -1190,7 +1431,7 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
         ...(workbook.fieldTransforms ?? []),
         buildTransformationRecord(
           workbook,
-          p,
+          preview,
           "preview-id",
           "preview-output",
           "2026-01-01T00:00:00.000Z",
@@ -1198,97 +1439,116 @@ ${field.exception ? "Parse exception retained; see the exceptions appendix." : "
       ],
       {},
     ),
-    p
+    preview
   );
 }
-function buildTransformationRecord(workbook, r, t, outputSheetId, createdAt) {
+function buildTransformationRecord(
+  workbook,
+  preview,
+  recordId,
+  outputSheetId,
+  createdAt,
+) {
   return {
-    id: t,
+    id: recordId,
     workbookId: workbook.id,
     sourceRevision: workbook.revision,
-    sourceSheetId: r.request.sourceSheetId,
-    sourceSheetName: r.sourceSheetName,
+    sourceSheetId: preview.request.sourceSheetId,
+    sourceSheetName: preview.sourceSheetName,
     outputSheetId: outputSheetId,
-    outputSheetName: r.request.outputName,
+    outputSheetName: preview.request.outputName,
     createdAt: createdAt,
     semantics: "reviewed-fields-v1",
-    request: structuredClone(r.request),
-    sources: structuredClone(r.sources),
-    outputs: structuredClone(r.outputs),
-    exceptions: structuredClone(r.exceptions),
+    request: structuredClone(preview.request),
+    sources: structuredClone(preview.sources),
+    outputs: structuredClone(preview.outputs),
+    exceptions: structuredClone(preview.exceptions),
   };
 }
-function commitApprovedTransformation(workbook, r, t) {
-  if (t.approved !== true)
+function commitApprovedTransformation(workbook, preview, approval) {
+  if (approval.approved !== true)
     throw Error(
       "Review and approve the complete transformation preview first.",
     );
-  if (r.snapshot !== JSON.stringify(workbook))
+  if (preview.snapshot !== JSON.stringify(workbook))
     throw Error("The workbook changed. Preview the transformation again.");
   const transformationPreview = buildTransformationPreview(
     workbook,
-    r.request,
-    t,
+    preview.request,
+    approval,
   );
-  if (JSON.stringify(transformationPreview) !== JSON.stringify(r))
+  if (JSON.stringify(transformationPreview) !== JSON.stringify(preview))
     throw Error("The preview or authorized context changed. Preview again.");
-  if (r.exceptions.length && t.acceptExceptions !== true)
+  if (preview.exceptions.length && approval.acceptExceptions !== true)
     throw Error("Acknowledge the retained parse exceptions before applying.");
-  const o = structuredClone(workbook),
-    worksheetRecord = createWorksheetRecord(r.request.outputName);
+  const nextWorkbook = structuredClone(workbook),
+    worksheetRecord = createWorksheetRecord(preview.request.outputName);
   return (
-    (worksheetRecord.cells = structuredClone(r.cells)),
-    o.sheets.push(worksheetRecord),
-    (o.fieldTransforms = [
-      ...(o.fieldTransforms ?? []),
+    (worksheetRecord.cells = structuredClone(preview.cells)),
+    nextWorkbook.sheets.push(worksheetRecord),
+    (nextWorkbook.fieldTransforms = [
+      ...(nextWorkbook.fieldTransforms ?? []),
       buildTransformationRecord(
         workbook,
-        r,
+        preview,
         crypto.randomUUID(),
         worksheetRecord.id,
         new Date().toISOString(),
       ),
     ]),
-    normalizeWorkbookInput(o)
+    normalizeWorkbookInput(nextWorkbook)
   );
 }
-function selectExceptionFreeRows(workbook, r, t, n, o = {}) {
-  const a = prepareTransformationInput(workbook, r, o);
+function selectExceptionFreeRows(
+  workbook,
+  recipe,
+  examples,
+  columns,
+  permissions = {},
+) {
+  const transformationInput = prepareTransformationInput(
+    workbook,
+    recipe,
+    permissions,
+  );
   applyTransformationSteps(
-    a.rows,
-    a.headers,
-    a.request.steps,
+    transformationInput.rows,
+    transformationInput.headers,
+    transformationInput.request.steps,
     workbook.datePolicy?.dateSystem,
   );
-  const s = a.rows.filter((row) =>
-    n.every((l) => row.fields[l] && !row.fields[l].exception),
+  const exceptionFreeRows = transformationInput.rows.filter((row) =>
+    columns.every(
+      (column) => row.fields[column] && !row.fields[column].exception,
+    ),
   );
   return inferTextPatternFromExamples(
-    s.map((u) => ({
-      row: u.row,
-      values: u.fields.map((field) => field.value),
+    exceptionFreeRows.map((exceptionFreeRow) => ({
+      row: exceptionFreeRow.row,
+      values: exceptionFreeRow.fields.map((field) => field.value),
     })),
-    n,
-    t,
+    columns,
+    examples,
   );
 }
-function verifyTransformationPreview(workbook, r, t = {}) {
+function verifyTransformationPreview(workbook, preview, permissions = {}) {
   if (
-    r.snapshot !== JSON.stringify(workbook) ||
-    JSON.stringify(buildTransformationPreview(workbook, r.request, t)) !==
-      JSON.stringify(r)
+    preview.snapshot !== JSON.stringify(workbook) ||
+    JSON.stringify(
+      buildTransformationPreview(workbook, preview.request, permissions),
+    ) !== JSON.stringify(preview)
   )
     throw Error(
       "The transformation preview is stale or altered. Preview again.",
     );
-  const { snapshot, context, cells, ...s } = r;
+  const { snapshot, context, cells, ...previewDetails } = preview;
   return JSON.stringify(
     {
       schemaVersion: 1,
       kind: "field-transformation-preview",
       workbookId: workbook.id,
       sourceRevision: workbook.revision,
-      ...s,
+      ...previewDetails,
     },
     null,
     2,
@@ -1308,30 +1568,30 @@ const expressionFunctionArity = {
     OR: [1, 20],
     NOT: [1, 1],
   },
-  assertFiniteNumericOperand = (e) => {
-    if (typeof e != "number" || !Number.isFinite(e))
+  assertFiniteNumericOperand = (operand) => {
+    if (typeof operand != "number" || !Number.isFinite(operand))
       throw Error(
         "This expression requires a finite number. Add an explicit Types step.",
       );
-    return e;
+    return operand;
   },
-  assertTextOperand = (e) => {
-    if (typeof e != "string")
+  assertTextOperand = (operand) => {
+    if (typeof operand != "string")
       throw Error("This expression requires text. Add an explicit Types step.");
-    return e;
+    return operand;
   },
-  assertBooleanCondition = (e) => {
-    if (typeof e != "boolean")
+  assertBooleanCondition = (condition) => {
+    if (typeof condition != "boolean")
       throw Error("IF/AND/OR/NOT conditions must be Boolean comparisons.");
-    return e;
+    return condition;
   },
-  assertDerivedValueLimits = (e) => {
+  assertDerivedValueLimits = (derivedValue) => {
     if (
-      (typeof e == "number" && !Number.isFinite(e)) ||
-      (typeof e == "string" && e.length > 32767)
+      (typeof derivedValue == "number" && !Number.isFinite(derivedValue)) ||
+      (typeof derivedValue == "string" && derivedValue.length > 32767)
     )
       throw Error("Derived value exceeds finite numeric or text limits.");
-    return e;
+    return derivedValue;
   };
 function parseRowExpression(expression, fields) {
   if (
@@ -1340,99 +1600,137 @@ function parseRowExpression(expression, fields) {
     expression.length > 1e3
   )
     throw Error("Use a row expression of 1–1,000 characters.");
-  let t = 0,
-    n = 0,
-    o = 0;
-  const a = expression.trim().replace(/^=/, ""),
-    s = () => {
-      for (; /\s/.test(a[t] ?? "") && t < a.length;) t++;
+  let cursor = 0,
+    nodeCount = 0,
+    nestingDepth = 0;
+  const expressionText = expression.trim().replace(/^=/, ""),
+    skipWhitespace = () => {
+      for (
+        ;
+        /\s/.test(expressionText[cursor] ?? "") &&
+        cursor < expressionText.length;
+      )
+        cursor++;
     },
-    d = () => (s(), a[t]),
-    u = () => {
+    peekChar = () => (skipWhitespace(), expressionText[cursor]),
+    throwSyntaxError = () => {
       throw Error(
-        `Invalid row expression near character ${t + 1}. Use [Field], literals, operators and supported functions.`,
+        `Invalid row expression near character ${cursor + 1}. Use [Field], literals, operators and supported functions.`,
       );
     },
-    l = (v) => {
-      if (++n > 200) throw Error("Row expressions are limited to 200 nodes.");
-      return v;
+    countNode = (node) => {
+      if (++nodeCount > 200)
+        throw Error("Row expressions are limited to 200 nodes.");
+      return node;
     };
-  function c() {
-    if (++o > 32) throw Error("Row expression nesting exceeds 32 levels.");
+  function parsePrimary() {
+    if (++nestingDepth > 32)
+      throw Error("Row expression nesting exceeds 32 levels.");
     try {
-      let operator = d();
+      let operator = peekChar();
       if (operator === "+" || operator === "-")
-        return (t++, l({ kind: "unary", operator: operator, value: c() }));
+        return (
+          cursor++,
+          countNode({
+            kind: "unary",
+            operator: operator,
+            value: parsePrimary(),
+          })
+        );
       if (operator === "(") {
-        t++;
-        const k = f(0);
-        return d() !== ")" ? u() : (t++, k);
+        cursor++;
+        const groupedNode = parseBinary(0);
+        return peekChar() !== ")"
+          ? throwSyntaxError()
+          : (cursor++, groupedNode);
       }
       if (operator === '"') {
-        const k = a.slice(t).match(/^"(?:[^"\\]|\\.)*"/);
-        if (!k) return u();
-        t += k[0].length;
+        const stringMatch = expressionText
+          .slice(cursor)
+          .match(/^"(?:[^"\\]|\\.)*"/);
+        if (!stringMatch) return throwSyntaxError();
+        cursor += stringMatch[0].length;
         try {
-          return l({ kind: "value", value: JSON.parse(k[0]) });
+          return countNode({
+            kind: "value",
+            value: JSON.parse(stringMatch[0]),
+          });
         } catch {
-          return u();
+          return throwSyntaxError();
         }
       }
       if (operator === "[") {
-        t++;
-        let k = "",
-          F = false;
-        for (; t < a.length;) {
-          if (a[t] === "]") {
-            if (a[t + 1] === "]") {
-              ((k += "]"), (t += 2));
+        cursor++;
+        let fieldName = "",
+          isFieldClosed = false;
+        for (; cursor < expressionText.length;) {
+          if (expressionText[cursor] === "]") {
+            if (expressionText[cursor + 1] === "]") {
+              ((fieldName += "]"), (cursor += 2));
               continue;
             }
-            (t++, (F = true));
+            (cursor++, (isFieldClosed = true));
             break;
           }
-          k += a[t++];
+          fieldName += expressionText[cursor++];
         }
-        const I = fields.indexOf(k);
-        if (!F || I < 0) throw Error(`Unknown row-expression field [${k}].`);
-        return l({ kind: "field", index: I });
+        const fieldIndex = fields.indexOf(fieldName);
+        if (!isFieldClosed || fieldIndex < 0)
+          throw Error(`Unknown row-expression field [${fieldName}].`);
+        return countNode({ kind: "field", index: fieldIndex });
       }
-      const g = a.slice(t).match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
-      if (g)
+      const numberMatch = expressionText
+        .slice(cursor)
+        .match(/^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/);
+      if (numberMatch)
         return (
-          (t += g[0].length),
-          l({ kind: "value", value: assertDerivedValueLimits(Number(g[0])) })
-        );
-      const b = a.slice(t).match(/^[A-Za-z_][A-Za-z0-9_]*/);
-      if (!b) return u();
-      t += b[0].length;
-      const y = b[0].toUpperCase();
-      if (d() !== "(") {
-        if (y === "TRUE" || y === "FALSE" || y === "NULL")
-          return l({
+          (cursor += numberMatch[0].length),
+          countNode({
             kind: "value",
-            value: y === "NULL" ? null : y === "TRUE",
-          });
-        throw Error(`Unknown identifier ${y}. Column references use [Field].`);
-      }
-      if (!Object.hasOwn(expressionFunctionArity, y))
-        throw Error(
-          `Unsupported row function ${y}. Use ${Object.keys(expressionFunctionArity).join(", ")}.`,
+            value: assertDerivedValueLimits(Number(numberMatch[0])),
+          })
         );
-      t++;
+      const identifierMatch = expressionText
+        .slice(cursor)
+        .match(/^[A-Za-z_][A-Za-z0-9_]*/);
+      if (!identifierMatch) return throwSyntaxError();
+      cursor += identifierMatch[0].length;
+      const identifierName = identifierMatch[0].toUpperCase();
+      if (peekChar() !== "(") {
+        if (
+          identifierName === "TRUE" ||
+          identifierName === "FALSE" ||
+          identifierName === "NULL"
+        )
+          return countNode({
+            kind: "value",
+            value: identifierName === "NULL" ? null : identifierName === "TRUE",
+          });
+        throw Error(
+          `Unknown identifier ${identifierName}. Column references use [Field].`,
+        );
+      }
+      if (!Object.hasOwn(expressionFunctionArity, identifierName))
+        throw Error(
+          `Unsupported row function ${identifierName}. Use ${Object.keys(expressionFunctionArity).join(", ")}.`,
+        );
+      cursor++;
       const args = [];
-      if (d() !== ")") for (; args.push(f(0)), d() === ",";) t++;
-      if (d() !== ")") return u();
-      t++;
-      const [E, A] = expressionFunctionArity[y];
-      if (args.length < E || args.length > A)
-        throw Error(`${y} expects ${E === A ? E : `${E}–${A}`} arguments.`);
-      return l({ kind: "call", name: y, args: args });
+      if (peekChar() !== ")")
+        for (; args.push(parseBinary(0)), peekChar() === ",";) cursor++;
+      if (peekChar() !== ")") return throwSyntaxError();
+      cursor++;
+      const [minArity, maxArity] = expressionFunctionArity[identifierName];
+      if (args.length < minArity || args.length > maxArity)
+        throw Error(
+          `${identifierName} expects ${minArity === maxArity ? minArity : `${minArity}–${maxArity}`} arguments.`,
+        );
+      return countNode({ kind: "call", name: identifierName, args: args });
     } finally {
-      o--;
+      nestingDepth--;
     }
   }
-  const h = {
+  const operatorPrecedence = {
     "=": 1,
     "<>": 1,
     "<": 1,
@@ -1445,161 +1743,184 @@ function parseRowExpression(expression, fields) {
     "*": 4,
     "/": 4,
   };
-  function f(v) {
-    let left = c();
+  function parseBinary(minPrecedence) {
+    let left = parsePrimary();
     for (;;) {
-      s();
-      const operator = a.slice(t).match(/^(<>|<=|>=|[=<>+*/&-])/)?.[0];
-      if (!operator || h[operator] < v) break;
-      ((t += operator.length),
-        (left = l({
+      skipWhitespace();
+      const operator = expressionText
+        .slice(cursor)
+        .match(/^(<>|<=|>=|[=<>+*/&-])/)?.[0];
+      if (!operator || operatorPrecedence[operator] < minPrecedence) break;
+      ((cursor += operator.length),
+        (left = countNode({
           kind: "binary",
           operator: operator,
           left: left,
-          right: f(h[operator] + 1),
+          right: parseBinary(operatorPrecedence[operator] + 1),
         })));
     }
     return left;
   }
-  const p = f(0);
-  if ((s(), t !== a.length)) return u();
-  function m(v, g) {
-    if (v.kind === "value") return v.value;
-    if (v.kind === "field") return g[v.index];
-    if (v.kind === "unary")
+  const rootNode = parseBinary(0);
+  if ((skipWhitespace(), cursor !== expressionText.length))
+    return throwSyntaxError();
+  function evaluateNode(node, rowValues) {
+    if (node.kind === "value") return node.value;
+    if (node.kind === "field") return rowValues[node.index];
+    if (node.kind === "unary")
       return assertDerivedValueLimits(
-        assertFiniteNumericOperand(m(v.value, g)) *
-          (v.operator === "-" ? -1 : 1),
+        assertFiniteNumericOperand(evaluateNode(node.value, rowValues)) *
+          (node.operator === "-" ? -1 : 1),
       );
-    if (v.kind === "binary") {
-      const w = m(v.left, g),
-        E = m(v.right, g),
-        operator = v.operator;
-      if (operator === "=") return w === E;
-      if (operator === "<>") return w !== E;
+    if (node.kind === "binary") {
+      const leftValue = evaluateNode(node.left, rowValues),
+        rightValue = evaluateNode(node.right, rowValues),
+        operator = node.operator;
+      if (operator === "=") return leftValue === rightValue;
+      if (operator === "<>") return leftValue !== rightValue;
       if (["<", ">", "<=", ">="].includes(operator)) {
         if (
-          typeof w != typeof E ||
-          w === null ||
-          E === null ||
-          typeof w == "boolean"
+          typeof leftValue != typeof rightValue ||
+          leftValue === null ||
+          rightValue === null ||
+          typeof leftValue == "boolean"
         )
           throw Error(
             "Comparisons require two numbers or two text values of the same type.",
           );
         return operator === "<"
-          ? w < E
+          ? leftValue < rightValue
           : operator === ">"
-            ? w > E
+            ? leftValue > rightValue
             : operator === "<="
-              ? w <= E
-              : w >= E;
+              ? leftValue <= rightValue
+              : leftValue >= rightValue;
       }
       if (operator === "&")
         return assertDerivedValueLimits(
-          assertTextOperand(w) + assertTextOperand(E),
+          assertTextOperand(leftValue) + assertTextOperand(rightValue),
         );
-      const k = assertFiniteNumericOperand(w),
-        F = assertFiniteNumericOperand(E);
-      if (operator === "/" && F === 0)
+      const leftNumber = assertFiniteNumericOperand(leftValue),
+        rightNumber = assertFiniteNumericOperand(rightValue);
+      if (operator === "/" && rightNumber === 0)
         throw Error("Derived expression divides by zero.");
       return assertDerivedValueLimits(
         operator === "+"
-          ? k + F
+          ? leftNumber + rightNumber
           : operator === "-"
-            ? k - F
+            ? leftNumber - rightNumber
             : operator === "*"
-              ? k * F
-              : k / F,
+              ? leftNumber * rightNumber
+              : leftNumber / rightNumber,
       );
     }
-    if (v.name === "IF")
-      return m(v.args[assertBooleanCondition(m(v.args[0], g)) ? 1 : 2], g);
-    if (v.name === "COALESCE") {
-      for (const arg of v.args) {
-        const E = m(arg, g);
-        if (E !== null && E !== "") return E;
+    if (node.name === "IF")
+      return evaluateNode(
+        node.args[
+          assertBooleanCondition(evaluateNode(node.args[0], rowValues)) ? 1 : 2
+        ],
+        rowValues,
+      );
+    if (node.name === "COALESCE") {
+      for (const arg of node.args) {
+        const candidateValue = evaluateNode(arg, rowValues);
+        if (candidateValue !== null && candidateValue !== "")
+          return candidateValue;
       }
       return null;
     }
-    const b = v.args.map((arg) => m(arg, g)),
-      y = b[0];
-    switch (v.name) {
+    const argValues = node.args.map((arg) => evaluateNode(arg, rowValues)),
+      firstArgValue = argValues[0];
+    switch (node.name) {
       case "ABS":
-        return Math.abs(assertFiniteNumericOperand(y));
+        return Math.abs(assertFiniteNumericOperand(firstArgValue));
       case "ROUND": {
-        const w = b.length === 1 ? 0 : assertFiniteNumericOperand(b[1]);
-        if (!Number.isInteger(w) || Math.abs(w) > 12)
+        const digits =
+          argValues.length === 1 ? 0 : assertFiniteNumericOperand(argValues[1]);
+        if (!Number.isInteger(digits) || Math.abs(digits) > 12)
           throw Error("ROUND digits must be an integer from -12 to 12.");
-        const E = assertFiniteNumericOperand(y),
-          A = 10 ** w;
+        const numberToRound = assertFiniteNumericOperand(firstArgValue),
+          scaleFactor = 10 ** digits;
         return assertDerivedValueLimits(
-          (Math.sign(E) * Math.round(Math.abs(E) * A)) / A,
+          (Math.sign(numberToRound) *
+            Math.round(Math.abs(numberToRound) * scaleFactor)) /
+            scaleFactor,
         );
       }
       case "UPPER":
         return assertDerivedValueLimits(
-          assertTextOperand(y).toLocaleUpperCase("en-US"),
+          assertTextOperand(firstArgValue).toLocaleUpperCase("en-US"),
         );
       case "LOWER":
         return assertDerivedValueLimits(
-          assertTextOperand(y).toLocaleLowerCase("en-US"),
+          assertTextOperand(firstArgValue).toLocaleLowerCase("en-US"),
         );
       case "TRIM":
-        return assertTextOperand(y).trim().replace(/\s+/gu, " ");
+        return assertTextOperand(firstArgValue).trim().replace(/\s+/gu, " ");
       case "LEN":
-        return Array.from(assertTextOperand(y)).length;
+        return Array.from(assertTextOperand(firstArgValue)).length;
       case "CONCAT":
-        return assertDerivedValueLimits(b.map(assertTextOperand).join(""));
+        return assertDerivedValueLimits(
+          argValues.map(assertTextOperand).join(""),
+        );
       case "AND":
-        return b.map(assertBooleanCondition).every(Boolean);
+        return argValues.map(assertBooleanCondition).every(Boolean);
       case "OR":
-        return b.map(assertBooleanCondition).some(Boolean);
+        return argValues.map(assertBooleanCondition).some(Boolean);
       case "NOT":
-        return !assertBooleanCondition(y);
+        return !assertBooleanCondition(firstArgValue);
       default:
         throw Error("Unknown row expression operation.");
     }
   }
-  return (v) => assertDerivedValueLimits(m(p, v));
+  return (rowValues) =>
+    assertDerivedValueLimits(evaluateNode(rootNode, rowValues));
 }
-const findFieldIndexOrThrow = (e, r) => {
-    const t = e.fields.indexOf(r);
-    if (t < 0)
-      throw Error(`Field “${r}” is missing from the step input schema.`);
-    return t;
+const findFieldIndexOrThrow = (table, fieldName) => {
+    const fieldIndex = table.fields.indexOf(fieldName);
+    if (fieldIndex < 0)
+      throw Error(
+        `Field “${fieldName}” is missing from the step input schema.`,
+      );
+    return fieldIndex;
   },
-  uniqueSortedSources = (e) => [...new Set(e.flatMap((r) => r.sources))].sort(),
-  profileFieldTypes = (e) =>
-    e.fields.map((field, t) => ({
+  uniqueSortedSources = (rows) =>
+    [...new Set(rows.flatMap((row) => row.sources))].sort(),
+  profileFieldTypes = (table) =>
+    table.fields.map((field, fieldIndex) => ({
       name: field,
       types: [
         ...new Set(
-          e.rows.map((row) =>
-            isNullOrEmptyValue(row.values[t]) ? "blank" : typeof row.values[t],
+          table.rows.map((row) =>
+            isNullOrEmptyValue(row.values[fieldIndex])
+              ? "blank"
+              : typeof row.values[fieldIndex],
           ),
         ),
       ].sort(),
-      ...(Object.hasOwn(e.declaredTypes, field)
-        ? { declaredType: e.declaredTypes[field] }
+      ...(Object.hasOwn(table.declaredTypes, field)
+        ? { declaredType: table.declaredTypes[field] }
         : {}),
     }));
 function buildFieldControlTotals(output) {
-  return output.fields.map((field, t) => {
+  return output.fields.map((field, fieldIndex) => {
     let sum = 0,
-      o = 0,
+      compensation = 0,
       numericCount = 0,
       blankCount = 0;
     for (const row of output.rows) {
-      const u = row.values[t];
-      if ((isNullOrEmptyValue(u) && blankCount++, typeof u == "number")) {
+      const cellValue = row.values[fieldIndex];
+      if (
+        (isNullOrEmptyValue(cellValue) && blankCount++,
+        typeof cellValue == "number")
+      ) {
         numericCount++;
-        const l = u - o,
-          c = sum + l;
+        const adjustedValue = cellValue - compensation,
+          nextSum = sum + adjustedValue;
         if (
-          ((o = c - sum - l),
-          (sum = c),
-          !Number.isFinite(sum) || !Number.isFinite(o))
+          ((compensation = nextSum - sum - adjustedValue),
+          (sum = nextSum),
+          !Number.isFinite(sum) || !Number.isFinite(compensation))
         )
           throw Error(
             `Control total for “${field}” exceeds finite numeric limits.`,
@@ -1614,33 +1935,34 @@ function buildFieldControlTotals(output) {
     };
   });
 }
-function validateRecipeOutputTable(e) {
+function validateRecipeOutputTable(table) {
   if (
-    !e.fields.length ||
-    e.fields.length > transformationRecipeLimits.columns ||
-    e.fields.some((field) => !field.trim() || field.length > 128) ||
-    new Set(e.fields.map((field) => field.toLowerCase())).size !==
-      e.fields.length
+    !table.fields.length ||
+    table.fields.length > transformationRecipeLimits.columns ||
+    table.fields.some((field) => !field.trim() || field.length > 128) ||
+    new Set(table.fields.map((field) => field.toLowerCase())).size !==
+      table.fields.length
   )
     throw Error(
       "The result needs 1–50 distinct, nonblank column names of at most 128 characters.",
     );
   if (
-    e.rows.length > transformationRecipeLimits.rows ||
-    (e.rows.length + 1) * e.fields.length > transformationRecipeLimits.cells
+    table.rows.length > transformationRecipeLimits.rows ||
+    (table.rows.length + 1) * table.fields.length >
+      transformationRecipeLimits.cells
   )
     throw Error(
       "A recipe step exceeds 1,000 rows or 20,000 cells. Narrow the source; no rows were truncated.",
     );
-  let r = 0,
-    t = 0;
-  for (const row of e.rows) {
-    if (row.values.length !== e.fields.length)
+  let characterCount = 0,
+    lineageLinkCount = 0;
+  for (const row of table.rows) {
+    if (row.values.length !== table.fields.length)
       throw Error("Invalid recipe row width.");
-    t += row.sources.length;
+    lineageLinkCount += row.sources.length;
     for (const value of row.values)
       if (typeof value == "string") {
-        if (((r += value.length), value.length > 32767))
+        if (((characterCount += value.length), value.length > 32767))
           throw Error("Recipe text exceeds the cell limit.");
       } else if (
         value !== null &&
@@ -1650,32 +1972,38 @@ function validateRecipeOutputTable(e) {
         throw Error("Recipe output must contain finite scalar values.");
   }
   if (
-    r > transformationRecipeLimits.characters ||
-    t > transformationRecipeLimits.lineageLinks
+    characterCount > transformationRecipeLimits.characters ||
+    lineageLinkCount > transformationRecipeLimits.lineageLinks
   )
     throw Error(
       "Recipe text or source-lineage budget exceeded. Narrow the source; no evidence was truncated.",
     );
-  return e;
+  return table;
 }
-function resolveRecipeSourceTable(workbook, source, t) {
+function resolveRecipeSourceTable(workbook, source, hostContext) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === source.sheetId);
-  if (!sheet || (t.allowedSheetIds && !t.allowedSheetIds.includes(sheet.id)))
+  if (
+    !sheet ||
+    (hostContext.allowedSheetIds &&
+      !hostContext.allowedSheetIds.includes(sheet.id))
+  )
     throw Error("A recipe source is outside the authorized host context.");
   let range = source.range;
   if (source.tableId) {
-    const c = sheet.tables?.find((table) => table.id === source.tableId);
-    if (!c)
+    const sourceTable = sheet.tables?.find(
+      (table) => table.id === source.tableId,
+    );
+    if (!sourceTable)
       throw Error(
         "The selected source table no longer exists. Review the recipe source.",
       );
-    const rangeAddress = parseRangeAddress(c.range);
-    range = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (c.showTotals ? 1 : 0)}`;
+    const rangeAddress = parseRangeAddress(sourceTable.range);
+    range = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (sourceTable.showTotals ? 1 : 0)}`;
   }
   const sourceHeaders = readSourceHeaders(
       workbook,
       [{ sheetId: source.sheetId, range: range }],
-      t,
+      hostContext,
     ),
     snapshot = sourceHeaders.snapshots[0],
     output = validateRecipeOutputTable({
@@ -1703,55 +2031,69 @@ function resolveRecipeSourceTable(workbook, source, t) {
     };
   return { data: output, evidence: evidence };
 }
-function aggregateFieldValues(e, r, operation) {
-  const n = e.map((s) => s.values[r]).filter((s) => !isNullOrEmptyValue(s));
-  if (operation === "count") return n.length;
+function aggregateFieldValues(rows, fieldIndex, operation) {
+  const nonBlankValues = rows
+    .map((row) => row.values[fieldIndex])
+    .filter((cellValue) => !isNullOrEmptyValue(cellValue));
+  if (operation === "count") return nonBlankValues.length;
   if (operation === "distinctCount")
-    return new Set(n.map((s) => serializeTypedKeyValues([s]))).size;
-  if (n.some((s) => typeof s != "number"))
+    return new Set(
+      nonBlankValues.map((distinctValue) =>
+        serializeTypedKeyValues([distinctValue]),
+      ),
+    ).size;
+  if (nonBlankValues.some((nonBlankValue) => typeof nonBlankValue != "number"))
     throw Error(
       "Numeric aggregation encountered text or Boolean values. Add a Types step before aggregating.",
     );
-  const o = n;
-  if (!o.length) return operation === "sum" ? 0 : null;
-  let a =
+  const numericValues = nonBlankValues;
+  if (!numericValues.length) return operation === "sum" ? 0 : null;
+  let result =
     operation === "min"
-      ? Math.min(...o)
+      ? Math.min(...numericValues)
       : operation === "max"
-        ? Math.max(...o)
-        : o.reduce((s, d) => s + d, 0);
-  if ((operation === "average" && (a /= o.length), !Number.isFinite(a)))
+        ? Math.max(...numericValues)
+        : numericValues.reduce((total, value) => total + value, 0);
+  if (
+    (operation === "average" && (result /= numericValues.length),
+    !Number.isFinite(result))
+  )
     throw Error("Aggregation exceeds finite numeric bounds.");
-  return a;
+  return result;
 }
-function groupRowsByFields(e, keys) {
-  const indices = keys.map((key) => findFieldIndexOrThrow(e, key)),
+function groupRowsByFields(table, keys) {
+  const indices = keys.map((key) => findFieldIndexOrThrow(table, key)),
     groups = new Map();
-  for (const row of e.rows) {
-    const a = serializeTypedKeyValues(
+  for (const row of table.rows) {
+    const groupKey = serializeTypedKeyValues(
       indices.map((indice) => row.values[indice]),
     );
-    groups.set(a, [...(groups.get(a) ?? []), row]);
+    groups.set(groupKey, [...(groups.get(groupKey) ?? []), row]);
   }
   return { indices: indices, groups: groups };
 }
-function executeRecipeStep(workbook, output, t, n) {
-  const o = output,
-    a = (s) => s.map((d) => findFieldIndexOrThrow(o, d));
-  switch (t.kind) {
+function executeRecipeStep(workbook, output, step, loadSourceTable) {
+  const inputTable = output,
+    resolveFieldIndices = (fieldNames) =>
+      fieldNames.map((fieldName) =>
+        findFieldIndexOrThrow(inputTable, fieldName),
+      );
+  switch (step.kind) {
     case "select": {
-      const s = a(t.fields);
+      const selectedIndices = resolveFieldIndices(step.fields);
       return {
         data: {
-          fields: t.fields,
-          rows: o.rows.map((row) => ({
+          fields: step.fields,
+          rows: inputTable.rows.map((row) => ({
             ...row,
-            values: s.map((u) => row.values[u]),
+            values: selectedIndices.map(
+              (selectedColumnIndex) => row.values[selectedColumnIndex],
+            ),
           })),
           declaredTypes: Object.fromEntries(
-            t.fields.flatMap((field) =>
-              Object.hasOwn(o.declaredTypes, field)
-                ? [[field, o.declaredTypes[field]]]
+            step.fields.flatMap((field) =>
+              Object.hasOwn(inputTable.declaredTypes, field)
+                ? [[field, inputTable.declaredTypes[field]]]
                 : [],
             ),
           ),
@@ -1760,49 +2102,55 @@ function executeRecipeStep(workbook, output, t, n) {
     }
     case "rename": {
       if (
-        (a(t.mappings.map((mapping) => mapping.from)),
-        new Set(t.mappings.map((mapping) => mapping.from)).size !==
-          t.mappings.length)
+        (resolveFieldIndices(step.mappings.map((mapping) => mapping.from)),
+        new Set(step.mappings.map((mapping) => mapping.from)).size !==
+          step.mappings.length)
       )
         throw Error("Rename each input field only once per step.");
-      const s = (d) =>
-        t.mappings.find((mapping) => mapping.from === d)?.to ?? d;
+      const renameField = (originalName) =>
+        step.mappings.find((mapping) => mapping.from === originalName)?.to ??
+        originalName;
       return {
         data: {
-          ...o,
-          fields: o.fields.map(s),
+          ...inputTable,
+          fields: inputTable.fields.map(renameField),
           declaredTypes: Object.fromEntries(
-            Object.entries(o.declaredTypes).map(([d, u]) => [s(d), u]),
+            Object.entries(inputTable.declaredTypes).map(
+              ([declaredFieldName, declaredType]) => [
+                renameField(declaredFieldName),
+                declaredType,
+              ],
+            ),
           ),
         },
       };
     }
     case "types": {
-      const columns = a(t.fields);
-      if (t.group && t.group === t.decimal)
+      const columns = resolveFieldIndices(step.fields);
+      if (step.group && step.group === step.decimal)
         throw Error("Decimal and grouping separators must differ.");
       return {
         data: {
-          ...o,
+          ...inputTable,
           declaredTypes: {
-            ...o.declaredTypes,
-            ...Object.fromEntries(t.fields.map((field) => [field, t.to])),
+            ...inputTable.declaredTypes,
+            ...Object.fromEntries(step.fields.map((field) => [field, step.to])),
           },
-          rows: o.rows.map((row, u) => {
+          rows: inputTable.rows.map((row, rowIndex) => {
             try {
               return {
                 ...row,
-                values: row.values.map((value, c) =>
-                  columns.includes(c)
+                values: row.values.map((value, columnIndex) =>
+                  columns.includes(columnIndex)
                     ? convertFieldToTypedValue(
                         value,
                         {
                           kind: "convert",
                           columns: columns,
-                          to: t.to,
-                          decimal: t.decimal,
-                          group: t.group,
-                          dateOrder: t.dateOrder,
+                          to: step.to,
+                          decimal: step.decimal,
+                          group: step.group,
+                          dateOrder: step.dateOrder,
                         },
                         normalizeDatePolicy(workbook.datePolicy).dateSystem,
                       )
@@ -1811,7 +2159,7 @@ function executeRecipeStep(workbook, output, t, n) {
               };
             } catch (error) {
               throw Error(
-                `Input record ${u + 1} (${row.sources.join(", ")}): ${error.message}`,
+                `Input record ${rowIndex + 1} (${row.sources.join(", ")}): ${error.message}`,
               );
             }
           }),
@@ -1819,39 +2167,41 @@ function executeRecipeStep(workbook, output, t, n) {
       };
     }
     case "replace": {
-      const s = a(t.fields);
+      const replaceColumnIndices = resolveFieldIndices(step.fields);
       if (
-        t.mode === "text" &&
-        (typeof t.find != "string" ||
-          !t.find ||
-          typeof t.replacement != "string")
+        step.mode === "text" &&
+        (typeof step.find != "string" ||
+          !step.find ||
+          typeof step.replacement != "string")
       )
         throw Error(
           "Text replace needs nonempty text to find and a text replacement.",
         );
-      const d = (u) => {
-        const l = u.split(t.find);
+      const replaceText = (cellText) => {
+        const textParts = cellText.split(step.find);
         if (
-          u.length + (l.length - 1) * (t.replacement.length - t.find.length) >
+          cellText.length +
+            (textParts.length - 1) *
+              (step.replacement.length - step.find.length) >
           32767
         )
           throw Error("Replacement exceeds the cell text limit.");
-        return l.join(t.replacement);
+        return textParts.join(step.replacement);
       };
       return {
         data: {
-          ...o,
+          ...inputTable,
           declaredTypes: {},
-          rows: o.rows.map((row) => ({
+          rows: inputTable.rows.map((row) => ({
             ...row,
-            values: row.values.map((value, c) =>
-              s.includes(c)
-                ? t.mode === "value"
-                  ? value === t.find
-                    ? t.replacement
+            values: row.values.map((value, valueColumnIndex) =>
+              replaceColumnIndices.includes(valueColumnIndex)
+                ? step.mode === "value"
+                  ? value === step.find
+                    ? step.replacement
                     : value
                   : typeof value == "string"
-                    ? d(value)
+                    ? replaceText(value)
                     : value
                 : value,
             ),
@@ -1861,15 +2211,20 @@ function executeRecipeStep(workbook, output, t, n) {
     }
     case "derive": {
       if (
-        o.fields.some((field) => field.toLowerCase() === t.name.toLowerCase())
+        inputTable.fields.some(
+          (field) => field.toLowerCase() === step.name.toLowerCase(),
+        )
       )
         throw Error("The derived column name already exists.");
-      const rowExpression = parseRowExpression(t.expression, o.fields);
+      const rowExpression = parseRowExpression(
+        step.expression,
+        inputTable.fields,
+      );
       return {
         data: {
-          ...o,
-          fields: [...o.fields, t.name],
-          rows: o.rows.map((row, u) => {
+          ...inputTable,
+          fields: [...inputTable.fields, step.name],
+          rows: inputTable.rows.map((row, deriveRowIndex) => {
             try {
               return {
                 ...row,
@@ -1877,7 +2232,7 @@ function executeRecipeStep(workbook, output, t, n) {
               };
             } catch (error) {
               throw Error(
-                `Input record ${u + 1} (${row.sources.join(", ")}): ${error.message}`,
+                `Input record ${deriveRowIndex + 1} (${row.sources.join(", ")}): ${error.message}`,
               );
             }
           }),
@@ -1885,8 +2240,11 @@ function executeRecipeStep(workbook, output, t, n) {
       };
     }
     case "filter": {
-      const s = t.conditions.map((condition) => {
-          const fieldIndexOrThrow = findFieldIndexOrThrow(o, condition.field);
+      const resolvedConditions = step.conditions.map((condition) => {
+          const fieldIndexOrThrow = findFieldIndexOrThrow(
+            inputTable,
+            condition.field,
+          );
           if (
             !["blank", "notBlank"].includes(condition.operator) &&
             condition.value === undefined
@@ -1906,125 +2264,167 @@ function executeRecipeStep(workbook, output, t, n) {
             throw Error("Ordered filters require a numeric criterion.");
           return { ...condition, i: fieldIndexOrThrow };
         }),
-        rows = o.rows.filter((row, l) => {
-          const c = s.map((h) => {
-            const f = row.values[h.i],
-              value = h.value;
-            switch (h.operator) {
-              case "blank":
-                return isNullOrEmptyValue(f);
-              case "notBlank":
-                return !isNullOrEmptyValue(f);
-              case "equals":
-                return f === value;
-              case "notEquals":
-                return f !== value;
-              case "contains":
-                return typeof f == "string" && f.includes(value);
-              case "startsWith":
-                return typeof f == "string" && f.startsWith(value);
-              case "endsWith":
-                return typeof f == "string" && f.endsWith(value);
-              default:
-                if (isNullOrEmptyValue(f)) return false;
-                if (typeof f != "number")
-                  throw Error(
-                    `Ordered filter found a nonnumeric value in “${h.field}” on input record ${l + 1}. Convert types explicitly.`,
+        rows = inputTable.rows.filter((row, filterRowIndex) => {
+          const conditionResults = resolvedConditions.map(
+            (resolvedCondition) => {
+              const cellValue = row.values[resolvedCondition.i],
+                value = resolvedCondition.value;
+              switch (resolvedCondition.operator) {
+                case "blank":
+                  return isNullOrEmptyValue(cellValue);
+                case "notBlank":
+                  return !isNullOrEmptyValue(cellValue);
+                case "equals":
+                  return cellValue === value;
+                case "notEquals":
+                  return cellValue !== value;
+                case "contains":
+                  return (
+                    typeof cellValue == "string" && cellValue.includes(value)
                   );
-                return h.operator === "gt"
-                  ? f > value
-                  : h.operator === "gte"
-                    ? f >= value
-                    : h.operator === "lt"
-                      ? f < value
-                      : f <= value;
-            }
-          });
-          return t.join === "and" ? c.every(Boolean) : c.some(Boolean);
+                case "startsWith":
+                  return (
+                    typeof cellValue == "string" && cellValue.startsWith(value)
+                  );
+                case "endsWith":
+                  return (
+                    typeof cellValue == "string" && cellValue.endsWith(value)
+                  );
+                default:
+                  if (isNullOrEmptyValue(cellValue)) return false;
+                  if (typeof cellValue != "number")
+                    throw Error(
+                      `Ordered filter found a nonnumeric value in “${resolvedCondition.field}” on input record ${filterRowIndex + 1}. Convert types explicitly.`,
+                    );
+                  return resolvedCondition.operator === "gt"
+                    ? cellValue > value
+                    : resolvedCondition.operator === "gte"
+                      ? cellValue >= value
+                      : resolvedCondition.operator === "lt"
+                        ? cellValue < value
+                        : cellValue <= value;
+              }
+            },
+          );
+          return step.join === "and"
+            ? conditionResults.every(Boolean)
+            : conditionResults.some(Boolean);
         });
       return {
-        data: { ...o, rows: rows },
+        data: { ...inputTable, rows: rows },
         details: {
           retained: rows.length,
-          excluded: o.rows.length - rows.length,
+          excluded: inputTable.rows.length - rows.length,
           comparison:
             "Exact typed comparison; text uses case-sensitive Unicode code units.",
         },
       };
     }
     case "sort": {
-      const s = t.fields.map((field) => ({
+      const sortKeys = step.fields.map((field) => ({
           ...field,
-          i: findFieldIndexOrThrow(o, field.field),
+          i: findFieldIndexOrThrow(inputTable, field.field),
         })),
-        d = (l) =>
-          l === null
+        typeRank = (sortValue) =>
+          sortValue === null
             ? 3
-            : typeof l == "number"
+            : typeof sortValue == "number"
               ? 0
-              : typeof l == "string"
+              : typeof sortValue == "string"
                 ? 1
                 : 2,
-        rows = o.rows
-          .map((row, c) => ({ r: row, i: c }))
-          .sort((l, c) => {
-            for (const h of s) {
-              const f = l.r.values[h.i],
-                p = c.r.values[h.i];
-              let m = d(f) - d(p);
-              if ((!m && f !== p && (m = f < p ? -1 : 1), m))
-                return m * (h.direction === "ascending" ? 1 : -1);
+        rows = inputTable.rows
+          .map((row, originalIndex) => ({ r: row, i: originalIndex }))
+          .sort((leftEntry, rightEntry) => {
+            for (const sortKey of sortKeys) {
+              const leftValue = leftEntry.r.values[sortKey.i],
+                rightValue = rightEntry.r.values[sortKey.i];
+              let comparisonResult = typeRank(leftValue) - typeRank(rightValue);
+              if (
+                (!comparisonResult &&
+                  leftValue !== rightValue &&
+                  (comparisonResult = leftValue < rightValue ? -1 : 1),
+                comparisonResult)
+              )
+                return (
+                  comparisonResult *
+                  (sortKey.direction === "ascending" ? 1 : -1)
+                );
             }
-            return l.i - c.i;
+            return leftEntry.i - rightEntry.i;
           })
-          .map((l) => l.r);
-      return { data: { ...o, rows: rows } };
+          .map((entry) => entry.r);
+      return { data: { ...inputTable, rows: rows } };
     }
     case "unpivot": {
-      const s = a(t.fields),
-        d = o.fields.map((field, l) => l).filter((u) => !s.includes(u));
-      if (o.rows.length * s.length > transformationRecipeLimits.rows)
+      const unpivotIndices = resolveFieldIndices(step.fields),
+        keptIndices = inputTable.fields
+          .map((field, fieldIndex) => fieldIndex)
+          .filter((candidateIndex) => !unpivotIndices.includes(candidateIndex));
+      if (
+        inputTable.rows.length * unpivotIndices.length >
+        transformationRecipeLimits.rows
+      )
         throw Error(
           "Unpivot would exceed 1,000 intermediate rows; narrow the selected fields or source.",
         );
       return {
         data: {
-          fields: [...d.map((u) => o.fields[u]), t.attribute, t.value],
-          rows: o.rows.flatMap((row) =>
-            s
-              .filter((l) => t.keepNulls || !isNullOrEmptyValue(row.values[l]))
-              .map((l) => ({
+          fields: [
+            ...keptIndices.map((keptIndex) => inputTable.fields[keptIndex]),
+            step.attribute,
+            step.value,
+          ],
+          rows: inputTable.rows.flatMap((row) =>
+            unpivotIndices
+              .filter(
+                (unpivotableIndex) =>
+                  step.keepNulls ||
+                  !isNullOrEmptyValue(row.values[unpivotableIndex]),
+              )
+              .map((unpivotIndex) => ({
                 values: [
-                  ...d.map((c) => row.values[c]),
-                  o.fields[l],
-                  row.values[l],
+                  ...keptIndices.map(
+                    (keptColumnIndex) => row.values[keptColumnIndex],
+                  ),
+                  inputTable.fields[unpivotIndex],
+                  row.values[unpivotIndex],
                 ],
                 sources: row.sources,
               })),
           ),
-          declaredTypes: { [t.attribute]: "text" },
+          declaredTypes: { [step.attribute]: "text" },
         },
         details: {
-          nullPolicy: t.keepNulls ? "retain" : "exclude",
-          selectedFields: t.fields,
+          nullPolicy: step.keepNulls ? "retain" : "exclude",
+          selectedFields: step.fields,
         },
       };
     }
     case "group": {
-      const { indices, groups } = groupRowsByFields(o, t.keys),
-        u = t.values.map((value) => ({
+      const { indices, groups } = groupRowsByFields(inputTable, step.keys),
+        aggregateSpecs = step.values.map((value) => ({
           ...value,
-          i: findFieldIndexOrThrow(o, value.field),
+          i: findFieldIndexOrThrow(inputTable, value.field),
         }));
       return {
         data: {
-          fields: [...t.keys, ...u.map((l) => l.name)],
-          rows: [...groups.values()].map((l) => ({
+          fields: [
+            ...step.keys,
+            ...aggregateSpecs.map((valueSpec) => valueSpec.name),
+          ],
+          rows: [...groups.values()].map((groupRows) => ({
             values: [
-              ...indices.map((indice) => l[0].values[indice]),
-              ...u.map((c) => aggregateFieldValues(l, c.i, c.operation)),
+              ...indices.map((indice) => groupRows[0].values[indice]),
+              ...aggregateSpecs.map((aggregateSpec) =>
+                aggregateFieldValues(
+                  groupRows,
+                  aggregateSpec.i,
+                  aggregateSpec.operation,
+                ),
+              ),
             ],
-            sources: uniqueSortedSources(l),
+            sources: uniqueSortedSources(groupRows),
           })),
           declaredTypes: {},
         },
@@ -2032,139 +2432,181 @@ function executeRecipeStep(workbook, output, t, n) {
     }
     case "pivot": {
       if (
-        t.keys.includes(t.column) ||
-        t.keys.includes(t.value) ||
-        t.column === t.value
+        step.keys.includes(step.column) ||
+        step.keys.includes(step.value) ||
+        step.column === step.value
       )
         throw Error("Pivot keys, attribute and value fields must be distinct.");
-      const fieldIndexOrThrow = findFieldIndexOrThrow(o, t.column),
-        d = findFieldIndexOrThrow(o, t.value),
-        { indices, groups } = groupRowsByFields(o, t.keys),
-        c = [
+      const fieldIndexOrThrow = findFieldIndexOrThrow(inputTable, step.column),
+        valueIndex = findFieldIndexOrThrow(inputTable, step.value),
+        { indices, groups } = groupRowsByFields(inputTable, step.keys),
+        pivotColumnValues = [
           ...new Map(
-            o.rows.map((row) => [
+            inputTable.rows.map((row) => [
               serializeTypedKeyValues([row.values[fieldIndexOrThrow]]),
               row.values[fieldIndexOrThrow],
             ]),
           ).values(),
         ],
-        h = c.map(
-          (p) =>
-            `${p === null ? "blank" : typeof p}:${p === null ? "(blank)" : String(p)}`,
+        pivotHeaders = pivotColumnValues.map(
+          (pivotValue) =>
+            `${pivotValue === null ? "blank" : typeof pivotValue}:${pivotValue === null ? "(blank)" : String(pivotValue)}`,
         );
-      if (t.keys.length + h.length > 50)
+      if (step.keys.length + pivotHeaders.length > 50)
         throw Error("Pivot exceeds 50 output columns.");
-      const rows = [...groups.values()].map((p) => ({
+      const rows = [...groups.values()].map((pivotGroupRows) => ({
         values: [
-          ...indices.map((indice) => p[0].values[indice]),
-          ...c.map((m) =>
+          ...indices.map((indice) => pivotGroupRows[0].values[indice]),
+          ...pivotColumnValues.map((columnValue) =>
             aggregateFieldValues(
-              p.filter((v) => v.values[fieldIndexOrThrow] === m),
-              d,
-              t.operation,
+              pivotGroupRows.filter(
+                (groupRow) =>
+                  groupRow.values[fieldIndexOrThrow] === columnValue,
+              ),
+              valueIndex,
+              step.operation,
             ),
           ),
         ],
-        sources: uniqueSortedSources(p),
+        sources: uniqueSortedSources(pivotGroupRows),
       }));
-      if (!c.length && t.keys.length === 0)
+      if (!pivotColumnValues.length && step.keys.length === 0)
         throw Error(
           "An empty pivot has no columns. Select at least one grouping key.",
         );
       return {
-        data: { fields: [...t.keys, ...h], rows: rows, declaredTypes: {} },
+        data: {
+          fields: [...step.keys, ...pivotHeaders],
+          rows: rows,
+          declaredTypes: {},
+        },
         details: {
-          columns: c.map((p, m) => ({ header: h[m], value: p })),
-          aggregation: t.operation,
+          columns: pivotColumnValues.map(
+            (pivotColumnValue, pivotColumnIndex) => ({
+              header: pivotHeaders[pivotColumnIndex],
+              value: pivotColumnValue,
+            }),
+          ),
+          aggregation: step.operation,
         },
       };
     }
     case "append": {
-      const s = n(t.source);
+      const appendSourceTable = loadSourceTable(step.source);
       if (
-        o.fields.length !== s.fields.length ||
-        o.fields.some((field) => !s.fields.includes(field))
+        inputTable.fields.length !== appendSourceTable.fields.length ||
+        inputTable.fields.some(
+          (field) => !appendSourceTable.fields.includes(field),
+        )
       )
         throw Error(
           "Append requires the same exact header set; column order may differ.",
         );
-      const d = o.fields.map((field) => findFieldIndexOrThrow(s, field));
+      const appendColumnIndices = inputTable.fields.map((field) =>
+        findFieldIndexOrThrow(appendSourceTable, field),
+      );
       return {
         data: {
-          fields: o.fields,
+          fields: inputTable.fields,
           rows: [
-            ...o.rows,
-            ...s.rows.map((row) => ({
+            ...inputTable.rows,
+            ...appendSourceTable.rows.map((row) => ({
               ...row,
-              values: d.map((l) => row.values[l]),
+              values: appendColumnIndices.map(
+                (sourceColumnIndex) => row.values[sourceColumnIndex],
+              ),
             })),
           ],
           declaredTypes: {},
         },
         details: {
-          leftRows: o.rows.length,
-          rightRows: s.rows.length,
-          outputRows: o.rows.length + s.rows.length,
+          leftRows: inputTable.rows.length,
+          rightRows: appendSourceTable.rows.length,
+          outputRows: inputTable.rows.length + appendSourceTable.rows.length,
         },
       };
     }
     case "merge": {
-      const s = n(t.source),
-        d = t.keys.map((key) => findFieldIndexOrThrow(o, key.left)),
-        u = t.keys.map((key) => findFieldIndexOrThrow(s, key.right));
-      if (new Set(d).size !== d.length || new Set(u).size !== u.length)
+      const mergeSourceTable = loadSourceTable(step.source),
+        leftKeyIndices = step.keys.map((key) =>
+          findFieldIndexOrThrow(inputTable, key.left),
+        ),
+        rightKeyIndices = step.keys.map((key) =>
+          findFieldIndexOrThrow(mergeSourceTable, key.right),
+        );
+      if (
+        new Set(leftKeyIndices).size !== leftKeyIndices.length ||
+        new Set(rightKeyIndices).size !== rightKeyIndices.length
+      )
         throw Error("Merge keys cannot repeat a field.");
-      const l = (v, g) =>
-          v.rows.map((row, y) => ({
-            row: y,
-            locator: `${g} input record ${y + 1}`,
+      const toMatchRecords = (matchTable, tableLabel) =>
+          matchTable.rows.map((row, matchRowIndex) => ({
+            row: matchRowIndex,
+            locator: `${tableLabel} input record ${matchRowIndex + 1}`,
             values: row.values,
           })),
-        records = l(o, "Left"),
-        h = l(s, "Right"),
-        f = matchKeyPopulations(records, h, d, u, t.normalization, t.fuzzy),
+        records = toMatchRecords(inputTable, "Left"),
+        rightRecords = toMatchRecords(mergeSourceTable, "Right"),
+        keyMatches = matchKeyPopulations(
+          records,
+          rightRecords,
+          leftKeyIndices,
+          rightKeyIndices,
+          step.normalization,
+          step.fuzzy,
+        ),
         rows = [],
-        m = (v, g) => {
+        pushMergedRow = (leftRow, rightRow) => {
           if (rows.length >= 1e3)
             throw Error("Merge exceeds 1,000 intermediate records.");
           rows.push({
             values: [
-              ...(v?.values ?? o.fields.map(() => null)),
-              ...(g?.values ?? s.fields.map(() => null)),
+              ...(leftRow?.values ?? inputTable.fields.map(() => null)),
+              ...(rightRow?.values ?? mergeSourceTable.fields.map(() => null)),
             ],
-            sources: uniqueSortedSources([v, g].filter((b) => !!b)),
+            sources: uniqueSortedSources(
+              [leftRow, rightRow].filter((candidateRow) => !!candidateRow),
+            ),
           });
         };
       for (const record of records) {
-        const g = f.byLeft.get(record.row);
-        if (g) {
-          if (!["leftAnti", "rightAnti"].includes(t.mode))
-            for (const b of g) m(o.rows[record.row], s.rows[b.record.row]);
+        const leftMatches = keyMatches.byLeft.get(record.row);
+        if (leftMatches) {
+          if (!["leftAnti", "rightAnti"].includes(step.mode))
+            for (const leftMatch of leftMatches)
+              pushMergedRow(
+                inputTable.rows[record.row],
+                mergeSourceTable.rows[leftMatch.record.row],
+              );
         } else
-          ["left", "full", "leftAnti"].includes(t.mode) &&
-            m(o.rows[record.row], undefined);
+          ["left", "full", "leftAnti"].includes(step.mode) &&
+            pushMergedRow(inputTable.rows[record.row], undefined);
       }
-      if (["right", "full", "rightAnti"].includes(t.mode))
-        for (const v of f.unmatchedRight) m(undefined, s.rows[v.row]);
+      if (["right", "full", "rightAnti"].includes(step.mode))
+        for (const unmatchedRecord of keyMatches.unmatchedRight)
+          pushMergedRow(undefined, mergeSourceTable.rows[unmatchedRecord.row]);
       return {
         data: {
-          fields: [...o.fields, ...s.fields.map((field) => t.prefix + field)],
+          fields: [
+            ...inputTable.fields,
+            ...mergeSourceTable.fields.map((field) => step.prefix + field),
+          ],
           rows: rows,
           declaredTypes: {},
         },
         details: {
-          leftRows: o.rows.length,
-          rightRows: s.rows.length,
-          matchedLeft: f.matchedLeftRows,
-          matchedRight: f.matchedRightRows,
-          matchPairs: f.matchPairs,
-          unmatchedLeft: f.unmatchedLeft,
-          unmatchedRight: f.unmatchedRight,
-          duplicateLeft: f.duplicateLeftKeys,
-          duplicateRight: f.duplicateRightKeys,
-          manyToMany: f.manyToManyKeys,
-          extraPairs: f.expandedMatchRows,
-          matching: f.diagnostics,
+          leftRows: inputTable.rows.length,
+          rightRows: mergeSourceTable.rows.length,
+          matchedLeft: keyMatches.matchedLeftRows,
+          matchedRight: keyMatches.matchedRightRows,
+          matchPairs: keyMatches.matchPairs,
+          unmatchedLeft: keyMatches.unmatchedLeft,
+          unmatchedRight: keyMatches.unmatchedRight,
+          duplicateLeft: keyMatches.duplicateLeftKeys,
+          duplicateRight: keyMatches.duplicateRightKeys,
+          manyToMany: keyMatches.manyToManyKeys,
+          extraPairs: keyMatches.expandedMatchRows,
+          matching: keyMatches.diagnostics,
         },
       };
     }

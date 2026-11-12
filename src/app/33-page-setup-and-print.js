@@ -37,51 +37,55 @@ import {
   buildPrintPages,
 } from "./32-drawing-objects-and-printing.js";
 
-function PageSetupDialog(e) {
+function PageSetupDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useRef(e);
-  n.current = e;
-  const o = ne.useRef(null),
-    a = ne.useRef(null),
-    [s, d] = ne.useState(null),
-    [u, l] = ne.useState(false),
-    [c, h] = ne.useState(false),
-    [f, p] = ne.useState(""),
-    [m, v] = ne.useState(null);
+    propsRef = ne.useRef(props);
+  propsRef.current = props;
+  const printAreaRef = ne.useRef(null),
+    abortRef = ne.useRef(null),
+    [printIssues, setPrintIssues] = ne.useState(null),
+    [isChecking, setIsChecking] = ne.useState(false),
+    [isBusy, setIsBusy] = ne.useState(false),
+    [progressMessage, setProgressMessage] = ne.useState(""),
+    [pdfDocument, setPdfDocument] = ne.useState(null);
   (ne.useEffect(
     () => () => {
-      m && URL.revokeObjectURL(m.url);
+      pdfDocument && URL.revokeObjectURL(pdfDocument.url);
     },
-    [m],
+    [pdfDocument],
   ),
-    ne.useEffect(() => () => a.current?.abort(), []));
-  const [g] = ne.useState(() => ({
-      snapshot: buildSnapshotGuard(e.workbook),
-      sheetId: e.sheetId,
-      range: e.range,
+    ne.useEffect(() => () => abortRef.current?.abort(), []));
+  const [openingState] = ne.useState(() => ({
+      snapshot: buildSnapshotGuard(props.workbook),
+      sheetId: props.sheetId,
+      range: props.range,
       sheet: structuredClone(
-        e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
+        props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
       ),
     })),
     sheetOrThrow =
-      e.workbook.sheets.find((sheet) => sheet.id === e.sheetId) ?? g.sheet;
-  function y(W = false) {
-    const K = n.current;
+      props.workbook.sheets.find((sheet) => sheet.id === props.sheetId) ??
+      openingState.sheet;
+  function verifySheetCurrent(shouldCheckEditable = false) {
+    const latestProps = propsRef.current;
     if (
-      (verifyPrintSnapshotGuard(K.workbook, g.snapshot),
-      K.sheetId !== g.sheetId || K.range !== g.range)
+      (verifyPrintSnapshotGuard(latestProps.workbook, openingState.snapshot),
+      latestProps.sheetId !== openingState.sheetId ||
+        latestProps.range !== openingState.range)
     )
       throw Error(
         "The worksheet or selection changed. Close and reopen page setup.",
       );
-    if (W) {
-      if (K.readOnly) throw Error("This workbook is read-only.");
+    if (shouldCheckEditable) {
+      if (latestProps.readOnly) throw Error("This workbook is read-only.");
       assertSheetUnprotected(
-        K.workbook.sheets.find((sheet) => sheet.id === g.sheetId),
+        latestProps.workbook.sheets.find(
+          (sheet) => sheet.id === openingState.sheetId,
+        ),
       );
     }
   }
-  const [layout, E] = ne.useState(() =>
+  const [layout, setLayout] = ne.useState(() =>
       structuredClone(
         sheetOrThrow.pageLayout ?? {
           ...createDefaultPageSetup(sheetOrThrow),
@@ -89,52 +93,64 @@ function PageSetupDialog(e) {
         },
       ),
     ),
-    [A, k] = ne.useState(""),
-    [F, I] = ne.useState("office"),
-    [O, j] = ne.useState(() =>
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [themeId, setThemeId] = ne.useState("office"),
+    [rowBreakText, setRowBreakText] = ne.useState(() =>
       (sheetOrThrow.pageLayout?.rowBreaks ?? [])
-        .map((K) => String(K + 1))
+        .map((rowIndex) => String(rowIndex + 1))
         .join(", "),
     ),
-    [z, V] = ne.useState(() =>
+    [columnBreakText, setColumnBreakText] = ne.useState(() =>
       (sheetOrThrow.pageLayout?.columnBreaks ?? [])
         .map(columnIndexToLetters)
         .join(", "),
     );
-  function D() {
-    const W = (K, te) => {
-      if (!K.trim()) return;
-      const ae = K.split(",")
-        .map((oe) => {
-          const de = oe.trim();
-          if (!(te === "row" ? /^[1-9]\d*$/ : /^[A-Za-z]{1,3}$/).test(de))
+  function buildLayoutDraft() {
+    const parseBreakList = (breakText, breakKind) => {
+      if (!breakText.trim()) return;
+      const breakIndexes = breakText
+        .split(",")
+        .map((segment) => {
+          const segmentText = segment.trim();
+          if (
+            !(breakKind === "row" ? /^[1-9]\d*$/ : /^[A-Za-z]{1,3}$/).test(
+              segmentText,
+            )
+          )
             throw Error(
               "Enter comma-separated row numbers or column letters for manual breaks.",
             );
-          return te === "row"
-            ? Number(de) - 1
-            : parseRangeAddress(`${de}1`).firstCol;
+          return breakKind === "row"
+            ? Number(segmentText) - 1
+            : parseRangeAddress(`${segmentText}1`).firstCol;
         })
-        .sort((oe, de) => oe - de);
+        .sort((leftIndex, rightIndex) => leftIndex - rightIndex);
       return validatePrintPageBreaks(
-        ae,
-        te === "row" ? sheetOrThrow.rowCount : sheetOrThrow.colCount,
+        breakIndexes,
+        breakKind === "row" ? sheetOrThrow.rowCount : sheetOrThrow.colCount,
       );
     };
-    return { ...layout, rowBreaks: W(O, "row"), columnBreaks: W(z, "column") };
+    return {
+      ...layout,
+      rowBreaks: parseBreakList(rowBreakText, "row"),
+      columnBreaks: parseBreakList(columnBreakText, "column"),
+    };
   }
-  const B = /theme/i.test(e.mode),
+  const isThemeMode = /theme/i.test(props.mode),
     calc = ne.useMemo(
-      () => calculateWorkbookWithSettings(e.workbook),
-      [e.workbook],
+      () => calculateWorkbookWithSettings(props.workbook),
+      [props.workbook],
     ),
-    C = ne.useMemo(() => {
+    printPreview = ne.useMemo(() => {
       try {
-        if (!e.workbook.sheets.some((sheet) => sheet.id === e.sheetId))
+        if (!props.workbook.sheets.some((sheet) => sheet.id === props.sheetId))
           throw Error(
             "The worksheet changed or was deleted. Close and reopen page setup.",
           );
-        return { ...buildPrintPages(e.workbook, e.sheetId, D()), error: "" };
+        return {
+          ...buildPrintPages(props.workbook, props.sheetId, buildLayoutDraft()),
+          error: "",
+        };
       } catch (error) {
         return {
           pages: [],
@@ -148,201 +164,259 @@ function PageSetupDialog(e) {
           error: error instanceof Error ? error.message : "Invalid page setup.",
         };
       }
-    }, [e.workbook, e.sheetId, sheetOrThrow, layout, calc, O, z]),
-    T = JSON.stringify([layout, O, z]),
-    N = ne.useRef(T);
-  ((N.current = T),
+    }, [
+      props.workbook,
+      props.sheetId,
+      sheetOrThrow,
+      layout,
+      calc,
+      rowBreakText,
+      columnBreakText,
+    ]),
+    layoutSignature = JSON.stringify([layout, rowBreakText, columnBreakText]),
+    layoutSignatureRef = ne.useRef(layoutSignature);
+  ((layoutSignatureRef.current = layoutSignature),
     ne.useEffect(() => {
-      (d(null), k(""), v(null));
-    }, [T, e.workbook, e.sheetId, e.range]));
+      (setPrintIssues(null), setErrorMessage(""), setPdfDocument(null));
+    }, [layoutSignature, props.workbook, props.sheetId, props.range]));
   async function onClick() {
-    const W = o.current;
-    if (!(!W || C.error)) {
-      (l(true), k(""));
+    const printElement = printAreaRef.current;
+    if (!(!printElement || printPreview.error)) {
+      (setIsChecking(true), setErrorMessage(""));
       try {
-        if ((y(), await waitForPrintAssets(W), y(), N.current !== T))
+        if (
+          (verifySheetCurrent(),
+          await waitForPrintAssets(printElement),
+          verifySheetCurrent(),
+          layoutSignatureRef.current !== layoutSignature)
+        )
           throw Error("Page settings changed. Run the print check again.");
-        d(measurePrintLayoutIssues(W));
+        setPrintIssues(measurePrintLayoutIssues(printElement));
       } catch (error) {
-        k(error instanceof Error ? error.message : "Print check failed.");
+        setErrorMessage(
+          error instanceof Error ? error.message : "Print check failed.",
+        );
       } finally {
-        l(false);
+        setIsChecking(false);
       }
     }
   }
-  const L = (W) => E((K) => ({ ...K, ...W }));
-  function $() {
+  const updateLayout = (patch) =>
+    setLayout((previous) => ({ ...previous, ...patch }));
+  function savePageSetup() {
     try {
-      if ((y(true), C.error)) throw Error(C.error);
-      const W = applyPrintLayoutChange(e.workbook, e.sheetId, C.layout, {
-        readOnly: e.readOnly,
-        expectedSnapshot: g.snapshot,
-      });
-      (W !== e.workbook && e.onWorkbookChange(W, "Update page layout"),
-        e.onClose());
+      if ((verifySheetCurrent(true), printPreview.error))
+        throw Error(printPreview.error);
+      const updatedWorkbook = applyPrintLayoutChange(
+        props.workbook,
+        props.sheetId,
+        printPreview.layout,
+        {
+          readOnly: props.readOnly,
+          expectedSnapshot: openingState.snapshot,
+        },
+      );
+      (updatedWorkbook !== props.workbook &&
+        props.onWorkbookChange(updatedWorkbook, "Update page layout"),
+        props.onClose());
     } catch (error) {
-      k(error instanceof Error ? error.message : "Could not save page setup.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Could not save page setup.",
+      );
     }
   }
-  function U() {
+  function applyTheme() {
     try {
-      y(true);
-      const rangeAddress = parseRangeAddress(e.range);
+      verifySheetCurrent(true);
+      const rangeAddress = parseRangeAddress(props.range);
       if (
         (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
           (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
         500
       )
         throw new Error("Select at most 500 cells to apply a theme.");
-      const ae =
-          F === "mint"
+      const themeColors =
+          themeId === "mint"
             ? ["#548235", "#E2EFDA"]
-            : F === "slate"
+            : themeId === "slate"
               ? ["#44546A", "#D6DCE4"]
-              : F === "amber"
+              : themeId === "amber"
                 ? ["#9C6500", "#FFF2CC"]
                 : ["#4472C4", "#D9E2F3"],
         cells = { ...sheetOrThrow.cells };
-      for (const de of assertRangeCellBudget(e.range)) {
-        const bold = parseRangeAddress(de).firstRow === rangeAddress.firstRow;
-        cells[de] = {
-          ...cells[de],
-          raw: cells[de]?.raw ?? null,
+      for (const cellAddress of assertRangeCellBudget(props.range)) {
+        const bold =
+          parseRangeAddress(cellAddress).firstRow === rangeAddress.firstRow;
+        cells[cellAddress] = {
+          ...cells[cellAddress],
+          raw: cells[cellAddress]?.raw ?? null,
           style: {
-            ...cells[de]?.style,
+            ...cells[cellAddress]?.style,
             fontFamily: "Calibri",
-            fill: bold ? ae[0] : ae[1],
+            fill: bold ? themeColors[0] : themeColors[1],
             color: bold ? "#FFFFFF" : "#242424",
             bold: bold,
           },
         };
       }
-      (e.onWorkbookChange(
+      (props.onWorkbookChange(
         {
-          ...e.workbook,
-          sheets: e.workbook.sheets.map((sheet) =>
+          ...props.workbook,
+          sheets: props.workbook.sheets.map((sheet) =>
             sheet.id === sheetOrThrow.id ? { ...sheet, cells: cells } : sheet,
           ),
         },
-        `Apply ${F} theme to selection`,
+        `Apply ${themeId} theme to selection`,
       ),
-        e.onClose());
+        props.onClose());
     } catch (error) {
-      k(error instanceof Error ? error.message : "Theme could not be applied.");
+      setErrorMessage(
+        error instanceof Error ? error.message : "Theme could not be applied.",
+      );
     }
   }
-  async function G() {
-    if (a.current) return;
-    let W = null;
-    const K = new AbortController();
-    ((a.current = K), h(true), k(""));
+  async function openPrintPreview() {
+    if (abortRef.current) return;
+    let previewWindow = null;
+    const abortController = new AbortController();
+    ((abortRef.current = abortController),
+      setIsBusy(true),
+      setErrorMessage(""));
     try {
-      if ((y(), C.error)) throw Error(C.error);
-      const html = renderPrintDocument(e.workbook, e.sheetId, C.layout).html;
-      if (((W = window.open("", "_blank")), !W))
+      if ((verifySheetCurrent(), printPreview.error))
+        throw Error(printPreview.error);
+      const html = renderPrintDocument(
+        props.workbook,
+        props.sheetId,
+        printPreview.layout,
+      ).html;
+      if (((previewWindow = window.open("", "_blank")), !previewWindow))
         throw Error(
           "Allow the print preview window in your browser, then try again.",
         );
-      const ae = o.current;
-      await waitForPrintAssets(ae, { signal: K.signal });
-      const oe = measurePrintLayoutIssues(ae);
-      (d(oe), summarizePrintIssues(oe));
-      const de = await printDocumentInWindow(W, html, {
-        signal: K.signal,
-        assertCurrent: () => {
-          if ((y(), K.signal.aborted))
-            throw Error("Print preparation was cancelled.");
-          if (N.current !== T)
-            throw Error("Page settings changed. Run the print check again.");
-        },
+      const printAreaElement = printAreaRef.current;
+      await waitForPrintAssets(printAreaElement, {
+        signal: abortController.signal,
       });
-      d(de);
+      const layoutIssues = measurePrintLayoutIssues(printAreaElement);
+      (setPrintIssues(layoutIssues), summarizePrintIssues(layoutIssues));
+      const previewInspection = await printDocumentInWindow(
+        previewWindow,
+        html,
+        {
+          signal: abortController.signal,
+          assertCurrent: () => {
+            if ((verifySheetCurrent(), abortController.signal.aborted))
+              throw Error("Print preparation was cancelled.");
+            if (layoutSignatureRef.current !== layoutSignature)
+              throw Error("Page settings changed. Run the print check again.");
+          },
+        },
+      );
+      setPrintIssues(previewInspection);
     } catch (error) {
-      (W && !W.closed && W.close(),
-        K.signal.aborted ||
-          k(
+      (previewWindow && !previewWindow.closed && previewWindow.close(),
+        abortController.signal.aborted ||
+          setErrorMessage(
             error instanceof Error
               ? error.message
               : "Print preview could not open.",
           ));
     } finally {
-      ((a.current = null), h(false));
+      ((abortRef.current = null), setIsBusy(false));
     }
   }
-  async function H() {
-    if (a.current) return;
-    const W = new AbortController();
-    ((a.current = W), h(true), p("Preparing PDF…"), k(""), v(null));
+  async function createPdf() {
+    if (abortRef.current) return;
+    const pdfAbort = new AbortController();
+    ((abortRef.current = pdfAbort),
+      setIsBusy(true),
+      setProgressMessage("Preparing PDF…"),
+      setErrorMessage(""),
+      setPdfDocument(null));
     try {
-      if ((y(), C.error)) throw Error(C.error);
-      await waitForPrintAssets(o.current, { signal: W.signal });
-      const K = measurePrintLayoutIssues(o.current);
-      (d(K), summarizePrintIssues(K));
-      const te = await renderSchedulePdf(e.workbook, e.sheetId, {
-        layout: C.layout,
-        signal: W.signal,
+      if ((verifySheetCurrent(), printPreview.error))
+        throw Error(printPreview.error);
+      await waitForPrintAssets(printAreaRef.current, {
+        signal: pdfAbort.signal,
+      });
+      const pdfLayoutIssues = measurePrintLayoutIssues(printAreaRef.current);
+      (setPrintIssues(pdfLayoutIssues), summarizePrintIssues(pdfLayoutIssues));
+      const pdfResult = await renderSchedulePdf(props.workbook, props.sheetId, {
+        layout: printPreview.layout,
+        signal: pdfAbort.signal,
         assertCurrent: () => {
-          if ((y(), N.current !== T))
+          if (
+            (verifySheetCurrent(),
+            layoutSignatureRef.current !== layoutSignature)
+          )
             throw Error(
               "Page settings changed. Create the PDF again from the updated preview.",
             );
         },
-        onProgress: (ae, oe) => p(`Creating PDF: ${ae} of ${oe} pages…`),
-      });
-      if (W.signal.aborted) return;
-      (d(te.inspection),
-        v({
-          url: URL.createObjectURL(
-            new Blob([new Uint8Array(te.bytes)], { type: "application/pdf" }),
+        onProgress: (completedPages, totalPages) =>
+          setProgressMessage(
+            `Creating PDF: ${completedPages} of ${totalPages} pages…`,
           ),
-          filename: te.filename,
-          pages: te.pageCount,
+      });
+      if (pdfAbort.signal.aborted) return;
+      (setPrintIssues(pdfResult.inspection),
+        setPdfDocument({
+          url: URL.createObjectURL(
+            new Blob([new Uint8Array(pdfResult.bytes)], {
+              type: "application/pdf",
+            }),
+          ),
+          filename: pdfResult.filename,
+          pages: pdfResult.pageCount,
         }));
     } catch (error) {
-      W.signal.aborted ||
-        k(
+      pdfAbort.signal.aborted ||
+        setErrorMessage(
           error instanceof Error
             ? error.message
             : "PDF creation failed. Try browser printing.",
         );
     } finally {
-      ((a.current = null), h(false), p(""));
+      ((abortRef.current = null), setIsBusy(false), setProgressMessage(""));
     }
   }
-  function Q() {
-    (a.current?.abort(), e.onClose());
+  function closeDialog() {
+    (abortRef.current?.abort(), props.onClose());
   }
   return i.jsx("div", {
     className: "dg-backdrop",
     onKeyDown: (event) => {
-      event.key === "Escape" && Q();
+      event.key === "Escape" && closeDialog();
     },
     children: i.jsxs("section", {
-      className: `dg-dialog ${B ? "" : "dg-page-dialog"}`,
+      className: `dg-dialog ${isThemeMode ? "" : "dg-page-dialog"}`,
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": B ? "Workbook themes" : "Page setup and print preview",
+      "aria-label": isThemeMode
+        ? "Workbook themes"
+        : "Page setup and print preview",
       children: [
         i.jsxs("header", {
           children: [
             i.jsxs("span", {
               children: [
-                B
+                isThemeMode
                   ? i.jsx(Palette, { size: 19 })
                   : i.jsx(FileText, { size: 19 }),
-                B ? "Themes" : "Page Setup",
+                isThemeMode ? "Themes" : "Page Setup",
               ],
             }),
             i.jsx("button", {
               "aria-label": text("Close page setup"),
-              onClick: Q,
+              onClick: closeDialog,
               lang: language("Close page setup"),
               "data-ui-label": "Close page setup",
               children: i.jsx(X, { size: 17 }),
             }),
           ],
         }),
-        B
+        isThemeMode
           ? i.jsxs("div", {
               className: "dg-form",
               children: [
@@ -358,8 +432,8 @@ function PageSetupDialog(e) {
                     i.jsx(LocalizedText, { children: "Theme" }),
                     i.jsxs("select", {
                       "aria-label": text("Theme"),
-                      value: F,
-                      onChange: (event) => I(event.target.value),
+                      value: themeId,
+                      onChange: (event) => setThemeId(event.target.value),
                       lang: language("Theme"),
                       "data-ui-label": "Theme",
                       children: [
@@ -377,14 +451,14 @@ function PageSetupDialog(e) {
                 i.jsxs("p", {
                   children: [
                     i.jsx(LocalizedText, { children: "Selection: " }),
-                    e.range,
+                    props.range,
                   ],
                 }),
-                A &&
+                errorMessage &&
                   i.jsx("p", {
                     role: "alert",
                     className: "dg-error",
-                    children: A,
+                    children: errorMessage,
                   }),
               ],
             })
@@ -404,7 +478,9 @@ function PageSetupDialog(e) {
                               "aria-label": text("Page orientation"),
                               value: layout.orientation,
                               onChange: (event) =>
-                                L({ orientation: event.target.value }),
+                                updateLayout({
+                                  orientation: event.target.value,
+                                }),
                               lang: language("Page orientation"),
                               "data-ui-label": "Page orientation",
                               children: [
@@ -427,7 +503,7 @@ function PageSetupDialog(e) {
                               "aria-label": text("Paper size"),
                               value: layout.paper,
                               onChange: (event) =>
-                                L({ paper: event.target.value }),
+                                updateLayout({ paper: event.target.value }),
                               lang: language("Paper size"),
                               "data-ui-label": "Paper size",
                               children: [
@@ -456,7 +532,9 @@ function PageSetupDialog(e) {
                           "aria-label": text("Print area"),
                           value: layout.printArea,
                           onChange: (event) =>
-                            L({ printArea: event.target.value.toUpperCase() }),
+                            updateLayout({
+                              printArea: event.target.value.toUpperCase(),
+                            }),
                           lang: language("Print area"),
                           "data-ui-label": "Print area",
                         }),
@@ -464,7 +542,7 @@ function PageSetupDialog(e) {
                     }),
                     i.jsx("button", {
                       className: "dg-inline",
-                      onClick: () => L({ printArea: e.range }),
+                      onClick: () => updateLayout({ printArea: props.range }),
                       children: i.jsx(LocalizedText, {
                         children: "Use current selection",
                       }),
@@ -486,7 +564,9 @@ function PageSetupDialog(e) {
                               placeholder: "1:2",
                               value: layout.repeatRows ?? "",
                               onChange: (event) =>
-                                L({ repeatRows: event.target.value }),
+                                updateLayout({
+                                  repeatRows: event.target.value,
+                                }),
                               lang: language("Rows to repeat at top"),
                               "data-ui-label": "Rows to repeat at top",
                             }),
@@ -502,7 +582,7 @@ function PageSetupDialog(e) {
                               placeholder: text("A:B"),
                               value: layout.repeatColumns ?? "",
                               onChange: (event) =>
-                                L({
+                                updateLayout({
                                   repeatColumns:
                                     event.target.value.toUpperCase(),
                                 }),
@@ -534,7 +614,7 @@ function PageSetupDialog(e) {
                               "aria-label": text("Page order"),
                               value: layout.pageOrder ?? "overThenDown",
                               onChange: (event) =>
-                                L({ pageOrder: event.target.value }),
+                                updateLayout({ pageOrder: event.target.value }),
                               lang: language("Page order"),
                               "data-ui-label": "Page order",
                               children: [
@@ -565,8 +645,9 @@ function PageSetupDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Break before rows"),
                               placeholder: "25, 50",
-                              value: O,
-                              onChange: (event) => j(event.target.value),
+                              value: rowBreakText,
+                              onChange: (event) =>
+                                setRowBreakText(event.target.value),
                               lang: language("Break before rows"),
                               "data-ui-label": "Break before rows",
                             }),
@@ -580,9 +661,11 @@ function PageSetupDialog(e) {
                             i.jsx("input", {
                               "aria-label": text("Break before columns"),
                               placeholder: text("D, H"),
-                              value: z,
+                              value: columnBreakText,
                               onChange: (event) =>
-                                V(event.target.value.toUpperCase()),
+                                setColumnBreakText(
+                                  event.target.value.toUpperCase(),
+                                ),
                               lang: language("Break before columns"),
                               "data-ui-label": "Break before columns",
                             }),
@@ -591,7 +674,7 @@ function PageSetupDialog(e) {
                         i.jsx("button", {
                           type: "button",
                           onClick: () => {
-                            (j(""), V(""));
+                            (setRowBreakText(""), setColumnBreakText(""));
                           },
                           children: i.jsx(LocalizedText, {
                             children: "Reset manual breaks",
@@ -622,29 +705,29 @@ function PageSetupDialog(e) {
                             "right",
                             "header",
                             "footer",
-                          ].map((W) =>
+                          ].map((marginName) =>
                             i.jsxs(
                               "label",
                               {
                                 children: [
-                                  W,
+                                  marginName,
                                   i.jsx(LocalizedNumberField, {
                                     min: 0,
                                     max: 3,
                                     step: 0.05,
-                                    "aria-label": `${W} margin`,
-                                    value: layout.margins[W],
-                                    onValueChange: (K) =>
-                                      L({
+                                    "aria-label": `${marginName} margin`,
+                                    value: layout.margins[marginName],
+                                    onValueChange: (nextValue) =>
+                                      updateLayout({
                                         margins: {
                                           ...layout.margins,
-                                          [W]: Number(K),
+                                          [marginName]: Number(nextValue),
                                         },
                                       }),
                                   }),
                                 ],
                               },
-                              W,
+                              marginName,
                             ),
                           ),
                         }),
@@ -657,7 +740,7 @@ function PageSetupDialog(e) {
                           type: "checkbox",
                           checked: layout.fitToPage,
                           onChange: (event) =>
-                            L({ fitToPage: event.target.checked }),
+                            updateLayout({ fitToPage: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, { children: "Fit to pages" }),
                       ],
@@ -676,8 +759,10 @@ function PageSetupDialog(e) {
                                   max: 10,
                                   "aria-label": text("Pages wide"),
                                   value: layout.fitToWidth,
-                                  onValueChange: (W) =>
-                                    L({ fitToWidth: Number(W) }),
+                                  onValueChange: (widthValue) =>
+                                    updateLayout({
+                                      fitToWidth: Number(widthValue),
+                                    }),
                                   lang: language("Pages wide"),
                                   "data-ui-label": "Pages wide",
                                 }),
@@ -693,8 +778,10 @@ function PageSetupDialog(e) {
                                   max: 10,
                                   "aria-label": text("Pages tall"),
                                   value: layout.fitToHeight,
-                                  onValueChange: (W) =>
-                                    L({ fitToHeight: Number(W) }),
+                                  onValueChange: (heightValue) =>
+                                    updateLayout({
+                                      fitToHeight: Number(heightValue),
+                                    }),
                                   lang: language("Pages tall"),
                                   "data-ui-label": "Pages tall",
                                 }),
@@ -710,7 +797,8 @@ function PageSetupDialog(e) {
                               max: 400,
                               "aria-label": text("Print scale"),
                               value: layout.scale,
-                              onValueChange: (W) => L({ scale: Number(W) }),
+                              onValueChange: (scaleValue) =>
+                                updateLayout({ scale: Number(scaleValue) }),
                               lang: language("Print scale"),
                               "data-ui-label": "Print scale",
                             }),
@@ -730,7 +818,7 @@ function PageSetupDialog(e) {
                           type: "checkbox",
                           checked: layout.gridlines,
                           onChange: (event) =>
-                            L({ gridlines: event.target.checked }),
+                            updateLayout({ gridlines: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, { children: "Print gridlines" }),
                       ],
@@ -742,7 +830,7 @@ function PageSetupDialog(e) {
                           type: "checkbox",
                           checked: layout.headings,
                           onChange: (event) =>
-                            L({ headings: event.target.checked }),
+                            updateLayout({ headings: event.target.checked }),
                         }),
                         i.jsx(LocalizedText, {
                           children: "Print row and column headings",
@@ -758,7 +846,7 @@ function PageSetupDialog(e) {
                           maxLength: 255,
                           value: layout.header,
                           onChange: (event) =>
-                            L({ header: event.target.value }),
+                            updateLayout({ header: event.target.value }),
                           lang: language("Print header"),
                           "data-ui-label": "Print header",
                         }),
@@ -773,7 +861,7 @@ function PageSetupDialog(e) {
                           maxLength: 255,
                           value: layout.footer,
                           onChange: (event) =>
-                            L({ footer: event.target.value }),
+                            updateLayout({ footer: event.target.value }),
                           lang: language("Print footer"),
                           "data-ui-label": "Print footer",
                         }),
@@ -788,7 +876,7 @@ function PageSetupDialog(e) {
                     }),
                     i.jsx("button", {
                       type: "button",
-                      onClick: () => L(defaultPrintHeaderFooter),
+                      onClick: () => updateLayout(defaultPrintHeaderFooter),
                       children: i.jsx(LocalizedText, {
                         children: "Insert workbook identifiers",
                       }),
@@ -808,29 +896,29 @@ function PageSetupDialog(e) {
                             "Merged areas crossing a page or print-area boundary repeat their top-left content in each clipped fragment.",
                         }),
                       }),
-                    A &&
+                    errorMessage &&
                       i.jsx("p", {
                         role: "alert",
                         className: "dg-error",
-                        children: A,
+                        children: errorMessage,
                       }),
                   ],
                 }),
                 i.jsxs("div", {
                   className: "dg-print-preview",
-                  ref: o,
+                  ref: printAreaRef,
                   children: [
                     i.jsx("style", { children: printPaperStyles }),
                     i.jsxs("div", {
                       className: "dg-preview-label",
                       children: [
                         i.jsx(LocalizedText, { children: "PRINT PREVIEW · " }),
-                        C.pages.length,
+                        printPreview.pages.length,
                         " ",
-                        C.pages.length === 1 ? "PAGE" : "PAGES",
+                        printPreview.pages.length === 1 ? "PAGE" : "PAGES",
                         " ·",
                         " ",
-                        Math.round(C.scale * 100),
+                        Math.round(printPreview.scale * 100),
                         "%",
                       ],
                     }),
@@ -870,51 +958,56 @@ function PageSetupDialog(e) {
                         i.jsx("button", {
                           type: "button",
                           onClick: onClick,
-                          disabled: u || c || !!C.error,
-                          children: u ? "Checking…" : "Check print output",
+                          disabled:
+                            isChecking || isBusy || !!printPreview.error,
+                          children: isChecking
+                            ? "Checking…"
+                            : "Check print output",
                         }),
-                        s &&
+                        printIssues &&
                           i.jsxs("div", {
                             role: "status",
                             children: [
                               i.jsx("p", {
-                                children: s.issues.length
-                                  ? s.issues.filter(
+                                children: printIssues.issues.length
+                                  ? printIssues.issues.filter(
                                       (issue) => issue.severity === "error",
                                     ).length +
                                     " blocking issue(s), " +
-                                    s.issues.filter(
+                                    printIssues.issues.filter(
                                       (issue) => issue.severity === "warning",
                                     ).length +
                                     " warning(s)."
                                   : "Print check passed: " +
-                                    s.pages +
+                                    printIssues.pages +
                                     " page(s); no measured clipping or missing images.",
                               }),
-                              s.issues.length > 0 &&
+                              printIssues.issues.length > 0 &&
                                 i.jsx("ul", {
-                                  children: s.issues.slice(0, 100).map((W, K) =>
-                                    i.jsxs(
-                                      "li",
-                                      {
-                                        children: [
-                                          W.severity === "error"
-                                            ? "Fix: "
-                                            : "Review: ",
-                                          W.message,
-                                        ],
-                                      },
-                                      K,
+                                  children: printIssues.issues
+                                    .slice(0, 100)
+                                    .map((issue, issueIndex) =>
+                                      i.jsxs(
+                                        "li",
+                                        {
+                                          children: [
+                                            issue.severity === "error"
+                                              ? "Fix: "
+                                              : "Review: ",
+                                            issue.message,
+                                          ],
+                                        },
+                                        issueIndex,
+                                      ),
                                     ),
-                                  ),
                                 }),
-                              s.issues.length > 100 &&
+                              printIssues.issues.length > 100 &&
                                 i.jsxs("p", {
                                   children: [
                                     i.jsx(LocalizedText, {
                                       children: "Showing the first 100 of ",
                                     }),
-                                    s.issues.length,
+                                    printIssues.issues.length,
                                     " ",
                                     i.jsx(LocalizedText, {
                                       children:
@@ -924,39 +1017,43 @@ function PageSetupDialog(e) {
                                 }),
                             ],
                           }),
-                        f && i.jsx("p", { role: "status", children: f }),
-                        m &&
+                        progressMessage &&
+                          i.jsx("p", {
+                            role: "status",
+                            children: progressMessage,
+                          }),
+                        pdfDocument &&
                           i.jsxs("p", {
                             role: "status",
                             children: [
                               i.jsxs("a", {
-                                href: m.url,
-                                download: m.filename,
+                                href: pdfDocument.url,
+                                download: pdfDocument.filename,
                                 children: [
                                   i.jsx(LocalizedText, {
                                     children: "Download PDF (",
                                   }),
-                                  m.pages,
+                                  pdfDocument.pages,
                                   " ",
-                                  m.pages === 1 ? "page" : "pages",
+                                  pdfDocument.pages === 1 ? "page" : "pages",
                                   ")",
                                 ],
                               }),
                               " ",
                               "· ",
-                              m.filename,
+                              pdfDocument.filename,
                             ],
                           }),
                       ],
                     }),
-                    C.notices?.map((notice) =>
+                    printPreview.notices?.map((notice) =>
                       i.jsx(
                         "p",
                         { className: "dg-muted", children: notice },
                         notice,
                       ),
                     ),
-                    C.ruleStyles.errors().length > 0 &&
+                    printPreview.ruleStyles.errors().length > 0 &&
                       i.jsxs("p", {
                         role: "alert",
                         className: "dg-error",
@@ -964,35 +1061,35 @@ function PageSetupDialog(e) {
                           i.jsx(LocalizedText, {
                             children: "Conditional formatting: ",
                           }),
-                          C.ruleStyles.errors().length,
+                          printPreview.ruleStyles.errors().length,
                           " ",
                           i.jsx(LocalizedText, {
                             children: "evaluation error(s). ",
                           }),
-                          C.ruleStyles.errors()[0].message,
+                          printPreview.ruleStyles.errors()[0].message,
                         ],
                       }),
-                    C.error
+                    printPreview.error
                       ? i.jsx("p", {
                           className: "dg-error",
                           role: "alert",
-                          children: C.error,
+                          children: printPreview.error,
                         })
-                      : C.pages.map((page, K) =>
+                      : printPreview.pages.map((page, pageIndex) =>
                           i.jsx(
                             PrintPagePreview,
                             {
-                              workbook: e.workbook,
+                              workbook: props.workbook,
                               sheet: sheetOrThrow,
-                              layout: C.layout,
+                              layout: printPreview.layout,
                               page: page,
-                              index: K,
-                              total: C.pages.length,
-                              scale: C.scale,
+                              index: pageIndex,
+                              total: printPreview.pages.length,
+                              scale: printPreview.scale,
                               calc: calc,
-                              ruleStyles: C.ruleStyles,
+                              ruleStyles: printPreview.ruleStyles,
                             },
-                            K,
+                            pageIndex,
                           ),
                         ),
                   ],
@@ -1002,34 +1099,36 @@ function PageSetupDialog(e) {
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: Q,
+              onClick: closeDialog,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
-            !B &&
+            !isThemeMode &&
               i.jsx("button", {
-                onClick: H,
-                disabled: !!C.error || c || u,
+                onClick: createPdf,
+                disabled: !!printPreview.error || isBusy || isChecking,
                 children: i.jsx(LocalizedText, { children: "Create PDF" }),
               }),
-            !B &&
+            !isThemeMode &&
               i.jsxs("button", {
-                onClick: G,
-                disabled: !!C.error || c || u,
+                onClick: openPrintPreview,
+                disabled: !!printPreview.error || isBusy || isChecking,
                 children: [
                   i.jsx(Printer, { size: 14 }),
-                  c && !f ? "Preparing print…" : "Print / Save as PDF",
+                  isBusy && !progressMessage
+                    ? "Preparing print…"
+                    : "Print / Save as PDF",
                 ],
               }),
             i.jsx("button", {
               className: "dg-primary",
-              onClick: B ? U : $,
+              onClick: isThemeMode ? applyTheme : savePageSetup,
               disabled:
-                e.readOnly ||
-                c ||
-                u ||
+                props.readOnly ||
+                isBusy ||
+                isChecking ||
                 !!sheetOrThrow.protection?.enabled ||
-                (!B && !!C.error),
-              children: B ? "Apply theme" : "Save page setup",
+                (!isThemeMode && !!printPreview.error),
+              children: isThemeMode ? "Apply theme" : "Save page setup",
             }),
           ],
         }),
@@ -1287,83 +1386,96 @@ const functionArgumentSignatures = {
   };
 function getFormulaCompletions(value, caret, workbook, sheetId) {
   if (!value.startsWith("=")) return { items: [] };
-  const o = value.slice(0, caret);
-  let a = false;
-  const s = [];
-  for (let I = 1; I < o.length; I++) {
-    if (o[I] === '"') {
-      if (a && o[I + 1] === '"') {
-        I++;
+  const textBeforeCaret = value.slice(0, caret);
+  let isInString = false;
+  const callStack = [];
+  for (let charIndex = 1; charIndex < textBeforeCaret.length; charIndex++) {
+    if (textBeforeCaret[charIndex] === '"') {
+      if (isInString && textBeforeCaret[charIndex + 1] === '"') {
+        charIndex++;
         continue;
       }
-      a = !a;
+      isInString = !isInString;
       continue;
     }
-    if (!a)
-      if (o[I] === "(") {
-        const O =
+    if (!isInString)
+      if (textBeforeCaret[charIndex] === "(") {
+        const functionName =
           /([A-Za-z][A-Za-z0-9_.]*)\s*$/
-            .exec(o.slice(0, I))?.[1]
+            .exec(textBeforeCaret.slice(0, charIndex))?.[1]
             ?.toUpperCase() ?? "";
-        s.push({ name: O, argumentIndex: 0 });
+        callStack.push({ name: functionName, argumentIndex: 0 });
       } else
-        o[I] === ")"
-          ? s.pop()
-          : o[I] === "," && s.length && s[s.length - 1].argumentIndex++;
+        textBeforeCaret[charIndex] === ")"
+          ? callStack.pop()
+          : textBeforeCaret[charIndex] === "," &&
+            callStack.length &&
+            callStack[callStack.length - 1].argumentIndex++;
   }
-  if (a) return { items: [] };
+  if (isInString) return { items: [] };
   const installedExtensionFunctions = listInstalledExtensionFunctions(workbook),
-    u = s.at(-1),
+    innermostCall = callStack.at(-1),
     installedExtensionFunction = installedExtensionFunctions.find(
       (installedExtensionFunction) =>
-        installedExtensionFunction.name === u?.name,
+        installedExtensionFunction.name === innermostCall?.name,
     ),
-    c = u?.name
+    matchedDefinedName = innermostCall?.name
       ? [
           ...(workbook.definedNames ?? []).filter(
-            (I) => I.scopeSheetId === sheetId,
+            (definedName) => definedName.scopeSheetId === sheetId,
           ),
-          ...(workbook.definedNames ?? []).filter((I) => !I.scopeSheetId),
-        ].find((I) => I.name.toUpperCase() === u.name)
+          ...(workbook.definedNames ?? []).filter(
+            (definedName) => !definedName.scopeSheetId,
+          ),
+        ].find(
+          (definedName) =>
+            definedName.name.toUpperCase() === innermostCall.name,
+        )
       : undefined,
-    h = c ? parseFormulaTree(c.refersTo) : undefined,
+    definedNameParameters = matchedDefinedName
+      ? parseFormulaTree(matchedDefinedName.refersTo)
+      : undefined,
     hint =
-      u?.name &&
-      (builtinFunctionNames.includes(u.name) || h || installedExtensionFunction)
+      innermostCall?.name &&
+      (builtinFunctionNames.includes(innermostCall.name) ||
+        definedNameParameters ||
+        installedExtensionFunction)
         ? {
-            ...u,
+            ...innermostCall,
             signature:
               (installedExtensionFunction
                 ? installedExtensionFunction.fn.parameters
                     .map((parameter) => parameter.name)
                     .join(", ")
-                : h
-                  ? h.join(", ")
-                  : functionArgumentSignatures[u.name]) ??
+                : definedNameParameters
+                  ? definedNameParameters.join(", ")
+                  : functionArgumentSignatures[innermostCall.name]) ??
               "value1, [value2], …",
           }
         : undefined,
-    p = /([A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?)$/.exec(o),
-    m = /^=\s*$/.test(o);
-  if (!p && !m) return { items: [], hint: hint };
-  const v = p?.[1] ?? "",
-    start = p ? caret - v.length : caret;
+    identifierMatch = /([A-Za-z_][A-Za-z0-9_.]*(?:\[[^\]]*)?)$/.exec(
+      textBeforeCaret,
+    ),
+    isAtFormulaStart = /^=\s*$/.test(textBeforeCaret);
+  if (!identifierMatch && !isAtFormulaStart) return { items: [], hint: hint };
+  const typedPrefix = identifierMatch?.[1] ?? "",
+    start = identifierMatch ? caret - typedPrefix.length : caret;
   if (start > 0 && /[A-Za-z0-9_$!']/.test(value[start - 1]))
     return { items: [], hint: hint };
-  const b = v.toLowerCase(),
-    y = [],
-    w = (I, O, insertText, detail) => {
-      I.toLowerCase().startsWith(b) &&
-        y.push({
-          label: I,
-          kind: O,
+  const prefixLower = typedPrefix.toLowerCase(),
+    candidates = [],
+    addCandidate = (candidateLabel, candidateKind, insertText, detail) => {
+      candidateLabel.toLowerCase().startsWith(prefixLower) &&
+        candidates.push({
+          label: candidateLabel,
+          kind: candidateKind,
           insertText: insertText,
           start: start,
           end: caret,
           detail: detail,
         });
     },
-    E = [
+    defaultFunctionNames = [
       "SUM",
       "AVERAGE",
       "IF",
@@ -1373,70 +1485,84 @@ function getFormulaCompletions(value, caret, workbook, sheetId) {
       "FILTER",
       "UNIQUE",
     ];
-  for (const I of v ? builtinFunctionNames : E)
-    w(
-      I,
+  for (const builtinName of typedPrefix
+    ? builtinFunctionNames
+    : defaultFunctionNames)
+    addCandidate(
+      builtinName,
       "function",
-      `${I}(`,
-      `${I}(${functionArgumentSignatures[I] ?? "value1, …"})${functionDescriptions[I] ? ` · ${functionDescriptions[I]}` : ""}`,
+      `${builtinName}(`,
+      `${builtinName}(${functionArgumentSignatures[builtinName] ?? "value1, …"})${functionDescriptions[builtinName] ? ` · ${functionDescriptions[builtinName]}` : ""}`,
     );
-  const A = new Set();
+  const seenDefinedNames = new Set();
   for (const installedExtensionFunction of installedExtensionFunctions)
-    w(
+    addCandidate(
       installedExtensionFunction.name,
       "function",
       `${installedExtensionFunction.name}(`,
       `${installedExtensionFunction.name}(${installedExtensionFunction.fn.parameters.map((parameter) => parameter.name).join(", ")}) · ${installedExtensionFunction.entry.enabled ? "Custom function · manual refresh" : "Disabled extension"} · ${installedExtensionFunction.fn.description}`,
     );
-  for (const I of [
+  for (const definedName of [
     ...(workbook.definedNames ?? []).filter((O) => O.scopeSheetId === sheetId),
     ...(workbook.definedNames ?? []).filter((O) => !O.scopeSheetId),
   ]) {
-    const O = I.name.toLowerCase(),
-      formulaTree = parseFormulaTree(I.refersTo);
-    (A.has(O) ||
-      w(
-        I.name,
+    const definedNameKey = definedName.name.toLowerCase(),
+      formulaTree = parseFormulaTree(definedName.refersTo);
+    (seenDefinedNames.has(definedNameKey) ||
+      addCandidate(
+        definedName.name,
         "name",
-        `${I.name}${formulaTree ? "(" : ""}`,
+        `${definedName.name}${formulaTree ? "(" : ""}`,
         formulaTree
-          ? `${I.name}(${formulaTree.join(", ")})${I.comment ? ` · ${I.comment}` : ""}`
-          : I.refersTo,
+          ? `${definedName.name}(${formulaTree.join(", ")})${definedName.comment ? ` · ${definedName.comment}` : ""}`
+          : definedName.refersTo,
       ),
-      A.add(O));
+      seenDefinedNames.add(definedNameKey));
   }
   for (const sheet of workbook.sheets)
-    for (const O of sheet.tables ?? []) {
-      w(O.name, "table", `${O.name}[`, `${sheet.name}!${O.range}`);
-      for (const column of O.columns)
-        w(
-          `${O.name}[${column.name}]`,
+    for (const table of sheet.tables ?? []) {
+      addCandidate(
+        table.name,
+        "table",
+        `${table.name}[`,
+        `${sheet.name}!${table.range}`,
+      );
+      for (const column of table.columns)
+        addCandidate(
+          `${table.name}[${column.name}]`,
           "table",
-          `${O.name}[${column.name}]`,
+          `${table.name}[${column.name}]`,
           `Table column · ${column.name}`,
         );
     }
   return (
-    v &&
-      y.sort((I, O) => {
-        const j = (z) =>
-          z.label.toLowerCase() === b
+    typedPrefix &&
+      candidates.sort((leftCandidate, rightCandidate) => {
+        const candidateRank = (candidate) =>
+          candidate.label.toLowerCase() === prefixLower
             ? -2
-            : z.kind === "function" && E.includes(z.label)
-              ? E.indexOf(z.label)
+            : candidate.kind === "function" &&
+                defaultFunctionNames.includes(candidate.label)
+              ? defaultFunctionNames.indexOf(candidate.label)
               : 100;
-        return j(I) - j(O) || I.label.localeCompare(O.label);
+        return (
+          candidateRank(leftCandidate) - candidateRank(rightCandidate) ||
+          leftCandidate.label.localeCompare(rightCandidate.label)
+        );
       }),
-    { items: y.slice(0, 12), hint: hint }
+    { items: candidates.slice(0, 12), hint: hint }
   );
 }
-function applyFormulaCompletion(value, r) {
-  const t = value.slice(r.end),
-    n =
-      r.insertText.endsWith("(") && t.startsWith("(")
-        ? r.insertText.slice(0, -1)
-        : r.insertText;
-  return { value: value.slice(0, r.start) + n + t, caret: r.start + n.length };
+function applyFormulaCompletion(value, completion) {
+  const textAfterCaret = value.slice(completion.end),
+    insertedText =
+      completion.insertText.endsWith("(") && textAfterCaret.startsWith("(")
+        ? completion.insertText.slice(0, -1)
+        : completion.insertText;
+  return {
+    value: value.slice(0, completion.start) + insertedText + textAfterCaret,
+    caret: completion.start + insertedText.length,
+  };
 }
 
 export {

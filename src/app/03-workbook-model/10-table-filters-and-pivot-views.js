@@ -120,64 +120,77 @@ import {
   calculateWorkbookWithSettings,
 } from "./09-calculation-engine.js";
 
-function parseReportSnapshot(e) {
-  if (new TextEncoder().encode(JSON.stringify(e)).length > 4e6)
+function parseReportSnapshot(snapshot) {
+  if (new TextEncoder().encode(JSON.stringify(snapshot)).length > 4e6)
     throw Error("A report snapshot exceeds 4 MB.");
-  const r = calculationReportSchema.parse(e),
-    rangeAddress = parseRangeAddress(r.request.range);
+  const report = calculationReportSchema.parse(snapshot),
+    rangeAddress = parseRangeAddress(report.request.range);
   if (
-    (validateObjectReportRequest(r.request),
-    r.hash !== hashRecordExcludingHash(r))
+    (validateObjectReportRequest(report.request),
+    report.hash !== hashRecordExcludingHash(report))
   )
     throw Error("Report snapshot integrity check failed.");
-  const n = Array.from(
+  const columnIndexes = Array.from(
     { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-    (s, d) => rangeAddress.firstCol + d,
+    (s, columnOffset) => rangeAddress.firstCol + columnOffset,
   );
   if (
-    fingerprintCanonicalValue(n) !== fingerprintCanonicalValue(r.columns) ||
-    r.widths.length !== n.length
+    fingerprintCanonicalValue(columnIndexes) !==
+      fingerprintCanonicalValue(report.columns) ||
+    report.widths.length !== columnIndexes.length
   )
     throw Error("Invalid report column layout.");
-  const o = r.rows.map((row) => row.row),
-    a = [...o, ...r.excludedRows].sort((s, d) => s - d);
+  const rowNumbers = report.rows.map((row) => row.row),
+    allRowNumbers = [...rowNumbers, ...report.excludedRows].sort(
+      (left, right) => left - right,
+    );
   if (
-    r.rows.length * n.length > 2e3 ||
-    a.length !== rangeAddress.lastRow - rangeAddress.firstRow + 1 ||
-    a.some((s, d) => s !== rangeAddress.firstRow + d + 1) ||
-    o.some((s, d) => d > 0 && s <= o[d - 1])
+    report.rows.length * columnIndexes.length > 2e3 ||
+    allRowNumbers.length !== rangeAddress.lastRow - rangeAddress.firstRow + 1 ||
+    allRowNumbers.some(
+      (rowNumber, rowIndex) =>
+        rowNumber !== rangeAddress.firstRow + rowIndex + 1,
+    ) ||
+    rowNumbers.some(
+      (candidateRow, rowPosition) =>
+        rowPosition > 0 && candidateRow <= rowNumbers[rowPosition - 1],
+    )
   )
     throw Error("Invalid report row accounting.");
-  for (const row of r.rows) {
-    if (row.cells.length !== n.length)
+  for (const row of report.rows) {
+    if (row.cells.length !== columnIndexes.length)
       throw Error("Invalid report cell layout.");
-    row.cells.forEach((cell, u) => {
-      if (cell.address !== `${columnIndexToLetters(n[u])}${row.row}`)
+    row.cells.forEach((cell, cellIndex) => {
+      if (
+        cell.address !==
+        `${columnIndexToLetters(columnIndexes[cellIndex])}${row.row}`
+      )
         throw Error("Invalid report cell address.");
       cell.style &&= validateCellStyle(cell.style);
     });
   }
-  if (r.object) {
-    const s = {
-      id: r.request.sheetId,
-      name: r.sheetName,
+  if (report.object) {
+    const drawingSheet = {
+      id: report.request.sheetId,
+      name: report.sheetName,
       rowCount: 1048576,
       colCount: 16384,
     };
-    (validateDrawingObjects([r.object], s), (r.object = s.objects[0]));
+    (validateDrawingObjects([report.object], drawingSheet),
+      (report.object = drawingSheet.objects[0]));
   }
   if (
-    (r.request.kind === "object") != !!r.object ||
-    (r.object && r.object.id !== r.request.objectId)
+    (report.request.kind === "object") != !!report.object ||
+    (report.object && report.object.id !== report.request.objectId)
   )
     throw Error("Invalid report drawing identity.");
-  if (r.hash !== hashRecordExcludingHash(r))
+  if (report.hash !== hashRecordExcludingHash(report))
     throw Error("Report metadata is not canonical.");
-  return r;
+  return report;
 }
-function buildSavedReportEnvelope(workbook, r) {
+function buildSavedReportEnvelope(workbook, envelope) {
   if (workbook.reportOutputs !== undefined) {
-    const t = array(
+    const parsedReportOutputs = array(
       object({
         id: nonEmptyLabelSchema,
         version: number().int().min(1).max(1e6),
@@ -186,122 +199,145 @@ function buildSavedReportEnvelope(workbook, r) {
     )
       .max(20)
       .parse(workbook.reportOutputs);
-    if (new Set(t.map((n) => n.id)).size !== t.length)
+    if (
+      new Set(parsedReportOutputs.map((reportOutput) => reportOutput.id))
+        .size !== parsedReportOutputs.length
+    )
       throw Error("Duplicate report output IDs.");
     if (
-      new TextEncoder().encode(JSON.stringify(t)).length >
+      new TextEncoder().encode(JSON.stringify(parsedReportOutputs)).length >
       reportOutputLimits.metadataBytes
     )
       throw Error("Saved reports exceed 16 MB.");
-    r.reportOutputs = t.map((n) => ({
-      ...n,
-      snapshot: parseReportSnapshot(n.snapshot),
+    envelope.reportOutputs = parsedReportOutputs.map((outputEntry) => ({
+      ...outputEntry,
+      snapshot: parseReportSnapshot(outputEntry.snapshot),
     }));
   }
   if (workbook.embeddedObjectInventories !== undefined) {
-    const t = array(importedCacheEvidenceSchema)
+    const parsedInventories = array(importedCacheEvidenceSchema)
       .max(20)
       .parse(workbook.embeddedObjectInventories);
     if (
-      new Set(t.map((n) => n.id)).size !== t.length ||
-      JSON.stringify(t).length > 2e6
+      new Set(parsedInventories.map((inventory) => inventory.id)).size !==
+        parsedInventories.length ||
+      JSON.stringify(parsedInventories).length > 2e6
     )
       throw Error("Invalid embedded-object inventory count or size.");
-    r.embeddedObjectInventories = t;
+    envelope.embeddedObjectInventories = parsedInventories;
   }
 }
-function validatePageSetup(e, sheet) {
-  if (e === undefined) return;
-  if (!e || typeof e != "object" || Array.isArray(e))
+function validatePageSetup(pageLayout, sheet) {
+  if (pageLayout === undefined) return;
+  if (!pageLayout || typeof pageLayout != "object" || Array.isArray(pageLayout))
     throw new Error("Invalid page layout.");
-  const t = e,
-    margins = t.margins,
-    o = (b, y, w) => {
-      if (typeof b != "number" || !Number.isFinite(b) || b < y || b > w)
+  const layout = pageLayout,
+    margins = layout.margins,
+    checkBoundedNumber = (value, minimum, maximum) => {
+      if (
+        typeof value != "number" ||
+        !Number.isFinite(value) ||
+        value < minimum ||
+        value > maximum
+      )
         throw new Error("Page setup contains an out-of-range number.");
-      return b;
+      return value;
     };
   if (
-    !["portrait", "landscape"].includes(String(t.orientation)) ||
-    !["letter", "a4", "legal"].includes(String(t.paper)) ||
+    !["portrait", "landscape"].includes(String(layout.orientation)) ||
+    !["letter", "a4", "legal"].includes(String(layout.paper)) ||
     !margins ||
     typeof margins != "object"
   )
     throw new Error("Invalid paper, orientation, or margins.");
   if (
-    t.pageOrder !== undefined &&
-    t.pageOrder !== "overThenDown" &&
-    t.pageOrder !== "downThenOver"
+    layout.pageOrder !== undefined &&
+    layout.pageOrder !== "overThenDown" &&
+    layout.pageOrder !== "downThenOver"
   )
     throw Error(
       "Unsupported print page order. Choose Over, then down or Down, then over.",
     );
-  const a = Object.fromEntries(
-      ["top", "bottom", "left", "right", "header", "footer"].map((b) => [
-        b,
-        o(margins[b], 0, 3),
-      ]),
+  const pageMargins = Object.fromEntries(
+      ["top", "bottom", "left", "right", "header", "footer"].map(
+        (marginName) => [
+          marginName,
+          checkBoundedNumber(margins[marginName], 0, 3),
+        ],
+      ),
     ),
-    s =
-      t.paper === "a4"
+    paperSize =
+      layout.paper === "a4"
         ? [8.2677, 11.6929]
-        : t.paper === "legal"
+        : layout.paper === "legal"
           ? [8.5, 14]
           : [8.5, 11],
-    [d, u] = t.orientation === "landscape" ? s.reverse() : s;
-  if (a.left + a.right >= d - 0.25 || a.top + a.bottom >= u - 0.25)
+    [pageWidth, pageHeight] =
+      layout.orientation === "landscape" ? paperSize.reverse() : paperSize;
+  if (
+    pageMargins.left + pageMargins.right >= pageWidth - 0.25 ||
+    pageMargins.top + pageMargins.bottom >= pageHeight - 0.25
+  )
     throw new Error("Margins leave no printable page area.");
-  if (typeof t.printArea != "string") throw new Error("Enter a print area.");
-  const rangeAddress = parseRangeAddress(t.printArea);
+  if (typeof layout.printArea != "string")
+    throw new Error("Enter a print area.");
+  const rangeAddress = parseRangeAddress(layout.printArea);
   if (
     rangeAddress.lastRow >= sheet.rowCount ||
     rangeAddress.lastCol >= sheet.colCount
   )
     throw new Error("Print area exceeds the worksheet.");
   if (
-    ["fitToPage", "gridlines", "headings"].some((b) => typeof t[b] != "boolean")
+    ["fitToPage", "gridlines", "headings"].some(
+      (optionName) => typeof layout[optionName] != "boolean",
+    )
   )
     throw new Error("Invalid print option.");
   if (
     ["header", "footer"].some(
-      (b) => typeof t[b] != "string" || String(t[b]).length > 255,
+      (fieldName) =>
+        typeof layout[fieldName] != "string" ||
+        String(layout[fieldName]).length > 255,
     )
   )
     throw new Error("Headers and footers must be at most 255 characters.");
-  const fitToWidth = o(t.fitToWidth, 0, 10),
-    fitToHeight = o(t.fitToHeight, 0, 10),
-    scale = o(t.scale, 10, 400);
+  const fitToWidth = checkBoundedNumber(layout.fitToWidth, 0, 10),
+    fitToHeight = checkBoundedNumber(layout.fitToHeight, 0, 10),
+    scale = checkBoundedNumber(layout.scale, 10, 400);
   if (![fitToWidth, fitToHeight, scale].every(Number.isInteger))
     throw new Error("Page fitting and scale must be whole numbers.");
-  const printTitles = parsePrintTitles(t.repeatRows, "row", sheet),
-    m = parsePrintTitles(t.repeatColumns, "column", sheet),
-    rowBreaks = validatePrintPageBreaks(t.rowBreaks, sheet.rowCount),
-    columnBreaks = validatePrintPageBreaks(t.columnBreaks, sheet.colCount);
+  const printTitles = parsePrintTitles(layout.repeatRows, "row", sheet),
+    columnTitles = parsePrintTitles(layout.repeatColumns, "column", sheet),
+    rowBreaks = validatePrintPageBreaks(layout.rowBreaks, sheet.rowCount),
+    columnBreaks = validatePrintPageBreaks(layout.columnBreaks, sheet.colCount);
   sheet.pageLayout = {
-    orientation: t.orientation,
-    paper: t.paper,
-    margins: a,
-    printArea: t.printArea,
-    fitToPage: t.fitToPage,
+    orientation: layout.orientation,
+    paper: layout.paper,
+    margins: pageMargins,
+    printArea: layout.printArea,
+    fitToPage: layout.fitToPage,
     fitToWidth: fitToWidth,
     fitToHeight: fitToHeight,
     scale: scale,
-    gridlines: t.gridlines,
-    headings: t.headings,
-    header: t.header,
-    footer: t.footer,
-    ...(t.pageOrder !== undefined ? { pageOrder: t.pageOrder } : {}),
+    gridlines: layout.gridlines,
+    headings: layout.headings,
+    header: layout.header,
+    footer: layout.footer,
+    ...(layout.pageOrder !== undefined ? { pageOrder: layout.pageOrder } : {}),
     ...(printTitles
       ? { repeatRows: formatAxisIntervalRef(printTitles, "row") }
       : {}),
-    ...(m ? { repeatColumns: formatAxisIntervalRef(m, "column") } : {}),
+    ...(columnTitles
+      ? { repeatColumns: formatAxisIntervalRef(columnTitles, "column") }
+      : {}),
     ...(rowBreaks ? { rowBreaks: rowBreaks } : {}),
     ...(columnBreaks ? { columnBreaks: columnBreaks } : {}),
   };
 }
 function zU(sheet, pageLayout) {
-  const t = { ...sheet };
-  (validatePageSetup(pageLayout, t), (pageLayout = t.pageLayout));
+  const sheetCopy = { ...sheet };
+  (validatePageSetup(pageLayout, sheetCopy),
+    (pageLayout = sheetCopy.pageLayout));
   const rangeAddress = parseRangeAddress(pageLayout.printArea);
   if (
     (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
@@ -312,129 +348,202 @@ function zU(sheet, pageLayout) {
       "Print preview supports at most 5,000 cells per print area. Choose a smaller print area.",
     );
   const pageDimensions = resolvePageDimensions(pageLayout),
-    s =
+    printableWidth =
       pageDimensions.width -
       (pageLayout.margins.left + pageLayout.margins.right) * 96,
-    d =
+    printableHeight =
       pageDimensions.height -
       (pageLayout.margins.top + pageLayout.margins.bottom) * 96,
     printTitles = parsePrintTitles(pageLayout.repeatRows, "row", sheet),
-    l = parsePrintTitles(pageLayout.repeatColumns, "column", sheet);
-  for (const j of sheet.merges ?? []) {
-    const rangeAddress = parseRangeAddress(j);
-    for (const [V, D, B] of [
+    columnTitles = parsePrintTitles(pageLayout.repeatColumns, "column", sheet);
+  for (const mergeRange of sheet.merges ?? []) {
+    const rangeAddress = parseRangeAddress(mergeRange);
+    for (const [titleRange, firstIndex, lastIndex] of [
       [printTitles, rangeAddress.firstRow, rangeAddress.lastRow],
-      [l, rangeAddress.firstCol, rangeAddress.lastCol],
+      [columnTitles, rangeAddress.firstCol, rangeAddress.lastCol],
     ])
-      if (V && D <= V.end && B >= V.start && (D < V.start || B > V.end))
+      if (
+        titleRange &&
+        firstIndex <= titleRange.end &&
+        lastIndex >= titleRange.start &&
+        (firstIndex < titleRange.start || lastIndex > titleRange.end)
+      )
         throw Error(
           "A merged area crosses a repeated-title boundary. Unmerge it or adjust the print titles first.",
         );
   }
   for (const object of sheet.objects ?? []) {
-    const z = _t(object.anchor),
-      V = applyChartDrawingLayout(sheet, object);
-    for (const [D, B, _, C, T] of [
-      [printTitles, "row", z.row, V.offsetY, V.height],
-      [l, "column", z.col, V.offsetX, V.width],
+    const anchorCell = _t(object.anchor),
+      drawingLayout = applyChartDrawingLayout(sheet, object);
+    for (const [axisTitles, axis, anchorIndex, axisOffset, axisSize] of [
+      [
+        printTitles,
+        "row",
+        anchorCell.row,
+        drawingLayout.offsetY,
+        drawingLayout.height,
+      ],
+      [
+        columnTitles,
+        "column",
+        anchorCell.col,
+        drawingLayout.offsetX,
+        drawingLayout.width,
+      ],
     ]) {
-      if (!D) continue;
+      if (!axisTitles) continue;
       const axisVisibilityIndex = createAxisVisibilityIndex(
-        B === "row" ? sheet.rowCount : sheet.colCount,
-        cn(sheet, B),
+        axis === "row" ? sheet.rowCount : sheet.colCount,
+        cn(sheet, axis),
       );
-      if (axisVisibilityIndex.isHidden(_)) continue;
-      const R = (G) =>
-          B === "row" ? rowHeightAt(sheet, G) : columnWidthAt(sheet, G),
-        L = (G) => {
-          let H = _,
-            Q = 0;
-          for (; G < 0;) {
-            const X = axisVisibilityIndex.next(H, -1);
-            if (X === null) return H;
-            if (((H = X), (G += R(H)), ++Q > 1e3))
+      if (axisVisibilityIndex.isHidden(anchorIndex)) continue;
+      const axisSizeAt = (axisIndex) =>
+          axis === "row"
+            ? rowHeightAt(sheet, axisIndex)
+            : columnWidthAt(sheet, axisIndex),
+        indexAtOffset = (offset) => {
+          let currentIndex = anchorIndex,
+            iterationCount = 0;
+          for (; offset < 0;) {
+            const previousVisibleIndex = axisVisibilityIndex.next(
+              currentIndex,
+              -1,
+            );
+            if (previousVisibleIndex === null) return currentIndex;
+            if (
+              ((currentIndex = previousVisibleIndex),
+              (offset += axisSizeAt(currentIndex)),
+              ++iterationCount > 1e3)
+            )
               throw Error(
                 "Drawing print inspection exceeds its geometry budget.",
               );
           }
-          for (; G >= R(H);) {
-            G -= R(H);
-            const X = axisVisibilityIndex.next(H, 1);
-            if (X === null) return H;
-            if (((H = X), ++Q > 1e3))
+          for (; offset >= axisSizeAt(currentIndex);) {
+            offset -= axisSizeAt(currentIndex);
+            const nextVisibleIndex = axisVisibilityIndex.next(currentIndex, 1);
+            if (nextVisibleIndex === null) return currentIndex;
+            if (((currentIndex = nextVisibleIndex), ++iterationCount > 1e3))
               throw Error(
                 "Drawing print inspection exceeds its geometry budget.",
               );
           }
-          return H;
+          return currentIndex;
         },
-        $ = L(C),
-        U = L(C + T - 1e-4);
-      if ($ <= D.end && U >= D.start && ($ < D.start || U > D.end))
+        startIndex = indexAtOffset(axisOffset),
+        endIndex = indexAtOffset(axisOffset + axisSize - 1e-4);
+      if (
+        startIndex <= axisTitles.end &&
+        endIndex >= axisTitles.start &&
+        (startIndex < axisTitles.start || endIndex > axisTitles.end)
+      )
         throw Error(
           "A drawing crosses a repeated-title boundary. Move or resize the drawing, or adjust the print titles first.",
         );
     }
   }
-  const c = (j, z, V) => {
+  const listVisibleIndexes = (axisKind, rangeStart, rangeEnd) => {
       const axisVisibilityIndex = createAxisVisibilityIndex(
-          j === "row" ? sheet.rowCount : sheet.colCount,
-          cn(sheet, j),
+          axisKind === "row" ? sheet.rowCount : sheet.colCount,
+          cn(sheet, axisKind),
         ),
-        B = [];
-      for (let _ = z; _ <= V; _++) axisVisibilityIndex.isHidden(_) || B.push(_);
-      return B;
+        visibleIndexes = [];
+      for (let scanIndex = rangeStart; scanIndex <= rangeEnd; scanIndex++)
+        axisVisibilityIndex.isHidden(scanIndex) ||
+          visibleIndexes.push(scanIndex);
+      return visibleIndexes;
     },
-    h = c("row", rangeAddress.firstRow, rangeAddress.lastRow),
-    f = c("column", rangeAddress.firstCol, rangeAddress.lastCol);
-  if (!h.length || !f.length)
+    visibleRows = listVisibleIndexes(
+      "row",
+      rangeAddress.firstRow,
+      rangeAddress.lastRow,
+    ),
+    visibleColumns = listVisibleIndexes(
+      "column",
+      rangeAddress.firstCol,
+      rangeAddress.lastCol,
+    );
+  if (!visibleRows.length || !visibleColumns.length)
     throw Error(
       "The print area has no visible cells. Unhide its rows or columns, or choose another print area.",
     );
-  const p = printTitles ? c("row", printTitles.start, printTitles.end) : [],
-    m = l ? c("column", l.start, l.end) : [],
-    v = (j, z, V, D, B) => {
-      const _ = new Set(z),
-        C = j.filter((U) => !_.has(U)),
-        T = z.reduce((U, G) => U + D(G), 0);
-      if (T > V + 1e-7 || (C.length && T >= V - 1e-7))
+  const visibleTitleRows = printTitles
+      ? listVisibleIndexes("row", printTitles.start, printTitles.end)
+      : [],
+    visibleTitleColumns = columnTitles
+      ? listVisibleIndexes("column", columnTitles.start, columnTitles.end)
+      : [],
+    paginateAxis = (
+      axisIndexes,
+      titleIndexes,
+      availableSize,
+      measureSize,
+      breakIndexes,
+    ) => {
+      const titleSet = new Set(titleIndexes),
+        dataIndexes = axisIndexes.filter(
+          (entryIndex) => !titleSet.has(entryIndex),
+        ),
+        titleSize = titleIndexes.reduce(
+          (sizeTotal, titleIndex) => sizeTotal + measureSize(titleIndex),
+          0,
+        );
+      if (
+        titleSize > availableSize + 1e-7 ||
+        (dataIndexes.length && titleSize >= availableSize - 1e-7)
+      )
         throw Error(
           "Repeated titles leave no space for worksheet data. Reduce the titles, margins or scale.",
         );
-      if (!C.length) return [z];
-      const N = [];
-      let R = [],
-        L = T,
-        $;
-      for (const U of C) {
-        const G = D(U),
-          H = $ !== undefined && B.some((Q) => Q > $ && Q <= U);
+      if (!dataIndexes.length) return [titleIndexes];
+      const pageGroups = [];
+      let currentGroup = [],
+        usedSize = titleSize,
+        lastPlacedIndex;
+      for (const dataIndex of dataIndexes) {
+        const dataSize = measureSize(dataIndex),
+          isBreakBefore =
+            lastPlacedIndex !== undefined &&
+            breakIndexes.some(
+              (breakIndex) =>
+                breakIndex > lastPlacedIndex && breakIndex <= dataIndex,
+            );
         if (
-          (R.length &&
-            (L + G > V + 1e-7 || H) &&
-            (N.push([...z, ...R]), (R = []), (L = T)),
-          z.length && L + G > V + 1e-7 && !R.length)
+          (currentGroup.length &&
+            (usedSize + dataSize > availableSize + 1e-7 || isBreakBefore) &&
+            (pageGroups.push([...titleIndexes, ...currentGroup]),
+            (currentGroup = []),
+            (usedSize = titleSize)),
+          titleIndexes.length &&
+            usedSize + dataSize > availableSize + 1e-7 &&
+            !currentGroup.length)
         )
           throw Error(
             "A data row or column cannot fit beside the repeated titles. Reduce the scale or title dimensions.",
           );
-        (R.push(U), (L += G), ($ = U));
+        (currentGroup.push(dataIndex),
+          (usedSize += dataSize),
+          (lastPlacedIndex = dataIndex));
       }
-      return (R.length && N.push([...z, ...R]), N);
+      return (
+        currentGroup.length &&
+          pageGroups.push([...titleIndexes, ...currentGroup]),
+        pageGroups
+      );
     },
-    g = (j) => ({
-      rows: v(
-        h,
-        p,
-        d / j - (pageLayout.headings ? 22 : 0),
-        (z) => rowHeightAt(sheet, z),
+    layoutAtScale = (candidateScale) => ({
+      rows: paginateAxis(
+        visibleRows,
+        visibleTitleRows,
+        printableHeight / candidateScale - (pageLayout.headings ? 22 : 0),
+        (rowIndex) => rowHeightAt(sheet, rowIndex),
         pageLayout.fitToPage ? [] : (pageLayout.rowBreaks ?? []),
       ),
-      columns: v(
-        f,
-        m,
-        s / j - (pageLayout.headings ? 32 : 0),
-        (z) => columnWidthAt(sheet, z),
+      columns: paginateAxis(
+        visibleColumns,
+        visibleTitleColumns,
+        printableWidth / candidateScale - (pageLayout.headings ? 32 : 0),
+        (columnIndex) => columnWidthAt(sheet, columnIndex),
         pageLayout.fitToPage ? [] : (pageLayout.columnBreaks ?? []),
       ),
     });
@@ -443,57 +552,73 @@ function zU(sheet, pageLayout) {
     pageLayout.fitToPage &&
     (pageLayout.fitToWidth || pageLayout.fitToHeight)
   ) {
-    const j = (z) => {
+    const canFitAtScale = (trialScale) => {
       try {
-        const V = g(z);
+        const trialLayout = layoutAtScale(trialScale);
         return (
           (!pageLayout.fitToWidth ||
-            V.columns.length <= pageLayout.fitToWidth) &&
-          (!pageLayout.fitToHeight || V.rows.length <= pageLayout.fitToHeight)
+            trialLayout.columns.length <= pageLayout.fitToWidth) &&
+          (!pageLayout.fitToHeight ||
+            trialLayout.rows.length <= pageLayout.fitToHeight)
         );
       } catch {
         return false;
       }
     };
-    if (!j(1)) {
-      let z = 0,
-        V = 1;
-      for (let D = 0; D < 40; D++) {
-        const B = (z + V) / 2;
-        j(B) ? (z = B) : (V = B);
+    if (!canFitAtScale(1)) {
+      let lowScale = 0,
+        highScale = 1;
+      for (let searchStep = 0; searchStep < 40; searchStep++) {
+        const midScale = (lowScale + highScale) / 2;
+        canFitAtScale(midScale)
+          ? (lowScale = midScale)
+          : (highScale = midScale);
       }
-      scale = z;
+      scale = lowScale;
     }
   }
   if (!Number.isFinite(scale) || scale <= 0)
     throw Error(
       "The print content cannot fit the selected paper. Reduce the print area or titles.",
     );
-  const y = g(scale);
-  if (y.rows.length * y.columns.length > printRenderLimits.pages)
+  const finalLayout = layoutAtScale(scale);
+  if (
+    finalLayout.rows.length * finalLayout.columns.length >
+    printRenderLimits.pages
+  )
     throw Error(
       "This layout exceeds 100 pages. Reduce the print area or fit it to fewer pages.",
     );
   if (
-    y.rows.reduce((j, z) => j + z.length, 0) *
-      y.columns.reduce((j, z) => j + z.length, 0) >
+    finalLayout.rows.reduce(
+      (rowTotal, pageRows) => rowTotal + pageRows.length,
+      0,
+    ) *
+      finalLayout.columns.reduce(
+        (columnTotal, pageColumns) => columnTotal + pageColumns.length,
+        0,
+      ) >
     printRenderLimits.renderedCells
   )
     throw Error(
       "Repeated print content exceeds 100,000 rendered cells. Reduce titles, pages or the print area.",
     );
-  const E = !!(printTitles || l),
-    A = (rows, columns) => ({
+  const hasRepeatedTitles = !!(printTitles || columnTitles),
+    toPageRange = (rows, columns) => ({
       firstRow: Math.min(...rows),
       lastRow: Math.max(...rows),
       firstCol: Math.min(...columns),
       lastCol: Math.max(...columns),
-      ...(E ? { rows: rows, columns: columns } : {}),
+      ...(hasRepeatedTitles ? { rows: rows, columns: columns } : {}),
     }),
     pages =
       pageLayout.pageOrder === "downThenOver"
-        ? y.columns.flatMap((column) => y.rows.map((row) => A(row, column)))
-        : y.rows.flatMap((row) => y.columns.map((column) => A(row, column))),
+        ? finalLayout.columns.flatMap((column) =>
+            finalLayout.rows.map((row) => toPageRange(row, column)),
+          )
+        : finalLayout.rows.flatMap((row) =>
+            finalLayout.columns.map((column) => toPageRange(row, column)),
+          ),
     notices =
       pageLayout.fitToPage &&
       (pageLayout.rowBreaks?.length ?? 0) +
@@ -510,13 +635,16 @@ function zU(sheet, pageLayout) {
 }
 function updateSheetPageSetup(e, sheet, workbookInput) {
   if (!sheet.pageLayout) return [];
-  const n = { ...sheet };
-  validatePageSetup(sheet.pageLayout, n);
-  const pageLayout = n.pageLayout,
+  const normalizedSheet = { ...sheet };
+  validatePageSetup(sheet.pageLayout, normalizedSheet);
+  const pageLayout = normalizedSheet.pageLayout,
     oddHeader = exportHeaderFooterTemplate(pageLayout.header, workbookInput),
     oddFooter = exportHeaderFooterTemplate(pageLayout.footer, workbookInput),
-    d = [pageLayout.header, pageLayout.footer].some((u) =>
-      [...u.matchAll(headerFooterTokenPattern)].some((l) => !!l[1]),
+    hasIdentityTokens = [pageLayout.header, pageLayout.footer].some(
+      (templateText) =>
+        [...templateText.matchAll(headerFooterTokenPattern)].some(
+          (tokenMatch) => !!tokenMatch[1],
+        ),
     );
   return (
     (e.pageSetup = {
@@ -540,25 +668,25 @@ function updateSheetPageSetup(e, sheet, workbookInput) {
         ? { printTitlesColumn: pageLayout.repeatColumns }
         : {}),
     }),
-    (e.rowBreaks = (pageLayout.rowBreaks ?? []).map((u) => ({
-      id: u,
+    (e.rowBreaks = (pageLayout.rowBreaks ?? []).map((breakRow) => ({
+      id: breakRow,
       max: 16383,
       man: 1,
     }))),
     (e.headerFooter = { oddHeader: oddHeader, oddFooter: oddFooter }),
-    d
+    hasIdentityTokens
       ? [
           "Print workbook/engagement/period/revision fields are exported as literal text from this workbook snapshot. Native JSON retains the live identity tokens; XLSX does not update them after later edits.",
         ]
       : []
   );
 }
-function findOccupiedRangeBounds(e, r = true) {
-  let t = null;
-  for (const [n, cell] of Object.entries(e.cells)) {
-    const a = cell.raw !== null && cell.raw !== "",
-      s =
-        r &&
+function findOccupiedRangeBounds(sheet, shouldIncludeFormatting = true) {
+  let bounds = null;
+  for (const [cellAddress, cell] of Object.entries(sheet.cells)) {
+    const hasValue = cell.raw !== null && cell.raw !== "",
+      hasFormatting =
+        shouldIncludeFormatting &&
         (cell.numberFormat ||
           cell.hyperlink ||
           cell.note ||
@@ -566,23 +694,28 @@ function findOccupiedRangeBounds(e, r = true) {
           cell.numFmt ||
           cell.format ||
           Object.keys(cell.style ?? {}).length);
-    if (!a && !s) continue;
-    const { row, col } = _t(n);
-    t
-      ? ((t.firstRow = Math.min(t.firstRow, row)),
-        (t.lastRow = Math.max(t.lastRow, row)),
-        (t.firstCol = Math.min(t.firstCol, col)),
-        (t.lastCol = Math.max(t.lastCol, col)))
-      : (t = { firstRow: row, lastRow: row, firstCol: col, lastCol: col });
+    if (!hasValue && !hasFormatting) continue;
+    const { row, col } = _t(cellAddress);
+    bounds
+      ? ((bounds.firstRow = Math.min(bounds.firstRow, row)),
+        (bounds.lastRow = Math.max(bounds.lastRow, row)),
+        (bounds.firstCol = Math.min(bounds.firstCol, col)),
+        (bounds.lastCol = Math.max(bounds.lastCol, col)))
+      : (bounds = { firstRow: row, lastRow: row, firstCol: col, lastCol: col });
   }
-  return t;
+  return bounds;
 }
-function formatOccupiedRangeAddress(e, r = true) {
-  const occupiedRangeBounds = findOccupiedRangeBounds(e, r);
+function formatOccupiedRangeAddress(sheet, shouldIncludeFormatting = true) {
+  const occupiedRangeBounds = findOccupiedRangeBounds(
+    sheet,
+    shouldIncludeFormatting,
+  );
   if (!occupiedRangeBounds) return "A1";
-  const n = `${columnIndexToLetters(occupiedRangeBounds.firstCol)}${occupiedRangeBounds.firstRow + 1}`,
-    o = `${columnIndexToLetters(occupiedRangeBounds.lastCol)}${occupiedRangeBounds.lastRow + 1}`;
-  return n === o ? n : `${n}:${o}`;
+  const firstAddress = `${columnIndexToLetters(occupiedRangeBounds.firstCol)}${occupiedRangeBounds.firstRow + 1}`,
+    lastAddress = `${columnIndexToLetters(occupiedRangeBounds.lastCol)}${occupiedRangeBounds.lastRow + 1}`;
+  return firstAddress === lastAddress
+    ? firstAddress
+    : `${firstAddress}:${lastAddress}`;
 }
 function createDefaultPageSetup(sheetOrThrow) {
   return {
@@ -608,8 +741,8 @@ function createDefaultPageSetup(sheetOrThrow) {
     footer: "",
   };
 }
-function assertRangeCellBudget(e) {
-  const { firstRow, lastRow, firstCol, lastCol } = parseRangeAddress(e);
+function assertRangeCellBudget(rangeText) {
+  const { firstRow, lastRow, firstCol, lastCol } = parseRangeAddress(rangeText);
   if (
     (lastRow - firstRow + 1) * (lastCol - firstCol + 1) >
     workbookLimits.maxCells
@@ -617,89 +750,94 @@ function assertRangeCellBudget(e) {
     return throwWithMessage(
       "Range is too large. Select at most 100,000 cells.",
     );
-  const a = [];
-  for (let s = firstRow; s <= lastRow; s++)
-    for (let d = firstCol; d <= lastCol; d++)
-      a.push(`${columnIndexToLetters(d)}${s + 1}`);
-  return a;
+  const cellAddresses = [];
+  for (let rowIndex = firstRow; rowIndex <= lastRow; rowIndex++)
+    for (let colIndex = firstCol; colIndex <= lastCol; colIndex++)
+      cellAddresses.push(`${columnIndexToLetters(colIndex)}${rowIndex + 1}`);
+  return cellAddresses;
 }
 function validateSelectionBounds(sheetOrThrow, activeCellAddress) {
-  const t = assertRangeCellBudget(activeCellAddress);
+  const selectionAddresses = assertRangeCellBudget(activeCellAddress);
   if (
-    t.some((n) => {
-      const { row, col } = _t(n);
+    selectionAddresses.some((address) => {
+      const { row, col } = _t(address);
       return row >= sheetOrThrow.rowCount || col >= sheetOrThrow.colCount;
     })
   )
     throw new Error("Selection exceeds worksheet dimensions.");
-  return t;
+  return selectionAddresses;
 }
 function validateRemoveDuplicatesRequest(
   workbook,
   sheetId,
-  t,
-  n,
+  range,
+  columnIndexes,
   checked = true,
 ) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   assertSheetUnprotected(sheet);
-  const s = assertRangeCellBudget(t);
-  s.length > 500 &&
+  const cellAddresses = assertRangeCellBudget(range);
+  cellAddresses.length > 500 &&
     failWithMessage("Select at most 500 cells to remove duplicates.");
-  const rangeAddress = parseRangeAddress(t);
-  (!n.length ||
-    n.some((m) => m < rangeAddress.firstCol || m > rangeAddress.lastCol)) &&
+  const rangeAddress = parseRangeAddress(range);
+  (!columnIndexes.length ||
+    columnIndexes.some(
+      (columnIndex) =>
+        columnIndex < rangeAddress.firstCol ||
+        columnIndex > rangeAddress.lastCol,
+    )) &&
     failWithMessage("Choose one or more columns inside the selected range.");
-  for (const m of sheet.tables ?? []) {
-    const v = parseRangeAddress(m.range);
-    doesRangeOverlap(t, m.range) &&
-      ((rangeAddress.firstCol > v.firstCol ||
-        rangeAddress.lastCol < v.lastCol) &&
+  for (const table of sheet.tables ?? []) {
+    const tableRangeAddress = parseRangeAddress(table.range);
+    doesRangeOverlap(range, table.range) &&
+      ((rangeAddress.firstCol > tableRangeAddress.firstCol ||
+        rangeAddress.lastCol < tableRangeAddress.lastCol) &&
         failWithMessage(
           "Include all table columns when removing duplicate table rows.",
         ),
-      m.showTotals &&
-        rangeAddress.firstRow <= v.lastRow &&
-        rangeAddress.lastRow >= v.lastRow &&
+      table.showTotals &&
+        rangeAddress.firstRow <= tableRangeAddress.lastRow &&
+        rangeAddress.lastRow >= tableRangeAddress.lastRow &&
         failWithMessage("Select data rows above the table totals row."),
       !checked &&
-        rangeAddress.firstRow <= v.firstRow &&
-        rangeAddress.lastRow >= v.firstRow &&
+        rangeAddress.firstRow <= tableRangeAddress.firstRow &&
+        rangeAddress.lastRow >= tableRangeAddress.firstRow &&
         failWithMessage("Keep the table header row selected as headers."));
   }
-  (sheet.merges ?? []).some((m) => doesRangeOverlap(t, m)) &&
-    failWithMessage("Unmerge selected cells before removing duplicates.");
+  (sheet.merges ?? []).some((mergeRange) =>
+    doesRangeOverlap(range, mergeRange),
+  ) && failWithMessage("Unmerge selected cells before removing duplicates.");
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    l = new Set(),
-    c = [];
+    seenRowKeys = new Set(),
+    copiedRows = [];
   let removed = 0;
   for (
     let firstRow = rangeAddress.firstRow;
     firstRow <= rangeAddress.lastRow;
     firstRow++
   ) {
-    const v = JSON.stringify(
-      n.map((g) =>
+    const rowKey = JSON.stringify(
+      columnIndexes.map((keyColumnIndex) =>
         workbookWithSettings(
           sheetId,
-          `${columnIndexToLetters(g)}${firstRow + 1}`,
+          `${columnIndexToLetters(keyColumnIndex)}${firstRow + 1}`,
         ),
       ),
     );
     if (firstRow !== rangeAddress.firstRow || !checked) {
-      if (l.has(v)) {
+      if (seenRowKeys.has(rowKey)) {
         removed++;
         continue;
       }
-      l.add(v);
+      seenRowKeys.add(rowKey);
     }
-    c.push(
+    copiedRows.push(
       Array.from(
         { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-        (g, b) => {
+        (g, columnOffset) => {
           const cell = structuredClone(
             sheet.cells[
-              `${columnIndexToLetters(rangeAddress.firstCol + b)}${firstRow + 1}`
+              `${columnIndexToLetters(rangeAddress.firstCol + columnOffset)}${firstRow + 1}`
             ] ?? {
               raw: null,
             },
@@ -710,7 +848,7 @@ function validateRemoveDuplicatesRequest(
               !cell.literal &&
               (cell.raw = shiftFormulaReferences(
                 cell.raw,
-                rangeAddress.firstRow + c.length - firstRow,
+                rangeAddress.firstRow + copiedRows.length - firstRow,
                 0,
               )),
             cell
@@ -720,12 +858,12 @@ function validateRemoveDuplicatesRequest(
     );
   }
   const cells = { ...sheet.cells };
-  for (const m of s) {
-    const v = _t(m);
-    cells[m] = c[v.row - rangeAddress.firstRow]?.[
-      v.col - rangeAddress.firstCol
+  for (const cellAddress of cellAddresses) {
+    const cellPosition = _t(cellAddress);
+    cells[cellAddress] = copiedRows[cellPosition.row - rangeAddress.firstRow]?.[
+      cellPosition.col - rangeAddress.firstCol
     ] ?? {
-      ...cells[m],
+      ...cells[cellAddress],
       raw: null,
     };
   }
@@ -739,41 +877,43 @@ function validateRemoveDuplicatesRequest(
     removed: removed,
   };
 }
-function findSheetOrThrow(workbook, r) {
+function findSheetOrThrow(workbook, sheetId) {
   return (
-    workbook.sheets.find((sheet) => sheet.id === r) ??
-    throwWithMessage(`Sheet not found: ${r}`)
+    workbook.sheets.find((sheet) => sheet.id === sheetId) ??
+    throwWithMessage(`Sheet not found: ${sheetId}`)
   );
 }
-function applyNamedStyleChange(workbook, request, t = {}) {
-  t.readOnly && failWithMessage("This workbook is read-only.");
+function applyNamedStyleChange(workbook, request, options = {}) {
+  options.readOnly && failWithMessage("This workbook is read-only.");
   for (const sheet of workbook.sheets)
     for (const cell of Object.values(sheet.cells))
       assertNamedStyleBindingCurrent(workbook, cell.style);
   const styleCatalog = workbook.styleCatalog,
-    o = cloneStyleValue(styleCatalog ?? createDefaultStyleCatalog(workbook.id));
-  let a = cloneStyleValue(request);
+    workingCatalog = cloneStyleValue(
+      styleCatalog ?? createDefaultStyleCatalog(workbook.id),
+    );
+  let workingRequest = cloneStyleValue(request);
   const changes = [],
     warnings = [],
-    u = (v) =>
-      o.styles.find((style) => style.id === v) ??
+    findNamedStyle = (targetStyleId) =>
+      workingCatalog.styles.find((style) => style.id === targetStyleId) ??
       failWithMessage("This named style no longer exists.");
-  function l(sheetId, address, b) {
+  function recordCellStyleChange(sheetId, address, nextCell) {
     const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-      w = sheetOrThrow.cells[address];
-    if (canonicalStyleKey(w) !== canonicalStyleKey(b)) {
+      currentCell = sheetOrThrow.cells[address];
+    if (canonicalStyleKey(currentCell) !== canonicalStyleKey(nextCell)) {
       if (
         (assertSheetUnprotected(sheetOrThrow),
-        hasBorderEdgeChanges(w?.style, b.style))
+        hasBorderEdgeChanges(currentCell?.style, nextCell.style))
       ) {
-        const A = _t(address);
+        const cellPosition = _t(address);
         sheetOrThrow.merges?.some((merge) => {
           const rangeAddress = parseRangeAddress(merge);
           return (
-            A.row >= rangeAddress.firstRow &&
-            A.row <= rangeAddress.lastRow &&
-            A.col >= rangeAddress.firstCol &&
-            A.col <= rangeAddress.lastCol
+            cellPosition.row >= rangeAddress.firstRow &&
+            cellPosition.row <= rangeAddress.lastRow &&
+            cellPosition.col >= rangeAddress.firstCol &&
+            cellPosition.col <= rangeAddress.lastCol
           );
         }) &&
           failWithMessage(
@@ -783,8 +923,8 @@ function applyNamedStyleChange(workbook, request, t = {}) {
       (changes.push({
         sheetId: sheetId,
         address: address,
-        ...(w ? { before: cloneStyleValue(w) } : {}),
-        after: cloneStyleValue(b),
+        ...(currentCell ? { before: cloneStyleValue(currentCell) } : {}),
+        after: cloneStyleValue(nextCell),
       }),
         changes.length > 500 &&
           failWithMessage(
@@ -792,58 +932,81 @@ function applyNamedStyleChange(workbook, request, t = {}) {
           ));
     }
   }
-  function c(v) {
+  function refreshBoundCells(filterStyleId) {
     for (const sheet of workbook.sheets)
-      for (const [y, w] of Object.entries(sheet.cells))
-        w.style?.binding &&
-          (!v || w.style.binding.styleId === v) &&
+      for (const [cellAddress, cellRecord] of Object.entries(sheet.cells))
+        cellRecord.style?.binding &&
+          (!filterStyleId ||
+            cellRecord.style.binding.styleId === filterStyleId) &&
           (assertSheetUnprotected(sheet),
-          l(sheet.id, y, {
-            ...w,
+          recordCellStyleChange(sheet.id, cellAddress, {
+            ...cellRecord,
             style: {
-              ...w.style,
-              binding: resolveNamedStyleBinding(o, w.style.binding),
+              ...cellRecord.style,
+              binding: resolveNamedStyleBinding(
+                workingCatalog,
+                cellRecord.style.binding,
+              ),
             },
           }));
   }
-  switch (a.kind) {
+  switch (workingRequest.kind) {
     case "setTheme":
-      ((o.theme = validateWorkbookTheme(a.theme)),
-        delete o.missingTheme,
-        (a.theme = cloneStyleValue(o.theme)),
-        c());
+      ((workingCatalog.theme = validateWorkbookTheme(workingRequest.theme)),
+        delete workingCatalog.missingTheme,
+        (workingRequest.theme = cloneStyleValue(workingCatalog.theme)),
+        refreshBoundCells());
       break;
     case "createStyle": {
-      const g = validateBoundedStyleText(a.name, "Style name"),
+      const styleName = validateBoundedStyleText(
+          workingRequest.name,
+          "Style name",
+        ),
         styleId =
-          a.styleId === undefined
+          workingRequest.styleId === undefined
             ? `style-${crypto.randomUUID()}`
-            : validateBoundedStyleText(a.styleId, "Style ID", 100),
-        definition = validateNamedStyleDefinition(a.definition);
-      (o.styles.push({ id: styleId, name: g, definition: definition }),
-        (a = { ...a, name: g, styleId: styleId, definition: definition }),
-        c(styleId));
+            : validateBoundedStyleText(workingRequest.styleId, "Style ID", 100),
+        definition = validateNamedStyleDefinition(workingRequest.definition);
+      (workingCatalog.styles.push({
+        id: styleId,
+        name: styleName,
+        definition: definition,
+      }),
+        (workingRequest = {
+          ...workingRequest,
+          name: styleName,
+          styleId: styleId,
+          definition: definition,
+        }),
+        refreshBoundCells(styleId));
       break;
     }
     case "updateStyle": {
-      const g = u(a.styleId);
-      ((g.definition = validateNamedStyleDefinition(a.definition)),
-        (a.definition = cloneStyleValue(g.definition)),
-        c(g.id));
+      const styleToUpdate = findNamedStyle(workingRequest.styleId);
+      ((styleToUpdate.definition = validateNamedStyleDefinition(
+        workingRequest.definition,
+      )),
+        (workingRequest.definition = cloneStyleValue(styleToUpdate.definition)),
+        refreshBoundCells(styleToUpdate.id));
       break;
     }
     case "renameStyle": {
-      const g = u(a.styleId);
-      ((g.name = validateBoundedStyleText(a.name, "Style name")),
-        (a.name = g.name),
-        c(g.id));
+      const styleToRename = findNamedStyle(workingRequest.styleId);
+      ((styleToRename.name = validateBoundedStyleText(
+        workingRequest.name,
+        "Style name",
+      )),
+        (workingRequest.name = styleToRename.name),
+        refreshBoundCells(styleToRename.id));
       break;
     }
     case "deleteStyle":
-      u(a.styleId);
-      const styleId = a.styleId;
-      ((o.styles = o.styles.filter((style) => style.id !== styleId)),
-        c(a.styleId),
+      findNamedStyle(workingRequest.styleId);
+      const styleId = workingRequest.styleId;
+      ((workingCatalog.styles = workingCatalog.styles.filter(
+        (style) => style.id !== styleId,
+      )),
+        refreshBoundCells(workingRequest.styleId),
         warnings.push(
           "Cells using this style will show default formatting plus their direct overrides. Detach the style first to retain its current appearance.",
         ));
@@ -851,26 +1014,39 @@ function applyNamedStyleChange(workbook, request, t = {}) {
     case "applyStyle":
     case "reapplyStyle":
     case "detachStyle": {
-      const sheetOrThrow = findSheetOrThrow(workbook, a.sheetId);
+      const sheetOrThrow = findSheetOrThrow(workbook, workingRequest.sheetId);
       (assertSheetUnprotected(sheetOrThrow),
-        a.kind !== "detachStyle" && u(a.styleId));
-      for (const b of enumerateSelectionCells(a.ranges)) {
-        const y = sheetOrThrow.cells[b] ?? { raw: null };
-        if (a.kind === "detachStyle") {
-          if (!y.style?.binding) continue;
-          const effectiveCellStyle = resolveEffectiveCellStyle(y.style),
-            E = { ...y, style: effectiveCellStyle };
-          (Object.keys(effectiveCellStyle).length || delete E.style,
-            l(sheetOrThrow.id, b, E));
+        workingRequest.kind !== "detachStyle" &&
+          findNamedStyle(workingRequest.styleId));
+      for (const selectedAddress of enumerateSelectionCells(
+        workingRequest.ranges,
+      )) {
+        const existingCell = sheetOrThrow.cells[selectedAddress] ?? {
+          raw: null,
+        };
+        if (workingRequest.kind === "detachStyle") {
+          if (!existingCell.style?.binding) continue;
+          const effectiveCellStyle = resolveEffectiveCellStyle(
+              existingCell.style,
+            ),
+            detachedCell = { ...existingCell, style: effectiveCellStyle };
+          (Object.keys(effectiveCellStyle).length || delete detachedCell.style,
+            recordCellStyleChange(
+              sheetOrThrow.id,
+              selectedAddress,
+              detachedCell,
+            ));
         } else {
-          const namedStyleBinding = resolveNamedStyleBinding(o, {
-            namespace: o.namespace,
-            styleId: a.styleId,
+          const namedStyleBinding = resolveNamedStyleBinding(workingCatalog, {
+            namespace: workingCatalog.namespace,
+            styleId: workingRequest.styleId,
           });
-          l(sheetOrThrow.id, b, {
-            ...y,
+          recordCellStyleChange(sheetOrThrow.id, selectedAddress, {
+            ...existingCell,
             style: {
-              ...(a.kind === "applyStyle" ? y.style : {}),
+              ...(workingRequest.kind === "applyStyle"
+                ? existingCell.style
+                : {}),
               binding: namedStyleBinding,
             },
           });
@@ -881,9 +1057,12 @@ function applyNamedStyleChange(workbook, request, t = {}) {
     default:
       failWithMessage("Choose a supported theme or named style action.");
   }
-  const h = validateWorkbookStyleCatalog(o),
-    catalogAfter = a.kind === "detachStyle" && !styleCatalog ? undefined : h,
-    p = {
+  const validatedCatalog = validateWorkbookStyleCatalog(workingCatalog),
+    catalogAfter =
+      workingRequest.kind === "detachStyle" && !styleCatalog
+        ? undefined
+        : validatedCatalog,
+    summaryByKind = {
       setTheme: "Change workbook theme",
       createStyle: "Create named style",
       updateStyle: "Update named style",
@@ -896,32 +1075,32 @@ function applyNamedStyleChange(workbook, request, t = {}) {
   return {
     version: 1,
     snapshot: JSON.stringify(workbook),
-    request: a,
+    request: workingRequest,
     ...(styleCatalog ? { catalogBefore: cloneStyleValue(styleCatalog) } : {}),
     ...(catalogAfter ? { catalogAfter: catalogAfter } : {}),
     changes: changes,
     count: changes.length,
-    summary: p[a.kind],
+    summary: summaryByKind[workingRequest.kind],
     warnings: warnings,
   };
 }
-function assertSheetWritable(workbook, sheetId, t) {
-  (t.readOnly && throwWithMessage("This workbook is read-only."),
+function assertSheetWritable(workbook, sheetId, options) {
+  (options.readOnly && throwWithMessage("This workbook is read-only."),
     assertSheetUnprotected(findSheetOrThrow(workbook, sheetId)));
 }
 function nQ(
   workbook,
   sheetId,
   selectionAnchorAddress,
-  n,
-  o = "Reviewer",
-  a = {},
+  commentText,
+  authorName = "Reviewer",
+  options = {},
 ) {
-  assertSheetWritable(workbook, sheetId, a);
+  assertSheetWritable(workbook, sheetId, options);
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    reviewTimestamp = resolveReviewTimestamp(a),
-    reviewAuthor = normalizeReviewAuthor(o),
-    l = {
+    reviewTimestamp = resolveReviewTimestamp(options),
+    reviewAuthor = normalizeReviewAuthor(authorName),
+    reviewThread = {
       id: crypto.randomUUID(),
       anchor: {
         sheetId: sheetId,
@@ -935,7 +1114,7 @@ function nQ(
           id: crypto.randomUUID(),
           author: reviewAuthor,
           text: normalizeBoundedText(
-            n,
+            commentText,
             "Comment",
             reviewThreadLimits.textLength,
             true,
@@ -946,40 +1125,49 @@ function nQ(
     };
   return attachReviewThreadsToWorkbook(workbook, [
     ...(workbook.reviewThreads ?? []),
-    l,
+    reviewThread,
   ]);
 }
-function findReviewThread(workbook, r, t) {
-  t.readOnly && throwWithMessage("This workbook is read-only.");
-  const n = workbook.reviewThreads?.find(
-    (reviewThread) => reviewThread.id === r,
+function findReviewThread(workbook, reviewThreadId, options) {
+  options.readOnly && throwWithMessage("This workbook is read-only.");
+  const matchingThread = workbook.reviewThreads?.find(
+    (reviewThread) => reviewThread.id === reviewThreadId,
   );
-  return n
-    ? (n.orphaned &&
+  return matchingThread
+    ? (matchingThread.orphaned &&
         throwWithMessage(
           "This discussion is retained for review because its target was deleted.",
         ),
-      assertSheetWritable(workbook, n.anchor.sheetId, t),
-      n)
+      assertSheetWritable(workbook, matchingThread.anchor.sheetId, options),
+      matchingThread)
     : throwWithMessage(
         "The discussion could not be found. Reopen the review tools.",
       );
 }
-function addReviewThreadReply(workbook, r, t, n = "Reviewer", o = {}) {
-  const reviewThread = findReviewThread(workbook, r, o);
+function addReviewThreadReply(
+  workbook,
+  reviewThreadId,
+  replyText,
+  authorName = "Reviewer",
+  options = {},
+) {
+  const reviewThread = findReviewThread(workbook, reviewThreadId, options);
   reviewThread.resolved &&
     throwWithMessage("Reopen the discussion before adding a reply.");
-  const reviewTimestamp = resolveReviewTimestamp(o, reviewThread.updatedAt),
-    d = {
+  const reviewTimestamp = resolveReviewTimestamp(
+      options,
+      reviewThread.updatedAt,
+    ),
+    updatedThread = {
       ...reviewThread,
       updatedAt: reviewTimestamp,
       messages: [
         ...reviewThread.messages,
         {
           id: crypto.randomUUID(),
-          author: normalizeReviewAuthor(n),
+          author: normalizeReviewAuthor(authorName),
           text: normalizeBoundedText(
-            t,
+            replyText,
             "Reply",
             reviewThreadLimits.textLength,
             true,
@@ -991,28 +1179,37 @@ function addReviewThreadReply(workbook, r, t, n = "Reviewer", o = {}) {
   return attachReviewThreadsToWorkbook(
     workbook,
     workbook.reviewThreads.map((reviewThread) =>
-      reviewThread.id === r ? d : reviewThread,
+      reviewThread.id === reviewThreadId ? updatedThread : reviewThread,
     ),
   );
 }
-function setReviewThreadResolved(workbook, r, t, n = "Reviewer", o = {}) {
-  typeof t != "boolean" &&
+function setReviewThreadResolved(
+  workbook,
+  reviewThreadId,
+  shouldResolve,
+  authorName = "Reviewer",
+  options = {},
+) {
+  typeof shouldResolve != "boolean" &&
     throwWithMessage("Choose whether to resolve or reopen the discussion.");
-  const reviewThread = findReviewThread(workbook, r, o);
-  if (!!reviewThread.resolved === t) return workbook;
-  const reviewTimestamp = resolveReviewTimestamp(o, reviewThread.updatedAt),
-    d = { ...reviewThread, updatedAt: reviewTimestamp };
+  const reviewThread = findReviewThread(workbook, reviewThreadId, options);
+  if (!!reviewThread.resolved === shouldResolve) return workbook;
+  const reviewTimestamp = resolveReviewTimestamp(
+      options,
+      reviewThread.updatedAt,
+    ),
+    updatedThread = { ...reviewThread, updatedAt: reviewTimestamp };
   return (
-    t
-      ? (d.resolved = {
-          author: normalizeReviewAuthor(n),
+    shouldResolve
+      ? (updatedThread.resolved = {
+          author: normalizeReviewAuthor(authorName),
           createdAt: reviewTimestamp,
         })
-      : (normalizeReviewAuthor(n), delete d.resolved),
+      : (normalizeReviewAuthor(authorName), delete updatedThread.resolved),
     attachReviewThreadsToWorkbook(
       workbook,
       workbook.reviewThreads.map((reviewThread) =>
-        reviewThread.id === r ? d : reviewThread,
+        reviewThread.id === reviewThreadId ? updatedThread : reviewThread,
       ),
     )
   );
@@ -1022,40 +1219,48 @@ function setCellHyperlink(
   sheetId,
   selectionAnchorAddress,
   hyperlink,
-  o = {},
+  options = {},
 ) {
-  assertSheetWritable(workbook, sheetId, o);
+  assertSheetWritable(workbook, sheetId, options);
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     cellAddress = normalizeCellAddress(selectionAnchorAddress),
-    d = sheetOrThrow.cells[cellAddress],
-    u = _t(cellAddress);
+    existingCell = sheetOrThrow.cells[cellAddress],
+    cellPosition = _t(cellAddress);
   sheetOrThrow.merges?.some((merge) => {
     const rangeAddress = parseRangeAddress(merge);
     return (
-      u.row >= rangeAddress.firstRow &&
-      u.row <= rangeAddress.lastRow &&
-      u.col >= rangeAddress.firstCol &&
-      u.col <= rangeAddress.lastCol &&
-      (u.row !== rangeAddress.firstRow || u.col !== rangeAddress.firstCol)
+      cellPosition.row >= rangeAddress.firstRow &&
+      cellPosition.row <= rangeAddress.lastRow &&
+      cellPosition.col >= rangeAddress.firstCol &&
+      cellPosition.col <= rangeAddress.lastCol &&
+      (cellPosition.row !== rangeAddress.firstRow ||
+        cellPosition.col !== rangeAddress.firstCol)
     );
   }) &&
     throwWithMessage(
       "Choose the merged area's first cell or unmerge it before changing its link.",
     );
-  const l = hyperlink === null ? undefined : validateHyperlinkRecord(hyperlink);
+  const validatedHyperlink =
+    hyperlink === null ? undefined : validateHyperlinkRecord(hyperlink);
   if (
-    (l?.kind === "internal" && findSheetOrThrow(workbook, l.sheetId),
-    JSON.stringify(d?.hyperlink) === JSON.stringify(l))
+    (validatedHyperlink?.kind === "internal" &&
+      findSheetOrThrow(workbook, validatedHyperlink.sheetId),
+    JSON.stringify(existingCell?.hyperlink) ===
+      JSON.stringify(validatedHyperlink))
   )
     return workbook;
-  !d &&
-    workbook.sheets.reduce((p, m) => p + Object.keys(m.cells).length, 0) >=
-      workbookLimits.maxCells &&
+  !existingCell &&
+    workbook.sheets.reduce(
+      (total, workbookSheet) => total + Object.keys(workbookSheet.cells).length,
+      0,
+    ) >= workbookLimits.maxCells &&
     throwWithMessage(
       "Adding this link would exceed the workbook populated-cell limit.",
     );
-  const cell = { ...(d ?? { raw: null }) };
-  l ? (cell.hyperlink = l) : delete cell.hyperlink;
+  const cell = { ...(existingCell ?? { raw: null }) };
+  validatedHyperlink
+    ? (cell.hyperlink = validatedHyperlink)
+    : delete cell.hyperlink;
   const cells = { ...sheetOrThrow.cells, [cellAddress]: cell };
   return (
     cell.raw === null &&
@@ -1069,18 +1274,25 @@ function setCellHyperlink(
     }
   );
 }
-function collectHyperlinkEntries(workbook, r, sheetId) {
+function collectHyperlinkEntries(workbook, previousSheetId, sheetId) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
-  let o = false;
+  let hasRetargetedLinks = false;
   const cells = Object.fromEntries(
-    Object.entries(sheetOrThrow.cells).map(([s, d]) =>
-      d.hyperlink?.kind !== "internal" || d.hyperlink.sheetId !== r
-        ? [s, d]
-        : ((o = true),
-          [s, { ...d, hyperlink: { ...d.hyperlink, sheetId: sheetId } }]),
+    Object.entries(sheetOrThrow.cells).map(([cellAddress, cellRecord]) =>
+      cellRecord.hyperlink?.kind !== "internal" ||
+      cellRecord.hyperlink.sheetId !== previousSheetId
+        ? [cellAddress, cellRecord]
+        : ((hasRetargetedLinks = true),
+          [
+            cellAddress,
+            {
+              ...cellRecord,
+              hyperlink: { ...cellRecord.hyperlink, sheetId: sheetId },
+            },
+          ]),
     ),
   );
-  return o
+  return hasRetargetedLinks
     ? {
         ...workbook,
         sheets: workbook.sheets.map((sheet) =>
@@ -1091,16 +1303,21 @@ function collectHyperlinkEntries(workbook, r, sheetId) {
 }
 function applyAutoSum(activeWorkbook, sheetId, activeCellAddress) {
   const sheetOrThrow = findSheetOrThrow(activeWorkbook, sheetId),
-    o = validateSelectionBounds(sheetOrThrow, activeCellAddress);
-  if (o.length !== 1) throw new Error("Select one empty total cell.");
-  activeCellAddress = o[0];
-  const a = _t(activeCellAddress),
+    selectedAddresses = validateSelectionBounds(
+      sheetOrThrow,
+      activeCellAddress,
+    );
+  if (selectedAddresses.length !== 1)
+    throw new Error("Select one empty total cell.");
+  activeCellAddress = selectedAddresses[0];
+  const cellPosition = _t(activeCellAddress),
     cell = sheetOrThrow.cells[activeCellAddress];
   if (cell?.raw !== undefined && cell.raw !== null && cell.raw !== "")
     throw new Error("Select an empty cell for AutoSum.");
-  const d = (h, f) => {
-    if (h < 0 || f < 0) return false;
-    const cell = sheetOrThrow.cells[`${columnIndexToLetters(f)}${h + 1}`];
+  const isNumericOrFormulaCell = (rowIndex, columnIndex) => {
+    if (rowIndex < 0 || columnIndex < 0) return false;
+    const cell =
+      sheetOrThrow.cells[`${columnIndexToLetters(columnIndex)}${rowIndex + 1}`];
     return (
       typeof cell?.raw == "number" ||
       (typeof cell?.raw == "string" &&
@@ -1108,49 +1325,57 @@ function applyAutoSum(activeWorkbook, sheetId, activeCellAddress) {
         !cell.literal)
     );
   };
-  let u, l;
-  if (d(a.row - 1, a.col)) {
-    let h = a.row - 1;
-    for (; d(h - 1, a.col);) h--;
-    ((u = `${columnIndexToLetters(a.col)}${h + 1}`),
-      (l = `${columnIndexToLetters(a.col)}${a.row}`));
-  } else if (d(a.row, a.col - 1)) {
-    let h = a.col - 1;
-    for (; d(a.row, h - 1);) h--;
-    ((u = `${columnIndexToLetters(h)}${a.row + 1}`),
-      (l = `${columnIndexToLetters(a.col - 1)}${a.row + 1}`));
+  let rangeStart, rangeEnd;
+  if (isNumericOrFormulaCell(cellPosition.row - 1, cellPosition.col)) {
+    let topRowIndex = cellPosition.row - 1;
+    for (; isNumericOrFormulaCell(topRowIndex - 1, cellPosition.col);)
+      topRowIndex--;
+    ((rangeStart = `${columnIndexToLetters(cellPosition.col)}${topRowIndex + 1}`),
+      (rangeEnd = `${columnIndexToLetters(cellPosition.col)}${cellPosition.row}`));
+  } else if (isNumericOrFormulaCell(cellPosition.row, cellPosition.col - 1)) {
+    let leftColumnIndex = cellPosition.col - 1;
+    for (; isNumericOrFormulaCell(cellPosition.row, leftColumnIndex - 1);)
+      leftColumnIndex--;
+    ((rangeStart = `${columnIndexToLetters(leftColumnIndex)}${cellPosition.row + 1}`),
+      (rangeEnd = `${columnIndexToLetters(cellPosition.col - 1)}${cellPosition.row + 1}`));
   } else
     throw new Error(
       "AutoSum needs adjacent numbers or formulas above or to the left.",
     );
-  const c = cloneCellRecord(cell);
+  const totalCell = cloneCellRecord(cell);
   return (
-    (c.raw = `=SUM(${u}:${l})`),
-    delete c.literal,
-    { sheetId: sheetId, address: activeCellAddress, cell: c }
+    (totalCell.raw = `=SUM(${rangeStart}:${rangeEnd})`),
+    delete totalCell.literal,
+    { sheetId: sheetId, address: activeCellAddress, cell: totalCell }
   );
 }
 function setTableColumnDataType(workbook, sheetId, tableId, columnId) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    a = sheetOrThrow.tables?.find((table) => table.id === tableId);
-  if (!a) throw Error("Table not found.");
-  const s = a.columns.findIndex((column) => column.id === columnId);
-  if (s < 0) throw Error("Select an existing table column.");
-  const rangeAddress = parseRangeAddress(a.range),
+    table = sheetOrThrow.tables?.find((table) => table.id === tableId);
+  if (!table) throw Error("Table not found.");
+  const columnIndex = table.columns.findIndex(
+    (column) => column.id === columnId,
+  );
+  if (columnIndex < 0) throw Error("Select an existing table column.");
+  const rangeAddress = parseRangeAddress(table.range),
     total = Math.max(
       0,
-      rangeAddress.lastRow - rangeAddress.firstRow - Number(a.showTotals),
+      rangeAddress.lastRow - rangeAddress.firstRow - Number(table.showTotals),
     ),
     workbookWithSettings = calculateWorkbookWithSettings(workbook),
     exceptions = [];
-  for (let f = 1; f <= Math.min(total, 500); f++) {
-    const address = `${columnIndexToLetters(rangeAddress.firstCol + s)}${rangeAddress.firstRow + f + 1}`,
-      m = workbookWithSettings(sheetId, address);
-    coerceImportedValue(m, a.columns[s].dataType) ||
-      exceptions.push({ address: address, value: m });
+  for (
+    let dataRowIndex = 1;
+    dataRowIndex <= Math.min(total, 500);
+    dataRowIndex++
+  ) {
+    const address = `${columnIndexToLetters(rangeAddress.firstCol + columnIndex)}${rangeAddress.firstRow + dataRowIndex + 1}`,
+      cellValue = workbookWithSettings(sheetId, address);
+    coerceImportedValue(cellValue, table.columns[columnIndex].dataType) ||
+      exceptions.push({ address: address, value: cellValue });
   }
   return {
-    dataType: a.columns[s].dataType ?? "any",
+    dataType: table.columns[columnIndex].dataType ?? "any",
     checked: Math.min(total, 500),
     total: total,
     truncated: total > 500,
@@ -1161,20 +1386,22 @@ function findTableForRange(workbook, sheetId, range) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     rangeAddress = parseRangeAddress(range);
   if (measureRangeArea(rangeAddress) !== 1) return toA1RangeAddress(range);
-  const a = sheetOrThrow.tables?.find((table) =>
+  const matchingTable = sheetOrThrow.tables?.find((table) =>
     Dp(
       parseRangeAddress(table.range),
       rangeAddress.firstRow,
       rangeAddress.firstCol,
     ),
   );
-  return a ? a.range : formatOccupiedRangeAddress(sheetOrThrow, false);
+  return matchingTable
+    ? matchingTable.range
+    : formatOccupiedRangeAddress(sheetOrThrow, false);
 }
 function suggestTableHeaderName(workbook, sheetId, range) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     sourceRange = resolveSourceRange(range, sheetOrThrow),
-    a = new Set(),
-    s = [];
+    usedNames = new Set(),
+    suggestions = [];
   for (
     let firstCol = sourceRange.firstCol;
     firstCol <= sourceRange.lastCol;
@@ -1183,17 +1410,17 @@ function suggestTableHeaderName(workbook, sheetId, range) {
     const address = Cn(sourceRange.firstRow, firstCol),
       cell = sheetOrThrow.cells[address],
       original = cell?.raw ?? null;
-    let h = `Column${firstCol - sourceRange.firstCol + 1}`;
+    let baseName = `Column${firstCol - sourceRange.firstCol + 1}`;
     try {
       isNullOrEmptyValue(original) ||
-        (h = validateColumnName(String(original)));
+        (baseName = validateColumnName(String(original)));
     } catch {}
-    let suggested = h,
-      p = 2;
-    for (; a.has(suggested.toLowerCase());)
-      suggested = `${h.slice(0, 250)}${p++}`;
-    (a.add(suggested.toLowerCase()),
-      s.push({
+    let suggested = baseName,
+      duplicateSuffix = 2;
+    for (; usedNames.has(suggested.toLowerCase());)
+      suggested = `${baseName.slice(0, 250)}${duplicateSuffix++}`;
+    (usedNames.add(suggested.toLowerCase()),
+      suggestions.push({
         address: address,
         original: original,
         suggested: suggested,
@@ -1202,213 +1429,302 @@ function suggestTableHeaderName(workbook, sheetId, range) {
           (suggested.startsWith("=") && !cell?.literal),
       }));
   }
-  return s;
+  return suggestions;
 }
 function validateReviewedTableHeaders(workbook, sheetId, range, headers) {
-  const o = suggestTableHeaderName(workbook, sheetId, range);
+  const suggestions = suggestTableHeaderName(workbook, sheetId, range);
   if (headers === undefined)
     return (
-      o.some((s) => s.requiresResolution) &&
+      suggestions.some((suggestion) => suggestion.requiresResolution) &&
         throwWorkbookError(
           "Review table headers: resolve blank, duplicate, non-text or formula headers explicitly. Original header values will be retained in native source evidence.",
         ),
-      o.map((s) => s.suggested)
+      suggestions.map((headerSuggestion) => headerSuggestion.suggested)
     );
-  (!Array.isArray(headers) || headers.length !== o.length) &&
+  (!Array.isArray(headers) || headers.length !== suggestions.length) &&
     throwWorkbookError("Provide one reviewed header for every table column.");
-  const a = headers.map(validateColumnName);
+  const validatedHeaders = headers.map(validateColumnName);
   return (
-    new Set(a.map((s) => s.toLowerCase())).size !== a.length &&
+    new Set(validatedHeaders.map((header) => header.toLowerCase())).size !==
+      validatedHeaders.length &&
       throwWorkbookError(
         "Reviewed table headers must be unique, nonblank text.",
       ),
-    a
+    validatedHeaders
   );
 }
-function renameTableHeaderField(workbook, r) {
-  const t = [];
+function renameTableHeaderField(workbook, nextWorkbook) {
+  const renames = [];
   for (const sheet of workbook.sheets) {
-    const d = r.sheets.find((u) => u.id === sheet.id);
-    if (d)
+    const nextSheet = nextWorkbook.sheets.find(
+      (candidateSheet) => candidateSheet.id === sheet.id,
+    );
+    if (nextSheet)
       for (const old of sheet.tables ?? []) {
-        const l = d.tables?.find((table) => table.id === old.id);
-        if (!l) continue;
+        const nextTable = nextSheet.tables?.find(
+          (table) => table.id === old.id,
+        );
+        if (!nextTable) continue;
         const rangeAddress = parseRangeAddress(old.range),
-          h = parseRangeAddress(l.range),
+          nextRangeAddress = parseRangeAddress(nextTable.range),
           names = {},
-          columns = l.columns.map((column, v) => {
-            const g = old.columns.findIndex((k) => k.id === column.id);
-            if (g < 0) return column;
-            const b = old.columns[g],
+          columns = nextTable.columns.map((column, nextColumnIndex) => {
+            const oldColumnIndex = old.columns.findIndex(
+              (oldColumnEntry) => oldColumnEntry.id === column.id,
+            );
+            if (oldColumnIndex < 0) return column;
+            const oldColumn = old.columns[oldColumnIndex],
               cell =
                 sheet.cells[
-                  Cn(rangeAddress.firstRow, rangeAddress.firstCol + g)
+                  Cn(
+                    rangeAddress.firstRow,
+                    rangeAddress.firstCol + oldColumnIndex,
+                  )
                 ],
-              w = d.cells[Cn(h.firstRow, h.firstCol + v)],
-              A =
-                cell?.raw !== w?.raw || cell?.literal !== w?.literal
-                  ? w && !isNullOrEmptyValue(w.raw)
-                    ? validateColumnName(String(w.raw))
+              nextCell =
+                nextSheet.cells[
+                  Cn(
+                    nextRangeAddress.firstRow,
+                    nextRangeAddress.firstCol + nextColumnIndex,
+                  )
+                ],
+              nextName =
+                cell?.raw !== nextCell?.raw ||
+                cell?.literal !== nextCell?.literal
+                  ? nextCell && !isNullOrEmptyValue(nextCell.raw)
+                    ? validateColumnName(String(nextCell.raw))
                     : throwWorkbookError(
                         "Table headers must be nonblank text. The header edit was not applied.",
                       )
                   : column.name;
             return (
-              A !== b.name &&
-                Object.defineProperty(names, b.name, {
-                  value: A,
+              nextName !== oldColumn.name &&
+                Object.defineProperty(names, oldColumn.name, {
+                  value: nextName,
                   enumerable: true,
                 }),
-              A === column.name ? column : { ...column, name: A }
+              nextName === column.name ? column : { ...column, name: nextName }
             );
           });
-        (old.name !== l.name || Object.keys(names).length) &&
+        (old.name !== nextTable.name || Object.keys(names).length) &&
           (new Set(columns.map((column) => column.name.toLowerCase())).size !==
             columns.length &&
             throwWorkbookError(
               "Table headers must be unique, nonblank text. The header edit was not applied.",
             ),
-          t.push({
-            sheetId: d.id,
+          renames.push({
+            sheetId: nextSheet.id,
             old: old,
-            current: l,
+            current: nextTable,
             columns: columns,
             names: names,
           }));
       }
   }
-  if (!t.length) return r;
-  const n = structuredClone(r);
-  for (const s of t) {
-    const sheetOrThrow = findSheetOrThrow(n, s.sheetId),
-      table = sheetOrThrow.tables.find((table) => table.id === s.current.id),
-      l = (f) => (Object.hasOwn(s.names, f) ? s.names[f] : f);
-    ((table.columns = s.columns),
+  if (!renames.length) return nextWorkbook;
+  const updatedWorkbook = structuredClone(nextWorkbook);
+  for (const rename of renames) {
+    const sheetOrThrow = findSheetOrThrow(updatedWorkbook, rename.sheetId),
+      table = sheetOrThrow.tables.find(
+        (table) => table.id === rename.current.id,
+      ),
+      renameField = (fieldName) =>
+        Object.hasOwn(rename.names, fieldName)
+          ? rename.names[fieldName]
+          : fieldName;
+    ((table.columns = rename.columns),
       (table.totals = Object.fromEntries(
-        Object.entries(table.totals).map(([f, p]) => [l(f), p]),
+        Object.entries(table.totals).map(([totalFieldName, totalValue]) => [
+          renameField(totalFieldName),
+          totalValue,
+        ]),
       )));
     const rangeAddress = parseRangeAddress(table.range);
-    table.columns.forEach((column, p) => {
-      const m = Cn(rangeAddress.firstRow, rangeAddress.firstCol + p);
-      sheetOrThrow.cells[m] = {
-        ...(sheetOrThrow.cells[m] ?? { raw: column.name }),
+    table.columns.forEach((column, columnIndex) => {
+      const headerCellAddress = Cn(
+        rangeAddress.firstRow,
+        rangeAddress.firstCol + columnIndex,
+      );
+      sheetOrThrow.cells[headerCellAddress] = {
+        ...(sheetOrThrow.cells[headerCellAddress] ?? { raw: column.name }),
         raw: column.name,
         ...(column.name.startsWith("=")
           ? { literal: true }
           : { literal: undefined }),
       };
     });
-    const h = (f) =>
-      f.tableId === table.id ||
-      (!f.tableId &&
-        f.sheetId === sheetOrThrow.id &&
-        toA1RangeAddress(f.range) === s.old.range);
-    for (const sheet of n.sheets) {
-      for (const p of sheet.tables ?? [])
-        for (const column of p.columns)
+    const refersToTable = (sourceReference) =>
+      sourceReference.tableId === table.id ||
+      (!sourceReference.tableId &&
+        sourceReference.sheetId === sheetOrThrow.id &&
+        toA1RangeAddress(sourceReference.range) === rename.old.range);
+    for (const sheet of updatedWorkbook.sheets) {
+      for (const sheetTable of sheet.tables ?? [])
+        for (const column of sheetTable.columns)
           column.calculatedFormula &&= $v(
             column.calculatedFormula,
-            s.old.name,
+            rename.old.name,
             table.name,
-            s.names,
-            p.id === table.id && sheet.id === sheetOrThrow.id,
+            rename.names,
+            sheetTable.id === table.id && sheet.id === sheetOrThrow.id,
           );
-      for (const [p, cell] of Object.entries(sheet.cells)) {
+      for (const [cellAddress, cell] of Object.entries(sheet.cells)) {
         if (
           typeof cell.raw != "string" ||
           !cell.raw.startsWith("=") ||
           cell.literal
         )
           continue;
-        const v = _t(p),
-          g = sheet.id === sheetOrThrow.id && Dp(rangeAddress, v.row, v.col);
-        cell.raw = $v(cell.raw, s.old.name, table.name, s.names, g);
+        const cellPosition = _t(cellAddress),
+          isInsideTable =
+            sheet.id === sheetOrThrow.id &&
+            Dp(rangeAddress, cellPosition.row, cellPosition.col);
+        cell.raw = $v(
+          cell.raw,
+          rename.old.name,
+          table.name,
+          rename.names,
+          isInsideTable,
+        );
       }
-      for (const p of sheet.conditionalFormats ?? [])
-        if (p.kind === "formula" && p.formula) {
-          const m = parseRangeAddress(p.range),
-            v = $v(p.formula, s.old.name, table.name, s.names, false),
-            g = $v(p.formula, s.old.name, table.name, s.names, true),
-            b =
-              sheet.id === sheetOrThrow.id && rangesIntersect(rangeAddress, m),
-            y =
-              b &&
-              Dp(rangeAddress, m.firstRow, m.firstCol) &&
-              Dp(rangeAddress, m.lastRow, m.lastCol);
-          (v !== g &&
-            b &&
-            !y &&
+      for (const conditionalFormat of sheet.conditionalFormats ?? [])
+        if (conditionalFormat.kind === "formula" && conditionalFormat.formula) {
+          const formatRangeAddress = parseRangeAddress(conditionalFormat.range),
+            formulaOutsideTable = $v(
+              conditionalFormat.formula,
+              rename.old.name,
+              table.name,
+              rename.names,
+              false,
+            ),
+            formulaInsideTable = $v(
+              conditionalFormat.formula,
+              rename.old.name,
+              table.name,
+              rename.names,
+              true,
+            ),
+            overlapsTable =
+              sheet.id === sheetOrThrow.id &&
+              rangesIntersect(rangeAddress, formatRangeAddress),
+            isFullyInsideTable =
+              overlapsTable &&
+              Dp(
+                rangeAddress,
+                formatRangeAddress.firstRow,
+                formatRangeAddress.firstCol,
+              ) &&
+              Dp(
+                rangeAddress,
+                formatRangeAddress.lastRow,
+                formatRangeAddress.lastCol,
+              );
+          (formulaOutsideTable !== formulaInsideTable &&
+            overlapsTable &&
+            !isFullyInsideTable &&
             throwWorkbookError(
               "This conditional formula uses unqualified table fields across a table boundary. Split or remove its applied range before renaming the field.",
             ),
-            (p.formula = y ? g : v));
+            (conditionalFormat.formula = isFullyInsideTable
+              ? formulaInsideTable
+              : formulaOutsideTable));
         }
-      for (const p of [...(sheet.pivots ?? []), ...(sheet.queries ?? [])])
-        if (h(p.source))
+      for (const pivotOrQuery of [
+        ...(sheet.pivots ?? []),
+        ...(sheet.queries ?? []),
+      ])
+        if (refersToTable(pivotOrQuery.source))
           if (
-            ((p.source = {
-              ...p.source,
+            ((pivotOrQuery.source = {
+              ...pivotOrQuery.source,
               tableId: table.id,
               range: table.range,
             }),
-            (p.filters &&= p.filters.map((filter) => ({
+            (pivotOrQuery.filters &&= pivotOrQuery.filters.map((filter) => ({
               ...filter,
-              field: l(filter.field),
+              field: renameField(filter.field),
             }))),
-            "rowFields" in p)
+            "rowFields" in pivotOrQuery)
           ) {
-            ((p.rowFields = p.rowFields.map(l)),
-              (p.columnFields = p.columnFields.map(l)),
-              (p.values = p.values.map((value) => ({
+            ((pivotOrQuery.rowFields = pivotOrQuery.rowFields.map(renameField)),
+              (pivotOrQuery.columnFields =
+                pivotOrQuery.columnFields.map(renameField)),
+              (pivotOrQuery.values = pivotOrQuery.values.map((value) => ({
                 ...value,
-                field: l(value.field),
+                field: renameField(value.field),
               }))),
-              (p.dateGroups &&= p.dateGroups.map((dateGroup) => ({
-                ...dateGroup,
-                field: l(dateGroup.field),
-              }))));
-            for (const m of ["slicers", "timelines", "sorts"])
-              p[m] &&= p[m].map((v) => ({ ...v, field: l(v.field) }));
-            p.calculatedFields &&= p.calculatedFields.map(
+              (pivotOrQuery.dateGroups &&= pivotOrQuery.dateGroups.map(
+                (dateGroup) => ({
+                  ...dateGroup,
+                  field: renameField(dateGroup.field),
+                }),
+              )));
+            for (const sectionKey of ["slicers", "timelines", "sorts"])
+              pivotOrQuery[sectionKey] &&= pivotOrQuery[sectionKey].map(
+                (sectionItem) => ({
+                  ...sectionItem,
+                  field: renameField(sectionItem.field),
+                }),
+              );
+            pivotOrQuery.calculatedFields &&= pivotOrQuery.calculatedFields.map(
               (calculatedField) => ({
                 ...calculatedField,
-                field: l(calculatedField.field),
+                field: renameField(calculatedField.field),
                 ...(calculatedField.otherField
-                  ? { otherField: l(calculatedField.otherField) }
+                  ? { otherField: renameField(calculatedField.otherField) }
                   : {}),
               }),
             );
           } else
-            ((p.fields = p.fields.map(l)),
-              (p.rename &&= Object.fromEntries(
-                Object.entries(p.rename).map(([m, v]) => [l(m), v]),
+            ((pivotOrQuery.fields = pivotOrQuery.fields.map(renameField)),
+              (pivotOrQuery.rename &&= Object.fromEntries(
+                Object.entries(pivotOrQuery.rename).map(
+                  ([renamedField, newName]) => [
+                    renameField(renamedField),
+                    newName,
+                  ],
+                ),
               )),
-              (p.sort &&= { ...p.sort, field: l(p.sort.field) }),
-              (p.derived &&= p.derived.map((m) => ({
-                ...m,
-                field: l(m.field),
-                ...(m.otherField ? { otherField: l(m.otherField) } : {}),
-              }))));
+              (pivotOrQuery.sort &&= {
+                ...pivotOrQuery.sort,
+                field: renameField(pivotOrQuery.sort.field),
+              }),
+              (pivotOrQuery.derived &&= pivotOrQuery.derived.map(
+                (derivedItem) => ({
+                  ...derivedItem,
+                  field: renameField(derivedItem.field),
+                  ...(derivedItem.otherField
+                    ? { otherField: renameField(derivedItem.otherField) }
+                    : {}),
+                }),
+              )));
     }
-    for (const f of n.definedNames ?? [])
-      f.refersTo = $v(f.refersTo, s.old.name, table.name, s.names);
+    for (const definedName of updatedWorkbook.definedNames ?? [])
+      definedName.refersTo = $v(
+        definedName.refersTo,
+        rename.old.name,
+        table.name,
+        rename.names,
+      );
     normalizeTableDefinitions(sheetOrThrow, sheetOrThrow);
   }
-  assertUniqueTableNames(n);
+  assertUniqueTableNames(updatedWorkbook);
   for (const sheet of workbook.sheets) {
     if (!sheet.protection?.enabled) continue;
-    const d = n.sheets.find((u) => u.id === sheet.id);
-    JSON.stringify(sheet) !== JSON.stringify(d) &&
+    const updatedSheet = updatedWorkbook.sheets.find(
+      (sheetCandidate) => sheetCandidate.id === sheet.id,
+    );
+    JSON.stringify(sheet) !== JSON.stringify(updatedSheet) &&
       throwWorkbookError(
         `This change would update dependent cells or analysis on protected worksheet ${sheet.name}. Unprotect it before renaming the table field.`,
       );
   }
-  return n;
+  return updatedWorkbook;
 }
 function buildPivotSource(workbook, source) {
   const sourceReference = normalizeSourceReference(source),
     sheetOrThrow = findSheetOrThrow(workbook, sourceReference.sheetId),
-    o = sourceReference.tableId
+    sourceTable = sourceReference.tableId
       ? (sheetOrThrow.tables?.find(
           (table) => table.id === sourceReference.tableId,
         ) ?? throwWorkbookError("The source table no longer exists."))
@@ -1416,11 +1732,11 @@ function buildPivotSource(workbook, source) {
           (table) => table.range === toA1RangeAddress(sourceReference.range),
         ),
     sourceRange = resolveSourceRange(
-      o?.range ?? sourceReference.range,
+      sourceTable?.range ?? sourceReference.range,
       sheetOrThrow,
     ),
     workbookWithSettings = calculateWorkbookWithSettings(workbook);
-  o?.showTotals && sourceRange.lastRow--;
+  sourceTable?.showTotals && sourceRange.lastRow--;
   const fields = [];
   for (
     let firstCol = sourceRange.firstCol;
@@ -1440,31 +1756,40 @@ function buildPivotSource(workbook, source) {
       "Source headers must be nonblank, unique text. Create a table to normalize blank or duplicate headers.",
     );
   const rows = [];
-  for (let h = sourceRange.firstRow + 1; h <= sourceRange.lastRow; h++) {
-    const values = fields.map((field, m) =>
-      workbookWithSettings(sheetOrThrow.id, Cn(h, sourceRange.firstCol + m)),
+  for (
+    let rowIndex = sourceRange.firstRow + 1;
+    rowIndex <= sourceRange.lastRow;
+    rowIndex++
+  ) {
+    const values = fields.map((field, fieldIndex) =>
+      workbookWithSettings(
+        sheetOrThrow.id,
+        Cn(rowIndex, sourceRange.firstCol + fieldIndex),
+      ),
     );
-    (values.forEach((value, m) => {
-      const v = Cn(h, sourceRange.firstCol + m);
+    (values.forEach((value, columnOffset) => {
+      const cellAddress = Cn(rowIndex, sourceRange.firstCol + columnOffset);
       typeof value == "string" &&
         value.startsWith("#") &&
         workbookWithSettings.evaluateFormula(
           sheetOrThrow.id,
-          v,
-          `=ISERROR(${v})`,
+          cellAddress,
+          `=ISERROR(${cellAddress})`,
         ) === true &&
         throwWorkbookError(
-          `Source calculation error ${value} at ${sheetOrThrow.name}!${v}. Repair the source calculation before building or refreshing analysis; no totals were written.`,
+          `Source calculation error ${value} at ${sheetOrThrow.name}!${cellAddress}. Repair the source calculation before building or refreshing analysis; no totals were written.`,
         );
     }),
       (values.some((value) => !isNullOrEmptyValue(value)) ||
         fields.some(
-          (field, m) =>
+          (field, sourceColumnOffset) =>
             !isNullOrEmptyValue(
-              sheetOrThrow.cells[Cn(h, sourceRange.firstCol + m)]?.raw ?? null,
+              sheetOrThrow.cells[
+                Cn(rowIndex, sourceRange.firstCol + sourceColumnOffset)
+              ]?.raw ?? null,
             ),
         )) &&
-        rows.push({ index: h, values: values }));
+        rows.push({ index: rowIndex, values: values }));
   }
   return (
     workbookWithSettings.getOperationalErrors().length &&
@@ -1476,8 +1801,8 @@ function buildPivotSource(workbook, source) {
       rows: rows,
       source: {
         ...sourceReference,
-        range: o?.range ?? toA1RangeAddress(sourceReference.range),
-        ...(o ? { tableId: o.id } : {}),
+        range: sourceTable?.range ?? toA1RangeAddress(sourceReference.range),
+        ...(sourceTable ? { tableId: sourceTable.id } : {}),
       },
     }
   );
@@ -1485,17 +1810,19 @@ function buildPivotSource(workbook, source) {
 function getPivotSourceFields(workbook, sheetId, range) {
   return buildPivotSource(workbook, { sheetId: sheetId, range: range }).fields;
 }
-function aggregatePivotRows(workbook, r, pivotSource) {
+function aggregatePivotRows(workbook, definition, pivotSource) {
   const sheetOrThrow = findSheetOrThrow(workbook, pivotSource.source.sheetId),
     rangeAddress = parseRangeAddress(pivotSource.source.range),
     cells = Object.entries(sheetOrThrow.cells)
-      .filter(([u]) => {
-        const l = _t(u);
-        return Dp(rangeAddress, l.row, l.col);
+      .filter(([cellAddress]) => {
+        const position = _t(cellAddress);
+        return Dp(rangeAddress, position.row, position.col);
       })
-      .sort(([u], [l]) => u.localeCompare(l))
-      .map(([u, cell]) => [u, cell.raw, !!cell.literal]),
-    { destination, ...settings } = normalizePivotDefinition(r);
+      .sort(([leftAddress], [rightAddress]) =>
+        leftAddress.localeCompare(rightAddress),
+      )
+      .map(([address, cell]) => [address, cell.raw, !!cell.literal]),
+    { destination, ...settings } = normalizePivotDefinition(definition);
   return computePivotRefreshFingerprint({
     source: pivotSource.source,
     fields: pivotSource.fields,
@@ -1527,14 +1854,14 @@ function getPivotRefreshState(workbook, pivotId) {
   try {
     const pivotSource = buildPivotSource(workbook, definition.source);
     validatePivotFieldReferences(definition, pivotSource.fields);
-    const d =
+    const sourceChanged =
       aggregatePivotRows(workbook, definition, pivotSource) !==
       definition.refresh.sourceFingerprint;
     return {
-      state: d || outputModified ? "stale" : "current",
+      state: sourceChanged || outputModified ? "stale" : "current",
       reason: outputModified
         ? "Output cells were edited. Refresh into a new result before relying on these totals."
-        : d
+        : sourceChanged
           ? "Source content, calculated values, range or settings changed. Refresh into a new result."
           : "Source content and output match the saved refresh snapshot.",
       outputModified: outputModified,
@@ -1554,43 +1881,51 @@ function describePivotRefresh(workbook, pivotId) {
     pivotRefreshState = getPivotRefreshState(workbook, pivotId);
   return buildPivotStatusRecord(workbook, definition, pivotRefreshState);
 }
-function inspectPivotControlFields(workbook, pivotId, t) {
-  t.length > 30 &&
+function inspectPivotControlFields(workbook, pivotId, fieldNames) {
+  fieldNames.length > 30 &&
     throwWorkbookError("Inspect at most 30 pivot control fields together.");
   const { definition } = findPivotDefinition(workbook, pivotId),
     pivotSource = buildPivotSource(workbook, definition.source);
   return new Map(
-    [...new Set(t)].map((a) => {
-      const s = pivotSource.fields.indexOf(a),
-        d = new Map();
-      if (s < 0)
+    [...new Set(fieldNames)].map((fieldName) => {
+      const fieldIndex = pivotSource.fields.indexOf(fieldName),
+        itemsByKey = new Map();
+      if (fieldIndex < 0)
         return [
-          a,
+          fieldName,
           {
             items: [],
-            error: `Broken pivot field “${a}”: source field was not found. Restore or reselect it.`,
+            error: `Broken pivot field “${fieldName}”: source field was not found. Restore or reselect it.`,
           },
         ];
       for (const row of pivotSource.rows)
         if (
-          (d.set(buildSlicerItemKey(row.values[s]), row.values[s]),
-          d.size > 500)
+          (itemsByKey.set(
+            buildSlicerItemKey(row.values[fieldIndex]),
+            row.values[fieldIndex],
+          ),
+          itemsByKey.size > 500)
         )
           return [
-            a,
+            fieldName,
             {
               items: [],
               error:
                 "This slicer exceeds 500 distinct items. Choose another field or reduce the source.",
             },
           ];
-      return [a, { items: [...d.values()], error: "" }];
+      return [fieldName, { items: [...itemsByKey.values()], error: "" }];
     }),
   );
 }
 function getPivotSlicerItems(workbook, pivotId, field) {
-  const n = inspectPivotControlFields(workbook, pivotId, [field]).get(field);
-  return (n.error && throwWorkbookError(n.error), n.items);
+  const fieldResult = inspectPivotControlFields(workbook, pivotId, [field]).get(
+    field,
+  );
+  return (
+    fieldResult.error && throwWorkbookError(fieldResult.error),
+    fieldResult.items
+  );
 }
 function buildPivotModel(workbook, pivotId) {
   const { owner, definition } = findPivotDefinition(workbook, pivotId),
@@ -1623,14 +1958,14 @@ function buildPivotModel(workbook, pivotId) {
 }
 function buildPivotChartModel(book, pivotId) {
   const { definition, built } = buildPivotModel(book, pivotId),
-    o = definition.chart?.valueIndex ?? 0;
+    valueIndex = definition.chart?.valueIndex ?? 0;
   built.chartRows.length > 200 &&
     throwWorkbookError(
       "PivotCharts are limited to 200 leaf groups. Filter or regroup before charting.",
     );
   const points = built.chartRows.map((chartRow) => ({
     label: chartRow.label,
-    value: chartRow.values[o],
+    value: chartRow.values[valueIndex],
   }));
   return (
     points.some(
@@ -1641,67 +1976,87 @@ function buildPivotChartModel(book, pivotId) {
       ),
     {
       kind: definition.chart?.kind ?? "column",
-      measure: built.measures[o].name,
-      showAs: definition.values[o].showAs ?? "value",
+      measure: built.measures[valueIndex].name,
+      showAs: definition.values[valueIndex].showAs ?? "value",
       points: points,
       sourceRevision: definition.sourceRevision,
     }
   );
 }
-function buildPivotDrillDown(workbook, pivotId, t) {
+function buildPivotDrillDown(workbook, pivotId, cellAddress) {
   const { definition, config, data, rows, built } = buildPivotModel(
       workbook,
       pivotId,
     ),
-    u = _t(t),
+    cellPosition = _t(cellAddress),
     rangeAddress = parseRangeAddress(definition.outputRange),
-    c = u.row - rangeAddress.firstRow - 1,
-    h = u.col - rangeAddress.firstCol - Math.max(1, config.rowFields.length);
-  (c < 0 ||
-    c >= built.rowAxes.length ||
-    h < 0 ||
-    u.col > rangeAddress.lastCol ||
-    u.row > rangeAddress.lastRow) &&
+    rowAxisIndex = cellPosition.row - rangeAddress.firstRow - 1,
+    valueColumnOffset =
+      cellPosition.col -
+      rangeAddress.firstCol -
+      Math.max(1, config.rowFields.length);
+  (rowAxisIndex < 0 ||
+    rowAxisIndex >= built.rowAxes.length ||
+    valueColumnOffset < 0 ||
+    cellPosition.col > rangeAddress.lastCol ||
+    cellPosition.row > rangeAddress.lastRow) &&
     throwWorkbookError(
       "Choose a PivotTable value cell, subtotal or grand total; headers and group labels cannot be drilled.",
     );
-  const f = built.rowAxes[c],
-    p = built.columnAxes[Math.floor(h / config.values.length)],
-    valueIndex = h % config.values.length,
-    v = (E, A, k) =>
-      !A ||
-      A.parts.every((part, I) => {
-        const O = E.values[findSourceFieldIndex(data.fields, k[I])],
-          j = config.dateGroups?.find((dateGroup) => dateGroup.field === k[I]);
+  const rowAxis = built.rowAxes[rowAxisIndex],
+    columnAxis =
+      built.columnAxes[Math.floor(valueColumnOffset / config.values.length)],
+    valueIndex = valueColumnOffset % config.values.length,
+    matchesAxis = (pivotRow, axisGroup, groupFields) =>
+      !axisGroup ||
+      axisGroup.parts.every((part, partIndex) => {
+        const fieldValue =
+            pivotRow.values[
+              findSourceFieldIndex(data.fields, groupFields[partIndex])
+            ],
+          matchingDateGroup = config.dateGroups?.find(
+            (dateGroup) => dateGroup.field === groupFields[partIndex],
+          );
         return (
           JSON.stringify(
-            j
-              ? bucketPivotDateValue(O, j, E.index)
-              : isNullOrEmptyValue(O)
+            matchingDateGroup
+              ? bucketPivotDateValue(
+                  fieldValue,
+                  matchingDateGroup,
+                  pivotRow.index,
+                )
+              : isNullOrEmptyValue(fieldValue)
                 ? null
-                : O,
+                : fieldValue,
           ) === JSON.stringify(part)
         );
       }),
-    g = rows.filter(
-      (row) => v(row, f, config.rowFields) && v(row, p, config.columnFields),
+    matchingRows = rows.filter(
+      (row) =>
+        matchesAxis(row, rowAxis, config.rowFields) &&
+        matchesAxis(row, columnAxis, config.columnFields),
     ),
     sheetOrThrow = findSheetOrThrow(workbook, data.source.sheetId),
-    y = parseRangeAddress(data.source.range),
-    records = g.map((E) => ({
+    sourceRangeAddress = parseRangeAddress(data.source.range),
+    records = matchingRows.map((matchingRow) => ({
       locator: {
         workbookId: workbook.id,
         sheetId: sheetOrThrow.id,
         sheetName: sheetOrThrow.name,
-        row: E.index + 1,
-        range: `${columnIndexToLetters(y.firstCol)}${E.index + 1}:${columnIndexToLetters(y.lastCol)}${E.index + 1}`,
-        original: findRowOrigin(workbook, sheetOrThrow.id, E.index),
+        row: matchingRow.index + 1,
+        range: `${columnIndexToLetters(sourceRangeAddress.firstCol)}${matchingRow.index + 1}:${columnIndexToLetters(sourceRangeAddress.lastCol)}${matchingRow.index + 1}`,
+        original: findRowOrigin(workbook, sheetOrThrow.id, matchingRow.index),
       },
-      values: [...E.values],
-      cells: data.fields.map((field, k) => ({
-        address: Cn(E.index, y.firstCol + k),
+      values: [...matchingRow.values],
+      cells: data.fields.map((field, fieldIndex) => ({
+        address: Cn(
+          matchingRow.index,
+          sourceRangeAddress.firstCol + fieldIndex,
+        ),
         cell: structuredClone(
-          sheetOrThrow.cells[Cn(E.index, y.firstCol + k)] ?? { raw: null },
+          sheetOrThrow.cells[
+            Cn(matchingRow.index, sourceRangeAddress.firstCol + fieldIndex)
+          ] ?? { raw: null },
         ),
       })),
     }));
@@ -1710,62 +2065,74 @@ function buildPivotDrillDown(workbook, pivotId, t) {
       state: "current",
       reason: "Source and output fingerprints match the saved calculation.",
     }),
-    address: `${columnIndexToLetters(u.col)}${u.row + 1}`,
+    address: `${columnIndexToLetters(cellPosition.col)}${cellPosition.row + 1}`,
     valueIndex: valueIndex,
     measure: config.values[valueIndex],
-    underlyingValue: built.baseMatrix[c + 1][u.col - rangeAddress.firstCol],
-    displayedValue: built.matrix[c + 1][u.col - rangeAddress.firstCol],
-    rowGroup: f?.parts ?? null,
-    columnGroup: p?.parts ?? null,
+    underlyingValue:
+      built.baseMatrix[rowAxisIndex + 1][
+        cellPosition.col - rangeAddress.firstCol
+      ],
+    displayedValue:
+      built.matrix[rowAxisIndex + 1][cellPosition.col - rangeAddress.firstCol],
+    rowGroup: rowAxis?.parts ?? null,
+    columnGroup: columnAxis?.parts ?? null,
     fields: [...data.fields],
     records: records,
   };
 }
-function validateTotalsRowForAppend(workbook, sheetId, t) {
+function validateTotalsRowForAppend(workbook, sheetId, table) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    rangeAddress = parseRangeAddress(t.range),
-    a = (d, u) => {
-      const l = stripFormulaStringLiterals(d.replace(/"(?:[^"]|"")*"/g, '""'));
-      /\b(?:INDIRECT|OFFSET|EVALUATE|LET|LAMBDA)\s*\(/i.test(l) &&
+    rangeAddress = parseRangeAddress(table.range),
+    assertFormulaSafe = (formulaText, formulaSheetId) => {
+      const formulaWithoutStrings = stripFormulaStringLiterals(
+        formulaText.replace(/"(?:[^"]|"")*"/g, '""'),
+      );
+      /\b(?:INDIRECT|OFFSET|EVALUATE|LET|LAMBDA)\s*\(/i.test(
+        formulaWithoutStrings,
+      ) &&
         throwWorkbookError(
           "A dynamic formula could refer to the moving totals row. Preserve or remove that ambiguity before appending.",
         );
-      for (const f of l.matchAll(
+      for (const rowRangeMatch of formulaWithoutStrings.matchAll(
         new RegExp(
           "(?<![A-Za-z0-9_.])(?:(?:'((?:[^']|'')+)'|([A-Za-z_\\\\][A-Za-z0-9_.\\\\]*))\\s*!\\s*)?(\\$?[1-9]\\d*)\\s*:\\s*(\\$?[1-9]\\d*)(?![A-Za-z0-9_.])",
           "g",
         ),
       )) {
-        const p = f[1]?.replace(/''/g, "'") ?? f[2];
+        const matchedSheetName =
+          rowRangeMatch[1]?.replace(/''/g, "'") ?? rowRangeMatch[2];
         if (
-          p
-            ? p.toLowerCase() !== sheetOrThrow.name.toLowerCase()
-            : u !== undefined && u !== sheetId
+          matchedSheetName
+            ? matchedSheetName.toLowerCase() !== sheetOrThrow.name.toLowerCase()
+            : formulaSheetId !== undefined && formulaSheetId !== sheetId
         )
           continue;
-        const m = Number(f[3].replace("$", "")) - 1,
-          v = Number(f[4].replace("$", "")) - 1;
-        rangeAddress.lastRow >= Math.min(m, v) &&
-          rangeAddress.lastRow <= Math.max(m, v) &&
+        const startRow = Number(rowRangeMatch[3].replace("$", "")) - 1,
+          endRow = Number(rowRangeMatch[4].replace("$", "")) - 1;
+        rangeAddress.lastRow >= Math.min(startRow, endRow) &&
+          rangeAddress.lastRow <= Math.max(startRow, endRow) &&
           throwWorkbookError(
             "A formula refers directly to the moving totals row. Use a structured table totals reference or move those references before appending.",
           );
       }
-      for (const f of l.matchAll(
+      for (const cellRefMatch of formulaWithoutStrings.matchAll(
         new RegExp(
           "(?<![A-Za-z0-9_.])(?:(?:'((?:[^']|'')+)'|([A-Za-z_\\\\][A-Za-z0-9_.\\\\]*))\\s*!\\s*)?(\\$?[A-Za-z]{1,3}\\$?[1-9]\\d*)(?:\\s*:\\s*(\\$?[A-Za-z]{1,3}\\$?[1-9]\\d*))?(?![A-Za-z0-9_.])",
           "g",
         ),
       )) {
-        const p = f[1]?.replace(/''/g, "'") ?? f[2];
+        const cellSheetName =
+          cellRefMatch[1]?.replace(/''/g, "'") ?? cellRefMatch[2];
         if (
-          p
-            ? p.toLowerCase() !== sheetOrThrow.name.toLowerCase()
-            : u !== undefined && u !== sheetId
+          cellSheetName
+            ? cellSheetName.toLowerCase() !== sheetOrThrow.name.toLowerCase()
+            : formulaSheetId !== undefined && formulaSheetId !== sheetId
         )
           continue;
-        const m = parseRangeAddress(`${f[3]}:${f[4] ?? f[3]}`);
-        rangesIntersect(m, {
+        const cellRefRange = parseRangeAddress(
+          `${cellRefMatch[3]}:${cellRefMatch[4] ?? cellRefMatch[3]}`,
+        );
+        rangesIntersect(cellRefRange, {
           ...rangeAddress,
           firstRow: rangeAddress.lastRow,
         }) &&
@@ -1775,45 +2142,52 @@ function validateTotalsRowForAppend(workbook, sheetId, t) {
       }
     };
   for (const sheet of workbook.sheets) {
-    for (const [u, cell] of Object.entries(sheet.cells)) {
-      const c = _t(u);
+    for (const [cellAddress, cell] of Object.entries(sheet.cells)) {
+      const cellPosition = _t(cellAddress);
       if (
         !(
           sheet.id === sheetId &&
-          c.row === rangeAddress.lastRow &&
-          c.col >= rangeAddress.firstCol &&
-          c.col <= rangeAddress.lastCol
+          cellPosition.row === rangeAddress.lastRow &&
+          cellPosition.col >= rangeAddress.firstCol &&
+          cellPosition.col <= rangeAddress.lastCol
         ) &&
         (typeof cell.raw == "string" &&
           cell.raw.startsWith("=") &&
           !cell.literal &&
-          a(cell.raw, sheet.id),
+          assertFormulaSafe(cell.raw, sheet.id),
         cell.hyperlink?.kind === "internal" &&
           cell.hyperlink.sheetId === sheetId)
       ) {
-        const h = _t(cell.hyperlink.address);
-        h.row === rangeAddress.lastRow &&
-          h.col >= rangeAddress.firstCol &&
-          h.col <= rangeAddress.lastCol &&
+        const hyperlinkTarget = _t(cell.hyperlink.address);
+        hyperlinkTarget.row === rangeAddress.lastRow &&
+          hyperlinkTarget.col >= rangeAddress.firstCol &&
+          hyperlinkTarget.col <= rangeAddress.lastCol &&
           throwWorkbookError(
             "An internal hyperlink targets the moving totals row. Retarget or remove it before appending.",
           );
       }
     }
-    for (const u of sheet.conditionalFormats ?? [])
-      u.kind === "formula" && u.formula && a(u.formula, sheet.id);
-    for (const u of sheet.tables ?? [])
-      for (const column of u.columns)
-        column.calculatedFormula && a(column.calculatedFormula, sheet.id);
+    for (const conditionalFormat of sheet.conditionalFormats ?? [])
+      conditionalFormat.kind === "formula" &&
+        conditionalFormat.formula &&
+        assertFormulaSafe(conditionalFormat.formula, sheet.id);
+    for (const sheetTable of sheet.tables ?? [])
+      for (const column of sheetTable.columns)
+        column.calculatedFormula &&
+          assertFormulaSafe(column.calculatedFormula, sheet.id);
   }
-  for (const d of workbook.definedNames ?? []) a(d.refersTo, d.scopeSheetId);
+  for (const definedName of workbook.definedNames ?? [])
+    assertFormulaSafe(definedName.refersTo, definedName.scopeSheetId);
   for (
     let firstCol = rangeAddress.firstCol;
     firstCol <= rangeAddress.lastCol;
     firstCol++
   ) {
     const cell = sheetOrThrow.cells[Cn(rangeAddress.lastRow, firstCol)],
-      tableTotalCell = buildTableTotalCell(t, firstCol - rangeAddress.firstCol);
+      tableTotalCell = buildTableTotalCell(
+        table,
+        firstCol - rangeAddress.firstCol,
+      );
     cell &&
       (cell.raw !== tableTotalCell.raw || cell.literal) &&
       throwWorkbookError(
@@ -1821,10 +2195,10 @@ function validateTotalsRowForAppend(workbook, sheetId, t) {
       );
   }
 }
-function resizeTableRange(workbook, sheetId, t, sourceRange, showTotals) {
+function resizeTableRange(workbook, sheetId, table, sourceRange, showTotals) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    rangeAddress = parseRangeAddress(t.range);
-  (showTotals !== t.showTotals &&
+    rangeAddress = parseRangeAddress(table.range);
+  (showTotals !== table.showTotals &&
     throwWorkbookError(
       "Clear calculated column rules before changing totals-row visibility.",
     ),
@@ -1837,67 +2211,74 @@ function resizeTableRange(workbook, sheetId, t, sourceRange, showTotals) {
       ),
     (sourceRange.lastRow - rangeAddress.lastRow) *
       (sourceRange.lastCol - sourceRange.firstCol + 1) +
-      (t.showTotals ? t.columns.length : 0) >
+      (table.showTotals ? table.columns.length : 0) >
       tableMutationLimits.changedCells &&
       throwWorkbookError("Table append/resize may change at most 500 cells."));
-  for (let u = rangeAddress.lastRow + 1; u <= sourceRange.lastRow; u++)
+  for (
+    let rowIndex = rangeAddress.lastRow + 1;
+    rowIndex <= sourceRange.lastRow;
+    rowIndex++
+  )
     for (
       let firstCol = sourceRange.firstCol;
       firstCol <= sourceRange.lastCol;
       firstCol++
     )
-      sheetOrThrow.cells[Cn(u, firstCol)] &&
+      sheetOrThrow.cells[Cn(rowIndex, firstCol)] &&
         throwWorkbookError(
           "Table append/resize would overwrite adjacent cells or their formatting. Move that content first.",
         );
-  if (t.showTotals && sourceRange.lastRow !== rangeAddress.lastRow) {
-    validateTotalsRowForAppend(workbook, sheetId, t);
-    for (const u of [
+  if (table.showTotals && sourceRange.lastRow !== rangeAddress.lastRow) {
+    validateTotalsRowForAppend(workbook, sheetId, table);
+    for (const anchoredItem of [
       ...(workbook.formulaWatches ?? []),
       ...(workbook.reviewThreads ?? []),
     ]) {
-      if (u.orphaned || u.anchor.sheetId !== sheetId) continue;
-      const l = _t(u.anchor.address);
-      l.row === sourceRange.lastRow &&
-        l.col >= sourceRange.firstCol &&
-        l.col <= sourceRange.lastCol &&
+      if (anchoredItem.orphaned || anchoredItem.anchor.sheetId !== sheetId)
+        continue;
+      const anchorPosition = _t(anchoredItem.anchor.address);
+      anchorPosition.row === sourceRange.lastRow &&
+        anchorPosition.col >= sourceRange.firstCol &&
+        anchorPosition.col <= sourceRange.lastCol &&
         throwWorkbookError(
           "The new totals row already has a saved watch or review discussion. Preserve or remove that destination anchor before appending.",
         );
     }
   }
 }
-function moveTotalsRowCells(workbook, next, sheetId, n, table) {
-  const rangeAddress = parseRangeAddress(n.range),
-    s = parseRangeAddress(table.range),
+function moveTotalsRowCells(workbook, next, sheetId, previousTable, table) {
+  const rangeAddress = parseRangeAddress(previousTable.range),
+    tableAddress = parseRangeAddress(table.range),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    u = findSheetOrThrow(next, sheetId);
+    nextSheet = findSheetOrThrow(next, sheetId);
   for (
     let firstCol = rangeAddress.firstCol;
     firstCol <= rangeAddress.lastCol;
     firstCol++
   ) {
-    const h = Cn(rangeAddress.lastRow, firstCol),
-      f = Cn(s.lastRow, firstCol),
-      p = sheetOrThrow.cells[h];
-    if (p) {
-      const m = {
-        ...structuredClone(p),
+    const sourceCellKey = Cn(rangeAddress.lastRow, firstCol),
+      targetCellKey = Cn(tableAddress.lastRow, firstCol),
+      sourceCell = sheetOrThrow.cells[sourceCellKey];
+    if (sourceCell) {
+      const totalCell = {
+        ...structuredClone(sourceCell),
         ...buildTableTotalCell(table, firstCol - rangeAddress.firstCol),
       };
-      (delete m.literal, (u.cells[f] = m));
+      (delete totalCell.literal, (nextSheet.cells[targetCellKey] = totalCell));
     }
   }
-  const l = (c) => {
-    if (c.sheetId !== sheetId) return;
-    const h = _t(c.address);
-    h.row === rangeAddress.lastRow &&
-      h.col >= rangeAddress.firstCol &&
-      h.col <= rangeAddress.lastCol &&
-      (c.address = Cn(s.lastRow, h.col));
+  const relocateAnchor = (anchor) => {
+    if (anchor.sheetId !== sheetId) return;
+    const anchorPosition = _t(anchor.address);
+    anchorPosition.row === rangeAddress.lastRow &&
+      anchorPosition.col >= rangeAddress.firstCol &&
+      anchorPosition.col <= rangeAddress.lastCol &&
+      (anchor.address = Cn(tableAddress.lastRow, anchorPosition.col));
   };
-  for (const c of next.formulaWatches ?? []) c.orphaned || l(c.anchor);
-  for (const c of next.reviewThreads ?? []) c.orphaned || l(c.anchor);
+  for (const formulaWatch of next.formulaWatches ?? [])
+    formulaWatch.orphaned || relocateAnchor(formulaWatch.anchor);
+  for (const reviewThread of next.reviewThreads ?? [])
+    reviewThread.orphaned || relocateAnchor(reviewThread.anchor);
 }
 function resolveTableDataRange(workbook, sheetId, range = "A1") {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
@@ -1907,87 +2288,87 @@ function resolveTableDataRange(workbook, sheetId, range = "A1") {
     rangeAddress.firstCol !== rangeAddress.lastCol
   )
     return range;
-  const a = sheetOrThrow.tables?.find((table) => {
-    const l = parseRangeAddress(table.range);
+  const matchingTable = sheetOrThrow.tables?.find((table) => {
+    const candidateTableAddress = parseRangeAddress(table.range);
     return (
-      rangeAddress.firstRow >= l.firstRow &&
-      rangeAddress.firstRow <= l.lastRow &&
-      rangeAddress.firstCol >= l.firstCol &&
-      rangeAddress.firstCol <= l.lastCol
+      rangeAddress.firstRow >= candidateTableAddress.firstRow &&
+      rangeAddress.firstRow <= candidateTableAddress.lastRow &&
+      rangeAddress.firstCol >= candidateTableAddress.firstCol &&
+      rangeAddress.firstCol <= candidateTableAddress.lastCol
     );
   });
-  if (!a) return formatOccupiedRangeAddress(sheetOrThrow, false);
-  const s = parseRangeAddress(a.range);
-  return `${columnIndexToLetters(s.firstCol)}${s.firstRow + 1}:${columnIndexToLetters(s.lastCol)}${s.lastRow + 1 - (a.showTotals ? 1 : 0)}`;
+  if (!matchingTable) return formatOccupiedRangeAddress(sheetOrThrow, false);
+  const tableAddress = parseRangeAddress(matchingTable.range);
+  return `${columnIndexToLetters(tableAddress.firstCol)}${tableAddress.firstRow + 1}:${columnIndexToLetters(tableAddress.lastCol)}${tableAddress.lastRow + 1 - (matchingTable.showTotals ? 1 : 0)}`;
 }
-function validateFilterRequest(workbook, sheetId, t) {
+function validateFilterRequest(workbook, sheetId, filterRequest) {
   if (
-    !t ||
-    typeof t.range != "string" ||
-    !Array.isArray(t.columns) ||
-    t.columns.length > filterEvaluationLimits.columns ||
-    [t.caseSensitive, t.unique].some(
-      (f) => f !== undefined && typeof f != "boolean",
+    !filterRequest ||
+    typeof filterRequest.range != "string" ||
+    !Array.isArray(filterRequest.columns) ||
+    filterRequest.columns.length > filterEvaluationLimits.columns ||
+    [filterRequest.caseSensitive, filterRequest.unique].some(
+      (flagValue) => flagValue !== undefined && typeof flagValue != "boolean",
     )
   )
     throw Error("Choose a header range and up to 64 column filters.");
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    rangeAddress = parseRangeAddress(t.range),
-    a = rangeAddress.lastRow - rangeAddress.firstRow,
-    s = rangeAddress.lastCol - rangeAddress.firstCol + 1;
+    rangeAddress = parseRangeAddress(filterRequest.range),
+    dataRowCount = rangeAddress.lastRow - rangeAddress.firstRow,
+    columnCount = rangeAddress.lastCol - rangeAddress.firstCol + 1;
   if (
     rangeAddress.lastRow >= sheetOrThrow.rowCount ||
     rangeAddress.lastCol >= sheetOrThrow.colCount ||
-    a < 1
+    dataRowCount < 1
   )
     throw Error(
       "Filter range needs one header row and at least one data row within the worksheet.",
     );
   if (
-    a > filterEvaluationLimits.rows ||
-    (a + 1) * s > filterEvaluationLimits.cells ||
-    s > filterEvaluationLimits.columns
+    dataRowCount > filterEvaluationLimits.rows ||
+    (dataRowCount + 1) * columnCount > filterEvaluationLimits.cells ||
+    columnCount > filterEvaluationLimits.columns
   )
     throw Error(
       "Filtering is limited to 10,000 data rows, 100,000 cells including headers, and 64 columns. Choose a smaller range.",
     );
   if (
     sheetOrThrow.merges?.some((merge) => {
-      const p = parseRangeAddress(merge);
+      const mergeAddress = parseRangeAddress(merge);
       return (
-        p.firstRow <= rangeAddress.lastRow &&
-        p.lastRow >= rangeAddress.firstRow &&
-        p.firstCol <= rangeAddress.lastCol &&
-        p.lastCol >= rangeAddress.firstCol
+        mergeAddress.firstRow <= rangeAddress.lastRow &&
+        mergeAddress.lastRow >= rangeAddress.firstRow &&
+        mergeAddress.firstCol <= rangeAddress.lastCol &&
+        mergeAddress.lastCol >= rangeAddress.firstCol
       );
     })
   )
     throw Error(
       "Unmerge cells in the filter range first; records cannot be split by filtering.",
     );
-  const d = (f) =>
-      Number.isInteger(f) &&
-      f >= rangeAddress.firstCol &&
-      f <= rangeAddress.lastCol,
-    u = (f) => {
+  const isFilterColumn = (columnIndex) =>
+      Number.isInteger(columnIndex) &&
+      columnIndex >= rangeAddress.firstCol &&
+      columnIndex <= rangeAddress.lastCol,
+    validateCondition = (filterCondition) => {
       if (
-        !f ||
-        !d(f.column) ||
-        !["value", "text", "number", "date"].includes(f.type) ||
-        !textFilterOperators.includes(f.operator) ||
-        (!["blank", "notBlank"].includes(f.operator) &&
-          !isStorableCellValue(f.value))
+        !filterCondition ||
+        !isFilterColumn(filterCondition.column) ||
+        !["value", "text", "number", "date"].includes(filterCondition.type) ||
+        !textFilterOperators.includes(filterCondition.operator) ||
+        (!["blank", "notBlank"].includes(filterCondition.operator) &&
+          !isStorableCellValue(filterCondition.value))
       )
         throw Error("Invalid filter condition, column or value.");
       if (
-        !["blank", "notBlank"].includes(f.operator) &&
-        f.type === "text" &&
-        typeof f.value != "string"
+        !["blank", "notBlank"].includes(filterCondition.operator) &&
+        filterCondition.type === "text" &&
+        typeof filterCondition.value != "string"
       )
         throw Error("Text criteria require a text value.");
       if (
-        typeof f.value == "string" &&
-        f.value.length > filterEvaluationLimits.text
+        typeof filterCondition.value == "string" &&
+        filterCondition.value.length > filterEvaluationLimits.text
       )
         throw Error("Filter criteria text is limited to 1,024 characters.");
       if (
@@ -1997,33 +2378,40 @@ function validateFilterRequest(workbook, sheetId, t) {
           "startsWith",
           "endsWith",
           "wildcard",
-        ].includes(f.operator) &&
-        f.type !== "text"
+        ].includes(filterCondition.operator) &&
+        filterCondition.type !== "text"
       )
         throw Error("Text matching requires a Text condition.");
-      if (["gt", "gte", "lt", "lte"].includes(f.operator) && f.type === "value")
+      if (
+        ["gt", "gte", "lt", "lte"].includes(filterCondition.operator) &&
+        filterCondition.type === "value"
+      )
         throw Error("Choose Number, Date or Text for ordered comparisons.");
       if (
-        !["blank", "notBlank"].includes(f.operator) &&
-        ["number", "date"].includes(f.type) &&
-        resolveDatePolicyContext(f.value, f.type, workbook) === null
+        !["blank", "notBlank"].includes(filterCondition.operator) &&
+        ["number", "date"].includes(filterCondition.type) &&
+        resolveDatePolicyContext(
+          filterCondition.value,
+          filterCondition.type,
+          workbook,
+        ) === null
       )
         throw Error(
-          `Invalid ${f.type} filter value. Use a finite number or a date in the workbook's date policy.`,
+          `Invalid ${filterCondition.type} filter value. Use a finite number or a date in the workbook's date policy.`,
         );
     };
-  let l = 0;
-  const c = new Set();
-  for (const column of t.columns) {
+  let conditionCount = 0;
+  const seenColumns = new Set();
+  for (const column of filterRequest.columns) {
     if (
       !column ||
-      !d(column.column) ||
-      c.has(column.column) ||
+      !isFilterColumn(column.column) ||
+      seenColumns.has(column.column) ||
       (column.join !== undefined && !["and", "or"].includes(column.join))
     )
       throw Error("Filter columns must be valid and distinct.");
     if (
-      (c.add(column.column),
+      (seenColumns.add(column.column),
       column.values !== undefined &&
         (!Array.isArray(column.values) ||
           column.values.length > filterEvaluationLimits.values ||
@@ -2035,46 +2423,47 @@ function validateFilterRequest(workbook, sheetId, t) {
       (!Array.isArray(column.conditions) || column.conditions.length > 2)
     )
       throw Error("Each column supports up to two custom conditions.");
-    for (const p of column.conditions ?? []) {
-      if (p.column !== column.column)
+    for (const columnCondition of column.conditions ?? []) {
+      if (columnCondition.column !== column.column)
         throw Error("A column condition must use its own column.");
-      (u(p), l++);
+      (validateCondition(columnCondition), conditionCount++);
     }
   }
   if (
-    t.advanced !== undefined &&
-    (!Array.isArray(t.advanced) ||
-      t.advanced.length > filterEvaluationLimits.conditions)
+    filterRequest.advanced !== undefined &&
+    (!Array.isArray(filterRequest.advanced) ||
+      filterRequest.advanced.length > filterEvaluationLimits.conditions)
   )
     throw Error("Invalid advanced filter groups.");
-  for (const f of t.advanced ?? []) {
+  for (const advancedGroup of filterRequest.advanced ?? []) {
     if (
-      !Array.isArray(f) ||
-      !f.length ||
-      f.length > filterEvaluationLimits.conditions
+      !Array.isArray(advancedGroup) ||
+      !advancedGroup.length ||
+      advancedGroup.length > filterEvaluationLimits.conditions
     )
       throw Error(
         "Each advanced OR group must contain at least one AND condition.",
       );
-    for (const p of f) (u(p), l++);
+    for (const advancedCondition of advancedGroup)
+      (validateCondition(advancedCondition), conditionCount++);
   }
-  if (l > filterEvaluationLimits.conditions)
+  if (conditionCount > filterEvaluationLimits.conditions)
     throw Error("At most 128 combined filter conditions are allowed.");
   return structuredClone({
-    ...t,
+    ...filterRequest,
     range: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`,
   });
 }
 function applyFilterConditions(
   workbook,
   sheetId,
-  t,
-  n = calculateWorkbookWithSettings(workbook),
+  filterRequest,
+  workbookWithSettings = calculateWorkbookWithSettings(workbook),
 ) {
-  const definition = validateFilterRequest(workbook, sheetId, t),
+  const definition = validateFilterRequest(workbook, sheetId, filterRequest),
     sheetOrThrow = findSheetOrThrow(workbook, sheetId),
     rangeAddress = parseRangeAddress(definition.range),
-    d = !!definition.caseSensitive,
+    isCaseSensitive = !!definition.caseSensitive,
     axisVisibilityIndex = createAxisVisibilityIndex(
       sheetOrThrow.rowCount,
       cn(sheetOrThrow, "row"),
@@ -2083,111 +2472,149 @@ function applyFilterConditions(
     matchingSourceRows = [],
     visibleSourceRows = [],
     excludedRows = [],
-    p = new Set(),
+    seenUniqueRows = new Set(),
     originalSourceIds = {},
-    v = definition.columns.map((column) =>
+    columnValueSets = definition.columns.map((column) =>
       column.values === undefined
         ? null
         : new Set(
-            column.values.map((value) => comparableCellValueKey(value, d)),
+            column.values.map((value) =>
+              comparableCellValueKey(value, isCaseSensitive),
+            ),
           ),
     );
   let manuallyHiddenRows = 0,
     hiddenMatchingRows = 0,
-    y = 0;
-  const w = (O, j) => {
+    comparisonWork = 0;
+  const evaluateCondition = (cellValue, condition) => {
       if (
-        ((y +=
-          j.operator === "wildcard"
-            ? Math.max(1, String(O ?? "").length) *
-              Math.max(1, String(j.value ?? "").length)
-            : 1 + String(O ?? "").length + String(j.value ?? "").length),
-        y > filterEvaluationLimits.comparisonWork)
+        ((comparisonWork +=
+          condition.operator === "wildcard"
+            ? Math.max(1, String(cellValue ?? "").length) *
+              Math.max(1, String(condition.value ?? "").length)
+            : 1 +
+              String(cellValue ?? "").length +
+              String(condition.value ?? "").length),
+        comparisonWork > filterEvaluationLimits.comparisonWork)
       )
         throw Error(
           "Filter comparison work exceeds its 5,000,000-unit budget. Narrow the range or simplify criteria.",
         );
-      return matchesTextFilter(O, j, workbook, d);
+      return matchesTextFilter(cellValue, condition, workbook, isCaseSensitive);
     },
     fields = Array.from(
       { length: rangeAddress.lastCol - rangeAddress.firstCol + 1 },
-      (O, j) => ({
-        column: rangeAddress.firstCol + j,
+      (O, fieldOffset) => ({
+        column: rangeAddress.firstCol + fieldOffset,
         label:
           String(
             assertCalculatedBeforeFilter(
-              n,
+              workbookWithSettings,
               sheetId,
-              `${columnIndexToLetters(rangeAddress.firstCol + j)}${rangeAddress.firstRow + 1}`,
+              `${columnIndexToLetters(rangeAddress.firstCol + fieldOffset)}${rangeAddress.firstRow + 1}`,
               workbook,
             ) ?? "",
-          ) || columnIndexToLetters(rangeAddress.firstCol + j),
+          ) || columnIndexToLetters(rangeAddress.firstCol + fieldOffset),
       }),
     );
-  for (let O = rangeAddress.firstRow + 1; O <= rangeAddress.lastRow; O++) {
-    const j = fields.map((field) =>
+  for (
+    let rowIndex = rangeAddress.firstRow + 1;
+    rowIndex <= rangeAddress.lastRow;
+    rowIndex++
+  ) {
+    const rowValues = fields.map((field) =>
         assertCalculatedBeforeFilter(
-          n,
+          workbookWithSettings,
           sheetId,
-          `${columnIndexToLetters(field.column)}${O + 1}`,
+          `${columnIndexToLetters(field.column)}${rowIndex + 1}`,
           workbook,
         ),
       ),
-      z = (B) => j[B - rangeAddress.firstCol];
+      valueAtColumn = (sheetColumnIndex) =>
+        rowValues[sheetColumnIndex - rangeAddress.firstCol];
     if (
-      ((y += j.reduce(
-        (B, _) => B + 1 + (typeof _ == "string" ? _.length : 0),
+      ((comparisonWork += rowValues.reduce(
+        (total, rowCellValue) =>
+          total +
+          1 +
+          (typeof rowCellValue == "string" ? rowCellValue.length : 0),
         0,
       )),
-      y > filterEvaluationLimits.comparisonWork)
+      comparisonWork > filterEvaluationLimits.comparisonWork)
     )
       throw Error(
         "Filter comparison work exceeds its 5,000,000-unit budget. Narrow the range or simplify criteria.",
       );
-    (sourceRows.push(O + 1),
-      sheetOrThrow.rowOriginIds?.[O] &&
-        (originalSourceIds[O + 1] = sheetOrThrow.rowOriginIds[O]));
-    const V = axisVisibilityIndex.isHidden(O);
-    V && manuallyHiddenRows++;
-    let D =
+    (sourceRows.push(rowIndex + 1),
+      sheetOrThrow.rowOriginIds?.[rowIndex] &&
+        (originalSourceIds[rowIndex + 1] =
+          sheetOrThrow.rowOriginIds[rowIndex]));
+    const isRowHidden = axisVisibilityIndex.isHidden(rowIndex);
+    isRowHidden && manuallyHiddenRows++;
+    let isMatchingRow =
       definition.columns.every(
-        (column, _) =>
-          (v[_] === null ||
-            v[_].has(comparableCellValueKey(z(column.column), d))) &&
+        (column, columnPosition) =>
+          (columnValueSets[columnPosition] === null ||
+            columnValueSets[columnPosition].has(
+              comparableCellValueKey(
+                valueAtColumn(column.column),
+                isCaseSensitive,
+              ),
+            )) &&
           (!column.conditions?.length ||
             (column.join === "or"
               ? column.conditions.some((condition) =>
-                  w(z(column.column), condition),
+                  evaluateCondition(valueAtColumn(column.column), condition),
                 )
               : column.conditions.every((condition) =>
-                  w(z(column.column), condition),
+                  evaluateCondition(valueAtColumn(column.column), condition),
                 ))),
       ) &&
       (!definition.advanced?.length ||
-        definition.advanced.some((B) => B.every((_) => w(z(_.column), _))));
-    if (D && definition.unique) {
-      const B = JSON.stringify(j.map((_) => comparableCellValueKey(_, d)));
-      p.has(B) ? (D = false) : p.add(B);
+        definition.advanced.some((conditionGroup) =>
+          conditionGroup.every((groupCondition) =>
+            evaluateCondition(
+              valueAtColumn(groupCondition.column),
+              groupCondition,
+            ),
+          ),
+        ));
+    if (isMatchingRow && definition.unique) {
+      const uniqueKey = JSON.stringify(
+        rowValues.map((uniqueCellValue) =>
+          comparableCellValueKey(uniqueCellValue, isCaseSensitive),
+        ),
+      );
+      seenUniqueRows.has(uniqueKey)
+        ? (isMatchingRow = false)
+        : seenUniqueRows.add(uniqueKey);
     }
-    if (D)
-      (matchingSourceRows.push(O + 1),
-        V ? hiddenMatchingRows++ : visibleSourceRows.push(O + 1));
+    if (isMatchingRow)
+      (matchingSourceRows.push(rowIndex + 1),
+        isRowHidden
+          ? hiddenMatchingRows++
+          : visibleSourceRows.push(rowIndex + 1));
     else {
-      const B = excludedRows.at(-1);
-      B?.end === O - 1 ? (B.end = O) : excludedRows.push({ start: O, end: O });
+      const lastExcludedRange = excludedRows.at(-1);
+      lastExcludedRange?.end === rowIndex - 1
+        ? (lastExcludedRange.end = rowIndex)
+        : excludedRows.push({ start: rowIndex, end: rowIndex });
     }
   }
-  const A = [];
-  for (const O of [...cn(sheetOrThrow, "row"), ...excludedRows].sort(
-    (j, z) => j.start - z.start,
+  const hiddenIntervals = [];
+  for (const interval of [...cn(sheetOrThrow, "row"), ...excludedRows].sort(
+    (leftInterval, rightInterval) => leftInterval.start - rightInterval.start,
   )) {
-    const j = A.at(-1);
-    j && O.start <= j.end + 1
-      ? (j.end = Math.max(j.end, O.end))
-      : A.push({ ...O });
+    const lastInterval = hiddenIntervals.at(-1);
+    lastInterval && interval.start <= lastInterval.end + 1
+      ? (lastInterval.end = Math.max(lastInterval.end, interval.end))
+      : hiddenIntervals.push({ ...interval });
   }
   return {
-    hiddenRows: normalizeHiddenIntervals(A, sheetOrThrow.rowCount),
+    hiddenRows: normalizeHiddenIntervals(
+      hiddenIntervals,
+      sheetOrThrow.rowCount,
+    ),
     fields: fields,
     excludedRows: excludedRows,
     context: {
@@ -2211,51 +2638,65 @@ function applyFilterConditions(
     },
   };
 }
-function buildFilterFacetValues(workbook, sheetId, t, n, o = "") {
-  const a = validateFilterRequest(workbook, sheetId, t),
-    rangeAddress = parseRangeAddress(a.range);
+function buildFilterFacetValues(
+  workbook,
+  sheetId,
+  filterRequest,
+  facetColumn,
+  searchText = "",
+) {
+  const definition = validateFilterRequest(workbook, sheetId, filterRequest),
+    rangeAddress = parseRangeAddress(definition.range);
   if (
-    !Number.isInteger(n) ||
-    n < rangeAddress.firstCol ||
-    n > rangeAddress.lastCol
+    !Number.isInteger(facetColumn) ||
+    facetColumn < rangeAddress.firstCol ||
+    facetColumn > rangeAddress.lastCol
   )
     throw Error("Facet column is outside the filter range.");
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    u = applyFilterConditions(
+    filterResult = applyFilterConditions(
       workbook,
       sheetId,
       {
-        ...a,
+        ...definition,
         unique: false,
-        columns: a.columns.filter((column) => column.column !== n),
+        columns: definition.columns.filter(
+          (column) => column.column !== facetColumn,
+        ),
       },
       workbookWithSettings,
     ),
-    l = new Map();
-  for (const matchingSourceRow of u.context.matchingSourceRows) {
-    const h = assertCalculatedBeforeFilter(
+    valueCounts = new Map();
+  for (const matchingSourceRow of filterResult.context.matchingSourceRows) {
+    const facetValue = assertCalculatedBeforeFilter(
         workbookWithSettings,
         sheetId,
-        `${columnIndexToLetters(n)}${matchingSourceRow}`,
+        `${columnIndexToLetters(facetColumn)}${matchingSourceRow}`,
         workbook,
       ),
-      f = comparableCellValueKey(h, a.caseSensitive);
+      valueKey = comparableCellValueKey(facetValue, definition.caseSensitive);
     if (
-      !normalizeComparableText(String(h ?? "(Blanks)")).includes(
-        normalizeComparableText(o),
+      !normalizeComparableText(String(facetValue ?? "(Blanks)")).includes(
+        normalizeComparableText(searchText),
       )
     )
       continue;
-    const p = l.get(f);
-    p ? p.count++ : l.set(f, { value: h, count: 1, key: f });
+    const existingEntry = valueCounts.get(valueKey);
+    existingEntry
+      ? existingEntry.count++
+      : valueCounts.set(valueKey, {
+          value: facetValue,
+          count: 1,
+          key: valueKey,
+        });
   }
   return {
-    values: [...l.values()].slice(0, filterEvaluationLimits.values),
-    distinct: l.size,
-    truncated: l.size > filterEvaluationLimits.values,
+    values: [...valueCounts.values()].slice(0, filterEvaluationLimits.values),
+    distinct: valueCounts.size,
+    truncated: valueCounts.size > filterEvaluationLimits.values,
   };
 }
-function validateSavedFilterViews(savedFilterViews, r) {
+function validateSavedFilterViews(savedFilterViews, targetWorkbook) {
   if (savedFilterViews === undefined) return;
   if (
     !Array.isArray(savedFilterViews) ||
@@ -2265,9 +2706,9 @@ function validateSavedFilterViews(savedFilterViews, r) {
     throw Error(
       "Saved filter views are limited to 20 views and 512,000 metadata characters per workbook.",
     );
-  const t = new Set(),
-    n = new Set();
-  r.savedFilterViews = savedFilterViews.map((savedFilterView) => {
+  const seenIds = new Set(),
+    seenNames = new Set();
+  targetWorkbook.savedFilterViews = savedFilterViews.map((savedFilterView) => {
     if (
       (validateSavedFilterViewMetadata(savedFilterView, [
         "id",
@@ -2298,12 +2739,12 @@ function validateSavedFilterViews(savedFilterViews, r) {
       savedFilterView.name,
     );
     if (
-      t.has(savedFilterView.id) ||
-      n.has(normalizeNameForComparison(savedFilterViewName))
+      seenIds.has(savedFilterView.id) ||
+      seenNames.has(normalizeNameForComparison(savedFilterViewName))
     )
       throw Error("Saved filter view names and IDs must be unique.");
-    (t.add(savedFilterView.id),
-      n.add(normalizeNameForComparison(savedFilterViewName)),
+    (seenIds.add(savedFilterView.id),
+      seenNames.add(normalizeNameForComparison(savedFilterViewName)),
       validateSavedFilterViewMetadata(savedFilterView.datePolicy, [
         "calendar",
         "dateSystem",
@@ -2318,8 +2759,8 @@ function validateSavedFilterViews(savedFilterViews, r) {
       "caseSensitive",
       "unique",
     ]);
-    const d = (h) =>
-      validateSavedFilterViewMetadata(h, [
+    const validateConditionMetadata = (conditionMetadata) =>
+      validateSavedFilterViewMetadata(conditionMetadata, [
         "column",
         "type",
         "operator",
@@ -2339,18 +2780,19 @@ function validateSavedFilterViews(savedFilterViews, r) {
       ) {
         if (!Array.isArray(column.conditions))
           throw Error("Invalid saved filter conditions.");
-        column.conditions.forEach(d);
+        column.conditions.forEach(validateConditionMetadata);
       }
     if (savedFilterView.definition.advanced !== undefined) {
       if (!Array.isArray(savedFilterView.definition.advanced))
         throw Error("Invalid saved advanced criteria.");
-      for (const h of savedFilterView.definition.advanced) {
-        if (!Array.isArray(h)) throw Error("Invalid saved advanced criteria.");
-        h.forEach(d);
+      for (const advancedGroup of savedFilterView.definition.advanced) {
+        if (!Array.isArray(advancedGroup))
+          throw Error("Invalid saved advanced criteria.");
+        advancedGroup.forEach(validateConditionMetadata);
       }
     }
     const workbook = {
-        ...r,
+        ...targetWorkbook,
         datePolicy: datePolicy,
         sheets: [
           {
@@ -2377,7 +2819,8 @@ function validateSavedFilterViews(savedFilterViews, r) {
     if (
       Object.keys(population).length !== 4 ||
       Object.values(population).some(
-        (h) => !Number.isInteger(h) || Number(h) < 0,
+        (populationCount) =>
+          !Number.isInteger(populationCount) || Number(populationCount) < 0,
       ) ||
       population.totalRows !==
         parseRangeAddress(definition.range).lastRow -
@@ -2405,20 +2848,29 @@ function validateSavedFilterViews(savedFilterViews, r) {
   });
 }
 function copyWithSavedFilterViews(workbook, savedFilterViews) {
-  const t = { ...workbook };
-  return (validateSavedFilterViews(savedFilterViews, t), t);
+  const copiedWorkbook = { ...workbook };
+  return (
+    validateSavedFilterViews(savedFilterViews, copiedWorkbook),
+    copiedWorkbook
+  );
 }
-function createSavedFilterView(workbook, sheetId, definition, n, o) {
+function createSavedFilterView(
+  workbook,
+  sheetId,
+  definition,
+  viewName,
+  viewId,
+) {
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
   if (
     (assertSavedFilterViewsEditable(workbook, sheetId),
-    o && findSavedFilterView(workbook, o).sheetId !== sheetId)
+    viewId && findSavedFilterView(workbook, viewId).sheetId !== sheetId)
   )
     throw Error("A saved view must keep its source worksheet.");
   const context = applyFilterConditions(workbook, sheetId, definition).context,
-    d = {
-      id: o ?? crypto.randomUUID(),
-      name: normalizeSavedFilterViewName(n),
+    savedFilterView = {
+      id: viewId ?? crypto.randomUUID(),
+      name: normalizeSavedFilterViewName(viewName),
       sheetId: sheetId,
       sheetName: sheetOrThrow.name,
       sourceWorkbookId: workbook.id,
@@ -2434,55 +2886,59 @@ function createSavedFilterView(workbook, sheetId, definition, n, o) {
       },
     };
   return copyWithSavedFilterViews(workbook, [
-    ...(workbook.savedFilterViews ?? []).filter((u) => u.id !== o),
-    d,
+    ...(workbook.savedFilterViews ?? []).filter(
+      (existingView) => existingView.id !== viewId,
+    ),
+    savedFilterView,
   ]);
 }
-function addSavedFilterView(workbook, r, t) {
+function addSavedFilterView(workbook, viewId, newName) {
   return (
     assertSavedFilterViewsEditable(
       workbook,
-      findSavedFilterView(workbook, r).sheetId,
+      findSavedFilterView(workbook, viewId).sheetId,
     ),
     copyWithSavedFilterViews(
       workbook,
       workbook.savedFilterViews.map((savedFilterView) =>
-        savedFilterView.id === r
-          ? { ...savedFilterView, name: normalizeSavedFilterViewName(t) }
+        savedFilterView.id === viewId
+          ? { ...savedFilterView, name: normalizeSavedFilterViewName(newName) }
           : savedFilterView,
       ),
     )
   );
 }
-function removeSavedFilterView(workbook, r) {
+function removeSavedFilterView(workbook, viewId) {
   return (
     assertSavedFilterViewsEditable(
       workbook,
-      findSavedFilterView(workbook, r).sheetId,
+      findSavedFilterView(workbook, viewId).sheetId,
     ),
     copyWithSavedFilterViews(
       workbook,
       workbook.savedFilterViews.filter(
-        (savedFilterView) => savedFilterView.id !== r,
+        (savedFilterView) => savedFilterView.id !== viewId,
       ),
     )
   );
 }
-function applyPrintLayoutChange(workbook, sheetId, layout, n = {}) {
-  if (n.readOnly) throw Error("This workbook is read-only.");
-  n.expectedSnapshot && verifyPrintSnapshotGuard(workbook, n.expectedSnapshot);
+function applyPrintLayoutChange(workbook, sheetId, layout, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
+  options.expectedSnapshot &&
+    verifyPrintSnapshotGuard(workbook, options.expectedSnapshot);
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId);
   assertSheetUnprotected(sheetOrThrow);
-  const a = { ...sheetOrThrow };
+  const updatedSheet = { ...sheetOrThrow };
   return (
-    validatePageSetup(layout, a),
-    zU(a, a.pageLayout),
-    JSON.stringify(a.pageLayout) === JSON.stringify(sheetOrThrow.pageLayout)
+    validatePageSetup(layout, updatedSheet),
+    zU(updatedSheet, updatedSheet.pageLayout),
+    JSON.stringify(updatedSheet.pageLayout) ===
+    JSON.stringify(sheetOrThrow.pageLayout)
       ? workbook
       : {
           ...workbook,
           sheets: workbook.sheets.map((sheet) =>
-            sheet.id === sheetId ? a : sheet,
+            sheet.id === sheetId ? updatedSheet : sheet,
           ),
         }
   );

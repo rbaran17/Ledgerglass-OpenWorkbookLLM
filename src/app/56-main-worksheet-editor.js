@@ -132,46 +132,52 @@ import {
   wy,
 } from "./55-external-source-refresh.js";
 
-function WorkbookSyncBoundary(e) {
-  const r = ne.useMemo(() => createWorkbookDiagnosticsMonitor(), []),
-    reliability = e.reliability ?? r,
-    n = ne.useRef({
-      propId: e.initialWorkbook?.id,
+function WorkbookSyncBoundary(props) {
+  const diagnosticsMonitor = ne.useMemo(
+      () => createWorkbookDiagnosticsMonitor(),
+      [],
+    ),
+    reliability = props.reliability ?? diagnosticsMonitor,
+    instanceRef = ne.useRef({
+      propId: props.initialWorkbook?.id,
       emittedId: undefined,
       generation: 0,
     });
-  n.current.propId !== e.initialWorkbook?.id &&
-    (n.current.emittedId !== e.initialWorkbook?.id && n.current.generation++,
-    (n.current.propId = e.initialWorkbook?.id));
+  instanceRef.current.propId !== props.initialWorkbook?.id &&
+    (instanceRef.current.emittedId !== props.initialWorkbook?.id &&
+      instanceRef.current.generation++,
+    (instanceRef.current.propId = props.initialWorkbook?.id));
   const onChange = ne.useCallback(
-      (c) => {
-        ((n.current.emittedId = c.id), e.onChange?.(c));
+      (workbook) => {
+        ((instanceRef.current.emittedId = workbook.id),
+          props.onChange?.(workbook));
       },
-      [e.onChange],
+      [props.onChange],
     ),
     onWorkbookLoaded = ne.useCallback(
-      (c) => {
-        ((n.current.emittedId = c.id), e.onWorkbookLoaded?.(c));
+      (workbook) => {
+        ((instanceRef.current.emittedId = workbook.id),
+          props.onWorkbookLoaded?.(workbook));
       },
-      [e.onWorkbookLoaded],
+      [props.onWorkbookLoaded],
     );
   return i.jsx(WorkbookMessagesProvider, {
-    options: e.localization,
+    options: props.localization,
     children: i.jsx(operationScopeContext.Provider, {
-      value: { ...e.fileProcessingOptions, reliability: reliability },
+      value: { ...props.fileProcessingOptions, reliability: reliability },
       children: i.jsx(
         MainWorksheetEditor,
         {
-          ...e,
+          ...props,
           reliability: reliability,
           onChange: onChange,
           onWorkbookLoaded: onWorkbookLoaded,
         },
-        (e.persistenceKey ?? "session") +
+        (props.persistenceKey ?? "session") +
           ":" +
-          n.current.generation +
+          instanceRef.current.generation +
           ":" +
-          workbookInstanceKey(e.workbookStore),
+          workbookInstanceKey(props.workbookStore),
       ),
     }),
   });
@@ -264,8 +270,9 @@ function MainWorksheetEditor({
             (persistenceKey
               ? saveWorkbookWithLock(
                   {
-                    getItem: (fe) => localStorage.getItem(fe),
-                    setItem: (fe, Oe) => localStorage.setItem(fe, Oe),
+                    getItem: (storageKey) => localStorage.getItem(storageKey),
+                    setItem: (storageKey, storedValue) =>
+                      localStorage.setItem(storageKey, storedValue),
                   },
                   persistenceKey,
                 )
@@ -302,55 +309,68 @@ function MainWorksheetEditor({
     selectionAreasKey = selectionAreas.join(", ");
 
   (ne.useEffect(() => {
-    let fe = 0,
-      Oe;
-    const Be = () => {
-        if (!formulaEntryState.formulaPointerStateRef.current.dragging || !Oe)
+    let animationFrameId = 0,
+      pointerPosition;
+    const autoScrollStep = () => {
+        if (
+          !formulaEntryState.formulaPointerStateRef.current.dragging ||
+          !pointerPosition
+        )
           return;
-        const gt = selectionState.gridContainerRef.current;
-        if (gt) {
-          const jt = gt.getBoundingClientRect();
-          (Oe.y < jt.top + 28
-            ? (gt.scrollTop -= 24)
-            : Oe.y > jt.bottom - 28 && (gt.scrollTop += 24),
-            Oe.x < jt.left + 28
-              ? (gt.scrollLeft -= 36)
-              : Oe.x > jt.right - 28 && (gt.scrollLeft += 36));
-          const rr = document
+        const gridContainer = selectionState.gridContainerRef.current;
+        if (gridContainer) {
+          const gridBounds = gridContainer.getBoundingClientRect();
+          (pointerPosition.y < gridBounds.top + 28
+            ? (gridContainer.scrollTop -= 24)
+            : pointerPosition.y > gridBounds.bottom - 28 &&
+              (gridContainer.scrollTop += 24),
+            pointerPosition.x < gridBounds.left + 28
+              ? (gridContainer.scrollLeft -= 36)
+              : pointerPosition.x > gridBounds.right - 28 &&
+                (gridContainer.scrollLeft += 36));
+          const cellElement = document
             .elementFromPoint?.(
-              Math.max(jt.left + 48, Math.min(jt.right - 8, Oe.x)),
-              Math.max(jt.top + 28, Math.min(jt.bottom - 8, Oe.y)),
+              Math.max(
+                gridBounds.left + 48,
+                Math.min(gridBounds.right - 8, pointerPosition.x),
+              ),
+              Math.max(
+                gridBounds.top + 28,
+                Math.min(gridBounds.bottom - 8, pointerPosition.y),
+              ),
             )
             ?.closest("[data-address]");
-          rr &&
-            gt.contains(rr) &&
-            formulaEntryState.formulaPointerMoveRef.current(rr.dataset.address);
+          cellElement &&
+            gridContainer.contains(cellElement) &&
+            formulaEntryState.formulaPointerMoveRef.current(
+              cellElement.dataset.address,
+            );
         }
-        fe = requestAnimationFrame(Be);
+        animationFrameId = requestAnimationFrame(autoScrollStep);
       },
-      Ue = (event) => {
+      handlePointerMove = (event) => {
         formulaEntryState.formulaPointerStateRef.current.dragging &&
-          ((Oe = { x: event.clientX, y: event.clientY }),
-          (fe ||= requestAnimationFrame(Be)));
+          ((pointerPosition = { x: event.clientX, y: event.clientY }),
+          (animationFrameId ||= requestAnimationFrame(autoScrollStep)));
       },
-      Xe = () => {
+      handlePointerEnd = () => {
         const dragging =
           formulaEntryState.formulaPointerStateRef.current.dragging;
         ((formulaEntryState.formulaPointerStateRef.current.dragging = false),
-          cancelAnimationFrame(fe),
-          (fe = 0),
-          (Oe = undefined),
+          cancelAnimationFrame(animationFrameId),
+          (animationFrameId = 0),
+          (pointerPosition = undefined),
           dragging && cellEditActions.restoreFormulaEditorFocus());
       };
     return (
-      window.addEventListener("pointermove", Ue),
-      window.addEventListener("pointerup", Xe),
-      window.addEventListener("pointercancel", Xe),
+      window.addEventListener("pointermove", handlePointerMove),
+      window.addEventListener("pointerup", handlePointerEnd),
+      window.addEventListener("pointercancel", handlePointerEnd),
       () => {
-        (cancelAnimationFrame(fe),
-          window.removeEventListener("pointermove", Ue),
-          window.removeEventListener("pointerup", Xe),
-          window.removeEventListener("pointercancel", Xe));
+        (cancelAnimationFrame(animationFrameId),
+          window.removeEventListener("pointermove", handlePointerMove),
+          window.removeEventListener("pointerup", handlePointerEnd),
+          window.removeEventListener("pointercancel", handlePointerEnd));
       }
     );
   }, []),
@@ -469,26 +489,31 @@ function MainWorksheetEditor({
     ),
     frozenColumnCount = activeSheet.frozenCols ?? 0;
   ne.useEffect(() => {
-    const fe = _t(selectionState.activeCellAddress);
+    const activeCellPosition = _t(selectionState.activeCellAddress);
     if (
-      !rowVisibilityIndex.isHidden(fe.row) &&
-      !columnVisibilityIndex.isHidden(fe.col)
+      !rowVisibilityIndex.isHidden(activeCellPosition.row) &&
+      !columnVisibilityIndex.isHidden(activeCellPosition.col)
     )
       return;
-    const Oe =
-        rowVisibilityIndex.next(fe.row, 1, true) ??
-        rowVisibilityIndex.next(fe.row, -1, true),
-      Be =
-        columnVisibilityIndex.next(fe.col, 1, true) ??
-        columnVisibilityIndex.next(fe.col, -1, true);
-    if (Oe === null || Be === null || Oe === undefined || Be === undefined)
+    const nextVisibleRow =
+        rowVisibilityIndex.next(activeCellPosition.row, 1, true) ??
+        rowVisibilityIndex.next(activeCellPosition.row, -1, true),
+      nextVisibleColumn =
+        columnVisibilityIndex.next(activeCellPosition.col, 1, true) ??
+        columnVisibilityIndex.next(activeCellPosition.col, -1, true);
+    if (
+      nextVisibleRow === null ||
+      nextVisibleColumn === null ||
+      nextVisibleRow === undefined ||
+      nextVisibleColumn === undefined
+    )
       return;
-    const Ue = `${columnIndexToLetters(Be)}${Oe + 1}`;
-    (selectionState.setActiveCellAddress(Ue),
-      selectionState.setSelectionAnchorAddress(Ue),
-      (selectionState.activeCellAddressRef.current = Ue),
-      viewAndSelectionActions.selectSingleRange(Ue),
-      navigationState.setPendingScrollAddress(Ue));
+    const nextActiveAddress = `${columnIndexToLetters(nextVisibleColumn)}${nextVisibleRow + 1}`;
+    (selectionState.setActiveCellAddress(nextActiveAddress),
+      selectionState.setSelectionAnchorAddress(nextActiveAddress),
+      (selectionState.activeCellAddressRef.current = nextActiveAddress),
+      viewAndSelectionActions.selectSingleRange(nextActiveAddress),
+      navigationState.setPendingScrollAddress(nextActiveAddress));
   }, [
     selectionState.activeCellAddress,
     rowVisibilityIndex,
@@ -515,7 +540,7 @@ function MainWorksheetEditor({
   };
 
   function handleCalculationCompleted() {
-    (setRenderRefreshCount((fe) => fe + 1),
+    (setRenderRefreshCount((previousCount) => previousCount + 1),
       assistantState.setAssistantProposal(null),
       assistantState.setAnswerCitations(null),
       auditState.setAuditAnalysisResult(null));
@@ -526,9 +551,10 @@ function MainWorksheetEditor({
         new Set(
           (activeWorkbook.reviewThreads ?? [])
             .filter(
-              (fe) => fe.anchor.sheetId === activeSheet.id && !fe.orphaned,
+              (thread) =>
+                thread.anchor.sheetId === activeSheet.id && !thread.orphaned,
             )
-            .map((fe) => fe.anchor.address),
+            .map((thread) => thread.anchor.address),
         ),
       [activeWorkbook.reviewThreads, activeSheet.id],
     ),
@@ -575,7 +601,7 @@ function MainWorksheetEditor({
       [activeSheet, workbookCalculator, arrayDisplayResult],
     ),
     getConditionalRuleStyle = ne.useMemo(
-      () => (fe) => conditionalFormatEvaluator(fe).style,
+      () => (cellAddress) => conditionalFormatEvaluator(cellAddress).style,
       [conditionalFormatEvaluator],
     ),
     activeCellFormulaErrors = conditionalFormatEvaluator(
@@ -587,9 +613,9 @@ function MainWorksheetEditor({
         workbookCalculator
           .getReferenceDiagnostics()
           .filter(
-            (fe) =>
-              fe.sheetId === activeSheet.id &&
-              fe.address === selectionState.activeCellAddress,
+            (diagnostic) =>
+              diagnostic.sheetId === activeSheet.id &&
+              diagnostic.address === selectionState.activeCellAddress,
           )
       ),
       [workbookCalculator, activeSheet.id, selectionState.activeCellAddress],
@@ -600,17 +626,17 @@ function MainWorksheetEditor({
         workbookCalculator
           .getNamedFormulaDiagnostics()
           .filter(
-            (fe) =>
-              fe.sheetId === activeSheet.id &&
-              fe.address === selectionState.activeCellAddress,
+            (diagnostic) =>
+              diagnostic.sheetId === activeSheet.id &&
+              diagnostic.address === selectionState.activeCellAddress,
           )
       ),
       [workbookCalculator, activeSheet.id, selectionState.activeCellAddress],
     ),
     getAllCellEntries = ne.useMemo(() => {
-      let fe;
+      let cachedCellEntries;
       return () =>
-        (fe ??= Object.entries(arrayDisplayResult.cells).map(
+        (cachedCellEntries ??= Object.entries(arrayDisplayResult.cells).map(
           ([address, cell]) => ({
             address: address,
             cell: cell,
@@ -641,7 +667,10 @@ function MainWorksheetEditor({
         activeSheet.id,
       ],
     ),
-    selectedNumericSum = selectedNumericValues.reduce((fe, Oe) => fe + Oe, 0),
+    selectedNumericSum = selectedNumericValues.reduce(
+      (total, numericValue) => total + numericValue,
+      0,
+    ),
     activeCell = activeSheet.cells[selectionState.activeCellAddress],
     sortedRowIndexes = ne.useMemo(() => {
       if (
@@ -649,7 +678,7 @@ function MainWorksheetEditor({
         !filterSortState.activeColumnSort
       )
         return null;
-      const fe = new Map();
+      const addressesByRow = new Map();
       for (const { address, row, cell } of getAllCellEntries()) {
         if (
           row < pinnedRowCount ||
@@ -657,40 +686,41 @@ function MainWorksheetEditor({
           cell.raw === null
         )
           continue;
-        const Nt = fe.get(row) ?? [];
-        (Nt.push(address), fe.set(row, Nt));
+        const rowAddresses = addressesByRow.get(row) ?? [];
+        (rowAddresses.push(address), addressesByRow.set(row, rowAddresses));
       }
-      const Oe = filterSortState.filterValueSearch.toLowerCase(),
-        Be = [...fe.keys()]
+      const normalizedSearch = filterSortState.filterValueSearch.toLowerCase(),
+        matchingRowIndexes = [...addressesByRow.keys()]
           .filter(
-            (Ue) =>
-              !Oe ||
-              fe.get(Ue).some((Xe) =>
-                String(workbookCalculator(activeSheet.id, Xe) ?? "")
+            (rowIndex) =>
+              !normalizedSearch ||
+              addressesByRow.get(rowIndex).some((cellAddress) =>
+                String(workbookCalculator(activeSheet.id, cellAddress) ?? "")
                   .toLowerCase()
-                  .includes(Oe),
+                  .includes(normalizedSearch),
               ),
           )
-          .sort((Ue, Xe) => Ue - Xe);
+          .sort((leftRow, rightRow) => leftRow - rightRow);
       return (
         filterSortState.activeColumnSort &&
-          Be.sort((Ue, Xe) => {
-            const gt = workbookCalculator(
+          matchingRowIndexes.sort((leftRow, rightRow) => {
+            const leftValue = workbookCalculator(
                 activeSheet.id,
-                `${columnIndexToLetters(filterSortState.activeColumnSort.col)}${Ue + 1}`,
+                `${columnIndexToLetters(filterSortState.activeColumnSort.col)}${leftRow + 1}`,
               ),
-              Nt = workbookCalculator(
+              rightValue = workbookCalculator(
                 activeSheet.id,
-                `${columnIndexToLetters(filterSortState.activeColumnSort.col)}${Xe + 1}`,
+                `${columnIndexToLetters(filterSortState.activeColumnSort.col)}${rightRow + 1}`,
               );
             return (
-              (isFiniteNumber(gt) && isFiniteNumber(Nt)
-                ? gt - Nt
-                : String(gt ?? "").localeCompare(String(Nt ?? ""))) *
-              filterSortState.activeColumnSort.direction
+              (isFiniteNumber(leftValue) && isFiniteNumber(rightValue)
+                ? leftValue - rightValue
+                : String(leftValue ?? "").localeCompare(
+                    String(rightValue ?? ""),
+                  )) * filterSortState.activeColumnSort.direction
             );
           }),
-        Be
+        matchingRowIndexes
       );
     }, [
       getAllCellEntries,
@@ -705,9 +735,9 @@ function MainWorksheetEditor({
       () =>
         sortedRowIndexes
           ? new Map(
-              sortedRowIndexes.map((sortedRowIndex, Oe) => [
+              sortedRowIndexes.map((sortedRowIndex, sortedPosition) => [
                 sortedRowIndex,
-                Oe,
+                sortedPosition,
               ]),
             )
           : null,
@@ -782,25 +812,29 @@ function MainWorksheetEditor({
       ],
     ),
     frozenRowCount = rowVisibilityIndex.countBefore(pinnedRowCount),
-    yn = columnVisibilityIndex.countBefore(frozenColumnCount),
-    frozenRowIndexes = Array.from({ length: frozenRowCount }, (fe, Oe) =>
-      rowVisibilityIndex.logicalIndex(Oe),
+    visibleFrozenColumnCount =
+      columnVisibilityIndex.countBefore(frozenColumnCount),
+    frozenRowIndexes = Array.from({ length: frozenRowCount }, (fe, viewIndex) =>
+      rowVisibilityIndex.logicalIndex(viewIndex),
     ),
-    frozenColumnIndexes = Array.from({ length: yn }, (fe, Oe) =>
-      columnVisibilityIndex.logicalIndex(Oe),
+    frozenColumnIndexes = Array.from(
+      { length: visibleFrozenColumnCount },
+      (fe, viewIndex) => columnVisibilityIndex.logicalIndex(viewIndex),
     ),
     scrollableRowLayout = ne.useMemo(() => {
       if (!sortedRowIndexes)
         return sliceVisibleAxis(rowAxisLayout, frozenRowCount);
-      const fe = {};
-      for (const [Oe, Be] of Object.entries(effectiveRowHeights)) {
-        const Ue = filteredRowPositionMap?.get(Number(Oe));
-        Ue !== undefined && Ue >= 0 && (fe[Ue] = Be);
+      const filteredRowHeights = {};
+      for (const [rowKey, rowHeight] of Object.entries(effectiveRowHeights)) {
+        const filteredPosition = filteredRowPositionMap?.get(Number(rowKey));
+        filteredPosition !== undefined &&
+          filteredPosition >= 0 &&
+          (filteredRowHeights[filteredPosition] = rowHeight);
       }
       return buildVisibleAxisLayout(
         sortedRowIndexes.length,
         defaultRowHeight,
-        fe,
+        filteredRowHeights,
       );
     }, [
       sortedRowIndexes,
@@ -811,22 +845,22 @@ function MainWorksheetEditor({
       defaultRowHeight,
     ]),
     scrollableColumnLayout = ne.useMemo(
-      () => sliceVisibleAxis(columnAxisLayout, yn),
-      [columnAxisLayout, yn],
+      () => sliceVisibleAxis(columnAxisLayout, visibleFrozenColumnCount),
+      [columnAxisLayout, visibleFrozenColumnCount],
     ),
     matchingRowCount = scrollableRowLayout.count,
-    logicalRowAt = (fe) =>
+    logicalRowAt = (scrollableIndex) =>
       sortedRowIndexes
-        ? sortedRowIndexes[fe]
-        : rowVisibilityIndex.logicalIndex(fe + frozenRowCount),
-    scrollableRowPositionOf = (fe) => {
-      if (!(fe < pinnedRowCount))
+        ? sortedRowIndexes[scrollableIndex]
+        : rowVisibilityIndex.logicalIndex(scrollableIndex + frozenRowCount),
+    scrollableRowPositionOf = (logicalRow) => {
+      if (!(logicalRow < pinnedRowCount))
         return filteredRowPositionMap
-          ? filteredRowPositionMap.get(fe)
-          : (rowVisibilityIndex.viewIndex(fe) ?? -1) - frozenRowCount;
+          ? filteredRowPositionMap.get(logicalRow)
+          : (rowVisibilityIndex.viewIndex(logicalRow) ?? -1) - frozenRowCount;
     },
     frozenRowsHeight = rowAxisLayout.offset(frozenRowCount),
-    frozenColumnsWidth = columnAxisLayout.offset(yn);
+    frozenColumnsWidth = columnAxisLayout.offset(visibleFrozenColumnCount);
   const viewAndSelectionActions = createViewAndSelectionActions({
     selectionState,
     filterSortState,
@@ -846,7 +880,7 @@ function MainWorksheetEditor({
     rowHeaderWidth,
     getAllCellEntries,
     sortedRowIndexes,
-    yn,
+    yn: visibleFrozenColumnCount,
     frozenRowIndexes,
     frozenColumnIndexes,
     scrollableRowLayout,
@@ -1055,50 +1089,55 @@ function MainWorksheetEditor({
   });
 
   (ne.useEffect(() => {
-    const fe = {};
-    for (const Be of Pv(sheetSplitPanes)) {
-      const Ue = viewAndSelectionActions.computeGridViewport(
-          splitPaneSizes.current.current[Be],
+    const panePositions = {};
+    for (const paneId of Pv(sheetSplitPanes)) {
+      const paneViewport = viewAndSelectionActions.computeGridViewport(
+          splitPaneSizes.current.current[paneId],
         ),
-        Xe = sheetSplitPanes
+        splitRowIndex = sheetSplitPanes
           ? (rowVisibilityIndex.next(sheetSplitPanes.row, 1, true) ??
             rowVisibilityIndex.next(sheetSplitPanes.row, -1, true) ??
             0)
           : 0,
-        gt = sheetSplitPanes
+        splitColumnIndex = sheetSplitPanes
           ? (columnVisibilityIndex.next(sheetSplitPanes.col, 1, true) ??
             columnVisibilityIndex.next(sheetSplitPanes.col, -1, true) ??
             0)
           : 0,
-        Nt = Be.startsWith("bottom")
+        paneTop = paneId.startsWith("bottom")
           ? logicalToPhysicalPixels(
               scrollableRowLayout.offset(
-                Math.max(0, scrollableRowPositionOf(Xe) ?? 0),
+                Math.max(0, scrollableRowPositionOf(splitRowIndex) ?? 0),
               ),
               scrollableRowLayout.total,
-              Ue.rowViewport,
+              paneViewport.rowViewport,
               zoomScale,
             )
           : 0,
-        left = Be.endsWith("right")
+        left = paneId.endsWith("right")
           ? logicalToPhysicalPixels(
               scrollableColumnLayout.offset(
-                Math.max(0, (columnVisibilityIndex.viewIndex(gt) ?? 0) - yn),
+                Math.max(
+                  0,
+                  (columnVisibilityIndex.viewIndex(splitColumnIndex) ?? 0) -
+                    visibleFrozenColumnCount,
+                ),
               ),
               scrollableColumnLayout.total,
-              Ue.columnViewport,
+              paneViewport.columnViewport,
               zoomScale,
             )
           : 0;
-      fe[Be] = { top: Nt, left: left };
-      const jt = splitPaneSizes.refs.current[Be];
-      jt && ((jt.scrollTop = Nt), (jt.scrollLeft = left));
+      panePositions[paneId] = { top: paneTop, left: left };
+      const paneElement = splitPaneSizes.refs.current[paneId];
+      paneElement &&
+        ((paneElement.scrollTop = paneTop), (paneElement.scrollLeft = left));
     }
-    splitPaneSizes.patch(fe);
-    const Oe = Pv(sheetSplitPanes).at(-1);
-    (splitPaneSizes.activate(Oe),
+    splitPaneSizes.patch(panePositions);
+    const activePaneId = Pv(sheetSplitPanes).at(-1);
+    (splitPaneSizes.activate(activePaneId),
       (selectionState.gridContainerRef.current =
-        splitPaneSizes.refs.current[Oe] ?? null));
+        splitPaneSizes.refs.current[activePaneId] ?? null));
   }, [splitPaneSizesKey]),
     ne.useEffect(() => {
       if (
@@ -1106,29 +1145,34 @@ function MainWorksheetEditor({
         typeof ResizeObserver > "u"
       )
         return;
-      const Oe = new ResizeObserver((Be) => {
-        const Ue = {};
-        for (const gt of Be) {
-          const Nt = Number(gt.target.dataset.row),
-            offsetHeight = gt.target.offsetHeight;
-          Number.isInteger(Nt) &&
-            activeSheet.rowHeights?.[Nt] === undefined &&
+      const resizeObserver = new ResizeObserver((resizeEntries) => {
+        const measuredHeights = {};
+        for (const entry of resizeEntries) {
+          const rowIndex = Number(entry.target.dataset.row),
+            offsetHeight = entry.target.offsetHeight;
+          Number.isInteger(rowIndex) &&
+            activeSheet.rowHeights?.[rowIndex] === undefined &&
             viewDisplayState.axisResizeState?.axis !== "row" &&
             offsetHeight > defaultRowHeight &&
-            (Ue[Nt] = offsetHeight);
+            (measuredHeights[rowIndex] = offsetHeight);
         }
-        Object.keys(Ue).length &&
-          viewDisplayState.setAutoFitRowHeights((gt) =>
-            Object.entries(Ue).every(([Nt, wt]) => gt[Number(Nt)] === wt)
-              ? gt
-              : { ...gt, ...Ue },
+        Object.keys(measuredHeights).length &&
+          viewDisplayState.setAutoFitRowHeights((previousHeights) =>
+            Object.entries(measuredHeights).every(
+              ([rowKey, measuredHeight]) =>
+                previousHeights[Number(rowKey)] === measuredHeight,
+            )
+              ? previousHeights
+              : { ...previousHeights, ...measuredHeights },
           );
       });
       return (
-        Object.values(splitPaneSizes.refs.current).forEach((Be) =>
-          Be.querySelectorAll("tr[data-row]").forEach((Ue) => Oe.observe(Ue)),
+        Object.values(splitPaneSizes.refs.current).forEach((paneElement) =>
+          paneElement
+            .querySelectorAll("tr[data-row]")
+            .forEach((rowElement) => resizeObserver.observe(rowElement)),
         ),
-        () => Oe.disconnect()
+        () => resizeObserver.disconnect()
       );
     }),
     ne.useEffect(() => {
@@ -1137,58 +1181,66 @@ function MainWorksheetEditor({
         !selectionState.gridContainerRef.current
       )
         return;
-      const fe = _t(navigationState.pendingScrollAddress),
-        Oe = selectionState.gridContainerRef.current;
+      const pendingPosition = _t(navigationState.pendingScrollAddress),
+        gridContainer = selectionState.gridContainerRef.current;
       if (
-        rowVisibilityIndex.isHidden(fe.row) ||
-        columnVisibilityIndex.isHidden(fe.col)
+        rowVisibilityIndex.isHidden(pendingPosition.row) ||
+        columnVisibilityIndex.isHidden(pendingPosition.col)
       ) {
         navigationState.setPendingScrollAddress(null);
         return;
       }
-      const Be = scrollableRowPositionOf(fe.row);
-      if (Be === undefined && fe.row >= pinnedRowCount) {
+      const scrollRowPosition = scrollableRowPositionOf(pendingPosition.row);
+      if (
+        scrollRowPosition === undefined &&
+        pendingPosition.row >= pinnedRowCount
+      ) {
         (filterSortState.setFilterValueSearch(""),
           filterSortState.setActiveColumnSort(null));
         return;
       }
-      let Ue = activePaneScrollTop,
-        Xe = activePaneScrollLeft;
-      if (Be !== undefined && Be >= 0) {
-        const Nt = scrollableRowLayout.offset(Be),
-          wt = scrollableRowLayout.offset(Be + 1);
+      let paneScrollTop = activePaneScrollTop,
+        paneScrollLeft = activePaneScrollLeft;
+      if (scrollRowPosition !== undefined && scrollRowPosition >= 0) {
+        const rowStartOffset = scrollableRowLayout.offset(scrollRowPosition),
+          rowEndOffset = scrollableRowLayout.offset(scrollRowPosition + 1);
         let logicalOffset = rowWindow.logicalOffset;
-        (Nt < logicalOffset
-          ? (logicalOffset = Nt)
-          : wt > logicalOffset + rowViewport / zoomScale &&
-            (logicalOffset = wt - rowViewport / zoomScale),
-          (Ue = logicalToPhysicalPixels(
+        (rowStartOffset < logicalOffset
+          ? (logicalOffset = rowStartOffset)
+          : rowEndOffset > logicalOffset + rowViewport / zoomScale &&
+            (logicalOffset = rowEndOffset - rowViewport / zoomScale),
+          (paneScrollTop = logicalToPhysicalPixels(
             logicalOffset,
             scrollableRowLayout.total,
             rowViewport,
             zoomScale,
           )));
       }
-      const gt = (columnVisibilityIndex.viewIndex(fe.col) ?? 0) - yn;
-      if (gt >= 0) {
-        const Nt = scrollableColumnLayout.offset(gt),
-          wt = scrollableColumnLayout.offset(gt + 1);
+      const scrollColumnPosition =
+        (columnVisibilityIndex.viewIndex(pendingPosition.col) ?? 0) -
+        visibleFrozenColumnCount;
+      if (scrollColumnPosition >= 0) {
+        const columnStartOffset =
+            scrollableColumnLayout.offset(scrollColumnPosition),
+          columnEndOffset = scrollableColumnLayout.offset(
+            scrollColumnPosition + 1,
+          );
         let logicalOffset = columnWindow.logicalOffset;
-        (Nt < logicalOffset
-          ? (logicalOffset = Nt)
-          : wt > logicalOffset + columnViewport / zoomScale &&
-            (logicalOffset = wt - columnViewport / zoomScale),
-          (Xe = logicalToPhysicalPixels(
+        (columnStartOffset < logicalOffset
+          ? (logicalOffset = columnStartOffset)
+          : columnEndOffset > logicalOffset + columnViewport / zoomScale &&
+            (logicalOffset = columnEndOffset - columnViewport / zoomScale),
+          (paneScrollLeft = logicalToPhysicalPixels(
             logicalOffset,
             scrollableColumnLayout.total,
             columnViewport,
             zoomScale,
           )));
       }
-      ((Oe.scrollTop = Ue),
-        (Oe.scrollLeft = Xe),
-        viewAndSelectionActions.scrollActivePaneVertically(Ue),
-        viewAndSelectionActions.scrollActivePaneHorizontally(Xe),
+      ((gridContainer.scrollTop = paneScrollTop),
+        (gridContainer.scrollLeft = paneScrollLeft),
+        viewAndSelectionActions.scrollActivePaneVertically(paneScrollTop),
+        viewAndSelectionActions.scrollActivePaneHorizontally(paneScrollLeft),
         navigationState.setPendingScrollAddress(null));
     }, [
       navigationState.pendingScrollAddress,
@@ -1196,7 +1248,7 @@ function MainWorksheetEditor({
       scrollableRowLayout,
       scrollableColumnLayout,
       pinnedRowCount,
-      yn,
+      visibleFrozenColumnCount,
       rowVisibilityIndex,
       columnVisibilityIndex,
       rowViewport,
@@ -1238,25 +1290,32 @@ function MainWorksheetEditor({
     ]),
     ne.useEffect(() => {
       persistenceState.isWorkbookLoadedRef.current = false;
-      const fe = { active: true, controllers: new Set() };
-      persistenceState.persistenceSessionRef.current = fe;
+      const persistenceSession = { active: true, controllers: new Set() };
+      persistenceState.persistenceSessionRef.current = persistenceSession;
       try {
-        const Oe = workbookPersistence.load();
+        const persistedRecord = workbookPersistence.load();
         if (
-          ((persistenceState.persistedWorkbookRecordRef.current = Oe),
-          persistenceState.setPersistedWorkbookRecord(Oe),
-          Oe)
+          ((persistenceState.persistedWorkbookRecordRef.current =
+            persistedRecord),
+          persistenceState.setPersistedWorkbookRecord(persistedRecord),
+          persistedRecord)
         ) {
-          (setWorkbookSnapshot(buildCanonicalWorkbookSnapshot(Oe.workbook)),
-            (latestEditStateRef.current.book = Oe.workbook),
-            viewAndSelectionActions.applyWorkbookView(Oe.view),
+          (setWorkbookSnapshot(
+            buildCanonicalWorkbookSnapshot(persistedRecord.workbook),
+          ),
+            (latestEditStateRef.current.book = persistedRecord.workbook),
+            viewAndSelectionActions.applyWorkbookView(persistedRecord.view),
             operationStatusState.setStatusNotice(
-              Oe.warning ?? "Restored your locally saved workbook.",
+              persistedRecord.warning ??
+                "Restored your locally saved workbook.",
             ),
-            persistenceActions.reportSaveStatus("saved", Oe.workbook));
+            persistenceActions.reportSaveStatus(
+              "saved",
+              persistedRecord.workbook,
+            ));
           try {
             viewAndSelectionActions.notifyHostCallback("loaded", () =>
-              onWorkbookLoaded?.(Oe.workbook),
+              onWorkbookLoaded?.(persistedRecord.workbook),
             );
           } catch {
             operationStatusState.setErrorNotice(
@@ -1274,11 +1333,12 @@ function MainWorksheetEditor({
           ));
       }
       return () => {
-        fe.active = false;
-        for (const controller of fe.controllers) controller.abort();
-        const Oe = persistenceState.persistenceSessionRef.current;
-        Oe.active = false;
-        for (const controller of Oe.controllers) controller.abort();
+        persistenceSession.active = false;
+        for (const controller of persistenceSession.controllers)
+          controller.abort();
+        const currentSession = persistenceState.persistenceSessionRef.current;
+        currentSession.active = false;
+        for (const controller of currentSession.controllers) controller.abort();
         persistenceState.saveAbortControllerRef.current?.abort();
       };
     }, [workbookPersistence]),
@@ -1292,21 +1352,26 @@ function MainWorksheetEditor({
     }, [readOnly]),
     ne.useEffect(() => {
       if (!persistenceKey && !("coordination" in workbookPersistence)) return;
-      const fe = (event) => {
-        const Be = persistenceState.persistedWorkbookRecordRef.current?.guard,
-          Ue = persistenceKey ?? Be?.namespace;
-        if (!(!Ue || (event.key !== null && event.key !== Ue)))
+      const handleStorageEvent = (event) => {
+        const knownGuard =
+            persistenceState.persistedWorkbookRecordRef.current?.guard,
+          storageNamespace = persistenceKey ?? knownGuard?.namespace;
+        if (!(
+          !storageNamespace ||
+          (event.key !== null && event.key !== storageNamespace)
+        ))
           try {
-            const gt = workbookPersistence.load();
+            const reloadedRecord = workbookPersistence.load();
             if (
-              JSON.stringify(gt?.guard ?? null) === JSON.stringify(Be ?? null)
+              JSON.stringify(reloadedRecord?.guard ?? null) ===
+              JSON.stringify(knownGuard ?? null)
             )
               return;
             persistenceActions.reportSaveError(
               new WorkbookRevisionConflictError(
                 "conflict",
                 "Another workbook window changed the saved version. Your local work has been retained.",
-                gt?.guard,
+                reloadedRecord?.guard,
               ),
             );
           } catch (error) {
@@ -1314,58 +1379,63 @@ function MainWorksheetEditor({
           }
       };
       return (
-        window.addEventListener("storage", fe),
-        () => window.removeEventListener("storage", fe)
+        window.addEventListener("storage", handleStorageEvent),
+        () => window.removeEventListener("storage", handleStorageEvent)
       );
     }, [workbookPersistence, persistenceKey]),
     ne.useEffect(() => {
       if (!persistenceKey && !workbookStorePersistent) return;
-      const fe = (Oe) => {
+      const handleBeforeUnload = (beforeUnloadEvent) => {
         (formulaEntryState.activeCellEditRef.current ||
           persistenceState.persistenceSessionRef.current.controllers.size ||
           JSON.stringify(
             persistenceState.persistedWorkbookRecordRef.current?.workbook,
           ) !== JSON.stringify(latestEditStateRef.current.book)) &&
-          (Oe.preventDefault(), (Oe.returnValue = ""));
+          (beforeUnloadEvent.preventDefault(),
+          (beforeUnloadEvent.returnValue = ""));
       };
       return (
-        window.addEventListener("beforeunload", fe),
-        () => window.removeEventListener("beforeunload", fe)
+        window.addEventListener("beforeunload", handleBeforeUnload),
+        () => window.removeEventListener("beforeunload", handleBeforeUnload)
       );
     }, [persistenceKey, workbookStorePersistent]),
     ne.useEffect(() => {
       if (!persistenceState.isWorkbookLoadedRef.current || readOnly) return;
-      const fe = setTimeout(() => {
+      const saveTimer = setTimeout(() => {
         try {
-          const Oe = latestEditStateRef.current;
+          const latestEditState = latestEditStateRef.current;
           if (
-            Oe.readOnly ||
+            latestEditState.readOnly ||
             persistenceState.persistenceError ||
             persistenceState.persistenceSessionRef.current.controllers.size
           )
             return;
-          const Be = viewAndSelectionActions.buildWorkbookViewState(
-              Oe.book,
-              Oe.sheetId,
-              Oe.range,
+          const viewState = viewAndSelectionActions.buildWorkbookViewState(
+              latestEditState.book,
+              latestEditState.sheetId,
+              latestEditState.range,
             ),
-            Ue = persistenceState.persistedWorkbookRecordRef.current;
+            savedRecord = persistenceState.persistedWorkbookRecordRef.current;
           if (
-            Ue &&
-            JSON.stringify(Ue.view) === JSON.stringify(Be) &&
-            (Ue.workbook === Oe.book ||
-              JSON.stringify(Ue.workbook) === JSON.stringify(Oe.book))
+            savedRecord &&
+            JSON.stringify(savedRecord.view) === JSON.stringify(viewState) &&
+            (savedRecord.workbook === latestEditState.book ||
+              JSON.stringify(savedRecord.workbook) ===
+                JSON.stringify(latestEditState.book))
           )
             return;
-          const Xe = persistenceActions.persistWorkbookSnapshot(Oe.book, Be);
-          isPromiseLike(Xe) && Xe.catch(() => {});
+          const saveResult = persistenceActions.persistWorkbookSnapshot(
+            latestEditState.book,
+            viewState,
+          );
+          isPromiseLike(saveResult) && saveResult.catch(() => {});
         } catch (error) {
           operationStatusState.setErrorNotice(
             `${error instanceof Error ? error.message : "The current selection could not be saved."} Changes remain in this editor; export JSON to keep a copy.`,
           );
         }
       }, 400);
-      return () => clearTimeout(fe);
+      return () => clearTimeout(saveTimer);
     }, [
       activeSheet.id,
       selectionState.activeSelectionRange,
@@ -1403,7 +1473,7 @@ function MainWorksheetEditor({
         return;
       assistantState.lastExternalProposalIdRef.current =
         externalProposal.requestId;
-      let fe;
+      let proposalResult;
       try {
         if (
           JSON.stringify(externalProposal.context) !==
@@ -1418,7 +1488,7 @@ function MainWorksheetEditor({
           throw new Error(
             "The workbook or selected context changed. Request a new external proposal.",
           );
-        const Oe = validateProposedCalculation(
+        const validatedProposal = validateProposedCalculation(
           activeWorkbook,
           {
             sheetId: activeSheet.id,
@@ -1433,23 +1503,26 @@ function MainWorksheetEditor({
               sheetId: activeSheet.id,
               range: selectionState.activeSelectionRange,
             },
-            Oe,
+            validatedProposal,
             externalProposal.context,
           ),
         ),
-          assistantState.setAssistantProposal(Oe),
+          assistantState.setAssistantProposal(validatedProposal),
           dialogState.setSidePanelKind("assistant"),
           operationStatusState.setErrorNotice(""),
-          (fe = { accepted: true }));
+          (proposalResult = { accepted: true }));
       } catch (error) {
-        const Be =
+        const errorMessage =
           error instanceof Error ? error.message : "Invalid external proposal.";
-        (operationStatusState.setErrorNotice(Be),
-          (fe = { accepted: false, error: Be }));
+        (operationStatusState.setErrorNotice(errorMessage),
+          (proposalResult = { accepted: false, error: errorMessage }));
       }
       try {
         viewAndSelectionActions.notifyHostCallback("proposal", () =>
-          onExternalProposalStaged?.(externalProposal.requestId, fe),
+          onExternalProposalStaged?.(
+            externalProposal.requestId,
+            proposalResult,
+          ),
         );
       } catch {
         operationStatusState.setErrorNotice(
@@ -1464,33 +1537,39 @@ function MainWorksheetEditor({
       onExternalProposalStaged,
     ]));
 
-  formulaEntryState.formulaPointerMoveRef.current = (fe) => {
-    formulaEntryState.formulaPointerStateRef.current.head !== fe &&
-      formulaEntryActions.insertFormulaReference(fe, true);
+  formulaEntryState.formulaPointerMoveRef.current = (cellAddress) => {
+    formulaEntryState.formulaPointerStateRef.current.head !== cellAddress &&
+      formulaEntryActions.insertFormulaReference(cellAddress, true);
   };
 
   ne.useEffect(() => {
     if (!viewDisplayState.axisResizeState) return;
-    const fe = (event) =>
+    const handleAxisPointerMove = (event) =>
         viewDisplayState.setAxisResizeState(
-          (gt) =>
-            gt && {
-              ...gt,
+          (previousResizeState) =>
+            previousResizeState && {
+              ...previousResizeState,
               size: Math.round(
                 Math.max(
-                  gt.axis === "column" ? minColumnWidth : minRowHeight,
+                  previousResizeState.axis === "column"
+                    ? minColumnWidth
+                    : minRowHeight,
                   Math.min(
-                    gt.axis === "column" ? maxColumnWidth : maxRowHeight,
-                    gt.initial +
-                      ((gt.axis === "column" ? event.clientX : event.clientY) -
-                        gt.start) /
+                    previousResizeState.axis === "column"
+                      ? maxColumnWidth
+                      : maxRowHeight,
+                    previousResizeState.initial +
+                      ((previousResizeState.axis === "column"
+                        ? event.clientX
+                        : event.clientY) -
+                        previousResizeState.start) /
                         zoomScale,
                   ),
                 ),
               ),
             },
         ),
-      Oe = () => {
+      handleAxisPointerUp = () => {
         (viewDisplayState.axisResizeState.size !==
           viewDisplayState.axisResizeState.initial &&
           viewAndSelectionActions.runGuardedAction(() =>
@@ -1505,26 +1584,26 @@ function MainWorksheetEditor({
           ),
           viewDisplayState.setAxisResizeState(null));
       },
-      Be = () => viewDisplayState.setAxisResizeState(null),
-      Ue = (Xe) => {
-        Xe.key === "Escape" &&
-          (!Xe.defaultPrevented &&
-            Xe.target instanceof Element &&
-            Xe.target.closest(".lg-app") ===
+      cancelAxisResize = () => viewDisplayState.setAxisResizeState(null),
+      handleAxisKeyDown = (keyboardEvent) => {
+        keyboardEvent.key === "Escape" &&
+          (!keyboardEvent.defaultPrevented &&
+            keyboardEvent.target instanceof Element &&
+            keyboardEvent.target.closest(".lg-app") ===
               selectionState.appRootRef.current &&
-            Xe.preventDefault(),
-          Be());
+            keyboardEvent.preventDefault(),
+          cancelAxisResize());
       };
     return (
-      window.addEventListener("pointermove", fe),
-      window.addEventListener("pointerup", Oe),
-      window.addEventListener("pointercancel", Be),
-      window.addEventListener("keydown", Ue),
+      window.addEventListener("pointermove", handleAxisPointerMove),
+      window.addEventListener("pointerup", handleAxisPointerUp),
+      window.addEventListener("pointercancel", cancelAxisResize),
+      window.addEventListener("keydown", handleAxisKeyDown),
       () => {
-        (window.removeEventListener("pointermove", fe),
-          window.removeEventListener("pointerup", Oe),
-          window.removeEventListener("pointercancel", Be),
-          window.removeEventListener("keydown", Ue));
+        (window.removeEventListener("pointermove", handleAxisPointerMove),
+          window.removeEventListener("pointerup", handleAxisPointerUp),
+          window.removeEventListener("pointercancel", cancelAxisResize),
+          window.removeEventListener("keydown", handleAxisKeyDown));
       }
     );
   }, [
@@ -1537,100 +1616,115 @@ function MainWorksheetEditor({
 
   ne.useEffect(() => {
     if (!dragFillState.fillDragState) return;
-    const fe = () => {
+    const clearFillDrag = () => {
         ((fillDragStateRef.current = null),
           dragFillState.setFillDragState(null));
       },
-      Oe = () => {
-        const Ue = fillDragStateRef.current;
-        if ((fe(), !(!Ue || Ue.targetRange === Ue.sourceRange))) {
+      handleFillPointerUp = () => {
+        const fillDrag = fillDragStateRef.current;
+        if (
+          (clearFillDrag(),
+          !(!fillDrag || fillDrag.targetRange === fillDrag.sourceRange))
+        ) {
           if (
             latestEditStateRef.current.readOnly ||
-            latestEditStateRef.current.book !== Ue.book ||
-            latestEditStateRef.current.sheetId !== Ue.sheetId
+            latestEditStateRef.current.book !== fillDrag.book ||
+            latestEditStateRef.current.sheetId !== fillDrag.sheetId
           ) {
             operationStatusState.setErrorNotice(
               "The workbook changed while filling. Select the cells and try again.",
             );
             return;
           }
-          dragFillState.setFillPreviewState(Ue);
+          dragFillState.setFillPreviewState(fillDrag);
         }
       },
-      Be = (Ue) => {
-        Ue.key === "Escape" &&
-          (!Ue.defaultPrevented &&
-            Ue.target instanceof Element &&
-            Ue.target.closest(".lg-app") ===
+      handleFillKeyDown = (keyboardEvent) => {
+        keyboardEvent.key === "Escape" &&
+          (!keyboardEvent.defaultPrevented &&
+            keyboardEvent.target instanceof Element &&
+            keyboardEvent.target.closest(".lg-app") ===
               selectionState.appRootRef.current &&
-            Ue.preventDefault(),
-          fe());
+            keyboardEvent.preventDefault(),
+          clearFillDrag());
       };
     return (
-      window.addEventListener("pointerup", Oe),
-      window.addEventListener("pointercancel", fe),
-      window.addEventListener("keydown", Be),
+      window.addEventListener("pointerup", handleFillPointerUp),
+      window.addEventListener("pointercancel", clearFillDrag),
+      window.addEventListener("keydown", handleFillKeyDown),
       () => {
-        (window.removeEventListener("pointerup", Oe),
-          window.removeEventListener("pointercancel", fe),
-          window.removeEventListener("keydown", Be));
+        (window.removeEventListener("pointerup", handleFillPointerUp),
+          window.removeEventListener("pointercancel", clearFillDrag),
+          window.removeEventListener("keydown", handleFillKeyDown));
       }
     );
   }, [!!dragFillState.fillDragState]);
 
   const frozenColumnLeftOffsets = Object.fromEntries(
-      frozenColumnIndexes.map((frozenColumnIndex, Oe) => [
+      frozenColumnIndexes.map((frozenColumnIndex, frozenColumnPosition) => [
         frozenColumnIndex,
-        rowHeaderWidth + columnAxisLayout.offset(Oe),
+        rowHeaderWidth + columnAxisLayout.offset(frozenColumnPosition),
       ]),
     ),
-    renderColumnHeader = (fe, Oe = false) =>
+    renderColumnHeader = (columnIndex, isFrozenColumn = false) =>
       i.jsxs(
         "th",
         {
           role: "columnheader",
           scope: "col",
-          "data-column": fe,
-          "aria-colindex": fe + 2,
-          className: `${_t(selectionState.activeCellAddress).col === fe ? "lg-selected-header" : ""} ${Oe ? "lg-frozen-column" : ""}`,
-          style: Oe
+          "data-column": columnIndex,
+          "aria-colindex": columnIndex + 2,
+          className: `${_t(selectionState.activeCellAddress).col === columnIndex ? "lg-selected-header" : ""} ${isFrozenColumn ? "lg-frozen-column" : ""}`,
+          style: isFrozenColumn
             ? {
                 position: "sticky",
-                left: frozenColumnLeftOffsets[fe],
+                left: frozenColumnLeftOffsets[columnIndex],
                 zIndex: 7,
               }
             : undefined,
-          onClick: (Be) => {
+          onClick: (mouseEvent) => {
             formulaEntryActions.insertFormulaReference(
-              `${columnIndexToLetters(fe)}1`,
+              `${columnIndexToLetters(columnIndex)}1`,
               false,
               {
-                range: `${columnIndexToLetters(fe)}:${columnIndexToLetters(fe)}`,
+                range: `${columnIndexToLetters(columnIndex)}:${columnIndexToLetters(columnIndex)}`,
                 bounds: {
                   firstRow: 0,
                   lastRow: activeSheet.rowCount - 1,
-                  firstCol: fe,
-                  lastCol: fe,
+                  firstCol: columnIndex,
+                  lastCol: columnIndex,
                 },
               },
-            ) || navigationActions.selectRowOrColumn("column", fe, Be.shiftKey);
+            ) ||
+              navigationActions.selectRowOrColumn(
+                "column",
+                columnIndex,
+                mouseEvent.shiftKey,
+              );
           },
           children: [
-            columnIndexToLetters(fe),
+            columnIndexToLetters(columnIndex),
             i.jsx("span", {
               className: "lg-column-resize",
               role: "separator",
-              "aria-label": `Resize column ${columnIndexToLetters(fe)}`,
+              "aria-label": `Resize column ${columnIndexToLetters(columnIndex)}`,
               "aria-orientation": "vertical",
               "aria-disabled": isEditingLocked,
               title: text(
                 "Drag to resize; double-click to AutoFit column width",
               ),
-              onPointerDown: (Be) =>
-                rowColumnAndFillActions.beginAxisResize("column", fe, Be),
+              onPointerDown: (pointerEvent) =>
+                rowColumnAndFillActions.beginAxisResize(
+                  "column",
+                  columnIndex,
+                  pointerEvent,
+                ),
               onDoubleClick: (event) => {
                 (event.stopPropagation(),
-                  rowColumnAndFillActions.autoFitSelectedAxis("column", fe));
+                  rowColumnAndFillActions.autoFitSelectedAxis(
+                    "column",
+                    columnIndex,
+                  ));
               },
               onClick: (event) => event.stopPropagation(),
               lang: language(
@@ -1639,44 +1733,53 @@ function MainWorksheetEditor({
             }),
           ],
         },
-        fe,
+        columnIndex,
       ),
-    renderGridRow = (fe, pinned, Be, Ue) =>
+    renderGridRow = (rowIndex, pinned, renderWindow, paneId) =>
       i.jsx(
         WorksheetGridRow,
         {
-          idPrefix: `${editorIdPrefix}-${Ue}`,
-          row: fe,
+          idPrefix: `${editorIdPrefix}-${paneId}`,
+          row: rowIndex,
           pinned: pinned,
           pinnedTop:
             (viewDisplayState.isHeadingsVisible ? 22 : 0) +
-            rowAxisLayout.offset(rowVisibilityIndex.viewIndex(fe) ?? 0),
+            rowAxisLayout.offset(rowVisibilityIndex.viewIndex(rowIndex) ?? 0),
           frozenColumns: frozenColumnIndexes,
           frozenColumnOffsets: frozenColumnLeftOffsets,
           headings: viewDisplayState.isHeadingsVisible,
-          columns: Be.shownColumns,
-          leftGap: Be.leftGap,
-          rightGap: Be.rightGap,
-          minimumHeight: effectiveRowHeights[fe] ?? defaultRowHeight,
+          columns: renderWindow.shownColumns,
+          leftGap: renderWindow.leftGap,
+          rightGap: renderWindow.rightGap,
+          minimumHeight: effectiveRowHeights[rowIndex] ?? defaultRowHeight,
           fixedHeight:
-            activeSheet.rowHeights?.[fe] !== undefined ||
+            activeSheet.rowHeights?.[rowIndex] !== undefined ||
             (viewDisplayState.axisResizeState?.axis === "row" &&
-              viewDisplayState.axisResizeState.index === fe),
-          onRowSelect: (Nt) => {
-            formulaEntryActions.insertFormulaReference(`A${fe + 1}`, false, {
-              range: `${fe + 1}:${fe + 1}`,
-              bounds: {
-                firstRow: fe,
-                lastRow: fe,
-                firstCol: 0,
-                lastCol: activeSheet.colCount - 1,
+              viewDisplayState.axisResizeState.index === rowIndex),
+          onRowSelect: (mouseEvent) => {
+            formulaEntryActions.insertFormulaReference(
+              `A${rowIndex + 1}`,
+              false,
+              {
+                range: `${rowIndex + 1}:${rowIndex + 1}`,
+                bounds: {
+                  firstRow: rowIndex,
+                  lastRow: rowIndex,
+                  firstCol: 0,
+                  lastCol: activeSheet.colCount - 1,
+                },
               },
-            }) || navigationActions.selectRowOrColumn("row", fe, Nt);
+            ) ||
+              navigationActions.selectRowOrColumn("row", rowIndex, mouseEvent);
           },
-          onResize: (Nt) =>
-            rowColumnAndFillActions.beginAxisResize("row", fe, Nt),
+          onResize: (pointerEvent) =>
+            rowColumnAndFillActions.beginAxisResize(
+              "row",
+              rowIndex,
+              pointerEvent,
+            ),
           onAutoFit: () =>
-            rowColumnAndFillActions.autoFitSelectedAxis("row", fe),
+            rowColumnAndFillActions.autoFitSelectedAxis("row", rowIndex),
           onCancelEdit: cellEditActions.cancelCellEdit,
           onFormulaInput: cellEditActions.syncFormulaEditorSelection,
           onFormulaKey: formulaEntryActions.handleFormulaKeyDown,
@@ -1690,29 +1793,29 @@ function MainWorksheetEditor({
             !!formulaEntryState.activeCellEditRef.current?.value.startsWith(
               "=",
             ),
-          onDragStart: (Nt, wt) => {
-            ((dragFillState.dragAnchorRef.current = Nt),
-              (dragFillState.dragBaseSelectionsRef.current = wt
+          onDragStart: (anchorAddress, shouldKeepSelection) => {
+            ((dragFillState.dragAnchorRef.current = anchorAddress),
+              (dragFillState.dragBaseSelectionsRef.current = shouldKeepSelection
                 ? [...selectionAreas]
                 : []));
           },
-          onDragEnter: (Nt, wt) => {
+          onDragEnter: (targetAddress, pressedButtons) => {
             if (
               formulaEntryState.formulaPointerStateRef.current.dragging &&
-              wt === 1
+              pressedButtons === 1
             ) {
-              formulaEntryActions.insertFormulaReference(Nt, true);
+              formulaEntryActions.insertFormulaReference(targetAddress, true);
               return;
             }
-            fillDragStateRef.current && wt === 1
-              ? rowColumnAndFillActions.extendFillDragTo(Nt)
+            fillDragStateRef.current && pressedButtons === 1
+              ? rowColumnAndFillActions.extendFillDragTo(targetAddress)
               : dragFillState.dragAnchorRef.current &&
-                wt === 1 &&
-                ((selectionState.activeCellAddressRef.current = Nt),
+                pressedButtons === 1 &&
+                ((selectionState.activeCellAddressRef.current = targetAddress),
                 viewAndSelectionActions.runGuardedAction(() =>
                   viewAndSelectionActions.applySelectionAreas([
                     ...dragFillState.dragBaseSelectionsRef.current,
-                    wy(dragFillState.dragAnchorRef.current, Nt),
+                    wy(dragFillState.dragAnchorRef.current, targetAddress),
                   ]),
                 ),
                 selectionState.setActiveCellAddress(
@@ -1720,26 +1823,26 @@ function MainWorksheetEditor({
                 ));
           },
           onNavigate: navigationActions.moveSelectionAfterCommit,
-          onPivotDrill: (Nt) => {
-            const wt = _t(Nt);
+          onPivotDrill: (cellAddress) => {
+            const position = _t(cellAddress);
             return activeSheet.pivots?.some((pivot) => {
               const rangeAddress = parseRangeAddress(pivot.outputRange);
               return (
-                wt.row > rangeAddress.firstRow &&
-                wt.row <= rangeAddress.lastRow &&
-                wt.col >=
+                position.row > rangeAddress.firstRow &&
+                position.row <= rangeAddress.lastRow &&
+                position.col >=
                   rangeAddress.firstCol + Math.max(1, pivot.rowFields.length) &&
-                wt.col <= rangeAddress.lastCol
+                position.col <= rangeAddress.lastCol
               );
             })
-              ? (navigationActions.selectCellAddress(Nt),
+              ? (navigationActions.selectCellAddress(cellAddress),
                 gridInteractionActions.runEditorCommand("pivotExplore"),
                 true)
               : false;
           },
           commentAddresses: commentedCellAddresses,
-          onReview: (Nt) => {
-            (navigationActions.selectCellAddress(Nt),
+          onReview: (cellAddress) => {
+            (navigationActions.selectCellAddress(cellAddress),
               gridInteractionActions.runEditorCommand("comments"));
           },
           onLink: (Nt, wt) =>
@@ -1754,19 +1857,19 @@ function MainWorksheetEditor({
             selectionState.completedSelectionAreas.length > 0,
           workbook: activeWorkbook,
           mergeBounds: mergeRanges,
-          displayedRows: pinned ? frozenRowIndexes : Be.shownRows,
+          displayedRows: pinned ? frozenRowIndexes : renderWindow.shownRows,
           filterHeader:
             filterResult &&
-            fe === parseRangeAddress(filterResult.context.range).firstRow
+            rowIndex === parseRangeAddress(filterResult.context.range).firstRow
               ? filterResult.fields
               : undefined,
           filteredColumns:
             filterResult?.context.definition.columns.map(
               (column) => column.column,
             ) ?? [],
-          onColumnFilter: (Nt) => {
+          onColumnFilter: (columnIndex) => {
             (gridInteractionActions.runEditorCommand("populationFilter"),
-              filterSortState.setActiveFilterColumn(Nt));
+              filterSortState.setActiveFilterColumn(columnIndex));
           },
           sortedView: !!(
             filterSortState.filterValueSearch ||
@@ -1786,18 +1889,18 @@ function MainWorksheetEditor({
           calc: workbookCalculator,
           showFormulas: viewDisplayState.isShowingFormulas,
           editing:
-            splitPaneSizes.activeId === Ue &&
+            splitPaneSizes.activeId === paneId &&
             (!formulaEntryState.activeCellEditRef.current ||
               formulaEntryState.activeCellEditRef.current.sheetId ===
                 activeSheet.id)
               ? formulaEntryState.cellEditState
               : null,
-          setEditing: (Nt) =>
-            Nt === null
+          setEditing: (nextCellEditState) =>
+            nextCellEditState === null
               ? cellEditActions.cancelCellEdit()
-              : cellEditActions.beginCellEdit(Nt, true),
-          select: (Nt, wt, jt) => {
-            (navigationActions.selectCellAddress(Nt, wt, jt),
+              : cellEditActions.beginCellEdit(nextCellEditState, true),
+          select: (cellAddress, wt, jt) => {
+            (navigationActions.selectCellAddress(cellAddress, wt, jt),
               selectionState.gridContainerRef.current?.focus({
                 preventScroll: true,
               }));
@@ -1805,9 +1908,9 @@ function MainWorksheetEditor({
           saveCell: cellEditActions.commitCellEdit,
           readOnly: isEditingLocked,
         },
-        fe,
+        rowIndex,
       ),
-    renderVirtualSpacer = (height, Oe, colSpan) =>
+    renderVirtualSpacer = (height, spacerKey, colSpan) =>
       height > 0
         ? i.jsx(
             "tr",
@@ -1820,7 +1923,7 @@ function MainWorksheetEditor({
                 style: { height: height },
               }),
             },
-            Oe,
+            spacerKey,
           )
         : null;
   const { renderGridPane } = createGridPaneRenderer({
@@ -1855,7 +1958,7 @@ function MainWorksheetEditor({
     mergeRanges,
     rowAxisLayout,
     columnAxisLayout,
-    yn,
+    yn: visibleFrozenColumnCount,
     frozenRowIndexes,
     frozenColumnIndexes,
     scrollableRowLayout,
@@ -1868,9 +1971,9 @@ function MainWorksheetEditor({
     renderVirtualSpacer,
   });
 
-  const closeContextMenu = ne.useCallback((fe) => {
+  const closeContextMenu = ne.useCallback((shouldRestoreFocus) => {
       (selectionState.setContextMenuState(null),
-        fe &&
+        shouldRestoreFocus &&
           selectionState.gridContainerRef.current?.focus({
             preventScroll: true,
           }));
@@ -1990,14 +2093,14 @@ function MainWorksheetEditor({
     lang: workbookMessages.locale,
     role: "region",
     "aria-label": activeWorkbook.name,
-    onKeyDown: (fe) => {
+    onKeyDown: (keyboardEvent) => {
       if (
-        fe.key !== "F6" ||
-        fe.defaultPrevented ||
-        fe.ctrlKey ||
-        fe.metaKey ||
-        fe.altKey ||
-        fe.nativeEvent.isComposing ||
+        keyboardEvent.key !== "F6" ||
+        keyboardEvent.defaultPrevented ||
+        keyboardEvent.ctrlKey ||
+        keyboardEvent.metaKey ||
+        keyboardEvent.altKey ||
+        keyboardEvent.nativeEvent.isComposing ||
         dialogState.activeDialogMode ||
         dialogState.promptDialogState ||
         (formulaEntryState.activeCellEditRef.current &&
@@ -2006,8 +2109,8 @@ function MainWorksheetEditor({
             !cellEditActions.commitCellEdit()))
       )
         return;
-      fe.preventDefault();
-      const Oe = [
+      keyboardEvent.preventDefault();
+      const focusTargets = [
           selectionState.appRootRef.current?.querySelector(
             '[role="tab"][aria-selected="true"]',
           ),
@@ -2016,22 +2119,24 @@ function MainWorksheetEditor({
           selectionState.appRootRef.current?.querySelector(
             '[data-sheet-id][aria-current="true"]',
           ),
-        ].filter((jt) => !!jt),
+        ].filter((target) => !!target),
         activeElement = document.activeElement,
-        Ue = activeElement?.closest(".xl-ribbon")
+        currentFocusIndex = activeElement?.closest(".xl-ribbon")
           ? 0
           : activeElement?.closest(".lg-sheet-tabs")
             ? 3
-            : Oe.findIndex(
-                (jt) => jt === activeElement || jt.contains(activeElement),
+            : focusTargets.findIndex(
+                (target) =>
+                  target === activeElement || target.contains(activeElement),
               ),
-        Xe = fe.shiftKey ? -1 : 1;
-      Oe[
-        Ue < 0
-          ? fe.shiftKey
-            ? Oe.length - 1
+        focusDirection = keyboardEvent.shiftKey ? -1 : 1;
+      focusTargets[
+        currentFocusIndex < 0
+          ? keyboardEvent.shiftKey
+            ? focusTargets.length - 1
             : 0
-          : (Ue + Xe + Oe.length) % Oe.length
+          : (currentFocusIndex + focusDirection + focusTargets.length) %
+            focusTargets.length
       ]?.focus({ preventScroll: true });
     },
     children: [
@@ -2200,14 +2305,14 @@ function MainWorksheetEditor({
                 ? "This workbook is read-only. Import is unavailable."
                 : undefined,
           onClose: () => importExportState.setDelimitedImportExportSource(null),
-          onReport: (fe) =>
+          onReport: (report) =>
             saveBlobToFile(
-              new Blob([JSON.stringify(fe, null, 2)], {
+              new Blob([JSON.stringify(report, null, 2)], {
                 type: "application/json",
               }),
-              `${fe.fileName}.schema.json`,
+              `${report.fileName}.schema.json`,
             ),
-          onImport: (workbook, Oe) => {
+          onImport: (workbook, importSummary) => {
             if (
               latestEditStateRef.current.book !==
               importExportState.delimitedImportExportSource.snapshot
@@ -2218,43 +2323,45 @@ function MainWorksheetEditor({
             (persistenceActions.commitWorkbookChange(workbook),
               navigationActions.switchActiveWorksheet(workbook.sheets[0].id),
               operationStatusState.setStatusNotice(
-                `Imported ${Oe.records} records using the reviewed schema. Formula-like source text remains literal.`,
+                `Imported ${importSummary.records} records using the reviewed schema. Formula-like source text remains literal.`,
               ),
               importExportState.setDelimitedImportExportSource(null));
           },
-          onExport: (fe, Oe) => {
+          onExport: (exportBytes, exportReview) => {
             if (
               latestEditStateRef.current.book !==
               importExportState.delimitedImportExportSource.snapshot
             )
               throw new Error("The workbook changed. Review the export again.");
             if (
-              Oe.population &&
+              exportReview.population &&
               !("bytes" in importExportState.delimitedImportExportSource)
             ) {
-              const Be = exportWorksheetToCsv(
+              const csvExport = exportWorksheetToCsv(
                 latestEditStateRef.current.book,
                 importExportState.delimitedImportExportSource.sheetId,
-                Oe.options,
+                exportReview.options,
               );
               if (
-                JSON.stringify(Be.report.population) !==
-                  JSON.stringify(Oe.population) ||
-                Be.bytes.length !== fe.length ||
-                Be.bytes.some((byte, Xe) => byte !== fe[Xe])
+                JSON.stringify(csvExport.report.population) !==
+                  JSON.stringify(exportReview.population) ||
+                csvExport.bytes.length !== exportBytes.length ||
+                csvExport.bytes.some(
+                  (byte, byteIndex) => byte !== exportBytes[byteIndex],
+                )
               )
                 throw Error(
                   "Calculated values or population membership changed. Preview the export again.",
                 );
             }
             (saveBlobToFile(
-              new Blob([Uint8Array.from(fe)], {
+              new Blob([Uint8Array.from(exportBytes)], {
                 type: "application/octet-stream",
               }),
-              Oe.fileName,
+              exportReview.fileName,
             ),
               operationStatusState.setStatusNotice(
-                `Delimited data exported; ${Oe.safeTextChanges} formula-like text values neutralized under the reviewed safe-export policy.`,
+                `Delimited data exported; ${exportReview.safeTextChanges} formula-like text values neutralized under the reviewed safe-export policy.`,
               ),
               importExportState.setDelimitedImportExportSource(null));
           },
@@ -2265,15 +2372,15 @@ function MainWorksheetEditor({
           inspectOnly: importExportState.xlsxConversionReview.inspectOnly,
           onOriginal: () =>
             viewAndSelectionActions.runGuardedAction(() => {
-              const fe = requireRetainedXlsxSource(
+              const retainedXlsxSource = requireRetainedXlsxSource(
                 importExportState.xlsxConversionReview.imported ??
                   importExportState.xlsxConversionReview.snapshot,
               );
               saveBlobToFile(
-                new Blob([new Uint8Array(fe.bytes)], {
+                new Blob([new Uint8Array(retainedXlsxSource.bytes)], {
                   type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 }),
-                fe.fileName,
+                retainedXlsxSource.fileName,
               );
             }),
           blocked:

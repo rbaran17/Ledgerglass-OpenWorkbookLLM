@@ -60,22 +60,25 @@ function ChartInspectionPanel({
   onExport = downloadTextFile,
 }) {
   const { text, language } = useWorkbookMessages(),
-    [d, u] = ne.useState(0),
-    [l, c] = ne.useState(""),
-    h = ne.useRef(null),
-    f = report?.points ?? [],
-    p = Math.min(d, Math.max(0, Math.ceil(f.length / 20) - 1)),
-    m = (v = false) => {
+    [pageIndex, setPageIndex] = ne.useState(0),
+    [exportError, setExportError] = ne.useState(""),
+    previewRef = ne.useRef(null),
+    points = report?.points ?? [],
+    currentPage = Math.min(
+      pageIndex,
+      Math.max(0, Math.ceil(points.length / 20) - 1),
+    ),
+    exportChart = (isSvgExport = false) => {
       try {
-        if ((c(""), !report)) throw Error(error);
-        if (v) {
-          const b = h.current?.querySelector("svg");
-          if (!b)
+        if ((setExportError(""), !report)) throw Error(error);
+        if (isSvgExport) {
+          const svgElement = previewRef.current?.querySelector("svg");
+          if (!svgElement)
             throw Error("Resolve chart errors before exporting the visual.");
           onExport({
             filename: "Chart.svg",
             mime: "image/svg+xml",
-            content: new XMLSerializer().serializeToString(b),
+            content: new XMLSerializer().serializeToString(svgElement),
           });
         } else
           onExport({
@@ -88,7 +91,7 @@ function ChartInspectionPanel({
             ),
           });
       } catch (error) {
-        c(error instanceof Error ? error.message : String(error));
+        setExportError(error instanceof Error ? error.message : String(error));
       }
     };
   return i.jsxs("section", {
@@ -107,7 +110,7 @@ function ChartInspectionPanel({
         i.jsxs(i.Fragment, {
           children: [
             i.jsx("div", {
-              ref: h,
+              ref: previewRef,
               className:
                 report.kind === "sparkline"
                   ? "dg-spark-preview"
@@ -133,19 +136,19 @@ function ChartInspectionPanel({
             report.diagnostics.length > 0 &&
               i.jsx("ul", {
                 className: "dg-chart-diagnostics",
-                children: report.diagnostics.map((diagnostic, g) =>
+                children: report.diagnostics.map((diagnostic, index) =>
                   i.jsxs(
                     "li",
                     {
                       children: [diagnostic.severity, ": ", diagnostic.message],
                     },
-                    g,
+                    index,
                   ),
                 ),
               }),
             i.jsx("button", {
               type: "button",
-              onClick: () => m(),
+              onClick: () => exportChart(),
               children: i.jsx(LocalizedText, {
                 children: "Export chart inspection",
               }),
@@ -155,7 +158,7 @@ function ChartInspectionPanel({
               disabled: report.diagnostics.some(
                 (diagnostic) => diagnostic.severity === "error",
               ),
-              onClick: () => m(true),
+              onClick: () => exportChart(true),
               children: i.jsx(LocalizedText, { children: "Export chart SVG" }),
             }),
             i.jsxs("details", {
@@ -237,80 +240,82 @@ function ChartInspectionPanel({
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: f.slice(p * 20, p * 20 + 20).map((v) =>
-                          i.jsxs(
-                            "tr",
-                            {
-                              children: [
-                                i.jsx("th", { children: v.row }),
-                                i.jsxs("td", {
-                                  children: [
-                                    v.included ? "Included" : "Excluded",
-                                    v.hidden ? " · hidden" : "",
-                                  ],
-                                }),
-                                i.jsxs("td", {
-                                  children: [
-                                    v.category.address,
-                                    ":",
-                                    " ",
-                                    String(v.category.value ?? "(blank)"),
-                                  ],
-                                }),
-                                v.values.map((value) =>
-                                  i.jsxs(
-                                    "td",
-                                    {
-                                      children: [
-                                        value.address,
-                                        ": ",
-                                        String(value.value ?? "(blank)"),
-                                        value.raw !== value.value &&
-                                          i.jsxs("small", {
-                                            children: [
-                                              " ",
-                                              i.jsx(LocalizedText, {
-                                                children: "Raw: ",
-                                              }),
-                                              String(value.raw),
-                                            ],
-                                          }),
-                                        value.note &&
-                                          i.jsxs("small", {
-                                            children: [
-                                              " ",
-                                              i.jsx(LocalizedText, {
-                                                children: "Note: ",
-                                              }),
-                                              value.note,
-                                            ],
-                                          }),
-                                      ],
-                                    },
-                                    value.address,
+                        children: points
+                          .slice(currentPage * 20, currentPage * 20 + 20)
+                          .map((point) =>
+                            i.jsxs(
+                              "tr",
+                              {
+                                children: [
+                                  i.jsx("th", { children: point.row }),
+                                  i.jsxs("td", {
+                                    children: [
+                                      point.included ? "Included" : "Excluded",
+                                      point.hidden ? " · hidden" : "",
+                                    ],
+                                  }),
+                                  i.jsxs("td", {
+                                    children: [
+                                      point.category.address,
+                                      ":",
+                                      " ",
+                                      String(point.category.value ?? "(blank)"),
+                                    ],
+                                  }),
+                                  point.values.map((value) =>
+                                    i.jsxs(
+                                      "td",
+                                      {
+                                        children: [
+                                          value.address,
+                                          ": ",
+                                          String(value.value ?? "(blank)"),
+                                          value.raw !== value.value &&
+                                            i.jsxs("small", {
+                                              children: [
+                                                " ",
+                                                i.jsx(LocalizedText, {
+                                                  children: "Raw: ",
+                                                }),
+                                                String(value.raw),
+                                              ],
+                                            }),
+                                          value.note &&
+                                            i.jsxs("small", {
+                                              children: [
+                                                " ",
+                                                i.jsx(LocalizedText, {
+                                                  children: "Note: ",
+                                                }),
+                                                value.note,
+                                              ],
+                                            }),
+                                        ],
+                                      },
+                                      value.address,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            },
-                            v.row,
+                                ],
+                              },
+                              point.row,
+                            ),
                           ),
-                        ),
                       }),
                     ],
                   }),
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: !p,
-                  onClick: () => u(p - 1),
+                  disabled: !currentPage,
+                  onClick: () => setPageIndex(currentPage - 1),
                   children: i.jsx(LocalizedText, {
                     children: "Previous chart source rows",
                   }),
                 }),
                 i.jsx("button", {
                   type: "button",
-                  disabled: (p + 1) * 20 >= f.length,
-                  onClick: () => u(p + 1),
+                  disabled: (currentPage + 1) * 20 >= points.length,
+                  onClick: () => setPageIndex(currentPage + 1),
                   children: i.jsx(LocalizedText, {
                     children: "Next chart source rows",
                   }),
@@ -322,8 +327,8 @@ function ChartInspectionPanel({
                       " ",
                       report.histogram
                         .map(
-                          (v) =>
-                            `${v.lower}–${v.upper}: ${v.count} rows ${v.upperInclusive ? "(upper inclusive)" : "(upper exclusive)"}`,
+                          (bin) =>
+                            `${bin.lower}–${bin.upper}: ${bin.count} rows ${bin.upperInclusive ? "(upper inclusive)" : "(upper exclusive)"}`,
                         )
                         .join("; "),
                     ],
@@ -334,7 +339,10 @@ function ChartInspectionPanel({
                       i.jsx(LocalizedText, { children: "Waterfall:" }),
                       " ",
                       report.waterfall
-                        .map((v) => `${v.label}: ${v.start} → ${v.end}`)
+                        .map(
+                          (step) =>
+                            `${step.label}: ${step.start} → ${step.end}`,
+                        )
                         .join("; "),
                     ],
                   }),
@@ -342,204 +350,252 @@ function ChartInspectionPanel({
             }),
           ],
         }),
-      l && i.jsx("p", { role: "alert", className: "dg-error", children: l }),
+      exportError &&
+        i.jsx("p", {
+          role: "alert",
+          className: "dg-error",
+          children: exportError,
+        }),
     ],
   });
 }
-function PicturePropertiesDialog(e) {
+function PicturePropertiesDialog(props) {
   const { text, language } = useWorkbookMessages(),
     cancellableOperation = useCancellableOperation(),
-    o = e.workbook.sheets
-      .find((sheet) => sheet.id === e.sheetId)
-      ?.objects?.find((object) => object.id === e.objectId),
-    a =
-      o?.kind ??
-      (/picture|image/i.test(e.mode)
+    existingObject = props.workbook.sheets
+      .find((sheet) => sheet.id === props.sheetId)
+      ?.objects?.find((object) => object.id === props.objectId),
+    objectKind =
+      existingObject?.kind ??
+      (/picture|image/i.test(props.mode)
         ? "picture"
-        : /chart/i.test(e.mode)
+        : /chart/i.test(props.mode)
           ? "chart"
           : "shape"),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    [d] = ne.useState(() => ({ current: F2(e.workbook, e.sheetId, e.range) })),
-    u = ne.useRef(e.mode),
-    l = ne.useRef(e.objectId),
-    c = ne.useRef(e),
-    h = ne.useRef(null),
-    f = ne.useRef(true),
-    p = ne.useRef(0);
-  (ne.useRef(null), (c.current = e));
-  const [object, v] = ne.useState(() =>
-      o
-        ? structuredClone(o)
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    [snapshotRef] = ne.useState(() => ({
+      current: F2(props.workbook, props.sheetId, props.range),
+    })),
+    modeRef = ne.useRef(props.mode),
+    objectIdRef = ne.useRef(props.objectId),
+    propsRef = ne.useRef(props),
+    dialogRef = ne.useRef(null),
+    isMountedRef = ne.useRef(true),
+    requestIdRef = ne.useRef(0);
+  (ne.useRef(null), (propsRef.current = props));
+  const [object, setObject] = ne.useState(() =>
+      existingObject
+        ? structuredClone(existingObject)
         : {
-            ...createAnchoredDrawingObject(a, e.range),
-            ...(a === "chart"
-              ? { chart: "column", range: e.range, headers: true }
+            ...createAnchoredDrawingObject(objectKind, props.range),
+            ...(objectKind === "chart"
+              ? { chart: "column", range: props.range, headers: true }
               : {}),
           },
     ),
-    [sourceLocator, b] = ne.useState(o?.evidence?.sourceLocator ?? ""),
-    [y, w] = ne.useState(""),
-    [E, A] = ne.useState(false),
-    k =
-      d.current.guard !== JSON.stringify(e.workbook) ||
-      d.current.sheetId !== e.sheetId ||
-      d.current.selection !== e.range ||
-      u.current !== e.mode ||
-      l.current !== e.objectId,
-    F = e.readOnly || k || !sheet || !!sheet?.protection?.enabled,
-    I = () => {
-      const L = c.current;
-      if (u.current !== L.mode || l.current !== L.objectId)
+    [sourceLocator, setSourceLocator] = ne.useState(
+      existingObject?.evidence?.sourceLocator ?? "",
+    ),
+    [pictureError, setPictureError] = ne.useState(""),
+    [isImporting, setIsImporting] = ne.useState(false),
+    isSnapshotStale =
+      snapshotRef.current.guard !== JSON.stringify(props.workbook) ||
+      snapshotRef.current.sheetId !== props.sheetId ||
+      snapshotRef.current.selection !== props.range ||
+      modeRef.current !== props.mode ||
+      objectIdRef.current !== props.objectId,
+    isEditLocked =
+      props.readOnly ||
+      isSnapshotStale ||
+      !sheet ||
+      !!sheet?.protection?.enabled,
+    assertDrawingCurrent = () => {
+      const latestProps = propsRef.current;
+      if (
+        modeRef.current !== latestProps.mode ||
+        objectIdRef.current !== latestProps.objectId
+      )
         throw Error("The drawing selection changed. Reopen this dialog.");
-      assertDrawingPreviewCurrent(L.workbook, L.sheetId, {
-        readOnly: L.readOnly,
-        snapshot: d.current,
-        selection: L.range,
+      assertDrawingPreviewCurrent(latestProps.workbook, latestProps.sheetId, {
+        readOnly: latestProps.readOnly,
+        snapshot: snapshotRef.current,
+        selection: latestProps.range,
       });
     },
-    update = (L) => {
-      !F && !E && v(($) => ({ ...$, ...L }));
+    update = (patch) => {
+      !isEditLocked &&
+        !isImporting &&
+        setObject((previous) => ({ ...previous, ...patch }));
     };
   (ne.useEffect(() => {
-    f.current = true;
+    isMountedRef.current = true;
     const activeElement = document.activeElement;
     return (
-      h.current?.querySelector("button")?.focus(),
+      dialogRef.current?.querySelector("button")?.focus(),
       () => {
-        ((f.current = false),
-          p.current++,
+        ((isMountedRef.current = false),
+          requestIdRef.current++,
           cancellableOperation.cancel(),
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []),
     ne.useEffect(() => {
-      F && (p.current++, cancellableOperation.cancel(), A(false));
-    }, [F]));
-  async function j(L) {
-    if (!L) return;
-    const $ = ++p.current;
+      isEditLocked &&
+        (requestIdRef.current++,
+        cancellableOperation.cancel(),
+        setIsImporting(false));
+    }, [isEditLocked]));
+  async function handlePictureFile(file) {
+    if (!file) return;
+    const requestId = ++requestIdRef.current;
     try {
       if (
-        (I(),
-        A(true),
-        w(""),
-        L.size > 2 * 1024 * 1024 ||
-          L.size === 0 ||
-          !["image/png", "image/jpeg"].includes(L.type))
+        (assertDrawingCurrent(),
+        setIsImporting(true),
+        setPictureError(""),
+        file.size > 2 * 1024 * 1024 ||
+          file.size === 0 ||
+          !["image/png", "image/jpeg"].includes(file.type))
       )
         throw Error("Choose a PNG or JPEG picture no larger than 2 MB.");
       const { dataURL } = await importPictureFile(
-        L,
+        file,
         cancellableOperation.begin(),
       );
-      if (!f.current || $ !== p.current) return;
-      I();
-      const G = inspectPictureDataUrl(dataURL);
-      if (G.bytes.length !== L.size)
+      if (!isMountedRef.current || requestId !== requestIdRef.current) return;
+      assertDrawingCurrent();
+      const pictureInspection = inspectPictureDataUrl(dataURL);
+      if (pictureInspection.bytes.length !== file.size)
         throw Error("The file bytes changed while reading the picture.");
       const pictureEvidence = createPictureEvidence(dataURL, {
           origin: "local-file",
-          filename: L.name,
+          filename: file.name,
           ...(sourceLocator ? { sourceLocator: sourceLocator } : {}),
         }),
-        Q = await new Promise((J, q) => {
-          const W = new Image();
-          ((W.onload = () =>
-            J({ width: W.naturalWidth, height: W.naturalHeight })),
-            (W.onerror = () => q(Error("The picture could not be decoded."))),
-            (W.src = dataURL));
+        decodedSize = await new Promise((resolve, reject) => {
+          const image = new Image();
+          ((image.onload = () =>
+            resolve({
+              width: image.naturalWidth,
+              height: image.naturalHeight,
+            })),
+            (image.onerror = () =>
+              reject(Error("The picture could not be decoded."))),
+            (image.src = dataURL));
         });
-      if (!f.current || $ !== p.current) return;
-      if ((I(), Q.width !== G.width || Q.height !== G.height))
+      if (!isMountedRef.current || requestId !== requestIdRef.current) return;
+      if (
+        (assertDrawingCurrent(),
+        decodedSize.width !== pictureInspection.width ||
+          decodedSize.height !== pictureInspection.height)
+      )
         throw Error(
           "Decoded picture dimensions do not match its validated header.",
         );
-      const X = Math.min(1, 400 / G.width, 250 / G.height);
-      v((J) => ({
-        ...J,
+      const scale = Math.min(
+        1,
+        400 / pictureInspection.width,
+        250 / pictureInspection.height,
+      );
+      setObject((previousObject) => ({
+        ...previousObject,
         dataURL,
         evidence: pictureEvidence,
-        label: L.name.slice(0, 500),
-        width: Math.max(24, Math.round(G.width * X)),
-        height: Math.max(24, Math.round(G.height * X)),
+        label: file.name.slice(0, 500),
+        width: Math.max(24, Math.round(pictureInspection.width * scale)),
+        height: Math.max(24, Math.round(pictureInspection.height * scale)),
       }));
     } catch (error) {
-      f.current &&
-        $ === p.current &&
-        w(error instanceof Error ? error.message : "Picture import failed.");
+      isMountedRef.current &&
+        requestId === requestIdRef.current &&
+        setPictureError(
+          error instanceof Error ? error.message : "Picture import failed.",
+        );
     } finally {
-      f.current && $ === p.current && A(false);
+      isMountedRef.current &&
+        requestId === requestIdRef.current &&
+        setIsImporting(false);
     }
   }
   function onClick() {
     try {
-      if ((I(), E)) return;
-      const $ = c.current,
-        sheet = $.workbook.sheets.find((sheet) => sheet.id === $.sheetId);
+      if ((assertDrawingCurrent(), isImporting)) return;
+      const latestProps = propsRef.current,
+        sheet = latestProps.workbook.sheets.find(
+          (sheet) => sheet.id === latestProps.sheetId,
+        );
       if (
-        (a === "chart" &&
+        (objectKind === "chart" &&
           (measureChartSelection(object.range, sheet),
           formatDiagnosticsMessage(
             inspectChartSource(
               sheet,
               object,
-              calculateWorkbookWithSettings($.workbook),
+              calculateWorkbookWithSettings(latestProps.workbook),
             ),
           )),
-        a === "picture" && !object.dataURL)
+        objectKind === "picture" && !object.dataURL)
       )
         throw Error("Choose a picture first.");
-      const G = structuredClone(object);
+      const nextObject = structuredClone(object);
       if (
-        (a === "picture" &&
-          (G.evidence = {
+        (objectKind === "picture" &&
+          (nextObject.evidence = {
             ...(object.evidence ??
               createPictureEvidence(object.dataURL, {
                 origin: "legacy-native",
               })),
             sourceLocator: sourceLocator || undefined,
           }),
-        e.objectId &&
-          !sheet.objects?.some((object) => object.id === e.objectId))
+        props.objectId &&
+          !sheet.objects?.some((object) => object.id === props.objectId))
       )
         throw Error("The drawing no longer exists.");
-      const H = e.objectId
-          ? (sheet.objects ?? []).map((X) => (X.id === e.objectId ? G : X))
-          : [...(sheet.objects ?? []), G],
-        Q = setSheetDrawingObjects($.workbook, $.sheetId, H, {
-          readOnly: $.readOnly,
-          snapshot: d.current,
-          selection: $.range,
-        });
-      (Q !== $.workbook &&
-        $.onWorkbookChange(
-          Q,
-          e.objectId ? "Update " + a + " properties" : "Insert " + a,
+      const nextObjects = props.objectId
+          ? (sheet.objects ?? []).map((drawingObject) =>
+              drawingObject.id === props.objectId ? nextObject : drawingObject,
+            )
+          : [...(sheet.objects ?? []), nextObject],
+        updatedWorkbook = setSheetDrawingObjects(
+          latestProps.workbook,
+          latestProps.sheetId,
+          nextObjects,
+          {
+            readOnly: latestProps.readOnly,
+            snapshot: snapshotRef.current,
+            selection: latestProps.range,
+          },
+        );
+      (updatedWorkbook !== latestProps.workbook &&
+        latestProps.onWorkbookChange(
+          updatedWorkbook,
+          props.objectId
+            ? "Update " + objectKind + " properties"
+            : "Insert " + objectKind,
         ),
-        $.onClose());
+        latestProps.onClose());
     } catch (error) {
-      w(
+      setPictureError(
         error instanceof Error
           ? error.message
           : "The object could not be saved.",
       );
     }
   }
-  const V =
+  const evidence =
       object.evidence ??
       (object.dataURL
         ? createPictureEvidence(object.dataURL, { origin: "legacy-native" })
         : undefined),
-    D = ne.useMemo(() => {
-      if (a !== "chart" || !sheet) return { report: null, error: "" };
+    chartInspection = ne.useMemo(() => {
+      if (objectKind !== "chart" || !sheet) return { report: null, error: "" };
       try {
         return {
           report: inspectChartSource(
             sheet,
             object,
-            calculateWorkbookWithSettings(e.workbook),
+            calculateWorkbookWithSettings(props.workbook),
           ),
           error: "",
         };
@@ -549,36 +605,39 @@ function PicturePropertiesDialog(e) {
           error: error instanceof Error ? error.message : String(error),
         };
       }
-    }, [a, sheet, object, e.workbook]),
-    B = a[0].toUpperCase() + a.slice(1) + " properties";
+    }, [objectKind, sheet, object, props.workbook]),
+    dialogTitle =
+      objectKind[0].toUpperCase() + objectKind.slice(1) + " properties";
   return i.jsx("div", {
     className: "dg-backdrop",
     onKeyDown: (event) => {
       if (
         (event.stopPropagation(),
-        event.key === "Escape" && (event.preventDefault(), e.onClose()),
+        event.key === "Escape" && (event.preventDefault(), props.onClose()),
         event.key === "Tab")
       ) {
-        const U = [
-            ...(h.current?.querySelectorAll(
+        const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled)",
             ) ?? []),
-          ].filter((Q) => !Q.closest("fieldset:disabled")),
-          G = U[0],
-          H = U.at(-1);
-        event.shiftKey && document.activeElement === G
-          ? (event.preventDefault(), H == null || H.focus())
+          ].filter((element) => !element.closest("fieldset:disabled")),
+          firstFocusable = focusableElements[0],
+          lastFocusable = focusableElements.at(-1);
+        event.shiftKey && document.activeElement === firstFocusable
+          ? (event.preventDefault(),
+            lastFocusable == null || lastFocusable.focus())
           : !event.shiftKey &&
-            document.activeElement === H &&
-            (event.preventDefault(), G == null || G.focus());
+            document.activeElement === lastFocusable &&
+            (event.preventDefault(),
+            firstFocusable == null || firstFocusable.focus());
       }
     },
     children: i.jsxs("section", {
-      className: `dg-dialog ${a === "chart" ? "dg-chart-dialog" : ""}`,
-      ref: h,
+      className: `dg-dialog ${objectKind === "chart" ? "dg-chart-dialog" : ""}`,
+      ref: dialogRef,
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": e.objectId ? B : `Insert ${a}`,
+      "aria-label": props.objectId ? dialogTitle : `Insert ${objectKind}`,
       children: [
         i.jsxs("header", {
           children: [
@@ -586,17 +645,17 @@ function PicturePropertiesDialog(e) {
               role: "heading",
               "aria-level": 2,
               children: [
-                a === "picture"
+                objectKind === "picture"
                   ? i.jsx(ImagePlus, { size: 19 })
-                  : a === "chart"
+                  : objectKind === "chart"
                     ? i.jsx(ChartColumn, { size: 19 })
                     : i.jsx(Shapes, { size: 19 }),
-                e.objectId ? B : "Insert " + a,
+                props.objectId ? dialogTitle : "Insert " + objectKind,
               ],
             }),
             i.jsx("button", {
               "aria-label": text("Close drawing tools"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close drawing tools"),
               "data-ui-label": "Close drawing tools",
               children: i.jsx(X, { size: 17 }),
@@ -606,7 +665,7 @@ function PicturePropertiesDialog(e) {
         i.jsxs("div", {
           className: "dg-form",
           children: [
-            k &&
+            isSnapshotStale &&
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
@@ -615,7 +674,7 @@ function PicturePropertiesDialog(e) {
                     "The workbook or selection changed. Close and reopen this dialog.",
                 }),
               }),
-            e.readOnly &&
+            props.readOnly &&
               i.jsx("p", {
                 role: "alert",
                 className: "dg-error",
@@ -635,9 +694,9 @@ function PicturePropertiesDialog(e) {
               }),
             i.jsxs("fieldset", {
               className: "dg-edit-fields",
-              disabled: F || E,
+              disabled: isEditLocked || isImporting,
               children: [
-                a === "picture" &&
+                objectKind === "picture" &&
                   i.jsxs(i.Fragment, {
                     children: [
                       i.jsxs("label", {
@@ -650,9 +709,9 @@ function PicturePropertiesDialog(e) {
                             type: "file",
                             accept: "image/png,image/jpeg",
                             "aria-label": text("Picture file"),
-                            disabled: F || E,
+                            disabled: isEditLocked || isImporting,
                             onChange: (event) =>
-                              void j(event.target.files?.[0]),
+                              void handlePictureFile(event.target.files?.[0]),
                             lang: language("Picture file"),
                             "data-ui-label": "Picture file",
                           }),
@@ -674,7 +733,8 @@ function PicturePropertiesDialog(e) {
                             "aria-label": text("Picture source locator"),
                             value: sourceLocator,
                             maxLength: 2e3,
-                            onChange: (event) => b(event.target.value),
+                            onChange: (event) =>
+                              setSourceLocator(event.target.value),
                             lang: language("Picture source locator"),
                             "data-ui-label": "Picture source locator",
                           }),
@@ -688,7 +748,7 @@ function PicturePropertiesDialog(e) {
                         }),
                     ],
                   }),
-                a === "shape" &&
+                objectKind === "shape" &&
                   i.jsxs("label", {
                     children: [
                       i.jsx(LocalizedText, { children: "Shape" }),
@@ -720,15 +780,15 @@ function PicturePropertiesDialog(e) {
                       }),
                     ],
                   }),
-                a === "chart" &&
+                objectKind === "chart" &&
                   i.jsx(ChartSettingsPanel, {
                     object: object,
-                    report: D.report,
+                    report: chartInspection.report,
                     update: update,
                   }),
                 i.jsxs("label", {
                   children: [
-                    a === "chart" ? "Chart title" : "Label",
+                    objectKind === "chart" ? "Chart title" : "Label",
                     i.jsx("input", {
                       "aria-label": text("Object label"),
                       value: object.label,
@@ -752,7 +812,8 @@ function PicturePropertiesDialog(e) {
                             max: 4e3,
                             "aria-label": text("Object width"),
                             value: object.width,
-                            onValueChange: (L) => update({ width: Number(L) }),
+                            onValueChange: (widthValue) =>
+                              update({ width: Number(widthValue) }),
                             lang: language("Object width"),
                             "data-ui-label": "Object width",
                           }),
@@ -766,7 +827,8 @@ function PicturePropertiesDialog(e) {
                             max: 4e3,
                             "aria-label": text("Object height"),
                             value: object.height,
-                            onValueChange: (L) => update({ height: Number(L) }),
+                            onValueChange: (heightValue) =>
+                              update({ height: Number(heightValue) }),
                             lang: language("Object height"),
                             "data-ui-label": "Object height",
                           }),
@@ -774,7 +836,7 @@ function PicturePropertiesDialog(e) {
                       }),
                     ],
                   }),
-                a === "shape" &&
+                objectKind === "shape" &&
                   i.jsxs("div", {
                     className: "dg-two",
                     children: [
@@ -821,15 +883,15 @@ function PicturePropertiesDialog(e) {
                 }),
               ],
             }),
-            a === "chart" &&
+            objectKind === "chart" &&
               i.jsx(ChartInspectionPanel, {
-                ...D,
-                revision: e.workbook.revision,
-                workbookId: e.workbook.id,
-                onExport: e.onChartExport,
+                ...chartInspection,
+                revision: props.workbook.revision,
+                workbookId: props.workbook.id,
+                onExport: props.onChartExport,
               }),
-            a === "picture" &&
-              V &&
+            objectKind === "picture" &&
+              evidence &&
               i.jsxs("dl", {
                 className: "dg-evidence-properties",
                 "aria-label": text("Picture evidence properties"),
@@ -841,34 +903,38 @@ function PicturePropertiesDialog(e) {
                   }),
                   i.jsx("dd", {
                     children:
-                      V.origin === "local-file"
+                      evidence.origin === "local-file"
                         ? "Local file bytes"
-                        : V.origin === "xlsx-media"
+                        : evidence.origin === "xlsx-media"
                           ? "Observed XLSX media"
                           : "Observed embedded bytes; original source unknown",
                   }),
                   i.jsx("dt", {
                     children:
-                      V.origin === "local-file"
+                      evidence.origin === "local-file"
                         ? "Original filename"
                         : "Observed filename",
                   }),
-                  i.jsx("dd", { children: V.filename ?? "Not available" }),
+                  i.jsx("dd", {
+                    children: evidence.filename ?? "Not available",
+                  }),
                   i.jsx("dt", {
                     children: i.jsx(LocalizedText, { children: "Byte length" }),
                   }),
-                  i.jsx("dd", { children: V.byteLength.toLocaleString() }),
+                  i.jsx("dd", {
+                    children: evidence.byteLength.toLocaleString(),
+                  }),
                   i.jsx("dt", {
                     children: i.jsx(LocalizedText, { children: "SHA-256" }),
                   }),
-                  i.jsx("dd", { children: V.sha256 }),
+                  i.jsx("dd", { children: evidence.sha256 }),
                   i.jsx("dt", {
                     children: i.jsx(LocalizedText, {
                       children: "Source reference",
                     }),
                   }),
-                  i.jsx("dd", { children: V.sourceReference }),
-                  V.containerFilename &&
+                  i.jsx("dd", { children: evidence.sourceReference }),
+                  evidence.containerFilename &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("dt", {
@@ -876,10 +942,10 @@ function PicturePropertiesDialog(e) {
                             children: "Imported workbook",
                           }),
                         }),
-                        i.jsx("dd", { children: V.containerFilename }),
+                        i.jsx("dd", { children: evidence.containerFilename }),
                       ],
                     }),
-                  V.mediaReference &&
+                  evidence.mediaReference &&
                     i.jsxs(i.Fragment, {
                       children: [
                         i.jsx("dt", {
@@ -887,7 +953,7 @@ function PicturePropertiesDialog(e) {
                             children: "Observed media reference",
                           }),
                         }),
-                        i.jsx("dd", { children: V.mediaReference }),
+                        i.jsx("dd", { children: evidence.mediaReference }),
                       ],
                     }),
                   i.jsx("dt", {
@@ -898,24 +964,28 @@ function PicturePropertiesDialog(e) {
                   i.jsx("dd", { children: sourceLocator || "Not recorded" }),
                 ],
               }),
-            y &&
-              i.jsx("p", { role: "alert", className: "dg-error", children: y }),
+            pictureError &&
+              i.jsx("p", {
+                role: "alert",
+                className: "dg-error",
+                children: pictureError,
+              }),
           ],
         }),
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsx("button", {
               className: "dg-primary",
               onClick: onClick,
-              disabled: F || E,
-              children: E
+              disabled: isEditLocked || isImporting,
+              children: isImporting
                 ? "Reading picture…"
-                : e.objectId
-                  ? "Save " + a + " properties"
+                : props.objectId
+                  ? "Save " + objectKind + " properties"
                   : "Insert",
             }),
           ],
@@ -925,7 +995,7 @@ function PicturePropertiesDialog(e) {
   });
 }
 function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
-  const o = ne.useMemo(() => {
+  const pictureError = ne.useMemo(() => {
     if (object.kind !== "picture") return "";
     try {
       return (inspectPictureDataUrl(object.dataURL ?? ""), "");
@@ -934,13 +1004,13 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
     }
   }, [object.kind, object.dataURL]);
   return object.kind === "picture"
-    ? o
+    ? pictureError
       ? i.jsxs("span", {
           role: "img",
-          "aria-label": "Invalid picture: " + o,
+          "aria-label": "Invalid picture: " + pictureError,
           children: [
             i.jsx(LocalizedText, { children: "Picture cannot be displayed: " }),
-            o,
+            pictureError,
           ],
         })
       : i.jsx("img", {
@@ -1026,80 +1096,106 @@ function DrawingObjectSvg({ object, sheet, calc, textScale = 1 }) {
         })
       : i.jsx(ChartPreviewFrame, { object, sheet, calc });
 }
-function DrawingObjectOverlay(e) {
+function DrawingObjectOverlay(props) {
   const { text, language } = useWorkbookMessages(),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    o = ne.useRef(e);
-  o.current = e;
-  const a = e.readOnly || !sheet || !!sheet?.protection?.enabled,
-    [s, d] = ne.useState(null),
-    [u, l] = ne.useState(""),
-    [objectId, h] = ne.useState(null),
-    [f, p] = ne.useState(null),
-    m = ne.useRef(null);
-  m.current = f;
-  function v(E, A, k) {
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    propsRef = ne.useRef(props);
+  propsRef.current = props;
+  const isEditLocked = props.readOnly || !sheet || !!sheet?.protection?.enabled,
+    [selectedDrawingId, setSelectedDrawingId] = ne.useState(null),
+    [editError, setEditError] = ne.useState(""),
+    [objectId, setObjectId] = ne.useState(null),
+    [dragState, setDragState] = ne.useState(null),
+    dragStateRef = ne.useRef(null);
+  dragStateRef.current = dragState;
+  function commitDrawingObject(nextObject, historyLabel, snapshot) {
     try {
-      const I = o.current,
-        sheet = I.workbook.sheets.find((sheet) => sheet.id === I.sheetId);
-      if (!sheet?.objects?.some((object) => object.id === E.id))
+      const latestProps = propsRef.current,
+        sheet = latestProps.workbook.sheets.find(
+          (sheet) => sheet.id === latestProps.sheetId,
+        );
+      if (!sheet?.objects?.some((object) => object.id === nextObject.id))
         throw Error("The selected drawing no longer exists.");
-      const j = setSheetDrawingObjects(
-        I.workbook,
-        I.sheetId,
-        sheet.objects.map((object) => (object.id === E.id ? E : object)),
+      const updatedWorkbook = setSheetDrawingObjects(
+        latestProps.workbook,
+        latestProps.sheetId,
+        sheet.objects.map((object) =>
+          object.id === nextObject.id ? nextObject : object,
+        ),
         {
-          readOnly: I.readOnly,
-          snapshot: k ?? F2(I.workbook, I.sheetId, I.selection),
-          selection: I.selection,
+          readOnly: latestProps.readOnly,
+          snapshot:
+            snapshot ??
+            F2(
+              latestProps.workbook,
+              latestProps.sheetId,
+              latestProps.selection,
+            ),
+          selection: latestProps.selection,
         },
       );
-      (j !== I.workbook && I.onWorkbookChange(j, A), l(""));
+      (updatedWorkbook !== latestProps.workbook &&
+        latestProps.onWorkbookChange(updatedWorkbook, historyLabel),
+        setEditError(""));
     } catch (error) {
-      l(error instanceof Error ? error.message : "Could not update object.");
+      setEditError(
+        error instanceof Error ? error.message : "Could not update object.",
+      );
     }
   }
-  function g(E) {
+  function deleteDrawing(drawingId) {
     try {
-      const A = o.current,
-        sheet = A.workbook.sheets.find((sheet) => sheet.id === A.sheetId),
-        F = setSheetDrawingObjects(
-          A.workbook,
-          A.sheetId,
-          (sheet?.objects ?? []).filter((I) => I.id !== E),
+      const latestProps = propsRef.current,
+        sheet = latestProps.workbook.sheets.find(
+          (sheet) => sheet.id === latestProps.sheetId,
+        ),
+        updatedWorkbook = setSheetDrawingObjects(
+          latestProps.workbook,
+          latestProps.sheetId,
+          (sheet?.objects ?? []).filter(
+            (drawingObject) => drawingObject.id !== drawingId,
+          ),
           {
-            readOnly: A.readOnly,
-            snapshot: F2(A.workbook, A.sheetId, A.selection),
-            selection: A.selection,
+            readOnly: latestProps.readOnly,
+            snapshot: F2(
+              latestProps.workbook,
+              latestProps.sheetId,
+              latestProps.selection,
+            ),
+            selection: latestProps.selection,
           },
         );
-      (F !== A.workbook && A.onWorkbookChange(F, "Delete drawing"), d(null));
+      (updatedWorkbook !== latestProps.workbook &&
+        latestProps.onWorkbookChange(updatedWorkbook, "Delete drawing"),
+        setSelectedDrawingId(null));
     } catch (error) {
-      l(error instanceof Error ? error.message : "Could not delete drawing.");
+      setEditError(
+        error instanceof Error ? error.message : "Could not delete drawing.",
+      );
     }
   }
-  function b(E, A, k, F) {
+  function beginDragEdit(drawingObject, dragType, pointerX, pointerY) {
     try {
       if (
-        (assertDrawingPreviewCurrent(e.workbook, e.sheetId, {
-          readOnly: e.readOnly,
+        (assertDrawingPreviewCurrent(props.workbook, props.sheetId, {
+          readOnly: props.readOnly,
         }),
-        !Number.isFinite(e.scale) || e.scale <= 0)
+        !Number.isFinite(props.scale) || props.scale <= 0)
       )
         throw Error("Invalid drawing zoom.");
-      (p({
-        id: E.id,
-        type: A,
-        x: k,
-        y: F,
-        initial: structuredClone(E),
-        next: structuredClone(E),
-        snapshot: F2(e.workbook, e.sheetId, e.selection),
-        scale: e.scale,
+      (setDragState({
+        id: drawingObject.id,
+        type: dragType,
+        x: pointerX,
+        y: pointerY,
+        initial: structuredClone(drawingObject),
+        next: structuredClone(drawingObject),
+        snapshot: F2(props.workbook, props.sheetId, props.selection),
+        scale: props.scale,
       }),
-        l(""));
+        setEditError(""));
     } catch (error) {
-      l(
+      setEditError(
         error instanceof Error
           ? error.message
           : "Could not start drawing edit.",
@@ -1108,89 +1204,101 @@ function DrawingObjectOverlay(e) {
   }
   return (
     ne.useEffect(() => {
-      (d(null), p(null), h(null));
-    }, [e.sheetId]),
+      (setSelectedDrawingId(null), setDragState(null), setObjectId(null));
+    }, [props.sheetId]),
     ne.useEffect(() => {
-      if (f)
+      if (dragState)
         try {
           if (
-            (assertDrawingPreviewCurrent(e.workbook, e.sheetId, {
-              readOnly: e.readOnly,
-              snapshot: f.snapshot,
-              selection: e.selection,
+            (assertDrawingPreviewCurrent(props.workbook, props.sheetId, {
+              readOnly: props.readOnly,
+              snapshot: dragState.snapshot,
+              selection: props.selection,
             }),
-            e.scale !== f.scale)
+            props.scale !== dragState.scale)
           )
             throw Error("The zoom changed. Start the drawing move again.");
         } catch (error) {
-          (p(null),
-            l(
+          (setDragState(null),
+            setEditError(
               error instanceof Error
                 ? error.message
                 : "Drawing edit was cancelled.",
             ));
         }
-    }, [e.workbook, e.readOnly, e.selection, e.scale, f]),
+    }, [
+      props.workbook,
+      props.readOnly,
+      props.selection,
+      props.scale,
+      dragState,
+    ]),
     ne.useEffect(() => {
-      if (!f) return;
-      const E = (event) => {
-          const O = m.current;
-          if (!O) return;
-          const j = (event.clientX - O.x) / O.scale,
-            z = (event.clientY - O.y) / O.scale,
-            V = {
-              ...O,
+      if (!dragState) return;
+      const handlePointerMove = (event) => {
+          const drag = dragStateRef.current;
+          if (!drag) return;
+          const deltaX = (event.clientX - drag.x) / drag.scale,
+            deltaY = (event.clientY - drag.y) / drag.scale,
+            nextDrag = {
+              ...drag,
               next:
-                O.type === "move"
+                drag.type === "move"
                   ? {
-                      ...O.initial,
+                      ...drag.initial,
                       offsetX: Math.max(
                         -4e3,
-                        Math.min(4e3, O.initial.offsetX + j),
+                        Math.min(4e3, drag.initial.offsetX + deltaX),
                       ),
                       offsetY: Math.max(
                         -4e3,
-                        Math.min(4e3, O.initial.offsetY + z),
+                        Math.min(4e3, drag.initial.offsetY + deltaY),
                       ),
                     }
                   : {
-                      ...O.initial,
-                      width: Math.max(24, Math.min(4e3, O.initial.width + j)),
-                      height: Math.max(24, Math.min(4e3, O.initial.height + z)),
+                      ...drag.initial,
+                      width: Math.max(
+                        24,
+                        Math.min(4e3, drag.initial.width + deltaX),
+                      ),
+                      height: Math.max(
+                        24,
+                        Math.min(4e3, drag.initial.height + deltaY),
+                      ),
                     },
             };
-          ((m.current = V), p(V));
+          ((dragStateRef.current = nextDrag), setDragState(nextDrag));
         },
-        A = () => {
-          const I = m.current;
-          I &&
-            (v(
-              I.next,
-              I.type === "move" ? "Move drawing" : "Resize drawing",
-              I.snapshot,
+        handlePointerUp = () => {
+          const drag = dragStateRef.current;
+          drag &&
+            (commitDrawingObject(
+              drag.next,
+              drag.type === "move" ? "Move drawing" : "Resize drawing",
+              drag.snapshot,
             ),
-            (m.current = null),
-            p(null));
+            (dragStateRef.current = null),
+            setDragState(null));
         },
-        k = () => {
-          ((m.current = null), p(null));
+        handlePointerCancel = () => {
+          ((dragStateRef.current = null), setDragState(null));
         },
-        F = (event) => {
-          event.key === "Escape" && k();
+        handleKeyDown = (event) => {
+          event.key === "Escape" && handlePointerCancel();
         };
       return (
-        window.addEventListener("pointermove", E),
-        window.addEventListener("pointerup", A),
-        window.addEventListener("pointercancel", k),
-        window.addEventListener("keydown", F),
+        window.addEventListener("pointermove", handlePointerMove),
+        window.addEventListener("pointerup", handlePointerUp),
+        window.addEventListener("pointercancel", handlePointerCancel),
+        window.addEventListener("keydown", handleKeyDown),
         () => {
-          (window.removeEventListener("pointermove", E),
-            window.removeEventListener("pointerup", A),
-            window.removeEventListener("pointercancel", k),
-            window.removeEventListener("keydown", F));
+          (window.removeEventListener("pointermove", handlePointerMove),
+            window.removeEventListener("pointerup", handlePointerUp),
+            window.removeEventListener("pointercancel", handlePointerCancel),
+            window.removeEventListener("keydown", handleKeyDown));
         }
       );
-    }, [!!f]),
+    }, [!!dragState]),
     i.jsxs(i.Fragment, {
       children: [
         i.jsxs("div", {
@@ -1200,44 +1308,51 @@ function DrawingObjectOverlay(e) {
           lang: language("Worksheet drawings"),
           "data-ui-label": "Worksheet drawings",
           children: [
-            (sheet?.objects ?? []).map((E) => {
-              const object = f?.id === E.id ? f.next : E,
-                k = e.positionForCell(object.anchor),
+            (sheet?.objects ?? []).map((storedObject) => {
+              const object =
+                  dragState?.id === storedObject.id
+                    ? dragState.next
+                    : storedObject,
+                anchorPosition = props.positionForCell(object.anchor),
                 disabled =
                   object.kind === "chart" && object.chart === "sparkline",
-                I = applyChartDrawingLayout(sheet, object);
-              return k
+                drawingLayout = applyChartDrawingLayout(sheet, object);
+              return anchorPosition
                 ? i.jsxs(
                     "div",
                     {
-                      className: `dg-drawing ${s === object.id ? "dg-drawing-selected" : ""}`,
+                      className: `dg-drawing ${selectedDrawingId === object.id ? "dg-drawing-selected" : ""}`,
                       "data-object-id": object.id,
                       style: {
-                        left: k.left + I.offsetX * e.scale,
-                        top: k.top + I.offsetY * e.scale,
-                        width: I.width * e.scale,
-                        height: I.height * e.scale,
+                        left:
+                          anchorPosition.left +
+                          drawingLayout.offsetX * props.scale,
+                        top:
+                          anchorPosition.top +
+                          drawingLayout.offsetY * props.scale,
+                        width: drawingLayout.width * props.scale,
+                        height: drawingLayout.height * props.scale,
                       },
                       tabIndex: 0,
                       "aria-label": object.kind + ": " + object.label,
-                      onClick: () => d(object.id),
+                      onClick: () => setSelectedDrawingId(object.id),
                       onKeyDown: (event) => {
                         (event.stopPropagation(),
-                          event.key === "Escape" && d(null),
+                          event.key === "Escape" && setSelectedDrawingId(null),
                           (event.key === "Delete" ||
                             event.key === "Backspace") &&
                             event.target === event.currentTarget &&
-                            !a &&
-                            (event.preventDefault(), g(object.id)));
+                            !isEditLocked &&
+                            (event.preventDefault(), deleteDrawing(object.id)));
                       },
                       children: [
                         i.jsx(DrawingObjectSvg, {
                           object: object,
                           sheet: sheet,
-                          calc: e.calc,
-                          textScale: e.scale,
+                          calc: props.calc,
+                          textScale: props.scale,
                         }),
-                        s === object.id &&
+                        selectedDrawingId === object.id &&
                           i.jsxs(i.Fragment, {
                             children: [
                               i.jsxs("div", {
@@ -1253,10 +1368,10 @@ function DrawingObjectOverlay(e) {
                                           : "Picture") +
                                         " properties: " +
                                         object.label,
-                                      onClick: () => h(object.id),
+                                      onClick: () => setObjectId(object.id),
                                       children: "ⓘ",
                                     }),
-                                  !a &&
+                                  !isEditLocked &&
                                     i.jsxs(i.Fragment, {
                                       children: [
                                         i.jsx("button", {
@@ -1267,7 +1382,7 @@ function DrawingObjectOverlay(e) {
                                           disabled: disabled,
                                           onPointerDown: (event) => {
                                             (event.preventDefault(),
-                                              b(
+                                              beginDragEdit(
                                                 object,
                                                 "move",
                                                 event.clientX,
@@ -1282,7 +1397,7 @@ function DrawingObjectOverlay(e) {
                                           ),
                                           value: object.label,
                                           onChange: (event) =>
-                                            v(
+                                            commitDrawingObject(
                                               {
                                                 ...object,
                                                 label: event.target.value,
@@ -1298,21 +1413,22 @@ function DrawingObjectOverlay(e) {
                                         i.jsx("button", {
                                           "aria-label":
                                             "Delete " + object.label,
-                                          onClick: () => g(object.id),
+                                          onClick: () =>
+                                            deleteDrawing(object.id),
                                           children: i.jsx(Trash2, { size: 14 }),
                                         }),
                                       ],
                                     }),
                                 ],
                               }),
-                              !a &&
+                              !isEditLocked &&
                                 !disabled &&
                                 i.jsx("button", {
                                   className: "dg-resize-object",
                                   "aria-label": "Resize " + object.label,
                                   onPointerDown: (event) => {
                                     (event.preventDefault(),
-                                      b(
+                                      beginDragEdit(
                                         object,
                                         "resize",
                                         event.clientX,
@@ -1328,11 +1444,11 @@ function DrawingObjectOverlay(e) {
                   )
                 : null;
             }),
-            u &&
+            editError &&
               i.jsx("div", {
                 className: "dg-object-error",
                 role: "alert",
-                children: u,
+                children: editError,
               }),
           ],
         }),
@@ -1341,14 +1457,14 @@ function DrawingObjectOverlay(e) {
           i.jsx(PicturePropertiesDialog, {
             mode: "drawing-properties",
             objectId: objectId,
-            workbook: e.workbook,
-            sheetId: e.sheetId,
+            workbook: props.workbook,
+            sheetId: props.sheetId,
             range:
-              e.selection ??
+              props.selection ??
               sheet.objects.find((object) => object.id === objectId).anchor,
-            readOnly: e.readOnly,
-            onClose: () => h(null),
-            onWorkbookChange: e.onWorkbookChange,
+            readOnly: props.readOnly,
+            onClose: () => setObjectId(null),
+            onWorkbookChange: props.onWorkbookChange,
           }),
       ],
     })
@@ -1371,55 +1487,70 @@ function PrintPagePreview({
       sheet.rowCount,
       cn(sheet, "row"),
     ),
-    c = createAxisVisibilityIndex(sheet.colCount, cn(sheet, "column")),
+    columnVisibilityIndex = createAxisVisibilityIndex(
+      sheet.colCount,
+      cn(sheet, "column"),
+    ),
     pageDimensions = resolvePageDimensions(layout),
     rangeAddress = parseRangeAddress(layout.printArea),
-    p =
+    visibleRows =
       page.rows ??
       Array.from(
         { length: page.lastRow - page.firstRow + 1 },
-        (E, A) => page.firstRow + A,
-      ).filter((E) => !axisVisibilityIndex.isHidden(E)),
-    m =
+        (E, rowOffset) => page.firstRow + rowOffset,
+      ).filter((rowIndex) => !axisVisibilityIndex.isHidden(rowIndex)),
+    visibleColumns =
       page.columns ??
       Array.from(
         { length: page.lastCol - page.firstCol + 1 },
-        (E, A) => page.firstCol + A,
-      ).filter((E) => !c.isHidden(E)),
-    width = m.reduce(
-      (E, A) => E + columnWidthAt(sheet, A),
+        (E, columnOffset) => page.firstCol + columnOffset,
+      ).filter((columnIndex) => !columnVisibilityIndex.isHidden(columnIndex)),
+    width = visibleColumns.reduce(
+      (totalWidth, column) => totalWidth + columnWidthAt(sheet, column),
       layout.headings ? 32 : 0,
     ),
-    g = new Map(p.map((E, A) => [E, A])),
-    b = [0];
-  for (const E of p) b.push(b.at(-1) + rowHeightAt(sheet, E));
-  const y = new Map();
-  for (const E of sheet.merges ?? []) {
-    const rangeAddress = parseRangeAddress(E),
-      k = p.filter(
-        (O) => O >= rangeAddress.firstRow && O <= rangeAddress.lastRow,
+    rowPositions = new Map(
+      visibleRows.map((row, rowPosition) => [row, rowPosition]),
+    ),
+    rowTops = [0];
+  for (const visibleRow of visibleRows)
+    rowTops.push(rowTops.at(-1) + rowHeightAt(sheet, visibleRow));
+  const mergeInfoByCell = new Map();
+  for (const mergeRange of sheet.merges ?? []) {
+    const rangeAddress = parseRangeAddress(mergeRange),
+      mergeRows = visibleRows.filter(
+        (candidateRow) =>
+          candidateRow >= rangeAddress.firstRow &&
+          candidateRow <= rangeAddress.lastRow,
       ),
-      F = m.filter(
-        (O) => O >= rangeAddress.firstCol && O <= rangeAddress.lastCol,
+      mergeColumns = visibleColumns.filter(
+        (candidateColumn) =>
+          candidateColumn >= rangeAddress.firstCol &&
+          candidateColumn <= rangeAddress.lastCol,
       );
-    if (!k.length || !F.length) continue;
-    const I = {
-      firstRow: k[0],
-      lastRow: k.at(-1),
-      firstCol: F[0],
-      lastCol: F.at(-1),
-      rowSpan: k.length,
-      colSpan: F.length,
+    if (!mergeRows.length || !mergeColumns.length) continue;
+    const mergeInfo = {
+      firstRow: mergeRows[0],
+      lastRow: mergeRows.at(-1),
+      firstCol: mergeColumns[0],
+      lastCol: mergeColumns.at(-1),
+      rowSpan: mergeRows.length,
+      colSpan: mergeColumns.length,
       suppressContent:
         axisVisibilityIndex.isHidden(rangeAddress.firstRow) ||
-        c.isHidden(rangeAddress.firstCol),
+        columnVisibilityIndex.isHidden(rangeAddress.firstCol),
       anchor: `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
     };
-    if (!(I.firstRow > I.lastRow || I.firstCol > I.lastCol))
-      for (const O of k) for (const j of F) y.set(O * 16384 + j, I);
+    if (!(
+      mergeInfo.firstRow > mergeInfo.lastRow ||
+      mergeInfo.firstCol > mergeInfo.lastCol
+    ))
+      for (const mergeRow of mergeRows)
+        for (const mergeColumn of mergeColumns)
+          mergeInfoByCell.set(mergeRow * 16384 + mergeColumn, mergeInfo);
   }
-  const w = (E) =>
-    expandHeaderFooterTemplate(E, workbook, sheet, index + 1, total);
+  const expandHeaderFooter = (template) =>
+    expandHeaderFooterTemplate(template, workbook, sheet, index + 1, total);
   return i.jsxs("article", {
     className: "dg-print-paper",
     "aria-label": `Print page ${index + 1}`,
@@ -1440,7 +1571,7 @@ function PrintPagePreview({
           left: layout.margins.left * 96,
           right: layout.margins.right * 96,
         },
-        children: w(layout.header),
+        children: expandHeaderFooter(layout.header),
       }),
       i.jsx("div", {
         className: "dg-print-content",
@@ -1466,11 +1597,11 @@ function PrintPagePreview({
                 i.jsxs("colgroup", {
                   children: [
                     layout.headings && i.jsx("col", { style: { width: 32 } }),
-                    m.map((E) =>
+                    visibleColumns.map((colIndex) =>
                       i.jsx(
                         "col",
-                        { style: { width: columnWidthAt(sheet, E) } },
-                        E,
+                        { style: { width: columnWidthAt(sheet, colIndex) } },
+                        colIndex,
                       ),
                     ),
                   ],
@@ -1480,126 +1611,156 @@ function PrintPagePreview({
                     children: i.jsxs("tr", {
                       children: [
                         i.jsx("th", {}),
-                        m.map((E) =>
-                          i.jsx("th", { children: columnIndexToLetters(E) }, E),
+                        visibleColumns.map((headerColumn) =>
+                          i.jsx(
+                            "th",
+                            { children: columnIndexToLetters(headerColumn) },
+                            headerColumn,
+                          ),
                         ),
                       ],
                     }),
                   }),
                 i.jsx("tbody", {
-                  children: p.map((E) =>
+                  children: visibleRows.map((bodyRow) =>
                     i.jsxs(
                       "tr",
                       {
-                        style: { height: rowHeightAt(sheet, E) },
+                        style: { height: rowHeightAt(sheet, bodyRow) },
                         children: [
-                          layout.headings && i.jsx("th", { children: E + 1 }),
-                          m.map((A) => {
-                            const k = y.get(E * 16384 + A);
-                            if (k && (E !== k.firstRow || A !== k.firstCol))
+                          layout.headings &&
+                            i.jsx("th", { children: bodyRow + 1 }),
+                          visibleColumns.map((bodyColumn) => {
+                            const cellMerge = mergeInfoByCell.get(
+                              bodyRow * 16384 + bodyColumn,
+                            );
+                            if (
+                              cellMerge &&
+                              (bodyRow !== cellMerge.firstRow ||
+                                bodyColumn !== cellMerge.firstCol)
+                            )
                               return null;
-                            const F =
-                                k?.anchor ??
-                                `${columnIndexToLetters(A)}${E + 1}`,
-                              cell = k?.suppressContent
+                            const cellAddress =
+                                cellMerge?.anchor ??
+                                `${columnIndexToLetters(bodyColumn)}${bodyRow + 1}`,
+                              cell = cellMerge?.suppressContent
                                 ? undefined
-                                : sheet.cells[F],
-                              O = {
+                                : sheet.cells[cellAddress],
+                              displayCell = {
                                 ...cell,
                                 raw: cell?.raw ?? null,
-                                style: k?.suppressContent
+                                style: cellMerge?.suppressContent
                                   ? {}
                                   : {
                                       ...cell?.style,
-                                      ...ruleStyles(F).style,
+                                      ...ruleStyles(cellAddress).style,
                                     },
                               },
-                              j = k?.suppressContent ? null : calc(sheet.id, F),
-                              z = b[g.get(k?.lastRow ?? E) + 1] - b[g.get(E)];
+                              cellValue = cellMerge?.suppressContent
+                                ? null
+                                : calc(sheet.id, cellAddress),
+                              spanHeight =
+                                rowTops[
+                                  rowPositions.get(
+                                    cellMerge?.lastRow ?? bodyRow,
+                                  ) + 1
+                                ] - rowTops[rowPositions.get(bodyRow)];
                             return i.jsx(
                               "td",
                               {
-                                "data-print-cell": F,
+                                "data-print-cell": cellAddress,
                                 "data-print-in-area":
-                                  E >= rangeAddress.firstRow &&
-                                  E <= rangeAddress.lastRow &&
-                                  A >= rangeAddress.firstCol &&
-                                  A <= rangeAddress.lastCol
+                                  bodyRow >= rangeAddress.firstRow &&
+                                  bodyRow <= rangeAddress.lastRow &&
+                                  bodyColumn >= rangeAddress.firstCol &&
+                                  bodyColumn <= rangeAddress.lastCol
                                     ? "true"
                                     : "false",
                                 "data-print-number":
-                                  typeof j == "number" ? "true" : undefined,
-                                colSpan: k?.colSpan ?? 1,
-                                rowSpan: k?.rowSpan ?? 1,
-                                style: cellStyleToCss(O.style, j, {
-                                  defaultBorder: layout.gridlines
-                                    ? "1px solid #d4d4d4"
-                                    : "none",
-                                }),
+                                  typeof cellValue == "number"
+                                    ? "true"
+                                    : undefined,
+                                colSpan: cellMerge?.colSpan ?? 1,
+                                rowSpan: cellMerge?.rowSpan ?? 1,
+                                style: cellStyleToCss(
+                                  displayCell.style,
+                                  cellValue,
+                                  {
+                                    defaultBorder: layout.gridlines
+                                      ? "1px solid #d4d4d4"
+                                      : "none",
+                                  },
+                                ),
                                 children: i.jsx("div", {
                                   style: {
-                                    maxHeight: z - 1,
-                                    ...textWrapToCss(O.style),
+                                    maxHeight: spanHeight - 1,
+                                    ...textWrapToCss(displayCell.style),
                                     position: "relative",
                                   },
                                   children: i.jsx(ConditionalFormatIndicator, {
-                                    decoration: k?.suppressContent
+                                    decoration: cellMerge?.suppressContent
                                       ? undefined
-                                      : ruleStyles(F),
+                                      : ruleStyles(cellAddress),
                                     children: i.jsx(CellValuePreview, {
-                                      value: j,
-                                      cell: O,
+                                      value: cellValue,
+                                      cell: displayCell,
                                       dateSystem:
                                         workbook.datePolicy?.dateSystem,
                                     }),
                                   }),
                                 }),
                               },
-                              A,
+                              bodyColumn,
                             );
                           }),
                         ],
                       },
-                      E,
+                      bodyRow,
                     ),
                   ),
                 }),
               ],
             }),
             (sheet.objects ?? []).map((object) => {
-              const A = parseRangeAddress(object.anchor),
-                k = applyChartDrawingLayout(sheet, object);
+              const objectAnchor = parseRangeAddress(object.anchor),
+                objectLayout = applyChartDrawingLayout(sheet, object);
               if (
-                axisVisibilityIndex.isHidden(A.firstRow) ||
-                c.isHidden(A.firstCol) ||
-                !p.includes(A.firstRow) ||
-                !m.includes(A.firstCol)
+                axisVisibilityIndex.isHidden(objectAnchor.firstRow) ||
+                columnVisibilityIndex.isHidden(objectAnchor.firstCol) ||
+                !visibleRows.includes(objectAnchor.firstRow) ||
+                !visibleColumns.includes(objectAnchor.firstCol)
               )
                 return null;
-              let F = layout.headings ? 32 : 0,
-                I = layout.headings ? 22 : 0;
-              for (const O of m.slice(0, m.indexOf(A.firstCol)))
-                F += columnWidthAt(sheet, O);
-              for (const O of p.slice(0, p.indexOf(A.firstRow)))
-                I += rowHeightAt(sheet, O);
+              let leftOffset = layout.headings ? 32 : 0,
+                topOffset = layout.headings ? 22 : 0;
+              for (const precedingColumn of visibleColumns.slice(
+                0,
+                visibleColumns.indexOf(objectAnchor.firstCol),
+              ))
+                leftOffset += columnWidthAt(sheet, precedingColumn);
+              for (const precedingRow of visibleRows.slice(
+                0,
+                visibleRows.indexOf(objectAnchor.firstRow),
+              ))
+                topOffset += rowHeightAt(sheet, precedingRow);
               return i.jsx(
                 "div",
                 {
                   className: "dg-print-object",
                   "data-print-object": object.id,
                   "data-print-in-area":
-                    A.firstRow >= rangeAddress.firstRow &&
-                    A.firstRow <= rangeAddress.lastRow &&
-                    A.firstCol >= rangeAddress.firstCol &&
-                    A.firstCol <= rangeAddress.lastCol
+                    objectAnchor.firstRow >= rangeAddress.firstRow &&
+                    objectAnchor.firstRow <= rangeAddress.lastRow &&
+                    objectAnchor.firstCol >= rangeAddress.firstCol &&
+                    objectAnchor.firstCol <= rangeAddress.lastCol
                       ? "true"
                       : "false",
                   "data-print-label": object.label,
                   style: {
-                    left: F + k.offsetX,
-                    top: I + k.offsetY,
-                    width: k.width,
-                    height: k.height,
+                    left: leftOffset + objectLayout.offsetX,
+                    top: topOffset + objectLayout.offsetY,
+                    width: objectLayout.width,
+                    height: objectLayout.height,
                   },
                   children: i.jsx(DrawingObjectSvg, {
                     object: object,
@@ -1620,15 +1781,15 @@ function PrintPagePreview({
           left: layout.margins.left * 96,
           right: layout.margins.right * 96,
         },
-        children: w(layout.footer),
+        children: expandHeaderFooter(layout.footer),
       }),
     ],
   });
 }
 
-function buildPrintPages(workbook, sheetId, t) {
+function buildPrintPages(workbook, sheetId, layout) {
   const sheet = { ...findSheetOrThrow(workbook, sheetId) };
-  validatePageSetup(t, sheet);
+  validatePageSetup(layout, sheet);
   try {
     validateDrawingObjects(sheet.objects, sheet);
   } catch (error) {
@@ -1636,31 +1797,32 @@ function buildPrintPages(workbook, sheetId, t) {
       `Unsupported or invalid print object: ${error instanceof Error ? error.message : "check the worksheet drawings."}`,
     );
   }
-  const o = zU(sheet, sheet.pageLayout),
+  const paginated = zU(sheet, sheet.pageLayout),
     workbookWithSettings = calculateWorkbookWithSettings(workbook),
     ruleStyles = evaluateConditionalFormatRules(
       sheet,
       workbookWithSettings,
       vx(sheet, workbookWithSettings),
     );
-  for (const page of o.pages) {
-    const u =
+  for (const page of paginated.pages) {
+    const pageRows =
         page.rows ??
         Array.from(
           { length: page.lastRow - page.firstRow + 1 },
-          (c, h) => page.firstRow + h,
+          (c, rowOffset) => page.firstRow + rowOffset,
         ),
-      l =
+      pageColumns =
         page.columns ??
         Array.from(
           { length: page.lastCol - page.firstCol + 1 },
-          (c, h) => page.firstCol + h,
+          (c, columnOffset) => page.firstCol + columnOffset,
         );
-    for (const c of u)
-      for (const h of l) ruleStyles(`${columnIndexToLetters(h)}${c + 1}`);
+    for (const pageRow of pageRows)
+      for (const pageColumn of pageColumns)
+        ruleStyles(`${columnIndexToLetters(pageColumn)}${pageRow + 1}`);
   }
   return {
-    ...o,
+    ...paginated,
     sheet: sheet,
     layout: sheet.pageLayout,
     calc: workbookWithSettings,
@@ -1678,7 +1840,7 @@ function renderPrintDocument(workbook, sheetId, layout) {
           ...defaultPrintHeaderFooter,
         },
     ),
-    a = printPages.pages.map((page, c) =>
+    pageElements = printPages.pages.map((page, pageIndex) =>
       i.jsx(
         PrintPagePreview,
         {
@@ -1686,16 +1848,17 @@ function renderPrintDocument(workbook, sheetId, layout) {
           sheet: printPages.sheet,
           layout: printPages.layout,
           page: page,
-          index: c,
+          index: pageIndex,
           total: printPages.pages.length,
           scale: printPages.scale,
           calc: printPages.calc,
           ruleStyles: printPages.ruleStyles,
         },
-        c,
+        pageIndex,
       ),
     ),
-    s = printPages.layout.paper === "a4" ? "A4" : printPages.layout.paper;
+    paperSize =
+      printPages.layout.paper === "a4" ? "A4" : printPages.layout.paper;
   return {
     html:
       "<!doctype html>" +
@@ -1714,11 +1877,11 @@ function renderPrintDocument(workbook, sheetId, layout) {
                   content: `Workbook ${workbook.name}; revision ${workbook.revision}; period ${workbook.metadata?.period || "not set"}; ${printPages.pages.length} page(s).`,
                 }),
                 i.jsx("style", {
-                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${printPaperStyles}@page{size:${s} ${printPages.layout.orientation};margin:0}`,
+                  children: `*{box-sizing:border-box}html,body{margin:0;padding:0;background:white;font-family:Calibri,Arial,sans-serif}${printPaperStyles}@page{size:${paperSize} ${printPages.layout.orientation};margin:0}`,
                 }),
               ],
             }),
-            i.jsx("body", { children: a }),
+            i.jsx("body", { children: pageElements }),
           ],
         }),
       ),
@@ -1727,50 +1890,61 @@ function renderPrintDocument(workbook, sheetId, layout) {
       ...(printPages.notices ?? []),
       ...printPages.ruleStyles
         .errors()
-        .map((l) => `Conditional formatting: ${l.message}`),
+        .map((ruleError) => `Conditional formatting: ${ruleError.message}`),
     ],
   };
 }
-function boundsOverlap(e, r, t = 0.8) {
+function boundsOverlap(childBounds, containerBounds, tolerance = 0.8) {
   return (
-    e.left < r.left - t ||
-    e.right > r.right + t ||
-    e.top < r.top - t ||
-    e.bottom > r.bottom + t
+    childBounds.left < containerBounds.left - tolerance ||
+    childBounds.right > containerBounds.right + tolerance ||
+    childBounds.top < containerBounds.top - tolerance ||
+    childBounds.bottom > containerBounds.bottom + tolerance
   );
 }
-function measureRenderedTextBounds(e) {
-  if (e.scrollWidth > e.clientWidth + 1 || e.scrollHeight > e.clientHeight + 1)
+function measureRenderedTextBounds(element) {
+  if (
+    element.scrollWidth > element.clientWidth + 1 ||
+    element.scrollHeight > element.clientHeight + 1
+  )
     return true;
-  const ownerDocument = e.ownerDocument,
-    t = e.getBoundingClientRect(),
-    n = ownerDocument.createTreeWalker(e, 4),
-    o = ownerDocument.createRange();
-  let a;
-  for (; (a = n.nextNode());)
-    if (a.textContent?.trim()) {
-      o.selectNodeContents(a);
-      for (const d of o.getClientRects()) if (boundsOverlap(d, t)) return true;
+  const ownerDocument = element.ownerDocument,
+    elementBounds = element.getBoundingClientRect(),
+    treeWalker = ownerDocument.createTreeWalker(element, 4),
+    textRange = ownerDocument.createRange();
+  let textNode;
+  for (; (textNode = treeWalker.nextNode());)
+    if (textNode.textContent?.trim()) {
+      textRange.selectNodeContents(textNode);
+      for (const clientRect of textRange.getClientRects())
+        if (boundsOverlap(clientRect, elementBounds)) return true;
     }
   return false;
 }
-function measurePrintLayoutIssues(e) {
-  const r = Array.from(e.querySelectorAll(".dg-print-paper")),
+function measurePrintLayoutIssues(printDocument) {
+  const paperPages = Array.from(
+      printDocument.querySelectorAll(".dg-print-paper"),
+    ),
     issues = [];
-  r.length ||
+  paperPages.length ||
     issues.push({
       severity: "error",
       code: "empty",
       message: "There are no pages to print. Choose a populated print area.",
     });
-  let n = false;
+  let hasContentInArea = false;
   return (
-    r.forEach((o, a) => {
-      const page = a + 1,
-        d = o.getBoundingClientRect(),
-        u = o.querySelector(".dg-print-content"),
-        l = o.querySelector(".dg-print-table");
-      if (!d.width || !d.height || !u || !l) {
+    paperPages.forEach((paperElement, pageIndex) => {
+      const page = pageIndex + 1,
+        paperBounds = paperElement.getBoundingClientRect(),
+        contentElement = paperElement.querySelector(".dg-print-content"),
+        tableElement = paperElement.querySelector(".dg-print-table");
+      if (
+        !paperBounds.width ||
+        !paperBounds.height ||
+        !contentElement ||
+        !tableElement
+      ) {
         issues.push({
           severity: "error",
           code: "layout",
@@ -1779,91 +1953,109 @@ function measurePrintLayoutIssues(e) {
         });
         return;
       }
-      const c = u.getBoundingClientRect();
-      boundsOverlap(l.getBoundingClientRect(), c) &&
+      const contentBounds = contentElement.getBoundingClientRect();
+      boundsOverlap(tableElement.getBoundingClientRect(), contentBounds) &&
         issues.push({
           severity: "error",
           code: "layout",
           page: page,
           message: `Page ${page}: rows or columns extend beyond the printable area. Reduce scale, increase margins' available space, or adjust row/column sizes.`,
         });
-      for (const m of ["header", "footer"]) {
-        const v = o.querySelector(`.dg-print-${m}`);
-        if (!v?.textContent?.trim()) continue;
-        const g = v.getBoundingClientRect();
-        (boundsOverlap(g, d) ||
-          measureRenderedTextBounds(v) ||
-          (m === "header" ? g.bottom > c.top + 0.8 : g.top < c.bottom - 0.8)) &&
+      for (const region of ["header", "footer"]) {
+        const regionElement = paperElement.querySelector(`.dg-print-${region}`);
+        if (!regionElement?.textContent?.trim()) continue;
+        const regionBounds = regionElement.getBoundingClientRect();
+        (boundsOverlap(regionBounds, paperBounds) ||
+          measureRenderedTextBounds(regionElement) ||
+          (region === "header"
+            ? regionBounds.bottom > contentBounds.top + 0.8
+            : regionBounds.top < contentBounds.bottom - 0.8)) &&
           issues.push({
             severity: "error",
             code: "identity",
             page: page,
-            message: `Page ${page}: the ${m} is clipped or overlaps the schedule. Shorten its text or increase the ${m === "header" ? "top" : "bottom"} margin.`,
+            message: `Page ${page}: the ${region} is clipped or overlaps the schedule. Shorten its text or increase the ${region === "header" ? "top" : "bottom"} margin.`,
           });
       }
-      const h = [];
-      for (const m of o.querySelectorAll("[data-print-cell]")) {
-        const firstElementChild = m.firstElementChild;
+      const numericCells = [];
+      for (const cellElement of paperElement.querySelectorAll(
+        "[data-print-cell]",
+      )) {
+        const firstElementChild = cellElement.firstElementChild;
         if (!firstElementChild?.textContent?.trim()) continue;
-        m.dataset.printInArea !== "false" && (n = true);
-        const printCell = m.dataset.printCell,
-          b = m.dataset.printNumber === "true";
-        (b && h.push({ address: printCell, bounds: m.getBoundingClientRect() }),
+        cellElement.dataset.printInArea !== "false" &&
+          (hasContentInArea = true);
+        const printCell = cellElement.dataset.printCell,
+          isNumberCell = cellElement.dataset.printNumber === "true";
+        (isNumberCell &&
+          numericCells.push({
+            address: printCell,
+            bounds: cellElement.getBoundingClientRect(),
+          }),
           measureRenderedTextBounds(firstElementChild) &&
             issues.push({
-              severity: b ? "error" : "warning",
-              code: b ? "number" : "text",
+              severity: isNumberCell ? "error" : "warning",
+              code: isNumberCell ? "number" : "text",
               page: page,
               address: printCell,
-              message: `Page ${page}, ${printCell}: ${b ? "the full number does not fit" : "text is clipped"}. AutoFit or widen the column, increase row height, or reduce the cell font size before printing.`,
+              message: `Page ${page}, ${printCell}: ${isNumberCell ? "the full number does not fit" : "text is clipped"}. AutoFit or widen the column, increase row height, or reduce the cell font size before printing.`,
             }));
       }
-      for (const m of o.querySelectorAll(".dg-print-object")) {
-        m.dataset.printInArea !== "false" && (n = true);
-        const v = m.dataset.printLabel || m.dataset.printObject || "Drawing",
-          g = m.getBoundingClientRect();
-        boundsOverlap(g, c) &&
+      for (const objectElement of paperElement.querySelectorAll(
+        ".dg-print-object",
+      )) {
+        objectElement.dataset.printInArea !== "false" &&
+          (hasContentInArea = true);
+        const objectLabel =
+            objectElement.dataset.printLabel ||
+            objectElement.dataset.printObject ||
+            "Drawing",
+          objectBounds = objectElement.getBoundingClientRect();
+        boundsOverlap(objectBounds, contentBounds) &&
           issues.push({
             severity: "error",
             code: "object",
             page: page,
-            message: `Page ${page}: “${v}” crosses the printable boundary. Move or resize it; drawings are not continued onto the next page.`,
+            message: `Page ${page}: “${objectLabel}” crosses the printable boundary. Move or resize it; drawings are not continued onto the next page.`,
           });
-        const b = m.querySelector(".dg-shape-label"),
-          y = [...m.querySelectorAll("svg text")];
-        ((b && measureRenderedTextBounds(b)) ||
-          y.some((w) => boundsOverlap(w.getBoundingClientRect(), g))) &&
+        const labelElement = objectElement.querySelector(".dg-shape-label"),
+          svgTextElements = [...objectElement.querySelectorAll("svg text")];
+        ((labelElement && measureRenderedTextBounds(labelElement)) ||
+          svgTextElements.some((svgText) =>
+            boundsOverlap(svgText.getBoundingClientRect(), objectBounds),
+          )) &&
           issues.push({
             severity: "error",
             code: "object",
             page: page,
-            message: `Page ${page}: the label in “${v}” is clipped. Enlarge the object or shorten the label.`,
+            message: `Page ${page}: the label in “${objectLabel}” is clipped. Enlarge the object or shorten the label.`,
           });
-        for (const w of h)
-          Math.min(g.right, w.bounds.right) - Math.max(g.left, w.bounds.left) >
+        for (const numericCell of numericCells)
+          Math.min(objectBounds.right, numericCell.bounds.right) -
+            Math.max(objectBounds.left, numericCell.bounds.left) >
             1 &&
-            Math.min(g.bottom, w.bounds.bottom) -
-              Math.max(g.top, w.bounds.top) >
+            Math.min(objectBounds.bottom, numericCell.bounds.bottom) -
+              Math.max(objectBounds.top, numericCell.bounds.top) >
               1 &&
             issues.push({
               severity: "error",
               code: "object",
               page: page,
-              address: w.address,
-              message: `Page ${page}, ${w.address}: “${v}” overlaps a numeric cell. Move the drawing so the amount remains visible.`,
+              address: numericCell.address,
+              message: `Page ${page}, ${numericCell.address}: “${objectLabel}” overlaps a numeric cell. Move the drawing so the amount remains visible.`,
             });
-        for (const w of m.querySelectorAll("img"))
-          (!w.complete || w.naturalWidth <= 0) &&
+        for (const imageElement of objectElement.querySelectorAll("img"))
+          (!imageElement.complete || imageElement.naturalWidth <= 0) &&
             issues.push({
               severity: "error",
               code: "image",
               page: page,
-              message: `Page ${page}: picture “${v}” could not be decoded. Replace it before printing.`,
+              message: `Page ${page}: picture “${objectLabel}” could not be decoded. Replace it before printing.`,
             });
       }
     }),
-    r.length &&
-      !n &&
+    paperPages.length &&
+      !hasContentInArea &&
       !issues.some((issue) => issue.code === "layout") &&
       issues.unshift({
         severity: "error",
@@ -1871,92 +2063,102 @@ function measurePrintLayoutIssues(e) {
         message:
           "The print area is empty: no displayed values or visible objects. Choose a populated print area. Formatting, repeated titles outside the area, and page identifiers alone do not count as schedule content.",
       }),
-    { pages: r.length, issues: issues }
+    { pages: paperPages.length, issues: issues }
   );
 }
-function summarizePrintIssues(e) {
-  const r = e.issues.filter((issue) => issue.severity === "error");
-  if (r.length)
+function summarizePrintIssues(result) {
+  const errorIssues = result.issues.filter(
+    (issue) => issue.severity === "error",
+  );
+  if (errorIssues.length)
     throw Error(
-      `${r.length} print issue(s). ${r
+      `${errorIssues.length} print issue(s). ${errorIssues
         .slice(0, 3)
-        .map((t) => t.message)
+        .map((issue) => issue.message)
         .join(" ")}`,
     );
 }
-async function waitForPrintAssets(e, r = {}) {
-  const t = e.ownerDocument ?? e,
-    { signal, timeoutMs = 1e4 } = r;
+async function waitForPrintAssets(root, options = {}) {
+  const targetDocument = root.ownerDocument ?? root,
+    { signal, timeoutMs = 1e4 } = options;
   if (signal?.aborted) throw Error("Print preparation was cancelled.");
-  const a = [];
+  const cleanups = [];
   try {
-    const d = Promise.all([
-      t.fonts?.ready ?? Promise.resolve(),
-      ...Array.from(e.querySelectorAll("img")).map(
-        (u) =>
-          new Promise((l, c) => {
-            const h = () =>
-              u.naturalWidth > 0
-                ? l()
-                : c(
+    const assetsReady = Promise.all([
+      targetDocument.fonts?.ready ?? Promise.resolve(),
+      ...Array.from(root.querySelectorAll("img")).map(
+        (imageElement) =>
+          new Promise((resolve, reject) => {
+            const onLoaded = () =>
+              imageElement.naturalWidth > 0
+                ? resolve()
+                : reject(
                     Error(
-                      `Picture “${u.alt || "Untitled"}” could not be decoded. Replace it before printing.`,
+                      `Picture “${imageElement.alt || "Untitled"}” could not be decoded. Replace it before printing.`,
                     ),
                   );
-            if (u.complete) {
-              h();
+            if (imageElement.complete) {
+              onLoaded();
               return;
             }
-            const f = () =>
-              c(
+            const onLoadError = () =>
+              reject(
                 Error(
-                  `Picture “${u.alt || "Untitled"}” could not be loaded. Replace it before printing.`,
+                  `Picture “${imageElement.alt || "Untitled"}” could not be loaded. Replace it before printing.`,
                 ),
               );
-            (u.addEventListener("load", h, { once: true }),
-              u.addEventListener("error", f, { once: true }),
-              a.push(() => {
-                (u.removeEventListener("load", h),
-                  u.removeEventListener("error", f));
+            (imageElement.addEventListener("load", onLoaded, { once: true }),
+              imageElement.addEventListener("error", onLoadError, {
+                once: true,
+              }),
+              cleanups.push(() => {
+                (imageElement.removeEventListener("load", onLoaded),
+                  imageElement.removeEventListener("error", onLoadError));
               }));
           }),
       ),
     ]);
     await Promise.race([
-      d,
-      new Promise((u, l) => {
-        const c = setTimeout(
+      assetsReady,
+      new Promise((u, raceReject) => {
+        const timeoutId = setTimeout(
             () =>
-              l(
+              raceReject(
                 Error(
                   "Print assets did not finish loading within 10 seconds. Check the pictures and fonts, then retry.",
                 ),
               ),
             timeoutMs,
           ),
-          h = () => l(Error("Print preparation was cancelled."));
-        (signal?.addEventListener("abort", h, { once: true }),
-          a.push(() => {
-            (clearTimeout(c), signal?.removeEventListener("abort", h));
+          onAbort = () => raceReject(Error("Print preparation was cancelled."));
+        (signal?.addEventListener("abort", onAbort, { once: true }),
+          cleanups.push(() => {
+            (clearTimeout(timeoutId),
+              signal?.removeEventListener("abort", onAbort));
           }));
       }),
     ]);
   } finally {
-    a.forEach((d) => d());
+    cleanups.forEach((cleanup) => cleanup());
   }
 }
-async function printDocumentInWindow(e, html, t) {
+async function printDocumentInWindow(printWindow, html, printRequest) {
   if (
-    (t.assertCurrent(),
-    e.document.write(html),
-    e.document.close(),
-    await waitForPrintAssets(e.document, t),
-    t.assertCurrent(),
-    e.closed)
+    (printRequest.assertCurrent(),
+    printWindow.document.write(html),
+    printWindow.document.close(),
+    await waitForPrintAssets(printWindow.document, printRequest),
+    printRequest.assertCurrent(),
+    printWindow.closed)
   )
     throw Error("The print window was closed. Reopen print preview to retry.");
-  const n = measurePrintLayoutIssues(e.document);
-  return (summarizePrintIssues(n), e.focus(), e.print(), n);
+  const layoutReport = measurePrintLayoutIssues(printWindow.document);
+  return (
+    summarizePrintIssues(layoutReport),
+    printWindow.focus(),
+    printWindow.print(),
+    layoutReport
+  );
 }
 const pdfRenderLimits = {
   pixelRatio: 2,
@@ -1971,109 +2173,117 @@ function buildScheduleFileName(workbook, sheetId) {
       .slice(0, 160) || "Schedule"
   }.pdf`;
 }
-async function renderSchedulePdf(workbook, sheetId, t) {
-  const n = () => {
-      if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
-      t.assertCurrent();
+async function renderSchedulePdf(workbook, sheetId, options) {
+  const throwIfCancelled = () => {
+      if (options.signal?.aborted) throw Error("PDF creation was cancelled.");
+      options.assertCurrent();
     },
-    o = async (b) => {
-      let y, w;
+    withPageTimeout = async (pagePromise) => {
+      let timeoutId, onAbort;
       try {
         return await Promise.race([
-          b,
-          new Promise((A, k) => {
-            ((y = setTimeout(
+          pagePromise,
+          new Promise((resolve, reject) => {
+            ((timeoutId = setTimeout(
               () =>
-                k(
+                reject(
                   Error(
                     "A PDF page did not finish within 30 seconds. Reduce its complexity or use browser printing.",
                   ),
                 ),
               pdfRenderLimits.pageTimeoutMs,
             )),
-              (w = () => k(Error("PDF creation was cancelled."))),
-              t.signal?.addEventListener("abort", w, { once: true }),
-              t.signal?.aborted && w());
+              (onAbort = () => reject(Error("PDF creation was cancelled."))),
+              options.signal?.addEventListener("abort", onAbort, {
+                once: true,
+              }),
+              options.signal?.aborted && onAbort());
           }),
         ]);
       } finally {
-        (clearTimeout(y), w && t.signal?.removeEventListener("abort", w));
+        (clearTimeout(timeoutId),
+          onAbort && options.signal?.removeEventListener("abort", onAbort));
       }
     };
-  if ((n(), typeof document > "u"))
+  if ((throwIfCancelled(), typeof document > "u"))
     throw Error("PDF rendering requires a browser with canvas support.");
   const sheetOrThrow = findSheetOrThrow(workbook, sheetId),
-    layout = t.layout ??
+    layout = options.layout ??
       sheetOrThrow.pageLayout ?? {
         ...createDefaultPageSetup(sheetOrThrow),
         ...defaultPrintHeaderFooter,
       },
-    d = renderPrintDocument(workbook, sheetId, layout),
+    printDocument = renderPrintDocument(workbook, sheetId, layout),
     pageDimensions = resolvePageDimensions(layout),
-    l = document.createElement("iframe");
-  ((l.title = "Preparing schedule PDF"),
-    l.setAttribute("aria-hidden", "true"),
-    (l.tabIndex = -1),
-    l.setAttribute("sandbox", "allow-same-origin"),
-    (l.style.cssText = `position:fixed;left:-100000px;top:0;width:${pageDimensions.width}px;height:${pageDimensions.height}px;border:0;pointer-events:none;`));
-  const c = [];
+    renderFrame = document.createElement("iframe");
+  ((renderFrame.title = "Preparing schedule PDF"),
+    renderFrame.setAttribute("aria-hidden", "true"),
+    (renderFrame.tabIndex = -1),
+    renderFrame.setAttribute("sandbox", "allow-same-origin"),
+    (renderFrame.style.cssText = `position:fixed;left:-100000px;top:0;width:${pageDimensions.width}px;height:${pageDimensions.height}px;border:0;pointer-events:none;`));
+  const cleanupCallbacks = [];
   try {
-    await new Promise((F, I) => {
-      const O = () => I(Error("PDF creation was cancelled.")),
-        j = setTimeout(
+    await new Promise((resolveLoad, rejectLoad) => {
+      const onFrameAbort = () =>
+          rejectLoad(Error("PDF creation was cancelled.")),
+        frameTimeoutId = setTimeout(
           () =>
-            I(
+            rejectLoad(
               Error(
                 "The PDF rendering frame could not load. Check the embedding host's content policy.",
               ),
             ),
           1e4,
         );
-      ((l.onload = () => F()),
-        (l.onerror = () => I(Error("The PDF rendering frame could not load."))),
-        t.signal?.addEventListener("abort", O, { once: true }),
-        c.push(() => {
-          (clearTimeout(j),
-            t.signal?.removeEventListener("abort", O),
-            (l.onload = null),
-            (l.onerror = null));
+      ((renderFrame.onload = () => resolveLoad()),
+        (renderFrame.onerror = () =>
+          rejectLoad(Error("The PDF rendering frame could not load."))),
+        options.signal?.addEventListener("abort", onFrameAbort, { once: true }),
+        cleanupCallbacks.push(() => {
+          (clearTimeout(frameTimeoutId),
+            options.signal?.removeEventListener("abort", onFrameAbort),
+            (renderFrame.onload = null),
+            (renderFrame.onerror = null));
         }),
-        (l.srcdoc = d.html.replace(
+        (renderFrame.srcdoc = printDocument.html.replace(
           "<head>",
           `<head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data: blob:; font-src 'none'">`,
         )),
-        document.body.append(l));
+        document.body.append(renderFrame));
     });
-    const contentDocument = l.contentDocument;
+    const contentDocument = renderFrame.contentDocument;
     if (!contentDocument)
       throw Error(
         "The host does not allow the isolated PDF rendering document.",
       );
-    (await waitForPrintAssets(contentDocument, { signal: t.signal }), n());
+    (await waitForPrintAssets(contentDocument, { signal: options.signal }),
+      throwIfCancelled());
     const inspection = measurePrintLayoutIssues(contentDocument);
     summarizePrintIssues(inspection);
-    const w = [...contentDocument.querySelectorAll(".dg-print-paper")];
+    const paperElements = [
+      ...contentDocument.querySelectorAll(".dg-print-paper"),
+    ];
     if (
-      w.length !== d.pageCount ||
-      !w.length ||
-      w.length > printRenderLimits.pages
+      paperElements.length !== printDocument.pageCount ||
+      !paperElements.length ||
+      paperElements.length > printRenderLimits.pages
     )
       throw Error(
         "The PDF page plan changed. Reopen print preview and try again.",
       );
-    const E = await PDFDocument.create();
-    (E.setTitle(`${workbook.name} — ${sheetOrThrow.name}`),
-      E.setSubject(
+    const pdfDocument = await PDFDocument.create();
+    (pdfDocument.setTitle(`${workbook.name} — ${sheetOrThrow.name}`),
+      pdfDocument.setSubject(
         `Period: ${workbook.metadata?.period || "not set"}; engagement: ${workbook.metadata?.engagement || "not set"}; revision ${workbook.revision}. Image-based schedule snapshot.`,
       ),
-      E.setCreator("Ledgerglass schedule PDF"),
-      E.setProducer("Ledgerglass / pdf-lib"));
-    let A = 0;
-    t.onProgress?.(0, w.length);
-    for (let F = 0; F < w.length; F++) {
-      if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
-      const I = await o(
-        toCanvas(w[F], {
+      pdfDocument.setCreator("Ledgerglass schedule PDF"),
+      pdfDocument.setProducer("Ledgerglass / pdf-lib"));
+    let totalImageBytes = 0;
+    options.onProgress?.(0, paperElements.length);
+    for (let pageIndex = 0; pageIndex < paperElements.length; pageIndex++) {
+      if (options.signal?.aborted) throw Error("PDF creation was cancelled.");
+      const pageCanvas = await withPageTimeout(
+        toCanvas(paperElements[pageIndex], {
           width: pageDimensions.width,
           height: pageDimensions.height,
           pixelRatio: pdfRenderLimits.pixelRatio,
@@ -2084,61 +2294,70 @@ async function renderSchedulePdf(workbook, sheetId, t) {
         }),
       );
       try {
-        if (t.signal?.aborted) throw Error("PDF creation was cancelled.");
+        if (options.signal?.aborted) throw Error("PDF creation was cancelled.");
         if (
-          I.width !== Math.floor(pageDimensions.width * 2) ||
-          I.height !== Math.floor(pageDimensions.height * 2)
+          pageCanvas.width !== Math.floor(pageDimensions.width * 2) ||
+          pageCanvas.height !== Math.floor(pageDimensions.height * 2)
         )
           throw Error(
             "The browser changed the PDF page resolution. Use browser printing instead.",
           );
-        const O = await o(
-          new Promise((V, D) =>
-            I.toBlob(
-              (B) =>
-                B ? V(B) : D(Error("The browser could not render a PDF page.")),
+        const pageBlob = await withPageTimeout(
+          new Promise((resolveBlob, rejectBlob) =>
+            pageCanvas.toBlob(
+              (blob) =>
+                blob
+                  ? resolveBlob(blob)
+                  : rejectBlob(
+                      Error("The browser could not render a PDF page."),
+                    ),
               "image/png",
             ),
           ),
         );
-        if (((A += O.size), A > pdfRenderLimits.maxBytes))
+        if (
+          ((totalImageBytes += pageBlob.size),
+          totalImageBytes > pdfRenderLimits.maxBytes)
+        )
           throw Error(
             "PDF images exceed 50 MB. Reduce the print area or image sizes.",
           );
-        const j = await E.embedPng(await O.arrayBuffer()),
-          z = E.addPage([
+        const pdfImage = await pdfDocument.embedPng(
+            await pageBlob.arrayBuffer(),
+          ),
+          pdfPage = pdfDocument.addPage([
             pageDimensions.width * 0.75,
             pageDimensions.height * 0.75,
           ]);
-        z.drawImage(j, {
+        pdfPage.drawImage(pdfImage, {
           x: 0,
           y: 0,
-          width: z.getWidth(),
-          height: z.getHeight(),
+          width: pdfPage.getWidth(),
+          height: pdfPage.getHeight(),
         });
       } finally {
-        ((I.width = 0), (I.height = 0));
+        ((pageCanvas.width = 0), (pageCanvas.height = 0));
       }
-      t.onProgress?.(F + 1, w.length);
+      options.onProgress?.(pageIndex + 1, paperElements.length);
     }
-    n();
-    const bytes = await E.save();
-    if ((n(), bytes.length > pdfRenderLimits.maxBytes))
+    throwIfCancelled();
+    const bytes = await pdfDocument.save();
+    if ((throwIfCancelled(), bytes.length > pdfRenderLimits.maxBytes))
       throw Error(
         "The PDF exceeds 50 MB. Reduce the print area or image sizes.",
       );
     return {
       bytes: bytes,
       filename: buildScheduleFileName(workbook, sheetId),
-      pageCount: w.length,
+      pageCount: paperElements.length,
       inspection: inspection,
       notices: [
         "Image-based PDF at 192 dpi: text is not selectable, searchable or accessibility-tagged. Use browser printing when a text PDF is needed.",
-        ...d.notices,
+        ...printDocument.notices,
       ],
     };
   } finally {
-    (c.forEach((b) => b()), l.remove());
+    (cleanupCallbacks.forEach((cleanup) => cleanup()), renderFrame.remove());
   }
 }
 

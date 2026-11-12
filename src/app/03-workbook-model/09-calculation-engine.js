@@ -86,7 +86,12 @@ import {
   rewriteStructuredReferences,
 } from "./08-table-pivot-query-definitions.js";
 
-function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
+function evaluateWorkbookFormulas(
+  workbook,
+  options = {},
+  accessPolicy,
+  calculationContext,
+) {
   const installedExtensionFunctions = listInstalledExtensionFunctions(workbook),
     supported = new Set([
       ...builtinFunctionNames,
@@ -94,13 +99,16 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
         (installedExtensionFunction) => installedExtensionFunction.name,
       ),
     ]),
-    s = n?.budget ?? createCalculationBudgetTracker(workbook),
-    clock = n?.dateContext ?? resolveLocalDateTime(workbook.datePolicy),
-    u = new Set(),
-    l = new Map(),
-    c = new Map(),
-    h = new Map(),
-    issue = (te) => (
+    budgetTracker =
+      calculationContext?.budget ?? createCalculationBudgetTracker(workbook),
+    clock =
+      calculationContext?.dateContext ??
+      resolveLocalDateTime(workbook.datePolicy),
+    operationalErrors = new Set(),
+    referenceDiagnostics = new Map(),
+    namedFormulaDiagnostics = new Map(),
+    financialDiagnostics = new Map(),
+    issue = (errorCode) => (
       [
         "#LIMIT!",
         "#BLOCKED!",
@@ -108,46 +116,54 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
         "#ERROR!",
         "#TIMEOUT!",
         "#ITER!",
-      ].includes(te) && u.add(te),
-      createFormulaError(te)
+      ].includes(errorCode) && operationalErrors.add(errorCode),
+      createFormulaError(errorCode)
     ),
-    filteredRowContext = resolveFilteredRowContext(workbook, r),
-    m = new Map(),
-    v = new Map(),
-    g = new Map(),
-    b = new Map(),
-    y = new Set(),
-    w = new Set(),
-    E = new Map(),
-    A = [],
-    k = [];
-  let F = 0;
-  const I = [];
-  let O = 0;
-  const j = workbook.definedNames?.some((definedName) =>
+    filteredRowContext = resolveFilteredRowContext(workbook, options),
+    computedCellValues = new Map(),
+    spillCellValues = new Map(),
+    spillRanges = new Map(),
+    spillDiagnostics = new Map(),
+    activeFormulaCells = new Set(),
+    parsingCells = new Set(),
+    readDependencies = new Map(),
+    nestedFormulaEngines = [],
+    reusableFormulaEngines = [];
+  let reusableFormulaDepth = 0;
+  const criterionFormulaEngines = [];
+  let criterionDepth = 0;
+  const hasLetOrLambdaNames = workbook.definedNames?.some((definedName) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(definedName.refersTo),
     ),
-    z = workbook.definedNames?.length
+    definedNamePattern = workbook.definedNames?.length
       ? new RegExp(
           `(?:^|[^A-Za-z0-9_.\\\\])(?:${workbook.definedNames.map((definedName) => definedName.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
           "i",
         )
       : undefined,
-    V = (te) =>
-      /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te) || !!(j && z?.test(te)),
+    isReusableFormula = (textToScan) =>
+      /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(textToScan) ||
+      !!(hasLetOrLambdaNames && definedNamePattern?.test(textToScan)),
     externalLinkAliases = buildExternalLinkAliases(workbook),
-    B = [...workbook.sheets, ...externalLinkAliases.sheets],
-    _ = new Map(B.map((te) => [te.id, te])),
-    C = new Map(B.map((te) => [te.name.toLowerCase(), te]));
-  let T = 0,
-    N = 0;
-  const R = new Map(),
-    L = new RegExp(
-      `\\b(?:${[...matrixResultFunctionNames, "ISFORMULA", "TEXTBEFORE", "TEXTAFTER", ...installedExtensionFunctions.filter((installedExtensionFunction) => installedExtensionFunction.fn.result.type === "matrix").map((te) => te.name.replaceAll(".", "\\."))].join("|")})\\s*\\(`,
+    allSheets = [...workbook.sheets, ...externalLinkAliases.sheets],
+    sheetsById = new Map(
+      allSheets.map((sheetRecord) => [sheetRecord.id, sheetRecord]),
+    ),
+    sheetsByName = new Map(
+      allSheets.map((namedSheetRecord) => [
+        namedSheetRecord.name.toLowerCase(),
+        namedSheetRecord,
+      ]),
+    );
+  let cellReadCount = 0,
+    spilledCellCount = 0;
+  const spillCandidateAddresses = new Map(),
+    matrixFunctionPattern = new RegExp(
+      `\\b(?:${[...matrixResultFunctionNames, "ISFORMULA", "TEXTBEFORE", "TEXTAFTER", ...installedExtensionFunctions.filter((installedExtensionFunction) => installedExtensionFunction.fn.result.type === "matrix").map((extensionFunction) => extensionFunction.name.replaceAll(".", "\\."))].join("|")})\\s*\\(`,
       "i",
     );
   for (const sheet of workbook.sheets)
-    R.set(
+    spillCandidateAddresses.set(
       sheet.id,
       Object.entries(sheet.cells)
         .filter(
@@ -155,8 +171,8 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
             typeof cell.raw == "string" &&
             cell.raw.startsWith("=") &&
             !cell.literal &&
-            (V(cell.raw) ||
-              L.test(cell.raw) ||
+            (isReusableFormula(cell.raw) ||
+              matrixFunctionPattern.test(cell.raw) ||
               (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(cell.raw) &&
                 cell.raw.replace(/"(?:[^"]|"")*"/g, '""').includes(":")) ||
               /[{}#]/.test(cell.raw.replace(/"(?:[^"]|"")*"/g, '""')) ||
@@ -164,172 +180,229 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
               (workbook.definedNames?.length &&
                 /^=\s*[A-Za-z_][A-Za-z0-9_.]*\s*$/.test(cell.raw))),
         )
-        .map(([ae]) => ae)
-        .sort((ae, oe) => {
-          const de = _t(ae),
-            he = _t(oe);
-          return de.row - he.row || de.col - he.col;
+        .map(([formulaAddress]) => formulaAddress)
+        .sort((leftAddress, rightAddress) => {
+          const leftPosition = _t(leftAddress),
+            rightPosition = _t(rightAddress);
+          return (
+            leftPosition.row - rightPosition.row ||
+            leftPosition.col - rightPosition.col
+          );
         }),
     );
-  const $ = (te, ae, address, de = true) => {
-      const he = (se, we = true) => {
-        const Ee = rewriteFormulaReferences(se, workbook, ae, address, we);
-        if (Ee) throw (l.set(`${ae}:${address}`, Ee), issue(Ee.error));
+  const prepareFormulaText = (
+      formulaText,
+      formulaSheetId,
+      address,
+      shouldResolveNames = true,
+    ) => {
+      const checkFormulaReferences = (textToCheck, we = true) => {
+        const rewriteError = rewriteFormulaReferences(
+          textToCheck,
+          workbook,
+          formulaSheetId,
+          address,
+          we,
+        );
+        if (rewriteError)
+          throw (
+            referenceDiagnostics.set(
+              `${formulaSheetId}:${address}`,
+              rewriteError,
+            ),
+            issue(rewriteError.error)
+          );
       };
-      ((te = externalLinkAliases.rewrite(te)), he(te, false));
-      let Se = de
-        ? resolveDefinedNameValue(te, workbook, ae, [], t?.allowName)
-        : te;
-      ((Se = externalLinkAliases.rewrite(Se)), he(Se));
-      let le = "",
-        ce = 0;
-      for (; ce < Se.length;) {
-        const se =
+      ((formulaText = externalLinkAliases.rewrite(formulaText)),
+        checkFormulaReferences(formulaText, false));
+      let expandedFormula = shouldResolveNames
+        ? resolveDefinedNameValue(
+            formulaText,
+            workbook,
+            formulaSheetId,
+            [],
+            accessPolicy?.allowName,
+          )
+        : formulaText;
+      ((expandedFormula = externalLinkAliases.rewrite(expandedFormula)),
+        checkFormulaReferences(expandedFormula));
+      let rewrittenText = "",
+        scanPosition = 0;
+      for (; scanPosition < expandedFormula.length;) {
+        const sheetSpillMatch =
           /^(?:'((?:[^']|'')*)'|([A-Za-z_][A-Za-z0-9_.]*))!\s*(\$?[A-Za-z]{1,3}\$?[1-9]\d*)#/i.exec(
-            Se.slice(ce),
+            expandedFormula.slice(scanPosition),
           );
-        if (se) {
-          const ye = C.get((se[1]?.replace(/''/g, "'") ?? se[2]).toLowerCase());
-          if (!ye) throw issue("#REF!");
-          const Te = _t(se[3]),
-            Pe = `${columnIndexToLetters(Te.col)}${Te.row + 1}`,
-            cell = readCell(ye.id, Pe),
-            ht = g.get(`${ye.id}:${Pe}`);
-          if (!ht) throw isFormulaError(cell) ? cell : issue("#REF!");
-          ((le += `'${ye.name.replace(/'/g, "''")}'!${ht}`),
-            (ce += se[0].length));
+        if (sheetSpillMatch) {
+          const referencedSheet = sheetsByName.get(
+            (
+              sheetSpillMatch[1]?.replace(/''/g, "'") ?? sheetSpillMatch[2]
+            ).toLowerCase(),
+          );
+          if (!referencedSheet) throw issue("#REF!");
+          const anchorPosition = _t(sheetSpillMatch[3]),
+            anchorAddress = `${columnIndexToLetters(anchorPosition.col)}${anchorPosition.row + 1}`,
+            cell = readCell(referencedSheet.id, anchorAddress),
+            spillRange = spillRanges.get(
+              `${referencedSheet.id}:${anchorAddress}`,
+            );
+          if (!spillRange) throw isFormulaError(cell) ? cell : issue("#REF!");
+          ((rewrittenText += `'${referencedSheet.name.replace(/'/g, "''")}'!${spillRange}`),
+            (scanPosition += sheetSpillMatch[0].length));
           continue;
         }
-        if (Se[ce] === '"' || Se[ce] === "'") {
-          const ye = Se[ce],
-            Te = ce++;
-          for (; ce < Se.length;)
-            if (Se[ce++] === ye)
-              if (Se[ce] === ye) ce++;
+        if (
+          expandedFormula[scanPosition] === '"' ||
+          expandedFormula[scanPosition] === "'"
+        ) {
+          const quoteChar = expandedFormula[scanPosition],
+            quoteStart = scanPosition++;
+          for (; scanPosition < expandedFormula.length;)
+            if (expandedFormula[scanPosition++] === quoteChar)
+              if (expandedFormula[scanPosition] === quoteChar) scanPosition++;
               else break;
-          le += Se.slice(Te, ce);
+          rewrittenText += expandedFormula.slice(quoteStart, scanPosition);
           continue;
         }
-        const we =
+        const leadingCommaMatch =
           /^(SEQUENCE|FILTER|SORT|SORTBY|UNIQUE|TRANSPOSE|TAKE|DROP|TEXTSPLIT)\s*\(\s*,/i.exec(
-            Se.slice(ce),
+            expandedFormula.slice(scanPosition),
           );
-        if (we) {
-          ((le += `${we[1]}(${we[1].toUpperCase() === "SEQUENCE" ? "1" : "#VALUE!"},`),
-            (ce += we[0].length));
+        if (leadingCommaMatch) {
+          ((rewrittenText += `${leadingCommaMatch[1]}(${leadingCommaMatch[1].toUpperCase() === "SEQUENCE" ? "1" : "#VALUE!"},`),
+            (scanPosition += leadingCommaMatch[0].length));
           continue;
         }
-        const Ee = /^(?:[A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(Se.slice(ce));
-        if (Ee) {
-          const ye = ce;
-          ce += Ee[0].length;
-          let Te = 1;
-          for (; ce < Se.length && Te;)
-            (Se[ce] === "[" && Te++, Se[ce] === "]" && Te--, ce++);
-          const Pe =
-            !Te &&
+        const structuredRefMatch = /^(?:[A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(
+          expandedFormula.slice(scanPosition),
+        );
+        if (structuredRefMatch) {
+          const structuredRefStart = scanPosition;
+          scanPosition += structuredRefMatch[0].length;
+          let bracketDepth = 1;
+          for (; scanPosition < expandedFormula.length && bracketDepth;)
+            (expandedFormula[scanPosition] === "[" && bracketDepth++,
+              expandedFormula[scanPosition] === "]" && bracketDepth--,
+              scanPosition++);
+          const resolvedStructuredRef =
+            !bracketDepth &&
             rewriteStructuredReferences(
               workbook,
-              ae,
-              Se.slice(ye, ce),
+              formulaSheetId,
+              expandedFormula.slice(structuredRefStart, scanPosition),
               address,
             );
-          if (!Pe) throw issue("#REF!");
-          const qe = _.get(Pe.sheetId);
-          le += `'${qe.name.replace(/'/g, "''")}'!${Pe.range}`;
+          if (!resolvedStructuredRef) throw issue("#REF!");
+          const structuredRefSheet = sheetsById.get(
+            resolvedStructuredRef.sheetId,
+          );
+          rewrittenText += `'${structuredRefSheet.name.replace(/'/g, "''")}'!${resolvedStructuredRef.range}`;
           continue;
         }
-        const Ae = /^(\$?[A-Za-z]{1,3}\$?[1-9]\d*)#/.exec(Se.slice(ce));
-        if (Ae) {
-          const ye = _t(Ae[1]),
-            Te = `${columnIndexToLetters(ye.col)}${ye.row + 1}`,
-            cell = readCell(ae, Te),
-            qe = g.get(`${ae}:${Te}`);
-          if (!qe) throw isFormulaError(cell) ? cell : issue("#REF!");
-          ((le += qe), (ce += Ae[0].length));
+        const spillRefMatch = /^(\$?[A-Za-z]{1,3}\$?[1-9]\d*)#/.exec(
+          expandedFormula.slice(scanPosition),
+        );
+        if (spillRefMatch) {
+          const spillRefPosition = _t(spillRefMatch[1]),
+            spillRefAddress = `${columnIndexToLetters(spillRefPosition.col)}${spillRefPosition.row + 1}`,
+            cell = readCell(formulaSheetId, spillRefAddress),
+            spillRefRange = spillRanges.get(
+              `${formulaSheetId}:${spillRefAddress}`,
+            );
+          if (!spillRefRange)
+            throw isFormulaError(cell) ? cell : issue("#REF!");
+          ((rewrittenText += spillRefRange),
+            (scanPosition += spillRefMatch[0].length));
           continue;
         }
-        le += Se[ce++];
+        rewrittenText += expandedFormula[scanPosition++];
       }
-      return le.replace(/\b_xlfn\.(?:_xlws\.)?/gi, "");
+      return rewrittenText.replace(/\b_xlfn\.(?:_xlws\.)?/gi, "");
     },
-    U = (te) => {
-      const ae = C.get((te ?? "").toLowerCase());
-      if (!ae) throw issue("#REF!");
-      return ae;
+    getSheetByName = (sheetName) => {
+      const matchedSheet = sheetsByName.get((sheetName ?? "").toLowerCase());
+      if (!matchedSheet) throw issue("#REF!");
+      return matchedSheet;
     },
-    G = () => {
+    createFormulaEngine = () => {
       const workbookFormulaEngine = createWorkbookFormulaEngine(
         new FormulaParser({
           onVariable: () => null,
           onCell: ({ sheet, row, col }) => {
-            const se = U(sheet);
+            const targetSheet = getSheetByName(sheet);
             if (
               !Number.isInteger(row) ||
               !Number.isInteger(col) ||
               row < 1 ||
               col < 1 ||
-              row > se.rowCount ||
-              col > se.colCount
+              row > targetSheet.rowCount ||
+              col > targetSheet.colCount
             )
               throw issue("#REF!");
-            return readCell(se.id, `${columnIndexToLetters(col - 1)}${row}`);
+            return readCell(
+              targetSheet.id,
+              `${columnIndexToLetters(col - 1)}${row}`,
+            );
           },
-          onRange: ({ sheet, from, to }) => {
-            const se = U(sheet),
-              row = to.row,
-              col = to.col;
+          onRange: ({ sheet, from, to: rangeEnd }) => {
+            const rangeSheet = getSheetByName(sheet),
+              row = rangeEnd.row,
+              col = rangeEnd.col;
             if (
               from.row < 1 ||
               from.col < 1 ||
-              row > se.rowCount ||
-              col > se.colCount ||
+              row > rangeSheet.rowCount ||
+              col > rangeSheet.colCount ||
               row < from.row ||
               col < from.col
             )
               throw issue("#REF!");
             if ((row - from.row + 1) * (col - from.col + 1) > 2e4)
               throw issue("#LIMIT!");
-            const Ae = s.reserve(
+            const reserveIssue = budgetTracker.reserve(
               (row - from.row + 1) * (32 + (col - from.col + 1) * 8),
             );
-            if (Ae) throw issue(Ae);
-            const ye = [];
-            for (let Te = from.row; Te <= row; Te++) {
-              const Pe = [];
-              for (let qe = from.col; qe <= col; qe++) {
+            if (reserveIssue) throw issue(reserveIssue);
+            const rangeRows = [];
+            for (let rangeRow = from.row; rangeRow <= row; rangeRow++) {
+              const rangeCells = [];
+              for (
+                let rangeColumn = from.col;
+                rangeColumn <= col;
+                rangeColumn++
+              ) {
                 const cell = readCell(
-                  se.id,
-                  `${columnIndexToLetters(qe - 1)}${Te}`,
+                  rangeSheet.id,
+                  `${columnIndexToLetters(rangeColumn - 1)}${rangeRow}`,
                 );
                 if (
                   isFormulaError(cell) &&
                   ["#LIMIT!", "#TIMEOUT!", "#BLOCKED!"].includes(cell.error)
                 )
                   throw cell;
-                Pe.push(cell);
+                rangeCells.push(cell);
               }
-              ye.push(Pe);
+              rangeRows.push(rangeCells);
             }
-            return ye;
+            return rangeRows;
           },
         }),
-        (le, ce, ge) =>
+        (le, ce, formulaContext) =>
           filteredRowContext(le, ce, {
-            currentSheetName: ge.position?.sheet,
-            retrieve: (we) => ge.retrieveRef(we),
+            currentSheetName: formulaContext.position?.sheet,
+            retrieve: (reference) => formulaContext.retrieveRef(reference),
             issue: issue,
             isIssue: isFormulaError,
             readCell: readCell,
             readMetadata:
-              t || n
+              accessPolicy || calculationContext
                 ? (sheetId, address) => {
                     if (
-                      (n?.read(`${sheetId}:${address}`),
-                      t && !t.allowRead(sheetId, address))
+                      (calculationContext?.read(`${sheetId}:${address}`),
+                      accessPolicy && !accessPolicy.allowRead(sheetId, address))
                     )
                       throw issue("#BLOCKED!");
-                    t?.step({
+                    accessPolicy?.step({
                       kind: "metadata",
                       sheetId: sheetId,
                       address: address,
@@ -338,10 +411,15 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
                     });
                   }
                 : undefined,
-            isActive: (we, Ee) => y.has(`${we}:${Ee}`),
-            expandedFormula: (cell, Ee) => {
+            isActive: (checkSheetId, checkAddress) =>
+              activeFormulaCells.has(`${checkSheetId}:${checkAddress}`),
+            expandedFormula: (cell, nameScope) => {
               try {
-                return resolveDefinedNameValue(String(cell.raw), workbook, Ee);
+                return resolveDefinedNameValue(
+                  String(cell.raw),
+                  workbook,
+                  nameScope,
+                );
               } catch {
                 return String(cell.raw);
               }
@@ -349,24 +427,37 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
           }),
         issue,
         clock,
-        (le) => {
+        (callInfo) => {
           const position = workbookFormulaEngine.position;
           if (!position) return;
-          const sheetId = U(position.sheet).id,
+          const sheetId = getSheetByName(position.sheet).id,
             address = `${columnIndexToLetters(position.col - 1)}${position.row}`,
-            we = `${sheetId}:${address}:${le.functionName}`;
-          if (h.size >= 1e4 && !h.has(we)) throw issue("#LIMIT!");
-          h.set(we, { ...le, sheetId: sheetId, address: address });
+            diagnosticKey = `${sheetId}:${address}:${callInfo.functionName}`;
+          if (
+            financialDiagnostics.size >= 1e4 &&
+            !financialDiagnostics.has(diagnosticKey)
+          )
+            throw issue("#LIMIT!");
+          financialDiagnostics.set(diagnosticKey, {
+            ...callInfo,
+            sheetId: sheetId,
+            address: address,
+          });
         },
-        (le, ce, ge) => {
-          const se =
-            le && typeof le == "object" && "ref" in le ? le.ref : undefined;
-          if (!se?.from || !se.to) return;
-          const we = U(se.sheet ?? workbookFormulaEngine.position?.sheet),
-            Ee = `${columnIndexToLetters(se.from.col + ge - 1)}${se.from.row + ce}`;
-          if (t && !t.allowRead(we.id, Ee)) throw issue("#BLOCKED!");
-          n?.read(`${we.id}:${Ee}`);
-          const cell = we.cells[Ee];
+        (refValue, rowOffset, colOffset) => {
+          const refDescriptor =
+            refValue && typeof refValue == "object" && "ref" in refValue
+              ? refValue.ref
+              : undefined;
+          if (!refDescriptor?.from || !refDescriptor.to) return;
+          const refSheet = getSheetByName(
+              refDescriptor.sheet ?? workbookFormulaEngine.position?.sheet,
+            ),
+            refAddress = `${columnIndexToLetters(refDescriptor.from.col + colOffset - 1)}${refDescriptor.from.row + rowOffset}`;
+          if (accessPolicy && !accessPolicy.allowRead(refSheet.id, refAddress))
+            throw issue("#BLOCKED!");
+          calculationContext?.read(`${refSheet.id}:${refAddress}`);
+          const cell = refSheet.cells[refAddress];
           if (
             cell?.literal ||
             typeof cell?.raw != "string" ||
@@ -374,71 +465,88 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
           )
             return;
           const raw = cell.raw;
-          return (Pe) => {
-            if (O >= 32) throw issue("#LIMIT!");
-            const qe = O++;
+          return (shiftAmount) => {
+            if (criterionDepth >= 32) throw issue("#LIMIT!");
+            const criterionEngineIndex = criterionDepth++;
             try {
               if (
-                t?.allowDatabaseCriterion &&
-                !t.allowDatabaseCriterion(
-                  we.id,
-                  shiftFormulaReferences(raw, Pe, 0),
+                accessPolicy?.allowDatabaseCriterion &&
+                !accessPolicy.allowDatabaseCriterion(
+                  refSheet.id,
+                  shiftFormulaReferences(raw, shiftAmount, 0),
                 )
               )
                 throw issue("#BLOCKED!");
               const definedNameValue = resolveDefinedNameValue(
                   raw,
                   workbook,
-                  we.id,
+                  refSheet.id,
                   [],
-                  t?.allowName,
+                  accessPolicy?.allowName,
                 ),
-                Re = shiftFormulaReferences(definedNameValue, Pe, 0);
-              if (Re.length > fileImportLimits.maxFormulaLength)
+                shiftedFormula = shiftFormulaReferences(
+                  definedNameValue,
+                  shiftAmount,
+                  0,
+                );
+              if (shiftedFormula.length > fileImportLimits.maxFormulaLength)
                 throw issue("#LIMIT!");
-              return V(Re)
-                ? H(Re.slice(1), we.id, Ee)
-                : (I[qe] ??= G()).parse(
-                    $(Re.slice(1), we.id, Ee),
+              return isReusableFormula(shiftedFormula)
+                ? evaluateReusable(
+                    shiftedFormula.slice(1),
+                    refSheet.id,
+                    refAddress,
+                  )
+                : (criterionFormulaEngines[criterionEngineIndex] ??=
+                    createFormulaEngine()).parse(
+                    prepareFormulaText(
+                      shiftedFormula.slice(1),
+                      refSheet.id,
+                      refAddress,
+                    ),
                     {
-                      sheet: we.name,
-                      row: se.from.row + ce,
-                      col: se.from.col + ge,
+                      sheet: refSheet.name,
+                      row: refDescriptor.from.row + rowOffset,
+                      col: refDescriptor.from.col + colOffset,
                     },
                     true,
                   );
             } finally {
-              O--;
+              criterionDepth--;
             }
           };
         },
       );
       if (installedExtensionFunctions.length) {
-        const le = workbookFormulaEngine._callFunction.bind(
+        const originalCallFunction = workbookFormulaEngine._callFunction.bind(
           workbookFormulaEngine,
         );
-        workbookFormulaEngine._callFunction = (ce, ge) => {
-          const se = ce.replace(/^_xlfn\./i, "").toUpperCase();
+        workbookFormulaEngine._callFunction = (functionName, functionArgs) => {
+          const upperFunctionName = functionName
+            .replace(/^_xlfn\./i, "")
+            .toUpperCase();
           if (
             !installedExtensionFunctions.some(
               (installedExtensionFunction) =>
-                installedExtensionFunction.name === se,
+                installedExtensionFunction.name === upperFunctionName,
             )
           )
-            return le(ce, ge);
+            return originalCallFunction(functionName, functionArgs);
           const position = workbookFormulaEngine.position;
           if (!position) return issue("#NAME?");
-          const Ee = U(position.sheet).id,
-            Ae = `${columnIndexToLetters(position.col - 1)}${position.row}`,
-            ye = ge.map((ht) => workbookFormulaEngine.retrieveRef(ht)),
-            formulaErrorArg = findFormulaErrorArg(ye);
+          const callSheetId = getSheetByName(position.sheet).id,
+            callAddress = `${columnIndexToLetters(position.col - 1)}${position.row}`,
+            resolvedArgs = functionArgs.map((argument) =>
+              workbookFormulaEngine.retrieveRef(argument),
+            ),
+            formulaErrorArg = findFormulaErrorArg(resolvedArgs);
           if (formulaErrorArg) return formulaErrorArg;
           const extensionFunctionCall = resolveExtensionFunctionCall(
             workbook,
-            se,
-            ye,
-            Ee,
-            Ae,
+            upperFunctionName,
+            resolvedArgs,
+            callSheetId,
+            callAddress,
           );
           if (extensionFunctionCall.error)
             return issue(extensionFunctionCall.error);
@@ -448,55 +556,78 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
             : value;
         };
       }
-      const ae = (le) => {
-          const ce = s.work() ?? n?.check();
-          if (ce) return issue(ce);
-          const ge = le(),
-            se = s.value(ge) ?? n?.check();
-          return se ? issue(se) : ge;
+      const runWithBudget = (computeValue) => {
+          const budgetIssue =
+            budgetTracker.work() ?? calculationContext?.check();
+          if (budgetIssue) return issue(budgetIssue);
+          const computedResult = computeValue(),
+            valueIssue =
+              budgetTracker.value(computedResult) ??
+              calculationContext?.check();
+          return valueIssue ? issue(valueIssue) : computedResult;
         },
-        oe = workbookFormulaEngine._callFunction.bind(workbookFormulaEngine),
-        de = workbookFormulaEngine.utils._applyInfix.bind(
+        boundCallFunction = workbookFormulaEngine._callFunction.bind(
+          workbookFormulaEngine,
+        ),
+        boundApplyInfix = workbookFormulaEngine.utils._applyInfix.bind(
           workbookFormulaEngine.utils,
         ),
-        he = workbookFormulaEngine.utils._applyPrefix.bind(
+        boundApplyPrefix = workbookFormulaEngine.utils._applyPrefix.bind(
           workbookFormulaEngine.utils,
         ),
-        Se = workbookFormulaEngine.utils._applyPostfix.bind(
+        boundApplyPostfix = workbookFormulaEngine.utils._applyPostfix.bind(
           workbookFormulaEngine.utils,
         );
       if (
-        ((workbookFormulaEngine._callFunction = (le, ce) =>
-          ae(() => oe(le, ce))),
-        (workbookFormulaEngine.utils._applyInfix = (le, ce, ge) =>
-          ae(() => de(le, ce, ge))),
-        (workbookFormulaEngine.utils._applyPrefix = (le, ce, ge) =>
-          ae(() => he(le, ce, ge))),
-        (workbookFormulaEngine.utils._applyPostfix = (le, ce, ge) =>
-          ae(() => Se(le, ce, ge))),
-        t)
+        ((workbookFormulaEngine._callFunction = (callName, callArgs) =>
+          runWithBudget(() => boundCallFunction(callName, callArgs))),
+        (workbookFormulaEngine.utils._applyInfix = (
+          leftOperand,
+          infixOperator,
+          rightOperand,
+        ) =>
+          runWithBudget(() =>
+            boundApplyInfix(leftOperand, infixOperator, rightOperand),
+          )),
+        (workbookFormulaEngine.utils._applyPrefix = (
+          prefixOperators,
+          prefixOperand,
+          ge,
+        ) =>
+          runWithBudget(() =>
+            boundApplyPrefix(prefixOperators, prefixOperand, ge),
+          )),
+        (workbookFormulaEngine.utils._applyPostfix = (
+          postfixOperand,
+          ce,
+          postfixOperator,
+        ) =>
+          runWithBudget(() =>
+            boundApplyPostfix(postfixOperand, ce, postfixOperator),
+          )),
+        accessPolicy)
       ) {
-        const le = (Ee, operation, inputs, Te) => {
+        const recordStep = (stepKind, operation, inputs, computeStep) => {
             const position = workbookFormulaEngine.position,
-              sheetId = U(position.sheet).id,
+              sheetId = getSheetByName(position.sheet).id,
               address = `${columnIndexToLetters(position.col - 1)}${position.row}`;
             try {
-              const Re = Te();
+              const stepResult = computeStep();
               return (
-                t.step({
-                  kind: Ee,
+                accessPolicy.step({
+                  kind: stepKind,
                   sheetId: sheetId,
                   address: address,
                   operation: operation,
                   inputs: inputs,
-                  result: Re,
+                  result: stepResult,
                 }),
-                Re
+                stepResult
               );
             } catch (error) {
               throw (
-                t.step({
-                  kind: Ee,
+                accessPolicy.step({
+                  kind: stepKind,
                   sheetId: sheetId,
                   address: address,
                   operation: operation,
@@ -507,145 +638,227 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
               );
             }
           },
-          ce = workbookFormulaEngine._callFunction.bind(workbookFormulaEngine),
-          ge = workbookFormulaEngine.utils._applyInfix.bind(
+          baseCallFunction = workbookFormulaEngine._callFunction.bind(
+            workbookFormulaEngine,
+          ),
+          baseApplyInfix = workbookFormulaEngine.utils._applyInfix.bind(
             workbookFormulaEngine.utils,
           ),
-          se = workbookFormulaEngine.utils._applyPrefix.bind(
+          baseApplyPrefix = workbookFormulaEngine.utils._applyPrefix.bind(
             workbookFormulaEngine.utils,
           ),
-          we = workbookFormulaEngine.utils._applyPostfix.bind(
+          baseApplyPostfix = workbookFormulaEngine.utils._applyPostfix.bind(
             workbookFormulaEngine.utils,
           );
-        ((workbookFormulaEngine._callFunction = (Ee, Ae) =>
-          le("function", Ee, Ae, () => ce(Ee, Ae))),
-          (workbookFormulaEngine.utils._applyInfix = (Ee, Ae, ye) =>
-            le("operator", Ae, [Ee.val, ye.val], () => ge(Ee, Ae, ye))),
-          (workbookFormulaEngine.utils._applyPrefix = (Ee, Ae, ye) =>
-            le("operator", Ee.join(""), [Ae], () => se(Ee, Ae, ye))),
-          (workbookFormulaEngine.utils._applyPostfix = (Ee, Ae, ye) =>
-            le("operator", ye, [Ee], () => we(Ee, Ae, ye))));
+        ((workbookFormulaEngine._callFunction = (traceName, traceArgs) =>
+          recordStep("function", traceName, traceArgs, () =>
+            baseCallFunction(traceName, traceArgs),
+          )),
+          (workbookFormulaEngine.utils._applyInfix = (
+            tracedLeft,
+            tracedOperator,
+            tracedRight,
+          ) =>
+            recordStep(
+              "operator",
+              tracedOperator,
+              [tracedLeft.val, tracedRight.val],
+              () => baseApplyInfix(tracedLeft, tracedOperator, tracedRight),
+            )),
+          (workbookFormulaEngine.utils._applyPrefix = (
+            tracedPrefixOperators,
+            tracedPrefixOperand,
+            ye,
+          ) =>
+            recordStep(
+              "operator",
+              tracedPrefixOperators.join(""),
+              [tracedPrefixOperand],
+              () =>
+                baseApplyPrefix(tracedPrefixOperators, tracedPrefixOperand, ye),
+            )),
+          (workbookFormulaEngine.utils._applyPostfix = (
+            tracedPostfixOperand,
+            Ae,
+            tracedPostfixOperator,
+          ) =>
+            recordStep(
+              "operator",
+              tracedPostfixOperator,
+              [tracedPostfixOperand],
+              () =>
+                baseApplyPostfix(
+                  tracedPostfixOperand,
+                  Ae,
+                  tracedPostfixOperator,
+                ),
+            )));
       }
       return workbookFormulaEngine;
     },
-    H = (te, sheetId, address) =>
-      evaluateReusableFormula(te, workbook, sheetId, {
+    evaluateReusable = (reusableFormulaText, sheetId, address) =>
+      evaluateReusableFormula(reusableFormulaText, workbook, sheetId, {
         supported: supported,
         issue: issue,
         isIssue: isFormulaError,
-        allowName: t?.allowName,
-        step: t
-          ? (de, operation, Se) =>
-              t.step({
-                kind: de,
+        allowName: accessPolicy?.allowName,
+        step: accessPolicy
+          ? (traceKind, operation, traceResult) =>
+              accessPolicy.step({
+                kind: traceKind,
                 sheetId: sheetId,
                 address: address,
                 operation: operation,
-                result: Se,
+                result: traceResult,
               })
           : undefined,
-        diagnostic: (de, he) =>
-          c.set(`${sheetId}:${address}`, {
+        diagnostic: (diagnosticCode, diagnosticMessage) =>
+          namedFormulaDiagnostics.set(`${sheetId}:${address}`, {
             sheetId: sheetId,
             address: address,
-            error: de,
-            message: he,
+            error: diagnosticCode,
+            message: diagnosticMessage,
           }),
-        parse: (de, he, Se) => {
-          const le = $(de, he, address, false),
-            ce = le.replace(/"(?:[^"]|"")*"/g, '""');
-          if (/[\[\]|]/.test(ce) || /(?:https?:|file:|\\\\)/i.test(ce))
+        parse: (parseText, parseSheetId, lambdaArgs) => {
+          const rewrittenFormula = prepareFormulaText(
+              parseText,
+              parseSheetId,
+              address,
+              false,
+            ),
+            textWithoutStrings = rewrittenFormula.replace(
+              /"(?:[^"]|"")*"/g,
+              '""',
+            );
+          if (
+            /[\[\]|]/.test(textWithoutStrings) ||
+            /(?:https?:|file:|\\\\)/i.test(textWithoutStrings)
+          )
             throw issue("#BLOCKED!");
           if (
             Array.from(
-              ce
+              textWithoutStrings
                 .replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet")
                 .matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g),
-            ).some((Ee) => Ee[1] !== y5 && !supported.has(Ee[1].toUpperCase()))
+            ).some(
+              (functionMatch) =>
+                functionMatch[1] !== y5 &&
+                !supported.has(functionMatch[1].toUpperCase()),
+            )
           )
             throw issue("#NAME?");
-          const ge = F++,
-            se = (k[ge] ??= G()),
-            we = se._callFunction;
-          se._callFunction = (Ee, Ae) =>
-            Ee === y5
-              ? Ae.length === 1 &&
-                Number.isInteger(Ae[0]) &&
-                Number(Ae[0]) >= 0 &&
-                Number(Ae[0]) < Se.length
-                ? Se[Number(Ae[0])]
+          const engineIndex = reusableFormulaDepth++,
+            reusableEngine = (reusableFormulaEngines[engineIndex] ??=
+              createFormulaEngine()),
+            previousCallFunction = reusableEngine._callFunction;
+          reusableEngine._callFunction = (lambdaCallName, lambdaCallArgs) =>
+            lambdaCallName === y5
+              ? lambdaCallArgs.length === 1 &&
+                Number.isInteger(lambdaCallArgs[0]) &&
+                Number(lambdaCallArgs[0]) >= 0 &&
+                Number(lambdaCallArgs[0]) < lambdaArgs.length
+                ? lambdaArgs[Number(lambdaCallArgs[0])]
                 : issue("#NAME?")
-              : we(Ee, Ae);
+              : previousCallFunction(lambdaCallName, lambdaCallArgs);
           try {
-            const Ee = _t(address);
-            return se.parse(
-              le,
-              { sheet: _.get(he).name, row: Ee.row + 1, col: Ee.col + 1 },
+            const parsePosition = _t(address);
+            return reusableEngine.parse(
+              rewrittenFormula,
+              {
+                sheet: sheetsById.get(parseSheetId).name,
+                row: parsePosition.row + 1,
+                col: parsePosition.col + 1,
+              },
               true,
             );
           } finally {
-            ((se._callFunction = we), F--);
+            ((reusableEngine._callFunction = previousCallFunction),
+              reusableFormulaDepth--);
           }
         },
       }),
     readCell = (sheetId, address) => {
-      const oe = s.work() ?? n?.check();
-      if (oe) return issue(oe);
-      if (!t) return X(sheetId, address);
-      if (!t.allowRead(sheetId, address)) return issue("#BLOCKED!");
-      const de = X(sheetId, address);
+      const readBudgetIssue =
+        budgetTracker.work() ?? calculationContext?.check();
+      if (readBudgetIssue) return issue(readBudgetIssue);
+      if (!accessPolicy) return resolveCellValue(sheetId, address);
+      if (!accessPolicy.allowRead(sheetId, address)) return issue("#BLOCKED!");
+      const cellValue = resolveCellValue(sheetId, address);
       return (
-        t.step({
+        accessPolicy.step({
           kind: "read",
           sheetId: sheetId,
           address: address,
           operation: "Read cell",
-          result: de,
+          result: cellValue,
         }),
-        de
+        cellValue
       );
     },
-    X = (sheetId, ae) => {
-      if (++T > workbookLimits.maxCells) return issue("#LIMIT!");
+    resolveCellValue = (sheetId, cellAddress) => {
+      if (++cellReadCount > workbookLimits.maxCells) return issue("#LIMIT!");
       let firstRow, firstCol;
       try {
-        ({ row: firstRow, col: firstCol } = _t(ae));
+        ({ row: firstRow, col: firstCol } = _t(cellAddress));
       } catch {
         return issue("#REF!");
       }
-      const sheet = _.get(sheetId);
+      const sheet = sheetsById.get(sheetId);
       if (!sheet || firstRow >= sheet.rowCount || firstCol >= sheet.colCount)
         return issue("#REF!");
-      ae = `${columnIndexToLetters(firstCol)}${firstRow + 1}`;
-      const Se = `${sheetId}:${ae}`,
-        le = externalLinkAliases.values.get(Se);
-      if (le) return le.type === "error" ? issue(String(le.value)) : le.value;
-      n?.read(Se);
-      const ce = n?.value(Se, y.size > 0 || w.size > 0);
-      if (ce) return ce.type === "error" ? issue(String(ce.value)) : ce.value;
-      for (const Te of y) E.get(Te)?.add(Se);
-      if (y.has(Se) || w.has(Se))
-        return (n?.cycle([...y, ...w, Se]), issue("#CYCLE!"));
-      if (m.has(Se)) return m.get(Se);
-      if (v.has(Se)) return v.get(Se).value;
-      const cell = sheet.cells[ae];
+      cellAddress = `${columnIndexToLetters(firstCol)}${firstRow + 1}`;
+      const cellKey = `${sheetId}:${cellAddress}`,
+        externalValue = externalLinkAliases.values.get(cellKey);
+      if (externalValue)
+        return externalValue.type === "error"
+          ? issue(String(externalValue.value))
+          : externalValue.value;
+      calculationContext?.read(cellKey);
+      const contextValue = calculationContext?.value(
+        cellKey,
+        activeFormulaCells.size > 0 || parsingCells.size > 0,
+      );
+      if (contextValue)
+        return contextValue.type === "error"
+          ? issue(String(contextValue.value))
+          : contextValue.value;
+      for (const activeFormulaCell of activeFormulaCells)
+        readDependencies.get(activeFormulaCell)?.add(cellKey);
+      if (activeFormulaCells.has(cellKey) || parsingCells.has(cellKey))
+        return (
+          calculationContext?.cycle([
+            ...activeFormulaCells,
+            ...parsingCells,
+            cellKey,
+          ]),
+          issue("#CYCLE!")
+        );
+      if (computedCellValues.has(cellKey))
+        return computedCellValues.get(cellKey);
+      if (spillCellValues.has(cellKey))
+        return spillCellValues.get(cellKey).value;
+      const cell = sheet.cells[cellAddress];
       if (!cell || cell.raw === null) {
-        const Te = R.get(sheetId) ?? [];
-        if (Te.length > 1e3) return issue("#LIMIT!");
-        for (const Pe of Te) {
-          if (Pe === ae) continue;
-          const qe = _t(Pe);
+        const spillCandidates = spillCandidateAddresses.get(sheetId) ?? [];
+        if (spillCandidates.length > 1e3) return issue("#LIMIT!");
+        for (const candidateAddress of spillCandidates) {
+          if (candidateAddress === cellAddress) continue;
+          const candidatePosition = _t(candidateAddress);
           if (
             !(
-              qe.row > firstRow ||
-              qe.col > firstCol ||
-              (firstRow - qe.row + 1) * (firstCol - qe.col + 1) >
+              candidatePosition.row > firstRow ||
+              candidatePosition.col > firstCol ||
+              (firstRow - candidatePosition.row + 1) *
+                (firstCol - candidatePosition.col + 1) >
                 fileImportLimits.maxSpillCells
             ) &&
-            !(y.has(`${sheetId}:${Pe}`) || w.has(`${sheetId}:${Pe}`)) &&
-            (readCell(sheetId, Pe), v.has(Se))
+            !(
+              activeFormulaCells.has(`${sheetId}:${candidateAddress}`) ||
+              parsingCells.has(`${sheetId}:${candidateAddress}`)
+            ) &&
+            (readCell(sheetId, candidateAddress), spillCellValues.has(cellKey))
           )
-            return v.get(Se).value;
+            return spillCellValues.get(cellKey).value;
         }
         return cell?.raw ?? null;
       }
@@ -656,21 +869,24 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
       )
         return cell.raw;
       const raw = cell.raw;
-      n?.enter(Se);
-      let Ee = (() => {
+      calculationContext?.enter(cellKey);
+      let formulaResult = (() => {
         if (
-          y.size + w.size >= fileImportLimits.maxFormulaDepth ||
+          activeFormulaCells.size + parsingCells.size >=
+            fileImportLimits.maxFormulaDepth ||
           raw.length > fileImportLimits.maxFormulaLength ||
           !isWithinNestingLimit(raw)
         )
           return issue("#LIMIT!");
-        let Te;
-        const Pe = V(raw);
-        w.add(Se);
+        let formulaBody;
+        const isReusable = isReusableFormula(raw);
+        parsingCells.add(cellKey);
         try {
           if (
-            ((Te = Pe ? raw.slice(1) : $(raw.slice(1), sheetId, ae)),
-            !isWithinNestingLimit(Te))
+            ((formulaBody = isReusable
+              ? raw.slice(1)
+              : prepareFormulaText(raw.slice(1), sheetId, cellAddress)),
+            !isWithinNestingLimit(formulaBody))
           )
             return issue("#LIMIT!");
         } catch (error) {
@@ -682,120 +898,153 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
                   : "#NAME?",
               );
         } finally {
-          w.delete(Se);
+          parsingCells.delete(cellKey);
         }
-        const qe = Te.replace(/"(?:[^"]|"")*"/g, '""');
-        if (!Pe && (/[\[\]|]/.test(qe) || /(?:https?:|file:|\\\\)/i.test(qe)))
+        const bodyWithoutStrings = formulaBody.replace(/"(?:[^"]|"")*"/g, '""');
+        if (
+          !isReusable &&
+          (/[\[\]|]/.test(bodyWithoutStrings) ||
+            /(?:https?:|file:|\\\\)/i.test(bodyWithoutStrings))
+        )
           return issue("#BLOCKED!");
         if (
-          !Pe &&
+          !isReusable &&
           Array.from(
-            qe
+            bodyWithoutStrings
               .replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet")
               .matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g),
-          ).some((Je) => !supported.has(Je[1].toUpperCase()))
+          ).some((callMatch) => !supported.has(callMatch[1].toUpperCase()))
         )
           return (
-            c.set(Se, {
+            namedFormulaDiagnostics.set(cellKey, {
               sheetId: sheetId,
-              address: ae,
+              address: cellAddress,
               error: "#NAME?",
               message:
                 "The formula calls an unknown or unsupported custom function. Imported VBA, add-in and external custom functions cannot execute.",
             }),
             issue("#NAME?")
           );
-        const size = y.size;
-        (y.add(Se), E.set(Se, new Set()));
-        let Re;
+        const size = activeFormulaCells.size;
+        (activeFormulaCells.add(cellKey),
+          readDependencies.set(cellKey, new Set()));
+        let computedValue;
         try {
-          const Je = (A[size] ??= G()),
-            ze = Pe
-              ? H(Te, sheetId, ae)
-              : Je.parse(
-                  Te,
+          const nestedEngine = (nestedFormulaEngines[size] ??=
+              createFormulaEngine()),
+            rawResult = isReusable
+              ? evaluateReusable(formulaBody, sheetId, cellAddress)
+              : nestedEngine.parse(
+                  formulaBody,
                   { sheet: sheet.name, row: firstRow + 1, col: firstCol + 1 },
                   true,
                 );
-          if (isFormulaError(ze)) Re = issue(ze.error);
-          else if (typeof ze == "number")
-            Re = Number.isFinite(ze) ? ze : issue("#NUM!");
-          else if (ze === null) Re = 0;
-          else if (typeof ze == "boolean") Re = ze;
-          else if (typeof ze == "string")
-            Re = ze.length <= 32767 ? ze : issue("#LIMIT!");
-          else if (Array.isArray(ze)) {
-            const at = ze.every(Array.isArray) ? ze : [ze],
-              _e = at[0]?.length ?? 0;
-            if (!at.length || !_e || at.some((Ze) => Ze.length !== _e))
-              Re = issue("#CALC!");
-            else if (
-              at.length * _e > fileImportLimits.maxSpillCells ||
-              N + at.length * _e > workbookLimits.maxCells
+          if (isFormulaError(rawResult)) computedValue = issue(rawResult.error);
+          else if (typeof rawResult == "number")
+            computedValue = Number.isFinite(rawResult)
+              ? rawResult
+              : issue("#NUM!");
+          else if (rawResult === null) computedValue = 0;
+          else if (typeof rawResult == "boolean") computedValue = rawResult;
+          else if (typeof rawResult == "string")
+            computedValue =
+              rawResult.length <= 32767 ? rawResult : issue("#LIMIT!");
+          else if (Array.isArray(rawResult)) {
+            const rowMatrix = rawResult.every(Array.isArray)
+                ? rawResult
+                : [rawResult],
+              spillColumnCount = rowMatrix[0]?.length ?? 0;
+            if (
+              !rowMatrix.length ||
+              !spillColumnCount ||
+              rowMatrix.some(
+                (rowValues) => rowValues.length !== spillColumnCount,
+              )
             )
-              Re = issue("#LIMIT!");
+              computedValue = issue("#CALC!");
             else if (
-              firstRow + at.length > sheet.rowCount ||
-              firstCol + _e > sheet.colCount
+              rowMatrix.length * spillColumnCount >
+                fileImportLimits.maxSpillCells ||
+              spilledCellCount + rowMatrix.length * spillColumnCount >
+                workbookLimits.maxCells
             )
-              (b.set(Se, {
+              computedValue = issue("#LIMIT!");
+            else if (
+              firstRow + rowMatrix.length > sheet.rowCount ||
+              firstCol + spillColumnCount > sheet.colCount
+            )
+              (spillDiagnostics.set(cellKey, {
                 sheetId: sheetId,
-                anchor: ae,
+                anchor: cellAddress,
                 reason: "bounds",
                 message:
                   "The array extends beyond the worksheet edge. Move the formula or reduce its output.",
               }),
-                (Re = issue("#SPILL!")));
+                (computedValue = issue("#SPILL!")));
             else {
-              let Ze = false,
-                lt = false;
-              const be = {
+              let hasObstruction = false,
+                hasCycle = false;
+              const spillBounds = {
                   firstRow: firstRow,
-                  lastRow: firstRow + at.length - 1,
+                  lastRow: firstRow + rowMatrix.length - 1,
                   firstCol: firstCol,
-                  lastCol: firstCol + _e - 1,
+                  lastCol: firstCol + spillColumnCount - 1,
                 },
-                ft = (nt) => {
-                  const rangeAddress = parseRangeAddress(nt);
+                overlapsSpill = (rangeText) => {
+                  const rangeAddress = parseRangeAddress(rangeText);
                   return (
-                    rangeAddress.firstRow <= be.lastRow &&
-                    rangeAddress.lastRow >= be.firstRow &&
-                    rangeAddress.firstCol <= be.lastCol &&
-                    rangeAddress.lastCol >= be.firstCol
+                    rangeAddress.firstRow <= spillBounds.lastRow &&
+                    rangeAddress.lastRow >= spillBounds.firstRow &&
+                    rangeAddress.firstCol <= spillBounds.lastCol &&
+                    rangeAddress.lastCol >= spillBounds.firstCol
                   );
                 },
-                pt = sheet.merges?.find(ft),
-                Fe = sheet.tables?.find((table) => ft(table.range));
-              if (pt || Fe) {
-                Ze = true;
-                const obstruction = pt ?? Fe.range;
-                b.set(Se, {
+                overlappingMerge = sheet.merges?.find(overlapsSpill),
+                overlappingTable = sheet.tables?.find((table) =>
+                  overlapsSpill(table.range),
+                );
+              if (overlappingMerge || overlappingTable) {
+                hasObstruction = true;
+                const obstruction = overlappingMerge ?? overlappingTable.range;
+                spillDiagnostics.set(cellKey, {
                   sheetId: sheetId,
-                  anchor: ae,
-                  reason: pt ? "merged" : "table",
+                  anchor: cellAddress,
+                  reason: overlappingMerge ? "merged" : "table",
                   obstruction: obstruction,
-                  message: pt
+                  message: overlappingMerge
                     ? `The array overlaps merged cells ${obstruction}. Unmerge those cells or move the formula.`
-                    : `The array overlaps table ${Fe.name} (${obstruction}). Place the formula outside the table.`,
+                    : `The array overlaps table ${overlappingTable.name} (${obstruction}). Place the formula outside the table.`,
                 });
               }
-              for (let nt = 0; nt < at.length && !Ze; nt++)
-                for (let mt = 0; mt < _e; mt++) {
-                  const obstruction = `${columnIndexToLetters(firstCol + mt)}${firstRow + nt + 1}`,
+              for (
+                let obstructionRow = 0;
+                obstructionRow < rowMatrix.length && !hasObstruction;
+                obstructionRow++
+              )
+                for (
+                  let obstructionColumn = 0;
+                  obstructionColumn < spillColumnCount;
+                  obstructionColumn++
+                ) {
+                  const obstruction = `${columnIndexToLetters(firstCol + obstructionColumn)}${firstRow + obstructionRow + 1}`,
                     cell = sheet.cells[obstruction];
-                  if (E.get(Se)?.has(`${sheetId}:${obstruction}`)) {
-                    lt = true;
+                  if (
+                    readDependencies
+                      .get(cellKey)
+                      ?.has(`${sheetId}:${obstruction}`)
+                  ) {
+                    hasCycle = true;
                     break;
                   }
                   if (
-                    obstruction !== ae &&
+                    obstruction !== cellAddress &&
                     ((cell && cell.raw !== null) ||
-                      v.has(`${sheetId}:${obstruction}`))
+                      spillCellValues.has(`${sheetId}:${obstruction}`))
                   ) {
-                    ((Ze = true),
-                      b.set(Se, {
+                    ((hasObstruction = true),
+                      spillDiagnostics.set(cellKey, {
                         sheetId: sheetId,
-                        anchor: ae,
+                        anchor: cellAddress,
                         reason: "occupied",
                         obstruction: obstruction,
                         message: `Cell ${obstruction} blocks the array. Move the formula or review and clear the obstruction; existing evidence was preserved.`,
@@ -803,122 +1052,142 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
                     break;
                   }
                 }
-              if (lt) Re = issue("#CYCLE!");
-              else if (Ze) Re = issue("#SPILL!");
+              if (hasCycle) computedValue = issue("#CYCLE!");
+              else if (hasObstruction) computedValue = issue("#SPILL!");
               else {
-                const nt = (mt) =>
-                  isFormulaError(mt)
-                    ? mt
-                    : mt === null
+                const normalizeSpillValue = (rawSpillValue) =>
+                  isFormulaError(rawSpillValue)
+                    ? rawSpillValue
+                    : rawSpillValue === null
                       ? 0
-                      : typeof mt == "number"
-                        ? Number.isFinite(mt)
-                          ? mt
+                      : typeof rawSpillValue == "number"
+                        ? Number.isFinite(rawSpillValue)
+                          ? rawSpillValue
                           : issue("#NUM!")
-                        : typeof mt == "boolean"
-                          ? mt
-                          : typeof mt == "string"
-                            ? mt.length <= 32767
-                              ? mt
+                        : typeof rawSpillValue == "boolean"
+                          ? rawSpillValue
+                          : typeof rawSpillValue == "string"
+                            ? rawSpillValue.length <= 32767
+                              ? rawSpillValue
                               : issue("#LIMIT!")
                             : issue("#VALUE!");
-                for (let mt = 0; mt < at.length; mt++)
-                  for (let Wt = 0; Wt < _e; Wt++) {
-                    const Zt = `${columnIndexToLetters(firstCol + Wt)}${firstRow + mt + 1}`;
-                    Zt !== ae &&
-                      v.set(`${sheetId}:${Zt}`, {
-                        value: nt(at[mt][Wt]),
-                        anchor: ae,
+                for (
+                  let storeRowIndex = 0;
+                  storeRowIndex < rowMatrix.length;
+                  storeRowIndex++
+                )
+                  for (
+                    let storeColumnIndex = 0;
+                    storeColumnIndex < spillColumnCount;
+                    storeColumnIndex++
+                  ) {
+                    const storeAddress = `${columnIndexToLetters(firstCol + storeColumnIndex)}${firstRow + storeRowIndex + 1}`;
+                    storeAddress !== cellAddress &&
+                      spillCellValues.set(`${sheetId}:${storeAddress}`, {
+                        value: normalizeSpillValue(
+                          rowMatrix[storeRowIndex][storeColumnIndex],
+                        ),
+                        anchor: cellAddress,
                       });
                   }
-                (g.set(
-                  Se,
-                  `${ae}:${columnIndexToLetters(firstCol + _e - 1)}${firstRow + at.length}`,
+                (spillRanges.set(
+                  cellKey,
+                  `${cellAddress}:${columnIndexToLetters(firstCol + spillColumnCount - 1)}${firstRow + rowMatrix.length}`,
                 ),
-                  (N += at.length * _e),
-                  (Re = nt(at[0][0])));
+                  (spilledCellCount += rowMatrix.length * spillColumnCount),
+                  (computedValue = normalizeSpillValue(rowMatrix[0][0])));
               }
             }
-          } else Re = issue("#VALUE!");
+          } else computedValue = issue("#VALUE!");
         } catch (error) {
-          const ze =
+          const errorDetails =
             error && typeof error == "object" && "details" in error
               ? error.details
               : undefined;
-          Re = isFormulaError(ze)
-            ? issue(ze.error)
+          computedValue = isFormulaError(errorDetails)
+            ? issue(errorDetails.error)
             : isFormulaError(error)
               ? issue(error.error)
               : issue("#ERROR!");
         } finally {
-          (y.delete(Se), E.delete(Se));
+          (activeFormulaCells.delete(cellKey),
+            readDependencies.delete(cellKey));
         }
-        return Re;
+        return computedValue;
       })();
-      const Ae = s.value(Ee) ?? n?.check();
+      const finalIssue =
+        budgetTracker.value(formulaResult) ?? calculationContext?.check();
       return (
-        Ae && (Ee = issue(Ae)),
-        m.set(Se, Ee),
-        n?.leave(
-          Se,
-          isFormulaError(Ee)
-            ? { type: "error", value: Ee.error }
+        finalIssue && (formulaResult = issue(finalIssue)),
+        computedCellValues.set(cellKey, formulaResult),
+        calculationContext?.leave(
+          cellKey,
+          isFormulaError(formulaResult)
+            ? { type: "error", value: formulaResult.error }
             : {
                 type:
-                  Ee === null
+                  formulaResult === null
                     ? "blank"
-                    : typeof Ee == "string"
+                    : typeof formulaResult == "string"
                       ? "text"
-                      : typeof Ee == "boolean"
+                      : typeof formulaResult == "boolean"
                         ? "boolean"
                         : "number",
-                value: Ee,
+                value: formulaResult,
               },
         ),
-        t?.step({
+        accessPolicy?.step({
           kind: "formula",
           sheetId: sheetId,
-          address: ae,
+          address: cellAddress,
           operation: cell.raw,
-          result: Ee,
+          result: formulaResult,
         }),
-        Ee
+        formulaResult
       );
     },
-    J = (te, ae) => J.getTypedValue(te, ae).value;
-  J.getTypedValue = (te, ae) => {
-    if (n?.running?.() === false)
+    getCellValue = (targetSheetId, targetAddress) =>
+      getCellValue.getTypedValue(targetSheetId, targetAddress).value;
+  getCellValue.getTypedValue = (typedSheetId, typedAddress) => {
+    if (calculationContext?.running?.() === false)
       try {
-        const Se = _t(ae),
-          sheet = _.get(te);
-        if (!sheet || Se.row >= sheet.rowCount || Se.col >= sheet.colCount)
+        const typedPosition = _t(typedAddress),
+          sheet = sheetsById.get(typedSheetId);
+        if (
+          !sheet ||
+          typedPosition.row >= sheet.rowCount ||
+          typedPosition.col >= sheet.colCount
+        )
           return { type: "error", value: "#REF!" };
-        const ce = `${columnIndexToLetters(Se.col)}${Se.row + 1}`,
-          ge = `${te}:${ce}`,
-          se = n.value(ge, false);
-        if (se) return { ...se };
-        const we =
-          m.get(ge) ?? v.get(ge)?.value ?? sheet.cells[ce]?.raw ?? null;
-        return isFormulaError(we)
-          ? { type: "error", value: we.error }
+        const typedCellAddress = `${columnIndexToLetters(typedPosition.col)}${typedPosition.row + 1}`,
+          typedCellKey = `${typedSheetId}:${typedCellAddress}`,
+          cachedValue = calculationContext.value(typedCellKey, false);
+        if (cachedValue) return { ...cachedValue };
+        const typedValue =
+          computedCellValues.get(typedCellKey) ??
+          spillCellValues.get(typedCellKey)?.value ??
+          sheet.cells[typedCellAddress]?.raw ??
+          null;
+        return isFormulaError(typedValue)
+          ? { type: "error", value: typedValue.error }
           : {
               type:
-                we === null
+                typedValue === null
                   ? "blank"
-                  : typeof we == "string"
+                  : typeof typedValue == "string"
                     ? "text"
-                    : typeof we == "boolean"
+                    : typeof typedValue == "boolean"
                       ? "boolean"
                       : "number",
-              value: we,
+              value: typedValue,
             };
       } catch {
         return { type: "error", value: "#REF!" };
       }
-    s.begin();
+    budgetTracker.begin();
     try {
-      T = 0;
-      const cell = readCell(te, ae);
+      cellReadCount = 0;
+      const cell = readCell(typedSheetId, typedAddress);
       return isFormulaError(cell)
         ? { type: "error", value: cell.error }
         : {
@@ -933,163 +1202,231 @@ function evaluateWorkbookFormulas(workbook, r = {}, t, n) {
             value: cell,
           };
     } finally {
-      s.end();
+      budgetTracker.end();
     }
   };
-  let q;
+  let sharedFormulaEngine;
   return (
-    (J.evaluateFormula = (te, ae, oe) => {
-      (s.begin(), (T = 0), l.delete(`${te}:${ae}`), c.delete(`${te}:${ae}`));
-      const de = `expression:${te}:${ae}`;
+    (getCellValue.evaluateFormula = (evalSheetId, evalAddress, evalFormula) => {
+      (budgetTracker.begin(),
+        (cellReadCount = 0),
+        referenceDiagnostics.delete(`${evalSheetId}:${evalAddress}`),
+        namedFormulaDiagnostics.delete(`${evalSheetId}:${evalAddress}`));
+      const expressionKey = `expression:${evalSheetId}:${evalAddress}`;
       try {
-        const he = _.get(te),
-          Se = _t(ae);
-        if (!he || Se.row >= he.rowCount || Se.col >= he.colCount)
-          return "#REF!";
-        if (typeof oe != "string" || !oe.startsWith("=")) return "#VALUE!";
+        const evalSheet = sheetsById.get(evalSheetId),
+          evalPosition = _t(evalAddress);
         if (
-          oe.length > fileImportLimits.maxFormulaLength ||
-          !isWithinNestingLimit(oe)
+          !evalSheet ||
+          evalPosition.row >= evalSheet.rowCount ||
+          evalPosition.col >= evalSheet.colCount
+        )
+          return "#REF!";
+        if (typeof evalFormula != "string" || !evalFormula.startsWith("="))
+          return "#VALUE!";
+        if (
+          evalFormula.length > fileImportLimits.maxFormulaLength ||
+          !isWithinNestingLimit(evalFormula)
         )
           return issue("#LIMIT!").error;
-        const le = V(oe),
-          ce = le ? oe.slice(1) : $(oe.slice(1), te, ae);
-        if (!isWithinNestingLimit(ce)) return issue("#LIMIT!").error;
-        const ge = ce.replace(/"(?:[^"]|"")*"/g, '""');
-        if (!le && (/[\[\]|]/.test(ge) || /(?:https?:|file:|\\\\)/i.test(ge)))
+        const evalIsReusable = isReusableFormula(evalFormula),
+          evalFormulaBody = evalIsReusable
+            ? evalFormula.slice(1)
+            : prepareFormulaText(
+                evalFormula.slice(1),
+                evalSheetId,
+                evalAddress,
+              );
+        if (!isWithinNestingLimit(evalFormulaBody))
+          return issue("#LIMIT!").error;
+        const evalBodyWithoutStrings = evalFormulaBody.replace(
+          /"(?:[^"]|"")*"/g,
+          '""',
+        );
+        if (
+          !evalIsReusable &&
+          (/[\[\]|]/.test(evalBodyWithoutStrings) ||
+            /(?:https?:|file:|\\\\)/i.test(evalBodyWithoutStrings))
+        )
           return issue("#BLOCKED!").error;
         if (
-          !le &&
+          !evalIsReusable &&
           Array.from(
-            ge
+            evalBodyWithoutStrings
               .replace(/'(?:[^']|'')*'(?=\s*!)/g, "Sheet")
               .matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g),
-          ).some((Ee) => !supported.has(Ee[1].toUpperCase()))
+          ).some(
+            (evalFunctionMatch) =>
+              !supported.has(evalFunctionMatch[1].toUpperCase()),
+          )
         )
           return "#NAME?";
-        (y.add(de), E.set(de, new Set()));
-        const se = le
-            ? H(ce, te, ae)
-            : (q ??= G()).parse(
-                ce,
-                { sheet: he.name, row: Se.row + 1, col: Se.col + 1 },
+        (activeFormulaCells.add(expressionKey),
+          readDependencies.set(expressionKey, new Set()));
+        const evalResult = evalIsReusable
+            ? evaluateReusable(evalFormulaBody, evalSheetId, evalAddress)
+            : (sharedFormulaEngine ??= createFormulaEngine()).parse(
+                evalFormulaBody,
+                {
+                  sheet: evalSheet.name,
+                  row: evalPosition.row + 1,
+                  col: evalPosition.col + 1,
+                },
                 true,
               ),
-          we = s.value(se) ?? n?.check();
-        return we
-          ? issue(we).error
-          : isFormulaError(se)
-            ? issue(se.error).error
-            : Array.isArray(se)
+          evalIssue =
+            budgetTracker.value(evalResult) ?? calculationContext?.check();
+        return evalIssue
+          ? issue(evalIssue).error
+          : isFormulaError(evalResult)
+            ? issue(evalResult.error).error
+            : Array.isArray(evalResult)
               ? "#VALUE!"
-              : se === null
+              : evalResult === null
                 ? 0
-                : typeof se == "number"
-                  ? Number.isFinite(se)
-                    ? se
+                : typeof evalResult == "number"
+                  ? Number.isFinite(evalResult)
+                    ? evalResult
                     : "#NUM!"
-                  : typeof se == "boolean"
-                    ? se
-                    : typeof se == "string"
-                      ? se.length <= 32767
-                        ? se
+                  : typeof evalResult == "boolean"
+                    ? evalResult
+                    : typeof evalResult == "string"
+                      ? evalResult.length <= 32767
+                        ? evalResult
                         : issue("#LIMIT!").error
                       : "#VALUE!";
       } catch (error) {
-        const Se =
+        const evalErrorDetails =
           error && typeof error == "object" && "details" in error
             ? error.details
             : undefined;
-        return isFormulaError(Se)
-          ? issue(Se.error).error
+        return isFormulaError(evalErrorDetails)
+          ? issue(evalErrorDetails.error).error
           : isFormulaError(error)
             ? issue(error.error).error
             : error instanceof Error && /^#/.test(error.message)
               ? issue(error.message).error
               : issue("#ERROR!").error;
       } finally {
-        (s.end(), y.delete(de), E.delete(de));
+        (budgetTracker.end(),
+          activeFormulaCells.delete(expressionKey),
+          readDependencies.delete(expressionKey));
       }
     }),
-    (J.getSpillRange = (te, ae) => (J(te, ae), g.get(`${te}:${ae}`))),
-    (J.getSpillDiagnostic = (te, ae) => {
-      J(te, ae);
-      const oe = b.get(`${te}:${ae}`);
-      return oe ? { ...oe } : undefined;
+    (getCellValue.getSpillRange = (spillSheetId, spillAddress) => (
+      getCellValue(spillSheetId, spillAddress),
+      spillRanges.get(`${spillSheetId}:${spillAddress}`)
+    )),
+    (getCellValue.getSpillDiagnostic = (
+      diagnosticSheetId,
+      diagnosticAddress,
+    ) => {
+      getCellValue(diagnosticSheetId, diagnosticAddress);
+      const spillDiagnostic = spillDiagnostics.get(
+        `${diagnosticSheetId}:${diagnosticAddress}`,
+      );
+      return spillDiagnostic ? { ...spillDiagnostic } : undefined;
     }),
-    (J.getSpillAnchor = (te, ae) => (J(te, ae), v.get(`${te}:${ae}`)?.anchor)),
-    (J.getSpillEntries = (te) => {
-      s.begin();
+    (getCellValue.getSpillAnchor = (anchorSheetId, anchorCell) => (
+      getCellValue(anchorSheetId, anchorCell),
+      spillCellValues.get(`${anchorSheetId}:${anchorCell}`)?.anchor
+    )),
+    (getCellValue.getSpillEntries = (entriesSheetId) => {
+      budgetTracker.begin();
       try {
-        const oe = R.get(te) ?? [];
-        if (oe.length > 1e3)
+        const entryCandidates =
+          spillCandidateAddresses.get(entriesSheetId) ?? [];
+        if (entryCandidates.length > 1e3)
           throw (
             issue("#LIMIT!"),
             new Error("Spill discovery exceeds 1,000 possible array formulas.")
           );
-        T = 0;
-        for (const he of n?.running?.() === false ? [] : oe)
-          if ((readCell(te, he), T > workbookLimits.maxCells))
+        cellReadCount = 0;
+        for (const scanAddress of calculationContext?.running?.() === false
+          ? []
+          : entryCandidates)
+          if (
+            (readCell(entriesSheetId, scanAddress),
+            cellReadCount > workbookLimits.maxCells)
+          )
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
             );
-        const de = `${te}:`;
-        return [...v.entries()]
-          .filter(([he]) => he.startsWith(de))
-          .map(([he, { anchor }]) => ({
-            address: he.slice(de.length),
+        const sheetKeyPrefix = `${entriesSheetId}:`;
+        return [...spillCellValues.entries()]
+          .filter(([entryKey]) => entryKey.startsWith(sheetKeyPrefix))
+          .map(([storedKey, { anchor }]) => ({
+            address: storedKey.slice(sheetKeyPrefix.length),
             anchor,
           }));
       } finally {
-        s.end();
+        budgetTracker.end();
       }
     }),
-    (J.getResourceReport = () => s.report()),
-    (J.getOperationalErrors = () => [...u]),
-    (J.getDateContext = () => ({ ...clock })),
-    (J.getFinancialDiagnostics = () => structuredClone([...h.values()])),
-    (J.peekSpill = (te, ae) => {
-      const oe = `${te}:${ae}`,
-        de = b.get(oe);
-      return { range: g.get(oe), ...(de ? { diagnostic: { ...de } } : {}) };
+    (getCellValue.getResourceReport = () => budgetTracker.report()),
+    (getCellValue.getOperationalErrors = () => [...operationalErrors]),
+    (getCellValue.getDateContext = () => ({ ...clock })),
+    (getCellValue.getFinancialDiagnostics = () =>
+      structuredClone([...financialDiagnostics.values()])),
+    (getCellValue.peekSpill = (peekSheetId, peekAddress) => {
+      const peekKey = `${peekSheetId}:${peekAddress}`,
+        peekDiagnostic = spillDiagnostics.get(peekKey);
+      return {
+        range: spillRanges.get(peekKey),
+        ...(peekDiagnostic ? { diagnostic: { ...peekDiagnostic } } : {}),
+      };
     }),
-    (J.getNamedFormulaDiagnostics = () =>
-      [...c.values()].map((te) => ({ ...te }))),
-    (J.getReferenceDiagnostics = () =>
-      [...l.values()].map((te) => ({ ...te }))),
-    J
+    (getCellValue.getNamedFormulaDiagnostics = () =>
+      [...namedFormulaDiagnostics.values()].map((namedDiagnostic) => ({
+        ...namedDiagnostic,
+      }))),
+    (getCellValue.getReferenceDiagnostics = () =>
+      [...referenceDiagnostics.values()].map((referenceDiagnostic) => ({
+        ...referenceDiagnostic,
+      }))),
+    getCellValue
   );
 }
 function evaluateValidationRule(workbook) {
-  const r = evaluateWorkbookFormulas(workbook);
-  return (sheetId, address, o) => {
-    const a = r(sheetId, address);
-    let s = false,
+  const calculator = evaluateWorkbookFormulas(workbook);
+  return (sheetId, address, rule) => {
+    const cellValue = calculator(sheetId, address);
+    let isValid = false,
       reason = "Value does not satisfy the rule.",
       formula,
       evaluationError = false;
     try {
-      if (r.getTypedValue(sheetId, address).type === "error")
-        throw Error(`Cell calculation returned ${a}.`);
-      if (a === null || a === "") s = o.allowBlank;
-      else if (o.kind === "custom") {
-        const c = _t(address),
-          rangeAddress = parseRangeAddress(o.range);
+      if (calculator.getTypedValue(sheetId, address).type === "error")
+        throw Error(`Cell calculation returned ${cellValue}.`);
+      if (cellValue === null || cellValue === "") isValid = rule.allowBlank;
+      else if (rule.kind === "custom") {
+        const cellAddress = _t(address),
+          rangeAddress = parseRangeAddress(rule.range);
         formula = shiftFormulaReferences(
-          o.formula,
-          c.row - rangeAddress.firstRow,
-          c.col - rangeAddress.firstCol,
+          rule.formula,
+          cellAddress.row - rangeAddress.firstRow,
+          cellAddress.col - rangeAddress.firstCol,
         );
-        const f = r.evaluateFormula(sheetId, address, formula);
+        const formulaResult = calculator.evaluateFormula(
+          sheetId,
+          address,
+          formula,
+        );
         if (
-          typeof f != "boolean" &&
-          (typeof f != "number" || !Number.isFinite(f))
+          typeof formulaResult != "boolean" &&
+          (typeof formulaResult != "number" || !Number.isFinite(formulaResult))
         )
           throw Error(
-            `Custom formula must return TRUE/FALSE or a finite number${typeof f == "string" && /^#[A-Z0-9/?!]+$/.test(f) ? `; returned ${f}` : ""}.`,
+            `Custom formula must return TRUE/FALSE or a finite number${typeof formulaResult == "string" && /^#[A-Z0-9/?!]+$/.test(formulaResult) ? `; returned ${formulaResult}` : ""}.`,
           );
-        ((s = !!f), (reason = "Custom formula returned FALSE or zero."));
-      } else s = validateDataValidationRule(o, a, workbook.datePolicy);
+        ((isValid = !!formulaResult),
+          (reason = "Custom formula returned FALSE or zero."));
+      } else
+        isValid = validateDataValidationRule(
+          rule,
+          cellValue,
+          workbook.datePolicy,
+        );
     } catch (error) {
       ((evaluationError = true),
         (reason =
@@ -1097,42 +1434,47 @@ function evaluateValidationRule(workbook) {
             ? error.message
             : "Validation could not be evaluated."));
     }
-    if (!(s && !evaluationError))
+    if (!(isValid && !evaluationError))
       return {
         sheetId: sheetId,
         sheetName: workbook.sheets.find((sheet) => sheet.id === sheetId).name,
         address: address,
-        ruleId: o.id,
-        style: evaluationError ? "stop" : (o.errorStyle ?? "stop"),
-        value: a,
-        title: o.errorTitle || "Invalid value",
+        ruleId: rule.id,
+        style: evaluationError ? "stop" : (rule.errorStyle ?? "stop"),
+        value: cellValue,
+        title: rule.errorTitle || "Invalid value",
         message:
-          o.message || "The value does not satisfy the data validation rule.",
+          rule.message ||
+          "The value does not satisfy the data validation rule.",
         reason: reason,
         ...(formula ? { formula: formula } : {}),
         evaluationError: evaluationError,
       };
   };
 }
-function checkDataValidationBatch(book, r, validationApproval) {
-  const n = r.flatMap((d) =>
-    findDataValidationsInRange(book, d.sheetId, d.address).map((rule) => ({
-      ...d,
-      rule: rule,
-    })),
+function checkDataValidationBatch(book, targets, validationApproval) {
+  const checks = targets.flatMap((target) =>
+    findDataValidationsInRange(book, target.sheetId, target.address).map(
+      (rule) => ({
+        ...target,
+        rule: rule,
+      }),
+    ),
   );
-  if (!n.length) return 0;
-  if (n.length > validationLimits.checks)
+  if (!checks.length) return 0;
+  if (checks.length > validationLimits.checks)
     throw Error(
       "Data validation exceeds the 100,000-check budget; split the batch.",
     );
-  const o = evaluateValidationRule(book),
-    issues = n.map((d) => o(d.sheetId, d.address, d.rule)).filter((d) => !!d);
+  const evaluateRule = evaluateValidationRule(book),
+    issues = checks
+      .map((check) => evaluateRule(check.sheetId, check.address, check.rule))
+      .filter((d) => !!d);
   if (!issues.length) return 0;
-  const s = JSON.stringify({ book: book, issues: issues });
+  const batchSignature = JSON.stringify({ book: book, issues: issues });
   if (
     validationApproval &&
-    r5.get(validationApproval) === s &&
+    r5.get(validationApproval) === batchSignature &&
     issues.every((issue) => issue.style !== "stop" && !issue.evaluationError)
   )
     return (r5.delete(validationApproval), issues.length);
@@ -1143,7 +1485,7 @@ function checkDataValidationBatch(book, r, validationApproval) {
     : new DataValidationError(book, issues);
 }
 function summarizeValidationInspection(workbook, sheetId) {
-  const t = {
+  const summary = {
       workbookId: workbook.id,
       revision: workbook.revision,
       checks: 0,
@@ -1154,14 +1496,14 @@ function summarizeValidationInspection(workbook, sheetId) {
       detailsTruncated: false,
       message: "",
     },
-    n = evaluateValidationRule(workbook),
-    o = new Set();
-  let a = 0;
-  e: for (const s of workbook.sheets.filter(
+    evaluateRule = evaluateValidationRule(workbook),
+    invalidCellKeys = new Set();
+  let customCheckCount = 0;
+  e: for (const worksheet of workbook.sheets.filter(
     (sheet) => !sheetId || sheet.id === sheetId,
   ))
-    for (const d of s.validations ?? []) {
-      const rangeAddress = parseRangeAddress(d.range);
+    for (const validation of worksheet.validations ?? []) {
+      const rangeAddress = parseRangeAddress(validation.range);
       for (
         let firstRow = rangeAddress.firstRow;
         firstRow <= rangeAddress.lastRow;
@@ -1173,117 +1515,153 @@ function summarizeValidationInspection(workbook, sheetId) {
           firstCol++
         ) {
           if (
-            t.checks >= validationLimits.checks ||
-            (d.kind === "custom" && ++a > validationLimits.customChecks)
+            summary.checks >= validationLimits.checks ||
+            (validation.kind === "custom" &&
+              ++customCheckCount > validationLimits.customChecks)
           ) {
-            t.complete = false;
+            summary.complete = false;
             break e;
           }
-          const h = `${columnIndexToLetters(firstCol)}${firstRow + 1}`;
-          t.checks++;
-          const f = n(s.id, h, d);
-          f &&
-            (o.add(`${s.id}:${h}`),
-            t.violations++,
-            t.issues.length < validationLimits.displayedIssues &&
-              t.issues.push(f));
+          const cellAddress = `${columnIndexToLetters(firstCol)}${firstRow + 1}`;
+          summary.checks++;
+          const issue = evaluateRule(worksheet.id, cellAddress, validation);
+          issue &&
+            (invalidCellKeys.add(`${worksheet.id}:${cellAddress}`),
+            summary.violations++,
+            summary.issues.length < validationLimits.displayedIssues &&
+              summary.issues.push(issue));
         }
     }
   return (
-    (t.invalidCells = o.size),
-    (t.detailsTruncated = t.violations > t.issues.length),
-    (t.message = `${t.complete ? "" : "Incomplete inspection: at least "}${t.invalidCells} invalid cells; ${t.violations} rule violations across ${t.checks} checks.${t.complete ? "" : " The 100,000-check or 5,000-custom-formula limit was reached. Narrow validation ranges and inspect again."}${t.detailsTruncated ? " Showing the first 500 violations." : ""}`),
-    FB.set(t, { source: JSON.stringify(workbook), content: JSON.stringify(t) }),
-    t
+    (summary.invalidCells = invalidCellKeys.size),
+    (summary.detailsTruncated = summary.violations > summary.issues.length),
+    (summary.message = `${summary.complete ? "" : "Incomplete inspection: at least "}${summary.invalidCells} invalid cells; ${summary.violations} rule violations across ${summary.checks} checks.${summary.complete ? "" : " The 100,000-check or 5,000-custom-formula limit was reached. Narrow validation ranges and inspect again."}${summary.detailsTruncated ? " Showing the first 500 violations." : ""}`),
+    FB.set(summary, {
+      source: JSON.stringify(workbook),
+      content: JSON.stringify(summary),
+    }),
+    summary
   );
 }
-function cU(workbook, report, values, n) {
-  const o = new Map(
-      n.spills.map((spill) => [`${spill.sheetId}:${spill.address}`, spill]),
+function cU(workbook, report, values, calculationResult) {
+  const spillsByKey = new Map(
+      calculationResult.spills.map((spill) => [
+        `${spill.sheetId}:${spill.address}`,
+        spill,
+      ]),
     ),
-    a = new Map(n.spillMetadata.map((c) => [`${c.sheetId}:${c.address}`, c])),
-    s = (c, h) => `${c}:${h.replace(/\$/g, "").toUpperCase()}`,
-    d = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
-    getTypedValue = (c, h) => {
-      const f = s(c, h),
-        p = values.get(f) ?? o.get(f)?.result;
-      if (p) return { ...p };
-      const sheet = d.get(c);
+    spillMetadataByKey = new Map(
+      calculationResult.spillMetadata.map((metadataEntry) => [
+        `${metadataEntry.sheetId}:${metadataEntry.address}`,
+        metadataEntry,
+      ]),
+    ),
+    cellKey = (sheetId, cellAddress) =>
+      `${sheetId}:${cellAddress.replace(/\$/g, "").toUpperCase()}`,
+    sheetsById = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
+    getTypedValue = (sheetId, cellAddress) => {
+      const valueKey = cellKey(sheetId, cellAddress),
+        storedValue = values.get(valueKey) ?? spillsByKey.get(valueKey)?.result;
+      if (storedValue) return { ...storedValue };
+      const sheet = sheetsById.get(sheetId);
       if (!sheet) return { type: "error", value: "#REF!" };
       try {
-        const y = _t(h);
-        if (y.row >= sheet.rowCount || y.col >= sheet.colCount)
+        const parsedAddress = _t(cellAddress);
+        if (
+          parsedAddress.row >= sheet.rowCount ||
+          parsedAddress.col >= sheet.colCount
+        )
           return { type: "error", value: "#REF!" };
       } catch {
         return { type: "error", value: "#REF!" };
       }
-      const v = sheet.cells[h.replace(/\$/g, "").toUpperCase()]?.raw ?? null;
+      const rawValue =
+        sheet.cells[cellAddress.replace(/\$/g, "").toUpperCase()]?.raw ?? null;
       return {
         type:
-          v === null
+          rawValue === null
             ? "blank"
-            : typeof v == "string"
+            : typeof rawValue == "string"
               ? "text"
-              : typeof v == "boolean"
+              : typeof rawValue == "boolean"
                 ? "boolean"
                 : "number",
-        value: v,
+        value: rawValue,
       };
     },
-    l = (c, h) => getTypedValue(c, h).value;
+    getValue = (sheetId, cellAddress) =>
+      getTypedValue(sheetId, cellAddress).value;
   return (
-    Object.assign(l, {
+    Object.assign(getValue, {
       getTypedValue: getTypedValue,
       getDateContext: () => ({ ...report.dateContext }),
       getResourceReport: () => ({ ...report.resources }),
-      getOperationalErrors: () => [...n.operationalErrors],
-      getReferenceDiagnostics: () => structuredClone(n.references),
-      getNamedFormulaDiagnostics: () => structuredClone(n.names),
-      getFinancialDiagnostics: () => structuredClone(n.financial),
-      getSpillEntries: (c) =>
-        n.spills
-          .filter((spill) => spill.sheetId === c)
+      getOperationalErrors: () => [...calculationResult.operationalErrors],
+      getReferenceDiagnostics: () =>
+        structuredClone(calculationResult.references),
+      getNamedFormulaDiagnostics: () =>
+        structuredClone(calculationResult.names),
+      getFinancialDiagnostics: () =>
+        structuredClone(calculationResult.financial),
+      getSpillEntries: (sheetId) =>
+        calculationResult.spills
+          .filter((spill) => spill.sheetId === sheetId)
           .map(({ address, anchor }) => ({ address, anchor })),
-      getSpillAnchor: (c, h) => o.get(s(c, h))?.anchor,
-      getSpillRange: (c, h) => a.get(s(c, h))?.range,
-      getSpillDiagnostic: (c, h) => structuredClone(a.get(s(c, h))?.diagnostic),
-      peekSpill: (c, h) => {
-        const f = a.get(s(c, h));
-        return f
-          ? { range: f.range, diagnostic: structuredClone(f.diagnostic) }
+      getSpillAnchor: (sheetId, cellAddress) =>
+        spillsByKey.get(cellKey(sheetId, cellAddress))?.anchor,
+      getSpillRange: (sheetId, cellAddress) =>
+        spillMetadataByKey.get(cellKey(sheetId, cellAddress))?.range,
+      getSpillDiagnostic: (sheetId, cellAddress) =>
+        structuredClone(
+          spillMetadataByKey.get(cellKey(sheetId, cellAddress))?.diagnostic,
+        ),
+      peekSpill: (sheetId, cellAddress) => {
+        const spillInfo = spillMetadataByKey.get(cellKey(sheetId, cellAddress));
+        return spillInfo
+          ? {
+              range: spillInfo.range,
+              diagnostic: structuredClone(spillInfo.diagnostic),
+            }
           : {};
       },
-      evaluateFormula: (c, h, f) =>
-        evaluateWorkbookFormulas(workbook).evaluateFormula(c, h, f),
+      evaluateFormula: (sheetId, cellAddress, formulaText) =>
+        evaluateWorkbookFormulas(workbook).evaluateFormula(
+          sheetId,
+          cellAddress,
+          formulaText,
+        ),
     }),
-    l
+    getValue
   );
 }
 function getIsolatedCalculation(workbook) {
-  const r = calculatorRecords.get(workbook);
+  const existingRecord = calculatorRecords.get(workbook);
   if (
-    r?.report.execution?.state === "pending" &&
-    isCalculationRecordCurrent(r, workbook)
+    existingRecord?.report.execution?.state === "pending" &&
+    isCalculationRecordCurrent(existingRecord, workbook)
   )
-    return { calculator: r.calculator, report: r.report };
+    return {
+      calculator: existingRecord.calculator,
+      report: existingRecord.report,
+    };
   const monotonicClockMs = readMonotonicClockMs(),
     cachedCalculationSnapshot = getCachedCalculationSnapshot(workbook),
-    o =
+    previousRecord =
       calculatorRecords.get(workbook) ?? carriedCalculatorRecords.get(workbook),
     values = new Map(),
     dependencies = new Map(),
-    reportCellValueMap = buildReportCellValueMap(o),
-    u = new Map();
-  for (const v of cachedCalculationSnapshot.formulas.keys()) {
-    values.set(v, pendingFormulaValue);
-    const g = reportCellValueMap.get(v);
-    g && u.set(v, g);
+    reportCellValueMap = buildReportCellValueMap(previousRecord),
+    lastKnownValues = new Map();
+  for (const formulaKey of cachedCalculationSnapshot.formulas.keys()) {
+    values.set(formulaKey, pendingFormulaValue);
+    const lastKnownValue = reportCellValueMap.get(formulaKey);
+    lastKnownValue && lastKnownValues.set(formulaKey, lastKnownValue);
   }
-  let l;
-  const c = {
+  let cellReports;
+  const baseReport = {
     workbookId: workbook.id,
     revision: workbook.revision,
-    run: (o?.report.run ?? 0) + 1,
+    run: (previousRecord?.report.run ?? 0) + 1,
     settings: cachedCalculationSnapshot.settings,
     resources: createCalculationBudgetTracker(workbook).report(),
     volatile: {
@@ -1319,33 +1697,41 @@ function getIsolatedCalculation(workbook) {
       hardInterrupt: true,
     },
   };
-  deepFreeze(c);
+  deepFreeze(baseReport);
   const report = Object.freeze({
-    ...c,
+    ...baseReport,
     get cells() {
       return (
-        l ||
-          ((l = [...cachedCalculationSnapshot.formulas].map(([v, g]) => ({
-            ...g,
-            result: { ...pendingFormulaValue },
-            status: "pending",
-            evaluations: 0,
-            dependencies: [],
-            ...(u.has(v) ? { lastKnown: u.get(v) } : {}),
-          }))),
-          deepFreeze(l)),
-        l
+        cellReports ||
+          ((cellReports = [...cachedCalculationSnapshot.formulas].map(
+            ([cellKey, formulaEntry]) => ({
+              ...formulaEntry,
+              result: { ...pendingFormulaValue },
+              status: "pending",
+              evaluations: 0,
+              dependencies: [],
+              ...(lastKnownValues.has(cellKey)
+                ? { lastKnown: lastKnownValues.get(cellKey) }
+                : {}),
+            }),
+          )),
+          deepFreeze(cellReports)),
+        cellReports
       );
     },
   });
-  reportCellValueMaps.set(report, u);
+  reportCellValueMaps.set(report, lastKnownValues);
   const spills = [];
-  if (o)
+  if (previousRecord)
     for (const sheet of workbook.sheets)
-      for (const g of o.calculator.getSpillEntries(sheet.id))
-        cachedCalculationSnapshot.formulas.has(`${sheet.id}:${g.anchor}`) &&
+      for (const spillEntry of previousRecord.calculator.getSpillEntries(
+        sheet.id,
+      ))
+        cachedCalculationSnapshot.formulas.has(
+          `${sheet.id}:${spillEntry.anchor}`,
+        ) &&
           spills.push({
-            ...g,
+            ...spillEntry,
             sheetId: sheet.id,
             result: { ...pendingFormulaValue },
           });
@@ -1371,73 +1757,87 @@ function getIsolatedCalculation(workbook) {
     { calculator: calculator, report: report }
   );
 }
-function acceptWorkerCalculationResult(workbook, report, t) {
-  const n = calculatorRecords.get(workbook),
+function acceptWorkerCalculationResult(workbook, report, workerResult) {
+  const existingRecord = calculatorRecords.get(workbook),
     cachedCalculationSnapshot = getCachedCalculationSnapshot(workbook);
   if (
-    !n ||
-    n.report !== report ||
-    !isCalculationRecordCurrent(n, workbook, cachedCalculationSnapshot)
+    !existingRecord ||
+    existingRecord.report !== report ||
+    !isCalculationRecordCurrent(
+      existingRecord,
+      workbook,
+      cachedCalculationSnapshot,
+    )
   )
     return;
   if (
-    t.inputSignature !== getCalculationInputSignature(workbook) ||
-    t.report.workbookId !== workbook.id ||
-    t.report.revision !== workbook.revision ||
-    t.report.cells.length !== cachedCalculationSnapshot.formulas.size
+    workerResult.inputSignature !== getCalculationInputSignature(workbook) ||
+    workerResult.report.workbookId !== workbook.id ||
+    workerResult.report.revision !== workbook.revision ||
+    workerResult.report.cells.length !== cachedCalculationSnapshot.formulas.size
   )
     throw Error("The worker result does not match the requested workbook.");
   const values = new Map(),
     dependencies = new Map();
-  for (const cell of t.report.cells) {
-    const h = `${cell.sheetId}:${cell.address}`;
+  for (const cell of workerResult.report.cells) {
+    const cellKey = `${cell.sheetId}:${cell.address}`;
     if (
-      values.has(h) ||
-      cachedCalculationSnapshot.formulas.get(h)?.formula !== cell.formula
+      values.has(cellKey) ||
+      cachedCalculationSnapshot.formulas.get(cellKey)?.formula !== cell.formula
     )
       throw Error(
         "The worker result contains stale or duplicate formula inputs.",
       );
-    (values.set(h, cell.result),
-      dependencies.set(h, new Set(cell.dependencies)));
+    (values.set(cellKey, cell.result),
+      dependencies.set(cellKey, new Set(cell.dependencies)));
   }
-  const d = { ...t.report, run: report.run };
-  deepFreeze(d);
-  const calculator = cU(workbook, d, values, t);
+  const runReport = { ...workerResult.report, run: report.run };
+  deepFreeze(runReport);
+  const calculator = cU(workbook, runReport, values, workerResult);
   return (
     calculatorRecords.set(workbook, {
       ...cachedCalculationSnapshot,
       calculator: calculator,
-      report: d,
+      report: runReport,
       values: values,
       dependencies: dependencies,
     }),
-    { calculator: calculator, report: d }
+    { calculator: calculator, report: runReport }
   );
 }
-function runIterativeCalculation(workbook, report, t, n, wallElapsedMs) {
-  if (t === "#PENDING!") {
-    const s = calculatorRecords.get(workbook);
-    if (!s || s.report !== report || !isCalculationRecordCurrent(s, workbook))
+function runIterativeCalculation(
+  workbook,
+  report,
+  errorCode,
+  errorMessage,
+  wallElapsedMs,
+) {
+  if (errorCode === "#PENDING!") {
+    const existingRecord = calculatorRecords.get(workbook);
+    if (
+      !existingRecord ||
+      existingRecord.report !== report ||
+      !isCalculationRecordCurrent(existingRecord, workbook)
+    )
       return;
-    const d = Object.freeze({
+    const cancelledExecution = Object.freeze({
         mode: "worker",
         state: "cancelled",
-        message: n,
+        message: errorMessage,
         wallElapsedMs: wallElapsedMs,
       }),
-      u = Object.freeze(
+      cancelledReport = Object.freeze(
         Object.defineProperties(
           {},
           {
             ...Object.getOwnPropertyDescriptors(report),
-            reason: { value: n, enumerable: true },
-            execution: { value: d, enumerable: true },
+            reason: { value: errorMessage, enumerable: true },
+            execution: { value: cancelledExecution, enumerable: true },
             iteration: {
               value: Object.freeze({
                 ...report.iteration,
                 status: report.settings.iterative ? "failed" : "off",
-                message: n,
+                message: errorMessage,
                 passes: 0,
                 maxDelta: null,
               }),
@@ -1446,16 +1846,20 @@ function runIterativeCalculation(workbook, report, t, n, wallElapsedMs) {
           },
         ),
       ),
-      l = reportCellValueMaps.get(report);
+      reportCellValues = reportCellValueMaps.get(report);
     return (
-      l && reportCellValueMaps.set(u, l),
-      calculatorRecords.set(workbook, { ...s, report: u }),
-      { calculator: s.calculator, report: u }
+      reportCellValues &&
+        reportCellValueMaps.set(cancelledReport, reportCellValues),
+      calculatorRecords.set(workbook, {
+        ...existingRecord,
+        report: cancelledReport,
+      }),
+      { calculator: existingRecord.calculator, report: cancelledReport }
     );
   }
   const cells = report.cells.map((cell) => ({
     ...cell,
-    result: makeFormulaError(t),
+    result: makeFormulaError(errorCode),
     status: "error",
     evaluations: 0,
     dependencies: [],
@@ -1470,18 +1874,18 @@ function runIterativeCalculation(workbook, report, t, n, wallElapsedMs) {
       reused: 0,
       dependencyEdges: 0,
       cycles: [],
-      reason: n,
+      reason: errorMessage,
       execution: {
         mode: "worker",
-        state: t === "#TIMEOUT!" ? "timeout" : "failed",
-        message: n,
+        state: errorCode === "#TIMEOUT!" ? "timeout" : "failed",
+        message: errorMessage,
         wallElapsedMs: wallElapsedMs,
       },
       limits: { ...report.limits, hardInterrupt: true },
       iteration: {
         ...report.iteration,
         status: report.settings.iterative ? "failed" : "off",
-        message: n,
+        message: errorMessage,
         passes: 0,
         maxDelta: null,
       },
@@ -1491,142 +1895,182 @@ function runIterativeCalculation(workbook, report, t, n, wallElapsedMs) {
     references: [],
     names: [],
     financial: [],
-    operationalErrors: [t],
+    operationalErrors: [errorCode],
   });
 }
 function recalculateWorkbookFormulas(
   workbook,
   cachedCalculationSnapshot,
-  t,
-  n,
+  previousCalculation,
+  isFullRecalculation,
 ) {
   const monotonicClockMs = readMonotonicClockMs(),
     { formulas, settings } = cachedCalculationSnapshot,
     localDateTime = resolveLocalDateTime(workbook.datePolicy),
     calculationBudgetTracker = createCalculationBudgetTracker(workbook);
   calculationBudgetTracker.begin();
-  const l = new Set(),
+  const dirtyFormulaKeys = new Set(),
     dependencies = new Map(),
     values = new Map(),
-    f = new Map();
-  let reason = n
+    evaluationCounts = new Map();
+  let reason = isFullRecalculation
     ? "Explicit full recalculation"
-    : t
+    : previousCalculation
       ? "Changed inputs and transitive dependents"
       : "First calculation of this snapshot";
   if (
-    n ||
-    !t ||
-    cachedCalculationSnapshot.metadata !== t.metadata ||
+    isFullRecalculation ||
+    !previousCalculation ||
+    cachedCalculationSnapshot.metadata !== previousCalculation.metadata ||
     ik(workbook, formulas) ||
-    ik(workbook, t.formulas)
+    ik(workbook, previousCalculation.formulas)
   )
-    (formulas.forEach((formula, G) => l.add(G)),
-      t &&
-        !n &&
+    (formulas.forEach((formula, formulaKey) =>
+      dirtyFormulaKeys.add(formulaKey),
+    ),
+      previousCalculation &&
+        !isFullRecalculation &&
         (reason =
-          cachedCalculationSnapshot.metadata !== t.metadata
+          cachedCalculationSnapshot.metadata !== previousCalculation.metadata
             ? "Calculation settings or structural metadata changed"
             : "Conservative recalculation for names, dynamic references or arrays"));
   else {
-    const U = new Set(),
-      G = cachedCalculationSnapshot.inputs(),
-      H = t.inputs();
-    for (const J of new Set([...G.keys(), ...H.keys()]))
-      G.get(J) !== H.get(J) && U.add(J);
-    (formulas.forEach((formula, q) => {
+    const affectedKeys = new Set(),
+      previousInputs = cachedCalculationSnapshot.inputs(),
+      currentInputs = previousCalculation.inputs();
+    for (const inputKey of new Set([
+      ...previousInputs.keys(),
+      ...currentInputs.keys(),
+    ]))
+      previousInputs.get(inputKey) !== currentInputs.get(inputKey) &&
+        affectedKeys.add(inputKey);
+    (formulas.forEach((formula, formulaKey) => {
       (_O.test(formula.formula) ||
-        !t.values.has(q) ||
-        ["#TIMEOUT!", "#LIMIT!"].includes(String(t.values.get(q)?.value))) &&
-        U.add(q);
+        !previousCalculation.values.has(formulaKey) ||
+        ["#TIMEOUT!", "#LIMIT!"].includes(
+          String(previousCalculation.values.get(formulaKey)?.value),
+        )) &&
+        affectedKeys.add(formulaKey);
     }),
-      t.report.cycles.flat().forEach((J) => U.add(J)));
-    const Q = new Map();
-    t.dependencies.forEach((dependency, q) =>
-      dependency.forEach((W) => {
-        const K = Q.get(W) ?? new Set();
-        (K.add(q), Q.set(W, K));
+      previousCalculation.report.cycles
+        .flat()
+        .forEach((cycleCell) => affectedKeys.add(cycleCell)));
+    const dependentsByPrecedent = new Map();
+    previousCalculation.dependencies.forEach((dependency, dependentKey) =>
+      dependency.forEach((precedentKey) => {
+        const dependentKeys =
+          dependentsByPrecedent.get(precedentKey) ?? new Set();
+        (dependentKeys.add(dependentKey),
+          dependentsByPrecedent.set(precedentKey, dependentKeys));
       }),
     );
-    const X = [...U];
-    for (let J = 0; J < X.length; J++)
-      for (const q of Q.get(X[J]) ?? []) U.has(q) || (U.add(q), X.push(q));
-    U.forEach((J) => {
-      formulas.has(J) && l.add(J);
+    const changeQueue = [...affectedKeys];
+    for (let queueIndex = 0; queueIndex < changeQueue.length; queueIndex++)
+      for (const dependentKey of dependentsByPrecedent.get(
+        changeQueue[queueIndex],
+      ) ?? [])
+        affectedKeys.has(dependentKey) ||
+          (affectedKeys.add(dependentKey), changeQueue.push(dependentKey));
+    affectedKeys.forEach((affectedKey) => {
+      formulas.has(affectedKey) && dirtyFormulaKeys.add(affectedKey);
     });
   }
-  formulas.forEach((formula, G) => {
-    !l.has(G) &&
-      t?.values.has(G) &&
-      (values.set(G, t.values.get(G)),
-      dependencies.set(G, new Set(t.dependencies.get(G))));
+  formulas.forEach((formula, formulaKey) => {
+    !dirtyFormulaKeys.has(formulaKey) &&
+      previousCalculation?.values.has(formulaKey) &&
+      (values.set(formulaKey, previousCalculation.values.get(formulaKey)),
+      dependencies.set(
+        formulaKey,
+        new Set(previousCalculation.dependencies.get(formulaKey)),
+      ));
   });
-  const v = new Map(values),
+  const baseValues = new Map(values),
     cycles = [],
-    b = new Set();
-  let y = true,
-    w,
-    E = [...dependencies.values()].reduce((U, G) => U + G.size, 0);
+    cycleCells = new Set();
+  let isRunning = true,
+    stopError,
+    dependencyEdgeCount = [...dependencies.values()].reduce(
+      (total, dependencySet) => total + dependencySet.size,
+      0,
+    );
   const check = () => (
-      y && !w && (w = calculationBudgetTracker.check()),
-      y &&
-        !w &&
+      isRunning && !stopError && (stopError = calculationBudgetTracker.check()),
+      isRunning &&
+        !stopError &&
         readMonotonicClockMs() - monotonicClockMs > settings.timeBudgetMs &&
-        (w = "#TIMEOUT!"),
-      y ? w : undefined
+        (stopError = "#TIMEOUT!"),
+      isRunning ? stopError : undefined
     ),
-    k = (U, G) => {
-      const H = [];
+    evaluatePass = (sourceValues, cycleOverrides) => {
+      const evaluationStack = [];
       return evaluateWorkbookFormulas(workbook, {}, undefined, {
         budget: calculationBudgetTracker,
-        running: () => y,
+        running: () => isRunning,
         dateContext: localDateTime,
         check: check,
-        read(X) {
-          const J = H.at(-1);
-          if (!y || !J) return;
-          const q = dependencies.get(J);
-          q.has(X) || (E >= j5 ? (w = "#LIMIT!") : (q.add(X), E++));
+        read(referencedKey) {
+          const currentFormulaKey = evaluationStack.at(-1);
+          if (!isRunning || !currentFormulaKey) return;
+          const currentDependencies = dependencies.get(currentFormulaKey);
+          currentDependencies.has(referencedKey) ||
+            (dependencyEdgeCount >= j5
+              ? (stopError = "#LIMIT!")
+              : (currentDependencies.add(referencedKey),
+                dependencyEdgeCount++));
         },
-        value(X, J) {
-          return J && G?.has(X) ? G.get(X) : U.get(X);
+        value(cellKey, shouldUseOverrides) {
+          return shouldUseOverrides && cycleOverrides?.has(cellKey)
+            ? cycleOverrides.get(cellKey)
+            : sourceValues.get(cellKey);
         },
-        enter(X) {
-          (H.push(X),
-            (E -= dependencies.get(X)?.size ?? 0),
-            dependencies.set(X, new Set()),
-            f.set(X, (f.get(X) ?? 0) + 1));
+        enter(enteredKey) {
+          (evaluationStack.push(enteredKey),
+            (dependencyEdgeCount -= dependencies.get(enteredKey)?.size ?? 0),
+            dependencies.set(enteredKey, new Set()),
+            evaluationCounts.set(
+              enteredKey,
+              (evaluationCounts.get(enteredKey) ?? 0) + 1,
+            ));
         },
-        leave(X, J) {
-          (values.set(X, J), H.pop());
+        leave(leftKey, result) {
+          (values.set(leftKey, result), evaluationStack.pop());
         },
-        cycle(X) {
-          const J = X.at(-1),
-            q = [...new Set(X.slice(X.indexOf(J), -1))];
-          (q.forEach((W) => b.add(W)),
-            q.length &&
+        cycle(cyclePath) {
+          const closingKey = cyclePath.at(-1),
+            cycleMembers = [
+              ...new Set(cyclePath.slice(cyclePath.indexOf(closingKey), -1)),
+            ];
+          (cycleMembers.forEach((cycleMember) => cycleCells.add(cycleMember)),
+            cycleMembers.length &&
               !cycles.some(
                 (cycle) =>
-                  cycle.length === q.length &&
-                  cycle.every((K) => q.includes(K)),
+                  cycle.length === cycleMembers.length &&
+                  cycle.every((memberKey) => cycleMembers.includes(memberKey)),
               ) &&
-              cycles.push(q));
+              cycles.push(cycleMembers));
         },
       });
     },
-    F = settings.mode === "manual" && !n;
-  F &&
-    l.forEach((U) => {
-      (values.set(U, pendingFormulaValue),
-        v.set(U, pendingFormulaValue),
-        dependencies.set(U, new Set(t?.dependencies.get(U))));
+    isManualPending = settings.mode === "manual" && !isFullRecalculation;
+  isManualPending &&
+    dirtyFormulaKeys.forEach((dirtyKey) => {
+      (values.set(dirtyKey, pendingFormulaValue),
+        baseValues.set(dirtyKey, pendingFormulaValue),
+        dependencies.set(
+          dirtyKey,
+          new Set(previousCalculation?.dependencies.get(dirtyKey)),
+        ));
     });
-  let I = k(v);
-  const O = () => {
-    for (const [U, G] of formulas)
-      values.set(U, v.get(U) ?? I.getTypedValue(G.sheetId, G.address));
+  let baseCalculator = evaluatePass(baseValues);
+  const copyEvaluatedValues = () => {
+    for (const [formulaKey, formula] of formulas)
+      values.set(
+        formulaKey,
+        baseValues.get(formulaKey) ??
+          baseCalculator.getTypedValue(formula.sheetId, formula.address),
+      );
   };
-  F || O();
+  isManualPending || copyEvaluatedValues();
   const iteration = {
     status: settings.iterative ? "not-needed" : "off",
     passes: 0,
@@ -1635,95 +2079,136 @@ function recalculateWorkbookFormulas(
       ? "No circular calculation was required."
       : "Iteration is disabled. Circular references return #CYCLE!.",
   };
-  if (!F && b.size && settings.iterative) {
-    const U = new Set(b),
-      G = new Map();
-    dependencies.forEach((dependency, X) =>
-      dependency.forEach((J) => {
-        const q = G.get(J) ?? new Set();
-        (q.add(X), G.set(J, q));
+  if (!isManualPending && cycleCells.size && settings.iterative) {
+    const iterationKeys = new Set(cycleCells),
+      dependentsByKey = new Map();
+    dependencies.forEach((dependency, dependentKey) =>
+      dependency.forEach((precedentKey) => {
+        const dependentSet = dependentsByKey.get(precedentKey) ?? new Set();
+        (dependentSet.add(dependentKey),
+          dependentsByKey.set(precedentKey, dependentSet));
       }),
     );
-    const H = [...b];
-    for (let Q = 0; Q < H.length; Q++)
-      for (const X of G.get(H[Q]) ?? []) U.has(X) || (U.add(X), H.push(X));
+    const expansionQueue = [...cycleCells];
+    for (
+      let expansionIndex = 0;
+      expansionIndex < expansionQueue.length;
+      expansionIndex++
+    )
+      for (const dependentKey of dependentsByKey.get(
+        expansionQueue[expansionIndex],
+      ) ?? [])
+        iterationKeys.has(dependentKey) ||
+          (iterationKeys.add(dependentKey), expansionQueue.push(dependentKey));
     if (
-      (values.forEach((value, X) => {
-        U.has(X) || v.set(X, value);
+      (values.forEach((value, cellKey) => {
+        iterationKeys.has(cellKey) || baseValues.set(cellKey, value);
       }),
       (iteration.status = "failed"),
       ik(workbook, formulas) ||
-        [...formulas.values()].some((Q) => _O.test(Q.formula)) ||
-        b.size > 1e3)
+        [...formulas.values()].some((formula) => _O.test(formula.formula)) ||
+        cycleCells.size > 1e3)
     )
       iteration.message =
         "Iteration supports at most 1,000 deterministic scalar cycle cells. Names, arrays, dynamic references and volatile formulas must be removed from this calculation.";
     else {
-      let Q = new Map([...b].map((X) => [X, { type: "number", value: 0 }]));
+      let cycleGuesses = new Map(
+        [...cycleCells].map((cycleKey) => [
+          cycleKey,
+          { type: "number", value: 0 },
+        ]),
+      );
       iteration.message = `No convergence within ${settings.maxIterations} simultaneous passes from zero.`;
-      for (let X = 0; X < settings.maxIterations && !check(); X++) {
-        I = k(v, Q);
-        const J = new Map();
-        let q = 0,
-          W = true;
-        for (const K of b) {
-          const te = formulas.get(K),
-            ae = I.getTypedValue(te.sheetId, te.address);
+      for (
+        let passIndex = 0;
+        passIndex < settings.maxIterations && !check();
+        passIndex++
+      ) {
+        baseCalculator = evaluatePass(baseValues, cycleGuesses);
+        const nextGuesses = new Map();
+        let maxDelta = 0,
+          isAllNumeric = true;
+        for (const cycleKey of cycleCells) {
+          const cycleFormula = formulas.get(cycleKey),
+            cycleValue = baseCalculator.getTypedValue(
+              cycleFormula.sheetId,
+              cycleFormula.address,
+            );
           if (
-            (J.set(K, ae), ae.type !== "number" || !Number.isFinite(ae.value))
+            (nextGuesses.set(cycleKey, cycleValue),
+            cycleValue.type !== "number" || !Number.isFinite(cycleValue.value))
           ) {
-            W = false;
+            isAllNumeric = false;
             break;
           }
-          q = Math.max(q, Math.abs(Number(ae.value) - Number(Q.get(K).value)));
+          maxDelta = Math.max(
+            maxDelta,
+            Math.abs(
+              Number(cycleValue.value) -
+                Number(cycleGuesses.get(cycleKey).value),
+            ),
+          );
         }
         if (
-          ((iteration.passes = X + 1),
-          (iteration.maxDelta = Number.isFinite(q) ? q : null),
-          !W)
+          ((iteration.passes = passIndex + 1),
+          (iteration.maxDelta = Number.isFinite(maxDelta) ? maxDelta : null),
+          !isAllNumeric)
         ) {
           iteration.message =
             "The circular calculation produced a nonnumeric value or calculation error.";
           break;
         }
-        if (((Q = J), q <= settings.maxChange)) {
+        if (((cycleGuesses = nextGuesses), maxDelta <= settings.maxChange)) {
           ((iteration.status = "converged"),
-            (iteration.message = `Converged from zero in ${X + 1} simultaneous passes; maximum change ${q}.`));
+            (iteration.message = `Converged from zero in ${passIndex + 1} simultaneous passes; maximum change ${maxDelta}.`));
           break;
         }
       }
       iteration.status === "converged" &&
-        !w &&
-        b.forEach((X) => v.set(X, Q.get(X)));
+        !stopError &&
+        cycleCells.forEach((cycleKey) =>
+          baseValues.set(cycleKey, cycleGuesses.get(cycleKey)),
+        );
     }
-    ((iteration.status !== "converged" || w) &&
-      b.forEach((Q) => v.set(Q, makeFormulaError(w ?? "#ITER!"))),
-      (I = k(v)),
-      O());
+    ((iteration.status !== "converged" || stopError) &&
+      cycleCells.forEach((cycleKey) =>
+        baseValues.set(cycleKey, makeFormulaError(stopError ?? "#ITER!")),
+      ),
+      (baseCalculator = evaluatePass(baseValues)),
+      copyEvaluatedValues());
   }
   (check(),
-    w &&
-      (l.forEach((U) => values.set(U, makeFormulaError(w))),
+    stopError &&
+      (dirtyFormulaKeys.forEach((dirtyKey) =>
+        values.set(dirtyKey, makeFormulaError(stopError)),
+      ),
       iteration.status === "converged" && (iteration.status = "failed"),
-      b.size &&
+      cycleCells.size &&
         settings.iterative &&
-        (iteration.message = `Calculation stopped with ${w}; no intermediate result is current.`)),
-    (y = false),
+        (iteration.message = `Calculation stopped with ${stopError}; no intermediate result is current.`)),
+    (isRunning = false),
     calculationBudgetTracker.end());
-  const calculator = (U, G) => calculator.getTypedValue(U, G).value;
-  Object.assign(calculator, I);
-  const V = (U, G) => `${U}:${G.replace(/\$/g, "").toUpperCase()}`,
-    D = new Map();
-  if (F && t)
+  const calculator = (targetSheetId, targetAddress) =>
+    calculator.getTypedValue(targetSheetId, targetAddress).value;
+  Object.assign(calculator, baseCalculator);
+  const toCellKey = (sheetId, address) =>
+      `${sheetId}:${address.replace(/\$/g, "").toUpperCase()}`,
+    pendingSpillAnchors = new Map();
+  if (isManualPending && previousCalculation)
     for (const sheet of workbook.sheets)
-      for (const G of t.calculator.getSpillEntries(sheet.id))
-        l.has(`${sheet.id}:${G.anchor}`) &&
-          D.set(`${sheet.id}:${G.address}`, G.anchor);
-  calculator.getTypedValue = (U, G) => {
-    const H = V(U, G);
-    if (values.has(H)) return { ...values.get(H) };
-    const cell = workbook.sheets.find((sheet) => sheet.id === U)?.cells[
-      G.replace(/\$/g, "").toUpperCase()
+      for (const spillEntry of previousCalculation.calculator.getSpillEntries(
+        sheet.id,
+      ))
+        dirtyFormulaKeys.has(`${sheet.id}:${spillEntry.anchor}`) &&
+          pendingSpillAnchors.set(
+            `${sheet.id}:${spillEntry.address}`,
+            spillEntry.anchor,
+          );
+  calculator.getTypedValue = (sheetId, address) => {
+    const valueKey = toCellKey(sheetId, address);
+    if (values.has(valueKey)) return { ...values.get(valueKey) };
+    const cell = workbook.sheets.find((sheet) => sheet.id === sheetId)?.cells[
+      address.replace(/\$/g, "").toUpperCase()
     ];
     if (
       cell &&
@@ -1739,29 +2224,30 @@ function recalculateWorkbookFormulas(
               : "number",
         value: cell.raw,
       };
-    if (D.has(H)) return { ...pendingFormulaValue };
-    const X = I.getSpillAnchor(U, G);
-    return X && values.get(`${U}:${X}`)?.type === "error"
-      ? { ...values.get(`${U}:${X}`) }
-      : I.getTypedValue(U, G);
+    if (pendingSpillAnchors.has(valueKey)) return { ...pendingFormulaValue };
+    const spillAnchor = baseCalculator.getSpillAnchor(sheetId, address);
+    return spillAnchor &&
+      values.get(`${sheetId}:${spillAnchor}`)?.type === "error"
+      ? { ...values.get(`${sheetId}:${spillAnchor}`) }
+      : baseCalculator.getTypedValue(sheetId, address);
   };
-  const getSpillEntries = I.getSpillEntries;
-  ((calculator.getSpillEntries = (U) => [
-    ...getSpillEntries(U),
-    ...[...D]
-      .filter(([G]) => G.startsWith(`${U}:`))
-      .map(([G, anchor]) => ({
-        address: G.slice(U.length + 1),
+  const getSpillEntries = baseCalculator.getSpillEntries;
+  ((calculator.getSpillEntries = (sheetId) => [
+    ...getSpillEntries(sheetId),
+    ...[...pendingSpillAnchors]
+      .filter(([pendingKey]) => pendingKey.startsWith(`${sheetId}:`))
+      .map(([pendingKey, anchor]) => ({
+        address: pendingKey.slice(sheetId.length + 1),
         anchor: anchor,
       })),
   ]),
     (calculator.getOperationalErrors = () => [
       ...new Set([
-        ...I.getOperationalErrors(),
+        ...baseCalculator.getOperationalErrors(),
         ...[...values.values()]
           .filter(
-            (U) =>
-              U.type === "error" &&
+            (cellValue) =>
+              cellValue.type === "error" &&
               [
                 "#PENDING!",
                 "#TIMEOUT!",
@@ -1770,63 +2256,93 @@ function recalculateWorkbookFormulas(
                 "#BLOCKED!",
                 "#CYCLE!",
                 "#ERROR!",
-              ].includes(String(U.value)),
+              ].includes(String(cellValue.value)),
           )
-          .map((U) => U.value),
+          .map((cellValue) => cellValue.value),
       ]),
     ]));
-  const _ = (U, G) => [
-      ...U.filter(
-        (H) =>
-          !l.has(`${H.sheetId}:${H.address}`) &&
-          formulas.has(`${H.sheetId}:${H.address}`),
+  const mergeDiagnostics = (previousDiagnostics, evaluatorDiagnostics) => [
+      ...previousDiagnostics.filter(
+        (diagnostic) =>
+          !dirtyFormulaKeys.has(
+            `${diagnostic.sheetId}:${diagnostic.address}`,
+          ) && formulas.has(`${diagnostic.sheetId}:${diagnostic.address}`),
       ),
-      ...G,
+      ...evaluatorDiagnostics,
     ],
-    C = t?.calculator.getReferenceDiagnostics() ?? [],
-    T = t?.calculator.getNamedFormulaDiagnostics() ?? [],
-    N = t?.calculator.getFinancialDiagnostics() ?? [];
+    previousReferenceDiagnostics =
+      previousCalculation?.calculator.getReferenceDiagnostics() ?? [],
+    previousNamedFormulaDiagnostics =
+      previousCalculation?.calculator.getNamedFormulaDiagnostics() ?? [],
+    previousFinancialDiagnostics =
+      previousCalculation?.calculator.getFinancialDiagnostics() ?? [];
   ((calculator.getFinancialDiagnostics = () =>
-    structuredClone(_(N, I.getFinancialDiagnostics()))),
+    structuredClone(
+      mergeDiagnostics(
+        previousFinancialDiagnostics,
+        baseCalculator.getFinancialDiagnostics(),
+      ),
+    )),
     (calculator.getReferenceDiagnostics = () =>
-      _(C, I.getReferenceDiagnostics())),
+      mergeDiagnostics(
+        previousReferenceDiagnostics,
+        baseCalculator.getReferenceDiagnostics(),
+      )),
     (calculator.getNamedFormulaDiagnostics = () =>
-      _(T, I.getNamedFormulaDiagnostics())));
-  const R = new Map(
-      t?.report.cells.map((cell) => [`${cell.sheetId}:${cell.address}`, cell]),
+      mergeDiagnostics(
+        previousNamedFormulaDiagnostics,
+        baseCalculator.getNamedFormulaDiagnostics(),
+      )));
+  const previousCellReports = new Map(
+      previousCalculation?.report.cells.map((cell) => [
+        `${cell.sheetId}:${cell.address}`,
+        cell,
+      ]),
     ),
-    L = new Map();
+    financialByCell = new Map();
   for (const {
     sheetId,
     address,
-    ...H
+    ...diagnosticDetails
   } of calculator.getFinancialDiagnostics()) {
-    const Q = `${sheetId}:${address}`;
-    L.set(Q, [...(L.get(Q) ?? []), H]);
+    const cellKey = `${sheetId}:${address}`;
+    financialByCell.set(cellKey, [
+      ...(financialByCell.get(cellKey) ?? []),
+      diagnosticDetails,
+    ]);
   }
-  const cells = [...formulas].map(([U, G]) => {
-    const H = values.get(U) ?? pendingFormulaValue,
-      Q = t?.values.get(U);
+  const cells = [...formulas].map(([formulaKey, formula]) => {
+    const cellResult = values.get(formulaKey) ?? pendingFormulaValue,
+      previousResult = previousCalculation?.values.get(formulaKey);
     return {
-      ...G,
-      ...(H.value !== "#PENDING!" && L.has(U) ? { financial: L.get(U) } : {}),
-      result: { ...H },
+      ...formula,
+      ...(cellResult.value !== "#PENDING!" && financialByCell.has(formulaKey)
+        ? { financial: financialByCell.get(formulaKey) }
+        : {}),
+      result: { ...cellResult },
       status:
-        H.type === "error"
-          ? H.value === "#PENDING!"
+        cellResult.type === "error"
+          ? cellResult.value === "#PENDING!"
             ? "pending"
             : "error"
           : "current",
-      ...(H.value === "#PENDING!" && Q && Q.value !== "#PENDING!"
-        ? { lastKnown: { revision: t.report.revision, result: { ...Q } } }
+      ...(cellResult.value === "#PENDING!" &&
+      previousResult &&
+      previousResult.value !== "#PENDING!"
+        ? {
+            lastKnown: {
+              revision: previousCalculation.report.revision,
+              result: { ...previousResult },
+            },
+          }
         : {}),
-      ...(H.value === "#PENDING!" &&
-      Q?.value === "#PENDING!" &&
-      R.get(U)?.lastKnown
-        ? { lastKnown: R.get(U).lastKnown }
+      ...(cellResult.value === "#PENDING!" &&
+      previousResult?.value === "#PENDING!" &&
+      previousCellReports.get(formulaKey)?.lastKnown
+        ? { lastKnown: previousCellReports.get(formulaKey).lastKnown }
         : {}),
-      dependencies: [...(dependencies.get(U) ?? [])].sort(),
-      evaluations: f.get(U) ?? 0,
+      dependencies: [...(dependencies.get(formulaKey) ?? [])].sort(),
+      evaluations: evaluationCounts.get(formulaKey) ?? 0,
     };
   });
   return {
@@ -1840,10 +2356,10 @@ function recalculateWorkbookFormulas(
         functions: [
           ...new Set(
             [...formulas.values()]
-              .flatMap((U) => findVolatileFunctionNames(U.formula))
+              .flatMap((formula) => findVolatileFunctionNames(formula.formula))
               .concat(
-                (workbook.definedNames ?? []).flatMap((U) =>
-                  findVolatileFunctionNames(U.refersTo),
+                (workbook.definedNames ?? []).flatMap((definedName) =>
+                  findVolatileFunctionNames(definedName.refersTo),
                 ),
               ),
           ),
@@ -1853,31 +2369,31 @@ function recalculateWorkbookFormulas(
       execution: {
         mode: "cooperative",
         state:
-          w === "#TIMEOUT!"
+          stopError === "#TIMEOUT!"
             ? "timeout"
-            : w
+            : stopError
               ? "failed"
-              : F
+              : isManualPending
                 ? "pending"
                 : "complete",
-        message: w
+        message: stopError
           ? (calculationBudgetTracker.report().reason ??
-            `Calculation stopped with ${w}.`)
+            `Calculation stopped with ${stopError}.`)
           : "Synchronous calculation uses cooperative limits.",
       },
       dateContext: localDateTime,
       workbookId: workbook.id,
       revision: workbook.revision,
-      run: (t?.report.run ?? 0) + 1,
+      run: (previousCalculation?.report.run ?? 0) + 1,
       settings,
       reason: reason,
       formulaCount: formulas.size,
       evaluated: cells.filter((cell) => cell.evaluations > 0).length,
-      reused: formulas.size - l.size,
+      reused: formulas.size - dirtyFormulaKeys.size,
       pending: cells.filter((cell) => cell.status === "pending").length,
       elapsedMs: Math.max(0, readMonotonicClockMs() - monotonicClockMs),
       dependencyEdges: [...dependencies.values()].reduce(
-        (U, G) => U + G.size,
+        (total, dependencySet) => total + dependencySet.size,
         0,
       ),
       cycles: cycles,
@@ -1893,91 +2409,110 @@ function recalculateWorkbookFormulas(
 }
 function getWorkbookCalculation(workbook) {
   const cachedCalculationSnapshot = getCachedCalculationSnapshot(workbook),
-    t = calculatorRecords.get(workbook);
-  if (isCalculationRecordCurrent(t, workbook, cachedCalculationSnapshot))
-    return { calculator: t.calculator, report: t.report };
-  const n = recalculateWorkbookFormulas(
+    calculatorRecord = calculatorRecords.get(workbook);
+  if (
+    isCalculationRecordCurrent(
+      calculatorRecord,
+      workbook,
+      cachedCalculationSnapshot,
+    )
+  )
+    return {
+      calculator: calculatorRecord.calculator,
+      report: calculatorRecord.report,
+    };
+  const recalculated = recalculateWorkbookFormulas(
     workbook,
     cachedCalculationSnapshot,
-    t ? undefined : carriedCalculatorRecords.get(workbook),
+    calculatorRecord ? undefined : carriedCalculatorRecords.get(workbook),
     false,
   );
   return (
-    deepFreeze(n.report),
-    calculatorRecords.set(workbook, n),
+    deepFreeze(recalculated.report),
+    calculatorRecords.set(workbook, recalculated),
     carriedCalculatorRecords.delete(workbook),
-    { calculator: n.calculator, report: n.report }
+    { calculator: recalculated.calculator, report: recalculated.report }
   );
 }
-function calculateWorkbookWithSettings(workbook, r = {}, t) {
+function calculateWorkbookWithSettings(workbook, settings = {}, t) {
   return !t &&
-    !Object.keys(r).length &&
+    !Object.keys(settings).length &&
     (workbook.calculation ||
       workbook.datePolicy ||
       hasCalculatorRecord(workbook) ||
       workbookUsesNowOrToday(workbook) ||
       workbookHasVolatileFunctions(workbook))
     ? getWorkbookCalculation(workbook).calculator
-    : evaluateWorkbookFormulas(workbook, r, t);
+    : evaluateWorkbookFormulas(workbook, settings, t);
 }
-function updateConditionalFormatRules(workbook, sheetId, rules, n = {}) {
-  if (n.readOnly) throw Error("This workbook is read-only.");
+function updateConditionalFormatRules(workbook, sheetId, rules, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   if (!sheet) throw Error("Worksheet no longer exists.");
   if (sheet.protection?.enabled)
     throw Error("Unprotect the worksheet before changing conditional formats.");
   const conditionalRules = normalizeConditionalRules(rules),
-    s = sheet.conditionalFormats ?? [],
+    existingRules = sheet.conditionalFormats ?? [],
     changes = [];
-  for (const m of new Set([
-    ...s.map((v) => v.id),
+  for (const ruleId of new Set([
+    ...existingRules.map((existingRule) => existingRule.id),
     ...conditionalRules.map((conditionalRule) => conditionalRule.id),
   ])) {
-    const beforeIndex = s.findIndex((w) => w.id === m),
-      afterIndex = conditionalRules.findIndex(
-        (conditionalRule) => conditionalRule.id === m,
+    const beforeIndex = existingRules.findIndex(
+        (storedRule) => storedRule.id === ruleId,
       ),
-      b = s[beforeIndex],
-      y = conditionalRules[afterIndex];
-    (JSON.stringify(b) !== JSON.stringify(y) || beforeIndex !== afterIndex) &&
+      afterIndex = conditionalRules.findIndex(
+        (conditionalRule) => conditionalRule.id === ruleId,
+      ),
+      previousRule = existingRules[beforeIndex],
+      updatedRule = conditionalRules[afterIndex];
+    (JSON.stringify(previousRule) !== JSON.stringify(updatedRule) ||
+      beforeIndex !== afterIndex) &&
       changes.push({
-        id: m,
-        ...(b ? { before: structuredClone(b), beforeIndex: beforeIndex } : {}),
-        ...(y ? { after: structuredClone(y), afterIndex: afterIndex } : {}),
+        id: ruleId,
+        ...(previousRule
+          ? { before: structuredClone(previousRule), beforeIndex: beforeIndex }
+          : {}),
+        ...(updatedRule
+          ? { after: structuredClone(updatedRule), afterIndex: afterIndex }
+          : {}),
       });
   }
   const workbookWithSettings = calculateWorkbookWithSettings(workbook),
-    l = evaluateConditionalFormatRules(sheet, workbookWithSettings),
-    c = evaluateConditionalFormatRules(
+    beforeEvaluator = evaluateConditionalFormatRules(
+      sheet,
+      workbookWithSettings,
+    ),
+    afterEvaluator = evaluateConditionalFormatRules(
       { ...sheet, conditionalFormats: conditionalRules },
       workbookWithSettings,
     ),
-    h = new Set();
-  for (const m of [...conditionalRules, ...s]) {
-    const rangeAddress = parseRangeAddress(m.range);
+    previewAddresses = new Set();
+  for (const rule of [...conditionalRules, ...existingRules]) {
+    const rangeAddress = parseRangeAddress(rule.range);
     if (
-      (h.add(
+      (previewAddresses.add(
         `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}`,
       ),
-      h.size >= 50)
+      previewAddresses.size >= 50)
     )
       break;
   }
-  if (h.size < 50) {
+  if (previewAddresses.size < 50) {
     for (const cell of Object.keys(sheet.cells))
       if (
-        ([...conditionalRules, ...s].some((v) =>
-          isCellInsideRange(parseRangeAddress(v.range), _t(cell)),
-        ) && h.add(cell),
-        h.size >= 50)
+        ([...conditionalRules, ...existingRules].some((formatRule) =>
+          isCellInsideRange(parseRangeAddress(formatRule.range), _t(cell)),
+        ) && previewAddresses.add(cell),
+        previewAddresses.size >= 50)
       )
         break;
   }
-  const samples = [...h].map((address) => ({
+  const samples = [...previewAddresses].map((address) => ({
     address: address,
     value: workbookWithSettings(sheetId, address),
-    before: l(address),
-    after: c(address),
+    before: beforeEvaluator(address),
+    after: afterEvaluator(address),
   }));
   return {
     workbookId: workbook.id,
@@ -1987,26 +2522,33 @@ function updateConditionalFormatRules(workbook, sheetId, rules, n = {}) {
     rules: conditionalRules,
     changes: changes,
     samples: samples,
-    errors: c.errors(),
+    errors: afterEvaluator.errors(),
     previewLimit: 50,
   };
 }
 function refreshCalculationReport(workbook) {
   const cachedCalculationSnapshot = getCachedCalculationSnapshot(workbook),
-    t = calculatorRecords.get(workbook),
-    n = recalculateWorkbookFormulas(
+    currentRecord = calculatorRecords.get(workbook),
+    recalculatedRecord = recalculateWorkbookFormulas(
       workbook,
       cachedCalculationSnapshot,
-      isCalculationRecordCurrent(t, workbook, cachedCalculationSnapshot)
-        ? t
+      isCalculationRecordCurrent(
+        currentRecord,
+        workbook,
+        cachedCalculationSnapshot,
+      )
+        ? currentRecord
         : undefined,
       true,
     );
   return (
-    deepFreeze(n.report),
-    calculatorRecords.set(workbook, n),
+    deepFreeze(recalculatedRecord.report),
+    calculatorRecords.set(workbook, recalculatedRecord),
     carriedCalculatorRecords.delete(workbook),
-    { calculator: n.calculator, report: n.report }
+    {
+      calculator: recalculatedRecord.calculator,
+      report: recalculatedRecord.report,
+    }
   );
 }
 function buildCalculationEvidence(workbook, report) {
@@ -2016,37 +2558,49 @@ function buildCalculationEvidence(workbook, report) {
       "The workbook or calculation run changed. Review current calculation results before exporting evidence.",
     );
   const importedCalculationCaches = workbook.importedCalculationCaches,
-    entries = (importedCalculationCaches?.entries ?? []).map((a) => {
-      const sheet = workbook.sheets.find((sheet) => sheet.id === a.sheetId),
-        cell = sheet?.cells[a.address],
-        u = sheet
-          ? workbookCalculation.calculator.getTypedValue(a.sheetId, a.address)
+    entries = (importedCalculationCaches?.entries ?? []).map((cacheEntry) => {
+      const sheet = workbook.sheets.find(
+          (sheet) => sheet.id === cacheEntry.sheetId,
+        ),
+        cell = sheet?.cells[cacheEntry.address],
+        currentTypedValue = sheet
+          ? workbookCalculation.calculator.getTypedValue(
+              cacheEntry.sheetId,
+              cacheEntry.address,
+            )
           : undefined,
-        l =
-          a.cache &&
-          u &&
-          a.cache.type === u.type &&
-          (typeof a.cache.value == "number" && typeof u.value == "number"
-            ? Math.abs(a.cache.value - u.value) <=
-              1e-10 * Math.max(1, Math.abs(a.cache.value), Math.abs(u.value))
-            : a.cache.value === u.value),
-        c = sheet
+        isCacheMatch =
+          cacheEntry.cache &&
+          currentTypedValue &&
+          cacheEntry.cache.type === currentTypedValue.type &&
+          (typeof cacheEntry.cache.value == "number" &&
+          typeof currentTypedValue.value == "number"
+            ? Math.abs(cacheEntry.cache.value - currentTypedValue.value) <=
+              1e-10 *
+                Math.max(
+                  1,
+                  Math.abs(cacheEntry.cache.value),
+                  Math.abs(currentTypedValue.value),
+                )
+            : cacheEntry.cache.value === currentTypedValue.value),
+        evidenceStatus = sheet
           ? cell?.literal
             ? "neutralized-or-literal"
-            : cell?.raw !== a.formula
+            : cell?.raw !== cacheEntry.formula
               ? "formula-changed"
-              : u?.type === "error" && u.value === "#PENDING!"
+              : currentTypedValue?.type === "error" &&
+                  currentTypedValue.value === "#PENDING!"
                 ? "pending"
-                : a.cache
-                  ? l
+                : cacheEntry.cache
+                  ? isCacheMatch
                     ? "matched"
                     : "different"
                   : "missing"
           : "source-sheet-removed";
       return {
-        ...a,
-        ...(u ? { current: u } : {}),
-        status: c,
+        ...cacheEntry,
+        ...(currentTypedValue ? { current: currentTypedValue } : {}),
+        status: evidenceStatus,
         verifiedByExcel: false,
       };
     });
@@ -2079,13 +2633,13 @@ function parseReportRange(range) {
     )
   )
     throw Error("Choose one explicit report range.");
-  const r = range.replaceAll("$", "").toUpperCase().split(":"),
+  const addressParts = range.replaceAll("$", "").toUpperCase().split(":"),
     rangeAddress = parseRangeAddress(range);
   if (
-    r[0] !==
+    addressParts[0] !==
       `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}` ||
-    (r[1] &&
-      r[1] !==
+    (addressParts[1] &&
+      addressParts[1] !==
         `${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1}`)
   )
     throw Error("Report ranges cannot be reversed.");
@@ -2229,12 +2783,15 @@ const PO = object({
     warnings: array(createBoundedTextSchema(2e3)).max(100),
   }).strict();
 function validateObjectReportRequest(request) {
-  const r = kU.parse(request);
-  if ((r.kind === "object") != !!r.objectId)
+  const parsedRequest = kU.parse(request);
+  if ((parsedRequest.kind === "object") != !!parsedRequest.objectId)
     throw Error("Select an existing drawing for an object report.");
-  if (r.filter && parseReportRange(r.filter.range) !== r.range)
+  if (
+    parsedRequest.filter &&
+    parseReportRange(parsedRequest.filter.range) !== parsedRequest.range
+  )
     throw Error("The report range must match its filter range.");
-  return r;
+  return parsedRequest;
 }
 
 export {

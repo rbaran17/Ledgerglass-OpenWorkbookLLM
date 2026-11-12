@@ -27,40 +27,43 @@ import {
   formatPivotGroupLabel,
 } from "./30-table-tools-dialog.js";
 
-function PivotExplorerDialog(e) {
+function PivotExplorerDialog(props) {
   const { text, language } = useWorkbookMessages(),
-    n = e.workbook.sheets.flatMap((sheet) =>
+    pivotEntries = props.workbook.sheets.flatMap((sheet) =>
       (sheet.pivots ?? []).map((definition) => ({
         sheet: sheet,
         definition: definition,
       })),
     ),
-    [o, a] = ne.useState(() => {
-      const u = _t(e.range.split(":")[0]);
+    [selectedPivotId, setSelectedPivotId] = ne.useState(() => {
+      const anchorCell = _t(props.range.split(":")[0]);
       return (
-        n.find((f) => {
-          const rangeAddress = parseRangeAddress(f.definition.outputRange);
+        pivotEntries.find((entry) => {
+          const rangeAddress = parseRangeAddress(entry.definition.outputRange);
           return (
-            f.sheet.id === e.sheetId &&
-            u.row >= rangeAddress.firstRow &&
-            u.row <= rangeAddress.lastRow &&
-            u.col >= rangeAddress.firstCol &&
-            u.col <= rangeAddress.lastCol
+            entry.sheet.id === props.sheetId &&
+            anchorCell.row >= rangeAddress.firstRow &&
+            anchorCell.row <= rangeAddress.lastRow &&
+            anchorCell.col >= rangeAddress.firstCol &&
+            anchorCell.col <= rangeAddress.lastCol
           );
         })?.definition.id ??
-        n.find((f) => f.sheet.id === e.sheetId)?.definition.id ??
-        n[0]?.definition.id ??
+        pivotEntries.find((entry) => entry.sheet.id === props.sheetId)
+          ?.definition.id ??
+        pivotEntries[0]?.definition.id ??
         ""
       );
     }),
-    definition = n.find((u) => u.definition.id === o)?.definition;
+    definition = pivotEntries.find(
+      (entry) => entry.definition.id === selectedPivotId,
+    )?.definition;
   return i.jsxs("div", {
     role: "dialog",
     "aria-modal": "false",
     "aria-label": text("Explore PivotTable"),
     className: "lg-table-tools lg-pivot-explore",
     onKeyDown: (event) => {
-      event.key === "Escape" && e.onClose();
+      event.key === "Escape" && props.onClose();
     },
     lang: language("Explore PivotTable"),
     "data-ui-label": "Explore PivotTable",
@@ -84,7 +87,7 @@ function PivotExplorerDialog(e) {
           }),
           i.jsx("button", {
             "aria-label": text("Close Explore PivotTable"),
-            onClick: e.onClose,
+            onClick: props.onClose,
             lang: language("Close Explore PivotTable"),
             "data-ui-label": "Close Explore PivotTable",
             children: "×",
@@ -95,23 +98,27 @@ function PivotExplorerDialog(e) {
         children: [
           i.jsx(LocalizedText, { children: "Pivot result" }),
           i.jsx("select", {
-            value: o,
-            onChange: (event) => a(event.target.value),
-            children: n.map((u) =>
+            value: selectedPivotId,
+            onChange: (event) => setSelectedPivotId(event.target.value),
+            children: pivotEntries.map((entry) =>
               i.jsxs(
                 "option",
                 {
-                  value: u.definition.id,
-                  children: [u.sheet.name, ": ", u.definition.name],
+                  value: entry.definition.id,
+                  children: [entry.sheet.name, ": ", entry.definition.name],
                 },
-                u.definition.id,
+                entry.definition.id,
               ),
             ),
           }),
         ],
       }),
       definition
-        ? i.jsx(PivotExplorerPanel, { ...e, definition: definition }, o)
+        ? i.jsx(
+            PivotExplorerPanel,
+            { ...props, definition: definition },
+            selectedPivotId,
+          )
         : i.jsx("p", {
             children: i.jsx(LocalizedText, {
               children: "Create a PivotTable to explore its results.",
@@ -120,11 +127,11 @@ function PivotExplorerDialog(e) {
     ],
   });
 }
-function PivotExplorerPanel(e) {
-  const definition = e.definition,
+function PivotExplorerPanel(props) {
+  const definition = props.definition,
     pivotId = definition.id,
-    n = ne.useRef(null),
-    [o, a] = ne.useState(() =>
+    panelRef = ne.useRef(null),
+    [draftView, setDraftView] = ne.useState(() =>
       structuredClone({
         slicers: definition.slicers ?? [],
         timelines: definition.timelines ?? [],
@@ -133,86 +140,107 @@ function PivotExplorerPanel(e) {
         chart: definition.chart,
       }),
     ),
-    [s, d] = ne.useState(""),
-    [u, l] = ne.useState(e.range.split(":")[0]),
-    [c, h] = ne.useState(0),
-    [f, p] = ne.useState(null),
-    [m, v] = ne.useState(() => {
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [valueCellAddress, setValueCellAddress] = ne.useState(
+      props.range.split(":")[0],
+    ),
+    [recordPage, setRecordPage] = ne.useState(0),
+    [previewState, setPreviewState] = ne.useState(null),
+    [drillDownState, setDrillDownState] = ne.useState(() => {
       try {
         return {
-          report: buildPivotDrillDown(e.workbook, pivotId, u),
-          snapshot: JSON.stringify(e.workbook),
+          report: buildPivotDrillDown(
+            props.workbook,
+            pivotId,
+            valueCellAddress,
+          ),
+          snapshot: JSON.stringify(props.workbook),
         };
       } catch {
         return null;
       }
     }),
-    snapshot = JSON.stringify(e.workbook),
-    request = JSON.stringify(o),
-    y = f?.snapshot === snapshot && f.request === request,
-    w = m?.snapshot === snapshot && m.report.address === u.toUpperCase(),
-    E = ne.useMemo(() => {
+    snapshot = JSON.stringify(props.workbook),
+    request = JSON.stringify(draftView),
+    isPreviewCurrent =
+      previewState?.snapshot === snapshot && previewState.request === request,
+    isDrillDownCurrent =
+      drillDownState?.snapshot === snapshot &&
+      drillDownState.report.address === valueCellAddress.toUpperCase(),
+    sourceFields = ne.useMemo(() => {
       try {
         return getPivotSourceFields(
-          e.workbook,
+          props.workbook,
           definition.source.sheetId,
           definition.source.range,
         );
       } catch {
         return [];
       }
-    }, [e.workbook, definition.source.sheetId, definition.source.range]);
+    }, [props.workbook, definition.source.sheetId, definition.source.range]);
   ne.useEffect(() => {
-    n.current?.querySelector("input")?.focus();
+    panelRef.current?.querySelector("input")?.focus();
   }, []);
-  const A = (D) => {
+  const runAction = (action) => {
       try {
-        (D(), d(""));
+        (action(), setErrorMessage(""));
       } catch (error) {
-        d(error.message);
+        setErrorMessage(error.message);
       }
     },
-    k = (D, B) =>
-      A(() => {
-        if (e.onExport) e.onExport(structuredClone(D), B);
+    exportJson = (payload, fileName) =>
+      runAction(() => {
+        if (props.onExport) props.onExport(structuredClone(payload), fileName);
         else {
-          const _ = URL.createObjectURL(
-              new Blob([JSON.stringify(D, null, 2)], {
+          const objectUrl = URL.createObjectURL(
+              new Blob([JSON.stringify(payload, null, 2)], {
                 type: "application/json",
               }),
             ),
-            C = document.createElement("a");
-          ((C.href = _),
-            (C.download = B),
-            C.click(),
-            setTimeout(() => URL.revokeObjectURL(_), 1e3));
+            downloadLink = document.createElement("a");
+          ((downloadLink.href = objectUrl),
+            (downloadLink.download = fileName),
+            downloadLink.click(),
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1e3));
         }
       }),
-    F = JSON.stringify([
+    controlFieldsKey = JSON.stringify([
       ...new Set(
-        [...(o.slicers ?? []), ...(o.timelines ?? [])].map((D) => D.field),
+        [...(draftView.slicers ?? []), ...(draftView.timelines ?? [])].map(
+          (control) => control.field,
+        ),
       ),
     ]),
-    I = ne.useMemo(() => {
+    controlFieldInfo = ne.useMemo(() => {
       try {
-        return inspectPivotControlFields(e.workbook, pivotId, JSON.parse(F));
+        return inspectPivotControlFields(
+          props.workbook,
+          pivotId,
+          JSON.parse(controlFieldsKey),
+        );
       } catch (error) {
         return new Map(
-          JSON.parse(F).map((B) => [B, { items: [], error: error.message }]),
+          JSON.parse(controlFieldsKey).map((fieldName) => [
+            fieldName,
+            { items: [], error: error.message },
+          ]),
         );
       }
-    }, [e.workbook, pivotId, F]),
-    O = (D) => I.get(D)?.items ?? [],
-    j = (D) => I.get(D)?.error ?? "",
-    z = (D, B) => a((_) => ({ ..._, [D]: B })),
-    V = y ? f.book.sheets.flatMap((sheet) => sheet.pivots ?? []).at(-1) : null;
+    }, [props.workbook, pivotId, controlFieldsKey]),
+    itemsForField = (fieldName) => controlFieldInfo.get(fieldName)?.items ?? [],
+    errorForField = (fieldName) => controlFieldInfo.get(fieldName)?.error ?? "",
+    updateDraftView = (key, value) =>
+      setDraftView((previousView) => ({ ...previousView, [key]: value })),
+    previewPivot = isPreviewCurrent
+      ? previewState.book.sheets.flatMap((sheet) => sheet.pivots ?? []).at(-1)
+      : null;
   return i.jsxs("div", {
-    ref: n,
+    ref: panelRef,
     className: "lg-table-form",
     children: [
-      i.jsx(PivotStatusBadge, { workbook: e.workbook, pivotId: pivotId }),
-      s && i.jsx("p", { role: "alert", children: s }),
-      e.readOnly &&
+      i.jsx(PivotStatusBadge, { workbook: props.workbook, pivotId: pivotId }),
+      errorMessage && i.jsx("p", { role: "alert", children: errorMessage }),
+      props.readOnly &&
         i.jsx("p", {
           children: i.jsx(LocalizedText, {
             children:
@@ -221,14 +249,14 @@ function PivotExplorerPanel(e) {
         }),
       i.jsx("button", {
         onClick: () =>
-          k(
-            describePivotRefresh(e.workbook, pivotId),
+          exportJson(
+            describePivotRefresh(props.workbook, pivotId),
             "Pivot-filter-context.json",
           ),
         children: i.jsx(LocalizedText, { children: "Export pivot context" }),
       }),
       i.jsxs("fieldset", {
-        disabled: e.readOnly,
+        disabled: props.readOnly,
         className: "lg-table-list",
         children: [
           i.jsx("legend", {
@@ -240,7 +268,7 @@ function PivotExplorerPanel(e) {
               i.jsx("summary", {
                 children: i.jsx(LocalizedText, { children: "Slicers" }),
               }),
-              (o.slicers ?? []).map((D, B) =>
+              (draftView.slicers ?? []).map((slicer, slicerIndex) =>
                 i.jsxs(
                   "fieldset",
                   {
@@ -248,25 +276,25 @@ function PivotExplorerPanel(e) {
                       i.jsxs("legend", {
                         children: [
                           i.jsx(LocalizedText, { children: "Slicer " }),
-                          B + 1,
+                          slicerIndex + 1,
                         ],
                       }),
                       i.jsxs("label", {
                         children: [
                           i.jsx(LocalizedText, { children: "Slicer field " }),
-                          B + 1,
+                          slicerIndex + 1,
                           i.jsxs("select", {
-                            value: D.field,
+                            value: slicer.field,
                             onChange: (event) =>
-                              A(() =>
-                                z(
+                              runAction(() =>
+                                updateDraftView(
                                   "slicers",
-                                  o.slicers.map((slicer, T) =>
-                                    B === T
+                                  draftView.slicers.map((slicer, index) =>
+                                    slicerIndex === index
                                       ? {
                                           field: event.target.value,
                                           selected: getPivotSlicerItems(
-                                            e.workbook,
+                                            props.workbook,
                                             pivotId,
                                             event.target.value,
                                           ),
@@ -276,59 +304,77 @@ function PivotExplorerPanel(e) {
                                 ),
                               ),
                             children: [
-                              !E.includes(D.field) &&
-                                i.jsx("option", { children: D.field }),
-                              E.map((_) => i.jsx("option", { children: _ }, _)),
+                              !sourceFields.includes(slicer.field) &&
+                                i.jsx("option", { children: slicer.field }),
+                              sourceFields.map((sourceField) =>
+                                i.jsx(
+                                  "option",
+                                  { children: sourceField },
+                                  sourceField,
+                                ),
+                              ),
                             ],
                           }),
                         ],
                       }),
                       i.jsx("div", {
                         className: "lg-pivot-items",
-                        children: O(D.field).map((_, C) =>
-                          i.jsxs(
-                            "label",
-                            {
-                              className: "lg-table-check",
-                              children: [
-                                i.jsx("input", {
-                                  type: "checkbox",
-                                  checked: D.selected.some(
-                                    (T) =>
-                                      buildSlicerItemKey(T) ===
-                                      buildSlicerItemKey(_),
-                                  ),
-                                  onChange: (event) =>
-                                    z(
-                                      "slicers",
-                                      o.slicers.map((slicer, R) =>
-                                        B === R
-                                          ? {
-                                              ...slicer,
-                                              selected: event.target.checked
-                                                ? [...slicer.selected, _]
-                                                : slicer.selected.filter(
-                                                    (L) =>
-                                                      buildSlicerItemKey(L) !==
-                                                      buildSlicerItemKey(_),
-                                                  ),
-                                            }
-                                          : slicer,
-                                      ),
+                        children: itemsForField(slicer.field).map(
+                          (slicerItem, itemIndex) =>
+                            i.jsxs(
+                              "label",
+                              {
+                                className: "lg-table-check",
+                                children: [
+                                  i.jsx("input", {
+                                    type: "checkbox",
+                                    checked: slicer.selected.some(
+                                      (selectedItem) =>
+                                        buildSlicerItemKey(selectedItem) ===
+                                        buildSlicerItemKey(slicerItem),
                                     ),
-                                }),
-                                formatPivotGroupLabel(_),
-                              ],
-                            },
-                            C,
-                          ),
+                                    onChange: (event) =>
+                                      updateDraftView(
+                                        "slicers",
+                                        draftView.slicers.map(
+                                          (slicer, index) =>
+                                            slicerIndex === index
+                                              ? {
+                                                  ...slicer,
+                                                  selected: event.target.checked
+                                                    ? [
+                                                        ...slicer.selected,
+                                                        slicerItem,
+                                                      ]
+                                                    : slicer.selected.filter(
+                                                        (selectedItem) =>
+                                                          buildSlicerItemKey(
+                                                            selectedItem,
+                                                          ) !==
+                                                          buildSlicerItemKey(
+                                                            slicerItem,
+                                                          ),
+                                                      ),
+                                                }
+                                              : slicer,
+                                        ),
+                                      ),
+                                  }),
+                                  formatPivotGroupLabel(slicerItem),
+                                ],
+                              },
+                              itemIndex,
+                            ),
                         ),
                       }),
-                      j(D.field) &&
-                        i.jsx("p", { role: "alert", children: j(D.field) }),
+                      errorForField(slicer.field) &&
+                        i.jsx("p", {
+                          role: "alert",
+                          children: errorForField(slicer.field),
+                        }),
                       i.jsxs("p", {
                         children: [
-                          D.selected.length,
+                          slicer.selected.length,
                           " ",
                           i.jsx(LocalizedText, {
                             children:
@@ -338,15 +384,15 @@ function PivotExplorerPanel(e) {
                       }),
                       i.jsxs("button", {
                         onClick: () =>
-                          A(() =>
-                            z(
+                          runAction(() =>
+                            updateDraftView(
                               "slicers",
-                              o.slicers.map((slicer, C) =>
-                                B === C
+                              draftView.slicers.map((slicer, index) =>
+                                slicerIndex === index
                                   ? {
                                       ...slicer,
                                       selected: getPivotSlicerItems(
-                                        e.workbook,
+                                        props.workbook,
                                         pivotId,
                                         slicer.field,
                                       ),
@@ -359,55 +405,62 @@ function PivotExplorerPanel(e) {
                           i.jsx(LocalizedText, {
                             children: "Select all slicer ",
                           }),
-                          B + 1,
+                          slicerIndex + 1,
                         ],
                       }),
                       i.jsxs("button", {
                         onClick: () =>
-                          z(
+                          updateDraftView(
                             "slicers",
-                            o.slicers.map((slicer, C) =>
-                              B === C ? { ...slicer, selected: [] } : slicer,
+                            draftView.slicers.map((slicer, index) =>
+                              slicerIndex === index
+                                ? { ...slicer, selected: [] }
+                                : slicer,
                             ),
                           ),
                         children: [
                           i.jsx(LocalizedText, {
                             children: "Select none slicer ",
                           }),
-                          B + 1,
+                          slicerIndex + 1,
                         ],
                       }),
                       i.jsxs("button", {
                         onClick: () =>
-                          z(
+                          updateDraftView(
                             "slicers",
-                            o.slicers.filter((slicer, C) => B !== C),
+                            draftView.slicers.filter(
+                              (slicer, index) => slicerIndex !== index,
+                            ),
                           ),
                         children: [
                           i.jsx(LocalizedText, { children: "Remove slicer " }),
-                          B + 1,
+                          slicerIndex + 1,
                         ],
                       }),
                     ],
                   },
-                  B,
+                  slicerIndex,
                 ),
               ),
               i.jsx("button", {
-                disabled: !E.length,
+                disabled: !sourceFields.length,
                 onClick: () =>
-                  A(() => {
-                    const field = E.find(
-                      (B) => !o.slicers?.some((slicer) => slicer.field === B),
+                  runAction(() => {
+                    const field = sourceFields.find(
+                      (sourceField) =>
+                        !draftView.slicers?.some(
+                          (slicer) => slicer.field === sourceField,
+                        ),
                     );
                     if (!field)
                       throw Error("Every source field already has a slicer.");
-                    z("slicers", [
-                      ...(o.slicers ?? []),
+                    updateDraftView("slicers", [
+                      ...(draftView.slicers ?? []),
                       {
                         field: field,
                         selected: getPivotSlicerItems(
-                          e.workbook,
+                          props.workbook,
                           pivotId,
                           field,
                         ),
@@ -429,17 +482,22 @@ function PivotExplorerPanel(e) {
               i.jsx("summary", {
                 children: i.jsx(LocalizedText, { children: "Timelines" }),
               }),
-              (o.timelines ?? []).map((D, B) => {
-                const _ = (T) =>
-                  z(
+              (draftView.timelines ?? []).map((timelineItem, timelineIndex) => {
+                const updateTimeline = (patch) =>
+                  updateDraftView(
                     "timelines",
-                    o.timelines.map((timeline, R) =>
-                      B === R ? { ...timeline, ...T } : timeline,
+                    draftView.timelines.map((timeline, index) =>
+                      timelineIndex === index
+                        ? { ...timeline, ...patch }
+                        : timeline,
                     ),
                   );
-                let C = [];
+                let periods = [];
                 try {
-                  C = buildTimelinePeriods(O(D.field), D);
+                  periods = buildTimelinePeriods(
+                    itemsForField(timelineItem.field),
+                    timelineItem,
+                  );
                 } catch {}
                 return i.jsxs(
                   "fieldset",
@@ -448,21 +506,29 @@ function PivotExplorerPanel(e) {
                       i.jsxs("legend", {
                         children: [
                           i.jsx(LocalizedText, { children: "Timeline " }),
-                          B + 1,
+                          timelineIndex + 1,
                         ],
                       }),
                       i.jsxs("label", {
                         children: [
                           i.jsx(LocalizedText, { children: "Timeline field " }),
-                          B + 1,
+                          timelineIndex + 1,
                           i.jsxs("select", {
-                            value: D.field,
+                            value: timelineItem.field,
                             onChange: (event) =>
-                              _({ field: event.target.value }),
+                              updateTimeline({ field: event.target.value }),
                             children: [
-                              !E.includes(D.field) &&
-                                i.jsx("option", { children: D.field }),
-                              E.map((T) => i.jsx("option", { children: T }, T)),
+                              !sourceFields.includes(timelineItem.field) &&
+                                i.jsx("option", {
+                                  children: timelineItem.field,
+                                }),
+                              sourceFields.map((sourceField) =>
+                                i.jsx(
+                                  "option",
+                                  { children: sourceField },
+                                  sourceField,
+                                ),
+                              ),
                             ],
                           }),
                         ],
@@ -472,11 +538,13 @@ function PivotExplorerPanel(e) {
                           i.jsx(LocalizedText, {
                             children: "Timeline date system ",
                           }),
-                          B + 1,
+                          timelineIndex + 1,
                           i.jsxs("select", {
-                            value: D.dateSystem,
+                            value: timelineItem.dateSystem,
                             onChange: (event) =>
-                              _({ dateSystem: event.target.value }),
+                              updateTimeline({
+                                dateSystem: event.target.value,
+                              }),
                             children: [
                               i.jsx("option", {
                                 value: "iso",
@@ -499,11 +567,11 @@ function PivotExplorerPanel(e) {
                           i.jsx(LocalizedText, {
                             children: "Timeline period ",
                           }),
-                          B + 1,
+                          timelineIndex + 1,
                           i.jsxs("select", {
-                            value: D.unit,
+                            value: timelineItem.unit,
                             onChange: (event) =>
-                              _({ unit: event.target.value }),
+                              updateTimeline({ unit: event.target.value }),
                             children: [
                               i.jsx("option", {
                                 value: "year",
@@ -523,29 +591,34 @@ function PivotExplorerPanel(e) {
                       }),
                       i.jsx("div", {
                         className: "lg-pivot-periods",
-                        children: C.slice(0, 120).map((T) =>
+                        children: periods.slice(0, 120).map((period) =>
                           i.jsx(
                             "button",
                             {
                               type: "button",
                               "aria-pressed":
-                                D.from === T.from && D.to === T.to,
-                              onClick: () => _({ from: T.from, to: T.to }),
-                              children: T.label,
+                                timelineItem.from === period.from &&
+                                timelineItem.to === period.to,
+                              onClick: () =>
+                                updateTimeline({
+                                  from: period.from,
+                                  to: period.to,
+                                }),
+                              children: period.label,
                             },
-                            T.label,
+                            period.label,
                           ),
                         ),
                       }),
                       i.jsxs("label", {
                         children: [
                           i.jsx(LocalizedText, { children: "Timeline from " }),
-                          B + 1,
+                          timelineIndex + 1,
                           i.jsx("input", {
                             type: "date",
-                            value: D.from,
+                            value: timelineItem.from,
                             onChange: (event) =>
-                              _({ from: event.target.value }),
+                              updateTimeline({ from: event.target.value }),
                           }),
                         ],
                       }),
@@ -554,11 +627,12 @@ function PivotExplorerPanel(e) {
                           i.jsx(LocalizedText, {
                             children: "Timeline through ",
                           }),
-                          B + 1,
+                          timelineIndex + 1,
                           i.jsx("input", {
                             type: "date",
-                            value: D.to,
-                            onChange: (event) => _({ to: event.target.value }),
+                            value: timelineItem.to,
+                            onChange: (event) =>
+                              updateTimeline({ to: event.target.value }),
                           }),
                         ],
                       }),
@@ -570,38 +644,44 @@ function PivotExplorerPanel(e) {
                       }),
                       i.jsxs("button", {
                         onClick: () =>
-                          z(
+                          updateDraftView(
                             "timelines",
-                            o.timelines.filter((timeline, N) => B !== N),
+                            draftView.timelines.filter(
+                              (timeline, index) => timelineIndex !== index,
+                            ),
                           ),
                         children: [
                           i.jsx(LocalizedText, {
                             children: "Remove timeline ",
                           }),
-                          B + 1,
+                          timelineIndex + 1,
                         ],
                       }),
                     ],
                   },
-                  B,
+                  timelineIndex,
                 );
               }),
               i.jsx("button", {
-                disabled: !E.length,
+                disabled: !sourceFields.length,
                 onClick: () => {
                   const field =
-                    E.find(
-                      (B) =>
-                        /date/i.test(B) &&
-                        !o.timelines?.some((timeline) => timeline.field === B),
+                    sourceFields.find(
+                      (sourceField) =>
+                        /date/i.test(sourceField) &&
+                        !draftView.timelines?.some(
+                          (timeline) => timeline.field === sourceField,
+                        ),
                     ) ??
-                    E.find(
-                      (B) =>
-                        !o.timelines?.some((timeline) => timeline.field === B),
+                    sourceFields.find(
+                      (sourceField) =>
+                        !draftView.timelines?.some(
+                          (timeline) => timeline.field === sourceField,
+                        ),
                     );
                   field &&
-                    z("timelines", [
-                      ...(o.timelines ?? []),
+                    updateDraftView("timelines", [
+                      ...(draftView.timelines ?? []),
                       {
                         field: field,
                         from: "2000-01-01",
@@ -636,11 +716,13 @@ function PivotExplorerPanel(e) {
                       field,
                       i.jsxs("select", {
                         value:
-                          o.sorts?.find((sort) => sort.field === field)
+                          draftView.sorts?.find((sort) => sort.field === field)
                             ?.direction ?? "",
                         onChange: (event) =>
-                          z("sorts", [
-                            ...(o.sorts ?? []).filter((T) => T.field !== field),
+                          updateDraftView("sorts", [
+                            ...(draftView.sorts ?? []).filter(
+                              (sort) => sort.field !== field,
+                            ),
                             ...(event.target.value
                               ? [
                                   {
@@ -677,32 +759,36 @@ function PivotExplorerPanel(e) {
               i.jsx("summary", {
                 children: i.jsx(LocalizedText, { children: "Show values as" }),
               }),
-              o.values.map((value, B) =>
+              draftView.values.map((value, valueIndex) =>
                 i.jsxs(
                   "label",
                   {
                     children: [
                       value.name ?? `${value.operation} of ${value.field}`,
                       i.jsx("select", {
-                        "aria-label": `Show values as ${B + 1}`,
+                        "aria-label": `Show values as ${valueIndex + 1}`,
                         value: value.showAs ?? "value",
                         onChange: (event) =>
-                          z(
+                          updateDraftView(
                             "values",
-                            o.values.map((value, T) =>
-                              T === B
+                            draftView.values.map((value, index) =>
+                              index === valueIndex
                                 ? { ...value, showAs: event.target.value }
                                 : value,
                             ),
                           ),
                         children: Object.entries(pivotShowAsLabels).map(
-                          ([_, C]) =>
-                            i.jsx("option", { value: _, children: C }, _),
+                          ([showAsKey, showAsLabel]) =>
+                            i.jsx(
+                              "option",
+                              { value: showAsKey, children: showAsLabel },
+                              showAsKey,
+                            ),
                         ),
                       }),
                     ],
                   },
-                  B,
+                  valueIndex,
                 ),
               ),
             ],
@@ -719,9 +805,9 @@ function PivotExplorerPanel(e) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: !!o.chart,
+                    checked: !!draftView.chart,
                     onChange: (event) =>
-                      z(
+                      updateDraftView(
                         "chart",
                         event.target.checked
                           ? { kind: "column", valueIndex: 0 }
@@ -731,17 +817,17 @@ function PivotExplorerPanel(e) {
                   i.jsx(LocalizedText, { children: "Show PivotChart" }),
                 ],
               }),
-              o.chart &&
+              draftView.chart &&
                 i.jsxs(i.Fragment, {
                   children: [
                     i.jsxs("label", {
                       children: [
                         i.jsx(LocalizedText, { children: "PivotChart type" }),
                         i.jsxs("select", {
-                          value: o.chart.kind,
+                          value: draftView.chart.kind,
                           onChange: (event) =>
-                            z("chart", {
-                              ...o.chart,
+                            updateDraftView("chart", {
+                              ...draftView.chart,
                               kind: event.target.value,
                             }),
                           children: [
@@ -762,22 +848,22 @@ function PivotExplorerPanel(e) {
                       children: [
                         i.jsx(LocalizedText, { children: "PivotChart value" }),
                         i.jsx("select", {
-                          value: o.chart.valueIndex,
+                          value: draftView.chart.valueIndex,
                           onChange: (event) =>
-                            z("chart", {
-                              ...o.chart,
+                            updateDraftView("chart", {
+                              ...draftView.chart,
                               valueIndex: Number(event.target.value),
                             }),
-                          children: o.values.map((value, B) =>
+                          children: draftView.values.map((value, valueIndex) =>
                             i.jsx(
                               "option",
                               {
-                                value: B,
+                                value: valueIndex,
                                 children:
                                   value.name ??
                                   `${value.operation} of ${value.field}`,
                               },
-                              B,
+                              valueIndex,
                             ),
                           ),
                         }),
@@ -789,58 +875,64 @@ function PivotExplorerPanel(e) {
           }),
           i.jsx("button", {
             onClick: () =>
-              A(() =>
-                p({
-                  book: applyPivotViewChange(e.workbook, pivotId, o, {
-                    snapshot: snapshot,
-                    readOnly: e.readOnly,
-                  }),
+              runAction(() =>
+                setPreviewState({
+                  book: applyPivotViewChange(
+                    props.workbook,
+                    pivotId,
+                    draftView,
+                    {
+                      snapshot: snapshot,
+                      readOnly: props.readOnly,
+                    },
+                  ),
                   snapshot: snapshot,
                   request: request,
                 }),
               ),
             children: i.jsx(LocalizedText, { children: "Preview pivot view" }),
           }),
-          f &&
-            !y &&
+          previewState &&
+            !isPreviewCurrent &&
             i.jsx("p", {
               role: "status",
               children: i.jsx(LocalizedText, {
                 children: "The workbook or controls changed. Preview again.",
               }),
             }),
-          V &&
+          previewPivot &&
             i.jsxs("div", {
               role: "status",
               children: [
                 i.jsx(LocalizedText, { children: "Preview: " }),
-                V.refresh.includedRows,
+                previewPivot.refresh.includedRows,
                 " ",
                 i.jsx(LocalizedText, { children: "included +" }),
                 " ",
-                V.refresh.excludedRows,
+                previewPivot.refresh.excludedRows,
                 " ",
                 i.jsx(LocalizedText, { children: "excluded =" }),
                 " ",
-                V.refresh.sourceRows,
+                previewPivot.refresh.sourceRows,
                 " ",
                 i.jsx(LocalizedText, { children: "records." }),
                 " ",
-                V.refresh.measures
+                previewPivot.refresh.measures
                   .map((measure) => `${measure.name}: ${measure.result}`)
                   .join("; "),
                 ".",
               ],
             }),
           i.jsx("button", {
-            disabled: !y,
+            disabled: !isPreviewCurrent,
             onClick: () =>
-              A(() => {
-                if (!y) throw Error("Preview again before applying.");
-                e.onWorkbookChange(
-                  applyPivotViewChange(e.workbook, pivotId, o, {
-                    snapshot: f.snapshot,
-                    readOnly: e.readOnly,
+              runAction(() => {
+                if (!isPreviewCurrent)
+                  throw Error("Preview again before applying.");
+                props.onWorkbookChange(
+                  applyPivotViewChange(props.workbook, pivotId, draftView, {
+                    snapshot: previewState.snapshot,
+                    readOnly: props.readOnly,
                   }),
                   "Apply pivot filters and view",
                 );
@@ -851,10 +943,10 @@ function PivotExplorerPanel(e) {
           }),
         ],
       }),
-      (V ? V.chart : definition.chart) &&
+      (previewPivot ? previewPivot.chart : definition.chart) &&
         i.jsx(PivotChartFigure, {
-          book: V ? f.book : e.workbook,
-          id: V?.id ?? pivotId,
+          book: previewPivot ? previewState.book : props.workbook,
+          id: previewPivot?.id ?? pivotId,
         }),
       i.jsxs("fieldset", {
         className: "lg-table-list",
@@ -866,24 +958,29 @@ function PivotExplorerPanel(e) {
             children: [
               i.jsx(LocalizedText, { children: "Pivot value cell" }),
               i.jsx("input", {
-                value: u,
-                onChange: (event) => l(event.target.value.toUpperCase()),
+                value: valueCellAddress,
+                onChange: (event) =>
+                  setValueCellAddress(event.target.value.toUpperCase()),
               }),
             ],
           }),
           i.jsx("button", {
             onClick: () =>
-              A(() => {
-                (v({
-                  report: buildPivotDrillDown(e.workbook, pivotId, u),
+              runAction(() => {
+                (setDrillDownState({
+                  report: buildPivotDrillDown(
+                    props.workbook,
+                    pivotId,
+                    valueCellAddress,
+                  ),
                   snapshot: snapshot,
                 }),
-                  h(0));
+                  setRecordPage(0));
               }),
             children: i.jsx(LocalizedText, { children: "Show source rows" }),
           }),
-          m &&
-            !w &&
+          drillDownState &&
+            !isDrillDownCurrent &&
             i.jsx("p", {
               role: "status",
               children: i.jsx(LocalizedText, {
@@ -891,25 +988,25 @@ function PivotExplorerPanel(e) {
                   "The workbook or selected value changed. Show source rows again.",
               }),
             }),
-          w &&
+          isDrillDownCurrent &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs("p", {
                   role: "status",
                   children: [
-                    m.report.records.length,
+                    drillDownState.report.records.length,
                     " ",
                     i.jsx(LocalizedText, {
                       children: "underlying records. Aggregate:",
                     }),
                     " ",
-                    String(m.report.underlyingValue),
+                    String(drillDownState.report.underlyingValue),
                     i.jsx(LocalizedText, { children: "; displayed value:" }),
                     " ",
-                    String(m.report.displayedValue),
+                    String(drillDownState.report.displayedValue),
                     i.jsx(LocalizedText, { children: ". Source revision" }),
                     " ",
-                    m.report.context.sourceRevision,
+                    drillDownState.report.context.sourceRevision,
                     ".",
                   ],
                 }),
@@ -925,78 +1022,89 @@ function PivotExplorerPanel(e) {
                                 children: "Source locator",
                               }),
                             }),
-                            m.report.fields.map((field) =>
+                            drillDownState.report.fields.map((field) =>
                               i.jsx("th", { children: field }, field),
                             ),
                           ],
                         }),
                       }),
                       i.jsx("tbody", {
-                        children: m.report.records
-                          .slice(c * 20, c * 20 + 20)
-                          .map((D) =>
+                        children: drillDownState.report.records
+                          .slice(recordPage * 20, recordPage * 20 + 20)
+                          .map((record) =>
                             i.jsxs(
                               "tr",
                               {
                                 children: [
                                   i.jsxs("td", {
                                     children: [
-                                      D.locator.sheetName,
+                                      record.locator.sheetName,
                                       "!",
-                                      D.locator.range,
+                                      record.locator.range,
                                     ],
                                   }),
-                                  D.values.map((value, _) =>
+                                  record.values.map((value, columnIndex) =>
                                     i.jsx(
                                       "td",
                                       { children: String(value ?? "") },
-                                      _,
+                                      columnIndex,
                                     ),
                                   ),
                                 ],
                               },
-                              D.locator.row,
+                              record.locator.row,
                             ),
                           ),
                       }),
                     ],
                   }),
                 }),
-                !m.report.records.length &&
+                !drillDownState.report.records.length &&
                   i.jsx("p", {
                     children: i.jsx(LocalizedText, {
                       children: "No source rows underlie this cell.",
                     }),
                   }),
                 i.jsx("button", {
-                  disabled: !c,
-                  onClick: () => h((D) => D - 1),
+                  disabled: !recordPage,
+                  onClick: () => setRecordPage((page) => page - 1),
                   children: i.jsx(LocalizedText, {
                     children: "Previous source rows",
                   }),
                 }),
                 i.jsx("button", {
-                  disabled: (c + 1) * 20 >= m.report.records.length,
-                  onClick: () => h((D) => D + 1),
+                  disabled:
+                    (recordPage + 1) * 20 >=
+                    drillDownState.report.records.length,
+                  onClick: () => setRecordPage((page) => page + 1),
                   children: i.jsx(LocalizedText, {
                     children: "Next source rows",
                   }),
                 }),
                 i.jsx("button", {
-                  onClick: () => k(m.report, "Pivot-drill-through.json"),
+                  onClick: () =>
+                    exportJson(
+                      drillDownState.report,
+                      "Pivot-drill-through.json",
+                    ),
                   children: i.jsx(LocalizedText, {
                     children: "Export drilled rows and context",
                   }),
                 }),
                 i.jsx("button", {
-                  disabled: e.readOnly,
+                  disabled: props.readOnly,
                   onClick: () =>
-                    A(() =>
-                      e.onWorkbookChange(
-                        extractPivotDrillThrough(e.workbook, pivotId, u, {
-                          snapshot: m.snapshot,
-                          readOnly: e.readOnly,
-                        }),
+                    runAction(() =>
+                      props.onWorkbookChange(
+                        extractPivotDrillThrough(
+                          props.workbook,
+                          pivotId,
+                          valueCellAddress,
+                          {
+                            snapshot: drillDownState.snapshot,
+                            readOnly: props.readOnly,
+                          },
+                        ),
                         "Extract pivot source rows",
                       ),
                     ),
@@ -1019,30 +1127,47 @@ const pivotSeriesPalette = [
     "#9E480E",
     "#008387",
   ],
-  formatPivotNumber = (e) =>
-    Math.abs(e) >= 1e7 || (Math.abs(e) > 0 && Math.abs(e) < 0.001)
-      ? e.toExponential(2)
-      : Number(e.toPrecision(5)).toLocaleString("en-US");
-function buildAxisTicks(e, r = false, t = true) {
-  const n = e.length ? e : [r ? 1 : 0];
-  let o = Math.min(...n),
-    a = Math.max(...n);
-  if (r)
-    ((o = Math.log10(o)),
-      (a = Math.log10(a)),
-      o === a &&
-        (o < -322 ? (a += 1) : a > 307 ? (o -= 1) : ((o -= 0.5), (a += 0.5))));
-  else if ((t && ((o = Math.min(0, o)), (a = Math.max(0, a))), o === a)) {
-    const s = Math.max(1, Math.abs(o) * 0.1);
-    ((o = Number.isFinite(o - s) ? o - s : o),
-      (a = Number.isFinite(a + s) ? a + s : a));
+  formatPivotNumber = (numericValue) =>
+    Math.abs(numericValue) >= 1e7 ||
+    (Math.abs(numericValue) > 0 && Math.abs(numericValue) < 0.001)
+      ? numericValue.toExponential(2)
+      : Number(numericValue.toPrecision(5)).toLocaleString("en-US");
+function buildAxisTicks(values, isLogScale = false, shouldIncludeZero = true) {
+  const valuesOrDefault = values.length ? values : [isLogScale ? 1 : 0];
+  let axisMin = Math.min(...valuesOrDefault),
+    axisMax = Math.max(...valuesOrDefault);
+  if (isLogScale)
+    ((axisMin = Math.log10(axisMin)),
+      (axisMax = Math.log10(axisMax)),
+      axisMin === axisMax &&
+        (axisMin < -322
+          ? (axisMax += 1)
+          : axisMax > 307
+            ? (axisMin -= 1)
+            : ((axisMin -= 0.5), (axisMax += 0.5))));
+  else if (
+    (shouldIncludeZero &&
+      ((axisMin = Math.min(0, axisMin)), (axisMax = Math.max(0, axisMax))),
+    axisMin === axisMax)
+  ) {
+    const padding = Math.max(1, Math.abs(axisMin) * 0.1);
+    ((axisMin = Number.isFinite(axisMin - padding)
+      ? axisMin - padding
+      : axisMin),
+      (axisMax = Number.isFinite(axisMax + padding)
+        ? axisMax + padding
+        : axisMax));
   }
   return {
-    min: r ? 10 ** o : o,
-    max: r ? 10 ** a : a,
-    fraction: (s) => ((r ? Math.log10(s) : s) - o) / (a - o),
-    ticks: Array.from({ length: 5 }, (s, d) =>
-      r ? 10 ** (o + ((a - o) * d) / 4) : o + ((a - o) * d) / 4,
+    min: isLogScale ? 10 ** axisMin : axisMin,
+    max: isLogScale ? 10 ** axisMax : axisMax,
+    fraction: (value) =>
+      ((isLogScale ? Math.log10(value) : value) - axisMin) /
+      (axisMax - axisMin),
+    ticks: Array.from({ length: 5 }, (s, tickIndex) =>
+      isLogScale
+        ? 10 ** (axisMin + ((axisMax - axisMin) * tickIndex) / 4)
+        : axisMin + ((axisMax - axisMin) * tickIndex) / 4,
     ),
   };
 }
@@ -1070,13 +1195,13 @@ function ChartPreviewFrame({ object, sheet, calc }) {
   return i.jsx(ChartReportSvg, { report: report });
 }
 function ChartReportSvg({ report }) {
-  const r = report.diagnostics.filter(
+  const errorDiagnostics = report.diagnostics.filter(
       (diagnostic) => diagnostic.severity === "error",
     ),
-    t = report.kind === "sparkline",
-    n = t ? 200 : 640,
-    o = t ? 40 : 380;
-  if (r.length)
+    isSparkline = report.kind === "sparkline",
+    viewWidth = isSparkline ? 200 : 640,
+    viewHeight = isSparkline ? 40 : 380;
+  if (errorDiagnostics.length)
     return i.jsxs("div", {
       role: "img",
       "aria-label": `${report.title}: chart unavailable`,
@@ -1095,145 +1220,195 @@ function ChartReportSvg({ report }) {
           ],
         }),
         i.jsx("p", {
-          children: r
+          children: errorDiagnostics
             .slice(0, 5)
-            .map((B) => B.message)
+            .map((diagnostic) => diagnostic.message)
             .join(" "),
         }),
         i.jsx("p", { children: report.scope }),
       ],
     });
-  const a = report.points.filter((point) => point.included),
-    s = report.series
-      .map((sery, _) => ({ ...sery, index: _ }))
-      .filter((B) => B.included),
-    d = s.flatMap((B) =>
-      a.map((_) => _.values[B.index].value).filter((_) => typeof _ == "number"),
+  const includedPoints = report.points.filter((point) => point.included),
+    includedSeries = report.series
+      .map((sery, seriesIndex) => ({ ...sery, index: seriesIndex }))
+      .filter((series) => series.included),
+    numericValues = includedSeries.flatMap((series) =>
+      includedPoints
+        .map((point) => point.values[series.index].value)
+        .filter((value) => typeof value == "number"),
     ),
-    u = t ? 3 : 80,
-    l = t ? 197 : 610,
-    c = t ? 3 : 60,
-    h = t ? 37 : 270,
-    f = l - u,
-    p = h - c,
-    m =
+    plotLeft = isSparkline ? 3 : 80,
+    plotRight = isSparkline ? 197 : 610,
+    plotTop = isSparkline ? 3 : 60,
+    plotBottom = isSparkline ? 37 : 270,
+    plotWidth = plotRight - plotLeft,
+    plotHeight = plotBottom - plotTop,
+    axisValues =
       report.kind === "histogram"
-        ? report.histogram.map((B) => B.count)
+        ? report.histogram.map((bin) => bin.count)
         : report.kind === "waterfall"
-          ? report.waterfall.flatMap((B) => [B.start, B.end])
-          : d,
-    axisTicks = buildAxisTicks(m, report.axes.y.scale === "log"),
-    g = (B) => h - axisTicks.fraction(B) * p,
-    b = report.axes.y.scale === "log" ? axisTicks.min : 0,
-    y = buildAxisTicks(
-      a.map((B) => Number(B.category.value)).filter(Number.isFinite),
+          ? report.waterfall.flatMap((step) => [step.start, step.end])
+          : numericValues,
+    axisTicks = buildAxisTicks(axisValues, report.axes.y.scale === "log"),
+    valueToY = (value) => plotBottom - axisTicks.fraction(value) * plotHeight,
+    baselineValue = report.axes.y.scale === "log" ? axisTicks.min : 0,
+    xAxisTicks = buildAxisTicks(
+      includedPoints
+        .map((point) => Number(point.category.value))
+        .filter(Number.isFinite),
       report.axes.x.scale === "log",
       false,
     ),
-    w = (B, _ = a.length) => u + ((B + 0.5) * f) / Math.max(1, _),
-    E = (B) => u + y.fraction(B) * f,
-    A = [],
-    k = (B, _) =>
-      `${B}: ${formatPivotNumber(_)}${report.kind === "histogram" ? " records" : report.axes.units ? " " + report.axes.units : ""}`,
-    F = (B, _, C, T, N = false) =>
-      B.forEach((R, L) => {
-        if (R === null) return;
-        const $ = (N ? p : f) / Math.max(1, B.length),
-          U = ($ * 0.72) / T,
-          G = (N ? c : u) + L * $ + $ * 0.14 + C * U,
-          H = axisTicks.fraction(b),
-          Q = axisTicks.fraction(R);
-        A.push(
+    pointCenterX = (pointIndex, pointCount = includedPoints.length) =>
+      plotLeft + ((pointIndex + 0.5) * plotWidth) / Math.max(1, pointCount),
+    scatterX = (xValue) => plotLeft + xAxisTicks.fraction(xValue) * plotWidth,
+    marks = [],
+    formatTooltip = (label, value) =>
+      `${label}: ${formatPivotNumber(value)}${report.kind === "histogram" ? " records" : report.axes.units ? " " + report.axes.units : ""}`,
+    drawBars = (
+      values,
+      labels,
+      seriesIndex,
+      seriesCount,
+      isHorizontal = false,
+    ) =>
+      values.forEach((barValue, valueIndex) => {
+        if (barValue === null) return;
+        const slotSize =
+            (isHorizontal ? plotHeight : plotWidth) /
+            Math.max(1, values.length),
+          barThickness = (slotSize * 0.72) / seriesCount,
+          barStart =
+            (isHorizontal ? plotTop : plotLeft) +
+            valueIndex * slotSize +
+            slotSize * 0.14 +
+            seriesIndex * barThickness,
+          baselineFraction = axisTicks.fraction(baselineValue),
+          valueFraction = axisTicks.fraction(barValue);
+        marks.push(
           i.jsx(
             "rect",
             {
               "data-chart-mark": "bar",
-              x: N ? u + Math.min(H, Q) * f : G,
-              y: N ? G : Math.min(g(b), g(R)),
-              width: N ? Math.abs(Q - H) * f : U,
-              height: N ? U : Math.abs(g(R) - g(b)),
-              fill: pivotSeriesPalette[C % pivotSeriesPalette.length],
-              children: i.jsx("title", { children: k(_[L], R) }),
+              x: isHorizontal
+                ? plotLeft +
+                  Math.min(baselineFraction, valueFraction) * plotWidth
+                : barStart,
+              y: isHorizontal
+                ? barStart
+                : Math.min(valueToY(baselineValue), valueToY(barValue)),
+              width: isHorizontal
+                ? Math.abs(valueFraction - baselineFraction) * plotWidth
+                : barThickness,
+              height: isHorizontal
+                ? barThickness
+                : Math.abs(valueToY(barValue) - valueToY(baselineValue)),
+              fill: pivotSeriesPalette[seriesIndex % pivotSeriesPalette.length],
+              children: i.jsx("title", {
+                children: formatTooltip(labels[valueIndex], barValue),
+              }),
             },
-            `bar-${C}-${L}`,
+            `bar-${seriesIndex}-${valueIndex}`,
           ),
         );
       }),
-    I = (B, _, C = false) => {
-      let T = [];
-      const N = () => {
-        if (!T.length) return;
-        const R = T[0],
-          L = T.at(-1);
-        (A.push(
-          C
+    drawLineSeries = (values, seriesIndex, isArea = false) => {
+      let segmentPoints = [];
+      const flushSegment = () => {
+        if (!segmentPoints.length) return;
+        const firstPoint = segmentPoints[0],
+          lastPoint = segmentPoints.at(-1);
+        (marks.push(
+          isArea
             ? i.jsx(
                 "polygon",
                 {
                   "data-chart-mark": "area",
                   points: [
-                    `${R.x},${g(b)}`,
-                    ...T.map(($) => `${$.x},${$.y}`),
-                    `${L.x},${g(b)}`,
+                    `${firstPoint.x},${valueToY(baselineValue)}`,
+                    ...segmentPoints.map(
+                      (segmentPoint) => `${segmentPoint.x},${segmentPoint.y}`,
+                    ),
+                    `${lastPoint.x},${valueToY(baselineValue)}`,
                   ].join(" "),
-                  fill: pivotSeriesPalette[_ % pivotSeriesPalette.length],
+                  fill: pivotSeriesPalette[
+                    seriesIndex % pivotSeriesPalette.length
+                  ],
                   fillOpacity: ".25",
-                  stroke: pivotSeriesPalette[_ % pivotSeriesPalette.length],
+                  stroke:
+                    pivotSeriesPalette[seriesIndex % pivotSeriesPalette.length],
                 },
-                `area-${_}-${R.i}`,
+                `area-${seriesIndex}-${firstPoint.i}`,
               )
             : i.jsx(
                 "polyline",
                 {
                   "data-chart-mark": "line",
-                  points: T.map(($) => `${$.x},${$.y}`).join(" "),
+                  points: segmentPoints
+                    .map(
+                      (segmentPoint) => `${segmentPoint.x},${segmentPoint.y}`,
+                    )
+                    .join(" "),
                   fill: "none",
-                  stroke: pivotSeriesPalette[_ % pivotSeriesPalette.length],
-                  strokeWidth: t ? 2 : 2.5,
+                  stroke:
+                    pivotSeriesPalette[seriesIndex % pivotSeriesPalette.length],
+                  strokeWidth: isSparkline ? 2 : 2.5,
                 },
-                `line-${_}-${R.i}`,
+                `line-${seriesIndex}-${firstPoint.i}`,
               ),
         ),
-          (T = []));
+          (segmentPoints = []));
       };
-      (B.forEach((R, L) => {
-        if (R === null) {
-          N();
+      (values.forEach((value, valueIndex) => {
+        if (value === null) {
+          flushSegment();
           return;
         }
-        const $ = w(L),
-          U = g(R);
-        (T.push({ x: $, y: U, v: R, i: L }),
-          A.push(
+        const pointX = pointCenterX(valueIndex),
+          pointY = valueToY(value);
+        (segmentPoints.push({ x: pointX, y: pointY, v: value, i: valueIndex }),
+          marks.push(
             i.jsx(
               "circle",
               {
-                cx: $,
-                cy: U,
-                r: t ? 1.7 : 3,
-                fill: pivotSeriesPalette[_ % pivotSeriesPalette.length],
-                children: i.jsx("title", { children: k(a[L].label, R) }),
+                cx: pointX,
+                cy: pointY,
+                r: isSparkline ? 1.7 : 3,
+                fill: pivotSeriesPalette[
+                  seriesIndex % pivotSeriesPalette.length
+                ],
+                children: i.jsx("title", {
+                  children: formatTooltip(
+                    includedPoints[valueIndex].label,
+                    value,
+                  ),
+                }),
               },
-              `point-${_}-${L}`,
+              `point-${seriesIndex}-${valueIndex}`,
             ),
           ));
       }),
-        N());
+        flushSegment());
     };
   if (report.kind === "pie" || report.kind === "donut") {
-    const B = a.map((T) => Number(T.values[s[0].index].value ?? 0)),
-      _ = B.reduce((T, N) => T + N, 0);
-    let C = -Math.PI / 2;
-    (B.forEach((T, N) => {
-      if (!T) return;
-      const R = C;
-      C += (T / _) * Math.PI * 2;
-      const L = 315 + Math.cos(R) * 100,
-        $ = 166 + Math.sin(R) * 100,
-        U = 315 + Math.cos(C) * 100,
-        G = 166 + Math.sin(C) * 100;
-      A.push(
-        T === _
+    const sliceValues = includedPoints.map((point) =>
+        Number(point.values[includedSeries[0].index].value ?? 0),
+      ),
+      totalValue = sliceValues.reduce(
+        (total, sliceValue) => total + sliceValue,
+        0,
+      );
+    let runningAngle = -Math.PI / 2;
+    (sliceValues.forEach((sliceValue, sliceIndex) => {
+      if (!sliceValue) return;
+      const sliceStartAngle = runningAngle;
+      runningAngle += (sliceValue / totalValue) * Math.PI * 2;
+      const startX = 315 + Math.cos(sliceStartAngle) * 100,
+        startY = 166 + Math.sin(sliceStartAngle) * 100,
+        endX = 315 + Math.cos(runningAngle) * 100,
+        endY = 166 + Math.sin(runningAngle) * 100;
+      marks.push(
+        sliceValue === totalValue
           ? i.jsx(
               "circle",
               {
@@ -1241,26 +1416,40 @@ function ChartReportSvg({ report }) {
                 cx: "315",
                 cy: "166",
                 r: "100",
-                fill: pivotSeriesPalette[N % pivotSeriesPalette.length],
-                children: i.jsx("title", { children: k(a[N].label, T) }),
+                fill: pivotSeriesPalette[
+                  sliceIndex % pivotSeriesPalette.length
+                ],
+                children: i.jsx("title", {
+                  children: formatTooltip(
+                    includedPoints[sliceIndex].label,
+                    sliceValue,
+                  ),
+                }),
               },
-              N,
+              sliceIndex,
             )
           : i.jsx(
               "path",
               {
                 "data-chart-mark": "slice",
-                d: `M315 166 L${L} ${$} A100 100 0 ${C - R > Math.PI ? 1 : 0} 1 ${U} ${G} Z`,
-                fill: pivotSeriesPalette[N % pivotSeriesPalette.length],
+                d: `M315 166 L${startX} ${startY} A100 100 0 ${runningAngle - sliceStartAngle > Math.PI ? 1 : 0} 1 ${endX} ${endY} Z`,
+                fill: pivotSeriesPalette[
+                  sliceIndex % pivotSeriesPalette.length
+                ],
                 stroke: "white",
-                children: i.jsx("title", { children: k(a[N].label, T) }),
+                children: i.jsx("title", {
+                  children: formatTooltip(
+                    includedPoints[sliceIndex].label,
+                    sliceValue,
+                  ),
+                }),
               },
-              N,
+              sliceIndex,
             ),
       );
     }),
       report.kind === "donut" &&
-        A.push(
+        marks.push(
           i.jsx(
             "circle",
             { cx: "315", cy: "166", r: "55", fill: "white" },
@@ -1269,149 +1458,179 @@ function ChartReportSvg({ report }) {
         ));
   } else
     report.kind === "histogram"
-      ? F(
-          report.histogram.map((B) => B.count),
+      ? drawBars(
+          report.histogram.map((bin) => bin.count),
           report.histogram.map(
-            (B) =>
-              `${formatPivotNumber(B.lower)}–${formatPivotNumber(B.upper)}`,
+            (bin) =>
+              `${formatPivotNumber(bin.lower)}–${formatPivotNumber(bin.upper)}`,
           ),
           0,
           1,
         )
       : report.kind === "waterfall"
-        ? report.waterfall.forEach((B, _) => {
-            const C = w(_, report.waterfall.length),
-              T = f / report.waterfall.length;
-            (A.push(
+        ? report.waterfall.forEach((waterfallStep, stepIndex) => {
+            const stepCenterX = pointCenterX(
+                stepIndex,
+                report.waterfall.length,
+              ),
+              stepWidth = plotWidth / report.waterfall.length;
+            (marks.push(
               i.jsx(
                 "rect",
                 {
                   "data-chart-mark": "waterfall",
-                  x: C - T * 0.34,
-                  y: Math.min(g(B.start), g(B.end)),
-                  width: T * 0.68,
-                  height: Math.max(1, Math.abs(g(B.start) - g(B.end))),
+                  x: stepCenterX - stepWidth * 0.34,
+                  y: Math.min(
+                    valueToY(waterfallStep.start),
+                    valueToY(waterfallStep.end),
+                  ),
+                  width: stepWidth * 0.68,
+                  height: Math.max(
+                    1,
+                    Math.abs(
+                      valueToY(waterfallStep.start) -
+                        valueToY(waterfallStep.end),
+                    ),
+                  ),
                   fill:
-                    B.row === null
+                    waterfallStep.row === null
                       ? "#4472C4"
-                      : B.value >= 0
+                      : waterfallStep.value >= 0
                         ? "#548235"
                         : "#C00000",
                   children: i.jsx("title", {
-                    children: `${B.label}: change ${formatPivotNumber(B.value)}, from ${formatPivotNumber(B.start)} to ${formatPivotNumber(B.end)}`,
+                    children: `${waterfallStep.label}: change ${formatPivotNumber(waterfallStep.value)}, from ${formatPivotNumber(waterfallStep.start)} to ${formatPivotNumber(waterfallStep.end)}`,
                   }),
                 },
-                _,
+                stepIndex,
               ),
             ),
-              _ < report.waterfall.length - 1 &&
-                A.push(
+              stepIndex < report.waterfall.length - 1 &&
+                marks.push(
                   i.jsx(
                     "line",
                     {
-                      x1: C + T * 0.34,
-                      x2: C + T * 0.66,
-                      y1: g(B.end),
-                      y2: g(B.end),
+                      x1: stepCenterX + stepWidth * 0.34,
+                      x2: stepCenterX + stepWidth * 0.66,
+                      y1: valueToY(waterfallStep.end),
+                      y2: valueToY(waterfallStep.end),
                       stroke: "#777",
                       strokeDasharray: "3 2",
                     },
-                    `connector-${_}`,
+                    `connector-${stepIndex}`,
                   ),
                 ));
           })
-        : s.forEach((B, _) => {
-            const C = a.map((N) =>
-                typeof N.values[B.index].value == "number"
-                  ? N.values[B.index].value
+        : includedSeries.forEach((series, seriesIndex) => {
+            const seriesValues = includedPoints.map((point) =>
+                typeof point.values[series.index].value == "number"
+                  ? point.values[series.index].value
                   : null,
               ),
-              T =
+              markKind =
                 report.kind === "combo"
-                  ? B.kind
+                  ? series.kind
                   : report.kind === "sparkline"
                     ? (report.options.sparklineKind ?? "line")
                     : report.kind;
-            T === "scatter"
-              ? C.forEach((N, R) => {
-                  N !== null &&
-                    A.push(
+            markKind === "scatter"
+              ? seriesValues.forEach((scatterValue, pointIndex) => {
+                  scatterValue !== null &&
+                    marks.push(
                       i.jsx(
                         "circle",
                         {
                           "data-chart-mark": "scatter",
-                          cx: E(Number(a[R].category.value)),
-                          cy: g(N),
+                          cx: scatterX(
+                            Number(includedPoints[pointIndex].category.value),
+                          ),
+                          cy: valueToY(scatterValue),
                           r: "4",
                           fill: pivotSeriesPalette[
-                            _ % pivotSeriesPalette.length
+                            seriesIndex % pivotSeriesPalette.length
                           ],
                           children: i.jsx("title", {
-                            children: `${a[R].category.address}=${a[R].category.value}; ${k(B.name, N)}`,
+                            children: `${includedPoints[pointIndex].category.address}=${includedPoints[pointIndex].category.value}; ${formatTooltip(series.name, scatterValue)}`,
                           }),
                         },
-                        `${_}-${R}`,
+                        `${seriesIndex}-${pointIndex}`,
                       ),
                     );
                 })
-              : T === "line" || T === "area"
-                ? I(C, _, T === "area")
-                : T === "winLoss"
-                  ? C.forEach((N, R) => {
-                      if (N === null || N === 0) return;
-                      const L = f / a.length;
-                      A.push(
+              : markKind === "line" || markKind === "area"
+                ? drawLineSeries(seriesValues, seriesIndex, markKind === "area")
+                : markKind === "winLoss"
+                  ? seriesValues.forEach((winLossValue, pointIndex) => {
+                      if (winLossValue === null || winLossValue === 0) return;
+                      const slotWidth = plotWidth / includedPoints.length;
+                      marks.push(
                         i.jsx(
                           "rect",
                           {
                             "data-chart-mark": "winLoss",
-                            x: w(R) - L * 0.32,
-                            y: N > 0 ? c : c + p / 2 + 1,
-                            width: L * 0.64,
-                            height: p / 2 - 1,
-                            fill: N > 0 ? "#548235" : "#C00000",
+                            x: pointCenterX(pointIndex) - slotWidth * 0.32,
+                            y:
+                              winLossValue > 0
+                                ? plotTop
+                                : plotTop + plotHeight / 2 + 1,
+                            width: slotWidth * 0.64,
+                            height: plotHeight / 2 - 1,
+                            fill: winLossValue > 0 ? "#548235" : "#C00000",
                             children: i.jsx("title", {
-                              children: k(a[R].label, N),
+                              children: formatTooltip(
+                                includedPoints[pointIndex].label,
+                                winLossValue,
+                              ),
                             }),
                           },
-                          R,
+                          pointIndex,
                         ),
                       );
                     })
-                  : F(
-                      C,
-                      a.map((N) => N.label),
-                      _,
-                      s.length,
-                      T === "bar",
+                  : drawBars(
+                      seriesValues,
+                      includedPoints.map((point) => point.label),
+                      seriesIndex,
+                      includedSeries.length,
+                      markKind === "bar",
                     );
           });
-  const O = ["pie", "donut"].includes(report.kind),
-    j = report.kind === "bar",
-    z =
+  const isPieOrDonut = ["pie", "donut"].includes(report.kind),
+    isBarChart = report.kind === "bar",
+    categoryLabels =
       report.kind === "histogram"
         ? report.histogram.map(
-            (B) =>
-              `${formatPivotNumber(B.lower)}–${formatPivotNumber(B.upper)}`,
+            (bin) =>
+              `${formatPivotNumber(bin.lower)}–${formatPivotNumber(bin.upper)}`,
           )
         : report.kind === "waterfall"
-          ? report.waterfall.map((B) => B.label)
-          : a.map((B) => B.label),
-    V = O
-      ? a
-          .filter((B) => Number(B.values[s[0].index].value) > 0)
-          .map((B) => B.label)
-      : s.map((B) => B.name),
-    D = O
-      ? a
-          .filter((B) => Number(B.values[s[0].index].value) > 0)
-          .map(
-            (B) => pivotSeriesPalette[a.indexOf(B) % pivotSeriesPalette.length],
+          ? report.waterfall.map((step) => step.label)
+          : includedPoints.map((point) => point.label),
+    legendLabels = isPieOrDonut
+      ? includedPoints
+          .filter(
+            (point) => Number(point.values[includedSeries[0].index].value) > 0,
           )
-      : s.map((B, _) => pivotSeriesPalette[_ % pivotSeriesPalette.length]);
+          .map((point) => point.label)
+      : includedSeries.map((series) => series.name),
+    legendColors = isPieOrDonut
+      ? includedPoints
+          .filter(
+            (point) => Number(point.values[includedSeries[0].index].value) > 0,
+          )
+          .map(
+            (point) =>
+              pivotSeriesPalette[
+                includedPoints.indexOf(point) % pivotSeriesPalette.length
+              ],
+          )
+      : includedSeries.map(
+          (series, seriesIndex) =>
+            pivotSeriesPalette[seriesIndex % pivotSeriesPalette.length],
+        );
   return i.jsxs("svg", {
-    viewBox: `0 0 ${n} ${o}`,
-    preserveAspectRatio: t ? "none" : "xMidYMid meet",
+    viewBox: `0 0 ${viewWidth} ${viewHeight}`,
+    preserveAspectRatio: isSparkline ? "none" : "xMidYMid meet",
     role: "img",
     "aria-label": report.altText,
     "data-chart-kind": report.kind,
@@ -1424,7 +1643,7 @@ function ChartReportSvg({ report }) {
     },
     children: [
       i.jsx("title", {
-        children: `${report.title}${t ? `. ${report.scope}` : ""}`,
+        children: `${report.title}${isSparkline ? `. ${report.scope}` : ""}`,
       }),
       i.jsxs("desc", {
         children: [
@@ -1446,10 +1665,10 @@ function ChartReportSvg({ report }) {
           "). ",
           report.population.policy,
           " ",
-          V.join("; "),
+          legendLabels.join("; "),
         ],
       }),
-      !t &&
+      !isSparkline &&
         i.jsxs(i.Fragment, {
           children: [
             i.jsx("text", {
@@ -1475,63 +1694,84 @@ function ChartReportSvg({ report }) {
             }),
           ],
         }),
-      !t &&
-        !O &&
+      !isSparkline &&
+        !isPieOrDonut &&
         i.jsxs(i.Fragment, {
           children: [
-            axisTicks.ticks.map((tick, _) =>
+            axisTicks.ticks.map((tick, tickIndex) =>
               i.jsxs(
                 "g",
                 {
                   children: [
                     i.jsx("line", {
-                      x1: j ? u + axisTicks.fraction(tick) * f : u,
-                      x2: j ? u + axisTicks.fraction(tick) * f : l,
-                      y1: j ? c : g(tick),
-                      y2: j ? h : g(tick),
+                      x1: isBarChart
+                        ? plotLeft + axisTicks.fraction(tick) * plotWidth
+                        : plotLeft,
+                      x2: isBarChart
+                        ? plotLeft + axisTicks.fraction(tick) * plotWidth
+                        : plotRight,
+                      y1: isBarChart ? plotTop : valueToY(tick),
+                      y2: isBarChart ? plotBottom : valueToY(tick),
                       stroke: "#E2E5E8",
                     }),
                     i.jsx("text", {
-                      x: j ? u + axisTicks.fraction(tick) * f : u - 6,
-                      y: j ? h + 15 : g(tick) + 3,
-                      textAnchor: j ? "middle" : "end",
+                      x: isBarChart
+                        ? plotLeft + axisTicks.fraction(tick) * plotWidth
+                        : plotLeft - 6,
+                      y: isBarChart ? plotBottom + 15 : valueToY(tick) + 3,
+                      textAnchor: isBarChart ? "middle" : "end",
                       fontSize: "10",
                       fill: "#555",
                       children: formatPivotNumber(tick),
                     }),
                   ],
                 },
-                _,
+                tickIndex,
               ),
             ),
             report.kind === "scatter"
-              ? y.ticks.map((tick, _) =>
+              ? xAxisTicks.ticks.map((tick, tickIndex) =>
                   i.jsx(
                     "text",
                     {
-                      x: E(tick),
-                      y: h + 15,
+                      x: scatterX(tick),
+                      y: plotBottom + 15,
                       textAnchor: "middle",
                       fontSize: "10",
                       fill: "#555",
                       children: formatPivotNumber(tick),
                     },
-                    _,
+                    tickIndex,
                   ),
                 )
-              : z.map((B, _) =>
-                  _ % Math.max(1, Math.ceil(z.length / (j ? 10 : 8))) === 0
+              : categoryLabels.map((categoryLabel, labelIndex) =>
+                  labelIndex %
+                    Math.max(
+                      1,
+                      Math.ceil(categoryLabels.length / (isBarChart ? 10 : 8)),
+                    ) ===
+                  0
                     ? i.jsx(
                         "text",
                         {
-                          x: j ? u - 7 : w(_, z.length),
-                          y: j ? c + ((_ + 0.5) * p) / z.length + 3 : h + 15,
-                          textAnchor: j ? "end" : "middle",
+                          x: isBarChart
+                            ? plotLeft - 7
+                            : pointCenterX(labelIndex, categoryLabels.length),
+                          y: isBarChart
+                            ? plotTop +
+                              ((labelIndex + 0.5) * plotHeight) /
+                                categoryLabels.length +
+                              3
+                            : plotBottom + 15,
+                          textAnchor: isBarChart ? "end" : "middle",
                           fontSize: "10",
                           fill: "#555",
-                          children: B.length > 14 ? B.slice(0, 12) + "…" : B,
+                          children:
+                            categoryLabel.length > 14
+                              ? categoryLabel.slice(0, 12) + "…"
+                              : categoryLabel,
                         },
-                        _,
+                        labelIndex,
                       )
                     : null,
                 ),
@@ -1540,43 +1780,46 @@ function ChartReportSvg({ report }) {
               y: "305",
               textAnchor: "middle",
               fontSize: "11",
-              children: j ? report.axes.y.title : report.axes.x.title,
+              children: isBarChart ? report.axes.y.title : report.axes.x.title,
             }),
             i.jsx("text", {
               transform: "translate(14 168) rotate(-90)",
               textAnchor: "middle",
               fontSize: "11",
-              children: j ? report.axes.x.title : report.axes.y.title,
+              children: isBarChart ? report.axes.x.title : report.axes.y.title,
             }),
           ],
         }),
-      A,
-      !t &&
+      marks,
+      !isSparkline &&
         i.jsxs(i.Fragment, {
           children: [
             report.options.showLegend !== false &&
-              V.slice(0, 6).map((B, _) =>
+              legendLabels.slice(0, 6).map((legendLabel, legendIndex) =>
                 i.jsxs(
                   "g",
                   {
                     children: [
                       i.jsx("rect", {
-                        x: 25 + (_ % 3) * 205,
-                        y: 317 + Math.floor(_ / 3) * 17,
+                        x: 25 + (legendIndex % 3) * 205,
+                        y: 317 + Math.floor(legendIndex / 3) * 17,
                         width: "10",
                         height: "10",
-                        fill: D[_],
+                        fill: legendColors[legendIndex],
                       }),
                       i.jsx("text", {
-                        x: 39 + (_ % 3) * 205,
-                        y: 326 + Math.floor(_ / 3) * 17,
+                        x: 39 + (legendIndex % 3) * 205,
+                        y: 326 + Math.floor(legendIndex / 3) * 17,
                         fontSize: "10",
                         fill: "#333",
-                        children: B.length > 24 ? B.slice(0, 22) + "…" : B,
+                        children:
+                          legendLabel.length > 24
+                            ? legendLabel.slice(0, 22) + "…"
+                            : legendLabel,
                       }),
                     ],
                   },
-                  _,
+                  legendIndex,
                 ),
               ),
             i.jsxs("text", {
@@ -1616,7 +1859,7 @@ function ChartReportSvg({ report }) {
                 report.diagnostics.length
                   ? `${report.diagnostics.length} diagnostics · `
                   : "",
-                V.length > 6 ? "Full legend and " : "",
+                legendLabels.length > 6 ? "Full legend and " : "",
                 i.jsx(LocalizedText, {
                   children:
                     "Full source, filters and series in Chart properties / Export inspection",
@@ -1628,23 +1871,30 @@ function ChartReportSvg({ report }) {
     ],
   });
 }
-function downloadTextFile(e) {
-  const r = URL.createObjectURL(new Blob([e.content], { type: e.mime })),
-    t = document.createElement("a");
-  ((t.href = r),
-    (t.download = e.filename),
-    t.click(),
-    setTimeout(() => URL.revokeObjectURL(r), 1e3));
+function downloadTextFile(file) {
+  const objectUrl = URL.createObjectURL(
+      new Blob([file.content], { type: file.mime }),
+    ),
+    link = document.createElement("a");
+  ((link.href = objectUrl),
+    (link.download = file.filename),
+    link.click(),
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1e3));
 }
 function ChartSettingsPanel({ object, report, update }) {
   const { text, language } = useWorkbookMessages(),
-    a = object.chartOptions ?? {},
-    s = (l) => update({ chartOptions: { ...a, ...l } }),
-    d = report?.series ?? [],
-    u = () =>
-      d
-        .filter((l) => l.included)
-        .map((l) => ({ column: l.column, name: l.name, kind: l.kind }));
+    chartOptions = object.chartOptions ?? {},
+    mergeChartOptions = (optionsPatch) =>
+      update({ chartOptions: { ...chartOptions, ...optionsPatch } }),
+    reportSeries = report?.series ?? [],
+    includedSeries = () =>
+      reportSeries
+        .filter((seriesItem) => seriesItem.included)
+        .map((seriesConfig) => ({
+          column: seriesConfig.column,
+          name: seriesConfig.name,
+          kind: seriesConfig.kind,
+        }));
   return i.jsxs(i.Fragment, {
     children: [
       i.jsxs("label", {
@@ -1655,7 +1905,7 @@ function ChartSettingsPanel({ object, report, update }) {
             value: object.chart,
             onChange: (event) => {
               const value = event.target.value,
-                h = [
+                isSingleSeriesChart = [
                   "pie",
                   "donut",
                   "waterfall",
@@ -1665,18 +1915,26 @@ function ChartSettingsPanel({ object, report, update }) {
               update({
                 chart: value,
                 chartOptions: {
-                  ...a,
+                  ...chartOptions,
                   yScale: "linear",
                   xScale: "linear",
                   ...(value === "histogram"
                     ? {
                         xTitle:
-                          d.find((p) => p.included)?.name ?? "Source value",
+                          reportSeries.find(
+                            (sourceSeries) => sourceSeries.included,
+                          )?.name ?? "Source value",
                         yTitle: "Frequency (records)",
                       }
                     : {}),
-                  ...(h && d.length
-                    ? { series: [u()[0] ?? { column: d[0].column }] }
+                  ...(isSingleSeriesChart && reportSeries.length
+                    ? {
+                        series: [
+                          includedSeries()[0] ?? {
+                            column: reportSeries[0].column,
+                          },
+                        ],
+                      }
                     : {}),
                 },
               });
@@ -1708,7 +1966,7 @@ function ChartSettingsPanel({ object, report, update }) {
               update({
                 range: event.target.value.toUpperCase(),
                 chartOptions: {
-                  ...a,
+                  ...chartOptions,
                   series: undefined,
                   includedRows: undefined,
                 },
@@ -1728,7 +1986,7 @@ function ChartSettingsPanel({ object, report, update }) {
               update({
                 headers: event.target.checked,
                 chartOptions: {
-                  ...a,
+                  ...chartOptions,
                   series: undefined,
                   includedRows: undefined,
                 },
@@ -1771,8 +2029,9 @@ function ChartSettingsPanel({ object, report, update }) {
                 i.jsx(LocalizedText, { children: "Sparkline style" }),
                 i.jsxs("select", {
                   "aria-label": text("Sparkline style"),
-                  value: a.sparklineKind ?? "line",
-                  onChange: (event) => s({ sparklineKind: event.target.value }),
+                  value: chartOptions.sparklineKind ?? "line",
+                  onChange: (event) =>
+                    mergeChartOptions({ sparklineKind: event.target.value }),
                   lang: language("Sparkline style"),
                   "data-ui-label": "Sparkline style",
                   children: [
@@ -1795,40 +2054,45 @@ function ChartSettingsPanel({ object, report, update }) {
           i.jsxs("div", {
             className: "dg-chart-stack",
             children: [
-              ["altText", "xTitle", "yTitle", "units"].map((l, c) =>
-                i.jsxs(
-                  "label",
-                  {
-                    children: [
-                      [
-                        "Alt text",
-                        "Category / X axis title",
-                        "Value / Y axis title",
-                        "Units (label; values are not rescaled)",
-                      ][c],
-                      i.jsx("input", {
-                        "aria-label": [
-                          "Chart alt text",
-                          "Chart X axis title",
-                          "Chart Y axis title",
-                          "Chart units",
-                        ][c],
-                        maxLength: l === "altText" ? 2e3 : 200,
-                        value: a[l] ?? "",
-                        onChange: (event) => s({ [l]: event.target.value }),
-                      }),
-                    ],
-                  },
-                  l,
-                ),
+              ["altText", "xTitle", "yTitle", "units"].map(
+                (optionKey, optionIndex) =>
+                  i.jsxs(
+                    "label",
+                    {
+                      children: [
+                        [
+                          "Alt text",
+                          "Category / X axis title",
+                          "Value / Y axis title",
+                          "Units (label; values are not rescaled)",
+                        ][optionIndex],
+                        i.jsx("input", {
+                          "aria-label": [
+                            "Chart alt text",
+                            "Chart X axis title",
+                            "Chart Y axis title",
+                            "Chart units",
+                          ][optionIndex],
+                          maxLength: optionKey === "altText" ? 2e3 : 200,
+                          value: chartOptions[optionKey] ?? "",
+                          onChange: (event) =>
+                            mergeChartOptions({
+                              [optionKey]: event.target.value,
+                            }),
+                        }),
+                      ],
+                    },
+                    optionKey,
+                  ),
               ),
               i.jsxs("label", {
                 children: [
                   i.jsx(LocalizedText, { children: "Value axis scale" }),
                   i.jsxs("select", {
                     "aria-label": text("Chart Y scale"),
-                    value: a.yScale ?? "linear",
-                    onChange: (event) => s({ yScale: event.target.value }),
+                    value: chartOptions.yScale ?? "linear",
+                    onChange: (event) =>
+                      mergeChartOptions({ yScale: event.target.value }),
                     lang: language("Chart Y scale"),
                     "data-ui-label": "Chart Y scale",
                     children: [
@@ -1847,8 +2111,9 @@ function ChartSettingsPanel({ object, report, update }) {
                     i.jsx(LocalizedText, { children: "X axis scale" }),
                     i.jsxs("select", {
                       "aria-label": text("Chart X scale"),
-                      value: a.xScale ?? "linear",
-                      onChange: (event) => s({ xScale: event.target.value }),
+                      value: chartOptions.xScale ?? "linear",
+                      onChange: (event) =>
+                        mergeChartOptions({ xScale: event.target.value }),
                       lang: language("Chart X scale"),
                       "data-ui-label": "Chart X scale",
                       children: [
@@ -1869,9 +2134,9 @@ function ChartSettingsPanel({ object, report, update }) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: a.showLegend !== false,
+                    checked: chartOptions.showLegend !== false,
                     onChange: (event) =>
-                      s({ showLegend: event.target.checked }),
+                      mergeChartOptions({ showLegend: event.target.checked }),
                   }),
                   i.jsx(LocalizedText, { children: "Show legend" }),
                 ],
@@ -1889,12 +2154,13 @@ function ChartSettingsPanel({ object, report, update }) {
               min: 1,
               max: 50,
               value:
-                a.histogramBins ??
+                chartOptions.histogramBins ??
                 Math.min(
                   50,
                   Math.max(1, Math.ceil(Math.sqrt(report?.points.length ?? 1))),
                 ),
-              onValueChange: (l) => s({ histogramBins: Number(l) }),
+              onValueChange: (newBinCount) =>
+                mergeChartOptions({ histogramBins: Number(newBinCount) }),
               lang: language("Histogram bins"),
               "data-ui-label": "Histogram bins",
             }),
@@ -1907,14 +2173,14 @@ function ChartSettingsPanel({ object, report, update }) {
           }),
           i.jsx("button", {
             type: "button",
-            onClick: () => s({ series: undefined }),
+            onClick: () => mergeChartOptions({ series: undefined }),
             children: i.jsx(LocalizedText, {
               children: "Use all source series",
             }),
           }),
           i.jsx("div", {
             className: "dg-chart-stack",
-            children: d.map((l) =>
+            children: reportSeries.map((seriesEntry) =>
               i.jsxs(
                 "div",
                 {
@@ -1925,49 +2191,54 @@ function ChartSettingsPanel({ object, report, update }) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          "aria-label": `Include series ${l.column}`,
-                          checked: l.included,
+                          "aria-label": `Include series ${seriesEntry.column}`,
+                          checked: seriesEntry.included,
                           onChange: (event) =>
-                            s({
+                            mergeChartOptions({
                               series: event.target.checked
                                 ? [
-                                    ...u(),
+                                    ...includedSeries(),
                                     {
-                                      column: l.column,
-                                      name: l.name,
-                                      kind: l.kind,
+                                      column: seriesEntry.column,
+                                      name: seriesEntry.name,
+                                      kind: seriesEntry.kind,
                                     },
                                   ]
-                                : u().filter((h) => h.column !== l.column),
+                                : includedSeries().filter(
+                                    (keptSeries) =>
+                                      keptSeries.column !== seriesEntry.column,
+                                  ),
                             }),
                         }),
-                        l.name,
+                        seriesEntry.name,
                         " ",
                         i.jsx(LocalizedText, { children: "(column " }),
-                        l.column,
+                        seriesEntry.column,
                         ")",
                       ],
                     }),
-                    l.included &&
+                    seriesEntry.included &&
                       i.jsxs(i.Fragment, {
                         children: [
                           i.jsxs("label", {
                             children: [
                               i.jsx(LocalizedText, { children: "Series name" }),
                               i.jsx("input", {
-                                "aria-label": `Series ${l.column} name`,
-                                value: l.name,
+                                "aria-label": `Series ${seriesEntry.column} name`,
+                                value: seriesEntry.name,
                                 maxLength: 200,
                                 onChange: (event) =>
-                                  s({
-                                    series: u().map((h) =>
-                                      h.column === l.column
-                                        ? {
-                                            ...h,
-                                            name:
-                                              event.target.value || undefined,
-                                          }
-                                        : h,
+                                  mergeChartOptions({
+                                    series: includedSeries().map(
+                                      (includedEntry) =>
+                                        includedEntry.column ===
+                                        seriesEntry.column
+                                          ? {
+                                              ...includedEntry,
+                                              name:
+                                                event.target.value || undefined,
+                                            }
+                                          : includedEntry,
                                     ),
                                   }),
                               }),
@@ -1980,14 +2251,19 @@ function ChartSettingsPanel({ object, report, update }) {
                                   children: "Series rendering",
                                 }),
                                 i.jsxs("select", {
-                                  "aria-label": `Series ${l.column} rendering`,
-                                  value: l.kind,
+                                  "aria-label": `Series ${seriesEntry.column} rendering`,
+                                  value: seriesEntry.kind,
                                   onChange: (event) =>
-                                    s({
-                                      series: u().map((h) =>
-                                        h.column === l.column
-                                          ? { ...h, kind: event.target.value }
-                                          : h,
+                                    mergeChartOptions({
+                                      series: includedSeries().map(
+                                        (styledSeries) =>
+                                          styledSeries.column ===
+                                          seriesEntry.column
+                                            ? {
+                                                ...styledSeries,
+                                                kind: event.target.value,
+                                              }
+                                            : styledSeries,
                                       ),
                                     }),
                                   children: [
@@ -2007,7 +2283,7 @@ function ChartSettingsPanel({ object, report, update }) {
                       }),
                   ],
                 },
-                l.column,
+                seriesEntry.column,
               ),
             ),
           }),
@@ -2021,14 +2297,14 @@ function ChartSettingsPanel({ object, report, update }) {
           i.jsx("p", { children: report?.scope }),
           i.jsx("button", {
             type: "button",
-            onClick: () => s({ includedRows: undefined }),
+            onClick: () => mergeChartOptions({ includedRows: undefined }),
             children: i.jsx(LocalizedText, {
               children: "Include all chart rows",
             }),
           }),
           i.jsx("button", {
             type: "button",
-            onClick: () => s({ includedRows: [] }),
+            onClick: () => mergeChartOptions({ includedRows: [] }),
             children: i.jsx(LocalizedText, {
               children: "Exclude all chart rows",
             }),
@@ -2046,13 +2322,15 @@ function ChartSettingsPanel({ object, report, update }) {
                       "aria-label": `Include chart row ${point.row}`,
                       checked: point.included,
                       onChange: (event) => {
-                        const h =
-                          a.includedRows ??
+                        const includedRows =
+                          chartOptions.includedRows ??
                           report.points.map((point) => point.row);
-                        s({
+                        mergeChartOptions({
                           includedRows: event.target.checked
-                            ? [...h, point.row]
-                            : h.filter((f) => f !== point.row),
+                            ? [...includedRows, point.row]
+                            : includedRows.filter(
+                                (rowNumber) => rowNumber !== point.row,
+                              ),
                         });
                       },
                     }),

@@ -40,132 +40,148 @@ import {
   sheetRangeReferencePattern,
 } from "./11-local-workbook-store-and-versions.js";
 
-function inspectFormulaDependencies(workbook, r) {
-  if (!["precedents", "dependents"].includes(r.direction))
+function inspectFormulaDependencies(workbook, request) {
+  if (!["precedents", "dependents"].includes(request.direction))
     throw Error("Choose precedents or dependents.");
-  const depth = requireIntegerInRange(r.depth, 1, 8, "Inspection depth"),
-    n = requireIntegerInRange(
-      r.limits?.maxFormulaCells,
+  const depth = requireIntegerInRange(request.depth, 1, 8, "Inspection depth"),
+    formulaScanLimit = requireIntegerInRange(
+      request.limits?.maxFormulaCells,
       5e3,
       1e4,
       "Formula scan limit",
     ),
-    o = requireIntegerInRange(
-      r.limits?.maxNodes,
+    resultCellLimit = requireIntegerInRange(
+      request.limits?.maxNodes,
       500,
       1e3,
       "Result cell limit",
     ),
-    a = requireIntegerInRange(
-      r.limits?.maxReferences,
+    referenceScanLimit = requireIntegerInRange(
+      request.limits?.maxReferences,
       1e4,
       5e4,
       "Reference scan limit",
     );
-  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
+  if (
+    request.includeHidden !== undefined &&
+    typeof request.includeHidden != "boolean"
+  )
     throw Error("Include hidden must be boolean.");
   if (
-    r.allowedSheetIds &&
-    (!Array.isArray(r.allowedSheetIds) ||
-      r.allowedSheetIds.some(
+    request.allowedSheetIds &&
+    (!Array.isArray(request.allowedSheetIds) ||
+      request.allowedSheetIds.some(
         (allowedSheetId) =>
           typeof allowedSheetId != "string" ||
           !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
       ))
   )
     throw Error("The allowed worksheet context is invalid.");
-  const s = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
-    d = new Set(r.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id)),
-    u = new Map(
+  const sheetsById = new Map(workbook.sheets.map((sheet) => [sheet.id, sheet])),
+    allowedSheetIdSet = new Set(
+      request.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+    ),
+    hiddenRangesBySheetId = new Map(
       workbook.sheets.map((sheet) => [
         sheet.id,
         { rows: cn(sheet, "row"), cols: cn(sheet, "column") },
       ]),
     ),
-    l = (Q, X) => {
-      if (!d.has(Q.id)) return false;
-      if (r.includeHidden) return true;
-      const J = _t(X);
+    isCellVisible = (worksheet, addressText) => {
+      if (!allowedSheetIdSet.has(worksheet.id)) return false;
+      if (request.includeHidden) return true;
+      const position = _t(addressText);
       return (
-        !Q.hidden &&
-        !u
-          .get(Q.id)
-          .rows.some((row) => J.row >= row.start && J.row <= row.end) &&
-        !u.get(Q.id).cols.some((col) => J.col >= col.start && J.col <= col.end)
+        !worksheet.hidden &&
+        !hiddenRangesBySheetId
+          .get(worksheet.id)
+          .rows.some(
+            (row) => position.row >= row.start && position.row <= row.end,
+          ) &&
+        !hiddenRangesBySheetId
+          .get(worksheet.id)
+          .cols.some(
+            (col) => position.col >= col.start && position.col <= col.end,
+          )
       );
     },
-    cellReference = parseCellReference(r.address);
+    cellReference = parseCellReference(request.address);
   if (cellReference.includes(":")) throw Error("Choose one cell to inspect.");
-  const sheet = s.get(r.sheetId);
-  if (!sheet || !l(sheet, cellReference))
+  const sheet = sheetsById.get(request.sheetId);
+  if (!sheet || !isCellVisible(sheet, cellReference))
     throw Error(
       "The selected cell is outside the visible, authorized inspection context.",
     );
   const compositeKey = buildCompositeKey(sheet.id, cellReference),
     issues = [],
-    m = [],
-    v = new Map(),
-    g = new Set();
+    references = [],
+    referencesByCellKey = new Map(),
+    blockedCellKeys = new Set();
   let referencesScanned = 0,
     truncated = false,
     depthLimited = false,
     excludedCells = 0;
-  const A = (from, X, J, token) => {
-      (g.add(from),
+  const addIssue = (from, issueKind, message, token) => {
+      (blockedCellKeys.add(from),
         issues.length < 200 &&
         !issues.some(
           (issue) =>
             issue.from === from &&
-            issue.kind === X &&
+            issue.kind === issueKind &&
             issue.token === token &&
-            issue.message === J,
+            issue.message === message,
         )
           ? issues.push({
               from: from,
-              kind: X,
-              message: J,
+              kind: issueKind,
+              message: message,
               ...(token ? { token: token } : {}),
             })
           : issues.length >= 200 && (truncated = true));
     },
-    k = [];
+    formulaCells = [];
   for (const sheet of workbook.sheets)
-    for (const X of Object.entries(sheet.cells).sort(([J], [q]) => {
-      const W = _t(J),
-        K = _t(q);
-      return W.row - K.row || W.col - K.col;
-    })) {
-      if (!l(sheet, X[0])) {
+    for (const entry of Object.entries(sheet.cells).sort(
+      ([leftAddress], [rightAddress]) => {
+        const leftPosition = _t(leftAddress),
+          rightPosition = _t(rightAddress);
+        return (
+          leftPosition.row - rightPosition.row ||
+          leftPosition.col - rightPosition.col
+        );
+      },
+    )) {
+      if (!isCellVisible(sheet, entry[0])) {
         excludedCells++;
         continue;
       }
-      isFormulaInputValue(X[1]) &&
-        k.push({
-          key: buildCompositeKey(sheet.id, X[0]),
+      isFormulaInputValue(entry[1]) &&
+        formulaCells.push({
+          key: buildCompositeKey(sheet.id, entry[0]),
           sheet: sheet,
-          address: X[0],
-          raw: X[1].raw,
+          address: entry[0],
+          raw: entry[1].raw,
         });
     }
-  k.sort((event, X) =>
-    event.key === compositeKey ? -1 : X.key === compositeKey ? 1 : 0,
+  formulaCells.sort((event, otherCell) =>
+    event.key === compositeKey ? -1 : otherCell.key === compositeKey ? 1 : 0,
   );
-  const F = k.slice(0, n);
-  k.length > F.length &&
+  const scannedFormulaCells = formulaCells.slice(0, formulaScanLimit);
+  formulaCells.length > scannedFormulaCells.length &&
     ((truncated = true),
-    A(
+    addIssue(
       compositeKey,
       "limit",
       "The formula-cell scan limit was reached; additional dependents may exist.",
     ));
-  for (const cell of F) {
-    const X = [];
-    v.set(cell.key, X);
-    let J = 0;
-    const q = (sheetId, address, token, oe) => {
-        if (referencesScanned >= a) {
+  for (const cell of scannedFormulaCells) {
+    const cellReferences = [];
+    referencesByCellKey.set(cell.key, cellReferences);
+    let expansionCount = 0;
+    const addReference = (sheetId, address, token, referenceKind) => {
+        if (referencesScanned >= referenceScanLimit) {
           ((truncated = true),
-            A(
+            addIssue(
               cell.key,
               "limit",
               "The workbook reference scan limit was reached.",
@@ -173,9 +189,9 @@ function inspectFormulaDependencies(workbook, r) {
           return;
         }
         referencesScanned++;
-        const de = s.get(sheetId);
-        if (!de) {
-          A(
+        const referencedSheet = sheetsById.get(sheetId);
+        if (!referencedSheet) {
+          addIssue(
             cell.key,
             "missing",
             "The referenced worksheet does not exist.",
@@ -183,8 +199,11 @@ function inspectFormulaDependencies(workbook, r) {
           );
           return;
         }
-        if (!d.has(sheetId) || (de.hidden && !r.includeHidden)) {
-          A(
+        if (
+          !allowedSheetIdSet.has(sheetId) ||
+          (referencedSheet.hidden && !request.includeHidden)
+        ) {
+          addIssue(
             cell.key,
             "excluded",
             "A referenced worksheet is outside the selected inspection context; its cells and values were excluded.",
@@ -194,39 +213,39 @@ function inspectFormulaDependencies(workbook, r) {
         try {
           const cellReference = parseCellReference(address),
             rangeAddress = parseRangeAddress(cellReference);
-          (X.push({
+          (cellReferences.push({
             from: cell.key,
             token: token,
             sheetId: sheetId,
             range: cellReference,
-            kind: oe,
+            kind: referenceKind,
             cellCount:
               (rangeAddress.lastRow - rangeAddress.firstRow + 1) *
               (rangeAddress.lastCol - rangeAddress.firstCol + 1),
           }),
-            !r.includeHidden &&
-              (u
-                .get(de.id)
+            !request.includeHidden &&
+              (hiddenRangesBySheetId
+                .get(referencedSheet.id)
                 .rows.some(
                   (row) =>
                     row.start <= rangeAddress.lastRow &&
                     row.end >= rangeAddress.firstRow,
                 ) ||
-                u
-                  .get(de.id)
+                hiddenRangesBySheetId
+                  .get(referencedSheet.id)
                   .cols.some(
                     (col) =>
                       col.start <= rangeAddress.lastCol &&
                       col.end >= rangeAddress.firstCol,
                   )) &&
-              A(
+              addIssue(
                 cell.key,
                 "excluded",
                 "A referenced range intersects hidden rows or columns; hidden cell details are excluded.",
                 token,
               ));
         } catch {
-          A(
+          addIssue(
             cell.key,
             "missing",
             "The reference is outside Excel's address bounds or is invalid.",
@@ -234,372 +253,463 @@ function inspectFormulaDependencies(workbook, r) {
           );
         }
       },
-      W = (K, te, ae = [], oe) => {
-        if (++J > 64 || ae.length > 16) {
+      expandFormulaText = (
+        formulaText,
+        contextSheetId,
+        nameChain = [],
+        originToken,
+      ) => {
+        if (++expansionCount > 64 || nameChain.length > 16) {
           ((truncated = true),
-            A(
+            addIssue(
               cell.key,
               "limit",
               "The defined-name expansion limit was reached.",
-              oe,
+              originToken,
             ));
           return;
         }
-        let de = K.startsWith("=") ? 1 : 0;
-        const he = new Map();
-        if (/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(K))
+        let scanIndex = formulaText.startsWith("=") ? 1 : 0;
+        const localBindingSpans = new Map();
+        if (/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(formulaText))
           try {
-            walkFormulaNodes(tokenizeFormulaText(K), (Ae, ye, Te, Pe) => {
-              (Pe ||
-                (!Ae.qualifier && ye.has(normalizeBindingName(Ae.name)))) &&
-                he.set(Ae.start, Ae.end);
-            });
+            walkFormulaNodes(
+              tokenizeFormulaText(formulaText),
+              (node, localBindingNames, Te, Pe) => {
+                (Pe ||
+                  (!node.qualifier &&
+                    localBindingNames.has(normalizeBindingName(node.name)))) &&
+                  localBindingSpans.set(node.start, node.end);
+              },
+            );
           } catch {
-            A(
+            addIssue(
               cell.key,
               "unsupported",
               "Invalid LET/LAMBDA bindings prevent complete dependency inspection.",
             );
             return;
           }
-        for (; de < K.length;) {
-          if (he.has(de)) {
-            de = he.get(de);
+        for (; scanIndex < formulaText.length;) {
+          if (localBindingSpans.has(scanIndex)) {
+            scanIndex = localBindingSpans.get(scanIndex);
             continue;
           }
-          if (referencesScanned >= a) {
+          if (referencesScanned >= referenceScanLimit) {
             ((truncated = true),
-              A(
+              addIssue(
                 cell.key,
                 "limit",
                 "The workbook reference scan limit was reached.",
               ));
             return;
           }
-          const Ae = K.slice(de),
-            ye = K[de];
-          if (ye === '"') {
-            de++;
-            let Je = false;
-            for (; de < K.length;)
-              if (K[de++] === '"')
-                if (K[de] === '"') de++;
+          const remainingText = formulaText.slice(scanIndex),
+            currentChar = formulaText[scanIndex];
+          if (currentChar === '"') {
+            scanIndex++;
+            let isTerminated = false;
+            for (; scanIndex < formulaText.length;)
+              if (formulaText[scanIndex++] === '"')
+                if (formulaText[scanIndex] === '"') scanIndex++;
                 else {
-                  Je = true;
+                  isTerminated = true;
                   break;
                 }
-            Je ||
-              A(
+            isTerminated ||
+              addIssue(
                 cell.key,
                 "unsupported",
                 "Unterminated formula text cannot be inspected completely.",
               );
             continue;
           }
-          const Te =
+          const externalMatch =
             /^(?:'(?:[^']|'')*\[[^\]]+\](?:[^']|'')*'\s*!\s*[^+*/(),;\s]+|\[[^\]]+\][^!+*/(),;]*![^+*/(),;\s]+)/.exec(
-              Ae,
+              remainingText,
             );
-          if (Te) {
-            (A(
+          if (externalMatch) {
+            (addIssue(
               cell.key,
               "external",
               "External workbook references are not opened or fetched.",
-              Te[0],
+              externalMatch[0],
             ),
-              (de += Te[0].length));
+              (scanIndex += externalMatch[0].length));
             continue;
           }
-          const Pe = sheetRangeReferencePattern.exec(Ae);
-          if (Pe || /^'(?:[^']|'')*:(?:[^']|'')*'\s*!/.test(Ae)) {
-            const Je = Pe?.[0] ?? /^[^+*/(),;]+/.exec(Ae)[0];
-            (A(
+          const sheetRangeMatch =
+            sheetRangeReferencePattern.exec(remainingText);
+          if (
+            sheetRangeMatch ||
+            /^'(?:[^']|'')*:(?:[^']|'')*'\s*!/.test(remainingText)
+          ) {
+            const sheetRangeText =
+              sheetRangeMatch?.[0] ?? /^[^+*/(),;]+/.exec(remainingText)[0];
+            (addIssue(
               cell.key,
               "unsupported",
               "Three-dimensional worksheet references are not expanded.",
-              Je,
+              sheetRangeText,
             ),
-              (de += Je.length));
+              (scanIndex += sheetRangeText.length));
             continue;
           }
-          const qe = /^#[A-Z0-9/?!]+/i.exec(Ae);
-          if (qe) {
-            (A(
+          const errorMatch = /^#[A-Z0-9/?!]+/i.exec(remainingText);
+          if (errorMatch) {
+            (addIssue(
               cell.key,
-              qe[0].toUpperCase() === "#REF!" ? "missing" : "unsupported",
+              errorMatch[0].toUpperCase() === "#REF!"
+                ? "missing"
+                : "unsupported",
               "The formula contains an error token.",
-              qe[0],
+              errorMatch[0],
             ),
-              (de += qe[0].length));
+              (scanIndex += errorMatch[0].length));
             continue;
           }
-          const ht = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(Ae);
-          if (ht) {
-            const Je = de;
-            de += ht[0].length;
-            let ze = 1;
-            for (; de < K.length && ze;)
-              (K[de] === "[" && ze++, K[de] === "]" && ze--, de++);
-            const at = K.slice(Je, de),
-              _e =
-                !ze &&
-                rewriteStructuredReferences(workbook, te, at, cell.address);
-            _e
-              ? q(_e.sheetId, _e.range, oe ?? at, oe ? "name" : "table")
-              : A(
+          const tableMatch = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(
+            remainingText,
+          );
+          if (tableMatch) {
+            const structuredStart = scanIndex;
+            scanIndex += tableMatch[0].length;
+            let bracketDepth = 1;
+            for (; scanIndex < formulaText.length && bracketDepth;)
+              (formulaText[scanIndex] === "[" && bracketDepth++,
+                formulaText[scanIndex] === "]" && bracketDepth--,
+                scanIndex++);
+            const structuredReferenceText = formulaText.slice(
+                structuredStart,
+                scanIndex,
+              ),
+              resolvedStructuredReference =
+                !bracketDepth &&
+                rewriteStructuredReferences(
+                  workbook,
+                  contextSheetId,
+                  structuredReferenceText,
+                  cell.address,
+                );
+            resolvedStructuredReference
+              ? addReference(
+                  resolvedStructuredReference.sheetId,
+                  resolvedStructuredReference.range,
+                  originToken ?? structuredReferenceText,
+                  originToken ? "name" : "table",
+                )
+              : addIssue(
                   cell.key,
                   "unsupported",
                   "The table, field, or structured-reference form could not be resolved.",
-                  at,
+                  structuredReferenceText,
                 );
             continue;
           }
-          const Re =
+          const sheetQualifiedMatch =
             /^(?:'((?:[^']|'')+)'|([A-Za-z_][A-Za-z0-9_.]*))\s*!\s*([A-Za-z_\\][A-Za-z0-9_.\\]*)/.exec(
-              Ae,
+              remainingText,
             );
-          if (Re && !/^[A-Za-z]{1,3}[1-9]\d*$/i.test(Re[3])) {
-            const Je = (Re[1] ?? Re[2]).replace(/''/g, "'"),
+          if (
+            sheetQualifiedMatch &&
+            !/^[A-Za-z]{1,3}[1-9]\d*$/i.test(sheetQualifiedMatch[3])
+          ) {
+            const qualifiedSheetName = (
+                sheetQualifiedMatch[1] ?? sheetQualifiedMatch[2]
+              ).replace(/''/g, "'"),
               sheet = workbook.sheets.find(
-                (sheet) => sheet.name.toLowerCase() === Je.toLowerCase(),
+                (sheet) =>
+                  sheet.name.toLowerCase() === qualifiedSheetName.toLowerCase(),
               ),
-              at = Re[0],
-              _e = Re[3];
+              qualifiedReferenceText = sheetQualifiedMatch[0],
+              qualifiedName = sheetQualifiedMatch[3];
             if (!sheet)
-              A(
+              addIssue(
                 cell.key,
                 "missing",
                 "The referenced worksheet does not exist.",
-                at,
+                qualifiedReferenceText,
               );
-            else if (!d.has(sheet.id) || (sheet.hidden && !r.includeHidden))
-              A(
+            else if (
+              !allowedSheetIdSet.has(sheet.id) ||
+              (sheet.hidden && !request.includeHidden)
+            )
+              addIssue(
                 cell.key,
                 "excluded",
                 "The defined name belongs to a worksheet outside the selected inspection context.",
               );
             else {
-              const Ze =
+              const qualifiedDefinedName =
                 workbook.definedNames?.find(
                   (definedName) =>
                     definedName.scopeSheetId === sheet.id &&
-                    definedName.name.toLowerCase() === _e.toLowerCase(),
+                    definedName.name.toLowerCase() ===
+                      qualifiedName.toLowerCase(),
                 ) ??
                 workbook.definedNames?.find(
                   (definedName) =>
                     !definedName.scopeSheetId &&
-                    definedName.name.toLowerCase() === _e.toLowerCase(),
+                    definedName.name.toLowerCase() ===
+                      qualifiedName.toLowerCase(),
                 );
-              if (!Ze)
-                A(
+              if (!qualifiedDefinedName)
+                addIssue(
                   cell.key,
                   "missing",
                   "The qualified defined name does not exist.",
-                  at,
+                  qualifiedReferenceText,
                 );
               else {
-                const lt = `${Ze.scopeSheetId ?? ""}:${Ze.name.toLowerCase()}`;
-                ae.includes(lt)
-                  ? A(
+                const nameChainKey = `${qualifiedDefinedName.scopeSheetId ?? ""}:${qualifiedDefinedName.name.toLowerCase()}`;
+                nameChain.includes(nameChainKey)
+                  ? addIssue(
                       cell.key,
-                      parseFormulaTree(Ze.refersTo) ? "dynamic" : "cycle",
+                      parseFormulaTree(qualifiedDefinedName.refersTo)
+                        ? "dynamic"
+                        : "cycle",
                       "The reusable definition recurs; references are shown once.",
-                      at,
+                      qualifiedReferenceText,
                     )
-                  : W(
-                      Ze.refersTo,
-                      Ze.scopeSheetId ?? sheet.id,
-                      [...ae, lt],
-                      oe ?? at,
+                  : expandFormulaText(
+                      qualifiedDefinedName.refersTo,
+                      qualifiedDefinedName.scopeSheetId ?? sheet.id,
+                      [...nameChain, nameChainKey],
+                      originToken ?? qualifiedReferenceText,
                     );
               }
             }
-            de += at.length;
+            scanIndex += qualifiedReferenceText.length;
             continue;
           }
-          const Me = /^([A-Za-z_\\][A-Za-z0-9_.\\]*)\s*\(/.exec(Ae);
-          if (Me) {
-            const Je = Me[1]
+          const functionCallMatch = /^([A-Za-z_\\][A-Za-z0-9_.\\]*)\s*\(/.exec(
+            remainingText,
+          );
+          if (functionCallMatch) {
+            const functionName = functionCallMatch[1]
               .toUpperCase()
               .replace(/^_XLFN\./, "")
               .replace(/^_XLWS\./, "");
-            if (["INDIRECT", "OFFSET"].includes(Je))
-              A(
+            if (["INDIRECT", "OFFSET"].includes(functionName))
+              addIssue(
                 cell.key,
                 "dynamic",
                 "Runtime reference selection is not resolved; static argument references are only potential dependencies.",
-                Me[1],
+                functionCallMatch[1],
               );
-            else if (!knownFunctionNameSet.has(Je)) {
-              const ze =
+            else if (!knownFunctionNameSet.has(functionName)) {
+              const functionDefinedName =
                 workbook.definedNames?.find(
                   (definedName) =>
-                    definedName.scopeSheetId === te &&
-                    definedName.name.toUpperCase() === Je,
+                    definedName.scopeSheetId === contextSheetId &&
+                    definedName.name.toUpperCase() === functionName,
                 ) ??
                 workbook.definedNames?.find(
                   (definedName) =>
                     !definedName.scopeSheetId &&
-                    definedName.name.toUpperCase() === Je,
+                    definedName.name.toUpperCase() === functionName,
                 );
-              if (ze) {
-                const at = `${ze.scopeSheetId ?? ""}:${ze.name.toLowerCase()}`;
-                ae.includes(at)
-                  ? A(
+              if (functionDefinedName) {
+                const functionNameKey = `${functionDefinedName.scopeSheetId ?? ""}:${functionDefinedName.name.toLowerCase()}`;
+                nameChain.includes(functionNameKey)
+                  ? addIssue(
                       cell.key,
-                      parseFormulaTree(ze.refersTo) ? "dynamic" : "cycle",
+                      parseFormulaTree(functionDefinedName.refersTo)
+                        ? "dynamic"
+                        : "cycle",
                       "Recursive reusable formula: static references are shown once; execution depth is bounded by calculation.",
-                      Me[1],
+                      functionCallMatch[1],
                     )
-                  : W(
-                      ze.refersTo,
-                      ze.scopeSheetId ?? te,
-                      [...ae, at],
-                      oe ?? Me[1],
+                  : expandFormulaText(
+                      functionDefinedName.refersTo,
+                      functionDefinedName.scopeSheetId ?? contextSheetId,
+                      [...nameChain, functionNameKey],
+                      originToken ?? functionCallMatch[1],
                     );
               } else
-                A(
+                addIssue(
                   cell.key,
                   "unsupported",
                   "The function is outside the local supported catalog; its static references may be incomplete.",
-                  Me[1],
+                  functionCallMatch[1],
                 );
             }
-            de += Me[0].length;
+            scanIndex += functionCallMatch[0].length;
             continue;
           }
-          const ke = singleRangeReferencePattern.exec(Ae);
-          if (ke && !/[A-Za-z0-9_.!:]/.test(Ae[ke[0].length] ?? "")) {
-            const Je = ke[1]?.trim().replace(/!\s*$/, "").trim(),
-              ze = Je?.replace(/^'|'$/g, "").replace(/''/g, "'"),
-              at =
-                ze === undefined
-                  ? s.get(te)
+          const singleRangeMatch =
+            singleRangeReferencePattern.exec(remainingText);
+          if (
+            singleRangeMatch &&
+            !/[A-Za-z0-9_.!:]/.test(
+              remainingText[singleRangeMatch[0].length] ?? "",
+            )
+          ) {
+            const sheetPrefix = singleRangeMatch[1]
+                ?.trim()
+                .replace(/!\s*$/, "")
+                .trim(),
+              unquotedSheetName = sheetPrefix
+                ?.replace(/^'|'$/g, "")
+                .replace(/''/g, "'"),
+              targetSheet =
+                unquotedSheetName === undefined
+                  ? sheetsById.get(contextSheetId)
                   : workbook.sheets.find(
-                      (sheet) => sheet.name.toLowerCase() === ze.toLowerCase(),
+                      (sheet) =>
+                        sheet.name.toLowerCase() ===
+                        unquotedSheetName.toLowerCase(),
                     );
-            (at
-              ? q(
-                  at.id,
-                  ke[2],
-                  oe ?? ke[0],
-                  oe ? "name" : ke[3] ? "spill-anchor" : "a1",
+            (targetSheet
+              ? addReference(
+                  targetSheet.id,
+                  singleRangeMatch[2],
+                  originToken ?? singleRangeMatch[0],
+                  originToken
+                    ? "name"
+                    : singleRangeMatch[3]
+                      ? "spill-anchor"
+                      : "a1",
                 )
-              : A(
+              : addIssue(
                   cell.key,
                   "missing",
                   "The referenced worksheet does not exist.",
-                  ke[0],
+                  singleRangeMatch[0],
                 ),
-              ke[3] &&
-                A(
+              singleRangeMatch[3] &&
+                addIssue(
                   cell.key,
                   "dynamic",
                   "Only the spill anchor is included; runtime spill output dependencies are not expanded.",
-                  ke[0],
+                  singleRangeMatch[0],
                 ),
-              (de += ke[0].length));
+              (scanIndex += singleRangeMatch[0].length));
             continue;
           }
-          const je = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(Ae);
-          if (je) {
-            de += je[0].length;
+          const numberMatch = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(
+            remainingText,
+          );
+          if (numberMatch) {
+            scanIndex += numberMatch[0].length;
             continue;
           }
-          const $e = bareSheetNamePattern.exec(Ae);
-          if ($e) {
-            const Je = $e[0],
-              ze = Ae.slice(Je.length);
-            if (/^\s*!/.test(ze)) {
-              const _e = /^[^+*/(),;\s]+/.exec(Ae)[0];
-              (A(
+          const bareSheetMatch = bareSheetNamePattern.exec(remainingText);
+          if (bareSheetMatch) {
+            const bareSheetName = bareSheetMatch[0],
+              textAfterSheetName = remainingText.slice(bareSheetName.length);
+            if (/^\s*!/.test(textAfterSheetName)) {
+              const sheetQualifiedNameText = /^[^+*/(),;\s]+/.exec(
+                remainingText,
+              )[0];
+              (addIssue(
                 cell.key,
                 "unsupported",
                 "Worksheet-qualified defined names are not resolved by this inspector.",
-                _e,
+                sheetQualifiedNameText,
               ),
-                (de += _e.length));
+                (scanIndex += sheetQualifiedNameText.length));
               continue;
             }
-            const at =
+            const bareDefinedName =
               workbook.definedNames?.find(
                 (definedName) =>
-                  definedName.scopeSheetId === te &&
-                  definedName.name.toLowerCase() === Je.toLowerCase(),
+                  definedName.scopeSheetId === contextSheetId &&
+                  definedName.name.toLowerCase() ===
+                    bareSheetName.toLowerCase(),
               ) ??
               workbook.definedNames?.find(
                 (definedName) =>
                   !definedName.scopeSheetId &&
-                  definedName.name.toLowerCase() === Je.toLowerCase(),
+                  definedName.name.toLowerCase() ===
+                    bareSheetName.toLowerCase(),
               );
-            if (at) {
-              const _e = `${at.scopeSheetId ?? ""}:${at.name.toLowerCase()}`;
-              ae.includes(_e)
-                ? A(
+            if (bareDefinedName) {
+              const bareNameKey = `${bareDefinedName.scopeSheetId ?? ""}:${bareDefinedName.name.toLowerCase()}`;
+              nameChain.includes(bareNameKey)
+                ? addIssue(
                     cell.key,
                     "cycle",
                     "Defined names contain a circular reference.",
-                    Je,
+                    bareSheetName,
                   )
-                : W(at.refersTo, at.scopeSheetId ?? te, [...ae, _e], oe ?? Je);
+                : expandFormulaText(
+                    bareDefinedName.refersTo,
+                    bareDefinedName.scopeSheetId ?? contextSheetId,
+                    [...nameChain, bareNameKey],
+                    originToken ?? bareSheetName,
+                  );
             } else
-              ["TRUE", "FALSE"].includes(Je.toUpperCase()) ||
-                A(
+              ["TRUE", "FALSE"].includes(bareSheetName.toUpperCase()) ||
+                addIssue(
                   cell.key,
                   "missing",
                   "The identifier is not a defined name or supported reference.",
-                  Je,
+                  bareSheetName,
                 );
-            de += Je.length;
+            scanIndex += bareSheetName.length;
             continue;
           }
-          ((ye === "'" ||
-            ye === "!" ||
-            ye === "[" ||
-            ye === "]" ||
-            ye === "@" ||
-            ye === "|") &&
-            A(
+          ((currentChar === "'" ||
+            currentChar === "!" ||
+            currentChar === "[" ||
+            currentChar === "]" ||
+            currentChar === "@" ||
+            currentChar === "|") &&
+            addIssue(
               cell.key,
               "unsupported",
               "The reference syntax is outside the inspected subset.",
-              ye,
+              currentChar,
             ),
-            de++);
+            scanIndex++);
         }
       };
-    (W(cell.raw, cell.sheet.id), m.push(...X));
+    (expandFormulaText(cell.raw, cell.sheet.id),
+      references.push(...cellReferences));
   }
-  const I = new Map([
+  const graphNodes = new Map([
       [compositeKey, { sheet: sheet, address: cellReference, depth: 0 }],
     ]),
-    O = new Map();
-  let j = [compositeKey];
-  const z = (sheet, address, depth, from, W) => {
-    if (!l(sheet, address)) return;
+    edgesByKey = new Map();
+  let frontierKeys = [compositeKey];
+  const addDependencyEdge = (sheet, address, depth, from, toKey) => {
+    if (!isCellVisible(sheet, address)) return;
     const compositeKey = buildCompositeKey(sheet.id, address);
-    if (!I.has(compositeKey)) {
-      if (I.size - 1 >= o) {
+    if (!graphNodes.has(compositeKey)) {
+      if (graphNodes.size - 1 >= resultCellLimit) {
         truncated = true;
         return;
       }
-      I.set(compositeKey, { sheet: sheet, address: address, depth: depth });
+      graphNodes.set(compositeKey, {
+        sheet: sheet,
+        address: address,
+        depth: depth,
+      });
     }
-    O.set(JSON.stringify([from, W]), { from: from, to: W });
+    edgesByKey.set(JSON.stringify([from, toKey]), { from: from, to: toKey });
   };
-  for (let Q = 1; Q <= depth && j.length; Q++) {
-    const X = new Set(I.keys());
-    for (const J of j) {
-      const q = I.get(J);
-      if (r.direction === "precedents") {
-        isFormulaInputValue(q.sheet.cells[q.address]) &&
-          !v.has(J) &&
+  for (
+    let traversalLevel = 1;
+    traversalLevel <= depth && frontierKeys.length;
+    traversalLevel++
+  ) {
+    const previousNodeKeys = new Set(graphNodes.keys());
+    for (const frontierKey of frontierKeys) {
+      const frontierNode = graphNodes.get(frontierKey);
+      if (request.direction === "precedents") {
+        isFormulaInputValue(frontierNode.sheet.cells[frontierNode.address]) &&
+          !referencesByCellKey.has(frontierKey) &&
           ((truncated = true),
-          A(J, "limit", "This formula was outside the formula scan budget."));
-        for (const W of v.get(J) ?? []) {
-          const rangeAddress = parseRangeAddress(W.range),
-            te = s.get(W.sheetId);
-          let ae = 0;
+          addIssue(
+            frontierKey,
+            "limit",
+            "This formula was outside the formula scan budget.",
+          ));
+        for (const reference of referencesByCellKey.get(frontierKey) ?? []) {
+          const rangeAddress = parseRangeAddress(reference.range),
+            referenceSheet = sheetsById.get(reference.sheetId);
+          let expandedCellCount = 0;
           e: for (
             let firstRow = rangeAddress.firstRow;
             firstRow <= rangeAddress.lastRow;
@@ -610,77 +720,114 @@ function inspectFormulaDependencies(workbook, r) {
               firstCol <= rangeAddress.lastCol;
               firstCol++
             ) {
-              if (++ae > o + 1 || I.size - 1 >= o) {
+              if (
+                ++expandedCellCount > resultCellLimit + 1 ||
+                graphNodes.size - 1 >= resultCellLimit
+              ) {
                 truncated = true;
                 break e;
               }
               const cellAddress = formatCellAddress(firstRow, firstCol);
-              z(te, cellAddress, Q, J, buildCompositeKey(te.id, cellAddress));
+              addDependencyEdge(
+                referenceSheet,
+                cellAddress,
+                traversalLevel,
+                frontierKey,
+                buildCompositeKey(referenceSheet.id, cellAddress),
+              );
             }
         }
       } else {
-        const W = _t(q.address);
-        for (const K of F)
-          (v.get(K.key) ?? []).some((te) => {
-            const rangeAddress = parseRangeAddress(te.range);
-            return (
-              te.sheetId === q.sheet.id &&
-              W.row >= rangeAddress.firstRow &&
-              W.row <= rangeAddress.lastRow &&
-              W.col >= rangeAddress.firstCol &&
-              W.col <= rangeAddress.lastCol
+        const dependentPosition = _t(frontierNode.address);
+        for (const formulaCell of scannedFormulaCells)
+          (referencesByCellKey.get(formulaCell.key) ?? []).some(
+            (candidateReference) => {
+              const rangeAddress = parseRangeAddress(candidateReference.range);
+              return (
+                candidateReference.sheetId === frontierNode.sheet.id &&
+                dependentPosition.row >= rangeAddress.firstRow &&
+                dependentPosition.row <= rangeAddress.lastRow &&
+                dependentPosition.col >= rangeAddress.firstCol &&
+                dependentPosition.col <= rangeAddress.lastCol
+              );
+            },
+          ) &&
+            addDependencyEdge(
+              formulaCell.sheet,
+              formulaCell.address,
+              traversalLevel,
+              formulaCell.key,
+              frontierKey,
             );
-          }) && z(K.sheet, K.address, Q, K.key, J);
       }
     }
-    j = [...I.keys()].filter((J) => !X.has(J));
+    frontierKeys = [...graphNodes.keys()].filter(
+      (newNodeKey) => !previousNodeKeys.has(newNodeKey),
+    );
   }
-  for (const Q of j) {
-    const X = I.get(Q);
-    (r.direction === "precedents"
-      ? isFormulaInputValue(X.sheet.cells[X.address]) &&
-        ((v.get(Q)?.length ?? 0) > 0 || !v.has(Q))
-      : m.some((J) => {
-          const q = _t(X.address),
-            rangeAddress = parseRangeAddress(J.range);
+  for (const terminalNodeKey of frontierKeys) {
+    const terminalNode = graphNodes.get(terminalNodeKey);
+    (request.direction === "precedents"
+      ? isFormulaInputValue(terminalNode.sheet.cells[terminalNode.address]) &&
+        ((referencesByCellKey.get(terminalNodeKey)?.length ?? 0) > 0 ||
+          !referencesByCellKey.has(terminalNodeKey))
+      : references.some((referenceRecord) => {
+          const nodePosition = _t(terminalNode.address),
+            rangeAddress = parseRangeAddress(referenceRecord.range);
           return (
-            J.sheetId === X.sheet.id &&
-            q.row >= rangeAddress.firstRow &&
-            q.row <= rangeAddress.lastRow &&
-            q.col >= rangeAddress.firstCol &&
-            q.col <= rangeAddress.lastCol
+            referenceRecord.sheetId === terminalNode.sheet.id &&
+            nodePosition.row >= rangeAddress.firstRow &&
+            nodePosition.row <= rangeAddress.lastRow &&
+            nodePosition.col >= rangeAddress.firstCol &&
+            nodePosition.col <= rangeAddress.lastCol
           );
         })) && (depthLimited = true);
   }
-  const edges = [...O.values()],
+  const edges = [...edgesByKey.values()],
     cycles = [],
-    B = new Map(),
-    _ = (Q, X) => {
-      if (B.get(Q) === 1) {
-        const J = [...X.slice(X.indexOf(Q)), Q];
-        cycles.length < 50 && cycles.push(J);
+    visitState = new Map(),
+    visitNode = (currentNodeKey, visitPath) => {
+      if (visitState.get(currentNodeKey) === 1) {
+        const cyclePath = [
+          ...visitPath.slice(visitPath.indexOf(currentNodeKey)),
+          currentNodeKey,
+        ];
+        cycles.length < 50 && cycles.push(cyclePath);
         return;
       }
-      if (!(B.get(Q) === 2 || X.length > 1e3)) {
-        B.set(Q, 1);
-        for (const edge of edges) edge.from === Q && _(edge.to, [...X, Q]);
-        B.set(Q, 2);
+      if (!(visitState.get(currentNodeKey) === 2 || visitPath.length > 1e3)) {
+        visitState.set(currentNodeKey, 1);
+        for (const edge of edges)
+          edge.from === currentNodeKey &&
+            visitNode(edge.to, [...visitPath, currentNodeKey]);
+        visitState.set(currentNodeKey, 2);
       }
     };
-  for (const Q of I.keys()) _(Q, []);
-  for (const cycle of cycles) for (const X of cycle) g.add(X);
-  const C = (Q, X = new Set(), J = { cells: 0 }) => {
-      if (X.has(Q) || X.size >= 32 || ++J.cells > 2e3 || g.has(Q)) return false;
-      const [q, W] = JSON.parse(Q),
-        K = s.get(q);
-      if (!l(K, W)) return false;
-      if (!isFormulaInputValue(K.cells[W])) return true;
-      const te = v.get(Q);
-      if (!te) return false;
-      const ae = new Set(X).add(Q);
-      for (const oe of te) {
-        if (oe.cellCount > 2e3) return false;
-        const rangeAddress = parseRangeAddress(oe.range);
+  for (const graphNodeKey of graphNodes.keys()) visitNode(graphNodeKey, []);
+  for (const cycle of cycles)
+    for (const cycleNodeKey of cycle) blockedCellKeys.add(cycleNodeKey);
+  const canResolveStatically = (
+      cellKey,
+      ancestorKeys = new Set(),
+      budget = { cells: 0 },
+    ) => {
+      if (
+        ancestorKeys.has(cellKey) ||
+        ancestorKeys.size >= 32 ||
+        ++budget.cells > 2e3 ||
+        blockedCellKeys.has(cellKey)
+      )
+        return false;
+      const [keySheetId, keyAddress] = JSON.parse(cellKey),
+        keySheet = sheetsById.get(keySheetId);
+      if (!isCellVisible(keySheet, keyAddress)) return false;
+      if (!isFormulaInputValue(keySheet.cells[keyAddress])) return true;
+      const keyReferences = referencesByCellKey.get(cellKey);
+      if (!keyReferences) return false;
+      const nextAncestorKeys = new Set(ancestorKeys).add(cellKey);
+      for (const keyReference of keyReferences) {
+        if (keyReference.cellCount > 2e3) return false;
+        const rangeAddress = parseRangeAddress(keyReference.range);
         for (
           let firstRow = rangeAddress.firstRow;
           firstRow <= rangeAddress.lastRow;
@@ -692,53 +839,57 @@ function inspectFormulaDependencies(workbook, r) {
             firstCol++
           )
             if (
-              !C(
+              !canResolveStatically(
                 buildCompositeKey(
-                  oe.sheetId,
+                  keyReference.sheetId,
                   formatCellAddress(firstRow, firstCol),
                 ),
-                ae,
-                J,
+                nextAncestorKeys,
+                budget,
               )
             )
               return false;
       }
       return true;
     },
-    T = {
+    inspectionWorkbook = {
       ...workbook,
       sheets: workbook.sheets
         .filter(
-          (sheet) => d.has(sheet.id) && (r.includeHidden || !sheet.hidden),
+          (sheet) =>
+            allowedSheetIdSet.has(sheet.id) &&
+            (request.includeHidden || !sheet.hidden),
         )
-        .map((Q) => ({
-          ...Q,
+        .map((inspectionSheet) => ({
+          ...inspectionSheet,
           cells: Object.fromEntries(
-            Object.entries(Q.cells).filter(([X]) => l(Q, X)),
+            Object.entries(inspectionSheet.cells).filter(([entryAddress]) =>
+              isCellVisible(inspectionSheet, entryAddress),
+            ),
           ),
         })),
     },
-    workbookWithSettings = calculateWorkbookWithSettings(T),
-    R = (Q) => {
-      const X = I.get(Q),
-        cell = X.sheet.cells[X.address],
-        q = {
-          key: Q,
-          sheetId: X.sheet.id,
-          sheetName: X.sheet.name,
-          address: X.address,
+    workbookWithSettings = calculateWorkbookWithSettings(inspectionWorkbook),
+    describeNode = (describedNodeKey) => {
+      const graphNode = graphNodes.get(describedNodeKey),
+        cell = graphNode.sheet.cells[graphNode.address],
+        nodeSummary = {
+          key: describedNodeKey,
+          sheetId: graphNode.sheet.id,
+          sheetName: graphNode.sheet.name,
+          address: graphNode.address,
           raw: cell?.raw ?? null,
-          depth: X.depth,
+          depth: graphNode.depth,
         };
       if (!isFormulaInputValue(cell))
         return {
-          ...q,
+          ...nodeSummary,
           result: cell?.raw ?? null,
           resultStatus: "literal",
         };
-      if (!C(Q))
+      if (!canResolveStatically(describedNodeKey))
         return {
-          ...q,
+          ...nodeSummary,
           result: null,
           resultStatus: "unavailable",
           resultNote:
@@ -746,13 +897,13 @@ function inspectFormulaDependencies(workbook, r) {
         };
       try {
         return {
-          ...q,
-          result: workbookWithSettings(X.sheet.id, X.address),
+          ...nodeSummary,
+          result: workbookWithSettings(graphNode.sheet.id, graphNode.address),
           resultStatus: "calculated",
         };
       } catch {
         return {
-          ...q,
+          ...nodeSummary,
           result: null,
           resultStatus: "unavailable",
           resultNote: "The local calculator could not evaluate this cell.",
@@ -786,17 +937,21 @@ function inspectFormulaDependencies(workbook, r) {
     {
       workbookId: workbook.id,
       revision: workbook.revision,
-      direction: r.direction,
+      direction: request.direction,
       depth: depth,
-      target: R(compositeKey),
-      nodes: [...I.keys()].filter((Q) => Q !== compositeKey).map(R),
+      target: describeNode(compositeKey),
+      nodes: [...graphNodes.keys()]
+        .filter((nodeKey) => nodeKey !== compositeKey)
+        .map(describeNode),
       edges: edges,
-      references: m.filter((Q) => I.has(Q.from)),
+      references: references.filter((referenceEntry) =>
+        graphNodes.has(referenceEntry.from),
+      ),
       issues: issues,
       cycles: cycles,
       coverage: {
-        formulaCellsAvailable: k.length,
-        formulaCellsScanned: F.length,
+        formulaCellsAvailable: formulaCells.length,
+        formulaCellsScanned: scannedFormulaCells.length,
         referencesScanned: referencesScanned,
         excludedCells: excludedCells,
         truncated: truncated,
@@ -817,7 +972,7 @@ const fuzzyMatchLimits = Object.freeze({
   comparisonWork: 1e7,
   matchPairs: 1e3,
 });
-function parseKeyNormalization(normalization, fuzzy, t) {
+function parseKeyNormalization(normalization, fuzzy, keyCount) {
   if (
     normalization !== undefined &&
     (!hasOnlyAllowedKeys(normalization, [
@@ -830,7 +985,7 @@ function parseKeyNormalization(normalization, fuzzy, t) {
         normalization.trim,
         normalization.collapseWhitespace,
         normalization.ignoreCase,
-      ].some((n) => n !== undefined && typeof n != "boolean") ||
+      ].some((option) => option !== undefined && typeof option != "boolean") ||
       (normalization.unicode !== undefined &&
         !["NFC", "NFKC"].includes(normalization.unicode)))
   )
@@ -840,7 +995,7 @@ function parseKeyNormalization(normalization, fuzzy, t) {
     (!hasOnlyAllowedKeys(fuzzy, ["key", "threshold"]) ||
       !Number.isInteger(fuzzy.key) ||
       fuzzy.key < 0 ||
-      fuzzy.key >= t ||
+      fuzzy.key >= keyCount ||
       typeof fuzzy.threshold != "number" ||
       !Number.isFinite(fuzzy.threshold) ||
       fuzzy.threshold < 0 ||
@@ -854,19 +1009,30 @@ function parseKeyNormalization(normalization, fuzzy, t) {
     ...(fuzzy ? { fuzzy: { ...fuzzy } } : {}),
   };
 }
-function normalizeKeyText(e, normalization = {}) {
-  if (typeof e != "string") return e;
-  let t = normalization.unicode ? e.normalize(normalization.unicode) : e;
+function normalizeKeyText(text, normalization = {}) {
+  if (typeof text != "string") return text;
+  let normalizedText = normalization.unicode
+    ? text.normalize(normalization.unicode)
+    : text;
   return (
-    normalization.collapseWhitespace && (t = t.replace(/\s+/gu, " ")),
-    normalization.trim && (t = t.trim()),
-    normalization.ignoreCase && (t = t.toLocaleLowerCase("en-US")),
-    t
+    normalization.collapseWhitespace &&
+      (normalizedText = normalizedText.replace(/\s+/gu, " ")),
+    normalization.trim && (normalizedText = normalizedText.trim()),
+    normalization.ignoreCase &&
+      (normalizedText = normalizedText.toLocaleLowerCase("en-US")),
+    normalizedText
   );
 }
 
-function matchKeyPopulations(records, r, t, n, normalization, fuzzy) {
-  parseKeyNormalization(normalization, fuzzy, t.length);
+function matchKeyPopulations(
+  records,
+  rightRecords,
+  leftKeyColumns,
+  rightKeyColumns,
+  normalization,
+  fuzzy,
+) {
+  parseKeyNormalization(normalization, fuzzy, leftKeyColumns.length);
   const diagnostics = {
     policy: fuzzy
       ? `Normalized Unicode code-point Levenshtein similarity: 1 - edit distance / maximum text length. Fuzzy key ${fuzzy.key + 1}; inclusive threshold ${fuzzy.threshold}. Other keys compare typed values exactly after selected text normalization. All qualifying matches are retained; scores are not probabilities or Power Query equivalents.`
@@ -879,37 +1045,46 @@ function matchKeyPopulations(records, r, t, n, normalization, fuzzy) {
     normalizationCollisionGroups: { left: 0, right: 0 },
     comparisonWork: 0,
   };
-  let d = 0;
-  const u = (C, T, side) =>
-      C.map((record) => {
-        const original = T.map((X) => record.values[X]),
-          $ = original.map((X) => normalizeKeyText(X, normalization));
+  let totalKeyCharacters = 0;
+  const buildKeyedRecords = (sourceRecords, keyColumns, side) =>
+      sourceRecords.map((record) => {
+        const original = keyColumns.map(
+            (keyColumn) => record.values[keyColumn],
+          ),
+          normalizedValues = original.map((originalValue) =>
+            normalizeKeyText(originalValue, normalization),
+          );
         if (
-          ((d += $.reduce(
-            (X, J) => X + (typeof J == "string" ? J.length : 0),
+          ((totalKeyCharacters += normalizedValues.reduce(
+            (total, normalizedValue) =>
+              total +
+              (typeof normalizedValue == "string" ? normalizedValue.length : 0),
             0,
           )),
-          d > 2e6)
+          totalKeyCharacters > 2e6)
         )
           throw Error("Normalized key text exceeds 2,000,000 characters.");
-        serializeTypedKeyValues(original) !== serializeTypedKeyValues($) &&
+        serializeTypedKeyValues(original) !==
+          serializeTypedKeyValues(normalizedValues) &&
           diagnostics.normalizedKeys.push({
             side: side,
             locator: record.locator,
             original: original,
-            normalized: $,
+            normalized: normalizedValues,
           });
-        const isBlank = $.some(isNullOrEmptyValue),
-          G = fuzzy ? $[fuzzy.key] : undefined,
-          H = !!fuzzy && !isBlank && typeof G != "string";
-        H &&
+        const isBlank = normalizedValues.some(isNullOrEmptyValue),
+          fuzzyKeyValue = fuzzy ? normalizedValues[fuzzy.key] : undefined,
+          isNonTextFuzzyKey =
+            !!fuzzy && !isBlank && typeof fuzzyKeyValue != "string";
+        isNonTextFuzzyKey &&
           diagnostics.exceptions.push({
             side: side,
             locator: record.locator,
             reason:
               "Fuzzy matching requires text in the selected key. This record is unmatched; no numeric or Boolean coercion was applied.",
           });
-        const chars = typeof G == "string" ? Array.from(G) : [];
+        const chars =
+          typeof fuzzyKeyValue == "string" ? Array.from(fuzzyKeyValue) : [];
         if (fuzzy && chars.length > fuzzyMatchLimits.fuzzyCharacters)
           throw Error(
             "Fuzzy keys are limited to 512 Unicode characters. Shorten the reviewed key or use exact matching.",
@@ -917,87 +1092,148 @@ function matchKeyPopulations(records, r, t, n, normalization, fuzzy) {
         return {
           record: record,
           original: original,
-          values: $,
-          valid: !isBlank && !H,
+          values: normalizedValues,
+          valid: !isBlank && !isNonTextFuzzyKey,
           isBlank: isBlank,
-          key: serializeTypedKeyValues($),
-          block: serializeTypedKeyValues($.filter((X, J) => J !== fuzzy?.key)),
+          key: serializeTypedKeyValues(normalizedValues),
+          block: serializeTypedKeyValues(
+            normalizedValues.filter(
+              (X, valueIndex) => valueIndex !== fuzzy?.key,
+            ),
+          ),
           chars: chars,
         };
       }),
-    l = u(records, t, "left"),
-    c = u(r, n, "right"),
-    h = (C, T) => {
-      const N = new Map();
-      for (const R of C)
-        R.isBlank || N.set(R.key, [...(N.get(R.key) ?? []), R]);
+    leftKeyedRecords = buildKeyedRecords(records, leftKeyColumns, "left"),
+    rightKeyedRecords = buildKeyedRecords(
+      rightRecords,
+      rightKeyColumns,
+      "right",
+    ),
+    groupByKey = (keyedRecords, sideName) => {
+      const groupsByKey = new Map();
+      for (const keyedRecord of keyedRecords)
+        keyedRecord.isBlank ||
+          groupsByKey.set(keyedRecord.key, [
+            ...(groupsByKey.get(keyedRecord.key) ?? []),
+            keyedRecord,
+          ]);
       return (
-        (diagnostics.normalizationCollisionGroups[T] = [...N.values()].filter(
-          (R) =>
-            new Set(R.map((L) => serializeTypedKeyValues(L.original))).size > 1,
+        (diagnostics.normalizationCollisionGroups[sideName] = [
+          ...groupsByKey.values(),
+        ].filter(
+          (keyGroup) =>
+            new Set(
+              keyGroup.map((groupMember) =>
+                serializeTypedKeyValues(groupMember.original),
+              ),
+            ).size > 1,
         ).length),
-        N
+        groupsByKey
       );
     },
-    f = h(l, "left"),
-    p = h(c, "right"),
+    leftKeyGroups = groupByKey(leftKeyedRecords, "left"),
+    rightKeyGroups = groupByKey(rightKeyedRecords, "right"),
     byLeft = new Map(),
-    v = new Map(),
-    g = new Map(),
-    b = new Map(),
-    y = (C) => {
+    rightMatchCounts = new Map(),
+    bestLeftScores = new Map(),
+    bestRightScores = new Map(),
+    addComparisonWork = (workUnits) => {
       if (
-        ((diagnostics.comparisonWork += C),
+        ((diagnostics.comparisonWork += workUnits),
         diagnostics.comparisonWork > fuzzyMatchLimits.comparisonWork)
       )
         throw Error(
           "Fuzzy comparison exceeds 10,000,000 work units. Narrow the populations or add an exact key before previewing.",
         );
     };
-  function w(C, T) {
-    if ((y(C.length + T.length + 1), C.join("") === T.join(""))) return 1;
-    y(C.length * T.length);
-    let N = Array.from({ length: T.length + 1 }, (R, L) => L);
-    for (let R = 1; R <= C.length; R++) {
-      const L = [R];
-      for (let $ = 1; $ <= T.length; $++)
-        L[$] = Math.min(
-          N[$] + 1,
-          L[$ - 1] + 1,
-          N[$ - 1] + (C[R - 1] === T[$ - 1] ? 0 : 1),
+  function textSimilarity(leftChars, rightChars) {
+    if (
+      (addComparisonWork(leftChars.length + rightChars.length + 1),
+      leftChars.join("") === rightChars.join(""))
+    )
+      return 1;
+    addComparisonWork(leftChars.length * rightChars.length);
+    let previousRow = Array.from(
+      { length: rightChars.length + 1 },
+      (R, columnIndex) => columnIndex,
+    );
+    for (
+      let leftPosition = 1;
+      leftPosition <= leftChars.length;
+      leftPosition++
+    ) {
+      const currentRow = [leftPosition];
+      for (
+        let rightPosition = 1;
+        rightPosition <= rightChars.length;
+        rightPosition++
+      )
+        currentRow[rightPosition] = Math.min(
+          previousRow[rightPosition] + 1,
+          currentRow[rightPosition - 1] + 1,
+          previousRow[rightPosition - 1] +
+            (leftChars[leftPosition - 1] === rightChars[rightPosition - 1]
+              ? 0
+              : 1),
         );
-      N = L;
+      previousRow = currentRow;
     }
-    return 1 - N[T.length] / Math.max(C.length, T.length);
+    return (
+      1 -
+      previousRow[rightChars.length] /
+        Math.max(leftChars.length, rightChars.length)
+    );
   }
-  const E = new Map();
-  for (const C of c)
-    if (C.valid) {
-      const T = fuzzy ? C.block : C.key;
-      E.set(T, [...(E.get(T) ?? []), C]);
+  const rightRecordsByKey = new Map();
+  for (const rightKeyedRecord of rightKeyedRecords)
+    if (rightKeyedRecord.valid) {
+      const joinKey = fuzzy ? rightKeyedRecord.block : rightKeyedRecord.key;
+      rightRecordsByKey.set(joinKey, [
+        ...(rightRecordsByKey.get(joinKey) ?? []),
+        rightKeyedRecord,
+      ]);
     }
-  for (const C of l) {
-    if (!C.valid) continue;
-    const T = E.get(fuzzy ? C.block : C.key) ?? [];
-    for (const N of T) {
-      const score = fuzzy ? w(C.chars, N.chars) : 1;
+  for (const leftKeyedRecord of leftKeyedRecords) {
+    if (!leftKeyedRecord.valid) continue;
+    const candidates =
+      rightRecordsByKey.get(
+        fuzzy ? leftKeyedRecord.block : leftKeyedRecord.key,
+      ) ?? [];
+    for (const candidate of candidates) {
+      const score = fuzzy
+        ? textSimilarity(leftKeyedRecord.chars, candidate.chars)
+        : 1;
       if (
-        (g.set(C.record.row, Math.max(g.get(C.record.row) ?? -1, score)),
-        b.set(N.record.row, Math.max(b.get(N.record.row) ?? -1, score)),
+        (bestLeftScores.set(
+          leftKeyedRecord.record.row,
+          Math.max(bestLeftScores.get(leftKeyedRecord.record.row) ?? -1, score),
+        ),
+        bestRightScores.set(
+          candidate.record.row,
+          Math.max(bestRightScores.get(candidate.record.row) ?? -1, score),
+        ),
         fuzzy && score < fuzzy.threshold)
       )
         continue;
       const explanation = fuzzy
           ? `Text similarity ${score.toFixed(6)} meets threshold ${fuzzy.threshold}; other key pairs match exactly after selected normalization.`
           : "Exact typed keys match after selected normalization.",
-        $ = byLeft.get(C.record.row) ?? [];
+        existingMatches = byLeft.get(leftKeyedRecord.record.row) ?? [];
       if (
-        ($.push({ record: N.record, score: score, explanation: explanation }),
-        byLeft.set(C.record.row, $),
-        v.set(N.record.row, (v.get(N.record.row) ?? 0) + 1),
+        (existingMatches.push({
+          record: candidate.record,
+          score: score,
+          explanation: explanation,
+        }),
+        byLeft.set(leftKeyedRecord.record.row, existingMatches),
+        rightMatchCounts.set(
+          candidate.record.row,
+          (rightMatchCounts.get(candidate.record.row) ?? 0) + 1,
+        ),
         diagnostics.matches.push({
-          left: C.record.locator,
-          right: N.record.locator,
+          left: leftKeyedRecord.record.locator,
+          right: candidate.record.locator,
           score: score,
           explanation: explanation,
         }),
@@ -1009,91 +1245,127 @@ function matchKeyPopulations(records, r, t, n, normalization, fuzzy) {
     }
   }
   ((diagnostics.ambiguousLeftRows = [...byLeft.values()].filter(
-    (C) => C.length > 1,
+    (leftMatches) => leftMatches.length > 1,
   ).length),
-    (diagnostics.ambiguousRightRows = [...v.values()].filter(
-      (C) => C > 1,
+    (diagnostics.ambiguousRightRows = [...rightMatchCounts.values()].filter(
+      (rightMatchCount) => rightMatchCount > 1,
     ).length));
-  const A = (C) => JSON.stringify(C.map((T) => String(T))),
-    k = new Set(l.filter((C) => C.valid).map((C) => A(C.values))),
-    F = new Set(c.filter((C) => C.valid).map((C) => A(C.values))),
-    I = (C, T, N) =>
-      C.isBlank
+  const serializeDisplayedKey = (keyValues) =>
+      JSON.stringify(keyValues.map((keyValue) => String(keyValue))),
+    leftDisplayedKeys = new Set(
+      leftKeyedRecords
+        .filter((leftKeyed) => leftKeyed.valid)
+        .map((keyedLeft) => serializeDisplayedKey(keyedLeft.values)),
+    ),
+    rightDisplayedKeys = new Set(
+      rightKeyedRecords
+        .filter((rightKeyed) => rightKeyed.valid)
+        .map((keyedRight) => serializeDisplayedKey(keyedRight.values)),
+    ),
+    explainUnmatched = (keyedEntry, bestScore, displayedKeys) =>
+      keyedEntry.isBlank
         ? "Blank join key; blanks do not match."
-        : C.valid
+        : keyedEntry.valid
           ? fuzzy
-            ? T === undefined
+            ? bestScore === undefined
               ? "No eligible text candidate with matching exact keys."
-              : `Best eligible similarity ${T.toFixed(6)} is below threshold ${fuzzy.threshold}.`
-            : N.has(A(C.values))
+              : `Best eligible similarity ${bestScore.toFixed(6)} is below threshold ${fuzzy.threshold}.`
+            : displayedKeys.has(serializeDisplayedKey(keyedEntry.values))
               ? "No exact typed composite-key match; equivalent displayed keys have mismatched types. No coercion was applied."
               : "No exact typed composite-key match."
           : "Non-text fuzzy key; no implicit type conversion.",
-    unmatchedLeft = l
-      .filter((C) => !byLeft.has(C.record.row))
-      .map((C) => ({
-        ...C.record,
-        unmatchedReason: I(C, g.get(C.record.row), F),
+    unmatchedLeft = leftKeyedRecords
+      .filter((leftKeyedItem) => !byLeft.has(leftKeyedItem.record.row))
+      .map((leftEntry) => ({
+        ...leftEntry.record,
+        unmatchedReason: explainUnmatched(
+          leftEntry,
+          bestLeftScores.get(leftEntry.record.row),
+          rightDisplayedKeys,
+        ),
       })),
-    unmatchedRight = c
-      .filter((C) => !v.has(C.record.row))
-      .map((C) => ({
-        ...C.record,
-        unmatchedReason: I(C, b.get(C.record.row), k),
+    unmatchedRight = rightKeyedRecords
+      .filter(
+        (rightKeyedItem) => !rightMatchCounts.has(rightKeyedItem.record.row),
+      )
+      .map((rightEntry) => ({
+        ...rightEntry.record,
+        unmatchedReason: explainUnmatched(
+          rightEntry,
+          bestRightScores.get(rightEntry.record.row),
+          leftDisplayedKeys,
+        ),
       }));
-  for (const [side, T] of [
+  for (const [side, unmatchedRows] of [
     ["left", unmatchedLeft],
     ["right", unmatchedRight],
   ])
-    for (const N of T)
+    for (const unmatchedEntry of unmatchedRows)
       diagnostics.exceptions.some(
         (exception) =>
-          exception.side === side && exception.locator === N.locator,
+          exception.side === side &&
+          exception.locator === unmatchedEntry.locator,
       ) ||
         diagnostics.exceptions.push({
           side: side,
-          locator: N.locator,
-          reason: N.unmatchedReason,
+          locator: unmatchedEntry.locator,
+          reason: unmatchedEntry.unmatchedReason,
         });
-  const z = new Map(),
-    V = new Map();
+  const rightToLeftMatches = new Map(),
+    leftToRightMatches = new Map();
   for (const match of diagnostics.matches)
-    (V.set(match.left, [...(V.get(match.left) ?? []), match.right]),
-      z.set(match.right, [...(z.get(match.right) ?? []), match.left]));
-  const D = new Set();
+    (leftToRightMatches.set(match.left, [
+      ...(leftToRightMatches.get(match.left) ?? []),
+      match.right,
+    ]),
+      rightToLeftMatches.set(match.right, [
+        ...(rightToLeftMatches.get(match.right) ?? []),
+        match.left,
+      ]));
+  const visitedLocators = new Set();
   let manyToManyKeys = 0,
     expandedMatchRows = 0;
-  for (const C of V.keys())
-    if (!D.has(C)) {
-      const T = new Set(),
-        N = new Set(),
-        R = [C];
-      let L = 0;
-      for (; R.length;) {
-        const $ = R.pop();
-        if (D.has($)) continue;
-        (D.add($), T.add($));
-        const U = V.get($);
-        L += U.length;
-        for (const G of U) {
-          N.add(G);
-          for (const H of z.get(G)) D.has(H) || R.push(H);
+  for (const startLocator of leftToRightMatches.keys())
+    if (!visitedLocators.has(startLocator)) {
+      const componentLeft = new Set(),
+        componentRight = new Set(),
+        pendingLocators = [startLocator];
+      let componentPairs = 0;
+      for (; pendingLocators.length;) {
+        const currentLocator = pendingLocators.pop();
+        if (visitedLocators.has(currentLocator)) continue;
+        (visitedLocators.add(currentLocator),
+          componentLeft.add(currentLocator));
+        const matchedRights = leftToRightMatches.get(currentLocator);
+        componentPairs += matchedRights.length;
+        for (const rightLocator of matchedRights) {
+          componentRight.add(rightLocator);
+          for (const leftLocator of rightToLeftMatches.get(rightLocator))
+            visitedLocators.has(leftLocator) ||
+              pendingLocators.push(leftLocator);
         }
       }
-      T.size > 1 &&
-        N.size > 1 &&
+      componentLeft.size > 1 &&
+        componentRight.size > 1 &&
         (manyToManyKeys++,
-        (expandedMatchRows += Math.max(0, L - Math.max(T.size, N.size))));
+        (expandedMatchRows += Math.max(
+          0,
+          componentPairs - Math.max(componentLeft.size, componentRight.size),
+        )));
     }
   return {
     byLeft: byLeft,
     unmatchedLeft: unmatchedLeft,
     unmatchedRight: unmatchedRight,
     diagnostics: diagnostics,
-    duplicateLeftKeys: [...f.values()].filter((C) => C.length > 1).length,
-    duplicateRightKeys: [...p.values()].filter((C) => C.length > 1).length,
+    duplicateLeftKeys: [...leftKeyGroups.values()].filter(
+      (leftGroup) => leftGroup.length > 1,
+    ).length,
+    duplicateRightKeys: [...rightKeyGroups.values()].filter(
+      (rightGroup) => rightGroup.length > 1,
+    ).length,
     matchedLeftRows: byLeft.size,
-    matchedRightRows: v.size,
+    matchedRightRows: rightMatchCounts.size,
     matchPairs: diagnostics.matches.length,
     manyToManyKeys: manyToManyKeys,
     expandedMatchRows: expandedMatchRows,
@@ -1114,39 +1386,39 @@ const consolidationBudgets = {
   totalTextCharacters: 1e6,
 };
 
-function parseSourceRectangle(e) {
-  (!hasOnlyAllowedKeys(e, ["sheetId", "range"]) ||
-    typeof e.sheetId != "string" ||
-    typeof e.range != "string" ||
+function parseSourceRectangle(source) {
+  (!hasOnlyAllowedKeys(source, ["sheetId", "range"]) ||
+    typeof source.sheetId != "string" ||
+    typeof source.range != "string" ||
     !/^\$?[A-Za-z]{1,3}\$?[1-9]\d*(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?$/.test(
-      e.range,
+      source.range,
     )) &&
     failWithMessage(
       "Choose a worksheet and one explicit headed cell rectangle for each source.",
     );
-  const r = e.range.replace(/\$/g, "").toUpperCase(),
-    t = r.split(":"),
-    n = _t(t[0]),
-    o = _t(t[1] ?? t[0]);
-  (n.row > o.row ||
-    n.col > o.col ||
-    o.row >= workbookLimits.maxRows ||
-    o.col >= workbookLimits.maxCols) &&
+  const normalizedRange = source.range.replace(/\$/g, "").toUpperCase(),
+    rangeParts = normalizedRange.split(":"),
+    startCell = _t(rangeParts[0]),
+    endCell = _t(rangeParts[1] ?? rangeParts[0]);
+  (startCell.row > endCell.row ||
+    startCell.col > endCell.col ||
+    endCell.row >= workbookLimits.maxRows ||
+    endCell.col >= workbookLimits.maxCols) &&
     failWithMessage(
       "A source rectangle is reversed or outside Excel's address bounds.",
     );
-  const a = o.row - n.row + 1,
-    s = o.col - n.col + 1;
+  const rowCount = endCell.row - startCell.row + 1,
+    columnCount = endCell.col - startCell.col + 1;
   return (
-    (a > consolidationBudgets.sourceRows + 1 ||
-      s > consolidationBudgets.sourceColumns ||
-      a * s > consolidationBudgets.sourceCells) &&
+    (rowCount > consolidationBudgets.sourceRows + 1 ||
+      columnCount > consolidationBudgets.sourceColumns ||
+      rowCount * columnCount > consolidationBudgets.sourceCells) &&
       failWithMessage(
         "Each source supports at most 500 data rows, 50 columns and 2,000 cells including headers.",
       ),
     {
-      sheetId: e.sheetId,
-      range: `${formatCellAddress(n.row, n.col)}:${formatCellAddress(o.row, o.col)}`,
+      sheetId: source.sheetId,
+      range: `${formatCellAddress(startCell.row, startCell.col)}:${formatCellAddress(endCell.row, endCell.col)}`,
     }
   );
 }
@@ -1154,113 +1426,147 @@ function isCellVisible(sheet, firstRow, firstCol) {
   return (
     !sheet.hidden &&
     !sheet.veryHidden &&
-    !cn(sheet, "row").some((n) => firstRow >= n.start && firstRow <= n.end) &&
-    !cn(sheet, "column").some((n) => firstCol >= n.start && firstCol <= n.end)
+    !cn(sheet, "row").some(
+      (hiddenRowRange) =>
+        firstRow >= hiddenRowRange.start && firstRow <= hiddenRowRange.end,
+    ) &&
+    !cn(sheet, "column").some(
+      (hiddenColumnRange) =>
+        firstCol >= hiddenColumnRange.start &&
+        firstCol <= hiddenColumnRange.end,
+    )
   );
 }
-function inspectOutputNameSafety(workbook, r) {
-  let t = 0;
-  const n = (o, a, address = "A1") => {
-    if (!o) return;
-    ((t += o.length),
-      t > consolidationBudgets.totalTextCharacters &&
+function inspectOutputNameSafety(workbook, outputSheetName) {
+  let totalFormulaCharacters = 0;
+  const scanFormula = (formulaText, sheetId, address = "A1") => {
+    if (!formulaText) return;
+    ((totalFormulaCharacters += formulaText.length),
+      totalFormulaCharacters > consolidationBudgets.totalTextCharacters &&
         failWithMessage(
           "Output-name safety inspection exceeds 1,000,000 formula characters. Use a smaller reviewed workbook.",
         ));
-    const d = o.replace(/"(?:[^"]|"")*"/g, "");
-    let u = "",
-      l = 0;
-    for (; l < d.length;) {
-      if (d[l] === "'") {
-        const f = l++;
-        for (; l < d.length;)
-          if (d[l++] === "'")
-            if (d[l] === "'") l++;
+    const formulaWithoutStrings = formulaText.replace(/"(?:[^"]|"")*"/g, "");
+    let rewrittenFormula = "",
+      scanPosition = 0;
+    for (; scanPosition < formulaWithoutStrings.length;) {
+      if (formulaWithoutStrings[scanPosition] === "'") {
+        const quoteStart = scanPosition++;
+        for (; scanPosition < formulaWithoutStrings.length;)
+          if (formulaWithoutStrings[scanPosition++] === "'")
+            if (formulaWithoutStrings[scanPosition] === "'") scanPosition++;
             else break;
-        u += d.slice(f, l);
+        rewrittenFormula += formulaWithoutStrings.slice(
+          quoteStart,
+          scanPosition,
+        );
         continue;
       }
-      const c = l,
-        h = /^(?:[A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(d.slice(l));
-      if (h) {
-        l += h[0].length;
-        let f = 1;
-        for (; l < d.length && f;)
-          (d[l] === "[" && f++, d[l] === "]" && f--, l++);
-        const p = d.slice(c, l);
-        u +=
-          !f &&
-          !/^[A-Za-z0-9_!]/.test(d.slice(l)) &&
-          rewriteStructuredReferences(workbook, a, p, address)
+      const referenceStart = scanPosition,
+        structuredMatch = /^(?:[A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(
+          formulaWithoutStrings.slice(scanPosition),
+        );
+      if (structuredMatch) {
+        scanPosition += structuredMatch[0].length;
+        let bracketDepth = 1;
+        for (; scanPosition < formulaWithoutStrings.length && bracketDepth;)
+          (formulaWithoutStrings[scanPosition] === "[" && bracketDepth++,
+            formulaWithoutStrings[scanPosition] === "]" && bracketDepth--,
+            scanPosition++);
+        const structuredReferenceText = formulaWithoutStrings.slice(
+          referenceStart,
+          scanPosition,
+        );
+        rewrittenFormula +=
+          !bracketDepth &&
+          !/^[A-Za-z0-9_!]/.test(formulaWithoutStrings.slice(scanPosition)) &&
+          rewriteStructuredReferences(
+            workbook,
+            sheetId,
+            structuredReferenceText,
+            address,
+          )
             ? "0"
-            : p;
-      } else u += d[l++];
+            : structuredReferenceText;
+      } else rewrittenFormula += formulaWithoutStrings[scanPosition++];
     }
-    for (const c of u.matchAll(
+    for (const referenceMatch of rewrittenFormula.matchAll(
       /('(?:[^']|'')*'|[A-Za-z_.\d\u007F-\uFFFF]+)\s*!/g,
     )) {
-      const h = c[1];
-      (h.startsWith("'")
-        ? h.slice(1, -1).replace(/''/g, "'")
-        : h
-      ).toLowerCase() === r.toLowerCase() &&
+      const sheetToken = referenceMatch[1];
+      (sheetToken.startsWith("'")
+        ? sheetToken.slice(1, -1).replace(/''/g, "'")
+        : sheetToken
+      ).toLowerCase() === outputSheetName.toLowerCase() &&
         failWithMessage(
           "The output name would reconnect an existing unresolved worksheet reference. Choose a different name.",
         );
     }
   };
   for (const sheet of workbook.sheets) {
-    for (const [a, cell] of Object.entries(sheet.cells))
-      isFormulaInputValue(cell) && n(String(cell.raw), sheet.id, a);
-    for (const a of sheet.conditionalFormats ?? [])
-      a.kind === "formula" && n(a.formula, sheet.id, a.range.split(":")[0]);
-    for (const a of sheet.tables ?? [])
-      for (const [s, d] of a.columns.entries()) {
-        const rangeAddress = parseRangeAddress(a.range);
-        n(
-          d.calculatedFormula,
+    for (const [cellAddress, cell] of Object.entries(sheet.cells))
+      isFormulaInputValue(cell) &&
+        scanFormula(String(cell.raw), sheet.id, cellAddress);
+    for (const conditionalFormat of sheet.conditionalFormats ?? [])
+      conditionalFormat.kind === "formula" &&
+        scanFormula(
+          conditionalFormat.formula,
+          sheet.id,
+          conditionalFormat.range.split(":")[0],
+        );
+    for (const table of sheet.tables ?? [])
+      for (const [columnIndex, column] of table.columns.entries()) {
+        const rangeAddress = parseRangeAddress(table.range);
+        scanFormula(
+          column.calculatedFormula,
           sheet.id,
           formatCellAddress(
             rangeAddress.firstRow + 1,
-            rangeAddress.firstCol + s,
+            rangeAddress.firstCol + columnIndex,
           ),
         );
       }
   }
-  for (const o of workbook.definedNames ?? [])
-    n(o.refersTo, o.scopeSheetId ?? workbook.sheets[0].id);
+  for (const definedName of workbook.definedNames ?? [])
+    scanFormula(
+      definedName.refersTo,
+      definedName.scopeSheetId ?? workbook.sheets[0].id,
+    );
 }
-function readSourceRectangles(workbookInput, r, t = {}) {
-  (!Array.isArray(r) || !r.length || r.length > 8) &&
+function readSourceRectangles(workbookInput, sourceRectangles, options = {}) {
+  (!Array.isArray(sourceRectangles) ||
+    !sourceRectangles.length ||
+    sourceRectangles.length > 8) &&
     failWithMessage("Read one to eight explicit source rectangles.");
-  const n = r.map(parseSourceRectangle);
-  (t.includeHidden !== undefined &&
-    typeof t.includeHidden != "boolean" &&
+  const parsedRectangles = sourceRectangles.map(parseSourceRectangle);
+  (options.includeHidden !== undefined &&
+    typeof options.includeHidden != "boolean" &&
     failWithMessage("Include hidden must be boolean."),
-    t.allowedSheetIds !== undefined &&
-      (!Array.isArray(t.allowedSheetIds) ||
-        t.allowedSheetIds.some(
+    options.allowedSheetIds !== undefined &&
+      (!Array.isArray(options.allowedSheetIds) ||
+        options.allowedSheetIds.some(
           (allowedSheetId) =>
             typeof allowedSheetId != "string" ||
             !workbookInput.sheets.some((sheet) => sheet.id === allowedSheetId),
         )) &&
       failWithMessage("The host scope contains an unknown worksheet."));
-  const o = {
-      includeHidden: !!t.includeHidden,
+  const scope = {
+      includeHidden: !!options.includeHidden,
       allowedSheetIds: [
         ...new Set(
-          t.allowedSheetIds ?? workbookInput.sheets.map((sheet) => sheet.id),
+          options.allowedSheetIds ??
+            workbookInput.sheets.map((sheet) => sheet.id),
         ),
       ].sort(),
     },
-    a = n.map((y) => {
+    sourceSheets = parsedRectangles.map((parsedRectangle) => {
       const sheet = workbookInput.sheets.find(
-        (sheet) => sheet.id === y.sheetId,
+        (sheet) => sheet.id === parsedRectangle.sheetId,
       );
-      (!sheet || !o.allowedSheetIds.includes(sheet.id)) &&
+      (!sheet || !scope.allowedSheetIds.includes(sheet.id)) &&
         failWithMessage("A source is outside the authorized host context.");
-      const rangeAddress = parseRangeAddress(y.range);
-      if (!o.includeHidden)
+      const rangeAddress = parseRangeAddress(parsedRectangle.range);
+      if (!scope.includeHidden)
         for (
           let firstRow = rangeAddress.firstRow;
           firstRow <= rangeAddress.lastRow;
@@ -1277,12 +1583,12 @@ function readSourceRectangles(workbookInput, r, t = {}) {
               );
       return (
         sheet.merges?.some((merge) => {
-          const F = parseRangeAddress(merge);
+          const mergeAddress = parseRangeAddress(merge);
           return (
-            F.firstRow <= rangeAddress.lastRow &&
-            F.lastRow >= rangeAddress.firstRow &&
-            F.firstCol <= rangeAddress.lastCol &&
-            F.lastCol >= rangeAddress.firstCol
+            mergeAddress.firstRow <= rangeAddress.lastRow &&
+            mergeAddress.lastRow >= rangeAddress.firstRow &&
+            mergeAddress.firstCol <= rangeAddress.lastCol &&
+            mergeAddress.lastCol >= rangeAddress.firstCol
           );
         }) &&
           failWithMessage(
@@ -1291,12 +1597,12 @@ function readSourceRectangles(workbookInput, r, t = {}) {
         sheet
       );
     }),
-    s = new Set(),
-    d = new Set(),
-    u = [];
-  for (const [y, w] of n.entries()) {
-    const sheet = a[y],
-      rangeAddress = parseRangeAddress(w.range);
+    capturedKeys = new Set(),
+    formulaKeys = new Set(),
+    formulaSourceCells = [];
+  for (const [rectangleIndex, rectangle] of parsedRectangles.entries()) {
+    const sheet = sourceSheets[rectangleIndex],
+      rangeAddress = parseRangeAddress(rectangle.range);
     for (
       let firstRow = rangeAddress.firstRow;
       firstRow <= rangeAddress.lastRow;
@@ -1309,45 +1615,52 @@ function readSourceRectangles(workbookInput, r, t = {}) {
       ) {
         const cellAddress = formatCellAddress(firstRow, firstCol),
           compositeKey = buildCompositeKey(sheet.id, cellAddress);
-        (s.add(compositeKey),
+        (capturedKeys.add(compositeKey),
           isFormulaInputValue(sheet.cells[cellAddress]) &&
-            !d.has(compositeKey) &&
-            (d.add(compositeKey),
-            u.push({ sheet: sheet, address: cellAddress })));
+            !formulaKeys.has(compositeKey) &&
+            (formulaKeys.add(compositeKey),
+            formulaSourceCells.push({ sheet: sheet, address: cellAddress })));
       }
   }
-  u.length > consolidationBudgets.sourceFormulas &&
+  formulaSourceCells.length > consolidationBudgets.sourceFormulas &&
     failWithMessage(
       "Source capture supports at most 50 formula source cells. Use a reviewed values snapshot for a larger calculated population.",
     );
-  for (const y of new Set(a)) {
-    const w = [];
-    for (const A of s) {
-      const [k, F] = JSON.parse(A);
-      k === y.id && (!y.cells[F] || y.cells[F].raw === null) && w.push(_t(F));
+  for (const sourceSheet of new Set(sourceSheets)) {
+    const blankCellPositions = [];
+    for (const capturedKey of capturedKeys) {
+      const [keySheetId, keyAddress] = JSON.parse(capturedKey);
+      keySheetId === sourceSheet.id &&
+        (!sourceSheet.cells[keyAddress] ||
+          sourceSheet.cells[keyAddress].raw === null) &&
+        blankCellPositions.push(_t(keyAddress));
     }
-    if (!w.length) continue;
-    const E = Object.entries(y.cells).filter(
-      ([A, k]) => isFormulaInputValue(k) && !d.has(buildCompositeKey(y.id, A)),
+    if (!blankCellPositions.length) continue;
+    const formulaAnchorCandidates = Object.entries(sourceSheet.cells).filter(
+      ([candidateAddress, candidateCell]) =>
+        isFormulaInputValue(candidateCell) &&
+        !formulaKeys.has(buildCompositeKey(sourceSheet.id, candidateAddress)),
     );
-    E.length > consolidationBudgets.scannedFormulas &&
+    formulaAnchorCandidates.length > consolidationBudgets.scannedFormulas &&
       failWithMessage(
         "Blank source cells require a bounded spill-ambiguity check; this sheet exceeds 1,000 possible formula anchors.",
       );
-    for (const [A] of E) {
-      const k = _t(A);
-      w.some(
-        (F) =>
-          F.row >= k.row &&
-          F.col >= k.col &&
-          (F.row - k.row + 1) * (F.col - k.col + 1) <= 1e4,
+    for (const [anchorAddress] of formulaAnchorCandidates) {
+      const anchorPosition = _t(anchorAddress);
+      blankCellPositions.some(
+        (blankPosition) =>
+          blankPosition.row >= anchorPosition.row &&
+          blankPosition.col >= anchorPosition.col &&
+          (blankPosition.row - anchorPosition.row + 1) *
+            (blankPosition.col - anchorPosition.col + 1) <=
+            1e4,
       ) &&
         failWithMessage(
           "A blank source cell could be a spill child of a formula outside the source. Use a reviewed values snapshot or include and validate the scalar source formula.",
         );
     }
   }
-  const l = new Set([
+  const volatileFunctionNames = new Set([
       ...matrixResultFunctionNames,
       "ISFORMULA",
       "INDEX",
@@ -1372,37 +1685,37 @@ function readSourceRectangles(workbookInput, r, t = {}) {
         sheet.veryHidden ? { ...sheet, hidden: true } : sheet,
       ),
     },
-    h = new Set();
-  for (const y of u) {
-    const w = inspectFormulaDependencies(workbook, {
-        sheetId: y.sheet.id,
-        address: y.address,
+    dependencyKeys = new Set();
+  for (const formulaSourceCell of formulaSourceCells) {
+    const dependencyReport = inspectFormulaDependencies(workbook, {
+        sheetId: formulaSourceCell.sheet.id,
+        address: formulaSourceCell.address,
         direction: "precedents",
         depth: 8,
-        includeHidden: o.includeHidden,
-        allowedSheetIds: o.allowedSheetIds,
+        includeHidden: scope.includeHidden,
+        allowedSheetIds: scope.allowedSheetIds,
         limits: { maxFormulaCells: 1e3, maxNodes: 500, maxReferences: 2e3 },
       }),
-      E = [w.target, ...w.nodes],
-      A = new Set(E.map((event) => event.key));
-    (w.coverage.truncated ||
-      w.coverage.depthLimited ||
-      w.cycles.length ||
-      w.issues.some((issue) => A.has(issue.from))) &&
+      targetAndNodes = [dependencyReport.target, ...dependencyReport.nodes],
+      nodeKeys = new Set(targetAndNodes.map((event) => event.key));
+    (dependencyReport.coverage.truncated ||
+      dependencyReport.coverage.depthLimited ||
+      dependencyReport.cycles.length ||
+      dependencyReport.issues.some((issue) => nodeKeys.has(issue.from))) &&
       failWithMessage(
         "A source formula has incomplete, cyclic, hidden, unauthorized or unsupported dependencies.",
       );
-    for (const k of E) {
-      (s.add(k.key),
-        h.add(k.key),
-        h.size > consolidationBudgets.dependencyCells &&
+    for (const dependencyNode of targetAndNodes) {
+      (capturedKeys.add(dependencyNode.key),
+        dependencyKeys.add(dependencyNode.key),
+        dependencyKeys.size > consolidationBudgets.dependencyCells &&
           failWithMessage(
             "Combined source formula dependencies exceed 2,000 cells.",
           ));
       const sheet = workbookInput.sheets.find(
-          (sheet) => sheet.id === k.sheetId,
+          (sheet) => sheet.id === dependencyNode.sheetId,
         ),
-        cell = sheet.cells[k.address];
+        cell = sheet.cells[dependencyNode.address];
       if (
         ((!cell || cell.raw === null) &&
           failWithMessage(
@@ -1410,45 +1723,47 @@ function readSourceRectangles(workbookInput, r, t = {}) {
           ),
         isFormulaInputValue(cell))
       ) {
-        const O = resolveDefinedNameValue(
+        const resolvedFormula = resolveDefinedNameValue(
           String(cell.raw),
           workbookInput,
           sheet.id,
         ).replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, "");
-        ([...O.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)]
-          .map((z) =>
-            z[1]
+        ([...resolvedFormula.matchAll(/([A-Za-z_][A-Za-z0-9_.]*)\s*\(/g)]
+          .map((functionMatch) =>
+            functionMatch[1]
               .toUpperCase()
               .replace(/^_XLFN\./, "")
               .replace(/^_XLWS\./, ""),
           )
-          .some((z) => l.has(z)) ||
-          /[{}#]/.test(O)) &&
+          .some((functionName) => volatileFunctionNames.has(functionName)) ||
+          /[{}#]/.test(resolvedFormula)) &&
           failWithMessage(
             "Source formulas must have deterministic scalar dependencies; volatile, dynamic and array formulas are excluded.",
           );
       }
     }
   }
-  const f = {
+  const capturedWorkbook = {
       ...workbookInput,
       sheets: workbookInput.sheets
-        .filter((sheet) => o.allowedSheetIds.includes(sheet.id))
-        .map((y) => ({
-          ...y,
+        .filter((sheet) => scope.allowedSheetIds.includes(sheet.id))
+        .map((capturedSheet) => ({
+          ...capturedSheet,
           cells: Object.fromEntries(
-            Object.entries(y.cells).filter(([w]) =>
-              s.has(buildCompositeKey(y.id, w)),
+            Object.entries(capturedSheet.cells).filter(([keptAddress]) =>
+              capturedKeys.has(
+                buildCompositeKey(capturedSheet.id, keptAddress),
+              ),
             ),
           ),
         })),
     },
-    workbookWithSettings = calculateWorkbookWithSettings(f),
-    m =
+    workbookWithSettings = calculateWorkbookWithSettings(capturedWorkbook),
+    errorValuePattern =
       /^#(?:DIV\/0!|N\/A|VALUE!|REF!|NAME\?|NUM!|NULL!|SPILL!|CALC!|CYCLE!|LIMIT!|BLOCKED!|ERROR!)$/;
-  let v = 0;
-  const grids = n.map((source, w) => {
-    const E = a[w],
+  let combinedTextLength = 0;
+  const grids = parsedRectangles.map((source, sourceIndex) => {
+    const gridSheet = sourceSheets[sourceIndex],
       rangeAddress = parseRangeAddress(source.range),
       values = [];
     for (
@@ -1456,38 +1771,41 @@ function readSourceRectangles(workbookInput, r, t = {}) {
       firstRow <= rangeAddress.lastRow;
       firstRow++
     ) {
-      const I = [];
+      const rowValues = [];
       for (
         let firstCol = rangeAddress.firstCol;
         firstCol <= rangeAddress.lastCol;
         firstCol++
       ) {
         const cellAddress = formatCellAddress(firstRow, firstCol),
-          cell = E.cells[cellAddress],
-          V = isFormulaInputValue(cell)
-            ? workbookWithSettings(E.id, cellAddress)
+          cell = gridSheet.cells[cellAddress],
+          cellValue = isFormulaInputValue(cell)
+            ? workbookWithSettings(gridSheet.id, cellAddress)
             : (cell?.raw ?? null);
-        (((isFormulaInputValue(cell) && typeof V == "string" && m.test(V)) ||
-          (typeof V == "number" && !Number.isFinite(V)) ||
-          (typeof V == "string" &&
-            V.length > consolidationBudgets.textCharacters)) &&
+        (((isFormulaInputValue(cell) &&
+          typeof cellValue == "string" &&
+          errorValuePattern.test(cellValue)) ||
+          (typeof cellValue == "number" && !Number.isFinite(cellValue)) ||
+          (typeof cellValue == "string" &&
+            cellValue.length > consolidationBudgets.textCharacters)) &&
           failWithMessage(
             "A source contains a calculation error, nonfinite number or oversized text. Repair it before capturing source values.",
           ),
-          (v += typeof V == "string" ? V.length : 0),
-          v > consolidationBudgets.totalTextCharacters &&
+          (combinedTextLength +=
+            typeof cellValue == "string" ? cellValue.length : 0),
+          combinedTextLength > consolidationBudgets.totalTextCharacters &&
             failWithMessage(
               "Combined source text exceeds 1,000,000 characters.",
             ),
-          I.push(V));
+          rowValues.push(cellValue));
       }
-      values.push(I);
+      values.push(rowValues);
     }
-    return { source: source, sheetName: E.name, values: values };
+    return { source: source, sheetName: gridSheet.name, values: values };
   });
-  for (const y of h) {
-    const [w, E] = JSON.parse(y);
-    workbookWithSettings.getSpillRange(w, E) &&
+  for (const dependencyKey of dependencyKeys) {
+    const [dependencySheetId, dependencyAddress] = JSON.parse(dependencyKey);
+    workbookWithSettings.getSpillRange(dependencySheetId, dependencyAddress) &&
       failWithMessage(
         "Source formula dependencies produced an array; use a reviewed scalar population.",
       );
@@ -1496,8 +1814,8 @@ function readSourceRectangles(workbookInput, r, t = {}) {
     failWithMessage(
       "A source encountered an operational calculation failure, including an error hidden by a formula handler.",
     );
-  const dependencyCells = [...s].sort().map((y) => {
-    const [sheetId, address] = JSON.parse(y);
+  const dependencyCells = [...capturedKeys].sort().map((cellKey) => {
+    const [sheetId, address] = JSON.parse(cellKey);
     return {
       sheetId: sheetId,
       address: address,
@@ -1509,16 +1827,20 @@ function readSourceRectangles(workbookInput, r, t = {}) {
   });
   return { grids: grids, dependencyCells: dependencyCells };
 }
-function readSourceHeaders(workbookInput, r, t = {}) {
-  const { grids, dependencyCells } = readSourceRectangles(workbookInput, r, t);
+function readSourceHeaders(workbookInput, sourceRectangles, options = {}) {
+  const { grids, dependencyCells } = readSourceRectangles(
+    workbookInput,
+    sourceRectangles,
+    options,
+  );
   return {
     snapshots: grids.map(({ source, sheetName, values }) => {
       const rangeAddress = parseRangeAddress(source.range);
       values[0].some(
-        (h) =>
-          typeof h != "string" ||
-          !h.trim() ||
-          h.length > consolidationBudgets.headerCharacters,
+        (headerValue) =>
+          typeof headerValue != "string" ||
+          !headerValue.trim() ||
+          headerValue.length > consolidationBudgets.headerCharacters,
       ) &&
         failWithMessage(
           "Every source column needs a nonblank text header of at most 128 characters.",
@@ -1534,9 +1856,9 @@ function readSourceHeaders(workbookInput, r, t = {}) {
           source,
           sheetName,
           headers: headers,
-          records: values.slice(1).map((values, f) => ({
-            row: rangeAddress.firstRow + f + 2,
-            locator: `'${sheetName.replace(/'/g, "''")}'!${formatCellAddress(rangeAddress.firstRow + f + 1, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.firstRow + f + 1, rangeAddress.lastCol)}`,
+          records: values.slice(1).map((values, recordIndex) => ({
+            row: rangeAddress.firstRow + recordIndex + 2,
+            locator: `'${sheetName.replace(/'/g, "''")}'!${formatCellAddress(rangeAddress.firstRow + recordIndex + 1, rangeAddress.firstCol)}:${formatCellAddress(rangeAddress.firstRow + recordIndex + 1, rangeAddress.lastCol)}`,
             values: values,
           })),
         }
@@ -1545,8 +1867,8 @@ function readSourceHeaders(workbookInput, r, t = {}) {
     dependencyCells,
   };
 }
-function buildConsolidationOutput(workbook, request, t = {}) {
-  (t.readOnly && failWithMessage("This workbook is read-only."),
+function buildConsolidationOutput(workbook, request, options = {}) {
+  (options.readOnly && failWithMessage("This workbook is read-only."),
     assertWorkbookStructureEditable(workbook),
     (!hasOnlyAllowedKeys(request, [
       "left",
@@ -1584,32 +1906,32 @@ function buildConsolidationOutput(workbook, request, t = {}) {
         "The output sheet name already exists. Choose a new sheet name.",
       ),
     inspectOutputNameSafety(workbook, request.outputSheetName),
-    t.includeHidden !== undefined &&
-      typeof t.includeHidden != "boolean" &&
+    options.includeHidden !== undefined &&
+      typeof options.includeHidden != "boolean" &&
       failWithMessage("Include hidden must be boolean."),
-    t.allowedSheetIds !== undefined &&
-      (!Array.isArray(t.allowedSheetIds) ||
-        t.allowedSheetIds.some(
+    options.allowedSheetIds !== undefined &&
+      (!Array.isArray(options.allowedSheetIds) ||
+        options.allowedSheetIds.some(
           (allowedSheetId) =>
             typeof allowedSheetId != "string" ||
             !workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
         )) &&
       failWithMessage("The host scope contains an unknown worksheet."));
   const context = {
-      includeHidden: !!t.includeHidden,
+      includeHidden: !!options.includeHidden,
       allowedSheetIds: [
         ...new Set(
-          t.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
+          options.allowedSheetIds ?? workbook.sheets.map((sheet) => sheet.id),
         ),
       ].sort(),
     },
-    o = {
+    parsedRequest = {
       left: parseSourceRectangle(request.left),
       right: parseSourceRectangle(request.right),
       mode: request.mode,
       outputSheetName: request.outputSheetName,
     };
-  o.mode === "append"
+  parsedRequest.mode === "append"
     ? ((request.normalization !== undefined || request.fuzzy !== undefined) &&
         failWithMessage(
           "Append aligns headers; key normalization and fuzzy matching apply only to joins.",
@@ -1629,19 +1951,25 @@ function buildConsolidationOutput(workbook, request, t = {}) {
             typeof key.right != "string",
         )) &&
         failWithMessage("Choose from one to eight pairs of join headers."),
-      (o.keys = request.keys.map((key) => ({ ...key }))),
+      (parsedRequest.keys = request.keys.map((key) => ({ ...key }))),
       Object.assign(
-        o,
+        parsedRequest,
         parseKeyNormalization(
           request.normalization,
           request.fuzzy,
-          o.keys.length,
+          parsedRequest.keys.length,
         ),
       ),
-      (new Set(o.keys.map((key) => key.left)).size !== o.keys.length ||
-        new Set(o.keys.map((key) => key.right)).size !== o.keys.length) &&
+      (new Set(parsedRequest.keys.map((key) => key.left)).size !==
+        parsedRequest.keys.length ||
+        new Set(parsedRequest.keys.map((key) => key.right)).size !==
+          parsedRequest.keys.length) &&
         failWithMessage("A join header cannot be repeated in the key pairs."));
-  const { snapshots } = readSourceHeaders(workbook, [o.left, o.right], t),
+  const { snapshots } = readSourceHeaders(
+      workbook,
+      [parsedRequest.left, parsedRequest.right],
+      options,
+    ),
     [left, right] = snapshots,
     rows = [],
     unmatchedLeft = [],
@@ -1656,14 +1984,16 @@ function buildConsolidationOutput(workbook, request, t = {}) {
     duplicateRightKeys = 0,
     manyToManyKeys = 0,
     expandedMatchRows = 0;
-  if (o.mode === "append") {
+  if (parsedRequest.mode === "append") {
     ((left.headers.length !== right.headers.length ||
       left.headers.some((header) => !right.headers.includes(header))) &&
       failWithMessage(
         "Append requires exactly matching header names on both sources; column order may differ.",
       ),
       (headers = [...left.headers, "Source left row", "Source right row"]));
-    const z = left.headers.map((header) => right.headers.indexOf(header));
+    const rightHeaderIndexes = left.headers.map((header) =>
+      right.headers.indexOf(header),
+    );
     (left.records.forEach((record) =>
       rows.push({
         values: [...record.values],
@@ -1673,7 +2003,9 @@ function buildConsolidationOutput(workbook, request, t = {}) {
     ),
       right.records.forEach((record) =>
         rows.push({
-          values: z.map((D) => record.values[D]),
+          values: rightHeaderIndexes.map(
+            (rightColumnIndex) => record.values[rightColumnIndex],
+          ),
           left: null,
           right: record.locator,
         }),
@@ -1685,39 +2017,44 @@ function buildConsolidationOutput(workbook, request, t = {}) {
       "Source left row",
       "Source right row",
     ];
-    const z = o.keys.map((key) => left.headers.indexOf(key.left)),
-      V = o.keys.map((key) => right.headers.indexOf(key.right));
-    (z.includes(-1) || V.includes(-1)) &&
+    const leftKeyIndexes = parsedRequest.keys.map((key) =>
+        left.headers.indexOf(key.left),
+      ),
+      rightKeyIndexes = parsedRequest.keys.map((key) =>
+        right.headers.indexOf(key.right),
+      );
+    (leftKeyIndexes.includes(-1) || rightKeyIndexes.includes(-1)) &&
       failWithMessage(
         "Every join key must name an existing source header exactly.",
       );
-    const D = (_, C) =>
+    const typeProfile = (records, columnIndex) =>
       [
         ...new Set(
-          _.map((T) =>
-            T.values[C] === null || T.values[C] === ""
+          records.map((profiledRecord) =>
+            profiledRecord.values[columnIndex] === null ||
+            profiledRecord.values[columnIndex] === ""
               ? "blank"
-              : typeof T.values[C],
+              : typeof profiledRecord.values[columnIndex],
           ),
         ),
       ].sort();
-    o.keys.forEach((key, C) =>
+    parsedRequest.keys.forEach((key, keyIndex) =>
       keyProfiles.push({
         leftHeader: key.left,
         rightHeader: key.right,
-        leftTypes: D(left.records, z[C]),
-        rightTypes: D(right.records, V[C]),
+        leftTypes: typeProfile(left.records, leftKeyIndexes[keyIndex]),
+        rightTypes: typeProfile(right.records, rightKeyIndexes[keyIndex]),
       }),
     );
-    const B = matchKeyPopulations(
+    const keyMatchResult = matchKeyPopulations(
       left.records,
       right.records,
-      z,
-      V,
-      o.normalization,
-      o.fuzzy,
+      leftKeyIndexes,
+      rightKeyIndexes,
+      parsedRequest.normalization,
+      parsedRequest.fuzzy,
     );
-    ((matching = B.diagnostics),
+    ((matching = keyMatchResult.diagnostics),
       ({
         matchedLeftRows: matchedLeftRows,
         matchedRightRows: matchedRightRows,
@@ -1726,36 +2063,44 @@ function buildConsolidationOutput(workbook, request, t = {}) {
         duplicateRightKeys: duplicateRightKeys,
         manyToManyKeys: manyToManyKeys,
         expandedMatchRows: expandedMatchRows,
-      } = B),
-      unmatchedLeft.push(...B.unmatchedLeft),
-      unmatchedRight.push(...B.unmatchedRight));
+      } = keyMatchResult),
+      unmatchedLeft.push(...keyMatchResult.unmatchedLeft),
+      unmatchedRight.push(...keyMatchResult.unmatchedRight));
     for (const record of left.records) {
-      const C = B.byLeft.get(record.row);
-      if (C) {
-        if (o.mode !== "leftAnti" && o.mode !== "rightAnti")
-          for (const T of C)
+      const leftMatches = keyMatchResult.byLeft.get(record.row);
+      if (leftMatches) {
+        if (
+          parsedRequest.mode !== "leftAnti" &&
+          parsedRequest.mode !== "rightAnti"
+        )
+          for (const rightMatch of leftMatches)
             rows.push({
-              values: [...record.values, ...T.record.values],
+              values: [...record.values, ...rightMatch.record.values],
               left: record.locator,
-              right: T.record.locator,
-              ...(o.fuzzy || o.normalization
-                ? { match: { score: T.score, explanation: T.explanation } }
+              right: rightMatch.record.locator,
+              ...(parsedRequest.fuzzy || parsedRequest.normalization
+                ? {
+                    match: {
+                      score: rightMatch.score,
+                      explanation: rightMatch.explanation,
+                    },
+                  }
                 : {}),
             });
       } else
-        ["left", "full", "leftAnti"].includes(o.mode) &&
+        ["left", "full", "leftAnti"].includes(parsedRequest.mode) &&
           rows.push({
             values: [...record.values, ...right.headers.map(() => null)],
             left: record.locator,
             right: null,
           });
     }
-    if (["right", "full", "rightAnti"].includes(o.mode))
-      for (const _ of unmatchedRight)
+    if (["right", "full", "rightAnti"].includes(parsedRequest.mode))
+      for (const unmatchedRecord of unmatchedRight)
         rows.push({
-          values: [...left.headers.map(() => null), ..._.values],
+          values: [...left.headers.map(() => null), ...unmatchedRecord.values],
           left: null,
-          right: _.locator,
+          right: unmatchedRecord.locator,
         });
   }
   (new Set(headers.map((header) => header.toLowerCase())).size !==
@@ -1769,42 +2114,58 @@ function buildConsolidationOutput(workbook, request, t = {}) {
         "The output exceeds 1,000 data rows or 20,000 cells including headers and provenance.",
       ),
     rows.reduce(
-      (z, V) =>
-        z +
-        V.values.reduce((D, B) => D + (typeof B == "string" ? B.length : 0), 0),
+      (total, outputRow) =>
+        total +
+        outputRow.values.reduce(
+          (rowTotal, value) =>
+            rowTotal + (typeof value == "string" ? value.length : 0),
+          0,
+        ),
       headers.join("").length,
     ) > consolidationBudgets.totalTextCharacters &&
       failWithMessage("Expanded output text exceeds 1,000,000 characters."),
-    workbook.sheets.reduce((z, V) => z + Object.keys(V.cells).length, 0) +
+    workbook.sheets.reduce(
+      (storedCells, existingSheet) =>
+        storedCells + Object.keys(existingSheet.cells).length,
+      0,
+    ) +
       (rows.length + 1) * headers.length >
       workbookLimits.maxCells &&
       failWithMessage(
         "The new output would exceed the workbook's stored-cell budget.",
       ));
-  const worksheetRecord = createWorksheetRecord(o.outputSheetName),
+  const worksheetRecord = createWorksheetRecord(parsedRequest.outputSheetName),
     snapshot = JSON.stringify(workbook),
-    I = new Set(snapshot.match(/"population-combine-[1-9]\d*"/g) ?? []);
-  let O = 1;
-  for (; I.has(JSON.stringify(`population-combine-${O}`));) O++;
-  ((worksheetRecord.id = `population-combine-${O}`),
+    existingCombineIds = new Set(
+      snapshot.match(/"population-combine-[1-9]\d*"/g) ?? [],
+    );
+  let combineNumber = 1;
+  for (
+    ;
+    existingCombineIds.has(
+      JSON.stringify(`population-combine-${combineNumber}`),
+    );
+  )
+    combineNumber++;
+  ((worksheetRecord.id = `population-combine-${combineNumber}`),
     (worksheetRecord.frozenRows = 1),
     (worksheetRecord.columnWidths = Object.fromEntries(
-      headers.map((header, V) => [
-        V,
+      headers.map((header, headerIndex) => [
+        headerIndex,
         Math.min(240, Math.max(110, header.length * 7 + 20)),
       ]),
     )),
-    headers.forEach((raw, V) => {
-      worksheetRecord.cells[formatCellAddress(0, V)] = {
+    headers.forEach((raw, headerColumn) => {
+      worksheetRecord.cells[formatCellAddress(0, headerColumn)] = {
         raw: raw,
         literal: raw.startsWith("="),
         style: { bold: true, fill: "#E2F0D9" },
       };
     }),
-    (worksheetRecord.cells.A1.note = `Reviewed ${o.mode} values snapshot; source workbook ${workbook.id}, revision ${workbook.revision}. Left: '${left.sheetName}'!${left.source.range} (${left.records.length} records); right: '${right.sheetName}'!${right.source.range} (${right.records.length} records). Keys: ${o.keys ? JSON.stringify(o.keys) : "exact matching headers"}. ${matching?.policy ?? "Append by exact headers."} Normalization: ${JSON.stringify(o.normalization ?? {})}; blank keys do not match. Matched left/right: ${matchedLeftRows}/${matchedRightRows}; match pairs: ${matchPairs}; unmatched left/right: ${unmatchedLeft.length}/${unmatchedRight.length}; output records: ${rows.length}. Duplicate key groups left/right: ${duplicateLeftKeys}/${duplicateRightKeys}; many-to-many groups: ${manyToManyKeys}; extra many-to-many pairs: ${expandedMatchRows}. Hidden sources explicitly included: ${context.includeHidden}. Filter views do not exclude records. This snapshot does not automatically refresh.`),
-    rows.forEach((row, V) =>
-      [...row.values, row.left, row.right].forEach((raw, B) => {
-        worksheetRecord.cells[formatCellAddress(V + 1, B)] = {
+    (worksheetRecord.cells.A1.note = `Reviewed ${parsedRequest.mode} values snapshot; source workbook ${workbook.id}, revision ${workbook.revision}. Left: '${left.sheetName}'!${left.source.range} (${left.records.length} records); right: '${right.sheetName}'!${right.source.range} (${right.records.length} records). Keys: ${parsedRequest.keys ? JSON.stringify(parsedRequest.keys) : "exact matching headers"}. ${matching?.policy ?? "Append by exact headers."} Normalization: ${JSON.stringify(parsedRequest.normalization ?? {})}; blank keys do not match. Matched left/right: ${matchedLeftRows}/${matchedRightRows}; match pairs: ${matchPairs}; unmatched left/right: ${unmatchedLeft.length}/${unmatchedRight.length}; output records: ${rows.length}. Duplicate key groups left/right: ${duplicateLeftKeys}/${duplicateRightKeys}; many-to-many groups: ${manyToManyKeys}; extra many-to-many pairs: ${expandedMatchRows}. Hidden sources explicitly included: ${context.includeHidden}. Filter views do not exclude records. This snapshot does not automatically refresh.`),
+    rows.forEach((row, rowIndex) =>
+      [...row.values, row.left, row.right].forEach((raw, outputColumn) => {
+        worksheetRecord.cells[formatCellAddress(rowIndex + 1, outputColumn)] = {
           raw: raw,
           ...(typeof raw == "string" && raw.startsWith("=")
             ? { literal: true }
@@ -1819,7 +2180,7 @@ function buildConsolidationOutput(workbook, request, t = {}) {
     normalizeWorkbookInput(next),
     {
       snapshot: snapshot,
-      request: o,
+      request: parsedRequest,
       context: context,
       left: left,
       right: right,
@@ -1847,15 +2208,19 @@ function buildConsolidationOutput(workbook, request, t = {}) {
     }
   );
 }
-function assertConsolidationPreviewCurrent(workbook, r, t = {}) {
-  (t.readOnly && failWithMessage("This workbook is read-only."),
-    r.snapshot !== JSON.stringify(workbook) &&
+function assertConsolidationPreviewCurrent(workbook, preview, options = {}) {
+  (options.readOnly && failWithMessage("This workbook is read-only."),
+    preview.snapshot !== JSON.stringify(workbook) &&
       failWithMessage(
         "The workbook changed after preview. Preview and review the populations again.",
       ));
-  const consolidationOutput = buildConsolidationOutput(workbook, r.request, t);
+  const consolidationOutput = buildConsolidationOutput(
+    workbook,
+    preview.request,
+    options,
+  );
   return (
-    JSON.stringify(consolidationOutput) !== JSON.stringify(r) &&
+    JSON.stringify(consolidationOutput) !== JSON.stringify(preview) &&
       failWithMessage(
         "The preview or host context changed. Preview and review again.",
       ),
@@ -1874,9 +2239,9 @@ function normalizeAuthorizedContext(workbook, options) {
   if (
     !Array.isArray(allowed) ||
     allowed.some(
-      (o) =>
-        typeof o != "string" ||
-        !workbook.sheets.some((sheet) => sheet.id === o),
+      (sheetId) =>
+        typeof sheetId != "string" ||
+        !workbook.sheets.some((sheet) => sheet.id === sheetId),
     )
   )
     throw Error("Invalid authorized worksheet context.");
@@ -1884,16 +2249,20 @@ function normalizeAuthorizedContext(workbook, options) {
   if (
     !Array.isArray(external) ||
     external.length > 8 ||
-    new Set(external.map((o) => o.workbook.id)).size !== external.length ||
+    new Set(external.map((approvedWorkbook) => approvedWorkbook.workbook.id))
+      .size !== external.length ||
     external.some(
-      (o) =>
-        o.workbook.id === workbook.id ||
-        !Array.isArray(o.allowedSheetIds) ||
-        o.allowedSheetIds.some(
+      (approvedEntry) =>
+        approvedEntry.workbook.id === workbook.id ||
+        !Array.isArray(approvedEntry.allowedSheetIds) ||
+        approvedEntry.allowedSheetIds.some(
           (allowedSheetId) =>
-            !o.workbook.sheets.some((sheet) => sheet.id === allowedSheetId),
+            !approvedEntry.workbook.sheets.some(
+              (sheet) => sheet.id === allowedSheetId,
+            ),
         ) ||
-        (o.includeHidden !== undefined && typeof o.includeHidden != "boolean"),
+        (approvedEntry.includeHidden !== undefined &&
+          typeof approvedEntry.includeHidden != "boolean"),
     )
   )
     throw Error(
@@ -1903,16 +2272,19 @@ function normalizeAuthorizedContext(workbook, options) {
 }
 function readSourceTableRecords(workbook, source, options) {
   const authorizedContext = normalizeAuthorizedContext(workbook, options),
-    o = authorizedContext.external.find(
-      (p) => p.workbook.id === source.workbookId,
+    approvedWorkbook = authorizedContext.external.find(
+      (approvedCandidate) =>
+        approvedCandidate.workbook.id === source.workbookId,
     ),
-    a = source.workbookId === workbook.id,
-    book = a ? workbook : o?.workbook;
+    isSameWorkbook = source.workbookId === workbook.id,
+    book = isSameWorkbook ? workbook : approvedWorkbook?.workbook;
   if (!book)
     throw Error(
       "Source workbook is missing or has not been approved. Attach and approve the exact workbook identity before refreshing.",
     );
-  const allowedSheetIds = a ? authorizedContext.allowed : o.allowedSheetIds,
+  const allowedSheetIds = isSameWorkbook
+      ? authorizedContext.allowed
+      : approvedWorkbook.allowedSheetIds,
     sheet = book.sheets.find((sheet) => sheet.id === source.sheetId);
   if (!sheet || !allowedSheetIds.includes(source.sheetId))
     throw Error(
@@ -1920,19 +2292,22 @@ function readSourceTableRecords(workbook, source, options) {
     );
   let range = source.range;
   if (source.tableId) {
-    const p = sheet.tables?.find((table) => table.id === source.tableId);
-    if (!p) throw Error("Source table is missing. Review the source mapping.");
-    const rangeAddress = parseRangeAddress(p.range);
-    range = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (p.showTotals ? 1 : 0)}`;
+    const sourceTable = sheet.tables?.find(
+      (table) => table.id === source.tableId,
+    );
+    if (!sourceTable)
+      throw Error("Source table is missing. Review the source mapping.");
+    const rangeAddress = parseRangeAddress(sourceTable.range);
+    range = `${columnIndexToLetters(rangeAddress.firstCol)}${rangeAddress.firstRow + 1}:${columnIndexToLetters(rangeAddress.lastCol)}${rangeAddress.lastRow + 1 - (sourceTable.showTotals ? 1 : 0)}`;
   }
   const sourceHeaders = readSourceHeaders(
       book,
       [{ sheetId: sheet.id, range: range }],
       {
         allowedSheetIds: allowedSheetIds,
-        includeHidden: a
+        includeHidden: isSameWorkbook
           ? options.includeHidden
-          : !!options.includeHidden && !!o.includeHidden,
+          : !!options.includeHidden && !!approvedWorkbook.includeHidden,
       },
     ),
     snapshot = sourceHeaders.snapshots[0];
@@ -1950,10 +2325,10 @@ function readSourceTableRecords(workbook, source, options) {
     }),
   };
 }
-function reconcileConsolidationSources(workbook, r, options = {}) {
-  const consolidationDefinition = parseConsolidationDefinition(r);
+function reconcileConsolidationSources(workbook, definition, options = {}) {
+  const consolidationDefinition = parseConsolidationDefinition(definition);
   normalizeAuthorizedContext(workbook, options);
-  const o = {
+  const review = {
       sources: [],
       contributions: [],
       subtotals: [],
@@ -1963,12 +2338,12 @@ function reconcileConsolidationSources(workbook, r, options = {}) {
       difference: null,
       complete: false,
     },
-    a = new Set(),
-    s = (sourceId, code, l, row, severity = "error") =>
-      o.exceptions.push({
+    seenAddresses = new Set(),
+    addException = (sourceId, code, message, row, severity = "error") =>
+      review.exceptions.push({
         sourceId: sourceId,
         code: code,
-        message: l,
+        message: message,
         ...(row ? { row: row } : {}),
         severity: severity,
       });
@@ -1981,23 +2356,24 @@ function reconcileConsolidationSources(workbook, r, options = {}) {
         ),
         { snapshot } = sourceTableRecords,
         rangeAddress = parseRangeAddress(snapshot.source.range),
-        h = (y) => {
-          const w = snapshot.headers.indexOf(y);
-          if (w < 0)
+        requireHeaderIndex = (headerName) => {
+          const headerIndex = snapshot.headers.indexOf(headerName);
+          if (headerIndex < 0)
             throw Error(
-              `Required field “${y}” is missing. Review the source schema.`,
+              `Required field “${headerName}” is missing. Review the source schema.`,
             );
-          return w;
+          return headerIndex;
         },
-        f = source.categories.map(h),
-        p = h(source.amountField),
-        m = (y, w) =>
-          source[y].kind === "constant"
-            ? source[y].value
-            : w[h(source[y].field)];
-      for (const y of ["period", "currency", "unit"])
-        source[y].kind === "field" && h(source[y].field);
-      const v = {
+        categoryIndexes = source.categories.map(requireHeaderIndex),
+        amountIndex = requireHeaderIndex(source.amountField),
+        readDimensionValue = (dimensionKey, recordValues) =>
+          source[dimensionKey].kind === "constant"
+            ? source[dimensionKey].value
+            : recordValues[requireHeaderIndex(source[dimensionKey].field)];
+      for (const dimensionName of ["period", "currency", "unit"])
+        source[dimensionName].kind === "field" &&
+          requireHeaderIndex(source[dimensionName].field);
+      const sourceSummary = {
         sourceId: source.id,
         workbookId: sourceTableRecords.book.id,
         workbookName: sourceTableRecords.book.name,
@@ -2012,85 +2388,94 @@ function reconcileConsolidationSources(workbook, r, options = {}) {
         currencies: [],
         units: [],
       };
-      o.sources.push(v);
-      const g = new Map(),
-        b = [];
+      review.sources.push(sourceSummary);
+      const firstRowByCategories = new Map(),
+        sourceContributions = [];
       for (const record of snapshot.records) {
-        let w = false;
-        const E = (V, D) => {
-            (s(source.id, V, D, record.row), (w = true));
+        let isRejected = false;
+        const addRecordException = (exceptionCode, exceptionMessage) => {
+            (addException(
+              source.id,
+              exceptionCode,
+              exceptionMessage,
+              record.row,
+            ),
+              (isRejected = true));
           },
-          categories = f.map((V) => record.values[V]),
-          amount = record.values[p],
-          address = `${columnIndexToLetters(rangeAddress.firstCol + p)}${record.row}`,
-          I = JSON.stringify([
+          categories = categoryIndexes.map(
+            (categoryIndex) => record.values[categoryIndex],
+          ),
+          amount = record.values[amountIndex],
+          address = `${columnIndexToLetters(rangeAddress.firstCol + amountIndex)}${record.row}`,
+          overlapKey = JSON.stringify([
             sourceTableRecords.book.id,
             sourceTableRecords.sheet.id,
             address,
           ]);
-        (a.has(I) &&
-          E(
+        (seenAddresses.has(overlapKey) &&
+          addRecordException(
             "overlap",
             `Amount ${sourceTableRecords.sheet.name}!${address} is included more than once. Remove overlapping sources to prevent double counting.`,
           ),
-          a.add(I),
+          seenAddresses.add(overlapKey),
           categories.some(
             (category) =>
               category === null ||
               (typeof category == "string" && !category.trim()),
           ) &&
-            E(
+            addRecordException(
               "blank-category",
               "Every contributing row needs nonblank categories.",
             ),
           (typeof amount != "number" || !Number.isFinite(amount)) &&
-            E(
+            addRecordException(
               "amount",
               `Amount ${sourceTableRecords.sheet.name}!${address} must be a finite number; text is not silently converted.`,
             ));
-        const O = {
-          period: m("period", record.values),
-          currency: m("currency", record.values),
-          unit: m("unit", record.values),
+        const recordDimensions = {
+          period: readDimensionValue("period", record.values),
+          currency: readDimensionValue("currency", record.values),
+          unit: readDimensionValue("unit", record.values),
         };
-        for (const V of ["period", "currency", "unit"]) {
-          const D = O[V];
+        for (const dimension of ["period", "currency", "unit"]) {
+          const dimensionValue = recordDimensions[dimension];
           if (
-            typeof D == "string" &&
-            D.trim() &&
-            D.length <= 128 &&
-            !/[\u0000-\u001f\u007f]/.test(D)
+            typeof dimensionValue == "string" &&
+            dimensionValue.trim() &&
+            dimensionValue.length <= 128 &&
+            !/[\u0000-\u001f\u007f]/.test(dimensionValue)
           ) {
-            const B =
-              v[
-                V === "currency"
+            const distinctValues =
+              sourceSummary[
+                dimension === "currency"
                   ? "currencies"
-                  : V === "period"
+                  : dimension === "period"
                     ? "periods"
                     : "units"
               ];
-            B.includes(D) || B.push(D);
+            distinctValues.includes(dimensionValue) ||
+              distinctValues.push(dimensionValue);
           }
-          D !== consolidationDefinition[V] &&
-            E(
-              V,
-              `Source ${V} ${JSON.stringify(D)} does not match ${JSON.stringify(consolidationDefinition[V])}. No currency, unit or period conversion is implicit.`,
+          dimensionValue !== consolidationDefinition[dimension] &&
+            addRecordException(
+              dimension,
+              `Source ${dimension} ${JSON.stringify(dimensionValue)} does not match ${JSON.stringify(consolidationDefinition[dimension])}. No currency, unit or period conversion is implicit.`,
             );
         }
-        const j = serializeTypedKeyValues(categories),
-          z = g.get(j);
-        (z !== undefined
-          ? (s(
+        const categoryKey = serializeTypedKeyValues(categories),
+          firstRowForKey = firstRowByCategories.get(categoryKey);
+        (firstRowForKey !== undefined
+          ? (addException(
               source.id,
               "duplicate-category",
-              `Repeated category also occurs at row ${z}. ${source.duplicatePolicy === "sum" ? "Explicit sum policy retains both contributions." : "Choose Sum repeated categories only after reviewing these records."}`,
+              `Repeated category also occurs at row ${firstRowForKey}. ${source.duplicatePolicy === "sum" ? "Explicit sum policy retains both contributions." : "Choose Sum repeated categories only after reviewing these records."}`,
               record.row,
               source.duplicatePolicy === "sum" ? "warning" : "error",
             ),
-            source.duplicatePolicy === "reject" && (w = true))
-          : g.set(j, record.row),
-          w ||
-            b.push({
+            source.duplicatePolicy === "reject" && (isRejected = true))
+          : firstRowByCategories.set(categoryKey, record.row),
+          isRejected ||
+            sourceContributions.push({
               sourceId: source.id,
               workbookId: sourceTableRecords.book.id,
               workbookName: sourceTableRecords.book.name,
@@ -2101,9 +2486,9 @@ function reconcileConsolidationSources(workbook, r, options = {}) {
               locator: `${sourceTableRecords.book.name} / ${snapshot.sheetName}!${address}`,
               categories: categories,
               amount: amount,
-              period: O.period,
-              currency: O.currency,
-              unit: O.unit,
+              period: recordDimensions.period,
+              currency: recordDimensions.currency,
+              unit: recordDimensions.unit,
               link:
                 sourceTableRecords.book.id !== workbook.id
                   ? "approved snapshot"
@@ -2112,49 +2497,51 @@ function reconcileConsolidationSources(workbook, r, options = {}) {
                     : "snapshot",
             }));
       }
-      ((v.acceptedRecords = b.length),
-        (v.amount = sumConsolidationAmounts(b.map((y) => y.amount))),
-        o.contributions.push(...b));
+      ((sourceSummary.acceptedRecords = sourceContributions.length),
+        (sourceSummary.amount = sumConsolidationAmounts(
+          sourceContributions.map((entry) => entry.amount),
+        )),
+        review.contributions.push(...sourceContributions));
     } catch (error) {
-      s(source.id, "source", error.message.slice(0, 4e3));
+      addException(source.id, "source", error.message.slice(0, 4e3));
     }
-  if (o.contributions.length > consolidationLimits.contributions)
+  if (review.contributions.length > consolidationLimits.contributions)
     throw Error(
       "Consolidation exceeds 2,000 contributions. Narrow the sources; no output was truncated.",
     );
   if (
-    (o.contributions.length ||
-      s(
+    (review.contributions.length ||
+      addException(
         consolidationDefinition.sources[0].id,
         "empty",
         "No valid contributing amounts. Review the sources and exceptions.",
       ),
-    !o.exceptions.some((exception) => exception.severity === "error"))
+    !review.exceptions.some((exception) => exception.severity === "error"))
   ) {
-    ((o.subtotals = buildConsolidationSubtotals(o.contributions)),
-      (o.grandTotal = sumConsolidationAmounts(
-        o.contributions.map((contribution) => contribution.amount),
+    ((review.subtotals = buildConsolidationSubtotals(review.contributions)),
+      (review.grandTotal = sumConsolidationAmounts(
+        review.contributions.map((contribution) => contribution.amount),
       )),
-      (o.sourceTotal = sumConsolidationAmounts(
-        o.sources.map((source) => source.amount),
+      (review.sourceTotal = sumConsolidationAmounts(
+        review.sources.map((source) => source.amount),
       )),
-      (o.difference = o.grandTotal - o.sourceTotal));
-    const d =
+      (review.difference = review.grandTotal - review.sourceTotal));
+    const amountTolerance =
       Number.EPSILON *
-      Math.max(1, Math.abs(o.grandTotal), Math.abs(o.sourceTotal)) *
-      o.contributions.length *
+      Math.max(1, Math.abs(review.grandTotal), Math.abs(review.sourceTotal)) *
+      review.contributions.length *
       4;
-    (Math.abs(o.difference) > d &&
-      s(
+    (Math.abs(review.difference) > amountTolerance &&
+      addException(
         consolidationDefinition.sources[0].id,
         "reconciliation",
         "Source control totals do not reconcile to the contributing amounts.",
       ),
-      (o.complete = !o.exceptions.some(
+      (review.complete = !review.exceptions.some(
         (exception) => exception.severity === "error",
       )));
   }
-  return o;
+  return review;
 }
 function buildAuthorizedContextSnapshot(workbook, options) {
   const authorizedContext = normalizeAuthorizedContext(workbook, options);
@@ -2163,12 +2550,14 @@ function buildAuthorizedContextSnapshot(workbook, options) {
     hidden: !!options.includeHidden,
     readOnly: !!options.readOnly,
     approved: authorizedContext.external
-      .map((n) => ({
-        id: n.workbook.id,
-        sheets: [...n.allowedSheetIds].sort(),
-        hidden: !!n.includeHidden,
+      .map((externalEntry) => ({
+        id: externalEntry.workbook.id,
+        sheets: [...externalEntry.allowedSheetIds].sort(),
+        hidden: !!externalEntry.includeHidden,
       }))
-      .sort((n, o) => n.id.localeCompare(o.id)),
+      .sort((leftEntry, rightEntry) =>
+        leftEntry.id.localeCompare(rightEntry.id),
+      ),
   });
 }
 function validateOutputSheetName(workbook, outputName) {
@@ -2217,13 +2606,13 @@ function buildConsolidationOutputCells(worksheetRecord, outputRange) {
     consolidationLimits.outputCells
   )
     throw Error("Consolidation output range exceeds its cell budget.");
-  const n = [];
+  const outputRows = [];
   for (
     let firstRow = rangeAddress.firstRow;
     firstRow <= rangeAddress.lastRow;
     firstRow++
   ) {
-    const a = [];
+    const rowCells = [];
     for (
       let firstCol = rangeAddress.firstCol;
       firstCol <= rangeAddress.lastCol;
@@ -2233,15 +2622,15 @@ function buildConsolidationOutputCells(worksheetRecord, outputRange) {
         worksheetRecord.cells[
           `${columnIndexToLetters(firstCol)}${firstRow + 1}`
         ];
-      a.push({
+      rowCells.push({
         raw: cell?.raw ?? null,
         literal: !!cell?.literal,
         note: cell?.note ?? "",
       });
     }
-    n.push(a);
+    outputRows.push(rowCells);
   }
-  return fingerprintCanonicalValue(n);
+  return fingerprintCanonicalValue(outputRows);
 }
 
 export {

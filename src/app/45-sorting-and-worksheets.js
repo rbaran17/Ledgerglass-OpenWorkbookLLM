@@ -55,9 +55,13 @@ import {
   sortEngineLimits,
 } from "./44-clean-and-reshape.js";
 
-function buildSortPreview(workbook, r, t = {}) {
-  const n = assertSortWorkbookAuthorized(workbook, r.sheetId, t),
-    sortSpecification = normalizeSortSpecification(workbook, r),
+function buildSortPreview(workbook, request, options = {}) {
+  const targetSheet = assertSortWorkbookAuthorized(
+      workbook,
+      request.sheetId,
+      options,
+    ),
+    sortSpecification = normalizeSortSpecification(workbook, request),
     sortSourceRange = resolveSortSourceRange(
       workbook,
       sortSpecification.sheetId,
@@ -69,125 +73,158 @@ function buildSortPreview(workbook, r, t = {}) {
       `This selection is part of populated records. Expand the selection to ${sortSourceRange.expandedRange}, or cancel; partial-record sorting is blocked.`,
     );
   const rangeAddress = parseRangeAddress(sortSourceRange.expandedRange),
-    d = sortSourceRange.lastRow - sortSourceRange.firstDataRow + 1;
-  if (d < 2)
+    rowCount = sortSourceRange.lastRow - sortSourceRange.firstDataRow + 1;
+  if (rowCount < 2)
     throw Error("Choose at least two data rows. Check the header setting.");
   if (
-    d > sortEngineLimits.rows ||
-    d * (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
+    rowCount > sortEngineLimits.rows ||
+    rowCount * (rangeAddress.lastCol - rangeAddress.firstCol + 1) >
       sortEngineLimits.cells
   )
     throw Error(
       "Sort supports at most 10,000 rows and 100,000 record cells per reviewed operation.",
     );
-  const u = cn(n, "row"),
+  const hiddenRowRanges = cn(targetSheet, "row"),
     hiddenRows = Array.from(
-      { length: d },
-      (B, _) => sortSourceRange.firstDataRow + _,
-    ).filter((B) => u.some((_) => B >= _.start && B <= _.end)).length;
+      { length: rowCount },
+      (B, rowOffset) => sortSourceRange.firstDataRow + rowOffset,
+    ).filter((rowNumber) =>
+      hiddenRowRanges.some(
+        (hiddenRange) =>
+          rowNumber >= hiddenRange.start && rowNumber <= hiddenRange.end,
+      ),
+    ).length;
   if (hiddenRows && !sortSpecification.includeHidden)
     throw Error(
       `The source contains ${hiddenRows} hidden rows. Include hidden rows explicitly or cancel so records stay together.`,
     );
-  assertSortSafeFormulas(workbook, d, t);
+  assertSortSafeFormulas(workbook, rowCount, options);
   const sortPlan = buildSortPlan(workbook, sortSpecification, sortSourceRange),
     keys = JSON.stringify(sortPlan),
-    f = new Intl.Collator("en-US", {
+    collator = new Intl.Collator("en-US", {
       usage: "sort",
       sensitivity: sortSpecification.caseSensitive ? "variant" : "accent",
       numeric: false,
     }),
-    p = (B) =>
+    comparableText = (text) =>
       sortSpecification.caseSensitive
-        ? B.normalize("NFC")
-        : B.normalize("NFC").toLocaleLowerCase("en-US"),
-    m = sortSpecification.keys.map(
-      (key) => new Map(key.customOrder?.map((C, T) => [p(C), T])),
+        ? text.normalize("NFC")
+        : text.normalize("NFC").toLocaleLowerCase("en-US"),
+    customOrderMaps = sortSpecification.keys.map(
+      (key) =>
+        new Map(
+          key.customOrder?.map((customOrderValue, customOrderIndex) => [
+            comparableText(customOrderValue),
+            customOrderIndex,
+          ]),
+        ),
     ),
-    v = (B) =>
-      B.compare === null || B.compare === ""
+    valueRank = (keyEntry) =>
+      keyEntry.compare === null || keyEntry.compare === ""
         ? 4
-        : B.error
+        : keyEntry.error
           ? 3
-          : typeof B.compare == "number"
+          : typeof keyEntry.compare == "number"
             ? 0
-            : typeof B.compare == "string"
+            : typeof keyEntry.compare == "string"
               ? 1
               : 2,
-    g = [...sortPlan].sort((B, _) => {
-      for (let C = 0; C < sortSpecification.keys.length; C++) {
-        const T = B.keys[C],
-          N = _.keys[C],
-          R = v(T),
-          L = v(N),
-          $ = sortSpecification.keys[C].direction === "ascending" ? 1 : -1;
-        if (R === 4 || L === 4) {
-          if (R !== L) return R === 4 ? 1 : -1;
+    sortedRows = [...sortPlan].sort((leftRow, rightRow) => {
+      for (
+        let keyIndex = 0;
+        keyIndex < sortSpecification.keys.length;
+        keyIndex++
+      ) {
+        const leftKey = leftRow.keys[keyIndex],
+          rightKey = rightRow.keys[keyIndex],
+          leftRank = valueRank(leftKey),
+          rightRank = valueRank(rightKey),
+          directionSign =
+            sortSpecification.keys[keyIndex].direction === "ascending" ? 1 : -1;
+        if (leftRank === 4 || rightRank === 4) {
+          if (leftRank !== rightRank) return leftRank === 4 ? 1 : -1;
           continue;
         }
-        if (m[C].size) {
-          const G = m[C].get(p(String(T.compare))),
-            H = m[C].get(p(String(N.compare)));
-          if (G !== undefined || H !== undefined) {
-            if (G === undefined) return 1;
-            if (H === undefined) return -1;
-            if (G !== H) return (G - H) * $;
+        if (customOrderMaps[keyIndex].size) {
+          const leftCustomIndex = customOrderMaps[keyIndex].get(
+              comparableText(String(leftKey.compare)),
+            ),
+            rightCustomIndex = customOrderMaps[keyIndex].get(
+              comparableText(String(rightKey.compare)),
+            );
+          if (leftCustomIndex !== undefined || rightCustomIndex !== undefined) {
+            if (leftCustomIndex === undefined) return 1;
+            if (rightCustomIndex === undefined) return -1;
+            if (leftCustomIndex !== rightCustomIndex)
+              return (leftCustomIndex - rightCustomIndex) * directionSign;
           }
         }
-        const U =
-          R !== L
-            ? R - L
-            : typeof T.compare == "number" && typeof N.compare == "number"
-              ? T.compare - N.compare
-              : typeof T.compare == "boolean" && typeof N.compare == "boolean"
-                ? Number(T.compare) - Number(N.compare)
-                : f.compare(String(T.compare), String(N.compare));
-        if (U) return U * $;
+        const comparison =
+          leftRank !== rightRank
+            ? leftRank - rightRank
+            : typeof leftKey.compare == "number" &&
+                typeof rightKey.compare == "number"
+              ? leftKey.compare - rightKey.compare
+              : typeof leftKey.compare == "boolean" &&
+                  typeof rightKey.compare == "boolean"
+                ? Number(leftKey.compare) - Number(rightKey.compare)
+                : collator.compare(
+                    String(leftKey.compare),
+                    String(rightKey.compare),
+                  );
+        if (comparison) return comparison * directionSign;
       }
-      return B.row - _.row;
+      return leftRow.row - rightRow.row;
     }),
-    permutation = Array(d).fill(0);
-  g.forEach(
-    (B, _) =>
-      (permutation[B.row - sortSourceRange.firstDataRow] =
-        sortSourceRange.firstDataRow + _),
+    permutation = Array(rowCount).fill(0);
+  sortedRows.forEach(
+    (sortedRow, sortedIndex) =>
+      (permutation[sortedRow.row - sortSourceRange.firstDataRow] =
+        sortSourceRange.firstDataRow + sortedIndex),
   );
-  const movedRows = g.filter(
-      (B, _) => B.row !== sortSourceRange.firstDataRow + _,
+  const movedRows = sortedRows.filter(
+      (movedRow, positionIndex) =>
+        movedRow.row !== sortSourceRange.firstDataRow + positionIndex,
     ).length,
-    w = {
+    structuralEdit = {
       axis: "row",
       index: sortSourceRange.firstDataRow,
-      count: d,
+      count: rowCount,
       remove: false,
       moveBefore: sortSourceRange.firstDataRow,
       permutation: permutation,
     };
   let candidate = movedRows
-    ? applyStructuralEdit(workbook, n.id, w)
+    ? applyStructuralEdit(workbook, targetSheet.id, structuralEdit)
     : structuredClone(workbook);
-  const A = [],
+  const changedCells = [],
     formulaChanges = [],
     metadataChanges = [],
-    I = (B) =>
-      B >= sortSourceRange.firstDataRow && B <= sortSourceRange.lastRow
-        ? permutation[B - sortSourceRange.firstDataRow]
-        : B;
+    destinationRowOf = (rowIndex) =>
+      rowIndex >= sortSourceRange.firstDataRow &&
+      rowIndex <= sortSourceRange.lastRow
+        ? permutation[rowIndex - sortSourceRange.firstDataRow]
+        : rowIndex;
   for (const sheet of workbook.sheets) {
     const sheetOrThrow = findSheetOrThrow(candidate, sheet.id);
     for (const [source, cell] of Object.entries(sheet.cells))
       if (N3(cell)) {
-        const N = _t(source),
+        const sourceAddress = _t(source),
           destination =
-            sheet.id === n.id ? formatCellAddress(I(N.row), N.col) : source,
-          L = sheetOrThrow.cells[destination]?.raw;
-        L !== cell.raw &&
+            sheet.id === targetSheet.id
+              ? formatCellAddress(
+                  destinationRowOf(sourceAddress.row),
+                  sourceAddress.col,
+                )
+              : source,
+          candidateRaw = sheetOrThrow.cells[destination]?.raw;
+        candidateRaw !== cell.raw &&
           formulaChanges.push({
             sheet: sheet.name,
             source: source,
             destination: destination,
             before: String(cell.raw),
-            after: String(L),
+            after: String(candidateRaw),
           });
       }
     for (const address of new Set([
@@ -196,12 +233,14 @@ function buildSortPreview(workbook, r, t = {}) {
     ]))
       JSON.stringify(sheet.cells[address]) !==
         JSON.stringify(sheetOrThrow.cells[address]) &&
-        A.push({
+        changedCells.push({
           sheetId: sheet.id,
           address: address,
           cell: sheetOrThrow.cells[address] ?? { raw: null },
         });
-    for (const field of Object.keys(sheetOrThrow).filter((T) => T !== "cells"))
+    for (const field of Object.keys(sheetOrThrow).filter(
+      (sheetFieldName) => sheetFieldName !== "cells",
+    ))
       JSON.stringify(sheet[field]) !== JSON.stringify(sheetOrThrow[field]) &&
         metadataChanges.push({ sheet: sheet.name, field: field });
   }
@@ -212,7 +251,7 @@ function buildSortPreview(workbook, r, t = {}) {
     JSON.stringify(workbook.formulaWatches) !==
       JSON.stringify(candidate.formulaWatches) &&
       metadataChanges.push({ sheet: "Workbook", field: "formulaWatches" }),
-    A.length > sortEngineLimits.cells)
+    changedCells.length > sortEngineLimits.cells)
   )
     throw Error(
       "The sort would change more than 100,000 cells including dependent references.",
@@ -221,99 +260,103 @@ function buildSortPreview(workbook, r, t = {}) {
     JSON.stringify(candidate.reviewThreads) &&
     metadataChanges.push({ sheet: "Workbook", field: "reviewThreads" });
   for (const sheet of workbook.sheets)
-    sheet.id !== n.id &&
+    sheet.id !== targetSheet.id &&
       JSON.stringify(sheet) !==
         JSON.stringify(findSheetOrThrow(candidate, sheet.id)) &&
       assertSheetUnprotected(sheet);
-  if ((checkDataValidationBatch(candidate, A), movedRows)) {
-    const sheetOrThrow = findSheetOrThrow(candidate, n.id);
+  if ((checkDataValidationBatch(candidate, changedCells), movedRows)) {
+    const sheetOrThrow = findSheetOrThrow(candidate, targetSheet.id);
     ((candidate.rowOrigins = [...(candidate.rowOrigins ?? [])]),
       (sheetOrThrow.rowOriginIds = { ...sheetOrThrow.rowOriginIds }));
-    const _ = new Set(
-      Object.entries(n.cells)
-        .filter(([, C]) => isNonBlankCellEntry(C))
-        .map(([C]) => _t(C).row),
+    const populatedRows = new Set(
+      Object.entries(targetSheet.cells)
+        .filter(([, cellEntry]) => isNonBlankCellEntry(cellEntry))
+        .map(([cellAddress]) => _t(cellAddress).row),
     );
-    for (const C of g)
-      if (_.has(C.row) && !n.rowOriginIds?.[C.row]) {
+    for (const sortedRowEntry of sortedRows)
+      if (
+        populatedRows.has(sortedRowEntry.row) &&
+        !targetSheet.rowOriginIds?.[sortedRowEntry.row]
+      ) {
         if (candidate.rowOrigins.length >= 1e5)
           throw Error("Source row identity capacity has been reached.");
-        const T = crypto.randomUUID();
-        ((sheetOrThrow.rowOriginIds[I(C.row)] = T),
+        const rowOriginId = crypto.randomUUID();
+        ((sheetOrThrow.rowOriginIds[destinationRowOf(sortedRowEntry.row)] =
+          rowOriginId),
           candidate.rowOrigins.push({
-            id: T,
+            id: rowOriginId,
             sourceId: workbook.id,
             sourceName: workbook.name,
-            sourceSheet: n.name,
-            originalRow: C.row + 1,
+            sourceSheet: targetSheet.name,
+            originalRow: sortedRowEntry.row + 1,
             kind: "snapshot",
           }));
       }
     candidate = normalizeWorkbookInput(candidate);
   }
-  const O = new Map(
+  const rowOriginsById = new Map(
       candidate.rowOrigins?.map((rowOrigin) => [rowOrigin.id, rowOrigin]),
     ),
-    j = {
+    preview = {
       request: sortSpecification,
       selection: sortSourceRange,
       snapshot: JSON.stringify(workbook),
-      rows: g.map((B, _) => {
-        const sourceId = findSheetOrThrow(candidate, n.id).rowOriginIds?.[
-            sortSourceRange.firstDataRow + _
-          ],
-          T = sourceId ? O.get(sourceId) : undefined;
+      rows: sortedRows.map((planRow, rowPosition) => {
+        const sourceId = findSheetOrThrow(candidate, targetSheet.id)
+            .rowOriginIds?.[sortSourceRange.firstDataRow + rowPosition],
+          sourceOrigin = sourceId ? rowOriginsById.get(sourceId) : undefined;
         return {
-          sourceRow: B.row + 1,
-          destinationRow: sortSourceRange.firstDataRow + _ + 1,
+          sourceRow: planRow.row + 1,
+          destinationRow: sortSourceRange.firstDataRow + rowPosition + 1,
           ...(sourceId
             ? {
                 sourceId: sourceId,
-                sourceName: T?.sourceName,
-                originalRow: T?.originalRow,
+                sourceName: sourceOrigin?.sourceName,
+                originalRow: sourceOrigin?.originalRow,
               }
             : {}),
-          keys: B.keys.map((key) => key.value),
+          keys: planRow.keys.map((key) => key.value),
         };
       }),
       movedRows: movedRows,
-      changedCells: A.length,
+      changedCells: changedCells.length,
       formulaChanges: formulaChanges,
       metadataChanges: metadataChanges,
       hiddenRows: hiddenRows,
       policy: stableSortPolicy,
     };
   return (
-    MW.set(j, {
-      signature: JSON.stringify(j),
+    MW.set(preview, {
+      signature: JSON.stringify(preview),
       candidate: candidate,
       keys: keys,
-      allowed: buildAllowedSheetKey(workbook, t),
+      allowed: buildAllowedSheetKey(workbook, options),
     }),
-    j
+    preview
   );
 }
-function assertSortPreviewCurrent(workbook, r, t = {}) {
-  const n = MW.get(r);
-  if (!n || n.signature !== JSON.stringify(r))
+function assertSortPreviewCurrent(workbook, preview, options = {}) {
+  const previewState = MW.get(preview);
+  if (!previewState || previewState.signature !== JSON.stringify(preview))
     throw Error(
       "This sort preview changed or was restored from another session. Preview again.",
     );
   if (
-    (assertSortWorkbookAuthorized(workbook, r.request.sheetId, t),
-    n.allowed !== buildAllowedSheetKey(workbook, t) ||
-      JSON.stringify(workbook) !== r.snapshot)
+    (assertSortWorkbookAuthorized(workbook, preview.request.sheetId, options),
+    previewState.allowed !== buildAllowedSheetKey(workbook, options) ||
+      JSON.stringify(workbook) !== preview.snapshot)
   )
     throw Error(
       "The workbook or host permissions changed after the sort preview. Preview again.",
     );
   if (
-    n.keys !== JSON.stringify(buildSortPlan(workbook, r.request, r.selection))
+    previewState.keys !==
+    JSON.stringify(buildSortPlan(workbook, preview.request, preview.selection))
   )
     throw Error(
       "Calculated sort keys changed after the preview. Preview and review the new order.",
     );
-  return r.movedRows ? structuredClone(n.candidate) : workbook;
+  return preview.movedRows ? structuredClone(previewState.candidate) : workbook;
 }
 const buildSortKeySpec = (column) => ({
     column: column,
@@ -322,15 +365,19 @@ const buildSortKeySpec = (column) => ({
     customText: "",
     useCustom: false,
   }),
-  expandSortSelectionToRecords = (e) => {
+  expandSortSelectionToRecords = (selection) => {
     try {
       const firstRow = parseRangeAddress(
-        resolveSortSourceRange(e.workbook, e.sheetId, e.range).expandedRange,
+        resolveSortSourceRange(
+          selection.workbook,
+          selection.sheetId,
+          selection.range,
+        ).expandedRange,
       ).firstRow;
       return (
         firstRow === 0 ||
-        !!e.workbook.sheets
-          .find((sheet) => sheet.id === e.sheetId)
+        !!selection.workbook.sheets
+          .find((sheet) => sheet.id === selection.sheetId)
           ?.tables?.some(
             (table) => parseRangeAddress(table.range).firstRow === firstRow,
           )
@@ -339,153 +386,200 @@ const buildSortKeySpec = (column) => ({
       return false;
     }
   };
-function CustomSortDialog(e) {
+function CustomSortDialog(dialogProps) {
   const { text, language } = useWorkbookMessages(),
-    n = ne.useId(),
-    o = ne.useRef(null),
-    a = ne.useRef(null),
-    [range, d] = ne.useState(e.range),
-    [headers, l] = ne.useState(() => expandSortSelectionToRecords(e)),
-    [c, h] = ne.useState([
-      buildSortKeySpec(parseRangeAddress(e.range).firstCol),
+    dialogId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    previewRef = ne.useRef(null),
+    [range, setRange] = ne.useState(dialogProps.range),
+    [headers, setHeaders] = ne.useState(() =>
+      expandSortSelectionToRecords(dialogProps),
+    ),
+    [sortKeys, setSortKeys] = ne.useState([
+      buildSortKeySpec(parseRangeAddress(dialogProps.range).firstCol),
     ]),
-    [f, p] = ne.useState(false),
-    [m, v] = ne.useState(false),
-    [g, b] = ne.useState(false),
-    [y, w] = ne.useState(null),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(0),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    z = e.allowedSheetIds ?? e.workbook.sheets.map((sheet) => sheet.id),
-    V = z.includes(e.sheetId),
-    D = JSON.stringify([
-      e.workbook,
-      e.sheetId,
-      e.range,
-      e.readOnly,
-      [...z].sort(),
+    [isSelectionExpanded, setIsSelectionExpanded] = ne.useState(false),
+    [shouldIncludeHidden, setShouldIncludeHidden] = ne.useState(false),
+    [isCaseSensitive, setIsCaseSensitive] = ne.useState(false),
+    [sortPreview, setSortPreview] = ne.useState(null),
+    [previewSnapshot, setPreviewSnapshot] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [pageIndex, setPageIndex] = ne.useState(0),
+    sheet = dialogProps.workbook.sheets.find(
+      (sheet) => sheet.id === dialogProps.sheetId,
+    ),
+    allowedSheetIds =
+      dialogProps.allowedSheetIds ??
+      dialogProps.workbook.sheets.map((sheet) => sheet.id),
+    isSheetAllowed = allowedSheetIds.includes(dialogProps.sheetId),
+    currentSnapshot = JSON.stringify([
+      dialogProps.workbook,
+      dialogProps.sheetId,
+      dialogProps.range,
+      dialogProps.readOnly,
+      [...allowedSheetIds].sort(),
     ]),
-    B = !!y && E === D && !e.readOnly;
-  let _,
-    C = "";
+    isPreviewCurrent =
+      !!sortPreview &&
+      previewSnapshot === currentSnapshot &&
+      !dialogProps.readOnly;
+  let sortSource,
+    sourceError = "";
   try {
-    if (!V) throw Error("The source is outside the host-approved worksheets.");
-    _ = resolveSortSourceRange(e.workbook, e.sheetId, range, headers);
+    if (!isSheetAllowed)
+      throw Error("The source is outside the host-approved worksheets.");
+    sortSource = resolveSortSourceRange(
+      dialogProps.workbook,
+      dialogProps.sheetId,
+      range,
+      headers,
+    );
   } catch (error) {
-    C = error.message;
+    sourceError = error.message;
   }
-  const T = _ ? parseRangeAddress(_.expandedRange) : undefined,
-    N = T
+  const expandedAddress = sortSource
+      ? parseRangeAddress(sortSource.expandedRange)
+      : undefined,
+    columnIndexes = expandedAddress
       ? Array.from(
-          { length: T.lastCol - T.firstCol + 1 },
-          (X, J) => T.firstCol + J,
+          { length: expandedAddress.lastCol - expandedAddress.firstCol + 1 },
+          (X, columnOffset) => expandedAddress.firstCol + columnOffset,
         )
       : [],
-    R = () => {
-      (w(null), F(""), O(0));
+    resetPreview = () => {
+      (setSortPreview(null), setErrorMessage(""), setPageIndex(0));
     },
-    L = (X, J) => {
-      (R(), h(c.map((q, W) => (W === X ? { ...q, ...J } : q))));
+    updateSortKey = (keyIndex, changes) => {
+      (resetPreview(),
+        setSortKeys(
+          sortKeys.map((sortKey, itemIndex) =>
+            itemIndex === keyIndex ? { ...sortKey, ...changes } : sortKey,
+          ),
+        ));
     },
-    $ = (X, J) => {
-      R();
-      const q = [...c];
-      (([q[X], q[X + J]] = [q[X + J], q[X]]), h(q));
+    moveSortKey = (keyIndex, direction) => {
+      resetPreview();
+      const nextSortKeys = [...sortKeys];
+      (([nextSortKeys[keyIndex], nextSortKeys[keyIndex + direction]] = [
+        nextSortKeys[keyIndex + direction],
+        nextSortKeys[keyIndex],
+      ]),
+        setSortKeys(nextSortKeys));
     },
     onClick = () => {
       try {
         const sortPreview = buildSortPreview(
-          e.workbook,
+          dialogProps.workbook,
           {
-            sheetId: e.sheetId,
+            sheetId: dialogProps.sheetId,
             range: range,
             headers: headers,
-            keys: c.map(({ customText, useCustom, ...W }) => ({
-              ...W,
+            keys: sortKeys.map(({ customText, useCustom, ...keySpec }) => ({
+              ...keySpec,
               ...(useCustom ? { customOrder: customText.split(/\r?\n/) } : {}),
             })),
-            expandSelection: f,
-            includeHidden: m,
-            caseSensitive: g,
+            expandSelection: isSelectionExpanded,
+            includeHidden: shouldIncludeHidden,
+            caseSensitive: isCaseSensitive,
           },
-          { readOnly: e.readOnly, allowedSheetIds: e.allowedSheetIds },
+          {
+            readOnly: dialogProps.readOnly,
+            allowedSheetIds: dialogProps.allowedSheetIds,
+          },
         );
-        (w(sortPreview), A(D), O(0), F(""));
+        (setSortPreview(sortPreview),
+          setPreviewSnapshot(currentSnapshot),
+          setPageIndex(0),
+          setErrorMessage(""));
       } catch (error) {
-        (w(null), F(error.message));
+        (setSortPreview(null), setErrorMessage(error.message));
       }
     },
-    G = () => {
+    applySortPreview = () => {
       try {
-        if (!y || !B)
+        if (!sortPreview || !isPreviewCurrent)
           throw Error("The workbook or selection changed. Preview again.");
-        const X = assertSortPreviewCurrent(e.workbook, y, {
-          readOnly: e.readOnly,
-          allowedSheetIds: e.allowedSheetIds,
-        });
-        (e.onWorkbookChange(
-          X,
-          `Sort ${sheet?.name}: ${y.movedRows} records moved`,
+        const sortedWorkbook = assertSortPreviewCurrent(
+          dialogProps.workbook,
+          sortPreview,
+          {
+            readOnly: dialogProps.readOnly,
+            allowedSheetIds: dialogProps.allowedSheetIds,
+          },
+        );
+        (dialogProps.onWorkbookChange(
+          sortedWorkbook,
+          `Sort ${sheet?.name}: ${sortPreview.movedRows} records moved`,
         ),
-          e.onClose());
+          dialogProps.onClose());
       } catch (error) {
-        (w(null), F(error.message));
+        (setSortPreview(null), setErrorMessage(error.message));
       }
     };
   (ne.useEffect(() => {
     const activeElement = document.activeElement;
     return (
-      o.current?.querySelector('input[data-ui-label="Source range"]')?.focus(),
+      dialogRef.current
+        ?.querySelector('input[data-ui-label="Source range"]')
+        ?.focus(),
       () => {
         activeElement?.isConnected && activeElement.focus();
       }
     );
   }, []),
     ne.useEffect(() => {
-      var X;
-      y &&
-        (((X = a.current) == null ? undefined : X.scrollIntoView)?.call(X, {
+      var previewElement;
+      sortPreview &&
+        (((previewElement = previewRef.current) == null
+          ? undefined
+          : previewElement.scrollIntoView
+        )?.call(previewElement, {
           block: "start",
         }),
-        a.current?.focus({ preventScroll: true }));
-    }, [y]));
-  const H = Math.max(
+        previewRef.current?.focus({ preventScroll: true }));
+    }, [sortPreview]));
+  const pageCount = Math.max(
       1,
-      Math.ceil((y?.rows.length ?? 0) / sortEngineLimits.pageSize),
+      Math.ceil((sortPreview?.rows.length ?? 0) / sortEngineLimits.pageSize),
     ),
-    Q = Math.min(I, H - 1);
+    currentPage = Math.min(pageIndex, pageCount - 1);
   return i.jsx("div", {
     className: "dup-backdrop",
     onMouseDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && dialogProps.onClose();
     },
     children: i.jsxs("section", {
       className: "dup-dialog sort-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": `${n}-title`,
-      ref: o,
+      "aria-labelledby": `${dialogId}-title`,
+      ref: dialogRef,
       onKeyDown: (event) => {
-        var q, W;
+        var lastFocusable, firstFocusable;
         if (
           (event.stopPropagation(),
-          event.key === "Escape" && (event.preventDefault(), e.onClose()),
+          event.key === "Escape" &&
+            (event.preventDefault(), dialogProps.onClose()),
           event.key === "Tab")
         ) {
-          const K = [
-            ...(o.current?.querySelectorAll(
+          const focusableElements = [
+            ...(dialogRef.current?.querySelectorAll(
               "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
             ) ?? []),
           ].filter(
-            (te) =>
-              !te.closest("details:not([open])") || te.tagName === "SUMMARY",
+            (element) =>
+              !element.closest("details:not([open])") ||
+              element.tagName === "SUMMARY",
           );
-          event.shiftKey && document.activeElement === K[0]
-            ? (event.preventDefault(), (q = K.at(-1)) == null || q.focus())
+          event.shiftKey && document.activeElement === focusableElements[0]
+            ? (event.preventDefault(),
+              (lastFocusable = focusableElements.at(-1)) == null ||
+                lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === K.at(-1) &&
-              (event.preventDefault(), (W = K[0]) == null || W.focus());
+              document.activeElement === focusableElements.at(-1) &&
+              (event.preventDefault(),
+              (firstFocusable = focusableElements[0]) == null ||
+                firstFocusable.focus());
         }
       },
       children: [
@@ -494,7 +588,7 @@ function CustomSortDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: `${n}-title`,
+                  id: `${dialogId}-title`,
                   children: i.jsx(LocalizedText, { children: "Custom sort" }),
                 }),
                 i.jsx("p", {
@@ -506,7 +600,7 @@ function CustomSortDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close custom sort"),
-              onClick: e.onClose,
+              onClick: dialogProps.onClose,
               lang: language("Close custom sort"),
               "data-ui-label": "Close custom sort",
               children: i.jsx(X, { size: 18 }),
@@ -520,7 +614,9 @@ function CustomSortDialog(e) {
               children: [
                 i.jsx(LocalizedText, { children: "Worksheet" }),
                 i.jsx("strong", {
-                  children: V ? sheet?.name : "Outside current context",
+                  children: isSheetAllowed
+                    ? sheet?.name
+                    : "Outside current context",
                 }),
               ],
             }),
@@ -531,7 +627,9 @@ function CustomSortDialog(e) {
                   "aria-label": text("Source range"),
                   value: range,
                   onChange: (event) => {
-                    (R(), p(false), d(event.target.value));
+                    (resetPreview(),
+                      setIsSelectionExpanded(false),
+                      setRange(event.target.value));
                   },
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
@@ -545,7 +643,7 @@ function CustomSortDialog(e) {
                   type: "checkbox",
                   checked: headers,
                   onChange: (event) => {
-                    (R(), l(event.target.checked));
+                    (resetPreview(), setHeaders(event.target.checked));
                   },
                 }),
                 i.jsx(LocalizedText, { children: "My data has headers" }),
@@ -553,15 +651,15 @@ function CustomSortDialog(e) {
             }),
           ],
         }),
-        C
-          ? i.jsx("p", { role: "alert", children: C })
+        sourceError
+          ? i.jsx("p", { role: "alert", children: sourceError })
           : i.jsxs("div", {
               className: "sort-scope",
               children: [
                 i.jsxs("strong", {
                   children: [
                     i.jsx(LocalizedText, { children: "Complete records: " }),
-                    _?.expandedRange,
+                    sortSource?.expandedRange,
                   ],
                 }),
                 i.jsx("p", {
@@ -570,7 +668,7 @@ function CustomSortDialog(e) {
                       "Every populated column in these worksheet rows moves together, including fields beside the selection. Headers stay in place. Applying also clears temporary view sorting and search.",
                   }),
                 }),
-                _?.expansionRequired &&
+                sortSource?.expansionRequired &&
                   i.jsxs("fieldset", {
                     children: [
                       i.jsx("legend", {
@@ -582,10 +680,10 @@ function CustomSortDialog(e) {
                         children: [
                           i.jsx("input", {
                             type: "radio",
-                            name: `${n}-expand`,
-                            checked: !f,
+                            name: `${dialogId}-expand`,
+                            checked: !isSelectionExpanded,
                             onChange: () => {
-                              (R(), p(false));
+                              (resetPreview(), setIsSelectionExpanded(false));
                             },
                           }),
                           i.jsx(LocalizedText, {
@@ -598,14 +696,14 @@ function CustomSortDialog(e) {
                         children: [
                           i.jsx("input", {
                             type: "radio",
-                            name: `${n}-expand`,
-                            checked: f,
+                            name: `${dialogId}-expand`,
+                            checked: isSelectionExpanded,
                             onChange: () => {
-                              (R(), p(true));
+                              (resetPreview(), setIsSelectionExpanded(true));
                             },
                           }),
                           i.jsx(LocalizedText, { children: "Expand to " }),
-                          _.expandedRange,
+                          sortSource.expandedRange,
                         ],
                       }),
                     ],
@@ -620,13 +718,19 @@ function CustomSortDialog(e) {
             }),
             i.jsxs("button", {
               disabled:
-                c.length >= sortEngineLimits.keys || c.length >= N.length,
+                sortKeys.length >= sortEngineLimits.keys ||
+                sortKeys.length >= columnIndexes.length,
               onClick: () => {
-                (R(),
-                  h([
-                    ...c,
+                (resetPreview(),
+                  setSortKeys([
+                    ...sortKeys,
                     buildSortKeySpec(
-                      N.find((X) => !c.some((J) => J.column === X)),
+                      columnIndexes.find(
+                        (columnIndex) =>
+                          !sortKeys.some(
+                            (sortKey) => sortKey.column === columnIndex,
+                          ),
+                      ),
                     ),
                   ]));
               },
@@ -639,45 +743,49 @@ function CustomSortDialog(e) {
         }),
         i.jsx("ol", {
           className: "sort-levels",
-          children: c.map((X$1, J) =>
+          children: sortKeys.map((X$1, levelIndex) =>
             i.jsxs(
               "li",
               {
                 children: [
                   i.jsx("span", {
                     className: "sort-level-number",
-                    children: J + 1,
+                    children: levelIndex + 1,
                   }),
                   i.jsxs("label", {
                     children: [
                       i.jsx(LocalizedText, { children: "Column" }),
-                      N.length > 500
+                      columnIndexes.length > 500
                         ? i.jsx(LocalizedNumberField, {
-                            "aria-label": `Column ${J + 1}`,
-                            min: T.firstCol + 1,
-                            max: T.lastCol + 1,
+                            "aria-label": `Column ${levelIndex + 1}`,
+                            min: expandedAddress.firstCol + 1,
+                            max: expandedAddress.lastCol + 1,
                             value: X$1.column + 1,
-                            onValueChange: (q) =>
-                              L(J, { column: Number(q) - 1 }),
+                            onValueChange: (columnNumber) =>
+                              updateSortKey(levelIndex, {
+                                column: Number(columnNumber) - 1,
+                              }),
                           })
                         : i.jsx("select", {
-                            "aria-label": `Column ${J + 1}`,
+                            "aria-label": `Column ${levelIndex + 1}`,
                             value: X$1.column,
                             onChange: (event) =>
-                              L(J, { column: Number(event.target.value) }),
-                            children: N.map((q) =>
+                              updateSortKey(levelIndex, {
+                                column: Number(event.target.value),
+                              }),
+                            children: columnIndexes.map((columnIndex) =>
                               i.jsxs(
                                 "option",
                                 {
-                                  value: q,
+                                  value: columnIndex,
                                   children: [
-                                    columnIndexToLetters(q),
-                                    headers && T
-                                      ? ` · ${String(sheet?.cells[`${columnIndexToLetters(q)}${T.firstRow + 1}`]?.raw ?? "(blank header)")}`
+                                    columnIndexToLetters(columnIndex),
+                                    headers && expandedAddress
+                                      ? ` · ${String(sheet?.cells[`${columnIndexToLetters(columnIndex)}${expandedAddress.firstRow + 1}`]?.raw ?? "(blank header)")}`
                                       : "",
                                   ],
                                 },
-                                q,
+                                columnIndex,
                               ),
                             ),
                           }),
@@ -687,10 +795,12 @@ function CustomSortDialog(e) {
                     children: [
                       i.jsx(LocalizedText, { children: "Order" }),
                       i.jsxs("select", {
-                        "aria-label": `Order ${J + 1}`,
+                        "aria-label": `Order ${levelIndex + 1}`,
                         value: X$1.direction,
                         onChange: (event) =>
-                          L(J, { direction: event.target.value }),
+                          updateSortKey(levelIndex, {
+                            direction: event.target.value,
+                          }),
                         children: [
                           i.jsx("option", {
                             value: "ascending",
@@ -708,10 +818,13 @@ function CustomSortDialog(e) {
                     children: [
                       i.jsx(LocalizedText, { children: "Interpret as" }),
                       i.jsxs("select", {
-                        "aria-label": `Interpretation ${J + 1}`,
+                        "aria-label": `Interpretation ${levelIndex + 1}`,
                         value: X$1.type,
                         onChange: (event) =>
-                          L(J, { type: event.target.value, useCustom: false }),
+                          updateSortKey(levelIndex, {
+                            type: event.target.value,
+                            useCustom: false,
+                          }),
                         children: [
                           i.jsx("option", {
                             value: "auto",
@@ -734,22 +847,27 @@ function CustomSortDialog(e) {
                     className: "sort-level-actions",
                     children: [
                       i.jsx("button", {
-                        "aria-label": `Move level ${J + 1} up`,
-                        disabled: J === 0,
-                        onClick: () => $(J, -1),
+                        "aria-label": `Move level ${levelIndex + 1} up`,
+                        disabled: levelIndex === 0,
+                        onClick: () => moveSortKey(levelIndex, -1),
                         children: i.jsx(ArrowUp, { size: 15 }),
                       }),
                       i.jsx("button", {
-                        "aria-label": `Move level ${J + 1} down`,
-                        disabled: J === c.length - 1,
-                        onClick: () => $(J, 1),
+                        "aria-label": `Move level ${levelIndex + 1} down`,
+                        disabled: levelIndex === sortKeys.length - 1,
+                        onClick: () => moveSortKey(levelIndex, 1),
                         children: i.jsx(ArrowDown, { size: 15 }),
                       }),
                       i.jsx("button", {
-                        "aria-label": `Remove level ${J + 1}`,
-                        disabled: c.length === 1,
+                        "aria-label": `Remove level ${levelIndex + 1}`,
+                        disabled: sortKeys.length === 1,
                         onClick: () => {
-                          (R(), h(c.filter((q, W) => W !== J)));
+                          (resetPreview(),
+                            setSortKeys(
+                              sortKeys.filter(
+                                (q, keyIndex) => keyIndex !== levelIndex,
+                              ),
+                            ));
                         },
                         children: i.jsx(X, { size: 15 }),
                       }),
@@ -765,12 +883,14 @@ function CustomSortDialog(e) {
                               type: "checkbox",
                               checked: X$1.useCustom,
                               onChange: (event) =>
-                                L(J, { useCustom: event.target.checked }),
+                                updateSortKey(levelIndex, {
+                                  useCustom: event.target.checked,
+                                }),
                             }),
                             i.jsx(LocalizedText, {
                               children: "Use a custom order for level ",
                             }),
-                            J + 1,
+                            levelIndex + 1,
                           ],
                         }),
                         X$1.useCustom &&
@@ -780,14 +900,16 @@ function CustomSortDialog(e) {
                                 children: "One value per line",
                               }),
                               i.jsx("textarea", {
-                                "aria-label": `Custom order ${J + 1}`,
+                                "aria-label": `Custom order ${levelIndex + 1}`,
                                 rows: 3,
                                 placeholder: `High
 Medium
 Low`,
                                 value: X$1.customText,
                                 onChange: (event) =>
-                                  L(J, { customText: event.target.value }),
+                                  updateSortKey(levelIndex, {
+                                    customText: event.target.value,
+                                  }),
                               }),
                               i.jsx("small", {
                                 children: i.jsx(LocalizedText, {
@@ -801,7 +923,7 @@ Low`,
                     }),
                 ],
               },
-              J,
+              levelIndex,
             ),
           ),
         }),
@@ -812,9 +934,9 @@ Low`,
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: g,
+                  checked: isCaseSensitive,
                   onChange: (event) => {
-                    (R(), b(event.target.checked));
+                    (resetPreview(), setIsCaseSensitive(event.target.checked));
                   },
                 }),
                 i.jsx(LocalizedText, { children: "Case-sensitive text" }),
@@ -824,9 +946,10 @@ Low`,
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: m,
+                  checked: shouldIncludeHidden,
                   onChange: (event) => {
-                    (R(), v(event.target.checked));
+                    (resetPreview(),
+                      setShouldIncludeHidden(event.target.checked));
                   },
                 }),
                 i.jsx(LocalizedText, { children: "Include hidden rows" }),
@@ -848,12 +971,12 @@ Low`,
                 children: "Comparison and reference policy",
               }),
             }),
-            Object.values(stableSortPolicy).map((X) =>
-              i.jsx("p", { children: X }, X),
+            Object.values(stableSortPolicy).map((policyText) =>
+              i.jsx("p", { children: policyText }, policyText),
             ),
           ],
         }),
-        e.readOnly &&
+        dialogProps.readOnly &&
           i.jsx("p", {
             role: "status",
             children: i.jsx(LocalizedText, {
@@ -861,9 +984,14 @@ Low`,
                 "This host is read-only. Sorting cannot change records.",
             }),
           }),
-        k && i.jsx("p", { className: "dup-error", role: "alert", children: k }),
-        y &&
-          !B &&
+        errorMessage &&
+          i.jsx("p", {
+            className: "dup-error",
+            role: "alert",
+            children: errorMessage,
+          }),
+        sortPreview &&
+          !isPreviewCurrent &&
           i.jsx("p", {
             role: "alert",
             children: i.jsx(LocalizedText, {
@@ -871,39 +999,39 @@ Low`,
                 "The workbook, selection or permissions changed. Preview again.",
             }),
           }),
-        y &&
-          B &&
+        sortPreview &&
+          isPreviewCurrent &&
           i.jsxs("div", {
             className: "dup-preview",
             "aria-label": text("Sort preview"),
-            ref: a,
+            ref: previewRef,
             tabIndex: -1,
             lang: language("Sort preview"),
             "data-ui-label": "Sort preview",
             children: [
               i.jsxs("h3", {
                 children: [
-                  y.movedRows,
+                  sortPreview.movedRows,
                   " ",
                   i.jsx(LocalizedText, { children: "records move · " }),
-                  y.changedCells,
+                  sortPreview.changedCells,
                   " ",
                   i.jsx(LocalizedText, { children: "cells change" }),
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  y.rows.length,
+                  sortPreview.rows.length,
                   " ",
                   i.jsx(LocalizedText, { children: "records reviewed · " }),
-                  y.hiddenRows,
+                  sortPreview.hiddenRows,
                   " ",
                   i.jsx(LocalizedText, { children: "hidden rows · " }),
-                  y.formulaChanges.length,
+                  sortPreview.formulaChanges.length,
                   " ",
                   i.jsx(LocalizedText, { children: "formula rewrites ·" }),
                   " ",
-                  y.metadataChanges.length,
+                  sortPreview.metadataChanges.length,
                   " ",
                   i.jsx(LocalizedText, { children: "metadata updates" }),
                 ],
@@ -939,20 +1067,22 @@ Low`,
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: y.rows
+                      children: sortPreview.rows
                         .slice(
-                          Q * sortEngineLimits.pageSize,
-                          (Q + 1) * sortEngineLimits.pageSize,
+                          currentPage * sortEngineLimits.pageSize,
+                          (currentPage + 1) * sortEngineLimits.pageSize,
                         )
-                        .map((X) =>
+                        .map((previewRow) =>
                           i.jsxs(
                             "tr",
                             {
                               children: [
-                                i.jsx("td", { children: X.sourceRow }),
-                                i.jsx("td", { children: X.destinationRow }),
+                                i.jsx("td", { children: previewRow.sourceRow }),
                                 i.jsx("td", {
-                                  children: X.keys
+                                  children: previewRow.destinationRow,
+                                }),
+                                i.jsx("td", {
+                                  children: previewRow.keys
                                     .map((key) =>
                                       key === null || key === ""
                                         ? "(blank)"
@@ -964,22 +1094,23 @@ Low`,
                                   children: [
                                     i.jsxs("span", {
                                       children: [
-                                        X.sourceName ?? "Unchanged source",
-                                        X.originalRow
-                                          ? ` · row ${X.originalRow}`
+                                        previewRow.sourceName ??
+                                          "Unchanged source",
+                                        previewRow.originalRow
+                                          ? ` · row ${previewRow.originalRow}`
                                           : "",
                                       ],
                                     }),
-                                    X.sourceId &&
+                                    previewRow.sourceId &&
                                       i.jsx("small", {
-                                        title: X.sourceId,
-                                        children: X.sourceId,
+                                        title: previewRow.sourceId,
+                                        children: previewRow.sourceId,
                                       }),
                                   ],
                                 }),
                               ],
                             },
-                            X.sourceRow,
+                            previewRow.sourceRow,
                           ),
                         ),
                     }),
@@ -992,33 +1123,33 @@ Low`,
                 "data-ui-label": "Sort preview pages",
                 children: [
                   i.jsx("button", {
-                    disabled: Q === 0,
-                    onClick: () => O(Q - 1),
+                    disabled: currentPage === 0,
+                    onClick: () => setPageIndex(currentPage - 1),
                     children: i.jsx(LocalizedText, { children: "Previous" }),
                   }),
                   i.jsxs("span", {
                     children: [
                       i.jsx(LocalizedText, { children: "Page " }),
-                      Q + 1,
+                      currentPage + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      H,
+                      pageCount,
                     ],
                   }),
                   i.jsx("button", {
-                    disabled: Q === H - 1,
-                    onClick: () => O(Q + 1),
+                    disabled: currentPage === pageCount - 1,
+                    onClick: () => setPageIndex(currentPage + 1),
                     children: i.jsx(LocalizedText, { children: "Next" }),
                   }),
                 ],
               }),
-              y.formulaChanges.length > 0 &&
+              sortPreview.formulaChanges.length > 0 &&
                 i.jsxs("details", {
                   children: [
                     i.jsxs("summary", {
                       children: [
                         i.jsx(LocalizedText, { children: "Review " }),
-                        y.formulaChanges.length,
+                        sortPreview.formulaChanges.length,
                         " ",
                         i.jsx(LocalizedText, { children: "formula changes" }),
                       ],
@@ -1029,32 +1160,38 @@ Low`,
                           "First 50 changes shown; the SDK preview contains the complete list.",
                       }),
                     }),
-                    y.formulaChanges.slice(0, 50).map((X, J) =>
-                      i.jsxs(
-                        "p",
-                        {
-                          children: [
-                            i.jsxs("strong", {
-                              children: [
-                                X.sheet,
-                                "!",
-                                X.source,
-                                " → ",
-                                X.destination,
-                              ],
-                            }),
-                            i.jsx("br", {}),
-                            i.jsxs("code", {
-                              children: [X.before, " → ", X.after],
-                            }),
-                          ],
-                        },
-                        J,
+                    sortPreview.formulaChanges
+                      .slice(0, 50)
+                      .map((formulaChange, formulaChangeIndex) =>
+                        i.jsxs(
+                          "p",
+                          {
+                            children: [
+                              i.jsxs("strong", {
+                                children: [
+                                  formulaChange.sheet,
+                                  "!",
+                                  formulaChange.source,
+                                  " → ",
+                                  formulaChange.destination,
+                                ],
+                              }),
+                              i.jsx("br", {}),
+                              i.jsxs("code", {
+                                children: [
+                                  formulaChange.before,
+                                  " → ",
+                                  formulaChange.after,
+                                ],
+                              }),
+                            ],
+                          },
+                          formulaChangeIndex,
+                        ),
                       ),
-                    ),
                   ],
                 }),
-              y.metadataChanges.length > 0 &&
+              sortPreview.metadataChanges.length > 0 &&
                 i.jsxs("details", {
                   children: [
                     i.jsx("summary", {
@@ -1062,18 +1199,19 @@ Low`,
                         children: "Review metadata updates",
                       }),
                     }),
-                    y.metadataChanges.map((metadataChange, J) =>
-                      i.jsxs(
-                        "p",
-                        {
-                          children: [
-                            metadataChange.sheet,
-                            ": ",
-                            metadataChange.field,
-                          ],
-                        },
-                        J,
-                      ),
+                    sortPreview.metadataChanges.map(
+                      (metadataChange, metadataChangeIndex) =>
+                        i.jsxs(
+                          "p",
+                          {
+                            children: [
+                              metadataChange.sheet,
+                              ": ",
+                              metadataChange.field,
+                            ],
+                          },
+                          metadataChangeIndex,
+                        ),
                     ),
                   ],
                 }),
@@ -1083,20 +1221,20 @@ Low`,
           className: "dup-actions",
           children: [
             i.jsx("button", {
-              onClick: e.onClose,
+              onClick: dialogProps.onClose,
               children: i.jsx(LocalizedText, { children: "Cancel" }),
             }),
             i.jsxs("div", {
               children: [
                 i.jsx("button", {
-                  disabled: e.readOnly || !!C,
+                  disabled: dialogProps.readOnly || !!sourceError,
                   onClick: onClick,
                   children: i.jsx(LocalizedText, { children: "Preview sort" }),
                 }),
                 i.jsx("button", {
                   className: "dup-primary",
-                  disabled: !B || !y?.movedRows,
-                  onClick: G,
+                  disabled: !isPreviewCurrent || !sortPreview?.movedRows,
+                  onClick: applySortPreview,
                   children: i.jsx(LocalizedText, { children: "Apply sort" }),
                 }),
               ],
@@ -1107,52 +1245,62 @@ Low`,
     }),
   });
 }
-const worksheetVisibilityState = (e) =>
-    e.veryHidden ? "veryHidden" : e.hidden ? "hidden" : "visible",
-  worksheetVisibilityLabel = (e) =>
-    e === "veryHidden" ? "Very hidden" : e === "hidden" ? "Hidden" : "Visible",
-  describeWorksheetError = (e) =>
-    e instanceof Error
-      ? e.message
+const worksheetVisibilityState = (sheet) =>
+    sheet.veryHidden ? "veryHidden" : sheet.hidden ? "hidden" : "visible",
+  worksheetVisibilityLabel = (visibilityState) =>
+    visibilityState === "veryHidden"
+      ? "Very hidden"
+      : visibilityState === "hidden"
+        ? "Hidden"
+        : "Visible",
+  describeWorksheetError = (error) =>
+    error instanceof Error
+      ? error.message
       : "The worksheet operation could not be completed.";
-function WorksheetTabBar(e) {
+function WorksheetTabBar(props) {
   const { text, language } = useWorkbookMessages(),
-    [n, o] = ne.useState(e.sheetId),
-    a =
-      e.workbook.sheets.find((sheet) => sheet.id === n) ?? e.workbook.sheets[0],
-    [s, d] = ne.useState(a.name),
-    [u, l] = ne.useState(worksheetVisibilityState(a)),
-    [tabColor, h] = ne.useState(a.tabColor ?? "#107c41"),
-    [f, p] = ne.useState(""),
-    [m, v] = ne.useState(""),
-    [g, b] = ne.useState(""),
-    [y, w] = ne.useState(false),
-    [E, A] = ne.useState(null),
-    [checked, F] = ne.useState(false),
-    [I, O] = ne.useState(0),
-    j = ne.useRef(null),
-    z = ne.useRef(null),
-    V = ne.useRef(e),
-    D = ne.useRef(true);
-  V.current = e;
-  const B = ne.useId(),
-    _ = !!e.workbook.structureProtection?.enabled,
-    T = ne
-      .useMemo(() => summarizeWorksheets(e.workbook), [e.workbook])
-      .find((ae) => ae.sheetId === a.id),
-    disabled = e.readOnly || _ || y,
-    R = e.workbook.sheets.findIndex((sheet) => sheet.id === a.id),
-    L =
-      !a.hidden &&
-      e.workbook.sheets.filter((sheet) => !sheet.hidden).length === 1,
-    $ = !disabled && e.workbook.sheets.length > 1 && !L;
+    [selectedSheetId, setSelectedSheetId] = ne.useState(props.sheetId),
+    activeSheet =
+      props.workbook.sheets.find((sheet) => sheet.id === selectedSheetId) ??
+      props.workbook.sheets[0],
+    [draftName, setDraftName] = ne.useState(activeSheet.name),
+    [draftVisibility, setDraftVisibility] = ne.useState(
+      worksheetVisibilityState(activeSheet),
+    ),
+    [tabColor, setTabColor] = ne.useState(activeSheet.tabColor ?? "#107c41"),
+    [structurePassword, setStructurePassword] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [isCheckingPassword, setIsCheckingPassword] = ne.useState(false),
+    [pendingDeletion, setPendingDeletion] = ne.useState(null),
+    [checked, setChecked] = ne.useState(false),
+    [dependencyPage, setDependencyPage] = ne.useState(0),
+    dialogRef = ne.useRef(null),
+    selectedSheetRef = ne.useRef(null),
+    latestPropsRef = ne.useRef(props),
+    isMountedRef = ne.useRef(true);
+  latestPropsRef.current = props;
+  const titleId = ne.useId(),
+    isStructureProtected = !!props.workbook.structureProtection?.enabled,
+    sheetSummary = ne
+      .useMemo(() => summarizeWorksheets(props.workbook), [props.workbook])
+      .find((summary) => summary.sheetId === activeSheet.id),
+    disabled = props.readOnly || isStructureProtected || isCheckingPassword,
+    activeSheetIndex = props.workbook.sheets.findIndex(
+      (sheet) => sheet.id === activeSheet.id,
+    ),
+    isOnlyVisibleSheet =
+      !activeSheet.hidden &&
+      props.workbook.sheets.filter((sheet) => !sheet.hidden).length === 1,
+    canDeleteSheet =
+      !disabled && props.workbook.sheets.length > 1 && !isOnlyVisibleSheet;
   (ne.useEffect(() => {
-    D.current = true;
+    isMountedRef.current = true;
     const activeElement = document.activeElement;
     return (
-      (z.current ?? j.current)?.focus(),
+      (selectedSheetRef.current ?? dialogRef.current)?.focus(),
       () => {
-        ((D.current = false),
+        ((isMountedRef.current = false),
           activeElement instanceof HTMLElement &&
             activeElement.isConnected &&
             activeElement.focus());
@@ -1160,158 +1308,203 @@ function WorksheetTabBar(e) {
     );
   }, []),
     ne.useEffect(() => {
-      (o(a.id),
-        d(a.name),
-        l(worksheetVisibilityState(a)),
-        h(a.tabColor ?? "#107c41"));
-    }, [a.id, a.name, a.hidden, a.veryHidden, a.tabColor]));
-  function U(ae) {
-    (o(ae), A(null), F(false), v(""), b(""));
+      (setSelectedSheetId(activeSheet.id),
+        setDraftName(activeSheet.name),
+        setDraftVisibility(worksheetVisibilityState(activeSheet)),
+        setTabColor(activeSheet.tabColor ?? "#107c41"));
+    }, [
+      activeSheet.id,
+      activeSheet.name,
+      activeSheet.hidden,
+      activeSheet.veryHidden,
+      activeSheet.tabColor,
+    ]));
+  function selectSheetTab(sheetId) {
+    (setSelectedSheetId(sheetId),
+      setPendingDeletion(null),
+      setChecked(false),
+      setErrorMessage(""),
+      setStatusMessage(""));
   }
-  function G(ae, oe, de = false) {
-    (v(""), b(""));
+  function runWorkbookOperation(
+    operationLabel,
+    applyOperation,
+    isCreatingSheet = false,
+  ) {
+    (setErrorMessage(""), setStatusMessage(""));
     try {
-      const he = V.current;
-      if (he.readOnly) throw new Error("This workbook is read-only.");
-      const workbook = oe(he.workbook);
-      if (workbook === he.workbook) return;
-      (he.onWorkbookChange(workbook, ae), A(null), F(false), O(0), b(ae));
-      const le = de
+      const currentProps = latestPropsRef.current;
+      if (currentProps.readOnly) throw new Error("This workbook is read-only.");
+      const workbook = applyOperation(currentProps.workbook);
+      if (workbook === currentProps.workbook) return;
+      (currentProps.onWorkbookChange(workbook, operationLabel),
+        setPendingDeletion(null),
+        setChecked(false),
+        setDependencyPage(0),
+        setStatusMessage(operationLabel));
+      const newSheet = isCreatingSheet
         ? workbook.sheets.find(
-            (sheet) => !he.workbook.sheets.some((ge) => ge.id === sheet.id),
+            (sheet) =>
+              !currentProps.workbook.sheets.some(
+                (existingSheet) => existingSheet.id === sheet.id,
+              ),
           )
         : undefined;
-      (le
-        ? (o(le.id), le.hidden || he.onSelectSheet(le.id))
-        : workbook.sheets.some((sheet) => sheet.id === a.id) ||
-          o(workbook.sheets.find((sheet) => !sheet.hidden).id),
-        !le &&
+      (newSheet
+        ? (setSelectedSheetId(newSheet.id),
+          newSheet.hidden || currentProps.onSelectSheet(newSheet.id))
+        : workbook.sheets.some((sheet) => sheet.id === activeSheet.id) ||
+          setSelectedSheetId(workbook.sheets.find((sheet) => !sheet.hidden).id),
+        !newSheet &&
           !workbook.sheets.some(
-            (sheet) => sheet.id === he.sheetId && !sheet.hidden,
+            (sheet) => sheet.id === currentProps.sheetId && !sheet.hidden,
           ) &&
-          he.onSelectSheet(workbook.sheets.find((sheet) => !sheet.hidden).id));
+          currentProps.onSelectSheet(
+            workbook.sheets.find((sheet) => !sheet.hidden).id,
+          ));
     } catch (error) {
-      v(describeWorksheetError(error));
+      setErrorMessage(describeWorksheetError(error));
     }
   }
   function onClick() {
-    const ae = new Set(
-      e.workbook.sheets.map((sheet) => sheet.name.toLowerCase()),
+    const existingNames = new Set(
+      props.workbook.sheets.map((sheet) => sheet.name.toLowerCase()),
     );
-    let oe = 1;
-    for (; ae.has(`sheet${oe}`);) oe++;
-    G(
+    let sheetNumber = 1;
+    for (; existingNames.has(`sheet${sheetNumber}`);) sheetNumber++;
+    runWorkbookOperation(
       "Add worksheet",
-      (activeWorkbook) => addWorksheet(activeWorkbook, `Sheet${oe}`),
+      (activeWorkbook) => addWorksheet(activeWorkbook, `Sheet${sheetNumber}`),
       true,
     );
   }
-  function Q() {
-    (v(""), b(""), O(0));
+  function startDeletion() {
+    (setErrorMessage(""), setStatusMessage(""), setDependencyPage(0));
     try {
-      (A({
-        workbook: e.workbook,
-        sheetId: a.id,
-        name: a.name,
-        dependencies: describeSheetDeletionImpacts(e.workbook, a.id),
+      (setPendingDeletion({
+        workbook: props.workbook,
+        sheetId: activeSheet.id,
+        name: activeSheet.name,
+        dependencies: describeSheetDeletionImpacts(
+          props.workbook,
+          activeSheet.id,
+        ),
       }),
-        F(false));
+        setChecked(false));
     } catch (error) {
-      v(describeWorksheetError(error));
+      setErrorMessage(describeWorksheetError(error));
     }
   }
   function X$1() {
-    if (!(!E || !checked)) {
-      if (E.workbook !== V.current.workbook) {
-        v("The workbook changed. Review current dependencies before deleting.");
+    if (!(!pendingDeletion || !checked)) {
+      if (pendingDeletion.workbook !== latestPropsRef.current.workbook) {
+        setErrorMessage(
+          "The workbook changed. Review current dependencies before deleting.",
+        );
         return;
       }
-      G(`Delete worksheet: ${E.name}`, (workbook) =>
-        deleteWorksheet(workbook, E.sheetId, true),
+      runWorkbookOperation(
+        `Delete worksheet: ${pendingDeletion.name}`,
+        (workbook) => deleteWorksheet(workbook, pendingDeletion.sheetId, true),
       );
     }
   }
-  async function J() {
-    const ae = V.current,
-      oe = !!ae.workbook.structureProtection?.enabled;
-    (v(""), b(""), w(true));
+  async function toggleStructureProtection() {
+    const startingProps = latestPropsRef.current,
+      wasStructureProtected =
+        !!startingProps.workbook.structureProtection?.enabled;
+    (setErrorMessage(""), setStatusMessage(""), setIsCheckingPassword(true));
     try {
-      if (ae.readOnly) throw new Error("This workbook is read-only.");
-      const he = await (oe
-        ? unprotectWorkbookStructure(ae.workbook, f)
-        : protectWorkbookStructure(ae.workbook, f));
-      if (!D.current) return;
-      const Se = V.current;
-      if (Se.readOnly)
+      if (startingProps.readOnly)
+        throw new Error("This workbook is read-only.");
+      const updatedWorkbook = await (wasStructureProtected
+        ? unprotectWorkbookStructure(startingProps.workbook, structurePassword)
+        : protectWorkbookStructure(startingProps.workbook, structurePassword));
+      if (!isMountedRef.current) return;
+      const currentProps = latestPropsRef.current;
+      if (currentProps.readOnly)
         throw new Error(
           "The host changed this workbook to read-only. No structure change was applied.",
         );
-      if (Se.workbook !== ae.workbook)
+      if (currentProps.workbook !== startingProps.workbook)
         throw new Error(
           "The workbook changed while checking the password. Try again with the current workbook.",
         );
-      (Se.onWorkbookChange(
-        he,
-        oe ? "Unprotect workbook structure" : "Protect workbook structure",
+      (currentProps.onWorkbookChange(
+        updatedWorkbook,
+        wasStructureProtected
+          ? "Unprotect workbook structure"
+          : "Protect workbook structure",
       ),
-        p(""),
-        A(null),
-        b(
-          oe
+        setStructurePassword(""),
+        setPendingDeletion(null),
+        setStatusMessage(
+          wasStructureProtected
             ? "Workbook structure is unlocked."
             : "Workbook structure is protected.",
         ));
     } catch (error) {
-      D.current && v(describeWorksheetError(error));
+      isMountedRef.current && setErrorMessage(describeWorksheetError(error));
     } finally {
-      D.current && w(false);
+      isMountedRef.current && setIsCheckingPassword(false);
     }
   }
-  const q = !!(E && E.workbook !== e.workbook),
-    W = E?.dependencies.some((dependency) =>
-      /unsupported/i.test(dependency.kind),
+  const isDeletionStale = !!(
+      pendingDeletion && pendingDeletion.workbook !== props.workbook
+    ),
+    hasUnsupportedDependencies = pendingDeletion?.dependencies.some(
+      (dependency) => /unsupported/i.test(dependency.kind),
     );
   return i.jsx("div", {
     className: "sm-backdrop",
     onPointerDown: (event) => {
-      event.target === event.currentTarget && e.onClose();
+      event.target === event.currentTarget && props.onClose();
     },
     children: i.jsxs("section", {
-      ref: j,
+      ref: dialogRef,
       className: "sm-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": B,
+      "aria-labelledby": titleId,
       tabIndex: -1,
       onKeyDown: (event) => {
-        var de;
+        var dialogElement;
         if (
           (event.stopPropagation(),
           event.key === "Escape" &&
-            (event.preventDefault(), E ? (A(null), F(false)) : e.onClose()),
+            (event.preventDefault(),
+            pendingDeletion
+              ? (setPendingDeletion(null), setChecked(false))
+              : props.onClose()),
           event.key === "Tab")
         ) {
-          const he = Array.from(
-              j.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 'button,input,select,textarea,[tabindex="0"]',
               ) ?? [],
             ).filter(
-              (ge) =>
-                !ge.matches(":disabled") &&
-                !ge.closest("[hidden]") &&
-                ge.tabIndex >= 0,
+              (element) =>
+                !element.matches(":disabled") &&
+                !element.closest("[hidden]") &&
+                element.tabIndex >= 0,
             ),
-            Se = he[0],
-            le = he.at(-1),
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1),
             activeElement = document.activeElement;
-          he.length
+          focusableElements.length
             ? event.shiftKey &&
-              (activeElement === Se || !he.includes(activeElement))
-              ? (event.preventDefault(), le == null || le.focus())
+              (activeElement === firstFocusable ||
+                !focusableElements.includes(activeElement))
+              ? (event.preventDefault(),
+                lastFocusable == null || lastFocusable.focus())
               : !event.shiftKey &&
-                (activeElement === le || !he.includes(activeElement)) &&
-                (event.preventDefault(), Se == null || Se.focus())
-            : (event.preventDefault(), (de = j.current) == null || de.focus());
+                (activeElement === lastFocusable ||
+                  !focusableElements.includes(activeElement)) &&
+                (event.preventDefault(),
+                firstFocusable == null || firstFocusable.focus())
+            : (event.preventDefault(),
+              (dialogElement = dialogRef.current) == null ||
+                dialogElement.focus());
         }
       },
       children: [
@@ -1322,7 +1515,7 @@ function WorksheetTabBar(e) {
               children: [
                 i.jsx(FileSpreadsheet, { size: 19 }),
                 i.jsx("h2", {
-                  id: B,
+                  id: titleId,
                   children: i.jsx(LocalizedText, {
                     children: "Manage Worksheets",
                   }),
@@ -1332,7 +1525,7 @@ function WorksheetTabBar(e) {
             i.jsx("button", {
               type: "button",
               "aria-label": text("Close worksheet manager"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close worksheet manager"),
               "data-ui-label": "Close worksheet manager",
               children: i.jsx(X, { size: 18 }),
@@ -1353,7 +1546,7 @@ function WorksheetTabBar(e) {
                   children: [
                     i.jsxs("span", {
                       children: [
-                        e.workbook.sheets.length,
+                        props.workbook.sheets.length,
                         " ",
                         i.jsx(LocalizedText, { children: "worksheets" }),
                       ],
@@ -1361,7 +1554,7 @@ function WorksheetTabBar(e) {
                     i.jsx("button", {
                       type: "button",
                       "aria-label": text("Add worksheet"),
-                      title: _
+                      title: isStructureProtected
                         ? "Unprotect workbook structure to add worksheets"
                         : "Add worksheet",
                       disabled: disabled,
@@ -1373,16 +1566,19 @@ function WorksheetTabBar(e) {
                   ],
                 }),
                 i.jsx("ul", {
-                  children: e.workbook.sheets.map((sheet) =>
+                  children: props.workbook.sheets.map((sheet) =>
                     i.jsx(
                       "li",
                       {
                         children: i.jsxs("button", {
                           type: "button",
-                          ref: sheet.id === a.id ? z : undefined,
+                          ref:
+                            sheet.id === activeSheet.id
+                              ? selectedSheetRef
+                              : undefined,
                           "aria-label": `Manage ${sheet.name}`,
-                          "aria-pressed": sheet.id === a.id,
-                          onClick: () => U(sheet.id),
+                          "aria-pressed": sheet.id === activeSheet.id,
+                          onClick: () => selectSheetTab(sheet.id),
                           children: [
                             i.jsx("span", {
                               className: "sm-tab-color",
@@ -1400,7 +1596,9 @@ function WorksheetTabBar(e) {
                                     worksheetVisibilityLabel(
                                       worksheetVisibilityState(sheet),
                                     ),
-                                    sheet.id === e.sheetId ? " · Current" : "",
+                                    sheet.id === props.sheetId
+                                      ? " · Current"
+                                      : "",
                                   ],
                                 }),
                               ],
@@ -1421,16 +1619,19 @@ function WorksheetTabBar(e) {
                 i.jsxs("div", {
                   className: "sm-detail-title",
                   children: [
-                    i.jsx("h3", { title: a.name, children: a.name }),
+                    i.jsx("h3", {
+                      title: activeSheet.name,
+                      children: activeSheet.name,
+                    }),
                     i.jsxs("button", {
                       type: "button",
                       className: "sm-view",
-                      disabled: a.hidden,
-                      title: a.hidden
+                      disabled: activeSheet.hidden,
+                      title: activeSheet.hidden
                         ? "Make the worksheet visible before opening it"
                         : "Open this worksheet",
                       onClick: () => {
-                        (e.onSelectSheet(a.id), e.onClose());
+                        (props.onSelectSheet(activeSheet.id), props.onClose());
                       },
                       children: [
                         i.jsx(Eye$1, { size: 14 }),
@@ -1439,7 +1640,7 @@ function WorksheetTabBar(e) {
                     }),
                   ],
                 }),
-                e.readOnly &&
+                props.readOnly &&
                   i.jsx("p", {
                     className: "sm-hint",
                     children: i.jsx(LocalizedText, {
@@ -1447,7 +1648,7 @@ function WorksheetTabBar(e) {
                         "The host opened this workbook read-only. You can inspect its worksheets.",
                     }),
                   }),
-                _ &&
+                isStructureProtected &&
                   i.jsxs("p", {
                     className: "sm-lock-note",
                     children: [
@@ -1479,7 +1680,9 @@ function WorksheetTabBar(e) {
                               }),
                             }),
                             i.jsx("dd", {
-                              children: worksheetVisibilityLabel(T.visibility),
+                              children: worksheetVisibilityLabel(
+                                sheetSummary.visibility,
+                              ),
                             }),
                           ],
                         }),
@@ -1491,7 +1694,8 @@ function WorksheetTabBar(e) {
                               }),
                             }),
                             i.jsx("dd", {
-                              children: T.storedCellCount.toLocaleString(),
+                              children:
+                                sheetSummary.storedCellCount.toLocaleString(),
                             }),
                           ],
                         }),
@@ -1503,7 +1707,8 @@ function WorksheetTabBar(e) {
                               }),
                             }),
                             i.jsx("dd", {
-                              children: T.formulaCellCount.toLocaleString(),
+                              children:
+                                sheetSummary.formulaCellCount.toLocaleString(),
                             }),
                           ],
                         }),
@@ -1514,7 +1719,9 @@ function WorksheetTabBar(e) {
                                 children: "Tab color",
                               }),
                             }),
-                            i.jsx("dd", { children: T.tabColor ?? "None" }),
+                            i.jsx("dd", {
+                              children: sheetSummary.tabColor ?? "None",
+                            }),
                           ],
                         }),
                         i.jsxs("div", {
@@ -1555,8 +1762,14 @@ function WorksheetTabBar(e) {
                       className: "sm-name-form",
                       onSubmit: (event) => {
                         (event.preventDefault(),
-                          G(`Rename worksheet: ${a.name}`, (oe) =>
-                            renameWorksheet(oe, a.id, s),
+                          runWorkbookOperation(
+                            `Rename worksheet: ${activeSheet.name}`,
+                            (workbook) =>
+                              renameWorksheet(
+                                workbook,
+                                activeSheet.id,
+                                draftName,
+                              ),
                           ));
                       },
                       children: [
@@ -1565,9 +1778,10 @@ function WorksheetTabBar(e) {
                             i.jsx(LocalizedText, { children: "Sheet name" }),
                             i.jsx("input", {
                               "aria-label": text("Sheet name"),
-                              value: s,
+                              value: draftName,
                               maxLength: 31,
-                              onChange: (event) => d(event.target.value),
+                              onChange: (event) =>
+                                setDraftName(event.target.value),
                               lang: language("Sheet name"),
                               "data-ui-label": "Sheet name",
                             }),
@@ -1575,7 +1789,9 @@ function WorksheetTabBar(e) {
                         }),
                         i.jsx("button", {
                           type: "submit",
-                          disabled: !s.trim() || s.trim() === a.name,
+                          disabled:
+                            !draftName.trim() ||
+                            draftName.trim() === activeSheet.name,
                           children: i.jsx(LocalizedText, {
                             children: "Rename sheet",
                           }),
@@ -1588,9 +1804,10 @@ function WorksheetTabBar(e) {
                         i.jsxs("button", {
                           type: "button",
                           onClick: () =>
-                            G(
-                              `Duplicate worksheet: ${a.name}`,
-                              (workbook) => duplicateWorksheet(workbook, a.id),
+                            runWorkbookOperation(
+                              `Duplicate worksheet: ${activeSheet.name}`,
+                              (workbook) =>
+                                duplicateWorksheet(workbook, activeSheet.id),
                               true,
                             ),
                           children: [
@@ -1607,10 +1824,16 @@ function WorksheetTabBar(e) {
                               type: "button",
                               "aria-label": text("Move worksheet up"),
                               title: text("Move worksheet earlier"),
-                              disabled: R === 0,
+                              disabled: activeSheetIndex === 0,
                               onClick: () =>
-                                G(`Move worksheet: ${a.name}`, (workbook) =>
-                                  moveWorksheet(workbook, a.id, R - 1),
+                                runWorkbookOperation(
+                                  `Move worksheet: ${activeSheet.name}`,
+                                  (workbook) =>
+                                    moveWorksheet(
+                                      workbook,
+                                      activeSheet.id,
+                                      activeSheetIndex - 1,
+                                    ),
                                 ),
                               lang: language("Move worksheet up"),
                               "data-ui-label": "Move worksheet up",
@@ -1620,10 +1843,18 @@ function WorksheetTabBar(e) {
                               type: "button",
                               "aria-label": text("Move worksheet down"),
                               title: text("Move worksheet later"),
-                              disabled: R === e.workbook.sheets.length - 1,
+                              disabled:
+                                activeSheetIndex ===
+                                props.workbook.sheets.length - 1,
                               onClick: () =>
-                                G(`Move worksheet: ${a.name}`, (workbook) =>
-                                  moveWorksheet(workbook, a.id, R + 1),
+                                runWorkbookOperation(
+                                  `Move worksheet: ${activeSheet.name}`,
+                                  (workbook) =>
+                                    moveWorksheet(
+                                      workbook,
+                                      activeSheet.id,
+                                      activeSheetIndex + 1,
+                                    ),
                                 ),
                               lang: language("Move worksheet down"),
                               "data-ui-label": "Move worksheet down",
@@ -1641,8 +1872,9 @@ function WorksheetTabBar(e) {
                             i.jsx(LocalizedText, { children: "Visibility" }),
                             i.jsxs("select", {
                               "aria-label": text("Worksheet visibility"),
-                              value: u,
-                              onChange: (event) => l(event.target.value),
+                              value: draftVisibility,
+                              onChange: (event) =>
+                                setDraftVisibility(event.target.value),
                               lang: language("Worksheet visibility"),
                               "data-ui-label": "Worksheet visibility",
                               children: [
@@ -1664,12 +1896,18 @@ function WorksheetTabBar(e) {
                         }),
                         i.jsx("button", {
                           type: "button",
-                          disabled: u === worksheetVisibilityState(a),
+                          disabled:
+                            draftVisibility ===
+                            worksheetVisibilityState(activeSheet),
                           onClick: () =>
-                            G(
-                              `Change worksheet visibility: ${a.name}`,
+                            runWorkbookOperation(
+                              `Change worksheet visibility: ${activeSheet.name}`,
                               (workbook) =>
-                                setWorksheetVisibility(workbook, a.id, u),
+                                setWorksheetVisibility(
+                                  workbook,
+                                  activeSheet.id,
+                                  draftVisibility,
+                                ),
                             ),
                           children: i.jsx(LocalizedText, {
                             children: "Apply visibility",
@@ -1694,7 +1932,8 @@ function WorksheetTabBar(e) {
                               "aria-label": text("Worksheet tab color"),
                               type: "color",
                               value: tabColor,
-                              onChange: (event) => h(event.target.value),
+                              onChange: (event) =>
+                                setTabColor(event.target.value),
                               lang: language("Worksheet tab color"),
                               "data-ui-label": "Worksheet tab color",
                             }),
@@ -1704,10 +1943,16 @@ function WorksheetTabBar(e) {
                           type: "button",
                           disabled:
                             tabColor.toLowerCase() ===
-                            a.tabColor?.toLowerCase(),
+                            activeSheet.tabColor?.toLowerCase(),
                           onClick: () =>
-                            G(`Change tab color: ${a.name}`, (workbook) =>
-                              setWorksheetTabColor(workbook, a.id, tabColor),
+                            runWorkbookOperation(
+                              `Change tab color: ${activeSheet.name}`,
+                              (workbook) =>
+                                setWorksheetTabColor(
+                                  workbook,
+                                  activeSheet.id,
+                                  tabColor,
+                                ),
                             ),
                           children: i.jsx(LocalizedText, {
                             children: "Apply tab color",
@@ -1715,10 +1960,12 @@ function WorksheetTabBar(e) {
                         }),
                         i.jsx("button", {
                           type: "button",
-                          disabled: !a.tabColor,
+                          disabled: !activeSheet.tabColor,
                           onClick: () =>
-                            G(`Remove tab color: ${a.name}`, (workbook) =>
-                              setWorksheetTabColor(workbook, a.id),
+                            runWorkbookOperation(
+                              `Remove tab color: ${activeSheet.name}`,
+                              (workbook) =>
+                                setWorksheetTabColor(workbook, activeSheet.id),
                             ),
                           children: i.jsx(LocalizedText, {
                             children: "No color",
@@ -1734,11 +1981,11 @@ function WorksheetTabBar(e) {
                     i.jsxs("button", {
                       type: "button",
                       className: "sm-danger",
-                      disabled: !$,
-                      title: L
+                      disabled: !canDeleteSheet,
+                      title: isOnlyVisibleSheet
                         ? "Keep at least one visible worksheet"
                         : undefined,
-                      onClick: Q,
+                      onClick: startDeletion,
                       children: [
                         i.jsx(Trash2, { size: 14 }),
                         i.jsx(LocalizedText, { children: "Delete worksheet…" }),
@@ -1751,7 +1998,7 @@ function WorksheetTabBar(e) {
                     }),
                   ],
                 }),
-                E &&
+                pendingDeletion &&
                   i.jsxs("section", {
                     className: "sm-deletion",
                     "aria-label": text("Delete worksheet confirmation"),
@@ -1761,7 +2008,7 @@ function WorksheetTabBar(e) {
                       i.jsxs("h4", {
                         children: [
                           i.jsx(LocalizedText, { children: "Delete “" }),
-                          E.name,
+                          pendingDeletion.name,
                           "”?",
                         ],
                       }),
@@ -1773,30 +2020,39 @@ function WorksheetTabBar(e) {
                       }),
                       i.jsxs("p", {
                         children: [
-                          i.jsx("strong", { children: E.dependencies.length }),
+                          i.jsx("strong", {
+                            children: pendingDeletion.dependencies.length,
+                          }),
                           " ",
                           i.jsx(LocalizedText, { children: "affected" }),
                           " ",
-                          E.dependencies.length === 1
+                          pendingDeletion.dependencies.length === 1
                             ? "reference"
                             : "references",
                         ],
                       }),
-                      E.dependencies.length
+                      pendingDeletion.dependencies.length
                         ? i.jsx("ul", {
-                            children: E.dependencies
-                              .slice(I * 200, (I + 1) * 200)
-                              .map((ae, oe) =>
+                            children: pendingDeletion.dependencies
+                              .slice(
+                                dependencyPage * 200,
+                                (dependencyPage + 1) * 200,
+                              )
+                              .map((dependency, dependencyIndex) =>
                                 i.jsxs(
                                   "li",
                                   {
                                     children: [
-                                      i.jsx("span", { children: ae.label }),
-                                      ae.address &&
-                                        i.jsx("code", { children: ae.address }),
+                                      i.jsx("span", {
+                                        children: dependency.label,
+                                      }),
+                                      dependency.address &&
+                                        i.jsx("code", {
+                                          children: dependency.address,
+                                        }),
                                     ],
                                   },
-                                  `${ae.kind}:${oe}`,
+                                  `${dependency.kind}:${dependencyIndex}`,
                                 ),
                               ),
                           })
@@ -1806,15 +2062,18 @@ function WorksheetTabBar(e) {
                               children: "No dependent references were found.",
                             }),
                           }),
-                      E.dependencies.length > 200 &&
+                      pendingDeletion.dependencies.length > 200 &&
                         i.jsxs("div", {
                           className: "sm-dependency-pages",
                           children: [
                             i.jsx("button", {
                               type: "button",
                               "aria-label": text("Previous references"),
-                              disabled: I === 0,
-                              onClick: () => O((ae) => ae - 1),
+                              disabled: dependencyPage === 0,
+                              onClick: () =>
+                                setDependencyPage(
+                                  (currentPage) => currentPage - 1,
+                                ),
                               lang: language("Previous references"),
                               "data-ui-label": "Previous references",
                               children: i.jsx(LocalizedText, {
@@ -1824,12 +2083,15 @@ function WorksheetTabBar(e) {
                             i.jsxs("span", {
                               "aria-live": "polite",
                               children: [
-                                I * 200 + 1,
+                                dependencyPage * 200 + 1,
                                 "–",
-                                Math.min(E.dependencies.length, (I + 1) * 200),
+                                Math.min(
+                                  pendingDeletion.dependencies.length,
+                                  (dependencyPage + 1) * 200,
+                                ),
                                 " ",
                                 i.jsx(LocalizedText, { children: "of " }),
-                                E.dependencies.length,
+                                pendingDeletion.dependencies.length,
                                 " ",
                                 i.jsx(LocalizedText, {
                                   children: "references",
@@ -1839,8 +2101,13 @@ function WorksheetTabBar(e) {
                             i.jsx("button", {
                               type: "button",
                               "aria-label": text("Next references"),
-                              disabled: (I + 1) * 200 >= E.dependencies.length,
-                              onClick: () => O((ae) => ae + 1),
+                              disabled:
+                                (dependencyPage + 1) * 200 >=
+                                pendingDeletion.dependencies.length,
+                              onClick: () =>
+                                setDependencyPage(
+                                  (currentPage) => currentPage + 1,
+                                ),
                               lang: language("Next references"),
                               "data-ui-label": "Next references",
                               children: i.jsx(LocalizedText, {
@@ -1849,7 +2116,7 @@ function WorksheetTabBar(e) {
                             }),
                           ],
                         }),
-                      W &&
+                      hasUnsupportedDependencies &&
                         i.jsx("p", {
                           className: "sm-error",
                           children: i.jsx(LocalizedText, {
@@ -1857,7 +2124,7 @@ function WorksheetTabBar(e) {
                               "Some references cannot be updated safely. Resolve the listed unsupported references first.",
                           }),
                         }),
-                      q &&
+                      isDeletionStale &&
                         i.jsx("p", {
                           className: "sm-error",
                           children: i.jsx(LocalizedText, {
@@ -1871,8 +2138,12 @@ function WorksheetTabBar(e) {
                           i.jsx("input", {
                             type: "checkbox",
                             checked: checked,
-                            disabled: disabled || q || W,
-                            onChange: (event) => F(event.target.checked),
+                            disabled:
+                              disabled ||
+                              isDeletionStale ||
+                              hasUnsupportedDependencies,
+                            onChange: (event) =>
+                              setChecked(event.target.checked),
                           }),
                           i.jsx(LocalizedText, {
                             children:
@@ -1886,17 +2157,17 @@ function WorksheetTabBar(e) {
                           i.jsx("button", {
                             type: "button",
                             onClick: () => {
-                              (A(null), F(false));
+                              (setPendingDeletion(null), setChecked(false));
                             },
                             children: i.jsx(LocalizedText, {
                               children: "Keep worksheet",
                             }),
                           }),
-                          q
+                          isDeletionStale
                             ? i.jsx("button", {
                                 type: "button",
                                 disabled: disabled,
-                                onClick: Q,
+                                onClick: startDeletion,
                                 children: i.jsx(LocalizedText, {
                                   children: "Review current dependencies",
                                 }),
@@ -1904,7 +2175,10 @@ function WorksheetTabBar(e) {
                             : i.jsx("button", {
                                 type: "button",
                                 className: "sm-danger sm-delete-final",
-                                disabled: !$ || !checked || W,
+                                disabled:
+                                  !canDeleteSheet ||
+                                  !checked ||
+                                  hasUnsupportedDependencies,
                                 onClick: X$1,
                                 children: i.jsx(LocalizedText, {
                                   children: "Delete worksheet",
@@ -1927,7 +2201,7 @@ function WorksheetTabBar(e) {
             i.jsxs("div", {
               className: "sm-protection-title",
               children: [
-                _
+                isStructureProtected
                   ? i.jsx(LockKeyhole, { size: 16 })
                   : i.jsx(LockKeyholeOpen, { size: 16 }),
                 i.jsx("strong", {
@@ -1935,7 +2209,9 @@ function WorksheetTabBar(e) {
                     children: "Workbook structure",
                   }),
                 }),
-                i.jsx("span", { children: _ ? "Protected" : "Unlocked" }),
+                i.jsx("span", {
+                  children: isStructureProtected ? "Protected" : "Unlocked",
+                }),
               ],
             }),
             i.jsx("p", {
@@ -1952,20 +2228,24 @@ function WorksheetTabBar(e) {
             }),
             i.jsxs("form", {
               onSubmit: (event) => {
-                (event.preventDefault(), y || J());
+                (event.preventDefault(),
+                  isCheckingPassword || toggleStructureProtection());
               },
               children: [
                 i.jsxs("label", {
                   children: [
-                    _ ? "Password to unlock" : "Password (optional)",
+                    isStructureProtected
+                      ? "Password to unlock"
+                      : "Password (optional)",
                     i.jsx("input", {
                       "aria-label": text("Structure password"),
                       type: "password",
                       autoComplete: "off",
-                      value: f,
+                      value: structurePassword,
                       maxLength: 200,
-                      disabled: e.readOnly || y,
-                      onChange: (event) => p(event.target.value),
+                      disabled: props.readOnly || isCheckingPassword,
+                      onChange: (event) =>
+                        setStructurePassword(event.target.value),
                       lang: language("Structure password"),
                       "data-ui-label": "Structure password",
                     }),
@@ -1973,10 +2253,10 @@ function WorksheetTabBar(e) {
                 }),
                 i.jsx("button", {
                   type: "submit",
-                  disabled: e.readOnly || y,
-                  children: y
+                  disabled: props.readOnly || isCheckingPassword,
+                  children: isCheckingPassword
                     ? "Checking…"
-                    : _
+                    : isStructureProtected
                       ? "Unprotect workbook structure"
                       : "Protect workbook structure",
                 }),
@@ -1984,16 +2264,16 @@ function WorksheetTabBar(e) {
             }),
           ],
         }),
-        (m || g) &&
+        (errorMessage || statusMessage) &&
           i.jsx("div", {
             className: "sm-feedback",
-            children: m
+            children: errorMessage
               ? i.jsx("p", {
                   role: "alert",
                   className: "sm-error",
-                  children: m,
+                  children: errorMessage,
                 })
-              : i.jsx("p", { role: "status", children: g }),
+              : i.jsx("p", { role: "status", children: statusMessage }),
           }),
         i.jsxs("footer", {
           className: "sm-footer",
@@ -2005,7 +2285,7 @@ function WorksheetTabBar(e) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: e.onClose,
+              onClick: props.onClose,
               children: i.jsx(LocalizedText, { children: "Done" }),
             }),
           ],
@@ -2042,31 +2322,31 @@ const worksheetPropertyLabels = {
     sourceRevision: "Source revision",
     version: "Version",
   },
-  formatAuditDetailValue = (e) =>
-    e === undefined
+  formatAuditDetailValue = (detailValue) =>
+    detailValue === undefined
       ? "Not set"
-      : e === null || e === ""
+      : detailValue === null || detailValue === ""
         ? "Blank"
-        : typeof e == "boolean"
-          ? e
+        : typeof detailValue == "boolean"
+          ? detailValue
             ? "Yes"
             : "No"
-          : typeof e == "string"
-            ? e.startsWith("data:image/")
+          : typeof detailValue == "string"
+            ? detailValue.startsWith("data:image/")
               ? "Embedded picture"
-              : /^\d{4}-\d{2}-\d{2}T.*Z$/.test(e) &&
-                  Number.isFinite(Date.parse(e))
-                ? new Date(e).toLocaleString()
-                : e
-            : typeof e != "object"
-              ? String(e)
-              : Array.isArray(e)
-                ? e.length
-                  ? e.map(formatAuditDetailValue).join("; ")
+              : /^\d{4}-\d{2}-\d{2}T.*Z$/.test(detailValue) &&
+                  Number.isFinite(Date.parse(detailValue))
+                ? new Date(detailValue).toLocaleString()
+                : detailValue
+            : typeof detailValue != "object"
+              ? String(detailValue)
+              : Array.isArray(detailValue)
+                ? detailValue.length
+                  ? detailValue.map(formatAuditDetailValue).join("; ")
                   : "None"
-                : Object.entries(e)
+                : Object.entries(detailValue)
                     .filter(
-                      ([r]) =>
+                      ([propertyKey]) =>
                         ![
                           "id",
                           "sheetId",
@@ -2074,17 +2354,18 @@ const worksheetPropertyLabels = {
                           "sourceWorkbookId",
                           "passwordHash",
                           "salt",
-                        ].includes(r),
+                        ].includes(propertyKey),
                     )
                     .map(
-                      ([r, t]) =>
-                        `${worksheetPropertyLabels[r] ?? r}: ${formatAuditDetailValue(t)}`,
+                      ([propertyKey, propertyValue]) =>
+                        `${worksheetPropertyLabels[propertyKey] ?? propertyKey}: ${formatAuditDetailValue(propertyValue)}`,
                     )
                     .join(" · ") || "No details",
-  formatAuditCellValue = (e) => (e ? formatAuditDetailValue(e) : "Empty cell"),
-  formatChangeAttribution = (e) =>
-    e?.actor && e.timestamp
-      ? `${e.actor} · ${new Date(e.timestamp).toLocaleString()}${e.basis === "operation-history" ? " · from operation history" : ""}`
+  formatAuditCellValue = (cellValue) =>
+    cellValue ? formatAuditDetailValue(cellValue) : "Empty cell",
+  formatChangeAttribution = (attribution) =>
+    attribution?.actor && attribution.timestamp
+      ? `${attribution.actor} · ${new Date(attribution.timestamp).toLocaleString()}${attribution.basis === "operation-history" ? " · from operation history" : ""}`
       : "Author and time not recorded for this change";
 
 export {

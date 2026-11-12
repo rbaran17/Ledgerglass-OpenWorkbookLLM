@@ -75,146 +75,160 @@ import {
 } from "./24-merge-audit-and-ribbon-helpers.js";
 import { ColorPickerButton } from "./25-color-picker.js";
 
-function WorkbookRibbon(e) {
+function WorkbookRibbon(props) {
   const { text, language } = useWorkbookMessages(),
-    [n, o] = ne.useState("Home"),
-    [a, s] = ne.useState(false),
-    d = ne.useRef(null),
-    [u, l] = ne.useState(false),
-    [c, h] = ne.useState(false),
-    [f, p] = ne.useState(false),
-    m = ne.useRef(null),
-    v = ne.useRef(null),
-    g = ne.useRef(null),
-    b = ne.useId(),
-    y = !c || f,
-    w = () =>
-      m.current?.querySelector('[role="tab"][aria-selected="true"]')?.focus(),
-    E = () => {
-      (v.current?.contains(document.activeElement) && w(),
-        h((q) => !q),
-        p(false),
-        l(false));
+    [activeTab, setActiveTab] = ne.useState("Home"),
+    [isCommandDialogOpen, setCommandDialogOpen] = ne.useState(false),
+    pendingFocusId = ne.useRef(null),
+    [isFileMenuOpen, setFileMenuOpen] = ne.useState(false),
+    [isRibbonCollapsed, setRibbonCollapsed] = ne.useState(false),
+    [isRibbonPeekOpen, setRibbonPeekOpen] = ne.useState(false),
+    ribbonRef = ne.useRef(null),
+    panelRef = ne.useRef(null),
+    fileControlRef = ne.useRef(null),
+    ribbonId = ne.useId(),
+    isRibbonBodyVisible = !isRibbonCollapsed || isRibbonPeekOpen,
+    focusActiveTab = () =>
+      ribbonRef.current
+        ?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.focus(),
+    toggleRibbonCollapsed = () => {
+      (panelRef.current?.contains(document.activeElement) && focusActiveTab(),
+        setRibbonCollapsed((previousCollapsed) => !previousCollapsed),
+        setRibbonPeekOpen(false),
+        setFileMenuOpen(false));
     },
-    A = (J) => {
-      (o(J), l(false), c && p(true));
+    selectTab = (tabName) => {
+      (setActiveTab(tabName),
+        setFileMenuOpen(false),
+        isRibbonCollapsed && setRibbonPeekOpen(true));
     };
   (ne.useEffect(() => {
-    if (!f) return;
-    const J = (event) => {
-      m.current?.contains(event.target) || p(false);
+    if (!isRibbonPeekOpen) return;
+    const handleOutsidePointer = (event) => {
+      ribbonRef.current?.contains(event.target) || setRibbonPeekOpen(false);
     };
     return (
-      document.addEventListener("pointerdown", J),
-      document.addEventListener("focusin", J),
+      document.addEventListener("pointerdown", handleOutsidePointer),
+      document.addEventListener("focusin", handleOutsidePointer),
       () => {
-        (document.removeEventListener("pointerdown", J),
-          document.removeEventListener("focusin", J));
+        (document.removeEventListener("pointerdown", handleOutsidePointer),
+          document.removeEventListener("focusin", handleOutsidePointer));
       }
     );
-  }, [f]),
+  }, [isRibbonPeekOpen]),
     ne.useEffect(() => {
-      const J = (q) => {
+      const handleRibbonShortcut = (keyboardEvent) => {
         if (
-          q.defaultPrevented ||
-          q.repeat ||
-          q.altKey ||
-          q.shiftKey ||
-          q.key !== "F1" ||
-          !(q.ctrlKey || q.metaKey)
+          keyboardEvent.defaultPrevented ||
+          keyboardEvent.repeat ||
+          keyboardEvent.altKey ||
+          keyboardEvent.shiftKey ||
+          keyboardEvent.key !== "F1" ||
+          !(keyboardEvent.ctrlKey || keyboardEvent.metaKey)
         )
           return;
-        const target = q.target;
+        const target = keyboardEvent.target;
         if (!(target instanceof Element) || target.closest('[role="dialog"]'))
           return;
-        const K = m.current,
-          te = K?.closest(".lg-app") ?? K;
-        !te ||
-          (te.classList.contains("lg-app")
-            ? target.closest(".lg-app") !== te
-            : !te.contains(target)) ||
-          (q.preventDefault(), q.stopPropagation(), E());
+        const ribbonElement = ribbonRef.current,
+          shortcutScope = ribbonElement?.closest(".lg-app") ?? ribbonElement;
+        !shortcutScope ||
+          (shortcutScope.classList.contains("lg-app")
+            ? target.closest(".lg-app") !== shortcutScope
+            : !shortcutScope.contains(target)) ||
+          (keyboardEvent.preventDefault(),
+          keyboardEvent.stopPropagation(),
+          toggleRibbonCollapsed());
       };
       return (
-        document.addEventListener("keydown", J),
-        () => document.removeEventListener("keydown", J)
+        document.addEventListener("keydown", handleRibbonShortcut),
+        () => document.removeEventListener("keydown", handleRibbonShortcut)
       );
     }, []));
-  const k = e.readOnly || e.busy,
-    effectiveCellStyle = resolveEffectiveCellStyle(e.cell?.style),
-    I = (J) => e.onFormat({ style: J }),
-    O = (format) =>
-      e.onFormat({
+  const isDisabled = props.readOnly || props.busy,
+    effectiveCellStyle = resolveEffectiveCellStyle(props.cell?.style),
+    applyStyle = (style) => props.onFormat({ style: style }),
+    applyFormat = (format) =>
+      props.onFormat({
         format: format,
         numFmt: undefined,
         numberFormat: undefined,
       }),
-    j =
-      e.cell?.numberFormat &&
+    hasAdvancedNumberFormat =
+      props.cell?.numberFormat &&
       !["number", "currency", "accounting", "percent"].includes(
-        e.cell.numberFormat.category,
+        props.cell.numberFormat.category,
       ),
-    z = (J) => {
-      if (e.cell?.numberFormat && !j) {
+    adjustDecimalPlaces = (decimalDelta) => {
+      if (props.cell?.numberFormat && !hasAdvancedNumberFormat) {
         const numberFormat = validateNumberFormatSettings({
-          ...e.cell.numberFormat,
+          ...props.cell.numberFormat,
           decimals: Math.max(
             0,
-            Math.min(12, (e.cell.numberFormat.decimals ?? 2) + J),
+            Math.min(
+              12,
+              (props.cell.numberFormat.decimals ?? 2) + decimalDelta,
+            ),
           ),
         });
-        e.onFormat({
+        props.onFormat({
           numberFormat: numberFormat,
           numFmt: buildNumberFormatCode(numberFormat),
         });
         return;
       }
-      const q =
-          summarizeNumberFormat(e.cell?.numFmt) ??
-          (e.cell?.format === "currency" ||
-          e.cell?.format === "number" ||
-          e.cell?.format === "percent"
+      const currentDecimals =
+          summarizeNumberFormat(props.cell?.numFmt) ??
+          (props.cell?.format === "currency" ||
+          props.cell?.format === "number" ||
+          props.cell?.format === "percent"
             ? 2
             : 0),
-        W = Math.max(0, Math.min(10, q + J));
-      e.onFormat({
+        nextDecimals = Math.max(
+          0,
+          Math.min(10, currentDecimals + decimalDelta),
+        );
+      props.onFormat({
         numberFormat: undefined,
-        numFmt: `${e.cell?.format === "currency" ? "$" : ""}#,##0${W ? `.${"0".repeat(W)}` : ""}${e.cell?.format === "percent" ? "%" : ""}`,
+        numFmt: `${props.cell?.format === "currency" ? "$" : ""}#,##0${nextDecimals ? `.${"0".repeat(nextDecimals)}` : ""}${props.cell?.format === "percent" ? "%" : ""}`,
       });
     };
   ne.useEffect(() => {
-    if (!u) return;
-    const J = (event) => {
-      g.current?.contains(event.target) || l(false);
+    if (!isFileMenuOpen) return;
+    const handleFileMenuPointer = (event) => {
+      fileControlRef.current?.contains(event.target) || setFileMenuOpen(false);
     };
     return (
-      document.addEventListener("pointerdown", J),
-      () => document.removeEventListener("pointerdown", J)
+      document.addEventListener("pointerdown", handleFileMenuPointer),
+      () => document.removeEventListener("pointerdown", handleFileMenuPointer)
     );
-  }, [u]);
-  const V = (J) => {
-      (l(false), J());
+  }, [isFileMenuOpen]);
+  const runFileMenuAction = (action) => {
+      (setFileMenuOpen(false), action());
     },
-    D = i.jsxs("select", {
+    numberFormatSelect = i.jsxs("select", {
       "aria-label": text("Number format"),
-      value: e.cell?.numberFormat ? "advanced" : (e.cell?.format ?? "general"),
-      disabled: k,
+      value: props.cell?.numberFormat
+        ? "advanced"
+        : (props.cell?.format ?? "general"),
+      disabled: isDisabled,
       onChange: (event) =>
         event.target.value === "advanced"
-          ? e.onTool("numberFormat")
-          : O(event.target.value),
+          ? props.onTool("numberFormat")
+          : applyFormat(event.target.value),
       lang: language("Number format"),
       "data-ui-label": "Number format",
       children: [
-        e.cell?.numberFormat &&
+        props.cell?.numberFormat &&
           i.jsxs("option", {
             value: "advanced",
             children: [
-              e.cell.numberFormat.category.charAt(0).toUpperCase() +
-                e.cell.numberFormat.category.slice(1),
+              props.cell.numberFormat.category.charAt(0).toUpperCase() +
+                props.cell.numberFormat.category.slice(1),
               " ",
               "(",
-              e.cell.numberFormat.locale,
+              props.cell.numberFormat.locale,
               ")",
             ],
           }),
@@ -225,46 +239,54 @@ function WorkbookRibbon(e) {
         i.jsx("option", { value: "date", children: "Short Date" }),
       ],
     }),
-    B = i.jsx("select", {
+    zoomSelect = i.jsx("select", {
       "aria-label": text("Zoom"),
-      value: e.zoom,
-      onChange: (event) => e.onZoom(Number(event.target.value)),
+      value: props.zoom,
+      onChange: (event) => props.onZoom(Number(event.target.value)),
       lang: language("Zoom"),
       "data-ui-label": "Zoom",
       children: Array.from(
-        new Set([50, 75, 90, 100, 110, 125, 150, 175, 200, e.zoom]),
+        new Set([50, 75, 90, 100, 110, 125, 150, 175, 200, props.zoom]),
       )
-        .sort((J, q) => J - q)
-        .map((J) => i.jsxs("option", { value: J, children: [J, "%"] }, J)),
+        .sort((leftZoom, rightZoom) => leftZoom - rightZoom)
+        .map((zoomOption) =>
+          i.jsxs(
+            "option",
+            { value: zoomOption, children: [zoomOption, "%"] },
+            zoomOption,
+          ),
+        ),
     }),
-    _ = (J) =>
-      e.busy
+    getDisabledReason = (commandLabel) =>
+      props.busy
         ? "Wait for the current workbook operation to finish."
-        : !e.allowProtectionChange && /Protect|New Sheet|New from/.test(J)
+        : !props.allowProtectionChange &&
+            /Protect|New Sheet|New from/.test(commandLabel)
           ? "The host has opened this workbook read-only."
-          : e.readOnly
-            ? e.sheetProtected
+          : props.readOnly
+            ? props.sheetProtected
               ? "Unprotect the worksheet before editing."
               : "The host has opened this workbook read-only."
-            : J === "Undo"
+            : commandLabel === "Undo"
               ? "There is no earlier edit to undo."
-              : J === "Redo"
+              : commandLabel === "Redo"
                 ? "There is no undone edit to redo."
-                : /Decimal/.test(J)
+                : /Decimal/.test(commandLabel)
                   ? "Choose a number, currency, accounting or percent format to adjust decimal places."
-                  : /New Sheet/.test(J) && e.workbookStructureProtected
+                  : /New Sheet/.test(commandLabel) &&
+                      props.workbookStructureProtected
                     ? "Unprotect workbook structure in Manage worksheets before adding a sheet."
                     : "This command is unavailable for the current workbook state.",
-    C = {
+    ribbonComponents = {
       group: RibbonGroup,
       command: RibbonCommandButton,
       icon: RibbonIconButton,
       color: ColorPickerButton,
     },
-    T = (J) =>
+    renderRibbonTab = (tab) =>
       i.jsxs(i.Fragment, {
         children: [
-          J === "Home" &&
+          tab === "Home" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(RibbonGroup, {
@@ -278,8 +300,8 @@ function WorkbookRibbon(e) {
                           icon: i.jsx(Clipboard, {}),
                           label: text("Paste"),
                           large: true,
-                          onClick: e.onPaste,
-                          disabled: k,
+                          onClick: props.onPaste,
+                          disabled: isDisabled,
                           className: "xl-gold-icon xl-paste-primary",
                         }),
                         i.jsxs("button", {
@@ -289,8 +311,8 @@ function WorkbookRibbon(e) {
                           title: text(
                             "Choose values, formulas, formatting and other paste options",
                           ),
-                          disabled: k,
-                          onClick: () => e.onTool("pasteSpecial"),
+                          disabled: isDisabled,
+                          onClick: () => props.onTool("pasteSpecial"),
                           lang: language("Paste Special"),
                           "data-ui-label": "Paste Special",
                           children: [
@@ -306,19 +328,19 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Scissors, {}),
                           label: text("Cut"),
-                          onClick: e.onCut,
-                          disabled: k,
+                          onClick: props.onCut,
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Copy, {}),
                           label: text("Copy"),
-                          onClick: e.onCopy,
+                          onClick: props.onCopy,
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Paintbrush, {}),
                           label: text("Format Painter"),
-                          onClick: () => e.onTool("paint"),
-                          disabled: k,
+                          onClick: () => props.onTool("paint"),
+                          disabled: isDisabled,
                         }),
                       ],
                     }),
@@ -327,9 +349,9 @@ function WorkbookRibbon(e) {
                 i.jsxs(RibbonGroup, {
                   label: text("Font"),
                   className: "xl-font-group",
-                  onDialog: () => e.onTool("cellStyle"),
+                  onDialog: () => props.onTool("cellStyle"),
                   dialogLabel: text("Cell Styles"),
-                  dialogDisabled: k,
+                  dialogDisabled: isDisabled,
                   children: [
                     i.jsxs("div", {
                       className: "xl-font-selects",
@@ -337,9 +359,9 @@ function WorkbookRibbon(e) {
                         i.jsx("select", {
                           "aria-label": text("Font family"),
                           value: effectiveCellStyle.fontFamily ?? "Calibri",
-                          disabled: k,
+                          disabled: isDisabled,
                           onChange: (event) =>
-                            I({ fontFamily: event.target.value }),
+                            applyStyle({ fontFamily: event.target.value }),
                           lang: language("Font family"),
                           "data-ui-label": "Font family",
                           children: [
@@ -348,14 +370,18 @@ function WorkbookRibbon(e) {
                             "Arial",
                             "Times New Roman",
                             "Courier New",
-                          ].map((q) => i.jsx("option", { children: q }, q)),
+                          ].map((family) =>
+                            i.jsx("option", { children: family }, family),
+                          ),
                         }),
                         i.jsx("select", {
                           "aria-label": text("Font size"),
                           value: effectiveCellStyle.fontSize ?? 11,
-                          disabled: k,
+                          disabled: isDisabled,
                           onChange: (event) =>
-                            I({ fontSize: Number(event.target.value) }),
+                            applyStyle({
+                              fontSize: Number(event.target.value),
+                            }),
                           lang: language("Font size"),
                           "data-ui-label": "Font size",
                           children: Array.from(
@@ -378,8 +404,10 @@ function WorkbookRibbon(e) {
                               effectiveCellStyle.fontSize ?? 11,
                             ]),
                           )
-                            .sort((q, W) => q - W)
-                            .map((q) => i.jsx("option", { children: q }, q)),
+                            .sort((leftSize, rightSize) => leftSize - rightSize)
+                            .map((size) =>
+                              i.jsx("option", { children: size }, size),
+                            ),
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
@@ -390,9 +418,9 @@ function WorkbookRibbon(e) {
                             ],
                           }),
                           label: text("Increase Font Size"),
-                          disabled: k,
+                          disabled: isDisabled,
                           onClick: () =>
-                            I({
+                            applyStyle({
                               fontSize: Math.min(
                                 72,
                                 (effectiveCellStyle.fontSize ?? 11) + 1,
@@ -408,24 +436,27 @@ function WorkbookRibbon(e) {
                           icon: i.jsx(Bold, { size: 15 }),
                           label: text("Bold (Ctrl+B)"),
                           active: !!effectiveCellStyle.bold,
-                          onClick: () => I({ bold: !effectiveCellStyle.bold }),
-                          disabled: k,
+                          onClick: () =>
+                            applyStyle({ bold: !effectiveCellStyle.bold }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Italic, { size: 15 }),
                           label: text("Italic (Ctrl+I)"),
                           active: !!effectiveCellStyle.italic,
                           onClick: () =>
-                            I({ italic: !effectiveCellStyle.italic }),
-                          disabled: k,
+                            applyStyle({ italic: !effectiveCellStyle.italic }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Underline, { size: 15 }),
                           label: text("Underline (Ctrl+U)"),
                           active: !!effectiveCellStyle.underline,
                           onClick: () =>
-                            I({ underline: !effectiveCellStyle.underline }),
-                          disabled: k,
+                            applyStyle({
+                              underline: !effectiveCellStyle.underline,
+                            }),
+                          disabled: isDisabled,
                         }),
                         i.jsx("span", { className: "xl-control-divider" }),
                         i.jsxs("select", {
@@ -433,9 +464,9 @@ function WorkbookRibbon(e) {
                           "aria-label": text("Borders"),
                           title: text("Borders"),
                           value: effectiveCellStyle.border ?? "none",
-                          disabled: k,
+                          disabled: isDisabled,
                           onChange: (event) =>
-                            I({
+                            applyStyle({
                               border: event.target.value,
                               borders: undefined,
                             }),
@@ -456,14 +487,14 @@ function WorkbookRibbon(e) {
                         i.jsx(ColorPickerButton, {
                           kind: "fill",
                           value: effectiveCellStyle.fill ?? "#FFFF00",
-                          onChange: (fill) => I({ fill: fill }),
-                          disabled: k,
+                          onChange: (fill) => applyStyle({ fill: fill }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(ColorPickerButton, {
                           kind: "color",
                           value: effectiveCellStyle.color ?? "#C00000",
-                          onChange: (color) => I({ color: color }),
-                          disabled: k,
+                          onChange: (color) => applyStyle({ color: color }),
+                          disabled: isDisabled,
                         }),
                       ],
                     }),
@@ -480,37 +511,38 @@ function WorkbookRibbon(e) {
                           icon: i.jsx(AlignLeft, { size: 16 }),
                           label: text("Align Left"),
                           active: effectiveCellStyle.align === "left",
-                          onClick: () => I({ align: "left" }),
-                          disabled: k,
+                          onClick: () => applyStyle({ align: "left" }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignCenter, { size: 16 }),
                           label: text("Center"),
                           active: effectiveCellStyle.align === "center",
-                          onClick: () => I({ align: "center" }),
-                          disabled: k,
+                          onClick: () => applyStyle({ align: "center" }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(AlignRight, { size: 16 }),
                           label: text("Align Right"),
                           active: effectiveCellStyle.align === "right",
-                          onClick: () => I({ align: "right" }),
-                          disabled: k,
+                          onClick: () => applyStyle({ align: "right" }),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(WrapText, {}),
                           label: text("Wrap Text"),
                           active: !!effectiveCellStyle.wrap,
-                          onClick: () => I({ wrap: !effectiveCellStyle.wrap }),
-                          disabled: k,
+                          onClick: () =>
+                            applyStyle({ wrap: !effectiveCellStyle.wrap }),
+                          disabled: isDisabled,
                         }),
                       ],
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Merge & Center"),
-                      onClick: () => e.onTool("merge"),
-                      disabled: k,
+                      onClick: () => props.onTool("merge"),
+                      disabled: isDisabled,
                     }),
                   ],
                 }),
@@ -518,12 +550,12 @@ function WorkbookRibbon(e) {
                   label: text("Number"),
                   className: "xl-number-group",
                   children: [
-                    D,
+                    numberFormatSelect,
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(DollarSign, { size: 15 }),
                       label: text("Format Cells"),
-                      onClick: () => e.onTool("numberFormat"),
-                      disabled: k,
+                      onClick: () => props.onTool("numberFormat"),
+                      disabled: isDisabled,
                     }),
                     i.jsxs("div", {
                       className: "xl-number-buttons",
@@ -531,14 +563,14 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(DollarSign, { size: 16 }),
                           label: text("Currency"),
-                          onClick: () => O("currency"),
-                          disabled: k,
+                          onClick: () => applyFormat("currency"),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx(Percent, { size: 15 }),
                           label: text("Percent Style"),
-                          onClick: () => O("percent"),
-                          disabled: k,
+                          onClick: () => applyFormat("percent"),
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsx("span", {
@@ -547,12 +579,12 @@ function WorkbookRibbon(e) {
                           }),
                           label: text("Comma Style"),
                           onClick: () =>
-                            e.onFormat({
+                            props.onFormat({
                               format: "number",
                               numFmt: "#,##0.00",
                               numberFormat: undefined,
                             }),
-                          disabled: k,
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
@@ -563,8 +595,8 @@ function WorkbookRibbon(e) {
                             ],
                           }),
                           label: text("Increase Decimal"),
-                          onClick: () => z(1),
-                          disabled: k || !!j,
+                          onClick: () => adjustDecimalPlaces(1),
+                          disabled: isDisabled || !!hasAdvancedNumberFormat,
                         }),
                         i.jsx(RibbonIconButton, {
                           icon: i.jsxs("span", {
@@ -572,8 +604,8 @@ function WorkbookRibbon(e) {
                             children: ["→", i.jsx("small", { children: ".0" })],
                           }),
                           label: text("Decrease Decimal"),
-                          onClick: () => z(-1),
-                          disabled: k || !!j,
+                          onClick: () => adjustDecimalPlaces(-1),
+                          disabled: isDisabled || !!hasAdvancedNumberFormat,
                         }),
                       ],
                     }),
@@ -587,23 +619,27 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Grid3x3, {}),
                       label: text("Conditional Formatting"),
                       large: true,
-                      onClick: () => e.onTool("conditional"),
-                      disabled: k,
+                      onClick: () => props.onTool("conditional"),
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Format as Table"),
                       large: true,
-                      onClick: () => e.onTool("table"),
-                      disabled: k,
+                      onClick: () => props.onTool("table"),
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(LayoutGrid, {}),
                       label: text("Heading Style"),
                       large: true,
                       onClick: () =>
-                        I({ fill: "#E2EFDA", color: "#375623", bold: true }),
-                      disabled: k,
+                        applyStyle({
+                          fill: "#E2EFDA",
+                          color: "#375623",
+                          bold: true,
+                        }),
+                      disabled: isDisabled,
                       title: text(
                         "Apply green heading cell style to the selection",
                       ),
@@ -620,25 +656,25 @@ function WorkbookRibbon(e) {
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("Insert Row"),
-                        onClick: e.onAddRow,
-                        disabled: k,
+                        onClick: props.onAddRow,
+                        disabled: isDisabled,
                         className: "xl-green-icon",
                       }),
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Table2, {}),
                         label: text("Insert Column"),
-                        onClick: e.onAddColumn,
-                        disabled: k,
+                        onClick: props.onAddColumn,
+                        disabled: isDisabled,
                         className: "xl-green-icon",
                       }),
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Sheet, {}),
                         label: text("New Sheet"),
-                        onClick: e.onAddSheet,
+                        onClick: props.onAddSheet,
                         disabled:
-                          e.busy ||
-                          !e.allowProtectionChange ||
-                          e.workbookStructureProtected,
+                          props.busy ||
+                          !props.allowProtectionChange ||
+                          props.workbookStructureProtected,
                       }),
                     ],
                   }),
@@ -651,8 +687,8 @@ function WorkbookRibbon(e) {
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Maximize, {}),
                         label: text("AutoFit Column Width"),
-                        onClick: e.onAutoFitColumns,
-                        disabled: k,
+                        onClick: props.onAutoFitColumns,
+                        disabled: isDisabled,
                         title: text(
                           "Fit the selected columns to their contents",
                         ),
@@ -660,8 +696,8 @@ function WorkbookRibbon(e) {
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("AutoFit Row Height"),
-                        onClick: e.onAutoFitRows,
-                        disabled: k,
+                        onClick: props.onAutoFitRows,
+                        disabled: isDisabled,
                         title: text(
                           "Fit the selected rows to their contents and wrapping",
                         ),
@@ -669,7 +705,7 @@ function WorkbookRibbon(e) {
                       i.jsx(RibbonCommandButton, {
                         icon: i.jsx(Rows3, {}),
                         label: text("Hide & Unhide"),
-                        onClick: () => e.onTool("viewSettings"),
+                        onClick: () => props.onTool("viewSettings"),
                         title: text(
                           "Hide or restore selected rows and columns",
                         ),
@@ -687,21 +723,21 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Sigma, {}),
                           label: text("AutoSum"),
-                          onClick: e.onAutosum,
-                          disabled: k,
+                          onClick: props.onAutosum,
+                          disabled: isDisabled,
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowDownToLine, {}),
                           label: text("Fill Down"),
-                          onClick: e.onFillDown,
-                          disabled: k,
+                          onClick: props.onFillDown,
+                          disabled: isDisabled,
                           className: "xl-blue-icon",
                         }),
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Eraser, {}),
                           label: text("Clear"),
-                          onClick: e.onClear,
-                          disabled: k,
+                          onClick: props.onClear,
+                          disabled: isDisabled,
                         }),
                       ],
                     }),
@@ -709,8 +745,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Rows3, {}),
                       label: text("Fill Series"),
                       large: true,
-                      onClick: () => e.onTool("fillSeries"),
-                      disabled: k,
+                      onClick: () => props.onTool("fillSeries"),
+                      disabled: isDisabled,
                       title: text(
                         "Fill in any direction or create a number or date series",
                       ),
@@ -720,19 +756,19 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Sort & Filter"),
                       large: true,
-                      onClick: e.onToggleFilter,
+                      onClick: props.onToggleFilter,
                       className: "xl-blue-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Find & Select"),
                       large: true,
-                      onClick: e.onFind,
+                      onClick: props.onFind,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Advanced Find"),
-                      onClick: () => e.onTool("search"),
+                      onClick: () => props.onTool("search"),
                       title: text(
                         "Find all matches, preview replacements, or inspect special cells (Ctrl/⌘+Shift+F)",
                       ),
@@ -740,7 +776,7 @@ function WorkbookRibbon(e) {
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Search, {}),
                       label: text("Go To Special"),
-                      onClick: () => e.onTool("goToSpecial"),
+                      onClick: () => props.onTool("goToSpecial"),
                       title: text(
                         "Select formulas, errors, constants, notes or blanks (F5)",
                       ),
@@ -749,7 +785,7 @@ function WorkbookRibbon(e) {
                 }),
               ],
             }),
-          J === "Insert" &&
+          tab === "Insert" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(RibbonGroup, {
@@ -759,15 +795,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("PivotTable"),
                       large: true,
-                      onClick: () => e.onTool("pivot"),
-                      disabled: k,
+                      onClick: () => props.onTool("pivot"),
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Table"),
                       large: true,
-                      onClick: () => e.onTool("table"),
-                      disabled: k,
+                      onClick: () => props.onTool("table"),
+                      disabled: isDisabled,
                     }),
                   ],
                 }),
@@ -778,15 +814,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Image$1, {}),
                       label: text("Pictures"),
                       large: true,
-                      onClick: () => e.onTool("picture"),
-                      disabled: k,
+                      onClick: () => props.onTool("picture"),
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Square, {}),
                       label: text("Shapes"),
                       large: true,
-                      onClick: () => e.onTool("shape"),
-                      disabled: k,
+                      onClick: () => props.onTool("shape"),
+                      disabled: isDisabled,
                     }),
                   ],
                 }),
@@ -796,8 +832,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(ChartColumn, {}),
                     label: text("Recommended Charts"),
                     large: true,
-                    onClick: () => e.onTool("chart"),
-                    disabled: k,
+                    onClick: () => props.onTool("chart"),
+                    disabled: isDisabled,
                   }),
                 }),
                 i.jsx(RibbonGroup, {
@@ -806,8 +842,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(MessageSquare, {}),
                     label: text("New Note"),
                     large: true,
-                    onClick: e.onNote,
-                    disabled: k,
+                    onClick: props.onNote,
+                    disabled: isDisabled,
                     className: "xl-gold-icon",
                   }),
                 }),
@@ -818,26 +854,26 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Sheet, {}),
                       label: text("New Sheet"),
                       large: true,
-                      onClick: e.onAddSheet,
+                      onClick: props.onAddSheet,
                       disabled:
-                        e.busy ||
-                        !e.allowProtectionChange ||
-                        e.workbookStructureProtected,
+                        props.busy ||
+                        !props.allowProtectionChange ||
+                        props.workbookStructureProtected,
                       className: "xl-green-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Insert Row"),
                       large: true,
-                      onClick: e.onAddRow,
-                      disabled: k,
+                      onClick: props.onAddRow,
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Table2, {}),
                       label: text("Insert Column"),
                       large: true,
-                      onClick: e.onAddColumn,
-                      disabled: k,
+                      onClick: props.onAddColumn,
+                      disabled: isDisabled,
                     }),
                   ],
                 }),
@@ -847,14 +883,14 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(FolderOpen, {}),
                     label: text("Open Workbook"),
                     large: true,
-                    onClick: e.onImport,
-                    disabled: k,
+                    onClick: props.onImport,
+                    disabled: isDisabled,
                     className: "xl-gold-icon",
                   }),
                 }),
               ],
             }),
-          J === "Page Layout" &&
+          tab === "Page Layout" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsx(RibbonGroup, {
@@ -863,8 +899,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(LayoutGrid, {}),
                     label: text("Themes"),
                     large: true,
-                    onClick: () => e.onTool("themes"),
-                    disabled: k,
+                    onClick: () => props.onTool("themes"),
+                    disabled: isDisabled,
                   }),
                 }),
                 i.jsxs(RibbonGroup, {
@@ -874,28 +910,28 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Sheet, {}),
                       label: text("Margins"),
                       large: true,
-                      onClick: () => e.onTool("margins"),
+                      onClick: () => props.onTool("margins"),
                       disabled: false,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Orientation"),
                       large: true,
-                      onClick: () => e.onTool("orientation"),
+                      onClick: () => props.onTool("orientation"),
                       disabled: false,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Square, {}),
                       label: text("Size"),
                       large: true,
-                      onClick: () => e.onTool("size"),
+                      onClick: () => props.onTool("size"),
                       disabled: false,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Print Area"),
                       large: true,
-                      onClick: () => e.onTool("printArea"),
+                      onClick: () => props.onTool("printArea"),
                       disabled: false,
                     }),
                   ],
@@ -906,14 +942,14 @@ function WorkbookRibbon(e) {
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Print Titles"),
-                      onClick: () => e.onTool("printTitles"),
+                      onClick: () => props.onTool("printTitles"),
                       disabled: false,
                       large: true,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Page Breaks"),
-                      onClick: () => e.onTool("pageBreaks"),
+                      onClick: () => props.onTool("pageBreaks"),
                       disabled: false,
                       large: true,
                     }),
@@ -925,7 +961,7 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(Maximize, {}),
                     label: text("Fit to Page"),
                     large: true,
-                    onClick: () => e.onTool("fit"),
+                    onClick: () => props.onTool("fit"),
                     disabled: false,
                   }),
                 }),
@@ -937,8 +973,8 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: e.gridlines,
-                          onChange: e.onGridlines,
+                          checked: props.gridlines,
+                          onChange: props.onGridlines,
                         }),
                         i.jsx(LocalizedText, { children: "Gridlines" }),
                       ],
@@ -947,8 +983,8 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: e.headings,
-                          onChange: e.onHeadings,
+                          checked: props.headings,
+                          onChange: props.onHeadings,
                         }),
                         i.jsx(LocalizedText, { children: "Headings" }),
                       ],
@@ -957,7 +993,7 @@ function WorkbookRibbon(e) {
                 }),
               ],
             }),
-          J === "Formulas" &&
+          tab === "Formulas" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(RibbonGroup, {
@@ -967,21 +1003,21 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Sigma, {}),
                       label: text("AutoSum"),
                       large: true,
-                      onClick: e.onAutosum,
-                      disabled: k,
+                      onClick: props.onAutosum,
+                      disabled: isDisabled,
                       className: "xl-blue-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(BookOpen, {}),
                       label: text("Function Reference"),
                       large: true,
-                      onClick: () => e.onPanel("help"),
+                      onClick: () => props.onPanel("help"),
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Calculator, {}),
                       label: text("Insert Function"),
                       large: true,
-                      onClick: () => e.onTool("function"),
+                      onClick: () => props.onTool("function"),
                       disabled: false,
                     }),
                   ],
@@ -992,8 +1028,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(Calculator, {}),
                     label: text("Add-ins & Functions"),
                     large: true,
-                    onClick: () => e.onTool("extensions"),
-                    disabled: e.busy,
+                    onClick: () => props.onTool("extensions"),
+                    disabled: props.busy,
                   }),
                 }),
                 i.jsx(RibbonGroup, {
@@ -1002,7 +1038,7 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(Table2, {}),
                     label: text("Name Manager"),
                     large: true,
-                    onClick: () => e.onTool("names"),
+                    onClick: () => props.onTool("names"),
                     disabled: false,
                   }),
                 }),
@@ -1015,7 +1051,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowLeftRight, {}),
                           label: text("Trace Precedents"),
-                          onClick: () => e.onTool("tracePrecedents"),
+                          onClick: () => props.onTool("tracePrecedents"),
                           title: text(
                             "Inspect the cells referenced by the active formula",
                           ),
@@ -1023,7 +1059,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowLeftRight, {}),
                           label: text("Trace Dependents"),
-                          onClick: () => e.onTool("traceDependents"),
+                          onClick: () => props.onTool("traceDependents"),
                           title: text(
                             "Inspect formulas that reference the active cell",
                           ),
@@ -1031,7 +1067,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Sheet, {}),
                           label: text("Watch Window"),
-                          onClick: () => e.onTool("formulaWatches"),
+                          onClick: () => props.onTool("formulaWatches"),
                           title: text(
                             "Track selected cells and their current calculated values",
                           ),
@@ -1042,7 +1078,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Evaluate Formula"),
                       large: true,
-                      onClick: () => e.onTool("evaluateFormula"),
+                      onClick: () => props.onTool("evaluateFormula"),
                       title: text(
                         "Replay actual calculation steps and inspect errors",
                       ),
@@ -1051,7 +1087,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ShieldCheck, {}),
                       label: text("Compatibility"),
                       large: true,
-                      onClick: () => e.onTool("functionCompatibility"),
+                      onClick: () => props.onTool("functionCompatibility"),
                       title: text(
                         "Review function contracts and unsupported formulas",
                       ),
@@ -1060,14 +1096,14 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Sheet, {}),
                       label: text("Show Formulas"),
                       large: true,
-                      active: e.showFormulas,
-                      onClick: e.onShowFormulas,
+                      active: props.showFormulas,
+                      onClick: props.onShowFormulas,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ShieldCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
-                      onClick: () => e.onPanel("checks"),
+                      onClick: () => props.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
                   ],
@@ -1079,7 +1115,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Calculation Options"),
                       large: true,
-                      onClick: () => e.onTool("calculation"),
+                      onClick: () => props.onTool("calculation"),
                       title: text(
                         "Automatic or manual mode, iteration and calculation evidence",
                       ),
@@ -1088,7 +1124,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Calculate Now"),
                       large: true,
-                      onClick: () => e.onTool("calculateNow"),
+                      onClick: () => props.onTool("calculateNow"),
                       title: text(
                         "Recalculate the workbook without changing source cells",
                       ),
@@ -1101,13 +1137,13 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(Sparkles, {}),
                     label: text("Ask AI Assistant"),
                     large: true,
-                    onClick: () => e.onPanel("assistant"),
+                    onClick: () => props.onPanel("assistant"),
                     className: "xl-purple-icon",
                   }),
                 }),
               ],
             }),
-          J === "Data" &&
+          tab === "Data" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(RibbonGroup, {
@@ -1117,8 +1153,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(FolderOpen, {}),
                       label: text("Get Data"),
                       large: true,
-                      onClick: e.onImport,
-                      disabled: k,
+                      onClick: props.onImport,
+                      disabled: isDisabled,
                       className: "xl-gold-icon",
                       title: text("Import Excel, CSV, TSV, or workbook JSON"),
                     }),
@@ -1126,15 +1162,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("From Table / Range"),
                       large: true,
-                      onClick: () => e.onTool("query"),
-                      disabled: k,
+                      onClick: () => props.onTool("query"),
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ArrowLeftRight, {}),
                       label: text("Append / Join"),
                       large: true,
-                      onClick: () => e.onTool("combinePopulations"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("combinePopulations"),
+                      disabled: props.busy,
                       title: text(
                         "Review combined populations, unmatched records and match counts",
                       ),
@@ -1143,8 +1179,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("Transformation Recipes"),
                       large: true,
-                      onClick: () => e.onTool("transformationRecipes"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("transformationRecipes"),
+                      disabled: props.busy,
                       title: text(
                         "Build versioned steps with source fingerprints, failure details and reviewed outputs",
                       ),
@@ -1153,8 +1189,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(FolderOpen, {}),
                       label: text("Connections & Refresh"),
                       large: true,
-                      onClick: () => e.onTool("externalSources"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("externalSources"),
+                      disabled: props.busy,
                       title: text(
                         "Review approved external sources, control changes and last successful data",
                       ),
@@ -1163,8 +1199,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Model"),
                       large: true,
-                      onClick: () => e.onTool("dataModel"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("dataModel"),
+                      disabled: props.busy,
                       title: text(
                         "Build typed tables, relationships and measures across shared dimensions",
                       ),
@@ -1178,8 +1214,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Filter, {}),
                       label: text("Column Filters"),
                       large: true,
-                      onClick: () => e.onTool("populationFilter"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("populationFilter"),
+                      disabled: props.busy,
                       title: text(
                         "Filter values, text, numbers, dates and advanced criteria while retaining source rows",
                       ),
@@ -1188,8 +1224,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ArrowDownAZ, {}),
                       label: text("Custom Sort"),
                       large: true,
-                      onClick: () => e.onTool("sort"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("sort"),
+                      disabled: props.busy,
                       title: text(
                         "Review a stable multi-level sort of complete worksheet records",
                       ),
@@ -1200,7 +1236,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowDownAZ, {}),
                           label: text("Sort A to Z"),
-                          onClick: () => e.onSort("asc"),
+                          onClick: () => props.onSort("asc"),
                           className: "xl-blue-icon",
                           title: text(
                             "Sort worksheet view ascending by the selected column",
@@ -1209,7 +1245,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(ArrowUpAZ, {}),
                           label: text("Sort Z to A"),
-                          onClick: () => e.onSort("desc"),
+                          onClick: () => props.onSort("desc"),
                           className: "xl-blue-icon",
                           title: text(
                             "Sort worksheet view descending by the selected column",
@@ -1218,7 +1254,7 @@ function WorkbookRibbon(e) {
                         i.jsx(RibbonCommandButton, {
                           icon: i.jsx(Eraser, {}),
                           label: text("Clear Sort"),
-                          onClick: () => e.onSort(null),
+                          onClick: () => props.onSort(null),
                         }),
                       ],
                     }),
@@ -1226,7 +1262,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Filter, {}),
                       label: text("Filter"),
                       large: true,
-                      onClick: e.onToggleFilter,
+                      onClick: props.onToggleFilter,
                     }),
                   ],
                 }),
@@ -1237,15 +1273,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ClipboardCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
-                      onClick: () => e.onPanel("checks"),
+                      onClick: () => props.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(CheckCheck, {}),
                       label: text("Data Validation"),
                       large: true,
-                      onClick: () => e.onTool("validation"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("validation"),
+                      disabled: props.busy,
                       title: text(
                         "Review validation rules and inspect existing values; editing requires write access",
                       ),
@@ -1254,8 +1290,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Copy, {}),
                       label: text("Remove Duplicates"),
                       large: true,
-                      onClick: () => e.onTool("duplicates"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("duplicates"),
+                      disabled: props.busy,
                       title: text(
                         "Review duplicate groups and create a separate deduplicated population",
                       ),
@@ -1264,8 +1300,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Columns3, {}),
                       label: text("Text to Columns"),
                       large: true,
-                      onClick: () => e.onTool("textToColumns"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("textToColumns"),
+                      disabled: props.busy,
                       title: text(
                         "Preview split fields and types before creating a separate output",
                       ),
@@ -1274,8 +1310,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Columns3, {}),
                       label: text("Clean up text"),
                       large: true,
-                      onClick: () => e.onTool("textCleanup"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("textCleanup"),
+                      disabled: props.busy,
                       title: text(
                         "Review cleanup and extraction steps while retaining original evidence",
                       ),
@@ -1284,8 +1320,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Columns3, {}),
                       label: text("Clean & Reshape"),
                       large: true,
-                      onClick: () => e.onTool("fieldTransform"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("fieldTransform"),
+                      disabled: props.busy,
                       title: text(
                         "Review splitting, conversions, gap filling and inferred patterns with retained exceptions",
                       ),
@@ -1298,8 +1334,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(FileSpreadsheet, {}),
                     label: text("Workbook Links"),
                     large: true,
-                    onClick: () => e.onTool("workbookLinks"),
-                    disabled: e.busy,
+                    onClick: () => props.onTool("workbookLinks"),
+                    disabled: props.busy,
                     title: text(
                       "Inspect, resolve, refresh, replace and break approved workbook links",
                     ),
@@ -1312,8 +1348,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Scenario Manager"),
                       large: true,
-                      onClick: () => e.onTool("scenarios"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("scenarios"),
+                      disabled: props.busy,
                       title: text(
                         "Compare named assumptions and review a scenario before applying it",
                       ),
@@ -1322,8 +1358,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Table"),
                       large: true,
-                      onClick: () => e.onTool("dataTable"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("dataTable"),
+                      disabled: props.busy,
                       title: text(
                         "Build a one- or two-variable sensitivity table with retained baseline assumptions",
                       ),
@@ -1332,8 +1368,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Goal Seek"),
                       large: true,
-                      onClick: () => e.onTool("goalSeek"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("goalSeek"),
+                      disabled: props.busy,
                       title: text(
                         "Find a numeric input that reaches a target formula result",
                       ),
@@ -1347,8 +1383,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Calculator, {}),
                       label: text("Solver"),
                       large: true,
-                      onClick: () => e.onTool("solver"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("solver"),
+                      disabled: props.busy,
                       title: text(
                         "Review bounded linear optimization with explicit constraints",
                       ),
@@ -1357,8 +1393,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("Data Analysis"),
                       large: true,
-                      onClick: () => e.onTool("statistics"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("statistics"),
+                      disabled: props.busy,
                       title: text(
                         "Descriptive statistics, regression, distributions and forecasts",
                       ),
@@ -1372,8 +1408,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Table2, {}),
                       label: text("Consolidate / Subtotals"),
                       large: true,
-                      onClick: () => e.onTool("consolidation"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("consolidation"),
+                      disabled: props.busy,
                       title: text(
                         "Review cross-sheet or approved-workbook rollups, source context and grouped subtotals",
                       ),
@@ -1382,7 +1418,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Rows3, {}),
                       label: text("Group & Outline"),
                       large: true,
-                      onClick: () => e.onTool("outlines"),
+                      onClick: () => props.onTool("outlines"),
                     }),
                   ],
                 }),
@@ -1393,8 +1429,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Copy, {}),
                       label: text("Report Outputs"),
                       large: true,
-                      onClick: () => e.onTool("reportOutputs"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("reportOutputs"),
+                      disabled: props.busy,
                       title: text(
                         "Publish fixed snapshots, review linked refreshes and inspect embedded objects",
                       ),
@@ -1403,22 +1439,22 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(FileSpreadsheet, {}),
                       label: text("Save as Excel"),
                       large: true,
-                      onClick: () => e.onExport("xlsx"),
-                      disabled: e.busy,
+                      onClick: () => props.onExport("xlsx"),
+                      disabled: props.busy,
                       className: "xl-green-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Download, {}),
                       label: text("Export CSV"),
                       large: true,
-                      onClick: () => e.onExport("csv"),
-                      disabled: e.busy,
+                      onClick: () => props.onExport("csv"),
+                      disabled: props.busy,
                     }),
                   ],
                 }),
               ],
             }),
-          J === "Review" &&
+          tab === "Review" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsx(RibbonGroup, {
@@ -1427,7 +1463,7 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(BookOpen, {}),
                     label: text("Spelling"),
                     large: true,
-                    onClick: () => e.onTool("spelling"),
+                    onClick: () => props.onTool("spelling"),
                     disabled: false,
                   }),
                 }),
@@ -1437,8 +1473,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(MessageSquare, {}),
                     label: text("New / Edit Note"),
                     large: true,
-                    onClick: e.onNote,
-                    disabled: k,
+                    onClick: props.onNote,
+                    disabled: isDisabled,
                     className: "xl-gold-icon",
                   }),
                 }),
@@ -1449,12 +1485,12 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(MessageSquare, {}),
                       label: text("Review Comments"),
                       large: true,
-                      onClick: () => e.onTool("comments"),
+                      onClick: () => props.onTool("comments"),
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(MessageSquare, {}),
                       label: text("Hyperlink"),
-                      onClick: () => e.onTool("hyperlink"),
+                      onClick: () => props.onTool("hyperlink"),
                     }),
                   ],
                 }),
@@ -1465,8 +1501,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Pattern Checks"),
                       large: true,
-                      onClick: () => e.onTool("patterns"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("patterns"),
+                      disabled: props.busy,
                       title: text(
                         "Test explicit duplicate keys, sequence gaps, round amounts, weekends, holidays and combined rules",
                       ),
@@ -1475,8 +1511,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Aging Schedule"),
                       large: true,
-                      onClick: () => e.onTool("aging"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("aging"),
+                      disabled: props.busy,
                       title: text(
                         "Reconcile configurable aging buckets using a fixed as-of date",
                       ),
@@ -1485,8 +1521,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ListFilter, {}),
                       label: text("Risk Screening"),
                       large: true,
-                      onClick: () => e.onTool("materiality"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("materiality"),
+                      disabled: props.busy,
                       title: text(
                         "Review explicit thresholds, currency and effective period",
                       ),
@@ -1495,15 +1531,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(CheckCheck, {}),
                       label: text("Mark Reviewed"),
                       large: true,
-                      onClick: e.onReviewed,
-                      disabled: k,
+                      onClick: props.onReviewed,
+                      disabled: isDisabled,
                       className: "xl-green-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(ClipboardCheck, {}),
                       label: text("Audit Checks"),
                       large: true,
-                      onClick: () => e.onPanel("checks"),
+                      onClick: () => props.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
                   ],
@@ -1515,8 +1551,8 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(ArrowLeftRight, {}),
                       label: text("Compare Workbooks"),
                       large: true,
-                      onClick: () => e.onTool("workbookComparison"),
-                      disabled: e.busy,
+                      onClick: () => props.onTool("workbookComparison"),
+                      disabled: props.busy,
                       title: text(
                         "Compare keyed rows, formulas, links and hidden content",
                       ),
@@ -1525,7 +1561,7 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(History, {}),
                       label: text("Show Changes"),
                       large: true,
-                      onClick: () => e.onPanel("history"),
+                      onClick: () => props.onPanel("history"),
                       className: "xl-blue-icon",
                     }),
                   ],
@@ -1534,12 +1570,12 @@ function WorkbookRibbon(e) {
                   label: text("Protection"),
                   children: i.jsx(RibbonCommandButton, {
                     icon: i.jsx(ShieldCheck, {}),
-                    label: e.sheetProtected
+                    label: props.sheetProtected
                       ? "Unprotect Sheet"
                       : "Protect Sheet",
                     large: true,
-                    onClick: () => e.onTool("protection"),
-                    disabled: !e.allowProtectionChange,
+                    onClick: () => props.onTool("protection"),
+                    disabled: !props.allowProtectionChange,
                   }),
                 }),
                 i.jsx(RibbonGroup, {
@@ -1548,7 +1584,7 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(Sparkles, {}),
                     label: text("AI Assistant"),
                     large: true,
-                    onClick: () => e.onPanel("assistant"),
+                    onClick: () => props.onPanel("assistant"),
                     className: "xl-purple-icon",
                   }),
                 }),
@@ -1558,8 +1594,8 @@ function WorkbookRibbon(e) {
                     icon: i.jsx(FileCode, {}),
                     label: text("Automation & Scripts"),
                     large: true,
-                    onClick: () => e.onTool("automation"),
-                    disabled: e.busy,
+                    onClick: () => props.onTool("automation"),
+                    disabled: props.busy,
                     title: text(
                       "Inspect and preserve VBA/Office Scripts; review bounded migrations",
                     ),
@@ -1567,7 +1603,7 @@ function WorkbookRibbon(e) {
                 }),
               ],
             }),
-          J === "View" &&
+          tab === "View" &&
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(RibbonGroup, {
@@ -1579,15 +1615,15 @@ function WorkbookRibbon(e) {
                       large: true,
                       active: true,
                       onClick: () => {
-                        (e.gridlines || e.onGridlines(),
-                          e.headings || e.onHeadings());
+                        (props.gridlines || props.onGridlines(),
+                          props.headings || props.onHeadings());
                       },
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Sheet, {}),
                       label: text("Page Layout"),
                       large: true,
-                      onClick: () => e.onTool("pageLayout"),
+                      onClick: () => props.onTool("pageLayout"),
                       disabled: false,
                     }),
                   ],
@@ -1600,8 +1636,8 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: e.gridlines,
-                          onChange: e.onGridlines,
+                          checked: props.gridlines,
+                          onChange: props.onGridlines,
                         }),
                         i.jsx(LocalizedText, { children: "Gridlines" }),
                       ],
@@ -1610,8 +1646,8 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: e.headings,
-                          onChange: e.onHeadings,
+                          checked: props.headings,
+                          onChange: props.onHeadings,
                         }),
                         i.jsx(LocalizedText, { children: "Headings" }),
                       ],
@@ -1620,8 +1656,8 @@ function WorkbookRibbon(e) {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          checked: e.showFormulas,
-                          onChange: e.onShowFormulas,
+                          checked: props.showFormulas,
+                          onChange: props.onShowFormulas,
                         }),
                         i.jsx(LocalizedText, { children: "Formulas" }),
                       ],
@@ -1634,13 +1670,13 @@ function WorkbookRibbon(e) {
                   children: [
                     i.jsxs("div", {
                       className: "xl-zoom-selector",
-                      children: [i.jsx(Search, { size: 22 }), B],
+                      children: [i.jsx(Search, { size: 22 }), zoomSelect],
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Maximize, {}),
                       label: "100%",
                       large: true,
-                      onClick: () => e.onZoom(100),
+                      onClick: () => props.onZoom(100),
                     }),
                   ],
                 }),
@@ -1650,26 +1686,26 @@ function WorkbookRibbon(e) {
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Split"),
-                      onClick: () => e.onTool("viewSettings"),
+                      onClick: () => props.onTool("viewSettings"),
                       title: text(
                         "Split the worksheet into two or four scrolling panes",
                       ),
-                      disabled: k,
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Default Sizes"),
-                      onClick: () => e.onTool("viewSettings"),
+                      onClick: () => props.onTool("viewSettings"),
                       title: text(
                         "Set worksheet-wide row height and column width",
                       ),
-                      disabled: k,
+                      disabled: isDisabled,
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Grid2x2, {}),
                       label: text("Freeze Panes"),
                       large: true,
-                      onClick: () => e.onTool("viewSettings"),
+                      onClick: () => props.onTool("viewSettings"),
                       title: text(
                         "Freeze rows and columns above and to the left of the selected cell",
                       ),
@@ -1679,15 +1715,15 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(PanelTop, {}),
                       label: text("Freeze Top Row"),
                       large: true,
-                      active: e.freezeRows,
-                      onClick: e.onFreeze,
+                      active: props.freezeRows,
+                      onClick: props.onFreeze,
                       className: "xl-blue-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(Rows3, {}),
                       label: text("Hide & Unhide"),
                       large: true,
-                      onClick: () => e.onTool("viewSettings"),
+                      onClick: () => props.onTool("viewSettings"),
                       title: text("Hide or restore selected rows and columns"),
                     }),
                   ],
@@ -1699,14 +1735,14 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Sparkles, {}),
                       label: text("AI Assistant"),
                       large: true,
-                      onClick: () => e.onPanel("assistant"),
+                      onClick: () => props.onPanel("assistant"),
                       className: "xl-purple-icon",
                     }),
                     i.jsx(RibbonCommandButton, {
                       icon: i.jsx(History, {}),
                       label: text("Show Changes"),
                       large: true,
-                      onClick: () => e.onPanel("history"),
+                      onClick: () => props.onPanel("history"),
                     }),
                   ],
                 }),
@@ -1714,8 +1750,16 @@ function WorkbookRibbon(e) {
             }),
         ],
       }),
-    N = Object.fromEntries(
-      Uh.map((J) => [J, collectRibbonCommands(T(J), J, C, _)]),
+    commandsByTab = Object.fromEntries(
+      Uh.map((tabLabel) => [
+        tabLabel,
+        collectRibbonCommands(
+          renderRibbonTab(tabLabel),
+          tabLabel,
+          ribbonComponents,
+          getDisabledReason,
+        ),
+      ]),
     ),
     ribbonCommands = collectRibbonCommands(
       i.jsxs("div", {
@@ -1728,8 +1772,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(e.onNew),
-            disabled: k,
+            onClick: () => runFileMenuAction(props.onNew),
+            disabled: isDisabled,
             children: [
               i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
@@ -1747,8 +1791,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(e.onImport),
-            disabled: k,
+            onClick: () => runFileMenuAction(props.onImport),
+            disabled: isDisabled,
             children: [
               i.jsx(FolderOpen, { size: 18 }),
               i.jsxs("span", {
@@ -1767,7 +1811,7 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onTool("sheets")),
+            onClick: () => runFileMenuAction(() => props.onTool("sheets")),
             children: [
               i.jsx(Sheet, { size: 18 }),
               i.jsxs("span", {
@@ -1786,7 +1830,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onTool("workbookProperties")),
+            onClick: () =>
+              runFileMenuAction(() => props.onTool("workbookProperties")),
             children: [
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
@@ -1804,7 +1849,7 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onTool("versions")),
+            onClick: () => runFileMenuAction(() => props.onTool("versions")),
             children: [
               i.jsx(History, { size: 18 }),
               i.jsxs("span", {
@@ -1822,8 +1867,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            disabled: !e.allowProtectionChange || e.busy,
-            onClick: () => V(() => e.onTool("template")),
+            disabled: !props.allowProtectionChange || props.busy,
+            onClick: () => runFileMenuAction(() => props.onTool("template")),
             children: [
               i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
@@ -1844,8 +1889,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onExport("xlsx")),
-            disabled: e.busy,
+            onClick: () => runFileMenuAction(() => props.onExport("xlsx")),
+            disabled: props.busy,
             children: [
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
@@ -1863,8 +1908,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onExport("csv")),
-            disabled: e.busy,
+            onClick: () => runFileMenuAction(() => props.onExport("csv")),
+            disabled: props.busy,
             children: [
               i.jsx(Download, { size: 18 }),
               i.jsxs("span", {
@@ -1882,8 +1927,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onExport("json")),
-            disabled: e.busy,
+            onClick: () => runFileMenuAction(() => props.onExport("json")),
+            disabled: props.busy,
             children: [
               i.jsx(FileJson, { size: 18 }),
               i.jsxs("span", {
@@ -1901,8 +1946,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            disabled: e.busy,
-            onClick: () => V(() => e.onTool("xlsxSource")),
+            disabled: props.busy,
+            onClick: () => runFileMenuAction(() => props.onTool("xlsxSource")),
             children: [
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
@@ -1922,8 +1967,9 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            disabled: e.busy,
-            onClick: () => V(() => e.onTool("importSources")),
+            disabled: props.busy,
+            onClick: () =>
+              runFileMenuAction(() => props.onTool("importSources")),
             children: [
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
@@ -1941,8 +1987,9 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            disabled: e.busy,
-            onClick: () => V(() => e.onTool("workbookFormats")),
+            disabled: props.busy,
+            onClick: () =>
+              runFileMenuAction(() => props.onTool("workbookFormats")),
             children: [
               i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
@@ -1961,8 +2008,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(e.onRename),
-            disabled: k,
+            onClick: () => runFileMenuAction(props.onRename),
+            disabled: isDisabled,
             children: [
               i.jsx(Type, { size: 18 }),
               i.jsx("span", {
@@ -1973,8 +2020,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(e.onDemo),
-            disabled: k,
+            onClick: () => runFileMenuAction(props.onDemo),
+            disabled: isDisabled,
             children: [
               i.jsx(ClipboardCheck, { size: 18 }),
               i.jsx("span", {
@@ -1987,8 +2034,8 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            disabled: e.busy,
-            onClick: () => V(() => e.onTool("automation")),
+            disabled: props.busy,
+            onClick: () => runFileMenuAction(() => props.onTool("automation")),
             children: [
               i.jsx(FileCode, { size: 18 }),
               i.jsx("span", {
@@ -2001,7 +2048,7 @@ function WorkbookRibbon(e) {
           i.jsxs("button", {
             type: "button",
             role: "menuitem",
-            onClick: () => V(() => e.onPanel("help")),
+            onClick: () => runFileMenuAction(() => props.onPanel("help")),
             children: [
               i.jsx(BookOpen, { size: 18 }),
               i.jsx("span", {
@@ -2012,93 +2059,101 @@ function WorkbookRibbon(e) {
         ],
       }),
       "File",
-      C,
-      _,
+      ribbonComponents,
+      getDisabledReason,
     ),
-    L = [
+    quickAccessCommands = [
       {
         id: "quick-undo",
         name: "Undo",
         location: "Quick access",
-        reason: k || !e.canUndo ? _("Undo") : undefined,
+        reason:
+          isDisabled || !props.canUndo ? getDisabledReason("Undo") : undefined,
       },
       {
         id: "quick-redo",
         name: "Redo",
         location: "Quick access",
-        reason: k || !e.canRedo ? _("Redo") : undefined,
+        reason:
+          isDisabled || !props.canRedo ? getDisabledReason("Redo") : undefined,
       },
     ],
-    onLocate = (J) => {
-      J.reason ||
-        (s(false),
-        (d.current = J.id),
-        J.id.startsWith("File:")
-          ? (l(true), p(false))
-          : J.id.startsWith("quick-") || A(J.id.split(":")[0]));
+    onLocate = (commandEntry) => {
+      commandEntry.reason ||
+        (setCommandDialogOpen(false),
+        (pendingFocusId.current = commandEntry.id),
+        commandEntry.id.startsWith("File:")
+          ? (setFileMenuOpen(true), setRibbonPeekOpen(false))
+          : commandEntry.id.startsWith("quick-") ||
+            selectTab(commandEntry.id.split(":")[0]));
     };
   return (
     ne.useEffect(() => {
-      const J = d.current;
-      if (!J) return;
-      const q = Array.from(
-        m.current?.querySelectorAll("[data-workbook-command]") ?? [],
-      ).find((K) => K.dataset.workbookCommand === J);
-      q && (q.focus(), (d.current = null));
+      const pendingCommandId = pendingFocusId.current;
+      if (!pendingCommandId) return;
+      const focusTarget = Array.from(
+        ribbonRef.current?.querySelectorAll("[data-workbook-command]") ?? [],
+      ).find((element) => element.dataset.workbookCommand === pendingCommandId);
+      focusTarget && (focusTarget.focus(), (pendingFocusId.current = null));
     }),
     ne.useEffect(() => {
-      const J = (q) => {
+      const handleHelpShortcut = (helpKeyEvent) => {
         if (
-          q.defaultPrevented ||
-          q.repeat ||
-          q.key !== "F1" ||
-          q.ctrlKey ||
-          q.metaKey ||
-          q.altKey ||
-          q.shiftKey
+          helpKeyEvent.defaultPrevented ||
+          helpKeyEvent.repeat ||
+          helpKeyEvent.key !== "F1" ||
+          helpKeyEvent.ctrlKey ||
+          helpKeyEvent.metaKey ||
+          helpKeyEvent.altKey ||
+          helpKeyEvent.shiftKey
         )
           return;
-        const target = q.target,
-          K = m.current;
+        const target = helpKeyEvent.target,
+          ribbonNode = ribbonRef.current;
         if (
           !(target instanceof Element) ||
-          !K ||
+          !ribbonNode ||
           target.closest('[role="dialog"]')
         )
           return;
-        const te = K.closest(".lg-app") ?? K;
-        (te.classList.contains("lg-app")
-          ? target.closest(".lg-app") !== te
-          : !te.contains(target)) ||
-          (q.preventDefault(), q.stopPropagation(), s(true));
+        const f1Scope = ribbonNode.closest(".lg-app") ?? ribbonNode;
+        (f1Scope.classList.contains("lg-app")
+          ? target.closest(".lg-app") !== f1Scope
+          : !f1Scope.contains(target)) ||
+          (helpKeyEvent.preventDefault(),
+          helpKeyEvent.stopPropagation(),
+          setCommandDialogOpen(true));
       };
       return (
-        document.addEventListener("keydown", J),
-        () => document.removeEventListener("keydown", J)
+        document.addEventListener("keydown", handleHelpShortcut),
+        () => document.removeEventListener("keydown", handleHelpShortcut)
       );
     }, []),
     i.jsxs(i.Fragment, {
       children: [
-        a &&
+        isCommandDialogOpen &&
           i.jsx(CommandReferenceDialog, {
             commands: [
-              ...L,
+              ...quickAccessCommands,
               ...ribbonCommands.commands,
-              ...Uh.flatMap((J) => N[J].commands),
+              ...Uh.flatMap((ribbonTab) => commandsByTab[ribbonTab].commands),
             ],
-            onClose: () => s(false),
+            onClose: () => setCommandDialogOpen(false),
             onLocate: onLocate,
           }),
         i.jsxs("div", {
-          ref: m,
+          ref: ribbonRef,
           role: "group",
-          className: `xl-ribbon${c ? " xl-ribbon-collapsed" : ""}`,
+          className: `xl-ribbon${isRibbonCollapsed ? " xl-ribbon-collapsed" : ""}`,
           "aria-label": text("Workbook ribbon"),
-          onKeyDown: (J) => {
-            J.key === "Escape" &&
-              f &&
-              !J.defaultPrevented &&
-              (J.preventDefault(), J.stopPropagation(), w(), p(false));
+          onKeyDown: (ribbonKeyEvent) => {
+            ribbonKeyEvent.key === "Escape" &&
+              isRibbonPeekOpen &&
+              !ribbonKeyEvent.defaultPrevented &&
+              (ribbonKeyEvent.preventDefault(),
+              ribbonKeyEvent.stopPropagation(),
+              focusActiveTab(),
+              setRibbonPeekOpen(false));
           },
           lang: language("Workbook ribbon"),
           "data-ui-label": "Workbook ribbon",
@@ -2108,61 +2163,68 @@ function WorkbookRibbon(e) {
               children: [
                 i.jsxs("div", {
                   className: "xl-file-control",
-                  ref: g,
-                  onKeyDown: (J) => {
+                  ref: fileControlRef,
+                  onKeyDown: (fileKeyEvent) => {
                     if (!(
-                      J.altKey ||
-                      J.ctrlKey ||
-                      J.metaKey ||
-                      J.defaultPrevented
+                      fileKeyEvent.altKey ||
+                      fileKeyEvent.ctrlKey ||
+                      fileKeyEvent.metaKey ||
+                      fileKeyEvent.defaultPrevented
                     ))
                       if (
-                        ["ArrowDown", "ArrowUp", "Home", "End"].includes(J.key)
+                        ["ArrowDown", "ArrowUp", "Home", "End"].includes(
+                          fileKeyEvent.key,
+                        )
                       ) {
-                        if ((J.preventDefault(), !u)) {
-                          l(true);
+                        if ((fileKeyEvent.preventDefault(), !isFileMenuOpen)) {
+                          setFileMenuOpen(true);
                           const command = ribbonCommands.commands.find(
                             (command) => !command.reason,
                           );
-                          command && (d.current = command.id);
+                          command && (pendingFocusId.current = command.id);
                           return;
                         }
-                        const ae = Array.from(
-                            g.current?.querySelectorAll(
+                        const menuItems = Array.from(
+                            fileControlRef.current?.querySelectorAll(
                               '[role="menuitem"]:not(:disabled)',
                             ) ?? [],
                           ),
-                          oe = ae.indexOf(document.activeElement),
-                          de =
-                            J.key === "Home"
+                          activeMenuIndex = menuItems.indexOf(
+                            document.activeElement,
+                          ),
+                          nextMenuIndex =
+                            fileKeyEvent.key === "Home"
                               ? 0
-                              : J.key === "End"
-                                ? ae.length - 1
-                                : (oe +
-                                    (J.key === "ArrowDown"
+                              : fileKeyEvent.key === "End"
+                                ? menuItems.length - 1
+                                : (activeMenuIndex +
+                                    (fileKeyEvent.key === "ArrowDown"
                                       ? 1
-                                      : ae.length - 1)) %
-                                  ae.length;
-                        ae[de]?.focus();
+                                      : menuItems.length - 1)) %
+                                  menuItems.length;
+                        menuItems[nextMenuIndex]?.focus();
                       } else
-                        J.key === "Escape" &&
-                          (J.preventDefault(),
-                          J.stopPropagation(),
-                          l(false),
-                          g.current?.querySelector("button")?.focus());
+                        fileKeyEvent.key === "Escape" &&
+                          (fileKeyEvent.preventDefault(),
+                          fileKeyEvent.stopPropagation(),
+                          setFileMenuOpen(false),
+                          fileControlRef.current
+                            ?.querySelector("button")
+                            ?.focus());
                   },
                   children: [
                     i.jsx("button", {
                       type: "button",
-                      className: `xl-file-tab ${u ? "xl-tab-open" : ""}`,
-                      "aria-expanded": u,
+                      className: `xl-file-tab ${isFileMenuOpen ? "xl-tab-open" : ""}`,
+                      "aria-expanded": isFileMenuOpen,
                       "aria-haspopup": "menu",
                       onClick: () => {
-                        (l(!u), p(false));
+                        (setFileMenuOpen(!isFileMenuOpen),
+                          setRibbonPeekOpen(false));
                       },
                       children: i.jsx(LocalizedText, { children: "File" }),
                     }),
-                    u && ribbonCommands.content,
+                    isFileMenuOpen && ribbonCommands.content,
                   ],
                 }),
                 i.jsx("div", {
@@ -2171,63 +2233,74 @@ function WorkbookRibbon(e) {
                   "aria-label": text("Ribbon tabs"),
                   lang: language("Ribbon tabs"),
                   "data-ui-label": "Ribbon tabs",
-                  children: Uh.map((J, q) =>
+                  children: Uh.map((tabTitle, tabIndex) =>
                     i.jsx(
                       "button",
                       {
                         type: "button",
-                        id: `${b}-${q}`,
+                        id: `${ribbonId}-${tabIndex}`,
                         role: "tab",
-                        "aria-selected": n === J,
-                        "aria-controls": `${b}-panel`,
-                        "aria-expanded": n === J && y,
-                        tabIndex: n === J ? 0 : -1,
-                        className: n === J ? "xl-tab-active" : "",
+                        "aria-selected": activeTab === tabTitle,
+                        "aria-controls": `${ribbonId}-panel`,
+                        "aria-expanded":
+                          activeTab === tabTitle && isRibbonBodyVisible,
+                        tabIndex: activeTab === tabTitle ? 0 : -1,
+                        className:
+                          activeTab === tabTitle ? "xl-tab-active" : "",
                         title: text(
                           "Double-click to collapse or expand the ribbon",
                         ),
-                        onClick: () => A(J),
-                        onDoubleClick: E,
-                        onKeyDown: (W) => {
+                        onClick: () => selectTab(tabTitle),
+                        onDoubleClick: toggleRibbonCollapsed,
+                        onKeyDown: (tabKeyEvent) => {
                           if (!(
-                            W.defaultPrevented ||
-                            W.altKey ||
-                            W.ctrlKey ||
-                            W.metaKey
+                            tabKeyEvent.defaultPrevented ||
+                            tabKeyEvent.altKey ||
+                            tabKeyEvent.ctrlKey ||
+                            tabKeyEvent.metaKey
                           )) {
                             if (
-                              W.key === "ArrowRight" ||
-                              W.key === "ArrowLeft"
+                              tabKeyEvent.key === "ArrowRight" ||
+                              tabKeyEvent.key === "ArrowLeft"
                             ) {
-                              W.preventDefault();
-                              const ae =
-                                (q +
-                                  (W.key === "ArrowRight"
+                              tabKeyEvent.preventDefault();
+                              const nextTabIndex =
+                                (tabIndex +
+                                  (tabKeyEvent.key === "ArrowRight"
                                     ? 1
                                     : Uh.length - 1)) %
                                 Uh.length;
-                              (A(Uh[ae]),
-                                document.getElementById(`${b}-${ae}`)?.focus());
-                            } else if (W.key === "Home" || W.key === "End") {
-                              W.preventDefault();
-                              const ae = W.key === "Home" ? 0 : Uh.length - 1;
-                              (A(Uh[ae]),
-                                document.getElementById(`${b}-${ae}`)?.focus());
-                            } else if (W.key === "ArrowDown") {
-                              (W.preventDefault(), A(J));
-                              const command = N[J].commands.find(
-                                (command) => !command.reason,
-                              );
-                              command && (d.current = command.id);
+                              (selectTab(Uh[nextTabIndex]),
+                                document
+                                  .getElementById(`${ribbonId}-${nextTabIndex}`)
+                                  ?.focus());
+                            } else if (
+                              tabKeyEvent.key === "Home" ||
+                              tabKeyEvent.key === "End"
+                            ) {
+                              tabKeyEvent.preventDefault();
+                              const edgeTabIndex =
+                                tabKeyEvent.key === "Home" ? 0 : Uh.length - 1;
+                              (selectTab(Uh[edgeTabIndex]),
+                                document
+                                  .getElementById(`${ribbonId}-${edgeTabIndex}`)
+                                  ?.focus());
+                            } else if (tabKeyEvent.key === "ArrowDown") {
+                              (tabKeyEvent.preventDefault(),
+                                selectTab(tabTitle));
+                              const command = commandsByTab[
+                                tabTitle
+                              ].commands.find((command) => !command.reason);
+                              command && (pendingFocusId.current = command.id);
                             }
                           }
                         },
                         lang: language(
                           "Double-click to collapse or expand the ribbon",
                         ),
-                        children: i.jsx(LocalizedText, { children: J }),
+                        children: i.jsx(LocalizedText, { children: tabTitle }),
                       },
-                      J,
+                      tabTitle,
                     ),
                   ),
                 }),
@@ -2238,15 +2311,15 @@ function WorkbookRibbon(e) {
                       type: "button",
                       className: "xl-icon-button xl-ribbon-toggle",
                       "aria-label": text(
-                        c ? "Expand ribbon" : "Collapse ribbon",
+                        isRibbonCollapsed ? "Expand ribbon" : "Collapse ribbon",
                       ),
-                      "aria-expanded": y,
-                      "aria-controls": `${b}-panel`,
-                      title: c
+                      "aria-expanded": isRibbonBodyVisible,
+                      "aria-controls": `${ribbonId}-panel`,
+                      title: isRibbonCollapsed
                         ? "Expand and keep ribbon open (Ctrl+F1)"
                         : "Collapse ribbon (Ctrl+F1)",
-                      onClick: E,
-                      children: c
+                      onClick: toggleRibbonCollapsed,
+                      children: isRibbonCollapsed
                         ? i.jsx(ChevronDown, { size: 16 })
                         : i.jsx(ChevronUp, { size: 16 }),
                     }),
@@ -2254,29 +2327,29 @@ function WorkbookRibbon(e) {
                       icon: i.jsx(Undo2, { size: 16 }),
                       label: text("Undo (Ctrl+Z)"),
                       commandId: "quick-undo",
-                      reason: L[0].reason,
-                      onClick: e.onUndo,
-                      disabled: k || !e.canUndo,
+                      reason: quickAccessCommands[0].reason,
+                      onClick: props.onUndo,
+                      disabled: isDisabled || !props.canUndo,
                     }),
                     i.jsx(RibbonIconButton, {
                       icon: i.jsx(Redo2, { size: 16 }),
                       label: text("Redo (Ctrl+Y)"),
                       commandId: "quick-redo",
-                      reason: L[1].reason,
-                      onClick: e.onRedo,
-                      disabled: k || !e.canRedo,
+                      reason: quickAccessCommands[1].reason,
+                      onClick: props.onRedo,
+                      disabled: isDisabled || !props.canRedo,
                     }),
                     i.jsx(RibbonIconButton, {
                       icon: i.jsx(BookOpen, { size: 16 }),
                       label: text("Commands & shortcuts"),
-                      onClick: () => s(true),
+                      onClick: () => setCommandDialogOpen(true),
                     }),
                     i.jsx("span", { className: "xl-tabbar-divider" }),
                     i.jsxs("button", {
                       type: "button",
                       className: "xl-ai-button",
                       "aria-label": text("AI assistant"),
-                      onClick: () => e.onPanel("assistant"),
+                      onClick: () => props.onPanel("assistant"),
                       lang: language("AI assistant"),
                       "data-ui-label": "AI assistant",
                       children: [
@@ -2293,13 +2366,17 @@ function WorkbookRibbon(e) {
               ],
             }),
             i.jsx("div", {
-              ref: v,
-              id: `${b}-panel`,
-              className: `xl-ribbon-body${c && f ? " xl-ribbon-temporary" : ""}`,
-              hidden: !y,
+              ref: panelRef,
+              id: `${ribbonId}-panel`,
+              className: `xl-ribbon-body${isRibbonCollapsed && isRibbonPeekOpen ? " xl-ribbon-temporary" : ""}`,
+              hidden: !isRibbonBodyVisible,
               role: "tabpanel",
-              "aria-labelledby": `${b}-${Uh.indexOf(n)}`,
-              children: y && i.jsx(i.Fragment, { children: N[n].content }),
+              "aria-labelledby": `${ribbonId}-${Uh.indexOf(activeTab)}`,
+              children:
+                isRibbonBodyVisible &&
+                i.jsx(i.Fragment, {
+                  children: commandsByTab[activeTab].content,
+                }),
             }),
           ],
         }),

@@ -80,187 +80,247 @@ import {
   isFormulaError,
 } from "./04-pivot-tables-and-pictures.js";
 
-function applyDefinedNameOperation(workbook, r, t = {}) {
-  if (t.readOnly) throw Error("This workbook is read-only.");
+function applyDefinedNameOperation(workbook, operation, options = {}) {
+  if (options.readOnly) throw Error("This workbook is read-only.");
   if (workbook.structureProtection?.enabled)
     throw Error(
       "Workbook structure is protected. Unprotect it before changing names.",
     );
-  const n = validateDefinedName(workbook.definedNames, workbook),
-    o =
-      r.kind === "create"
+  const definedNames = validateDefinedName(workbook.definedNames, workbook),
+    existingName =
+      operation.kind === "create"
         ? undefined
-        : n.find(
-            (y) =>
-              y.name.toLowerCase() === r.name.toLowerCase() &&
-              y.scopeSheetId === r.scopeSheetId,
+        : definedNames.find(
+            (candidate) =>
+              candidate.name.toLowerCase() === operation.name.toLowerCase() &&
+              candidate.scopeSheetId === operation.scopeSheetId,
           );
-  if (r.kind !== "create" && !o)
+  if (operation.kind !== "create" && !existingName)
     throw Error("The defined name was not found. Reopen Name Manager.");
-  let a;
-  if (r.kind === "create" || r.kind === "update")
-    a = validateDefinedName([r.definition], workbook)[0];
-  else if (r.kind === "rename")
-    a = validateDefinedName([{ ...o, name: r.newName }], workbook)[0];
-  else if (r.kind !== "delete") throw Error("Unknown name operation.");
+  let newDefinition;
+  if (operation.kind === "create" || operation.kind === "update")
+    newDefinition = validateDefinedName([operation.definition], workbook)[0];
+  else if (operation.kind === "rename")
+    newDefinition = validateDefinedName(
+      [{ ...existingName, name: operation.newName }],
+      workbook,
+    )[0];
+  else if (operation.kind !== "delete") throw Error("Unknown name operation.");
   if (
-    r.kind === "update" &&
-    (o.name !== a.name || o.scopeSheetId !== a.scopeSheetId)
+    operation.kind === "update" &&
+    (existingName.name !== newDefinition.name ||
+      existingName.scopeSheetId !== newDefinition.scopeSheetId)
   )
     throw Error(
       "Use Rename to change a name. Existing name scope cannot be changed; create a separate name instead.",
     );
   if (
-    a &&
+    newDefinition &&
     workbook.sheets.some((sheet) =>
       sheet.tables?.some(
-        (table) => table.name.toLowerCase() === a.name.toLowerCase(),
+        (table) =>
+          table.name.toLowerCase() === newDefinition.name.toLowerCase(),
       ),
     )
   )
     throw Error("A table already uses this name.");
   const next = structuredClone(workbook),
-    d = o ? definedNameScopeKey(o) : undefined;
+    existingScopeKey = existingName
+      ? definedNameScopeKey(existingName)
+      : undefined;
   ((next.definedNames = validateDefinedName(
-    [...n.filter((y) => definedNameScopeKey(y) !== d), ...(a ? [a] : [])],
+    [
+      ...definedNames.filter(
+        (otherEntry) => definedNameScopeKey(otherEntry) !== existingScopeKey,
+      ),
+      ...(newDefinition ? [newDefinition] : []),
+    ],
     workbook,
   )),
-    o &&
-      a &&
-      (next.definedNames = n.map((y) =>
-        definedNameScopeKey(y) === d ? a : y,
+    existingName &&
+      newDefinition &&
+      (next.definedNames = definedNames.map((existingEntry) =>
+        definedNameScopeKey(existingEntry) === existingScopeKey
+          ? newDefinition
+          : existingEntry,
       )));
-  const u = a?.scopeSheetId ?? o?.scopeSheetId,
-    l = (y) => {
-      if (workbook.sheets.find((sheet) => sheet.id === y)?.protection?.enabled)
+  const affectedSheetId =
+      newDefinition?.scopeSheetId ?? existingName?.scopeSheetId,
+    assertSheetUnprotected = (sheetId) => {
+      if (
+        workbook.sheets.find((sheet) => sheet.id === sheetId)?.protection
+          ?.enabled
+      )
         throw Error(
           "An affected worksheet is protected. Unprotect it before changing names.",
         );
     };
-  u && l(u);
+  affectedSheetId && assertSheetUnprotected(affectedSheetId);
   const changes = [],
     dependencies = [];
-  let f = 0;
+  let scanBudgetUsed = 0;
   const p = true,
-    m = (y) => {
-      const w = m5(y, p);
-      if (((f += w.length + 1), f > 1e6))
+    scanReferences = (formulaText) => {
+      const scannedReferences = m5(formulaText, p);
+      if (
+        ((scanBudgetUsed += scannedReferences.length + 1), scanBudgetUsed > 1e6)
+      )
         throw Error(
           "The name dependency scan exceeds the supported budget. Split the workbook before changing names.",
         );
       if (
-        w.some(
-          (E) =>
-            E.qualifier &&
+        scannedReferences.some(
+          (scannedReference) =>
+            scannedReference.qualifier &&
             !workbook.sheets.some(
-              (sheet) => sheet.name.toLowerCase() === E.qualifier.toLowerCase(),
+              (sheet) =>
+                sheet.name.toLowerCase() ===
+                scannedReference.qualifier.toLowerCase(),
             ),
         )
       )
         throw Error(
           "An unknown or external worksheet qualifier cannot be safely migrated.",
         );
-      return w;
+      return scannedReferences;
     },
-    v = (y, w, E = []) => {
-      if (E.length > 32)
+    dependsOnTarget = (refersToText, scopeSheetId, dependencyChain = []) => {
+      if (dependencyChain.length > 32)
         throw Error("The name dependency chain exceeds 32 levels.");
-      for (const A of m(y)) {
-        const scopedDefinedName = findScopedDefinedName(A, workbook, w),
-          F =
-            r.kind === "create" ? findScopedDefinedName(A, next, w) : undefined;
+      for (const reference of scanReferences(refersToText)) {
+        const scopedDefinedName = findScopedDefinedName(
+            reference,
+            workbook,
+            scopeSheetId,
+          ),
+          nextDefinedName =
+            operation.kind === "create"
+              ? findScopedDefinedName(reference, next, scopeSheetId)
+              : undefined;
         if (
-          F &&
-          definedNameScopeKey(F) === definedNameScopeKey(a) &&
+          nextDefinedName &&
+          definedNameScopeKey(nextDefinedName) ===
+            definedNameScopeKey(newDefinition) &&
           (!scopedDefinedName ||
-            definedNameScopeKey(scopedDefinedName) !== definedNameScopeKey(F))
+            definedNameScopeKey(scopedDefinedName) !==
+              definedNameScopeKey(nextDefinedName))
         )
           return true;
         if (!scopedDefinedName) {
           if (
-            r.kind === "create" &&
-            findScopedDefinedName(A, next, w) &&
-            definedNameScopeKey(findScopedDefinedName(A, next, w)) ===
-              definedNameScopeKey(a)
+            operation.kind === "create" &&
+            findScopedDefinedName(reference, next, scopeSheetId) &&
+            definedNameScopeKey(
+              findScopedDefinedName(reference, next, scopeSheetId),
+            ) === definedNameScopeKey(newDefinition)
           )
             return true;
           continue;
         }
-        if (definedNameScopeKey(scopedDefinedName) === d) return true;
-        const I = definedNameScopeKey(scopedDefinedName);
+        if (definedNameScopeKey(scopedDefinedName) === existingScopeKey)
+          return true;
+        const dependencyScopeKey = definedNameScopeKey(scopedDefinedName);
         if (
-          !E.includes(I) &&
-          v(
+          !dependencyChain.includes(dependencyScopeKey) &&
+          dependsOnTarget(
             scopedDefinedName.refersTo,
             scopedDefinedName.scopeSheetId ??
-              (A.qualifier
+              (reference.qualifier
                 ? workbook.sheets.find(
                     (sheet) =>
-                      sheet.name.toLowerCase() === A.qualifier.toLowerCase(),
+                      sheet.name.toLowerCase() ===
+                      reference.qualifier.toLowerCase(),
                   ).id
-                : w),
-            [...E, I],
+                : scopeSheetId),
+            [...dependencyChain, dependencyScopeKey],
           )
         )
           return true;
       }
       return false;
     },
-    g = (before, w, E) => {
-      const A = m(before);
-      if (w.some((I) => v(before, I))) {
+    rewriteFormula = (before, sheetIds, target) => {
+      const beforeReferences = scanReferences(before);
+      if (
+        sheetIds.some((candidateSheetId) =>
+          dependsOnTarget(before, candidateSheetId),
+        )
+      ) {
         if (
           (dependencies.push({
-            label: E.label,
-            ...(E.sheetId ? { sheetId: E.sheetId } : {}),
-            ...(E.address ? { address: E.address } : {}),
+            label: target.label,
+            ...(target.sheetId ? { sheetId: target.sheetId } : {}),
+            ...(target.address ? { address: target.address } : {}),
           }),
           dependencies.length > pO)
         )
           throw Error(
             "A name operation may affect at most 500 dependent locations. Split the operation into smaller workbooks.",
           );
-        if ((E.sheetId && l(E.sheetId), r.kind === "delete"))
+        if (
+          (target.sheetId && assertSheetUnprotected(target.sheetId),
+          operation.kind === "delete")
+        )
           throw Error(
-            `This name is referenced by ${E.label}. Remove or replace its dependencies before deletion.`,
+            `This name is referenced by ${target.label}. Remove or replace its dependencies before deletion.`,
           );
       }
-      const after = replaceTextSpans(before, A, (I) => {
-        if (r.kind !== "rename") return I.text;
-        const O = w.map((V) => findScopedDefinedName(I, workbook, V)),
-          j = O.map((V) => !!V && definedNameScopeKey(V) === d);
-        if (j.some(Boolean) && !j.every(Boolean))
-          throw Error(
-            `The workbook-scoped definition ${E.label} resolves differently across worksheets. Qualify its references before renaming.`,
+      const after = replaceTextSpans(before, beforeReferences, (span) => {
+        if (operation.kind !== "rename") return span.text;
+        const originalDefinitions = sheetIds.map((lookupSheetId) =>
+            findScopedDefinedName(span, workbook, lookupSheetId),
+          ),
+          matchesTarget = originalDefinitions.map(
+            (originalDefinition) =>
+              !!originalDefinition &&
+              definedNameScopeKey(originalDefinition) === existingScopeKey,
           );
-        if (j.every(Boolean)) {
-          if (!I.qualifier && I.bound?.has(a.name.toLowerCase()))
-            throw Error(
-              `Renaming would be shadowed by a local LET variable or LAMBDA parameter in ${E.label}. Choose a distinct name.`,
-            );
-          const V = { ...I, name: a.name };
+        if (matchesTarget.some(Boolean) && !matchesTarget.every(Boolean))
+          throw Error(
+            `The workbook-scoped definition ${target.label} resolves differently across worksheets. Qualify its references before renaming.`,
+          );
+        if (matchesTarget.every(Boolean)) {
           if (
-            w.some((D) => {
-              const scopedDefinedName = findScopedDefinedName(V, next, D);
+            !span.qualifier &&
+            span.bound?.has(newDefinition.name.toLowerCase())
+          )
+            throw Error(
+              `Renaming would be shadowed by a local LET variable or LAMBDA parameter in ${target.label}. Choose a distinct name.`,
+            );
+          const renamedReference = { ...span, name: newDefinition.name };
+          if (
+            sheetIds.some((checkSheetId) => {
+              const scopedDefinedName = findScopedDefinedName(
+                renamedReference,
+                next,
+                checkSheetId,
+              );
               return (
                 !scopedDefinedName ||
                 definedNameScopeKey(scopedDefinedName) !==
-                  definedNameScopeKey(a)
+                  definedNameScopeKey(newDefinition)
               );
             })
           )
             throw Error(
-              `Renaming would be shadowed by another name in ${E.label}. Choose a distinct name.`,
+              `Renaming would be shadowed by another name in ${target.label}. Choose a distinct name.`,
             );
-          return I.qualifier
-            ? I.text.slice(0, I.text.length - I.name.length) + a.name
-            : a.name;
+          return span.qualifier
+            ? span.text.slice(0, span.text.length - span.name.length) +
+                newDefinition.name
+            : newDefinition.name;
         }
         if (
-          w.some((V, D) => {
-            const scopedDefinedName = findScopedDefinedName(I, next, V);
+          sheetIds.some((checkedSheetId, index) => {
+            const scopedDefinedName = findScopedDefinedName(
+              span,
+              next,
+              checkedSheetId,
+            );
             return (
-              (O[D] ? definedNameScopeKey(O[D]) : undefined) !==
+              (originalDefinitions[index]
+                ? definedNameScopeKey(originalDefinitions[index])
+                : undefined) !==
               (scopedDefinedName
                 ? definedNameScopeKey(scopedDefinedName)
                 : undefined)
@@ -268,14 +328,14 @@ function applyDefinedNameOperation(workbook, r, t = {}) {
           })
         )
           throw Error(
-            `Renaming would change an existing reference in ${E.label}. Choose a distinct name.`,
+            `Renaming would change an existing reference in ${target.label}. Choose a distinct name.`,
           );
-        return I.text;
+        return span.text;
       });
       if (
         after !== before &&
-        (E.sheetId && l(E.sheetId),
-        changes.push({ ...E, before: before, after: after }),
+        (target.sheetId && assertSheetUnprotected(target.sheetId),
+        changes.push({ ...target, before: before, after: after }),
         changes.length > pO)
       )
         throw Error(
@@ -284,62 +344,71 @@ function applyDefinedNameOperation(workbook, r, t = {}) {
       return after;
     };
   for (const sheet of next.sheets) {
-    for (const w of sheet.tables ?? [])
-      for (const column of w.columns)
-        column.calculatedFormula &&= g(column.calculatedFormula, [sheet.id], {
-          kind: "table-column",
-          label: `${sheet.name}: ${w.name}[${column.name}] calculated rule`,
-          sheetId: sheet.id,
-        });
+    for (const sheetTable of sheet.tables ?? [])
+      for (const column of sheetTable.columns)
+        column.calculatedFormula &&= rewriteFormula(
+          column.calculatedFormula,
+          [sheet.id],
+          {
+            kind: "table-column",
+            label: `${sheet.name}: ${sheetTable.name}[${column.name}] calculated rule`,
+            sheetId: sheet.id,
+          },
+        );
     for (const [address, cell] of Object.entries(sheet.cells))
       typeof cell.raw == "string" &&
         cell.raw.startsWith("=") &&
         !cell.literal &&
-        (cell.raw = g(cell.raw, [sheet.id], {
+        (cell.raw = rewriteFormula(cell.raw, [sheet.id], {
           kind: "cell",
           label: `${sheet.name}!${address}`,
           sheetId: sheet.id,
           address: address,
         }));
-    for (const w of [
+    for (const rule of [
       ...(sheet.conditionalFormats ?? []),
       ...(sheet.validations ?? []),
     ])
-      (w.kind === "formula" || w.kind === "custom") &&
-        w.formula &&
-        (w.formula = g(w.formula, [sheet.id], {
-          kind: w.kind === "custom" ? "validation" : "conditional",
-          label: `${sheet.name}: ${w.kind === "custom" ? "validation" : "conditional"} rule ${w.id}`,
+      (rule.kind === "formula" || rule.kind === "custom") &&
+        rule.formula &&
+        (rule.formula = rewriteFormula(rule.formula, [sheet.id], {
+          kind: rule.kind === "custom" ? "validation" : "conditional",
+          label: `${sheet.name}: ${rule.kind === "custom" ? "validation" : "conditional"} rule ${rule.id}`,
           sheetId: sheet.id,
         }));
   }
   for (const definedName of next.definedNames) {
-    const w = definedName.scopeSheetId
+    const targetSheetIds = definedName.scopeSheetId
       ? [definedName.scopeSheetId]
       : workbook.sheets.map((sheet) => sheet.id);
-    definedName.refersTo = g(definedName.refersTo, w, {
-      kind: "name",
-      label: `Name ${definedName.name} (${definedName.scopeSheetId ? workbook.sheets.find((sheet) => sheet.id === definedName.scopeSheetId).name : "Workbook"})`,
-      ...(definedName.scopeSheetId
-        ? { sheetId: definedName.scopeSheetId }
-        : {}),
-    });
+    definedName.refersTo = rewriteFormula(
+      definedName.refersTo,
+      targetSheetIds,
+      {
+        kind: "name",
+        label: `Name ${definedName.name} (${definedName.scopeSheetId ? workbook.sheets.find((sheet) => sheet.id === definedName.scopeSheetId).name : "Workbook"})`,
+        ...(definedName.scopeSheetId
+          ? { sheetId: definedName.scopeSheetId }
+          : {}),
+      },
+    );
   }
-  if (a)
-    for (const y of a.scopeSheetId
-      ? [a.scopeSheetId]
+  if (newDefinition)
+    for (const targetSheetId of newDefinition.scopeSheetId
+      ? [newDefinition.scopeSheetId]
       : workbook.sheets.map((sheet) => sheet.id))
       try {
         resolveDefinedNameValue(
           next.definedNames
             .find(
               (definedName) =>
-                definedNameScopeKey(definedName) === definedNameScopeKey(a),
+                definedNameScopeKey(definedName) ===
+                definedNameScopeKey(newDefinition),
             )
             .refersTo.slice(1),
           next,
-          y,
-          [definedNameScopeKey(a)],
+          targetSheetId,
+          [definedNameScopeKey(newDefinition)],
         );
       } catch (error) {
         throw Error(
@@ -348,14 +417,15 @@ function applyDefinedNameOperation(workbook, r, t = {}) {
       }
   return {
     snapshot: JSON.stringify(workbook),
-    request: structuredClone(r),
-    ...(o ? { before: structuredClone(o) } : {}),
-    ...(a
+    request: structuredClone(operation),
+    ...(existingName ? { before: structuredClone(existingName) } : {}),
+    ...(newDefinition
       ? {
           after: structuredClone(
             next.definedNames.find(
               (definedName) =>
-                definedNameScopeKey(definedName) === definedNameScopeKey(a),
+                definedNameScopeKey(definedName) ===
+                definedNameScopeKey(newDefinition),
             ),
           ),
         }
@@ -365,241 +435,303 @@ function applyDefinedNameOperation(workbook, r, t = {}) {
     next: next,
   };
 }
-function assertNamePreviewCurrent(workbook, r, t = {}) {
-  if (JSON.stringify(workbook) !== r.snapshot)
+function assertNamePreviewCurrent(workbook, preview, options = {}) {
+  if (JSON.stringify(workbook) !== preview.snapshot)
     throw Error(
       "The workbook changed after the name preview. Review the operation again.",
     );
-  const n = applyDefinedNameOperation(workbook, r.request, t);
-  if (JSON.stringify(n) !== JSON.stringify(r))
+  const recomputedPreview = applyDefinedNameOperation(
+    workbook,
+    preview.request,
+    options,
+  );
+  if (JSON.stringify(recomputedPreview) !== JSON.stringify(preview))
     throw Error("The name preview changed. Review the operation again.");
-  return JSON.stringify(n.next) === JSON.stringify(workbook)
+  return JSON.stringify(recomputedPreview.next) === JSON.stringify(workbook)
     ? workbook
-    : n.next;
+    : recomputedPreview.next;
 }
-function matchCriteriaValue(e, r) {
-  if (typeof r != "string") return e === r;
-  const t = /^(<=|>=|<>|=|<|>)?(.*)$/.exec(r),
-    n = t[1] ?? "=",
-    o = t[2];
-  if ((n === "=" || n === "<>") && /[?*~]/.test(o)) {
-    if (typeof e != "string") return n === "<>";
-    const u = [];
-    for (let h = 0; h < o.length; h++)
-      o[h] === "~" && h + 1 < o.length
-        ? u.push({ char: o[++h].toLowerCase(), wildcard: false })
-        : u.push({
-            char: o[h].toLowerCase(),
-            wildcard: o[h] === "*" || o[h] === "?",
+function matchCriteriaValue(cellValue, criterion) {
+  if (typeof criterion != "string") return cellValue === criterion;
+  const criterionMatch = /^(<=|>=|<>|=|<|>)?(.*)$/.exec(criterion),
+    operator = criterionMatch[1] ?? "=",
+    operand = criterionMatch[2];
+  if ((operator === "=" || operator === "<>") && /[?*~]/.test(operand)) {
+    if (typeof cellValue != "string") return operator === "<>";
+    const patternTokens = [];
+    for (let patternIndex = 0; patternIndex < operand.length; patternIndex++)
+      operand[patternIndex] === "~" && patternIndex + 1 < operand.length
+        ? patternTokens.push({
+            char: operand[++patternIndex].toLowerCase(),
+            wildcard: false,
+          })
+        : patternTokens.push({
+            char: operand[patternIndex].toLowerCase(),
+            wildcard:
+              operand[patternIndex] === "*" || operand[patternIndex] === "?",
           });
-    const l = String(e ?? "").toLowerCase();
-    if (u.length * l.length > 1e5) throw formulaErrorFactory("#LIMIT!");
-    let c = Array(l.length + 1).fill(false);
-    c[0] = true;
-    for (const h of u) {
-      const f = Array(l.length + 1).fill(false);
-      f[0] = h.wildcard && h.char === "*" && c[0];
-      for (let p = 1; p <= l.length; p++)
-        f[p] =
-          h.wildcard && h.char === "*"
-            ? c[p] || f[p - 1]
-            : c[p - 1] &&
-              ((h.wildcard && h.char === "?") || l[p - 1] === h.char);
-      c = f;
+    const cellText = String(cellValue ?? "").toLowerCase();
+    if (patternTokens.length * cellText.length > 1e5)
+      throw formulaErrorFactory("#LIMIT!");
+    let matchRow = Array(cellText.length + 1).fill(false);
+    matchRow[0] = true;
+    for (const patternToken of patternTokens) {
+      const nextMatchRow = Array(cellText.length + 1).fill(false);
+      nextMatchRow[0] =
+        patternToken.wildcard && patternToken.char === "*" && matchRow[0];
+      for (let textIndex = 1; textIndex <= cellText.length; textIndex++)
+        nextMatchRow[textIndex] =
+          patternToken.wildcard && patternToken.char === "*"
+            ? matchRow[textIndex] || nextMatchRow[textIndex - 1]
+            : matchRow[textIndex - 1] &&
+              ((patternToken.wildcard && patternToken.char === "?") ||
+                cellText[textIndex - 1] === patternToken.char);
+      matchRow = nextMatchRow;
     }
-    return n === "<>" ? !c[l.length] : c[l.length];
+    return operator === "<>"
+      ? !matchRow[cellText.length]
+      : matchRow[cellText.length];
   }
-  const a = o.trim() !== "" && Number.isFinite(Number(o)),
-    s = a
-      ? e === null || e === ""
+  const isNumericOperand =
+      operand.trim() !== "" && Number.isFinite(Number(operand)),
+    comparableValue = isNumericOperand
+      ? cellValue === null || cellValue === ""
         ? 0
-        : typeof e == "number"
-          ? e
+        : typeof cellValue == "number"
+          ? cellValue
           : NaN
-      : String(e ?? "").toLowerCase(),
-    d = a ? Number(o) : o.toLowerCase();
-  return n === "<>"
-    ? s !== d
-    : n === "<"
-      ? s < d
-      : n === ">"
-        ? s > d
-        : n === "<="
-          ? s <= d
-          : n === ">="
-            ? s >= d
-            : s === d;
+      : String(cellValue ?? "").toLowerCase(),
+    comparableOperand = isNumericOperand
+      ? Number(operand)
+      : operand.toLowerCase();
+  return operator === "<>"
+    ? comparableValue !== comparableOperand
+    : operator === "<"
+      ? comparableValue < comparableOperand
+      : operator === ">"
+        ? comparableValue > comparableOperand
+        : operator === "<="
+          ? comparableValue <= comparableOperand
+          : operator === ">="
+            ? comparableValue >= comparableOperand
+            : comparableValue === comparableOperand;
 }
 function createWorkbookFormulaEngine(
-  e,
-  r,
+  engine,
+  referenceFunctionEvaluator,
   issue = createFormulaError,
   clock = resolveLocalDateTime(),
   report,
   criterionFormula,
 ) {
-  const s = e.utils._applyInfix.bind(e.utils);
-  ((e.utils._applyInfix = (u, l, c) => {
-    const h = (val, E) => (
-      ["=", "<>", "<", ">", "<=", ">="].includes(l) &&
+  const originalApplyInfix = engine.utils._applyInfix.bind(engine.utils);
+  ((engine.utils._applyInfix = (leftOperand, operator, rightOperand) => {
+    const applyScalarInfix = (val, rightValue) => (
+      ["=", "<>", "<", ">", "<=", ">="].includes(operator) &&
         typeof val == "string" &&
-        typeof E == "string" &&
-        ((val = val.toLowerCase()), (E = E.toLowerCase())),
-      s({ val: val, isArray: false }, l, { val: E, isArray: false })
+        typeof rightValue == "string" &&
+        ((val = val.toLowerCase()), (rightValue = rightValue.toLowerCase())),
+      originalApplyInfix({ val: val, isArray: false }, operator, {
+        val: rightValue,
+        isArray: false,
+      })
     );
-    if (!Array.isArray(u.val) && !Array.isArray(c.val)) return h(u.val, c.val);
-    const f = (w) =>
-        Array.isArray(w) ? (w.every(Array.isArray) ? w : [w]) : [[w]],
-      p = f(u.val),
-      m = f(c.val),
-      v = Math.max(p.length, m.length),
-      g = Math.max(p[0]?.length ?? 0, m[0]?.length ?? 0);
-    return !v ||
-      !g ||
-      (p.length !== v && p.length !== 1) ||
-      (m.length !== v && m.length !== 1) ||
-      (p[0].length !== g && p[0].length !== 1) ||
-      (m[0].length !== g && m[0].length !== 1)
+    if (!Array.isArray(leftOperand.val) && !Array.isArray(rightOperand.val))
+      return applyScalarInfix(leftOperand.val, rightOperand.val);
+    const toMatrix = (operand) =>
+        Array.isArray(operand)
+          ? operand.every(Array.isArray)
+            ? operand
+            : [operand]
+          : [[operand]],
+      leftMatrix = toMatrix(leftOperand.val),
+      rightMatrix = toMatrix(rightOperand.val),
+      rowCount = Math.max(leftMatrix.length, rightMatrix.length),
+      columnCount = Math.max(
+        leftMatrix[0]?.length ?? 0,
+        rightMatrix[0]?.length ?? 0,
+      );
+    return !rowCount ||
+      !columnCount ||
+      (leftMatrix.length !== rowCount && leftMatrix.length !== 1) ||
+      (rightMatrix.length !== rowCount && rightMatrix.length !== 1) ||
+      (leftMatrix[0].length !== columnCount && leftMatrix[0].length !== 1) ||
+      (rightMatrix[0].length !== columnCount && rightMatrix[0].length !== 1)
       ? issue("#VALUE!")
-      : v * g > fileImportLimits.maxSpillCells
+      : rowCount * columnCount > fileImportLimits.maxSpillCells
         ? issue("#LIMIT!")
-        : Array.from({ length: v }, (w, E) =>
-            Array.from({ length: g }, (A, k) =>
-              h(
-                p[p.length === 1 ? 0 : E][p[0].length === 1 ? 0 : k],
-                m[m.length === 1 ? 0 : E][m[0].length === 1 ? 0 : k],
+        : Array.from({ length: rowCount }, (w, rowIndex) =>
+            Array.from({ length: columnCount }, (A, columnIndex) =>
+              applyScalarInfix(
+                leftMatrix[leftMatrix.length === 1 ? 0 : rowIndex][
+                  leftMatrix[0].length === 1 ? 0 : columnIndex
+                ],
+                rightMatrix[rightMatrix.length === 1 ? 0 : rowIndex][
+                  rightMatrix[0].length === 1 ? 0 : columnIndex
+                ],
               ),
             ),
           );
   }),
-    (e.checkFormulaResult = (u, l) => {
-      const c = e.retrieveRef(u);
-      return isFormulaError(c)
-        ? c
-        : Array.isArray(c)
-          ? l
-            ? c
+    (engine.checkFormulaResult = (reference, allowArrayResult) => {
+      const retrievedValue = engine.retrieveRef(reference);
+      return isFormulaError(retrievedValue)
+        ? retrievedValue
+        : Array.isArray(retrievedValue)
+          ? allowArrayResult
+            ? retrievedValue
             : issue("#VALUE!")
-          : c === null
+          : retrievedValue === null
             ? 0
-            : typeof c == "number"
-              ? Number.isFinite(c)
-                ? c
+            : typeof retrievedValue == "number"
+              ? Number.isFinite(retrievedValue)
+                ? retrievedValue
                 : issue("#NUM!")
-              : typeof c == "string" || typeof c == "boolean"
-                ? c
+              : typeof retrievedValue == "string" ||
+                  typeof retrievedValue == "boolean"
+                ? retrievedValue
                 : issue("#VALUE!");
     }));
-  const distribution = e._callFunction.bind(e);
+  const distribution = engine._callFunction.bind(engine);
   return (
-    (e._callFunction = (u, l) => {
-      u = u
+    (engine._callFunction = (functionName, args) => {
+      functionName = functionName
         .replace(/^_xlfn\./i, "")
         .replace(/^_xlws\./i, "")
         .toUpperCase();
-      const retrieve = (f) => (f == null ? undefined : e.retrieveRef(f));
+      const retrieve = (reference) =>
+        reference == null ? undefined : engine.retrieveRef(reference);
       try {
-        if (!builtinFunctionNameSet.has(u)) return issue("#NAME?");
-        if (u === "RAND") return l.length ? issue("#VALUE!") : Math.random();
-        if (u === "RANDBETWEEN") {
-          if (l.length !== 2) return issue("#VALUE!");
-          const D = l.map(retrieve),
-            formulaErrorArg = findFormulaErrorArg(D);
+        if (!builtinFunctionNameSet.has(functionName)) return issue("#NAME?");
+        if (functionName === "RAND")
+          return args.length ? issue("#VALUE!") : Math.random();
+        if (functionName === "RANDBETWEEN") {
+          if (args.length !== 2) return issue("#VALUE!");
+          const retrievedArgs = args.map(retrieve),
+            formulaErrorArg = findFormulaErrorArg(retrievedArgs);
           if (formulaErrorArg) return formulaErrorArg;
           if (
-            D.some(
-              (T) =>
-                Array.isArray(T) ||
-                T === undefined ||
-                (typeof T == "string" && T.trim() === "") ||
-                !Number.isFinite(Number(T)),
+            retrievedArgs.some(
+              (arg) =>
+                Array.isArray(arg) ||
+                arg === undefined ||
+                (typeof arg == "string" && arg.trim() === "") ||
+                !Number.isFinite(Number(arg)),
             )
           )
             return issue("#VALUE!");
-          const _ = Math.ceil(Number(D[0])),
-            C = Math.floor(Number(D[1]));
-          return !Number.isSafeInteger(_) ||
-            !Number.isSafeInteger(C) ||
-            _ > C ||
-            !Number.isSafeInteger(C - _ + 1)
+          const lowerBound = Math.ceil(Number(retrievedArgs[0])),
+            upperBound = Math.floor(Number(retrievedArgs[1]));
+          return !Number.isSafeInteger(lowerBound) ||
+            !Number.isSafeInteger(upperBound) ||
+            lowerBound > upperBound ||
+            !Number.isSafeInteger(upperBound - lowerBound + 1)
             ? issue("#NUM!")
-            : _ + Math.floor(Math.random() * (C - _ + 1));
+            : lowerBound +
+                Math.floor(Math.random() * (upperBound - lowerBound + 1));
         }
-        const f = evaluateDateFunction(u, l, {
+        const dateResult = evaluateDateFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
           clock: clock,
         });
-        if (f !== notDateFunctionSentinel) return f;
-        const p = evaluateFinancialFunction(u, l, {
+        if (dateResult !== notDateFunctionSentinel) return dateResult;
+        const financialResult = evaluateFinancialFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
           clock: clock,
           report: report,
         });
-        if (p !== notFinancialSentinel) return p;
-        const m = r(u, l, e);
-        if (m !== notReferenceFunctionMarker) return m;
-        const v = evaluateDatabaseFunction(u, l, {
+        if (financialResult !== notFinancialSentinel) return financialResult;
+        const referenceResult = referenceFunctionEvaluator(
+          functionName,
+          args,
+          engine,
+        );
+        if (referenceResult !== notReferenceFunctionMarker)
+          return referenceResult;
+        const databaseResult = evaluateDatabaseFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
           criterionFormula: criterionFormula,
         });
-        if (v !== notDatabaseFunctionMarker) return v;
-        const g = evaluateSpecialistFunction(u, l, {
+        if (databaseResult !== notDatabaseFunctionMarker) return databaseResult;
+        const specialistResult = evaluateSpecialistFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+          },
+        );
+        if (specialistResult !== notSpecialistSentinel) return specialistResult;
+        const regressionResult = evaluateRegressionFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+          },
+        );
+        if (regressionResult !== notRegressionSentinel) return regressionResult;
+        const significanceResult = evaluateSignificanceTestFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+            distribution: distribution,
+          },
+        );
+        if (significanceResult !== notInferenceSentinel)
+          return significanceResult;
+        const arithmeticResult = evaluateArithmeticFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+          },
+        );
+        if (arithmeticResult !== notArithmeticSentinel) return arithmeticResult;
+        const statisticalResult = evaluateStatisticalFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+          },
+        );
+        if (statisticalResult !== notStatisticalSentinel)
+          return statisticalResult;
+        const logicalResult = evaluateLogicalFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
         });
-        if (g !== notSpecialistSentinel) return g;
-        const b = evaluateRegressionFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-        });
-        if (b !== notRegressionSentinel) return b;
-        const y = evaluateSignificanceTestFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-          distribution: distribution,
-        });
-        if (y !== notInferenceSentinel) return y;
-        const w = evaluateArithmeticFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-        });
-        if (w !== notArithmeticSentinel) return w;
-        const E = evaluateStatisticalFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-        });
-        if (E !== notStatisticalSentinel) return E;
-        const A = evaluateLogicalFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-        });
-        if (A !== notOwnedLogicalSentinel) return A;
-        const k = evaluateLookupFunction(u, l, {
+        if (logicalResult !== notOwnedLogicalSentinel) return logicalResult;
+        const lookupResult = evaluateLookupFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
           matches: matchCriteriaValue,
         });
-        if (k !== notOwnedLookupSentinel) return k;
-        if (u === "TEXTBEFORE" || u === "TEXTAFTER")
+        if (lookupResult !== notOwnedLookupSentinel) return lookupResult;
+        if (functionName === "TEXTBEFORE" || functionName === "TEXTAFTER")
           return broadcastOverArrays(
-            l.map(retrieve),
-            (D) => {
+            args.map(retrieve),
+            (argValues) => {
               try {
-                return evaluateTextFunction(u, D, {
-                  retrieve: (B) => B,
+                return evaluateTextFunction(functionName, argValues, {
+                  retrieve: (value) => value,
                   issue: issue,
                   isIssue: isFormulaError,
                   format: () => issue("#VALUE!"),
@@ -610,116 +742,152 @@ function createWorkbookFormulaEngine(
             },
             issue,
           );
-        const F = evaluateTextFunction(u, l, {
+        const textResult = evaluateTextFunction(functionName, args, {
           retrieve: retrieve,
           issue: issue,
           isIssue: isFormulaError,
-          temporal: (D) => parseDateText(D, clock),
+          temporal: (dateText) => parseDateText(dateText, clock),
           format: () => {
-            const D = Number(retrieve(l[0]) ?? 0),
-              pattern = retrieve(l[1]);
-            if (typeof D == "number" && typeof pattern == "string") {
+            const serialValue = Number(retrieve(args[0]) ?? 0),
+              pattern = retrieve(args[1]);
+            if (typeof serialValue == "number" && typeof pattern == "string") {
               try {
                 if (validateNumberFormatCode(pattern).kind === "temporal")
                   return formatCellValueWithNumberFormat(
-                    D,
+                    serialValue,
                     { category: "custom", locale: "en-US", pattern: pattern },
                     clock.dateSystem,
                   ).text;
               } catch {}
-              const _ = pattern.replace(/"[^"]*"|\\./g, "");
+              const unquotedPattern = pattern.replace(/"[^"]*"|\\./g, "");
               if (
                 clock.dateSystem === "1904" &&
-                /[ydm]/i.test(_) &&
-                !/\[[hms]+\]/i.test(_)
+                /[ydm]/i.test(unquotedPattern) &&
+                !/\[[hms]+\]/i.test(unquotedPattern)
               )
-                return distribution(u, [
-                  D + dateSystemSerialOffset(clock.dateSystem),
+                return distribution(functionName, [
+                  serialValue + dateSystemSerialOffset(clock.dateSystem),
                   pattern,
                 ]);
             }
-            return distribution(u, l);
+            return distribution(functionName, args);
           },
         });
-        if (F !== notTextFunctionSentinel) return F;
-        const I = evaluateDefinedNameFunction(u, l, {
-          retrieve: retrieve,
-          issue: issue,
-          isIssue: isFormulaError,
-          matches: matchCriteriaValue,
-        });
-        if (I !== notModernFunctionSentinel) return I;
-        if (u === "INDEX") {
-          if (l.length < 2 || l.length > 4) return issue("#VALUE!");
-          if (isFormulaError(l[0])) return l[0];
-          const D = [...l];
-          for (let _ = 1; _ < l.length; _++) {
-            const C = l[_] == null ? (_ === 3 ? 1 : 0) : retrieve(l[_]);
-            if (isFormulaError(C)) return C;
+        if (textResult !== notTextFunctionSentinel) return textResult;
+        const definedNameResult = evaluateDefinedNameFunction(
+          functionName,
+          args,
+          {
+            retrieve: retrieve,
+            issue: issue,
+            isIssue: isFormulaError,
+            matches: matchCriteriaValue,
+          },
+        );
+        if (definedNameResult !== notModernFunctionSentinel)
+          return definedNameResult;
+        if (functionName === "INDEX") {
+          if (args.length < 2 || args.length > 4) return issue("#VALUE!");
+          if (isFormulaError(args[0])) return args[0];
+          const indexArgs = [...args];
+          for (let argIndex = 1; argIndex < args.length; argIndex++) {
+            const argValue =
+              args[argIndex] == null
+                ? argIndex === 3
+                  ? 1
+                  : 0
+                : retrieve(args[argIndex]);
+            if (isFormulaError(argValue)) return argValue;
             if (
-              Array.isArray(C) ||
-              (typeof C == "string" && C.trim() === "") ||
-              !Number.isFinite(Number(C)) ||
-              Number(C) < 0
+              Array.isArray(argValue) ||
+              (typeof argValue == "string" && argValue.trim() === "") ||
+              !Number.isFinite(Number(argValue)) ||
+              Number(argValue) < 0
             )
               return issue("#VALUE!");
-            D[_] = Number(C);
+            indexArgs[argIndex] = Number(argValue);
           }
-          if (D.length > 3 && Number(D[3]) < 1) return issue("#VALUE!");
-          const B = distribution(u, D);
-          if (B && typeof B == "object" && "ref" in B) {
-            const _ = l[0],
-              C = B;
-            _?.ref?.sheet && !C.ref.sheet && (C.ref.sheet = _.ref.sheet);
+          if (indexArgs.length > 3 && Number(indexArgs[3]) < 1)
+            return issue("#VALUE!");
+          const indexResult = distribution(functionName, indexArgs);
+          if (
+            indexResult &&
+            typeof indexResult == "object" &&
+            "ref" in indexResult
+          ) {
+            const sourceArg = args[0],
+              resultToUpdate = indexResult;
+            sourceArg?.ref?.sheet &&
+              !resultToUpdate.ref.sheet &&
+              (resultToUpdate.ref.sheet = sourceArg.ref.sheet);
           }
-          return B;
+          return indexResult;
         }
-        if (u === "IF") {
-          if (l.length < 2 || l.length > 3) return issue("#VALUE!");
-          const D = retrieve(l[0]);
-          if (isFormulaError(D)) return D;
-          if (Array.isArray(D))
+        if (functionName === "IF") {
+          if (args.length < 2 || args.length > 3) return issue("#VALUE!");
+          const condition = retrieve(args[0]);
+          if (isFormulaError(condition)) return condition;
+          if (Array.isArray(condition))
             return broadcastOverArrays(
-              [D, retrieve(l[1]), l.length === 3 ? retrieve(l[2]) : false],
-              ([_, C, T]) =>
-                isFormulaError(_)
-                  ? _
-                  : typeof _ == "string" && !/^(TRUE|FALSE)$/i.test(_)
+              [
+                condition,
+                retrieve(args[1]),
+                args.length === 3 ? retrieve(args[2]) : false,
+              ],
+              ([conditionValue, trueValue, falseValue]) =>
+                isFormulaError(conditionValue)
+                  ? conditionValue
+                  : typeof conditionValue == "string" &&
+                      !/^(TRUE|FALSE)$/i.test(conditionValue)
                     ? issue("#VALUE!")
                     : (((
-                        typeof _ == "string" ? _.toUpperCase() === "TRUE" : !!_
+                        typeof conditionValue == "string"
+                          ? conditionValue.toUpperCase() === "TRUE"
+                          : !!conditionValue
                       )
-                        ? C
-                        : T) ?? 0),
+                        ? trueValue
+                        : falseValue) ?? 0),
               issue,
             );
-          if (typeof D == "string" && !/^(TRUE|FALSE)$/i.test(D))
+          if (
+            typeof condition == "string" &&
+            !/^(TRUE|FALSE)$/i.test(condition)
+          )
             return issue("#VALUE!");
-          const B = typeof D == "string" ? D.toUpperCase() === "TRUE" : !!D;
-          return retrieve(B ? l[1] : l.length === 3 ? l[2] : false) ?? 0;
+          const isConditionTrue =
+            typeof condition == "string"
+              ? condition.toUpperCase() === "TRUE"
+              : !!condition;
+          return (
+            retrieve(
+              isConditionTrue ? args[1] : args.length === 3 ? args[2] : false,
+            ) ?? 0
+          );
         }
-        if (u === "IFERROR" || u === "IFNA") {
-          if (l.length !== 2) return issue("#VALUE!");
-          const D = retrieve(l[0]);
-          return Array.isArray(D)
+        if (functionName === "IFERROR" || functionName === "IFNA") {
+          if (args.length !== 2) return issue("#VALUE!");
+          const primaryValue = retrieve(args[0]);
+          return Array.isArray(primaryValue)
             ? broadcastOverArrays(
-                [D, retrieve(l[1])],
-                ([B, _]) =>
-                  isFormulaError(B) && (u === "IFERROR" || B.error === "#N/A")
-                    ? (_ ?? 0)
-                    : (B ?? 0),
+                [primaryValue, retrieve(args[1])],
+                ([mainValue, fallbackValue]) =>
+                  isFormulaError(mainValue) &&
+                  (functionName === "IFERROR" || mainValue.error === "#N/A")
+                    ? (fallbackValue ?? 0)
+                    : (mainValue ?? 0),
                 issue,
               )
-            : isFormulaError(D) && (u === "IFERROR" || D.error === "#N/A")
-              ? (retrieve(l[1]) ?? 0)
-              : (D ?? 0);
+            : isFormulaError(primaryValue) &&
+                (functionName === "IFERROR" || primaryValue.error === "#N/A")
+              ? (retrieve(args[1]) ?? 0)
+              : (primaryValue ?? 0);
         }
-        const O = l.map(retrieve),
-          j = O.flatMap(flattenNestedValues).filter(
-            (D) => typeof D == "number",
-          );
+        const resolvedArgs = args.map(retrieve),
+          numericArgs = resolvedArgs
+            .flatMap(flattenNestedValues)
+            .filter((entry) => typeof entry == "number");
         if (
-          O.flatMap(flattenNestedValues).length > 1e5 ||
+          resolvedArgs.flatMap(flattenNestedValues).length > 1e5 ||
           ([
             "REPT",
             "BASE",
@@ -734,17 +902,20 @@ function createWorkbookFormulaEngine(
             "OCT2HEX",
             "FIXED",
             "DOLLAR",
-          ].includes(u) &&
-            ((Math.abs(Number(O[u === "BASE" ? 2 : 1] ?? 0)) > 32767 &&
-              !["FIXED", "DOLLAR"].includes(u)) ||
-              (["FIXED", "DOLLAR"].includes(u) &&
-                Math.abs(Number(O[1] ?? 2)) > 100) ||
-              (u === "REPT" &&
-                String(O[0] ?? "").length * Number(O[1]) > 32767))) ||
-          (["MUNIT", "MDETERM", "MMULT", "GROWTH"].includes(u) &&
-            (u === "MUNIT"
-              ? Number(O[0]) > 100
-              : O.flatMap(flattenNestedValues).length > 1e3)) ||
+          ].includes(functionName) &&
+            ((Math.abs(
+              Number(resolvedArgs[functionName === "BASE" ? 2 : 1] ?? 0),
+            ) > 32767 &&
+              !["FIXED", "DOLLAR"].includes(functionName)) ||
+              (["FIXED", "DOLLAR"].includes(functionName) &&
+                Math.abs(Number(resolvedArgs[1] ?? 2)) > 100) ||
+              (functionName === "REPT" &&
+                String(resolvedArgs[0] ?? "").length * Number(resolvedArgs[1]) >
+                  32767))) ||
+          (["MUNIT", "MDETERM", "MMULT", "GROWTH"].includes(functionName) &&
+            (functionName === "MUNIT"
+              ? Number(resolvedArgs[0]) > 100
+              : resolvedArgs.flatMap(flattenNestedValues).length > 1e3)) ||
           ([
             "BINOM.DIST.RANGE",
             "BINOM.INV",
@@ -755,13 +926,18 @@ function createWorkbookFormulaEngine(
             "COMBIN",
             "COMBINA",
             "MULTINOMIAL",
-          ].includes(u) &&
-            j.some((D) => Math.abs(D) > 1e4)) ||
-          (["BESSELI", "BESSELJ", "BESSELK", "BESSELY"].includes(u) &&
-            Math.abs(Number(O[1])) > 1e3)
+          ].includes(functionName) &&
+            numericArgs.some((numericValue) => Math.abs(numericValue) > 1e4)) ||
+          (["BESSELI", "BESSELJ", "BESSELK", "BESSELY"].includes(
+            functionName,
+          ) &&
+            Math.abs(Number(resolvedArgs[1])) > 1e3)
         )
           return issue("#LIMIT!");
-        if (u === "ROMAN" && Math.abs(Number(O[0])) > 3999)
+        if (
+          functionName === "ROMAN" &&
+          Math.abs(Number(resolvedArgs[0])) > 3999
+        )
           return issue("#VALUE!");
         if (
           [
@@ -769,36 +945,48 @@ function createWorkbookFormulaEngine(
             "NETWORKDAYS.INTL",
             "WORKDAY",
             "WORKDAY.INTL",
-          ].includes(u) &&
+          ].includes(functionName) &&
           (Math.abs(
-            Number(O[1]) - (u.startsWith("NETWORK") ? Number(O[0]) : 0),
+            Number(resolvedArgs[1]) -
+              (functionName.startsWith("NETWORK")
+                ? Number(resolvedArgs[0])
+                : 0),
           ) > 366e3 ||
-            O.flatMap(flattenNestedValues).length > 1e3)
+            resolvedArgs.flatMap(flattenNestedValues).length > 1e3)
         )
           return issue("#LIMIT!");
-        if (u === "ISERR") return isFormulaError(O[0]) && O[0].error !== "#N/A";
-        if (u === "ISLOGICAL") return typeof O[0] == "boolean";
-        if (u === "ISNONTEXT") return typeof O[0] != "string";
-        if (u === "N")
-          return isFormulaError(O[0]) || typeof O[0] == "number"
-            ? O[0]
-            : O[0] === true
+        if (functionName === "ISERR")
+          return (
+            isFormulaError(resolvedArgs[0]) && resolvedArgs[0].error !== "#N/A"
+          );
+        if (functionName === "ISLOGICAL")
+          return typeof resolvedArgs[0] == "boolean";
+        if (functionName === "ISNONTEXT")
+          return typeof resolvedArgs[0] != "string";
+        if (functionName === "N")
+          return isFormulaError(resolvedArgs[0]) ||
+            typeof resolvedArgs[0] == "number"
+            ? resolvedArgs[0]
+            : resolvedArgs[0] === true
               ? 1
               : 0;
-        if (u === "T")
-          return isFormulaError(O[0]) || typeof O[0] == "string" ? O[0] : "";
-        if (u === "TYPE")
-          return isFormulaError(O[0])
+        if (functionName === "T")
+          return isFormulaError(resolvedArgs[0]) ||
+            typeof resolvedArgs[0] == "string"
+            ? resolvedArgs[0]
+            : "";
+        if (functionName === "TYPE")
+          return isFormulaError(resolvedArgs[0])
             ? 16
-            : Array.isArray(O[0])
+            : Array.isArray(resolvedArgs[0])
               ? 64
-              : typeof O[0] == "string"
+              : typeof resolvedArgs[0] == "string"
                 ? 2
-                : typeof O[0] == "boolean"
+                : typeof resolvedArgs[0] == "boolean"
                   ? 4
                   : 1;
-        if (u === "ERROR.TYPE") {
-          const D = [
+        if (functionName === "ERROR.TYPE") {
+          const errorIndex = [
             "#NULL!",
             "#DIV/0!",
             "#VALUE!",
@@ -807,21 +995,29 @@ function createWorkbookFormulaEngine(
             "#NUM!",
             "#N/A",
             "#GETTING_DATA",
-          ].indexOf(isFormulaError(O[0]) ? O[0].error : "");
-          return D < 0 ? issue("#N/A") : D + 1;
+          ].indexOf(
+            isFormulaError(resolvedArgs[0]) ? resolvedArgs[0].error : "",
+          );
+          return errorIndex < 0 ? issue("#N/A") : errorIndex + 1;
         }
-        if (u === "ISERROR") return isFormulaError(O[0]);
-        if (u === "ISNA") return isFormulaError(O[0]) && O[0].error === "#N/A";
-        if (u === "ISNUMBER") return typeof O[0] == "number";
-        if (u === "ISTEXT") return typeof O[0] == "string";
-        if (u === "ISBLANK") return O[0] === null;
-        if (u === "COUNTA")
-          return O.flatMap(flattenNestedValues).filter((D) => D !== null)
-            .length;
-        if (u === "COUNTBLANK")
-          return O.flatMap(flattenNestedValues).filter(
-            (D) => D === null || D === "",
-          ).length;
+        if (functionName === "ISERROR") return isFormulaError(resolvedArgs[0]);
+        if (functionName === "ISNA")
+          return (
+            isFormulaError(resolvedArgs[0]) && resolvedArgs[0].error === "#N/A"
+          );
+        if (functionName === "ISNUMBER")
+          return typeof resolvedArgs[0] == "number";
+        if (functionName === "ISTEXT")
+          return typeof resolvedArgs[0] == "string";
+        if (functionName === "ISBLANK") return resolvedArgs[0] === null;
+        if (functionName === "COUNTA")
+          return resolvedArgs
+            .flatMap(flattenNestedValues)
+            .filter((entry) => entry !== null).length;
+        if (functionName === "COUNTBLANK")
+          return resolvedArgs
+            .flatMap(flattenNestedValues)
+            .filter((entry) => entry === null || entry === "").length;
         if (
           [
             "SUMIF",
@@ -830,155 +1026,219 @@ function createWorkbookFormulaEngine(
             "SUMIFS",
             "AVERAGEIFS",
             "COUNTIFS",
-          ].includes(u)
+          ].includes(functionName)
         ) {
-          const D = u.endsWith("IFS"),
-            B = u.startsWith("COUNT"),
-            _ = u.startsWith("AVERAGE");
-          let C, T;
-          if (D) {
-            if (((T = B ? O : O.slice(1)), T.length < 2 || T.length % 2 !== 0))
-              return issue("#VALUE!");
-            C = B
-              ? flattenNestedValues(T[0]).map(() => 1)
-              : flattenNestedValues(O[0]);
-          } else {
-            if (O.length < 2 || O.length > (B ? 2 : 3)) return issue("#VALUE!");
-            ((T = O.slice(0, 2)),
-              (C = B
-                ? flattenNestedValues(O[0]).map(() => 1)
-                : flattenNestedValues(
-                    l.length < 3 || l[2] == null ? O[0] : O[2],
-                  )));
-          }
-          const N = [],
-            R = [],
-            L = (H) => {
-              if (!Array.isArray(H)) return "1:1";
-              const Q = H.every(Array.isArray) ? H : [H],
-                X = Q[0]?.length ?? 0;
-              return Q.length && X && Q.every((q) => q.length === X)
-                ? `${Q.length}:${X}`
-                : "invalid";
-            },
-            $ = L(B ? T[0] : D || l.length < 3 || l[2] == null ? O[0] : O[2]);
-          for (let H = 0; H < T.length; H += 2) {
-            const Q = flattenNestedValues(T[H]);
+          const isMultiCriteria = functionName.endsWith("IFS"),
+            isCountFunction = functionName.startsWith("COUNT"),
+            isAverageFunction = functionName.startsWith("AVERAGE");
+          let valueCells, criteriaArgs;
+          if (isMultiCriteria) {
             if (
-              Q.length !== C.length ||
-              $ === "invalid" ||
-              L(T[H]) !== $ ||
-              Array.isArray(T[H + 1])
+              ((criteriaArgs = isCountFunction
+                ? resolvedArgs
+                : resolvedArgs.slice(1)),
+              criteriaArgs.length < 2 || criteriaArgs.length % 2 !== 0)
             )
               return issue("#VALUE!");
-            if (isFormulaError(T[H + 1])) return T[H + 1];
-            N.push(Q);
-            const X = T[H + 1];
-            R.push(X == null ? "=0" : typeof X == "number" ? `=${X}` : X);
-          }
-          const U = [];
-          let G = 0;
-          for (let H = 0; H < C.length; H++) {
+            valueCells = isCountFunction
+              ? flattenNestedValues(criteriaArgs[0]).map(() => 1)
+              : flattenNestedValues(resolvedArgs[0]);
+          } else {
             if (
-              ((G += N.reduce(
-                (Q, X, J) =>
-                  Q +
-                  Math.max(1, String(X[H] ?? "").length) *
-                    Math.max(1, String(R[J] ?? "").length),
+              resolvedArgs.length < 2 ||
+              resolvedArgs.length > (isCountFunction ? 2 : 3)
+            )
+              return issue("#VALUE!");
+            ((criteriaArgs = resolvedArgs.slice(0, 2)),
+              (valueCells = isCountFunction
+                ? flattenNestedValues(resolvedArgs[0]).map(() => 1)
+                : flattenNestedValues(
+                    args.length < 3 || args[2] == null
+                      ? resolvedArgs[0]
+                      : resolvedArgs[2],
+                  )));
+          }
+          const criteriaRanges = [],
+            criteriaValues = [],
+            rangeShape = (range) => {
+              if (!Array.isArray(range)) return "1:1";
+              const rows = range.every(Array.isArray) ? range : [range],
+                columnCount = rows[0]?.length ?? 0;
+              return rows.length &&
+                columnCount &&
+                rows.every((row) => row.length === columnCount)
+                ? `${rows.length}:${columnCount}`
+                : "invalid";
+            },
+            criteriaShape = rangeShape(
+              isCountFunction
+                ? criteriaArgs[0]
+                : isMultiCriteria || args.length < 3 || args[2] == null
+                  ? resolvedArgs[0]
+                  : resolvedArgs[2],
+            );
+          for (
+            let pairIndex = 0;
+            pairIndex < criteriaArgs.length;
+            pairIndex += 2
+          ) {
+            const criteriaCells = flattenNestedValues(criteriaArgs[pairIndex]);
+            if (
+              criteriaCells.length !== valueCells.length ||
+              criteriaShape === "invalid" ||
+              rangeShape(criteriaArgs[pairIndex]) !== criteriaShape ||
+              Array.isArray(criteriaArgs[pairIndex + 1])
+            )
+              return issue("#VALUE!");
+            if (isFormulaError(criteriaArgs[pairIndex + 1]))
+              return criteriaArgs[pairIndex + 1];
+            criteriaRanges.push(criteriaCells);
+            const criterion = criteriaArgs[pairIndex + 1];
+            criteriaValues.push(
+              criterion == null
+                ? "=0"
+                : typeof criterion == "number"
+                  ? `=${criterion}`
+                  : criterion,
+            );
+          }
+          const matchedValues = [];
+          let workUnits = 0;
+          for (let cellIndex = 0; cellIndex < valueCells.length; cellIndex++) {
+            if (
+              ((workUnits += criteriaRanges.reduce(
+                (total, rangeCells, rangeIndex) =>
+                  total +
+                  Math.max(1, String(rangeCells[cellIndex] ?? "").length) *
+                    Math.max(
+                      1,
+                      String(criteriaValues[rangeIndex] ?? "").length,
+                    ),
                 0,
               )),
-              G > 2e6)
+              workUnits > 2e6)
             )
               return issue("#LIMIT!");
             if (
-              N.every(
-                (Q, X) =>
-                  !isFormulaError(Q[H]) && matchCriteriaValue(Q[H], R[X]),
+              criteriaRanges.every(
+                (rangeCells, rangeIndex) =>
+                  !isFormulaError(rangeCells[cellIndex]) &&
+                  matchCriteriaValue(
+                    rangeCells[cellIndex],
+                    criteriaValues[rangeIndex],
+                  ),
               )
             ) {
-              if (isFormulaError(C[H])) return C[H];
-              typeof C[H] == "number" && U.push(C[H]);
+              if (isFormulaError(valueCells[cellIndex]))
+                return valueCells[cellIndex];
+              typeof valueCells[cellIndex] == "number" &&
+                matchedValues.push(valueCells[cellIndex]);
             }
           }
-          return _
-            ? U.length
-              ? exactAverageOfNumbers(U)
+          return isAverageFunction
+            ? matchedValues.length
+              ? exactAverageOfNumbers(matchedValues)
               : issue("#DIV/0!")
-            : sumDecimalPartsToNumber(U);
+            : sumDecimalPartsToNumber(matchedValues);
         }
-        const formulaErrorArg = findFormulaErrorArg(O);
-        if (formulaErrorArg && u !== "COUNT") return formulaErrorArg;
-        if (u === "TRIM")
-          return String(O[0] ?? "")
+        const formulaErrorArg = findFormulaErrorArg(resolvedArgs);
+        if (formulaErrorArg && functionName !== "COUNT") return formulaErrorArg;
+        if (functionName === "TRIM")
+          return String(resolvedArgs[0] ?? "")
             .replace(/^ +| +$/g, "")
             .replace(/ +/g, " ");
-        if (u === "UPPER") {
-          const D = String(O[0] ?? "").toUpperCase();
-          return D.length > 32767 ? issue("#LIMIT!") : D;
+        if (functionName === "UPPER") {
+          const upperText = String(resolvedArgs[0] ?? "").toUpperCase();
+          return upperText.length > 32767 ? issue("#LIMIT!") : upperText;
         }
-        if (u === "VALUE") {
-          if (O.length !== 1 || Array.isArray(O[0])) return issue("#VALUE!");
-          let D = String(O[0] ?? "").trim(),
-            B = false;
-          D.startsWith("(") &&
-            D.endsWith(")") &&
-            ((B = true), (D = D.slice(1, -1).trim()));
-          const _ = D.endsWith("%");
+        if (functionName === "VALUE") {
+          if (resolvedArgs.length !== 1 || Array.isArray(resolvedArgs[0]))
+            return issue("#VALUE!");
+          let numberText = String(resolvedArgs[0] ?? "").trim(),
+            isNegative = false;
+          numberText.startsWith("(") &&
+            numberText.endsWith(")") &&
+            ((isNegative = true),
+            (numberText = numberText.slice(1, -1).trim()));
+          const isPercent = numberText.endsWith("%");
           if (
-            (_ && (D = D.slice(0, -1).trim()),
-            (D = D.replace(/^\$/, "")),
+            (isPercent && (numberText = numberText.slice(0, -1).trim()),
+            (numberText = numberText.replace(/^\$/, "")),
             !/^[+-]?(?:\d{1,3}(?:,\d{3})+|\d+|\d*\.\d+)(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(
-              D,
+              numberText,
             ))
           )
             return issue("#VALUE!");
-          const C =
-            (Number(D.replace(/,/g, "")) * (B ? -1 : 1)) / (_ ? 100 : 1);
-          return Number.isFinite(C) ? C : issue("#NUM!");
+          const parsedNumber =
+            (Number(numberText.replace(/,/g, "")) * (isNegative ? -1 : 1)) /
+            (isPercent ? 100 : 1);
+          return Number.isFinite(parsedNumber) ? parsedNumber : issue("#NUM!");
         }
-        if (u === "MATCH") {
-          if (O.length < 2 || O.length > 3) return issue("#VALUE!");
-          const D = O[1];
+        if (functionName === "MATCH") {
+          if (resolvedArgs.length < 2 || resolvedArgs.length > 3)
+            return issue("#VALUE!");
+          const lookupArray = resolvedArgs[1];
           if (
-            Array.isArray(D) &&
-            D.length > 1 &&
-            Array.isArray(D[0]) &&
-            D[0].length > 1
+            Array.isArray(lookupArray) &&
+            lookupArray.length > 1 &&
+            Array.isArray(lookupArray[0]) &&
+            lookupArray[0].length > 1
           )
             return issue("#N/A");
-          const B = flattenNestedValues(D),
-            _ = O[0],
-            C = O[2] === undefined ? 1 : Number(O[2]);
-          if (![0, -1, 1].includes(C)) return issue("#N/A");
-          if (C === 0) {
-            const $ = B.findIndex((U) =>
-              typeof _ == "string"
-                ? typeof U == "string" &&
-                  (/[?*~]/.test(_)
-                    ? matchCriteriaValue(U, `=${_}`)
-                    : U.toLowerCase() === _.toLowerCase())
-                : U === _,
+          const lookupValues = flattenNestedValues(lookupArray),
+            lookupValue = resolvedArgs[0],
+            matchType =
+              resolvedArgs[2] === undefined ? 1 : Number(resolvedArgs[2]);
+          if (![0, -1, 1].includes(matchType)) return issue("#N/A");
+          if (matchType === 0) {
+            const matchIndex = lookupValues.findIndex((candidate) =>
+              typeof lookupValue == "string"
+                ? typeof candidate == "string" &&
+                  (/[?*~]/.test(lookupValue)
+                    ? matchCriteriaValue(candidate, `=${lookupValue}`)
+                    : candidate.toLowerCase() === lookupValue.toLowerCase())
+                : candidate === lookupValue,
             );
-            return $ < 0 ? issue("#N/A") : $ + 1;
+            return matchIndex < 0 ? issue("#N/A") : matchIndex + 1;
           }
-          const T = B.map(($) => (typeof $ == "string" ? $.toLowerCase() : $)),
-            N = typeof _ == "string" ? _.toLowerCase() : _;
+          const normalizedValues = lookupValues.map((lookupItem) =>
+              typeof lookupItem == "string"
+                ? lookupItem.toLowerCase()
+                : lookupItem,
+            ),
+            normalizedLookup =
+              typeof lookupValue == "string"
+                ? lookupValue.toLowerCase()
+                : lookupValue;
           if (
-            (typeof N != "number" && typeof N != "string") ||
-            T.some(($) => typeof $ != typeof N)
+            (typeof normalizedLookup != "number" &&
+              typeof normalizedLookup != "string") ||
+            normalizedValues.some(
+              (normalizedValue) =>
+                typeof normalizedValue != typeof normalizedLookup,
+            )
           )
             return issue("#VALUE!");
-          const R = T;
+          const sortedValues = normalizedValues;
           if (
-            R.some(($, U) => U > 0 && (C === 1 ? $ < R[U - 1] : $ > R[U - 1]))
+            sortedValues.some(
+              (sortedValue, valueIndex) =>
+                valueIndex > 0 &&
+                (matchType === 1
+                  ? sortedValue < sortedValues[valueIndex - 1]
+                  : sortedValue > sortedValues[valueIndex - 1]),
+            )
           )
             return issue("#VALUE!");
-          let L = -1;
+          let lastMatchIndex = -1;
           return (
-            R.forEach(($, U) => {
-              (C === 1 ? $ <= N : $ >= N) && (L = U);
+            sortedValues.forEach((sortedValue, valueIndex) => {
+              (matchType === 1
+                ? sortedValue <= normalizedLookup
+                : sortedValue >= normalizedLookup) &&
+                (lastMatchIndex = valueIndex);
             }),
-            L < 0 ? issue("#N/A") : L + 1
+            lastMatchIndex < 0 ? issue("#N/A") : lastMatchIndex + 1
           );
         }
         if (
@@ -992,170 +1252,241 @@ function createWorkbookFormulaEngine(
             "SMALL",
             "STDEV.S",
             "VAR.S",
-          ].includes(u)
+          ].includes(functionName)
         ) {
-          const D = u === "LARGE" || u === "SMALL" ? O.slice(0, 1) : O,
-            B = [];
-          D.forEach((T, N) => {
-            const R = !!l[N] && typeof l[N] == "object" && "ref" in l[N];
-            for (const L of flattenNestedValues(T))
-              typeof L == "number"
-                ? B.push(L)
-                : !R &&
-                  !Array.isArray(T) &&
-                  (typeof L == "boolean" ||
-                    (typeof L == "string" &&
-                      L.trim() !== "" &&
-                      Number.isFinite(Number(L)))) &&
-                  B.push(Number(L));
+          const valueArgs =
+              functionName === "LARGE" || functionName === "SMALL"
+                ? resolvedArgs.slice(0, 1)
+                : resolvedArgs,
+            numericValues = [];
+          valueArgs.forEach((valueArg, argIndex) => {
+            const isReferenceArg =
+              !!args[argIndex] &&
+              typeof args[argIndex] == "object" &&
+              "ref" in args[argIndex];
+            for (const flatValue of flattenNestedValues(valueArg))
+              typeof flatValue == "number"
+                ? numericValues.push(flatValue)
+                : !isReferenceArg &&
+                  !Array.isArray(valueArg) &&
+                  (typeof flatValue == "boolean" ||
+                    (typeof flatValue == "string" &&
+                      flatValue.trim() !== "" &&
+                      Number.isFinite(Number(flatValue)))) &&
+                  numericValues.push(Number(flatValue));
           });
-          const _ = sumDecimalPartsToNumber(B);
-          if (u === "SUM") return _;
-          if (u === "AVERAGE")
-            return B.length ? _ / B.length : issue("#DIV/0!");
-          if (u === "MIN")
-            return B.length ? B.reduce((T, N) => Math.min(T, N)) : 0;
-          if (u === "MAX")
-            return B.length ? B.reduce((T, N) => Math.max(T, N)) : 0;
-          if (u === "STDEV.S" || u === "VAR.S") {
-            if (B.length < 2) return issue("#DIV/0!");
-            const T =
-              B.reduce((N, R) => N + (R - _ / B.length) ** 2, 0) /
-              (B.length - 1);
-            return u === "VAR.S" ? T : Math.sqrt(T);
+          const sum = sumDecimalPartsToNumber(numericValues);
+          if (functionName === "SUM") return sum;
+          if (functionName === "AVERAGE")
+            return numericValues.length
+              ? sum / numericValues.length
+              : issue("#DIV/0!");
+          if (functionName === "MIN")
+            return numericValues.length
+              ? numericValues.reduce((minimum, candidate) =>
+                  Math.min(minimum, candidate),
+                )
+              : 0;
+          if (functionName === "MAX")
+            return numericValues.length
+              ? numericValues.reduce((maximum, candidate) =>
+                  Math.max(maximum, candidate),
+                )
+              : 0;
+          if (functionName === "STDEV.S" || functionName === "VAR.S") {
+            if (numericValues.length < 2) return issue("#DIV/0!");
+            const variance =
+              numericValues.reduce(
+                (total, numericValue) =>
+                  total + (numericValue - sum / numericValues.length) ** 2,
+                0,
+              ) /
+              (numericValues.length - 1);
+            return functionName === "VAR.S" ? variance : Math.sqrt(variance);
           }
-          if ((B.sort((T, N) => T - N), u === "MEDIAN"))
-            return B.length
-              ? (B[Math.floor((B.length - 1) / 2)] +
-                  B[Math.floor(B.length / 2)]) /
+          if (
+            (numericValues.sort(
+              (leftNumber, rightNumber) => leftNumber - rightNumber,
+            ),
+            functionName === "MEDIAN")
+          )
+            return numericValues.length
+              ? (numericValues[Math.floor((numericValues.length - 1) / 2)] +
+                  numericValues[Math.floor(numericValues.length / 2)]) /
                   2
               : issue("#NUM!");
-          const C = Number(O[1]);
-          return !Number.isInteger(C) || C < 1 || C > B.length
+          const position = Number(resolvedArgs[1]);
+          return !Number.isInteger(position) ||
+            position < 1 ||
+            position > numericValues.length
             ? issue("#NUM!")
-            : u === "LARGE"
-              ? B[B.length - C]
-              : B[C - 1];
+            : functionName === "LARGE"
+              ? numericValues[numericValues.length - position]
+              : numericValues[position - 1];
         }
-        if (u === "SUBSTITUTE") {
-          if (O.length < 3 || O.length > 4 || O.some(Array.isArray))
-            return issue("#VALUE!");
-          const D = String(O[0] ?? ""),
-            B = String(O[1] ?? ""),
-            _ = String(O[2] ?? ""),
-            C = B.length ? D.split(B).length - 1 : 0;
+        if (functionName === "SUBSTITUTE") {
           if (
-            O[3] !== undefined &&
-            (!Number.isInteger(Number(O[3])) || Number(O[3]) < 1)
+            resolvedArgs.length < 3 ||
+            resolvedArgs.length > 4 ||
+            resolvedArgs.some(Array.isArray)
+          )
+            return issue("#VALUE!");
+          const sourceText = String(resolvedArgs[0] ?? ""),
+            oldText = String(resolvedArgs[1] ?? ""),
+            newText = String(resolvedArgs[2] ?? ""),
+            occurrenceCount = oldText.length
+              ? sourceText.split(oldText).length - 1
+              : 0;
+          if (
+            resolvedArgs[3] !== undefined &&
+            (!Number.isInteger(Number(resolvedArgs[3])) ||
+              Number(resolvedArgs[3]) < 1)
           )
             return issue("#VALUE!");
           if (
-            D.length +
-              (O[3] === undefined ? C : Math.min(C, 1)) *
-                (_.length - B.length) >
+            sourceText.length +
+              (resolvedArgs[3] === undefined
+                ? occurrenceCount
+                : Math.min(occurrenceCount, 1)) *
+                (newText.length - oldText.length) >
             32767
           )
             return issue("#LIMIT!");
-          if (!B.length) return D;
-          if (O[3] === undefined) return D.split(B).join(_);
-          let T = 0;
-          return D.split(B).reduce(
-            (N, R, L) => (L === 0 ? R : N + (++T === Number(O[3]) ? _ : B) + R),
-            "",
-          );
+          if (!oldText.length) return sourceText;
+          if (resolvedArgs[3] === undefined)
+            return sourceText.split(oldText).join(newText);
+          let replacedCount = 0;
+          return sourceText
+            .split(oldText)
+            .reduce(
+              (resultText, segment, segmentIndex) =>
+                segmentIndex === 0
+                  ? segment
+                  : resultText +
+                    (++replacedCount === Number(resolvedArgs[3])
+                      ? newText
+                      : oldText) +
+                    segment,
+              "",
+            );
         }
-        if (u === "SEARCH" || u === "SEARCHB") {
-          if (O.length < 2 || O.length > 3 || O.some(Array.isArray))
+        if (functionName === "SEARCH" || functionName === "SEARCHB") {
+          if (
+            resolvedArgs.length < 2 ||
+            resolvedArgs.length > 3 ||
+            resolvedArgs.some(Array.isArray)
+          )
             return issue("#VALUE!");
-          const D = String(O[0] ?? "").toLowerCase(),
-            B = String(O[1] ?? "").toLowerCase(),
-            _ = O[2] === undefined ? 1 : Number(O[2]);
-          if (!Number.isInteger(_) || _ < 1 || _ > B.length)
+          const searchText = String(resolvedArgs[0] ?? "").toLowerCase(),
+            withinText = String(resolvedArgs[1] ?? "").toLowerCase(),
+            startPosition =
+              resolvedArgs[2] === undefined ? 1 : Number(resolvedArgs[2]);
+          if (
+            !Number.isInteger(startPosition) ||
+            startPosition < 1 ||
+            startPosition > withinText.length
+          )
             return issue("#VALUE!");
-          if (!/[?*~]/.test(D)) {
-            const C = B.indexOf(D, _ - 1);
-            return C < 0 ? issue("#VALUE!") : C + 1;
+          if (!/[?*~]/.test(searchText)) {
+            const foundIndex = withinText.indexOf(
+              searchText,
+              startPosition - 1,
+            );
+            return foundIndex < 0 ? issue("#VALUE!") : foundIndex + 1;
           }
-          if (B.length * B.length * D.length > 2e6) return issue("#LIMIT!");
-          for (let C = _ - 1; C < B.length; C++)
-            if (matchCriteriaValue(B.slice(C), `${D}*`)) return C + 1;
+          if (withinText.length * withinText.length * searchText.length > 2e6)
+            return issue("#LIMIT!");
+          for (
+            let offset = startPosition - 1;
+            offset < withinText.length;
+            offset++
+          )
+            if (matchCriteriaValue(withinText.slice(offset), `${searchText}*`))
+              return offset + 1;
           return issue("#VALUE!");
         }
         if (
-          u === "CONCATENATE" &&
-          O.flatMap(flattenNestedValues).reduce(
-            (D, B) => D + String(B ?? "").length,
-            0,
-          ) > 32767
+          functionName === "CONCATENATE" &&
+          resolvedArgs
+            .flatMap(flattenNestedValues)
+            .reduce((total, entry) => total + String(entry ?? "").length, 0) >
+            32767
         )
           return issue("#LIMIT!");
-        const V = distribution(u, l);
-        return /^IM/.test(u) &&
-          !["IMABS", "IMREAL", "IMAGINARY", "IMARGUMENT"].includes(u) &&
-          typeof V == "number"
-          ? String(V)
-          : typeof V == "string" && V.length > 32767
+        const distributedResult = distribution(functionName, args);
+        return /^IM/.test(functionName) &&
+          !["IMABS", "IMREAL", "IMAGINARY", "IMARGUMENT"].includes(
+            functionName,
+          ) &&
+          typeof distributedResult == "number"
+          ? String(distributedResult)
+          : typeof distributedResult == "string" &&
+              distributedResult.length > 32767
             ? issue("#LIMIT!")
-            : V;
+            : distributedResult;
       } catch (error) {
         return isFormulaError(error) ? issue(error.error) : issue("#ERROR!");
       }
     }),
-    e
+    engine
   );
 }
-function formatNumberWithPattern(e, cell, t = "1900") {
+function formatNumberWithPattern(value, cell, dateSystem = "1900") {
   if (cell?.numberFormat)
     try {
-      return formatCellValueWithNumberFormat(e, cell.numberFormat, t).text;
+      return formatCellValueWithNumberFormat(
+        value,
+        cell.numberFormat,
+        dateSystem,
+      ).text;
     } catch {
       return "#FORMAT!";
     }
-  if (e === null) return "";
-  if (typeof e == "boolean") return e ? "TRUE" : "FALSE";
-  if (typeof e != "number") return e;
-  if (!Number.isFinite(e)) return "#NUM!";
+  if (value === null) return "";
+  if (typeof value == "boolean") return value ? "TRUE" : "FALSE";
+  if (typeof value != "number") return value;
+  if (!Number.isFinite(value)) return "#NUM!";
   if (cell?.format === "date") {
     if (cell.numFmt)
       try {
         if (validateNumberFormatCode(cell.numFmt).kind === "temporal")
           return formatCellValueWithNumberFormat(
-            e,
+            value,
             { category: "custom", locale: "en-US", pattern: cell.numFmt },
-            t,
+            dateSystem,
           ).text;
       } catch {}
     return formatCellValueWithNumberFormat(
-      e,
+      value,
       { category: "date", locale: "en-US", pattern: "yyyy-mm-dd" },
-      t,
+      dateSystem,
     ).text;
   }
   if (cell?.numFmt) {
     if (cell.numFmt.toLowerCase() === "general")
-      return String(Number(e.toPrecision(15)));
-    const n = numberFormatToIntlOptions(e, cell.numFmt);
-    if (n !== undefined) return n;
+      return String(Number(value.toPrecision(15)));
+    const intlOptions = numberFormatToIntlOptions(value, cell.numFmt);
+    if (intlOptions !== undefined) return intlOptions;
   }
   return cell?.format === "percent"
     ? new Intl.NumberFormat("en-US", {
         style: "percent",
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
-      }).format(e)
+      }).format(value)
     : cell?.format === "currency"
       ? new Intl.NumberFormat("en-US", {
           style: "currency",
           currency: "USD",
           minimumFractionDigits: 2,
           maximumFractionDigits: 2,
-        }).format(e)
+        }).format(value)
       : cell?.format === "number"
         ? new Intl.NumberFormat("en-US", {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-          }).format(e)
-        : String(Number(e.toPrecision(15)));
+          }).format(value)
+        : String(Number(value.toPrecision(15)));
 }
 const defaultCalculationSettings = Object.freeze({
     mode: "automatic",
@@ -1169,58 +1500,58 @@ const defaultCalculationSettings = Object.freeze({
       "Invalid calculation settings. Choose Automatic or Manual, explicit iteration, 1–1000 iterations, convergence from 0 to 1, a 1–10000 ms time budget, 1–128 MiB working data and 1000–10000000 work units.",
     );
   };
-function normalizeCalculationSettings(e) {
-  return !isPlainObjectValue(e) ||
-    Object.keys(e).some(
-      (r) =>
+function normalizeCalculationSettings(settings) {
+  return !isPlainObjectValue(settings) ||
+    Object.keys(settings).some(
+      (key) =>
         ![
           ...Object.keys(defaultCalculationSettings),
           "memoryBudgetMiB",
           "workBudget",
-        ].includes(r),
+        ].includes(key),
     ) ||
-    typeof e.mode != "string" ||
-    !["automatic", "manual"].includes(e.mode) ||
-    typeof e.iterative != "boolean" ||
-    !Number.isInteger(e.maxIterations) ||
-    Number(e.maxIterations) < 1 ||
-    Number(e.maxIterations) > 1e3 ||
-    typeof e.maxChange != "number" ||
-    !Number.isFinite(e.maxChange) ||
-    e.maxChange < 0 ||
-    e.maxChange > 1 ||
-    !Number.isInteger(e.timeBudgetMs) ||
-    Number(e.timeBudgetMs) < 1 ||
-    Number(e.timeBudgetMs) > 1e4 ||
-    (e.memoryBudgetMiB !== undefined &&
-      (!Number.isInteger(e.memoryBudgetMiB) ||
-        Number(e.memoryBudgetMiB) < 1 ||
-        Number(e.memoryBudgetMiB) > 128)) ||
-    (e.workBudget !== undefined &&
-      (!Number.isInteger(e.workBudget) ||
-        Number(e.workBudget) < 1e3 ||
-        Number(e.workBudget) > 1e7))
+    typeof settings.mode != "string" ||
+    !["automatic", "manual"].includes(settings.mode) ||
+    typeof settings.iterative != "boolean" ||
+    !Number.isInteger(settings.maxIterations) ||
+    Number(settings.maxIterations) < 1 ||
+    Number(settings.maxIterations) > 1e3 ||
+    typeof settings.maxChange != "number" ||
+    !Number.isFinite(settings.maxChange) ||
+    settings.maxChange < 0 ||
+    settings.maxChange > 1 ||
+    !Number.isInteger(settings.timeBudgetMs) ||
+    Number(settings.timeBudgetMs) < 1 ||
+    Number(settings.timeBudgetMs) > 1e4 ||
+    (settings.memoryBudgetMiB !== undefined &&
+      (!Number.isInteger(settings.memoryBudgetMiB) ||
+        Number(settings.memoryBudgetMiB) < 1 ||
+        Number(settings.memoryBudgetMiB) > 128)) ||
+    (settings.workBudget !== undefined &&
+      (!Number.isInteger(settings.workBudget) ||
+        Number(settings.workBudget) < 1e3 ||
+        Number(settings.workBudget) > 1e7))
     ? throwInvalidCalculationSettings()
     : {
-        mode: e.mode,
-        iterative: e.iterative,
-        maxIterations: Number(e.maxIterations),
-        maxChange: e.maxChange,
-        timeBudgetMs: Number(e.timeBudgetMs),
-        ...(e.memoryBudgetMiB !== undefined
-          ? { memoryBudgetMiB: Number(e.memoryBudgetMiB) }
+        mode: settings.mode,
+        iterative: settings.iterative,
+        maxIterations: Number(settings.maxIterations),
+        maxChange: settings.maxChange,
+        timeBudgetMs: Number(settings.timeBudgetMs),
+        ...(settings.memoryBudgetMiB !== undefined
+          ? { memoryBudgetMiB: Number(settings.memoryBudgetMiB) }
           : {}),
-        ...(e.workBudget !== undefined
-          ? { workBudget: Number(e.workBudget) }
+        ...(settings.workBudget !== undefined
+          ? { workBudget: Number(settings.workBudget) }
           : {}),
       };
 }
-function importFormulaCacheEvidence(workbook, r) {
+function importFormulaCacheEvidence(workbook, target) {
   workbook.calculation !== undefined &&
-    (r.calculation = normalizeCalculationSettings(workbook.calculation));
+    (target.calculation = normalizeCalculationSettings(workbook.calculation));
   const importedCalculationCaches = workbook.importedCalculationCaches;
   if (importedCalculationCaches === undefined) return;
-  const n = () => {
+  const throwInvalidEvidence = () => {
     throw Error(
       "Invalid imported formula-cache evidence. Caches must remain separately labeled source evidence.",
     );
@@ -1239,7 +1570,7 @@ function importFormulaCacheEvidence(workbook, r) {
     !Array.isArray(importedCalculationCaches.entries) ||
     importedCalculationCaches.entries.length > 1e5
   )
-    return n();
+    return throwInvalidEvidence();
   const sourceSettings = importedCalculationCaches.sourceSettings;
   if (
     typeof sourceSettings.mode != "string" ||
@@ -1255,16 +1586,19 @@ function importFormulaCacheEvidence(workbook, r) {
         !Number.isFinite(sourceSettings.maxChange) ||
         sourceSettings.maxChange < 0))
   )
-    return n();
-  const a = (u) => {
-      const l = /^([A-Z]+)([1-9]\d*)$/.exec(u);
+    return throwInvalidEvidence();
+  const isAddressInBounds = (address) => {
+      const addressMatch = /^([A-Z]+)([1-9]\d*)$/.exec(address);
       return (
-        !!l &&
-        Number(l[2]) <= 1048576 &&
-        [...l[1]].reduce((c, h) => c * 26 + h.charCodeAt(0) - 64, 0) <= 16384
+        !!addressMatch &&
+        Number(addressMatch[2]) <= 1048576 &&
+        [...addressMatch[1]].reduce(
+          (total, letter) => total * 26 + letter.charCodeAt(0) - 64,
+          0,
+        ) <= 16384
       );
     },
-    s = new Set(),
+    seenEntryKeys = new Set(),
     entries = importedCalculationCaches.entries.map((entry) => {
       if (
         !isPlainObjectValue(entry) ||
@@ -1273,16 +1607,16 @@ function importFormulaCacheEvidence(workbook, r) {
         entry.sheetId.length > 100 ||
         typeof entry.address != "string" ||
         !/^[A-Z]{1,3}[1-9]\d{0,6}$/.test(entry.address) ||
-        !a(entry.address) ||
+        !isAddressInBounds(entry.address) ||
         typeof entry.formula != "string" ||
         !entry.formula.startsWith("=") ||
         entry.formula.length > 8192
       )
-        return n();
-      const l = JSON.stringify([entry.sheetId, entry.address]);
-      if (s.has(l)) return n();
-      s.add(l);
-      let c;
+        return throwInvalidEvidence();
+      const entryKey = JSON.stringify([entry.sheetId, entry.address]);
+      if (seenEntryKeys.has(entryKey)) return throwInvalidEvidence();
+      seenEntryKeys.add(entryKey);
+      let normalizedCache;
       if (entry.cache !== undefined) {
         const cache = entry.cache;
         if (
@@ -1300,17 +1634,17 @@ function importFormulaCacheEvidence(workbook, r) {
           (cache.type === "error" &&
             !/^#[A-Z0-9_/?!]+$/.test(String(cache.value)))
         )
-          return n();
-        c = { type: cache.type, value: cache.value };
+          return throwInvalidEvidence();
+        normalizedCache = { type: cache.type, value: cache.value };
       }
       return {
         sheetId: entry.sheetId,
         address: entry.address,
         formula: entry.formula,
-        ...(c ? { cache: c } : {}),
+        ...(normalizedCache ? { cache: normalizedCache } : {}),
       };
     });
-  r.importedCalculationCaches = {
+  target.importedCalculationCaches = {
     schemaVersion: 1,
     fileName: importedCalculationCaches.fileName,
     sourceSha256: importedCalculationCaches.sourceSha256,
@@ -1331,65 +1665,76 @@ const calculatorRecords = new WeakMap(),
   carriedCalculatorRecords = new WeakMap(),
   j5 = 2e5,
   pendingFormulaValue = { type: "error", value: "#PENDING!" },
-  makeFormulaError = (e) => ({ type: "error", value: e }),
+  makeFormulaError = (errorValue) => ({ type: "error", value: errorValue }),
   dynamicFunctionPattern = new RegExp(
     `\\b(?:${[...matrixResultFunctionNames, "LET", "LAMBDA", "INDIRECT", "OFFSET", "ISFORMULA", "TEXTBEFORE", "TEXTAFTER"].join("|")})\\s*\\(`,
     "i",
   ),
-  _O = { test: (e) => findVolatileFunctionNames(e).length > 0 },
-  ik = (e, r) =>
-    !!e.definedNames?.length ||
-    [...r.values()].some((n) => {
-      const o = n.formula.replace(/"(?:[^"]|"")*"/g, '""');
+  _O = {
+    test: (formulaText) => findVolatileFunctionNames(formulaText).length > 0,
+  },
+  ik = (workbook, formulas) =>
+    !!workbook.definedNames?.length ||
+    [...formulas.values()].some((formulaEntry) => {
+      const formulaWithoutStrings = formulaEntry.formula.replace(
+        /"(?:[^"]|"")*"/g,
+        '""',
+      );
       return (
-        dynamicFunctionPattern.test(o) ||
-        /[{}#]/.test(o) ||
-        /^=\s*[^()+*/]*:/.test(o) ||
-        (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(o) && o.includes(":"))
+        dynamicFunctionPattern.test(formulaWithoutStrings) ||
+        /[{}#]/.test(formulaWithoutStrings) ||
+        /^=\s*[^()+*/]*:/.test(formulaWithoutStrings) ||
+        (/\b(?:IF|IFERROR|IFNA)\s*\(/i.test(formulaWithoutStrings) &&
+          formulaWithoutStrings.includes(":"))
       );
     }),
   calculationSnapshotCache = new WeakMap();
 const sheetInputCache = new WeakMap();
-function buildSheetCalculationSnapshot(e) {
-  const r = isDeepFrozenValue(e.cells)
-    ? sheetInputCache.get(e.cells)?.get(e.id)
+function buildSheetCalculationSnapshot(sheet) {
+  const cachedSnapshot = isDeepFrozenValue(sheet.cells)
+    ? sheetInputCache.get(sheet.cells)?.get(sheet.id)
     : undefined;
-  if (r) return r;
+  if (cachedSnapshot) return cachedSnapshot;
   const formulas = [];
-  let n, o;
+  let cachedInputs, cachedSignature;
   const inputs = () =>
-      (n ??= Object.entries(e.cells).map(([l, cell]) => [
-        `${e.id}:${l}`,
-        JSON.stringify([cell.raw, !!cell.literal]),
-      ])),
-    signature = () => (o ??= JSON.stringify(inputs()));
-  isDeepFrozenValue(e.cells) || signature();
-  for (const address in e.cells) {
-    const cell = e.cells[address],
-      h = `${e.id}:${address}`;
+      (cachedInputs ??= Object.entries(sheet.cells).map(
+        ([cellAddress, cell]) => [
+          `${sheet.id}:${cellAddress}`,
+          JSON.stringify([cell.raw, !!cell.literal]),
+        ],
+      )),
+    signature = () => (cachedSignature ??= JSON.stringify(inputs()));
+  isDeepFrozenValue(sheet.cells) || signature();
+  for (const address in sheet.cells) {
+    const cell = sheet.cells[address],
+      cellKey = `${sheet.id}:${address}`;
     !cell.literal &&
       typeof cell.raw == "string" &&
       cell.raw.startsWith("=") &&
       formulas.push([
-        h,
-        { sheetId: e.id, address: address, formula: cell.raw },
+        cellKey,
+        { sheetId: sheet.id, address: address, formula: cell.raw },
       ]);
   }
-  const d = {
+  const snapshot = {
     inputs: inputs,
     formulas: formulas,
     signature: signature,
     volatile: [
       ...new Set(
-        formulas.flatMap(([, l]) => findVolatileFunctionNames(l.formula)),
+        formulas.flatMap(([, formulaRecord]) =>
+          findVolatileFunctionNames(formulaRecord.formula),
+        ),
       ),
     ],
   };
-  if (isDeepFrozenValue(e.cells)) {
-    const l = sheetInputCache.get(e.cells) ?? new Map();
-    (l.set(e.id, d), sheetInputCache.set(e.cells, l));
+  if (isDeepFrozenValue(sheet.cells)) {
+    const snapshotsBySheetId = sheetInputCache.get(sheet.cells) ?? new Map();
+    (snapshotsBySheetId.set(sheet.id, snapshot),
+      sheetInputCache.set(sheet.cells, snapshotsBySheetId));
   }
-  return d;
+  return snapshot;
 }
 function buildWorkbookCalculationDescriptor(workbook) {
   const calculationSettings = normalizeCalculationSettings(
@@ -1419,20 +1764,25 @@ function buildWorkbookCalculationDescriptor(workbook) {
   ]);
 }
 function buildWorkbookCalculationSignature(workbook) {
-  const r = workbook.sheets.map(buildSheetCalculationSnapshot);
-  let t;
-  const inputs = () => (t ??= new Map(r.flatMap((h) => h.inputs()))),
-    formulas = new Map(r.flatMap((h) => h.formulas)),
+  const sheetSnapshots = workbook.sheets.map(buildSheetCalculationSnapshot);
+  let cachedInputMap;
+  const inputs = () =>
+      (cachedInputMap ??= new Map(
+        sheetSnapshots.flatMap((sheetSnapshot) => sheetSnapshot.inputs()),
+      )),
+    formulas = new Map(
+      sheetSnapshots.flatMap((formulaSnapshot) => formulaSnapshot.formulas),
+    ),
     calculationSettings = normalizeCalculationSettings(
       workbook.calculation ?? defaultCalculationSettings,
     ),
     workbookCalculationDescriptor =
       buildWorkbookCalculationDescriptor(workbook);
-  let d, u;
+  let cachedInputSignature, cachedSignatureText;
   const inputSignature = () =>
-      (d ??= `[${JSON.stringify(workbook.revision)},${JSON.stringify(workbookCalculationDescriptor)},[${r.map((h) => h.signature()).join(",")}]]`),
+      (cachedInputSignature ??= `[${JSON.stringify(workbook.revision)},${JSON.stringify(workbookCalculationDescriptor)},[${sheetSnapshots.map((inputSnapshot) => inputSnapshot.signature()).join(",")}]]`),
     signature = () =>
-      (u ??= `[${inputSignature()},${JSON.stringify(workbook.importedCalculationCaches ?? null)}]`);
+      (cachedSignatureText ??= `[${inputSignature()},${JSON.stringify(workbook.importedCalculationCaches ?? null)}]`);
   return (
     isDeepFrozenValue(workbook) || signature(),
     {
@@ -1442,11 +1792,11 @@ function buildWorkbookCalculationSignature(workbook) {
       metadata: workbookCalculationDescriptor,
       volatile: [
         ...new Set(
-          r
-            .flatMap((h) => h.volatile)
+          sheetSnapshots
+            .flatMap((volatileSnapshot) => volatileSnapshot.volatile)
             .concat(
-              (workbook.definedNames ?? []).flatMap((h) =>
-                findVolatileFunctionNames(h.refersTo),
+              (workbook.definedNames ?? []).flatMap((definedName) =>
+                findVolatileFunctionNames(definedName.refersTo),
               ),
             ),
         ),
@@ -1459,45 +1809,50 @@ function buildWorkbookCalculationSignature(workbook) {
 function getCachedCalculationSnapshot(workbook) {
   if (!isDeepFrozenValue(workbook))
     return buildWorkbookCalculationSignature(workbook);
-  let r = calculationSnapshotCache.get(workbook);
+  let cachedSnapshot = calculationSnapshotCache.get(workbook);
   return (
-    r ||
-      ((r = buildWorkbookCalculationSignature(workbook)),
-      calculationSnapshotCache.set(workbook, r)),
-    r
+    cachedSnapshot ||
+      ((cachedSnapshot = buildWorkbookCalculationSignature(workbook)),
+      calculationSnapshotCache.set(workbook, cachedSnapshot)),
+    cachedSnapshot
   );
 }
 function isCalculationRecordCurrent(
-  e,
+  calculationRecord,
   workbook,
   cachedCalculationSnapshot = getCachedCalculationSnapshot(workbook),
 ) {
   return (
-    !!e &&
+    !!calculationRecord &&
     (isDeepFrozenValue(workbook) ||
-      e.signature() === cachedCalculationSnapshot.signature())
+      calculationRecord.signature() === cachedCalculationSnapshot.signature())
   );
 }
-function MO(workbook, r) {
+function MO(workbook, otherWorkbook) {
   if (
-    workbook.revision !== r.revision ||
+    workbook.revision !== otherWorkbook.revision ||
     buildWorkbookCalculationDescriptor(workbook) !==
-      buildWorkbookCalculationDescriptor(r) ||
-    (workbook.importedCalculationCaches !== r.importedCalculationCaches &&
+      buildWorkbookCalculationDescriptor(otherWorkbook) ||
+    (workbook.importedCalculationCaches !==
+      otherWorkbook.importedCalculationCaches &&
       JSON.stringify(workbook.importedCalculationCaches) !==
-        JSON.stringify(r.importedCalculationCaches))
+        JSON.stringify(otherWorkbook.importedCalculationCaches))
   )
     return false;
-  for (let t = 0; t < workbook.sheets.length; t++) {
-    const cells = workbook.sheets[t].cells,
-      o = r.sheets[t].cells;
-    if (cells === o) continue;
-    const a = Object.keys(cells);
-    if (a.length !== Object.keys(o).length) return false;
-    for (const s of a) {
-      const cell = cells[s],
-        u = o[s];
-      if (!u || cell.raw !== u.raw || !!cell.literal != !!u.literal)
+  for (let sheetIndex = 0; sheetIndex < workbook.sheets.length; sheetIndex++) {
+    const cells = workbook.sheets[sheetIndex].cells,
+      otherCells = otherWorkbook.sheets[sheetIndex].cells;
+    if (cells === otherCells) continue;
+    const cellAddresses = Object.keys(cells);
+    if (cellAddresses.length !== Object.keys(otherCells).length) return false;
+    for (const address of cellAddresses) {
+      const cell = cells[address],
+        otherCell = otherCells[address];
+      if (
+        !otherCell ||
+        cell.raw !== otherCell.raw ||
+        !!cell.literal != !!otherCell.literal
+      )
         return false;
     }
   }
@@ -1508,52 +1863,67 @@ function hasCalculatorRecord(workbook) {
     calculatorRecords.has(workbook) || carriedCalculatorRecords.has(workbook)
   );
 }
-function carryCalculatorRecordForward(workbook, r) {
-  if (workbook === r || workbook.id !== r.id || r.revision <= workbook.revision)
+function carryCalculatorRecordForward(workbook, nextWorkbook) {
+  if (
+    workbook === nextWorkbook ||
+    workbook.id !== nextWorkbook.id ||
+    nextWorkbook.revision <= workbook.revision
+  )
     return;
-  const t = calculatorRecords.get(workbook);
-  t &&
-    isCalculationRecordCurrent(t, workbook) &&
-    carriedCalculatorRecords.set(r, t);
+  const calculatorRecord = calculatorRecords.get(workbook);
+  calculatorRecord &&
+    isCalculationRecordCurrent(calculatorRecord, workbook) &&
+    carriedCalculatorRecords.set(nextWorkbook, calculatorRecord);
 }
-function zie(e, workbook) {
-  if (e === workbook) return;
-  const t = calculatorRecords.get(e);
-  t && isCalculationRecordCurrent(t, e) && MO(e, workbook)
-    ? calculatorRecords.set(workbook, t)
-    : carriedCalculatorRecords.has(e) &&
-      MO(e, workbook) &&
-      carriedCalculatorRecords.set(workbook, carriedCalculatorRecords.get(e));
+function zie(previousWorkbook, workbook) {
+  if (previousWorkbook === workbook) return;
+  const previousRecord = calculatorRecords.get(previousWorkbook);
+  previousRecord &&
+  isCalculationRecordCurrent(previousRecord, previousWorkbook) &&
+  MO(previousWorkbook, workbook)
+    ? calculatorRecords.set(workbook, previousRecord)
+    : carriedCalculatorRecords.has(previousWorkbook) &&
+      MO(previousWorkbook, workbook) &&
+      carriedCalculatorRecords.set(
+        workbook,
+        carriedCalculatorRecords.get(previousWorkbook),
+      );
 }
-function withCalculationSettings(workbook, r) {
-  return { ...workbook, calculation: normalizeCalculationSettings(r) };
+function withCalculationSettings(workbook, settings) {
+  return { ...workbook, calculation: normalizeCalculationSettings(settings) };
 }
-function deepFreeze(e) {
-  !e ||
-    typeof e != "object" ||
-    Object.isFrozen(e) ||
-    (Object.values(e).forEach(deepFreeze), Object.freeze(e));
+function deepFreeze(value) {
+  !value ||
+    typeof value != "object" ||
+    Object.isFrozen(value) ||
+    (Object.values(value).forEach(deepFreeze), Object.freeze(value));
 }
 function getCurrentCalculatorRecord(activeWorkbook) {
-  const r = calculatorRecords.get(activeWorkbook);
-  return isCalculationRecordCurrent(r, activeWorkbook)
-    ? { calculator: r.calculator, report: r.report }
+  const calculatorRecord = calculatorRecords.get(activeWorkbook);
+  return isCalculationRecordCurrent(calculatorRecord, activeWorkbook)
+    ? {
+        calculator: calculatorRecord.calculator,
+        report: calculatorRecord.report,
+      }
     : undefined;
 }
 const reportCellValueMaps = new WeakMap();
-function buildReportCellValueMap(e) {
-  if (!e) return new Map();
-  const r = reportCellValueMaps.get(e.report);
-  if (r) return r;
-  const t = new Map();
-  for (const cell of e.report.cells) {
-    const o = `${cell.sheetId}:${cell.address}`,
-      a = e.values.get(o);
-    a && a.value !== "#PENDING!"
-      ? t.set(o, { revision: e.report.revision, result: { ...a } })
-      : cell.lastKnown && t.set(o, cell.lastKnown);
+function buildReportCellValueMap(calculatorRecord) {
+  if (!calculatorRecord) return new Map();
+  const cachedValueMap = reportCellValueMaps.get(calculatorRecord.report);
+  if (cachedValueMap) return cachedValueMap;
+  const valueMap = new Map();
+  for (const cell of calculatorRecord.report.cells) {
+    const cellKey = `${cell.sheetId}:${cell.address}`,
+      valueEntry = calculatorRecord.values.get(cellKey);
+    valueEntry && valueEntry.value !== "#PENDING!"
+      ? valueMap.set(cellKey, {
+          revision: calculatorRecord.report.revision,
+          result: { ...valueEntry },
+        })
+      : cell.lastKnown && valueMap.set(cellKey, cell.lastKnown);
   }
-  return t;
+  return valueMap;
 }
 function getCalculationInputSignature(workbook) {
   return getCachedCalculationSnapshot(workbook).inputSignature();
@@ -1569,12 +1939,14 @@ const filterEvaluationLimits = Object.freeze({
   }),
   savedFilterViewHelpText =
     "View only. Column rules intersect (AND); advanced groups use OR of AND rules. Counts include blank records in the declared range. Manual/outline hiding is separate. Full scope includes every data row; visible scope excludes filtered and manually hidden rows. Applying a view leaves source addresses, formulas, identities and history unchanged. Native JSON, XLSX, print and AI selections use full source data. Active masks are session state; named criteria can be saved in native JSON and require a fresh preview before reuse.",
-  normalizeComparableText = (e, r = false) =>
-    r ? e.normalize("NFC") : e.normalize("NFC").toLocaleLowerCase("en-US"),
-  comparableCellValueKey = (e, r = false) =>
-    isNullOrEmptyValue(e)
+  normalizeComparableText = (text, isCaseSensitive = false) =>
+    isCaseSensitive
+      ? text.normalize("NFC")
+      : text.normalize("NFC").toLocaleLowerCase("en-US"),
+  comparableCellValueKey = (value, isCaseSensitive = false) =>
+    isNullOrEmptyValue(value)
       ? "blank"
-      : `${typeof e}:${typeof e == "string" ? normalizeComparableText(e, r) : e}`,
+      : `${typeof value}:${typeof value == "string" ? normalizeComparableText(value, isCaseSensitive) : value}`,
   textFilterOperators = [
     "equals",
     "notEquals",
@@ -1590,142 +1962,172 @@ const filterEvaluationLimits = Object.freeze({
     "blank",
     "notBlank",
   ],
-  isStorableCellValue = (e) =>
-    e === null ||
-    typeof e == "boolean" ||
-    (typeof e == "number" && Number.isFinite(e)) ||
-    (typeof e == "string" && e.length <= 32767);
-function resolveDatePolicyContext(e, r, workbook) {
-  if (r === "number") return typeof e == "number" ? e : null;
-  if (r === "date") {
+  isStorableCellValue = (value) =>
+    value === null ||
+    typeof value == "boolean" ||
+    (typeof value == "number" && Number.isFinite(value)) ||
+    (typeof value == "string" && value.length <= 32767);
+function resolveDatePolicyContext(value, valueType, workbook) {
+  if (valueType === "number") return typeof value == "number" ? value : null;
+  if (valueType === "date") {
     const datePolicy = normalizeDatePolicy(workbook.datePolicy),
-      o =
-        typeof e == "number"
-          ? e
-          : typeof e == "string"
-            ? parseDateText(e, datePolicy)
+      serial =
+        typeof value == "number"
+          ? value
+          : typeof value == "string"
+            ? parseDateText(value, datePolicy)
             : undefined;
-    return o !== undefined &&
-      o >= 0 &&
-      o < dateSystemMaxSerial(datePolicy.dateSystem) + 1
-      ? o
+    return serial !== undefined &&
+      serial >= 0 &&
+      serial < dateSystemMaxSerial(datePolicy.dateSystem) + 1
+      ? serial
       : null;
   }
-  return typeof e == "string" ? e : null;
+  return typeof value == "string" ? value : null;
 }
-function parseWildcardPattern(e, r) {
-  const t = [];
-  for (let d = 0; d < r.length; d++) {
-    const u = r[d];
-    u === "~" && d + 1 < r.length
-      ? t.push({ text: r[++d] })
-      : t.push(
-          u === "*" ? { star: true } : u === "?" ? { any: true } : { text: u },
+function parseWildcardPattern(text, pattern) {
+  const tokens = [];
+  for (let patternIndex = 0; patternIndex < pattern.length; patternIndex++) {
+    const patternChar = pattern[patternIndex];
+    patternChar === "~" && patternIndex + 1 < pattern.length
+      ? tokens.push({ text: pattern[++patternIndex] })
+      : tokens.push(
+          patternChar === "*"
+            ? { star: true }
+            : patternChar === "?"
+              ? { any: true }
+              : { text: patternChar },
         );
   }
-  let n = 0,
-    o = 0,
-    a = -1,
-    s = 0;
-  for (; n < e.length;)
-    if (o < t.length && (t[o].any || t[o].text === e[n])) (n++, o++);
-    else if (o < t.length && t[o].star) ((a = o++), (s = n));
-    else if (a >= 0) ((o = a + 1), (n = ++s));
+  let textIndex = 0,
+    tokenIndex = 0,
+    lastStarIndex = -1,
+    starTextIndex = 0;
+  for (; textIndex < text.length;)
+    if (
+      tokenIndex < tokens.length &&
+      (tokens[tokenIndex].any || tokens[tokenIndex].text === text[textIndex])
+    )
+      (textIndex++, tokenIndex++);
+    else if (tokenIndex < tokens.length && tokens[tokenIndex].star)
+      ((lastStarIndex = tokenIndex++), (starTextIndex = textIndex));
+    else if (lastStarIndex >= 0)
+      ((tokenIndex = lastStarIndex + 1), (textIndex = ++starTextIndex));
     else return false;
-  for (; o < t.length && t[o].star;) o++;
-  return o === t.length;
+  for (; tokenIndex < tokens.length && tokens[tokenIndex].star;) tokenIndex++;
+  return tokenIndex === tokens.length;
 }
-function matchesTextFilter(e, r, workbook, n) {
-  if (r.operator === "blank") return isNullOrEmptyValue(e);
-  if (r.operator === "notBlank") return !isNullOrEmptyValue(e);
-  if (r.type === "value") {
-    const s =
-      comparableCellValueKey(e, n) === comparableCellValueKey(r.value, n);
-    return r.operator === "equals" ? s : !s;
+function matchesTextFilter(value, filter, workbook, isCaseSensitive) {
+  if (filter.operator === "blank") return isNullOrEmptyValue(value);
+  if (filter.operator === "notBlank") return !isNullOrEmptyValue(value);
+  if (filter.type === "value") {
+    const isEqual =
+      comparableCellValueKey(value, isCaseSensitive) ===
+      comparableCellValueKey(filter.value, isCaseSensitive);
+    return filter.operator === "equals" ? isEqual : !isEqual;
   }
-  let datePolicyContext = resolveDatePolicyContext(e, r.type, workbook),
-    a = resolveDatePolicyContext(r.value, r.type, workbook);
-  if (datePolicyContext === null || a === null) return false;
+  let datePolicyContext = resolveDatePolicyContext(
+      value,
+      filter.type,
+      workbook,
+    ),
+    filterValue = resolveDatePolicyContext(filter.value, filter.type, workbook);
+  if (datePolicyContext === null || filterValue === null) return false;
   switch (
     (typeof datePolicyContext == "string" &&
-      typeof a == "string" &&
-      ((datePolicyContext = normalizeComparableText(datePolicyContext, n)),
-      (a = normalizeComparableText(a, n))),
-    r.operator)
+      typeof filterValue == "string" &&
+      ((datePolicyContext = normalizeComparableText(
+        datePolicyContext,
+        isCaseSensitive,
+      )),
+      (filterValue = normalizeComparableText(filterValue, isCaseSensitive))),
+    filter.operator)
   ) {
     case "equals":
-      return datePolicyContext === a;
+      return datePolicyContext === filterValue;
     case "notEquals":
-      return datePolicyContext !== a;
+      return datePolicyContext !== filterValue;
     case "gt":
-      return datePolicyContext > a;
+      return datePolicyContext > filterValue;
     case "gte":
-      return datePolicyContext >= a;
+      return datePolicyContext >= filterValue;
     case "lt":
-      return datePolicyContext < a;
+      return datePolicyContext < filterValue;
     case "lte":
-      return datePolicyContext <= a;
+      return datePolicyContext <= filterValue;
     case "contains":
-      return String(datePolicyContext).includes(String(a));
+      return String(datePolicyContext).includes(String(filterValue));
     case "notContains":
-      return !String(datePolicyContext).includes(String(a));
+      return !String(datePolicyContext).includes(String(filterValue));
     case "startsWith":
-      return String(datePolicyContext).startsWith(String(a));
+      return String(datePolicyContext).startsWith(String(filterValue));
     case "endsWith":
-      return String(datePolicyContext).endsWith(String(a));
+      return String(datePolicyContext).endsWith(String(filterValue));
     case "wildcard":
-      return parseWildcardPattern(String(datePolicyContext), String(a));
+      return parseWildcardPattern(
+        String(datePolicyContext),
+        String(filterValue),
+      );
   }
   return false;
 }
-function assertCalculatedBeforeFilter(e, sheetId, t, workbook) {
-  const o = e(sheetId, t),
-    cell = workbook?.sheets.find((sheet) => sheet.id === sheetId)?.cells[t];
+function assertCalculatedBeforeFilter(
+  getCalculatedValue,
+  sheetId,
+  address,
+  workbook,
+) {
+  const value = getCalculatedValue(sheetId, address),
+    cell = workbook?.sheets.find((sheet) => sheet.id === sheetId)?.cells[
+      address
+    ];
   if (
     cell &&
-    cell.raw === o &&
+    cell.raw === value &&
     (cell.literal || typeof cell.raw != "string" || !cell.raw.startsWith("="))
   )
-    return o;
+    return value;
   if (
-    typeof o == "string" &&
-    /^#(?:PENDING|LIMIT|TIMEOUT|CANCELLED|BUSY|BLOCKED|CALC_LIMIT)!?$/i.test(o)
+    typeof value == "string" &&
+    /^#(?:PENDING|LIMIT|TIMEOUT|CANCELLED|BUSY|BLOCKED|CALC_LIMIT)!?$/i.test(
+      value,
+    )
   )
     throw Error(
-      `Calculation is incomplete at ${t}. Recalculate before filtering; unchecked rows are never reported as an empty population.`,
+      `Calculation is incomplete at ${address}. Recalculate before filtering; unchecked rows are never reported as an empty population.`,
     );
-  return o;
+  return value;
 }
 const savedFilterViewLimits = Object.freeze({
   views: 20,
   name: 80,
   characters: 512e3,
 });
-function validateSavedFilterViewMetadata(e, r) {
+function validateSavedFilterViewMetadata(metadata, allowedKeys) {
   if (
-    !e ||
-    typeof e != "object" ||
-    Array.isArray(e) ||
-    ![Object.prototype, null].includes(Object.getPrototypeOf(e)) ||
-    Object.keys(e).some((t) => !r.includes(t))
+    !metadata ||
+    typeof metadata != "object" ||
+    Array.isArray(metadata) ||
+    ![Object.prototype, null].includes(Object.getPrototypeOf(metadata)) ||
+    Object.keys(metadata).some((key) => !allowedKeys.includes(key))
   )
     throw Error("Invalid saved filter view metadata.");
 }
-function isValidFilterViewText(e, r) {
+function isValidFilterViewText(text, maxLength) {
   return (
-    typeof e == "string" &&
-    !!e.trim() &&
-    e.length <= r &&
-    !/[\u0000-\u001f\u007f]/.test(e)
+    typeof text == "string" &&
+    !!text.trim() &&
+    text.length <= maxLength &&
+    !/[\u0000-\u001f\u007f]/.test(text)
   );
 }
 function normalizeNameForComparison(savedFilterViewName) {
   return savedFilterViewName.normalize("NFC").trim().toLocaleLowerCase("en-US");
 }
-function normalizeSavedFilterViewName(e) {
-  if (!isValidFilterViewText(e, savedFilterViewLimits.name))
+function normalizeSavedFilterViewName(viewName) {
+  if (!isValidFilterViewText(viewName, savedFilterViewLimits.name))
     throw Error("Use a nonempty filter view name of up to 80 characters.");
-  return e.normalize("NFC").trim();
+  return viewName.normalize("NFC").trim();
 }
 function assertSavedFilterViewsEditable(workbook, sheetId) {
   if (
@@ -1736,12 +2138,12 @@ function assertSavedFilterViewsEditable(workbook, sheetId) {
       "Unprotect the workbook and source worksheet before changing saved filter views.",
     );
 }
-function findSavedFilterView(workbook, r) {
-  const t = workbook.savedFilterViews?.find(
-    (savedFilterView) => savedFilterView.id === r,
+function findSavedFilterView(workbook, viewId) {
+  const view = workbook.savedFilterViews?.find(
+    (savedFilterView) => savedFilterView.id === viewId,
   );
-  if (!t) throw Error("This saved filter view no longer exists.");
-  return t;
+  if (!view) throw Error("This saved filter view no longer exists.");
+  return view;
 }
 const consolidationFormatVersion = "ledgerglass-consolidation-v1",
   consolidationLimits = Object.freeze({
@@ -1756,7 +2158,7 @@ const consolidationFormatVersion = "ledgerglass-consolidation-v1",
   boundedLabelSchema = string()
     .min(1)
     .max(128)
-    .refine((e) => !!e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
+    .refine((text) => !!text.trim() && !/[\u0000-\u001f\u007f]/.test(text)),
   shortLabelSchema = string().min(1).max(100),
   V5 = string().regex(/^[a-f0-9]{64}$/),
   scalarValueSchema = union([
@@ -1790,10 +2192,10 @@ const consolidationFormatVersion = "ledgerglass-consolidation-v1",
     unit: boundedLabelSchema,
     linkedAmounts: boolean(),
     collapseDetails: boolean(),
-  }).superRefine((e, r) => {
-    const t = [
+  }).superRefine((definition, context) => {
+    const outputHeaders = [
       "Row type",
-      ...e.categoryLabels,
+      ...definition.categoryLabels,
       "Period",
       "Currency",
       "Unit",
@@ -1801,14 +2203,16 @@ const consolidationFormatVersion = "ledgerglass-consolidation-v1",
       "Source",
       "Link state",
     ];
-    (new Set(t.map((n) => n.toLowerCase())).size !== t.length ||
-      new Set(e.sources.map((source) => source.id)).size !== e.sources.length ||
-      e.sources.some(
+    (new Set(outputHeaders.map((header) => header.toLowerCase())).size !==
+      outputHeaders.length ||
+      new Set(definition.sources.map((source) => source.id)).size !==
+        definition.sources.length ||
+      definition.sources.some(
         (source) =>
-          source.categories.length !== e.categoryLabels.length ||
+          source.categories.length !== definition.categoryLabels.length ||
           new Set(source.categories).size !== source.categories.length,
       )) &&
-      r.addIssue({
+      context.addIssue({
         code: "custom",
         message:
           "Use unique source IDs, distinct category fields, and distinct output headers with matching category counts.",
@@ -1882,77 +2286,93 @@ const consolidationFormatVersion = "ledgerglass-consolidation-v1",
     outputHash: V5,
   });
 function parseConsolidationDefinition(definition) {
-  const r = consolidationDefinitionSchema.safeParse(definition);
-  if (!r.success)
-    throw Error(`Invalid consolidation: ${r.error.issues[0]?.message}`);
-  return r.data;
+  const parsed = consolidationDefinitionSchema.safeParse(definition);
+  if (!parsed.success)
+    throw Error(`Invalid consolidation: ${parsed.error.issues[0]?.message}`);
+  return parsed.data;
 }
-const serializeTypedKeyValues = (e) =>
-  JSON.stringify(e.map((r) => [typeof r, r]));
-function sumConsolidationAmounts(e) {
-  let r = 0,
-    t = 0;
-  for (const n of e) {
-    const o = n - t,
-      a = r + o;
-    if (((t = a - r - o), (r = a), !Number.isFinite(r) || !Number.isFinite(t)))
+const serializeTypedKeyValues = (entries) =>
+  JSON.stringify(entries.map((item) => [typeof item, item]));
+function sumConsolidationAmounts(amounts) {
+  let total = 0,
+    compensation = 0;
+  for (const amount of amounts) {
+    const adjustedAmount = amount - compensation,
+      nextTotal = total + adjustedAmount;
+    if (
+      ((compensation = nextTotal - total - adjustedAmount),
+      (total = nextTotal),
+      !Number.isFinite(total) || !Number.isFinite(compensation))
+    )
       throw Error("Consolidation total exceeds finite numeric limits.");
   }
-  return Object.is(r, -0) ? 0 : r;
+  return Object.is(total, -0) ? 0 : total;
 }
 function buildConsolidationSubtotals(contributions) {
-  const r = new Map();
+  const groupsByKey = new Map();
   for (const contribution of contributions)
-    for (let n = 1; n <= contribution.categories.length; n++) {
-      const o = serializeTypedKeyValues(contribution.categories.slice(0, n)),
-        a = r.get(o) ?? [];
-      (a.push(contribution), r.set(o, a));
+    for (
+      let prefixLength = 1;
+      prefixLength <= contribution.categories.length;
+      prefixLength++
+    ) {
+      const groupKey = serializeTypedKeyValues(
+          contribution.categories.slice(0, prefixLength),
+        ),
+        groupContributions = groupsByKey.get(groupKey) ?? [];
+      (groupContributions.push(contribution),
+        groupsByKey.set(groupKey, groupContributions));
     }
-  if (r.size > consolidationLimits.groups)
+  if (groupsByKey.size > consolidationLimits.groups)
     throw Error(
       "Consolidation exceeds 1,000 subtotal groups. Narrow the sources; no rows were truncated.",
     );
-  return [...r].map(([t, n]) => {
-    const level = JSON.parse(t).length;
+  return [...groupsByKey].map(([serializedKey, groupMembers]) => {
+    const level = JSON.parse(serializedKey).length;
     return {
-      categories: n[0].categories.slice(0, level),
+      categories: groupMembers[0].categories.slice(0, level),
       level: level,
-      count: n.length,
-      amount: sumConsolidationAmounts(n.map((a) => a.amount)),
+      count: groupMembers.length,
+      amount: sumConsolidationAmounts(
+        groupMembers.map((entry) => entry.amount),
+      ),
     };
   });
 }
-function verifyConsolidationEvidence(workbook, r) {
-  let t = 0;
-  for (const sheet of r.sheets) {
-    const d = workbook.sheets?.find((f) => f.id === sheet.id)?.consolidation;
-    if (d === undefined) continue;
+function verifyConsolidationEvidence(workbook, report) {
+  let totalMetadataCharacters = 0;
+  for (const sheet of report.sheets) {
+    const sheetConsolidation = workbook.sheets?.find(
+      (workbookSheet) => workbookSheet.id === sheet.id,
+    )?.consolidation;
+    if (sheetConsolidation === undefined) continue;
     if (
-      ((t += JSON.stringify(d).length),
-      t > consolidationLimits.metadataCharacters)
+      ((totalMetadataCharacters += JSON.stringify(sheetConsolidation).length),
+      totalMetadataCharacters > consolidationLimits.metadataCharacters)
     )
       throw Error(
         "Consolidation evidence exceeds 8,000,000 characters. Retain native backups before removing obsolete reports.",
       );
-    const u = consolidationEvidenceSchema.safeParse(d);
-    if (!u.success)
+    const parsedEvidence =
+      consolidationEvidenceSchema.safeParse(sheetConsolidation);
+    if (!parsedEvidence.success)
       throw Error(
-        `Invalid consolidation evidence: ${u.error.issues[0]?.message}`,
+        `Invalid consolidation evidence: ${parsedEvidence.error.issues[0]?.message}`,
       );
-    const data = u.data,
+    const data = parsedEvidence.data,
       review = data.review,
-      h = data.definition.sources.map((source) => source.id);
+      sourceIds = data.definition.sources.map((source) => source.id);
     if (
       !review.complete ||
       review.exceptions.some((exception) => exception.severity === "error") ||
       !review.contributions.length ||
-      review.sources.length !== h.length ||
+      review.sources.length !== sourceIds.length ||
       new Set(review.sources.map((source) => source.sourceId)).size !==
-        h.length ||
-      review.sources.some((source) => !h.includes(source.sourceId)) ||
+        sourceIds.length ||
+      review.sources.some((source) => !sourceIds.includes(source.sourceId)) ||
       review.contributions.some(
         (contribution) =>
-          !h.includes(contribution.sourceId) ||
+          !sourceIds.includes(contribution.sourceId) ||
           contribution.categories.length !==
             data.definition.categoryLabels.length ||
           contribution.period !== data.definition.period ||
@@ -1983,16 +2403,20 @@ function verifyConsolidationEvidence(workbook, r) {
         "Consolidation evidence does not reconcile to its sources, categories or retained fingerprint.",
       );
     for (const source of review.sources) {
-      const p = review.contributions.filter(
+      const sourceContributions = review.contributions.filter(
         (contribution) => contribution.sourceId === source.sourceId,
       );
       if (
-        source.records !== p.length ||
-        source.acceptedRecords !== p.length ||
-        source.amount !== sumConsolidationAmounts(p.map((m) => m.amount)) ||
-        p.some(
-          (m) =>
-            m.workbookId !== source.workbookId || m.sheetId !== source.sheetId,
+        source.records !== sourceContributions.length ||
+        source.acceptedRecords !== sourceContributions.length ||
+        source.amount !==
+          sumConsolidationAmounts(
+            sourceContributions.map((entry) => entry.amount),
+          ) ||
+        sourceContributions.some(
+          (sourceContribution) =>
+            sourceContribution.workbookId !== source.workbookId ||
+            sourceContribution.sheetId !== source.sheetId,
         )
       )
         throw Error("Consolidation source evidence does not reconcile.");
@@ -2022,7 +2446,11 @@ const externalSourceFormatVersion = "ledgerglass-sources-v1",
   columnNameSchema = string()
     .min(1)
     .max(128)
-    .refine((e) => e === e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
+    .refine(
+      (columnName) =>
+        columnName === columnName.trim() &&
+        !/[\u0000-\u001f\u007f]/.test(columnName),
+    ),
   isoDateTimeSchema = string().datetime({ offset: true }),
   sourceHashSchema = string().regex(/^[a-f0-9]{64}$/),
   sourceColumnSchema = strictObject({
@@ -2037,18 +2465,19 @@ const externalSourceFormatVersion = "ledgerglass-sources-v1",
     schemaVersion: sourceIdSchema,
     columns: array(sourceColumnSchema).min(1).max(externalSourceLimits.columns),
     controlFields: array(columnNameSchema).max(externalSourceLimits.columns),
-  }).superRefine((e, r) => {
-    (new Set(e.columns.map((column) => column.name.toLowerCase())).size !==
-      e.columns.length ||
-      new Set(e.controlFields).size !== e.controlFields.length ||
-      e.controlFields.some(
+  }).superRefine((sourceTable, context) => {
+    (new Set(sourceTable.columns.map((column) => column.name.toLowerCase()))
+      .size !== sourceTable.columns.length ||
+      new Set(sourceTable.controlFields).size !==
+        sourceTable.controlFields.length ||
+      sourceTable.controlFields.some(
         (controlField) =>
-          !e.columns.some(
+          !sourceTable.columns.some(
             (column) =>
               column.name === controlField && column.type === "number",
           ),
       )) &&
-      r.addIssue({
+      context.addIssue({
         code: "custom",
         message: "Use unique columns and declared numeric control fields.",
       });
@@ -2105,9 +2534,9 @@ const externalSourceFormatVersion = "ledgerglass-sources-v1",
       "The workbook, preview or source approval changed. Preview again before applying a refresh.",
   };
 class ExternalSourceError extends Error {
-  constructor(r) {
-    (super(externalSourceErrorMessages[r]),
-      (this.code = r),
+  constructor(errorCode) {
+    (super(externalSourceErrorMessages[errorCode]),
+      (this.code = errorCode),
       (this.name = "ExternalSourceError"));
   }
 }
@@ -2120,15 +2549,17 @@ function isExternalSourceError(error) {
       ? new ExternalSourceError(error.code)
       : new ExternalSourceError("unavailable");
 }
-function parseActiveSourceApproval(e, r = Date.now()) {
-  const t = sourceApprovalSchema.safeParse(e);
-  if (!t.success) throw new ExternalSourceError("invalid");
-  if (Date.parse(t.data.expiresAt) <= r)
+function parseActiveSourceApproval(approval, currentTimeMs = Date.now()) {
+  const parseResult = sourceApprovalSchema.safeParse(approval);
+  if (!parseResult.success) throw new ExternalSourceError("invalid");
+  if (Date.parse(parseResult.data.expiresAt) <= currentTimeMs)
     throw new ExternalSourceError("expired");
-  return t.data;
+  return parseResult.data;
 }
-function isSameContentHash(source, r) {
-  return fingerprintCanonicalValue(source) === fingerprintCanonicalValue(r);
+function isSameContentHash(source, otherSource) {
+  return (
+    fingerprintCanonicalValue(source) === fingerprintCanonicalValue(otherSource)
+  );
 }
 function validateExternalSourcePayload(snapshot, source) {
   if (snapshot && typeof snapshot == "object") {
@@ -2143,9 +2574,9 @@ function validateExternalSourcePayload(snapshot, source) {
     )
       throw new ExternalSourceError("limit");
   }
-  const t = sourceResultPayloadSchema.safeParse(snapshot);
-  if (!t.success) throw new ExternalSourceError("invalid");
-  const data = t.data;
+  const parseResult = sourceResultPayloadSchema.safeParse(snapshot);
+  if (!parseResult.success) throw new ExternalSourceError("invalid");
+  const data = parseResult.data;
   if (source && !isSameContentHash(data.source, source))
     throw new ExternalSourceError("schema");
   if (
@@ -2158,18 +2589,20 @@ function validateExternalSourcePayload(snapshot, source) {
   for (const row of data.rows) {
     if (row.length !== data.source.columns.length)
       throw new ExternalSourceError("schema");
-    row.forEach((a, s) => {
-      const d = data.source.columns[s];
+    row.forEach((cellValue, columnIndex) => {
+      const column = data.source.columns[columnIndex];
       if (
-        a === null
-          ? !d.nullable
-          : d.type === "date"
-            ? typeof a != "string" ||
-              !/^\d{4}-\d{2}-\d{2}$/.test(a) ||
-              !Number.isFinite(Date.parse(a)) ||
-              new Date(a).toISOString().slice(0, 10) !== a
-            : typeof a !==
-              { text: "string", number: "number", boolean: "boolean" }[d.type]
+        cellValue === null
+          ? !column.nullable
+          : column.type === "date"
+            ? typeof cellValue != "string" ||
+              !/^\d{4}-\d{2}-\d{2}$/.test(cellValue) ||
+              !Number.isFinite(Date.parse(cellValue)) ||
+              new Date(cellValue).toISOString().slice(0, 10) !== cellValue
+            : typeof cellValue !==
+              { text: "string", number: "number", boolean: "boolean" }[
+                column.type
+              ]
       )
         throw new ExternalSourceError("schema");
     });
@@ -2178,31 +2611,31 @@ function validateExternalSourcePayload(snapshot, source) {
 }
 function computeSourceControlTotals(snapshot) {
   return snapshot.source.controlFields.map((controlField) => {
-    const t = snapshot.source.columns.findIndex(
+    const controlColumnIndex = snapshot.source.columns.findIndex(
       (column) => column.name === controlField,
     );
-    let n = 0,
-      o = 0,
+    let total = 0,
+      compensation = 0,
       numeric = 0,
       blanks = 0;
     for (const row of snapshot.rows) {
-      if (row[t] === null) {
+      if (row[controlColumnIndex] === null) {
         blanks++;
         continue;
       }
-      const u = row[t] - o,
-        l = n + u;
+      const adjustedValue = row[controlColumnIndex] - compensation,
+        nextTotal = total + adjustedValue;
       if (
-        ((o = l - n - u),
-        (n = l),
+        ((compensation = nextTotal - total - adjustedValue),
+        (total = nextTotal),
         numeric++,
-        !Number.isFinite(n) || !Number.isFinite(o))
+        !Number.isFinite(total) || !Number.isFinite(compensation))
       )
         throw new ExternalSourceError("limit");
     }
     return {
       field: controlField,
-      sum: Object.is(n, -0) ? 0 : n,
+      sum: Object.is(total, -0) ? 0 : total,
       numeric: numeric,
       blanks: blanks,
     };
@@ -2232,27 +2665,28 @@ const sourceControlFieldSchema = strictObject({
     }),
     outputHash: sourceHashSchema,
   });
-function buildExternalSourceRefreshState(workbook, r) {
-  let t = 0,
-    n = 0;
-  for (const sheet of r.sheets) {
-    const s = workbook.sheets.find(
-      (l) => l.id === sheet.id,
+function buildExternalSourceRefreshState(workbook, report) {
+  let totalMetadataCharacters = 0,
+    sourceCount = 0;
+  for (const sheet of report.sheets) {
+    const externalConnection = workbook.sheets.find(
+      (workbookSheet) => workbookSheet.id === sheet.id,
     )?.externalConnection;
-    if (s === undefined) continue;
+    if (externalConnection === undefined) continue;
     if (
-      ++n > externalSourceLimits.sources ||
-      (t += JSON.stringify(s).length) > externalSourceLimits.metadataCharacters
+      ++sourceCount > externalSourceLimits.sources ||
+      (totalMetadataCharacters += JSON.stringify(externalConnection).length) >
+        externalSourceLimits.metadataCharacters
     )
       throw new ExternalSourceError("limit");
-    const d = sourceRefreshStateSchema.safeParse(s);
-    if (!d.success) throw new ExternalSourceError("invalid");
-    const data = d.data;
+    const parseResult = sourceRefreshStateSchema.safeParse(externalConnection);
+    if (!parseResult.success) throw new ExternalSourceError("invalid");
+    const data = parseResult.data;
     if (
       data.lastSuccess.controls.length !== data.source.controlFields.length ||
       data.lastSuccess.controls.some(
-        (control, c) =>
-          control.field !== data.source.controlFields[c] ||
+        (control, controlIndex) =>
+          control.field !== data.source.controlFields[controlIndex] ||
           control.numeric + control.blanks !== data.lastSuccess.rows,
       ) ||
       (data.lastSuccess.rows + 1) * data.source.columns.length >

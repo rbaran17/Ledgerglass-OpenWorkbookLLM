@@ -8,33 +8,44 @@ import {
   parseDateText,
 } from "./01-schemas-date-functions-and-validation.js";
 
-function solveRateCandidates(e, guess, t = financialSolverLimits.minRate) {
-  const n = Math.log1p(t),
-    o = Math.log1p(financialSolverLimits.maxRate),
-    a = Math.log1p(guess);
+function solveRateCandidates(
+  evaluateResidual,
+  guess,
+  minRate = financialSolverLimits.minRate,
+) {
+  const minLogRate = Math.log1p(minRate),
+    maxLogRate = Math.log1p(financialSolverLimits.maxRate),
+    guessLogRate = Math.log1p(guess);
   let evaluations = 0;
   const candidates = [],
-    u = (g) => {
+    evaluateLogRate = (probeLogRate) => {
       if (
-        g < n ||
-        g > o ||
-        !Number.isFinite(g) ||
+        probeLogRate < minLogRate ||
+        probeLogRate > maxLogRate ||
+        !Number.isFinite(probeLogRate) ||
         evaluations >= financialSolverLimits.evaluations
       )
         return;
       evaluations++;
-      const b = e(Math.expm1(g));
+      const residualPoint = evaluateResidual(Math.expm1(probeLogRate));
       if (!(
-        !Number.isFinite(b.value) ||
-        !Number.isFinite(b.scale) ||
-        b.scale <= 0
+        !Number.isFinite(residualPoint.value) ||
+        !Number.isFinite(residualPoint.scale) ||
+        residualPoint.scale <= 0
       ))
-        return { ...b, normalized: b.value / b.scale };
+        return {
+          ...residualPoint,
+          normalized: residualPoint.value / residualPoint.scale,
+        };
     },
-    l = (g, b) => {
-      if (!b || Math.abs(b.normalized) > financialSolverLimits.relativeResidual)
+    recordCandidate = (candidateLogRate, candidatePoint) => {
+      if (
+        !candidatePoint ||
+        Math.abs(candidatePoint.normalized) >
+          financialSolverLimits.relativeResidual
+      )
         return false;
-      const rate = Math.expm1(g);
+      const rate = Math.expm1(candidateLogRate);
       return (
         candidates.some(
           (candidate) =>
@@ -43,37 +54,58 @@ function solveRateCandidates(e, guess, t = financialSolverLimits.minRate) {
         ) ||
           candidates.push({
             rate: rate,
-            residual: b.value,
-            relativeResidual: Math.abs(b.normalized),
+            residual: candidatePoint.value,
+            relativeResidual: Math.abs(candidatePoint.normalized),
           }),
         true
       );
     };
-  if ([0, Math.log1p(0.1), Math.log1p(0.5)].map(u).every((g) => g?.value === 0))
+  if (
+    [0, Math.log1p(0.1), Math.log1p(0.5)]
+      .map(evaluateLogRate)
+      .every((evaluatedPoint) => evaluatedPoint?.value === 0)
+  )
     return {
       status: "indeterminate",
       candidates: candidates,
       evaluations: evaluations,
       exhaustive: false,
     };
-  let h = a;
-  for (let g = 0; g < 60; g++) {
-    const b = u(h);
-    if (!b || l(h, b)) break;
-    const y = 1e-5,
-      w = u(Math.max(n, h - y)),
-      E = u(Math.min(o, h + y));
-    if (!w || !E) break;
-    const A =
-      (E.normalized - w.normalized) / (Math.min(o, h + y) - Math.max(n, h - y));
-    if (!Number.isFinite(A) || Math.abs(A) < 1e-15) break;
-    const k = h - Math.max(-1, Math.min(1, b.normalized / A));
-    if (k < n || k > o || k === h) break;
-    h = k;
+  let currentLogRate = guessLogRate;
+  for (let iteration = 0; iteration < 60; iteration++) {
+    const currentPoint = evaluateLogRate(currentLogRate);
+    if (!currentPoint || recordCandidate(currentLogRate, currentPoint)) break;
+    const derivativeStep = 1e-5,
+      lowerPoint = evaluateLogRate(
+        Math.max(minLogRate, currentLogRate - derivativeStep),
+      ),
+      upperPoint = evaluateLogRate(
+        Math.min(maxLogRate, currentLogRate + derivativeStep),
+      );
+    if (!lowerPoint || !upperPoint) break;
+    const derivative =
+      (upperPoint.normalized - lowerPoint.normalized) /
+      (Math.min(maxLogRate, currentLogRate + derivativeStep) -
+        Math.max(minLogRate, currentLogRate - derivativeStep));
+    if (!Number.isFinite(derivative) || Math.abs(derivative) < 1e-15) break;
+    const nextLogRate =
+      currentLogRate -
+      Math.max(-1, Math.min(1, currentPoint.normalized / derivative));
+    if (
+      nextLogRate < minLogRate ||
+      nextLogRate > maxLogRate ||
+      nextLogRate === currentLogRate
+    )
+      break;
+    currentLogRate = nextLogRate;
   }
-  const f = [
+  const gridLogRates = [
     ...new Set([
-      ...Array.from({ length: 193 }, (g, b) => n + ((o - n) * b) / 192),
+      ...Array.from(
+        { length: 193 },
+        (g, gridIndex) =>
+          minLogRate + ((maxLogRate - minLogRate) * gridIndex) / 192,
+      ),
       ...[
         -0.9,
         -0.5,
@@ -93,43 +125,60 @@ function solveRateCandidates(e, guess, t = financialSolverLimits.minRate) {
         10,
         guess,
       ]
-        .filter((g) => g >= t)
+        .filter((candidateRate) => candidateRate >= minRate)
         .map(Math.log1p),
     ]),
-  ].sort((g, b) => g - b);
-  let p;
-  for (const g of f) {
-    const b = u(g);
-    if (!b) {
-      p = undefined;
+  ].sort((leftLogRate, rightLogRate) => leftLogRate - rightLogRate);
+  let previousSample;
+  for (const scanLogRate of gridLogRates) {
+    const scanPoint = evaluateLogRate(scanLogRate);
+    if (!scanPoint) {
+      previousSample = undefined;
       continue;
     }
-    if ((l(g, b), p && p.y.normalized * b.normalized < 0)) {
-      let y = p.x,
-        w = g,
-        normalized = p.y.normalized;
-      for (let A = 0; A < 100; A++) {
-        const k = (y + w) / 2,
-          F = u(k);
-        if (!F || l(k, F) || k === y || k === w) break;
-        normalized * F.normalized < 0
-          ? (w = k)
-          : ((y = k), (normalized = F.normalized));
+    if (
+      (recordCandidate(scanLogRate, scanPoint),
+      previousSample && previousSample.y.normalized * scanPoint.normalized < 0)
+    ) {
+      let bracketLowLogRate = previousSample.x,
+        bracketHighLogRate = scanLogRate,
+        normalized = previousSample.y.normalized;
+      for (let bisectionStep = 0; bisectionStep < 100; bisectionStep++) {
+        const midLogRate = (bracketLowLogRate + bracketHighLogRate) / 2,
+          midPoint = evaluateLogRate(midLogRate);
+        if (
+          !midPoint ||
+          recordCandidate(midLogRate, midPoint) ||
+          midLogRate === bracketLowLogRate ||
+          midLogRate === bracketHighLogRate
+        )
+          break;
+        normalized * midPoint.normalized < 0
+          ? (bracketHighLogRate = midLogRate)
+          : ((bracketLowLogRate = midLogRate),
+            (normalized = midPoint.normalized));
       }
     }
-    p = { x: g, y: b };
+    previousSample = { x: scanLogRate, y: scanPoint };
   }
-  candidates.sort((g, b) => g.rate - b.rate);
+  candidates.sort(
+    (leftCandidate, rightCandidate) => leftCandidate.rate - rightCandidate.rate,
+  );
   const selected = [...candidates].sort(
-      (g, b) =>
-        Math.abs(Math.log1p(g.rate) - a) - Math.abs(Math.log1p(b.rate) - a),
+      (firstCandidate, secondCandidate) =>
+        Math.abs(Math.log1p(firstCandidate.rate) - guessLogRate) -
+        Math.abs(Math.log1p(secondCandidate.rate) - guessLogRate),
     )[0],
-    v = evaluations >= financialSolverLimits.evaluations;
+    isEvaluationLimitReached = evaluations >= financialSolverLimits.evaluations;
   return {
-    ...(selected && !v ? { selected: selected } : {}),
+    ...(selected && !isEvaluationLimitReached ? { selected: selected } : {}),
     candidates: candidates,
     evaluations: evaluations,
-    status: v ? "limit" : selected ? "converged" : "no-convergence",
+    status: isEvaluationLimitReached
+      ? "limit"
+      : selected
+        ? "converged"
+        : "no-convergence",
     exhaustive: false,
   };
 }
@@ -178,133 +227,191 @@ const supportedFinancialFunctionNames = [
     ACCRINT: [6, 8],
     ACCRINTM: [4, 5],
   },
-  flattenNestedValues = (e) =>
-    Array.isArray(e) ? e.flatMap(flattenNestedValues) : [e],
-  compensatedSum = (e) => {
-    let r = 0,
-      t = 0;
-    for (const n of e) {
-      const o = n - t,
-        a = r + o;
-      ((t = a - r - o), (r = a));
+  flattenNestedValues = (nestedValue) =>
+    Array.isArray(nestedValue)
+      ? nestedValue.flatMap(flattenNestedValues)
+      : [nestedValue],
+  compensatedSum = (values) => {
+    let sum = 0,
+      compensation = 0;
+    for (const value of values) {
+      const correctedValue = value - compensation,
+        nextSum = sum + correctedValue;
+      ((compensation = nextSum - sum - correctedValue), (sum = nextSum));
     }
-    return r;
+    return sum;
   },
-  countSignChanges = (e) => {
-    const r = e.filter((t) => t !== 0).map(Math.sign);
-    return r.slice(1).filter((t, n) => t !== r[n]).length;
+  countSignChanges = (values) => {
+    const signs = values.filter((value) => value !== 0).map(Math.sign);
+    return signs.slice(1).filter((sign, signIndex) => sign !== signs[signIndex])
+      .length;
   };
-function evaluateFinancialFunction(functionName, r, t) {
+function evaluateFinancialFunction(functionName, argumentNodes, context) {
   if (!supportedFinancialFunctionNames.includes(functionName))
     return notFinancialSentinel;
   let convention =
       "Cash paid out is negative; cash received is positive. Rates and periods must use the same interval. No automatic cent rounding.",
-    o = false;
-  const dateSystem = t.clock.dateSystem,
-    s = (k, F, I) => dateToSerial(k, F, I, dateSystem),
-    d = (k) => serialToDateParts(k, dateSystem),
-    u = (k) => {
-      ((o = true),
-        t.report?.({
+    hasReported = false;
+  const dateSystem = context.clock.dateSystem,
+    toDateSerial = (year, month, day) =>
+      dateToSerial(year, month, day, dateSystem),
+    toDateParts = (serial) => serialToDateParts(serial, dateSystem),
+    reportCalculation = (details) => {
+      ((hasReported = true),
+        context.report?.({
           functionName: functionName,
           convention: convention,
-          ...k,
+          ...details,
         }));
     },
-    l = (k, F) => {
-      throw (u({ status: "error", error: k, message: F }), t.issue(k));
+    throwFinancialError = (errorCode, errorMessage) => {
+      throw (
+        reportCalculation({
+          status: "error",
+          error: errorCode,
+          message: errorMessage,
+        }),
+        context.issue(errorCode)
+      );
     },
-    c = (k) =>
-      Number.isFinite(k)
-        ? k
-        : l(
+    ensureFinite = (numericValue) =>
+      Number.isFinite(numericValue)
+        ? numericValue
+        : throwFinancialError(
             "#NUM!",
             "The financial equation overflowed or has no finite result. Review rates, signs and periods.",
           ),
-    h = (k) => {
-      if (t.isIssue(k)) throw k;
-      return Array.isArray(k)
-        ? k.length === 1
-          ? h(k[0])
-          : l("#VALUE!", "A scalar argument must contain exactly one value.")
-        : k;
+    toScalar = (argument) => {
+      if (context.isIssue(argument)) throw argument;
+      return Array.isArray(argument)
+        ? argument.length === 1
+          ? toScalar(argument[0])
+          : throwFinancialError(
+              "#VALUE!",
+              "A scalar argument must contain exactly one value.",
+            )
+        : argument;
     },
-    f = (k, F) => (
-      (k = h(k)),
-      k == null
-        ? (F ?? 0)
-        : typeof k == "boolean"
-          ? Number(k)
-          : typeof k != "number" &&
-              (typeof k != "string" ||
-                !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(k))
-            ? l(
+    toFinancialNumber = (inputValue, fallbackValue) => (
+      (inputValue = toScalar(inputValue)),
+      inputValue == null
+        ? (fallbackValue ?? 0)
+        : typeof inputValue == "boolean"
+          ? Number(inputValue)
+          : typeof inputValue != "number" &&
+              (typeof inputValue != "string" ||
+                !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(
+                  inputValue,
+                ))
+            ? throwFinancialError(
                 "#VALUE!",
                 "Expected a finite number; nonnumeric text cannot be used as a financial input.",
               )
-            : c(Number(k))
+            : ensureFinite(Number(inputValue))
     ),
-    p = (k) => {
-      if (((k = h(k)), k == null || typeof k == "boolean"))
-        return l(
+    toCashFlowDate = (dateInput) => {
+      if (
+        ((dateInput = toScalar(dateInput)),
+        dateInput == null || typeof dateInput == "boolean")
+      )
+        return throwFinancialError(
           "#VALUE!",
           "A cash-flow or security date is missing or is not a date.",
         );
-      const F = typeof k == "string" ? parseDateText(k, t.clock) : f(k);
-      return F === undefined ||
-        F < (dateSystem === "1904" ? 0 : 1) ||
-        F >= dateSystemMaxSerial(dateSystem) + 1
-        ? l(
+      const serialValue =
+        typeof dateInput == "string"
+          ? parseDateText(dateInput, context.clock)
+          : toFinancialNumber(dateInput);
+      return serialValue === undefined ||
+        serialValue < (dateSystem === "1904" ? 0 : 1) ||
+        serialValue >= dateSystemMaxSerial(dateSystem) + 1
+        ? throwFinancialError(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
           )
-        : Math.floor(F);
+        : Math.floor(serialValue);
     },
-    m = (k) => (
-      k <= 0 && l("#NUM!", "Periods must be greater than zero."),
-      k > financialSolverLimits.periods &&
-        l("#LIMIT!", "Financial periods exceed the 10000-period budget."),
-      k
+    validatePeriods = (periodCount) => (
+      periodCount <= 0 &&
+        throwFinancialError("#NUM!", "Periods must be greater than zero."),
+      periodCount > financialSolverLimits.periods &&
+        throwFinancialError(
+          "#LIMIT!",
+          "Financial periods exceed the 10000-period budget.",
+        ),
+      periodCount
     ),
-    v = (k) =>
-      k > -1 ? k : l("#NUM!", "The rate must be greater than -100%."),
-    g = (k) =>
-      [0, 1].includes(k)
-        ? k
-        : l("#NUM!", "Payment timing must be 0 (end) or 1 (beginning)."),
-    b = (k, F) => Math.exp(F * Math.log1p(k)),
-    y = (k, F) => (k === 0 ? F : Math.expm1(F * Math.log1p(k)) / k),
-    w = (k, F, I, O, j) => -(I * b(k, F) + O) / ((1 + k * j) * y(k, F)),
-    E = (k, F = false) => {
-      const I = flattenNestedValues(k);
-      I.length > financialSolverLimits.cashFlows &&
-        l("#LIMIT!", "Cash-flow input exceeds 10000 positions.");
-      const O = [];
-      for (const j of I) {
-        if (t.isIssue(j)) throw j;
-        typeof j == "number"
-          ? O.push(c(j))
-          : F &&
-            l(
+    validateRate = (rateValue) =>
+      rateValue > -1
+        ? rateValue
+        : throwFinancialError("#NUM!", "The rate must be greater than -100%."),
+    validateTiming = (timingValue) =>
+      [0, 1].includes(timingValue)
+        ? timingValue
+        : throwFinancialError(
+            "#NUM!",
+            "Payment timing must be 0 (end) or 1 (beginning).",
+          ),
+    growthFactor = (compoundRate, elapsedPeriods) =>
+      Math.exp(elapsedPeriods * Math.log1p(compoundRate)),
+    annuityFactor = (annuityRate, annuityPeriods) =>
+      annuityRate === 0
+        ? annuityPeriods
+        : Math.expm1(annuityPeriods * Math.log1p(annuityRate)) / annuityRate,
+    paymentAmount = (
+      paymentRate,
+      paymentPeriods,
+      presentValue,
+      futureValue,
+      paymentTiming,
+    ) =>
+      -(
+        presentValue * growthFactor(paymentRate, paymentPeriods) +
+        futureValue
+      ) /
+      ((1 + paymentRate * paymentTiming) *
+        annuityFactor(paymentRate, paymentPeriods)),
+    collectCashFlows = (cashFlowInput, shouldRequireDates = false) => {
+      const flatValues = flattenNestedValues(cashFlowInput);
+      flatValues.length > financialSolverLimits.cashFlows &&
+        throwFinancialError(
+          "#LIMIT!",
+          "Cash-flow input exceeds 10000 positions.",
+        );
+      const cashFlows = [];
+      for (const flatValue of flatValues) {
+        if (context.isIssue(flatValue)) throw flatValue;
+        typeof flatValue == "number"
+          ? cashFlows.push(ensureFinite(flatValue))
+          : shouldRequireDates &&
+            throwFinancialError(
               "#VALUE!",
               "Dated cash flows require one numeric amount for every date; blanks, booleans and text cannot be silently removed.",
             );
       }
       return (
-        O.length || l("#NUM!", "No numeric cash flows were supplied."),
-        O
+        cashFlows.length ||
+          throwFinancialError("#NUM!", "No numeric cash flows were supplied."),
+        cashFlows
       );
     },
-    A = (k, guess, signChanges, O) => {
-      (guess < (O ?? financialSolverLimits.minRate) ||
+    solveRate = (residualFunction, guess, signChanges, lowerRateBound) => {
+      (guess < (lowerRateBound ?? financialSolverLimits.minRate) ||
         guess > financialSolverLimits.maxRate) &&
-        l("#NUM!", "The rate guess is outside the supported search interval.");
-      const solver = solveRateCandidates(k, guess, O),
-        z = solver.status === "limit" ? "#LIMIT!" : "#NUM!";
+        throwFinancialError(
+          "#NUM!",
+          "The rate guess is outside the supported search interval.",
+        );
+      const solver = solveRateCandidates(
+          residualFunction,
+          guess,
+          lowerRateBound,
+        ),
+        failureCode = solver.status === "limit" ? "#LIMIT!" : "#NUM!";
       if (
-        (u({
+        (reportCalculation({
           status: solver.selected ? "converged" : "error",
-          ...(solver.selected ? {} : { error: z }),
+          ...(solver.selected ? {} : { error: failureCode }),
           guess: guess,
           signChanges: signChanges,
           solver: solver,
@@ -316,358 +423,567 @@ function evaluateFinancialFunction(functionName, r, t) {
         }),
         !solver.selected)
       )
-        throw t.issue(z);
+        throw context.issue(failureCode);
       return solver.selected.rate;
     };
   try {
-    const [k, F] = financialArgumentRanges[functionName];
-    (r.length < k || r.length > F) &&
-      l("#VALUE!", `${functionName} requires ${k}–${F} arguments.`);
-    const I = r.map(t.retrieve);
-    let O;
+    const [minArgs, maxArgs] = financialArgumentRanges[functionName];
+    (argumentNodes.length < minArgs || argumentNodes.length > maxArgs) &&
+      throwFinancialError(
+        "#VALUE!",
+        `${functionName} requires ${minArgs}–${maxArgs} arguments.`,
+      );
+    const argumentValues = argumentNodes.map(context.retrieve);
+    let financialResult;
     if (
       ["PV", "FV", "PMT", "IPMT", "PPMT", "RATE", "NPER"].includes(functionName)
     )
       if (functionName === "RATE") {
-        const j = m(f(I[0])),
-          z = f(I[1]),
-          V = f(I[2]),
-          D = f(I[3]),
-          B = g(f(I[4]));
-        ([V, z, D].every((_) => _ === 0) &&
-          l("#NUM!", "All amounts are zero; no rate can be determined."),
-          (O = A(
-            (_) => {
-              const C = [V * b(_, j), z * (1 + _ * B) * y(_, j), D];
+        const ratePeriods = validatePeriods(
+            toFinancialNumber(argumentValues[0]),
+          ),
+          ratePayment = toFinancialNumber(argumentValues[1]),
+          pvAmount = toFinancialNumber(argumentValues[2]),
+          fvAmount = toFinancialNumber(argumentValues[3]),
+          rateTiming = validateTiming(toFinancialNumber(argumentValues[4]));
+        ([pvAmount, ratePayment, fvAmount].every((amount) => amount === 0) &&
+          throwFinancialError(
+            "#NUM!",
+            "All amounts are zero; no rate can be determined.",
+          ),
+          (financialResult = solveRate(
+            (candidateRate) => {
+              const residualTerms = [
+                pvAmount * growthFactor(candidateRate, ratePeriods),
+                ratePayment *
+                  (1 + candidateRate * rateTiming) *
+                  annuityFactor(candidateRate, ratePeriods),
+                fvAmount,
+              ];
               return {
-                value: compensatedSum(C),
-                scale: compensatedSum(C.map(Math.abs)),
+                value: compensatedSum(residualTerms),
+                scale: compensatedSum(residualTerms.map(Math.abs)),
               };
             },
-            f(I[5], 0.1),
+            toFinancialNumber(argumentValues[5], 0.1),
           )));
       } else if (functionName === "NPER") {
-        const j = v(f(I[0])),
-          z = f(I[1]),
-          V = f(I[2]),
-          D = f(I[3]),
-          B = g(f(I[4]));
-        if (j === 0)
-          (z === 0 &&
-            l(
+        const periodicRate = validateRate(toFinancialNumber(argumentValues[0])),
+          nperPayment = toFinancialNumber(argumentValues[1]),
+          nperPresentValue = toFinancialNumber(argumentValues[2]),
+          nperFutureValue = toFinancialNumber(argumentValues[3]),
+          nperTiming = validateTiming(toFinancialNumber(argumentValues[4]));
+        if (periodicRate === 0)
+          (nperPayment === 0 &&
+            throwFinancialError(
               "#DIV/0!",
               "Zero rate and zero payment cannot determine a period count.",
             ),
-            (O = -(V + D) / z));
+            (financialResult =
+              -(nperPresentValue + nperFutureValue) / nperPayment));
         else {
-          const _ = z * (1 + j * B),
-            C = (_ - D * j) / (V * j + _);
-          (C > 0 ||
-            l(
+          const paymentTerm = nperPayment * (1 + periodicRate * nperTiming),
+            logRatio =
+              (paymentTerm - nperFutureValue * periodicRate) /
+              (nperPresentValue * periodicRate + paymentTerm);
+          (logRatio > 0 ||
+            throwFinancialError(
               "#NUM!",
               "Cash-flow signs or payment size do not produce a finite real period count.",
             ),
-            (O = Math.log(C) / Math.log1p(j)));
+            (financialResult = Math.log(logRatio) / Math.log1p(periodicRate)));
         }
-        m(O);
+        validatePeriods(financialResult);
       } else if (functionName === "IPMT" || functionName === "PPMT") {
-        const j = v(f(I[0])),
-          z = f(I[1]),
-          V = m(f(I[2])),
-          D = f(I[3]),
-          B = f(I[4]),
-          _ = g(f(I[5]));
-        (z < 1 || z > V || !Number.isInteger(z)) &&
-          l(
+        const interestRate = validateRate(toFinancialNumber(argumentValues[0])),
+          period = toFinancialNumber(argumentValues[1]),
+          totalPeriods = validatePeriods(toFinancialNumber(argumentValues[2])),
+          loanPresentValue = toFinancialNumber(argumentValues[3]),
+          loanFutureValue = toFinancialNumber(argumentValues[4]),
+          ipmtTiming = validateTiming(toFinancialNumber(argumentValues[5]));
+        (period < 1 || period > totalPeriods || !Number.isInteger(period)) &&
+          throwFinancialError(
             "#NUM!",
             "Interest/principal period must be an integer from 1 through nper.",
           );
-        const C = w(j, V, D, B, _),
-          T =
-            _ && z === 1
+        const periodicPayment = paymentAmount(
+            interestRate,
+            totalPeriods,
+            loanPresentValue,
+            loanFutureValue,
+            ipmtTiming,
+          ),
+          interestPart =
+            ipmtTiming && period === 1
               ? 0
-              : (-(D * b(j, z - 1) + C * (1 + j * _) * y(j, z - 1)) * j) /
-                (1 + j * _);
-        O = functionName === "IPMT" ? T : C - T;
+              : (-(
+                  loanPresentValue * growthFactor(interestRate, period - 1) +
+                  periodicPayment *
+                    (1 + interestRate * ipmtTiming) *
+                    annuityFactor(interestRate, period - 1)
+                ) *
+                  interestRate) /
+                (1 + interestRate * ipmtTiming);
+        financialResult =
+          functionName === "IPMT"
+            ? interestPart
+            : periodicPayment - interestPart;
       } else {
-        const j = v(f(I[0])),
-          z = m(f(I[1])),
-          V = f(I[2]),
-          D = f(I[3]),
-          B = g(f(I[4]));
-        O =
+        const pmtRate = validateRate(toFinancialNumber(argumentValues[0])),
+          pmtPeriods = validatePeriods(toFinancialNumber(argumentValues[1])),
+          pmtPresentValue = toFinancialNumber(argumentValues[2]),
+          pmtFutureValue = toFinancialNumber(argumentValues[3]),
+          pmtTiming = validateTiming(toFinancialNumber(argumentValues[4]));
+        financialResult =
           functionName === "PMT"
-            ? w(j, z, V, D, B)
+            ? paymentAmount(
+                pmtRate,
+                pmtPeriods,
+                pmtPresentValue,
+                pmtFutureValue,
+                pmtTiming,
+              )
             : functionName === "FV"
-              ? -(D * b(j, z) + V * (1 + j * B) * y(j, z))
-              : -(D + V * (1 + j * B) * y(j, z)) / b(j, z);
+              ? -(
+                  pmtFutureValue * growthFactor(pmtRate, pmtPeriods) +
+                  pmtPresentValue *
+                    (1 + pmtRate * pmtTiming) *
+                    annuityFactor(pmtRate, pmtPeriods)
+                )
+              : -(
+                  pmtFutureValue +
+                  pmtPresentValue *
+                    (1 + pmtRate * pmtTiming) *
+                    annuityFactor(pmtRate, pmtPeriods)
+                ) / growthFactor(pmtRate, pmtPeriods);
       }
     else if (["NPV", "XNPV", "IRR", "XIRR", "MIRR"].includes(functionName)) {
-      const j = functionName.startsWith("X"),
-        z = functionName === "IRR" || functionName === "XIRR",
-        V = E(
+      const isDated = functionName.startsWith("X"),
+        isIrrFunction = functionName === "IRR" || functionName === "XIRR",
+        numericCashFlows = collectCashFlows(
           functionName === "NPV"
-            ? I.slice(1)
-            : I[z || functionName === "MIRR" ? 0 : 1],
-          j,
+            ? argumentValues.slice(1)
+            : argumentValues[isIrrFunction || functionName === "MIRR" ? 0 : 1],
+          isDated,
         );
-      let D = V.map((_, C) => C + (functionName === "NPV" ? 1 : 0));
-      if (j) {
-        const _ = flattenNestedValues(I[z ? 1 : 2]);
-        _.length !== V.length &&
-          l("#NUM!", "Every cash-flow amount must have exactly one date.");
-        const C = _.map(p);
-        (C.some((T) => T < C[0]) &&
-          l("#NUM!", "A cash-flow date precedes the first cash-flow date."),
-          (D = C.map((T) => (T - C[0]) / 365)),
+      let timePositions = numericCashFlows.map(
+        (_, periodIndex) => periodIndex + (functionName === "NPV" ? 1 : 0),
+      );
+      if (isDated) {
+        const dateValues = flattenNestedValues(
+          argumentValues[isIrrFunction ? 1 : 2],
+        );
+        dateValues.length !== numericCashFlows.length &&
+          throwFinancialError(
+            "#NUM!",
+            "Every cash-flow amount must have exactly one date.",
+          );
+        const dateSerials = dateValues.map(toCashFlowDate);
+        (dateSerials.some((serialEntry) => serialEntry < dateSerials[0]) &&
+          throwFinancialError(
+            "#NUM!",
+            "A cash-flow date precedes the first cash-flow date.",
+          ),
+          (timePositions = dateSerials.map(
+            (dateEntry) => (dateEntry - dateSerials[0]) / 365,
+          )),
           (convention =
             "Dated cash flows use truncated Gregorian/workbook-system dates and actual elapsed days / 365, including leap years. The first date is time zero; later dates may be unsorted or repeated. One numeric amount per date."));
       } else
         convention =
           "Periodic cash-flow positions are equally spaced. NPV starts at period 1; IRR/MIRR start at period 0. Numeric zeros retain a period; blanks, text and booleans in cash-flow lists are ignored. No automatic cent rounding.";
-      const B = (_) => {
-        const C = V.map((T, N) => T / Math.exp(D[N] * Math.log1p(_)));
+      const npvResidual = (trialRate) => {
+        const discountedTerms = numericCashFlows.map(
+          (flowValue, flowIndex) =>
+            flowValue /
+            Math.exp(timePositions[flowIndex] * Math.log1p(trialRate)),
+        );
         return {
-          value: compensatedSum(C),
-          scale: compensatedSum(C.map(Math.abs)),
+          value: compensatedSum(discountedTerms),
+          scale: compensatedSum(discountedTerms.map(Math.abs)),
         };
       };
-      if (z || functionName === "MIRR")
+      if (isIrrFunction || functionName === "MIRR")
         if (
-          ((!V.some((_) => _ < 0) || !V.some((_) => _ > 0)) &&
-            l(
+          ((!numericCashFlows.some((cashFlowAmount) => cashFlowAmount < 0) ||
+            !numericCashFlows.some((cashFlowToCheck) => cashFlowToCheck > 0)) &&
+            throwFinancialError(
               "#NUM!",
               "At least one positive and one negative cash flow are required.",
             ),
           functionName === "MIRR")
         ) {
-          const _ = v(f(I[1])),
-            C = v(f(I[2])),
-            T = V.length - 1,
-            N = compensatedSum(
-              V.map((L, $) => (L < 0 ? L / Math.exp($ * Math.log1p(_)) : 0)),
+          const financeRate = validateRate(
+              toFinancialNumber(argumentValues[1]),
             ),
-            R = compensatedSum(
-              V.map((L, $) =>
-                L > 0 ? L * Math.exp((T - $) * Math.log1p(C)) : 0,
+            reinvestRate = validateRate(toFinancialNumber(argumentValues[2])),
+            lastPeriod = numericCashFlows.length - 1,
+            negativePresentValue = compensatedSum(
+              numericCashFlows.map((cashFlow, flowPeriod) =>
+                cashFlow < 0
+                  ? cashFlow / Math.exp(flowPeriod * Math.log1p(financeRate))
+                  : 0,
+              ),
+            ),
+            positiveFutureValue = compensatedSum(
+              numericCashFlows.map((laterFlow, laterPeriod) =>
+                laterFlow > 0
+                  ? laterFlow *
+                    Math.exp(
+                      (lastPeriod - laterPeriod) * Math.log1p(reinvestRate),
+                    )
+                  : 0,
               ),
             );
-          O = Math.expm1(Math.log(-R / N) / T);
-        } else O = A(B, f(I[j ? 2 : 1], 0.1), countSignChanges(V));
-      else O = B(v(f(I[0]))).value;
+          financialResult = Math.expm1(
+            Math.log(-positiveFutureValue / negativePresentValue) / lastPeriod,
+          );
+        } else
+          financialResult = solveRate(
+            npvResidual,
+            toFinancialNumber(argumentValues[isDated ? 2 : 1], 0.1),
+            countSignChanges(numericCashFlows),
+          );
+      else
+        financialResult = npvResidual(
+          validateRate(toFinancialNumber(argumentValues[0])),
+        ).value;
     } else if (["SLN", "SYD", "DB", "DDB"].includes(functionName)) {
-      const j = f(I[0]),
-        z = f(I[1]),
-        V = m(f(I[2]));
+      const assetCost = toFinancialNumber(argumentValues[0]),
+        salvageValue = toFinancialNumber(argumentValues[1]),
+        usefulLife = validatePeriods(toFinancialNumber(argumentValues[2]));
       if (
         ((convention =
           "Depreciation uses matching life/period units and no automatic cent rounding. DB rounds its fixed rate to three decimals and prorates first/last years; DDB does not switch to straight line."),
-        (j < 0 || z < 0) && l("#NUM!", "Cost and salvage must be nonnegative."),
+        (assetCost < 0 || salvageValue < 0) &&
+          throwFinancialError("#NUM!", "Cost and salvage must be nonnegative."),
         functionName === "SLN")
       )
-        O = (j - z) / V;
+        financialResult = (assetCost - salvageValue) / usefulLife;
       else {
-        const D = f(I[3]);
+        const depreciationPeriod = toFinancialNumber(argumentValues[3]);
         if (
-          ((D < 1 ||
-            D > V + (functionName === "DB" ? 1 : 0) ||
-            !Number.isInteger(D)) &&
-            l(
+          ((depreciationPeriod < 1 ||
+            depreciationPeriod > usefulLife + (functionName === "DB" ? 1 : 0) ||
+            !Number.isInteger(depreciationPeriod)) &&
+            throwFinancialError(
               "#NUM!",
               "Depreciation period must be a supported whole period within asset life (plus DB partial final year).",
             ),
           functionName === "SYD")
         )
-          O = ((j - z) * (V - D + 1) * 2) / (V * (V + 1));
+          financialResult =
+            ((assetCost - salvageValue) *
+              (usefulLife - depreciationPeriod + 1) *
+              2) /
+            (usefulLife * (usefulLife + 1));
         else if (functionName === "DB") {
-          const B = f(I[4], 12);
+          const firstYearMonths = toFinancialNumber(argumentValues[4], 12);
           if (
-            ((!Number.isInteger(V) ||
-              B < 1 ||
-              B > 12 ||
-              !Number.isInteger(B) ||
-              D > V + (B < 12 ? 1 : 0)) &&
-              l(
+            ((!Number.isInteger(usefulLife) ||
+              firstYearMonths < 1 ||
+              firstYearMonths > 12 ||
+              !Number.isInteger(firstYearMonths) ||
+              depreciationPeriod >
+                usefulLife + (firstYearMonths < 12 ? 1 : 0)) &&
+              throwFinancialError(
                 "#NUM!",
                 "DB requires whole life/period and 1–12 first-year months; a partial first year permits one partial final year.",
               ),
-            j === 0 || z >= j)
+            assetCost === 0 || salvageValue >= assetCost)
           )
-            O = 0;
+            financialResult = 0;
           else {
-            const _ = Math.round((1 - (z / j) ** (1 / V)) * 1e3) / 1e3;
-            let C = j;
-            O = 0;
-            for (let T = 1; T <= D; T++)
-              ((O = C * _ * (T === 1 ? B / 12 : T > V ? (12 - B) / 12 : 1)),
-                (C -= O));
+            const dbRate =
+              Math.round(
+                (1 - (salvageValue / assetCost) ** (1 / usefulLife)) * 1e3,
+              ) / 1e3;
+            let remainingCost = assetCost;
+            financialResult = 0;
+            for (
+              let depreciationYear = 1;
+              depreciationYear <= depreciationPeriod;
+              depreciationYear++
+            )
+              ((financialResult =
+                remainingCost *
+                dbRate *
+                (depreciationYear === 1
+                  ? firstYearMonths / 12
+                  : depreciationYear > usefulLife
+                    ? (12 - firstYearMonths) / 12
+                    : 1)),
+                (remainingCost -= financialResult));
           }
         } else {
-          const B = f(I[4], 2);
-          B <= 0 && l("#NUM!", "DDB factor must be greater than zero.");
-          let _ = j;
-          O = 0;
-          for (let C = 1; C <= D; C++)
-            ((O = Math.max(0, Math.min((_ * B) / V, _ - z))), (_ -= O));
+          const decliningFactor = toFinancialNumber(argumentValues[4], 2);
+          decliningFactor <= 0 &&
+            throwFinancialError(
+              "#NUM!",
+              "DDB factor must be greater than zero.",
+            );
+          let bookValue = assetCost;
+          financialResult = 0;
+          for (let yearIndex = 1; yearIndex <= depreciationPeriod; yearIndex++)
+            ((financialResult = Math.max(
+              0,
+              Math.min(
+                (bookValue * decliningFactor) / usefulLife,
+                bookValue - salvageValue,
+              ),
+            )),
+              (bookValue -= financialResult));
         }
       }
     } else {
-      const j =
+      const basisIndex =
           functionName === "ACCRINT" ? 6 : functionName === "ACCRINTM" ? 4 : 6,
-        z = Math.trunc(f(I[j]));
-      ([0, 1, 2, 3, 4].includes(z) ||
-        l(
+        dayCountBasis = Math.trunc(
+          toFinancialNumber(argumentValues[basisIndex]),
+        );
+      ([0, 1, 2, 3, 4].includes(dayCountBasis) ||
+        throwFinancialError(
           "#NUM!",
           "Day-count basis must be 0 (US 30/360), 1 (actual/actual), 2 (actual/360), 3 (actual/365), or 4 (European 30/360).",
         ),
-        (convention = `Security basis ${z}; annual coupon/yield rates, regular maturity-anchored coupons at frequency 1/2/4, end-of-month anchoring. PRICE/YIELD are per 100 face value. Gregorian/workbook-system dates; no business-day adjustment or automatic rounding.`));
-      const V = (C, T) =>
-          z === 0 || z === 4
-            ? evaluateDateFunction("DAYS360", [C, T, z === 4], {
-                ...t,
-                retrieve: (N) => N,
-              })
-            : T - C,
-        D = (C, T, N) => (z === 1 ? T - C : (z === 3 ? 365 : 360) / N),
-        B = (C) => {
-          const T = Math.trunc(f(C));
-          return [1, 2, 4].includes(T)
-            ? T
-            : l("#NUM!", "Coupon frequency must be 1, 2 or 4.");
+        (convention = `Security basis ${dayCountBasis}; annual coupon/yield rates, regular maturity-anchored coupons at frequency 1/2/4, end-of-month anchoring. PRICE/YIELD are per 100 face value. Gregorian/workbook-system dates; no business-day adjustment or automatic rounding.`));
+      const daysBetween = (startDate, endDate) =>
+          dayCountBasis === 0 || dayCountBasis === 4
+            ? evaluateDateFunction(
+                "DAYS360",
+                [startDate, endDate, dayCountBasis === 4],
+                {
+                  ...context,
+                  retrieve: (rawValue) => rawValue,
+                },
+              )
+            : endDate - startDate,
+        couponPeriodLength = (periodStart, periodEnd, periodsPerYear) =>
+          dayCountBasis === 1
+            ? periodEnd - periodStart
+            : (dayCountBasis === 3 ? 365 : 360) / periodsPerYear,
+        readFrequency = (frequencyInput) => {
+          const frequency = Math.trunc(toFinancialNumber(frequencyInput));
+          return [1, 2, 4].includes(frequency)
+            ? frequency
+            : throwFinancialError(
+                "#NUM!",
+                "Coupon frequency must be 1, 2 or 4.",
+              );
         },
-        _ = (C, T) => {
-          const N = d(C),
-            R = N.year * 12 + N.month - 1 + T,
-            L = Math.floor(R / 12),
-            $ = (((R % 12) + 12) % 12) + 1;
-          return s(
-            L,
-            $,
-            N.day === daysInExcelMonth(N.year, N.month)
-              ? daysInExcelMonth(L, $)
-              : Math.min(N.day, daysInExcelMonth(L, $)),
+        addMonths = (anchorSerial, monthOffset) => {
+          const dateParts = toDateParts(anchorSerial),
+            totalMonths =
+              dateParts.year * 12 + dateParts.month - 1 + monthOffset,
+            targetYear = Math.floor(totalMonths / 12),
+            targetMonth = (((totalMonths % 12) + 12) % 12) + 1;
+          return toDateSerial(
+            targetYear,
+            targetMonth,
+            dateParts.day === daysInExcelMonth(dateParts.year, dateParts.month)
+              ? daysInExcelMonth(targetYear, targetMonth)
+              : Math.min(
+                  dateParts.day,
+                  daysInExcelMonth(targetYear, targetMonth),
+                ),
           );
         };
       if (functionName === "PRICE" || functionName === "YIELD") {
-        const C = p(I[0]),
-          T = p(I[1]),
-          N = f(I[2]),
-          R = f(I[3]),
-          L = f(I[4]),
-          $ = B(I[5]);
-        (C >= T ||
-          N < 0 ||
-          L <= 0 ||
-          R < 0 ||
-          (functionName === "YIELD" && R === 0)) &&
-          l(
+        const priceSettlementSerial = toCashFlowDate(argumentValues[0]),
+          priceMaturitySerial = toCashFlowDate(argumentValues[1]),
+          couponRate = toFinancialNumber(argumentValues[2]),
+          yieldRate = toFinancialNumber(argumentValues[3]),
+          redemptionValue = toFinancialNumber(argumentValues[4]),
+          couponFrequency = readFrequency(argumentValues[5]);
+        (priceSettlementSerial >= priceMaturitySerial ||
+          couponRate < 0 ||
+          redemptionValue <= 0 ||
+          yieldRate < 0 ||
+          (functionName === "YIELD" && yieldRate === 0)) &&
+          throwFinancialError(
             "#NUM!",
             "Require settlement before maturity, nonnegative coupon/yield, and positive redemption/price.",
           );
-        let U = 1,
-          G = _(T, -12 / $);
-        for (; G > C;)
-          (U >= financialSolverLimits.couponPeriods &&
-            l("#LIMIT!", "Security exceeds 1000 coupon periods."),
-            U++,
-            (G = _(T, (-U * 12) / $)));
-        const H = _(T, (-(U - 1) * 12) / $),
-          Q = D(G, H, $),
-          X = V(G, C),
-          J = z === 0 || z === 4 ? Q - X : V(C, H),
-          q = J / Q,
-          W = (100 * N) / $,
-          K = (te) =>
-            U === 1
-              ? (L + W) / (1 + (te / $) * q) - (W * X) / Q
+        let couponCount = 1,
+          previousCouponSerial = addMonths(
+            priceMaturitySerial,
+            -12 / couponFrequency,
+          );
+        for (; previousCouponSerial > priceSettlementSerial;)
+          (couponCount >= financialSolverLimits.couponPeriods &&
+            throwFinancialError(
+              "#LIMIT!",
+              "Security exceeds 1000 coupon periods.",
+            ),
+            couponCount++,
+            (previousCouponSerial = addMonths(
+              priceMaturitySerial,
+              (-couponCount * 12) / couponFrequency,
+            )));
+        const nextCouponSerial = addMonths(
+            priceMaturitySerial,
+            (-(couponCount - 1) * 12) / couponFrequency,
+          ),
+          couponPeriodDays = couponPeriodLength(
+            previousCouponSerial,
+            nextCouponSerial,
+            couponFrequency,
+          ),
+          accruedDays = daysBetween(
+            previousCouponSerial,
+            priceSettlementSerial,
+          ),
+          daysRemaining =
+            dayCountBasis === 0 || dayCountBasis === 4
+              ? couponPeriodDays - accruedDays
+              : daysBetween(priceSettlementSerial, nextCouponSerial),
+          fractionRemaining = daysRemaining / couponPeriodDays,
+          couponPayment = (100 * couponRate) / couponFrequency,
+          priceForYield = (candidateYield) =>
+            couponCount === 1
+              ? (redemptionValue + couponPayment) /
+                  (1 + (candidateYield / couponFrequency) * fractionRemaining) -
+                (couponPayment * accruedDays) / couponPeriodDays
               : compensatedSum(
                   Array.from(
-                    { length: U },
-                    (ae, oe) => W / (1 + te / $) ** (oe + q),
+                    { length: couponCount },
+                    (ae, couponIndex) =>
+                      couponPayment /
+                      (1 + candidateYield / couponFrequency) **
+                        (couponIndex + fractionRemaining),
                   ),
                 ) +
-                L / (1 + te / $) ** (U - 1 + q) -
-                (W * X) / Q;
-        O =
+                redemptionValue /
+                  (1 + candidateYield / couponFrequency) **
+                    (couponCount - 1 + fractionRemaining) -
+                (couponPayment * accruedDays) / couponPeriodDays;
+        financialResult =
           functionName === "PRICE"
-            ? K(R)
-            : A(
-                (te) => {
-                  const ae = K(te);
-                  return { value: ae - R, scale: Math.abs(ae) + R };
+            ? priceForYield(yieldRate)
+            : solveRate(
+                (trialYield) => {
+                  const priceValue = priceForYield(trialYield);
+                  return {
+                    value: priceValue - yieldRate,
+                    scale: Math.abs(priceValue) + yieldRate,
+                  };
                 },
                 0.1,
                 undefined,
                 0,
               );
       } else if (functionName === "ACCRINTM") {
-        const C = p(I[0]),
-          T = p(I[1]),
-          N = f(I[2]),
-          R = f(I[3], 1e3);
-        (C >= T || N <= 0 || R <= 0) &&
-          l(
+        const issueSerial = toCashFlowDate(argumentValues[0]),
+          interestSettlementSerial = toCashFlowDate(argumentValues[1]),
+          annualRate = toFinancialNumber(argumentValues[2]),
+          parValue = toFinancialNumber(argumentValues[3], 1e3);
+        (issueSerial >= interestSettlementSerial ||
+          annualRate <= 0 ||
+          parValue <= 0) &&
+          throwFinancialError(
             "#NUM!",
             "Require issue before settlement, positive coupon rate and positive par.",
           );
-        const L = evaluateDateFunction("YEARFRAC", [C, T, z], {
-          ...t,
-          retrieve: ($) => $,
-        });
-        ((O = R * N * L),
-          (convention = `Accrued interest at maturity: par × annual rate × YEARFRAC basis ${z}, using the published local day-count convention. Gregorian/workbook-system; no automatic rounding.`));
+        const yearFraction = evaluateDateFunction(
+          "YEARFRAC",
+          [issueSerial, interestSettlementSerial, dayCountBasis],
+          {
+            ...context,
+            retrieve: (rawArgument) => rawArgument,
+          },
+        );
+        ((financialResult = parValue * annualRate * yearFraction),
+          (convention = `Accrued interest at maturity: par × annual rate × YEARFRAC basis ${dayCountBasis}, using the published local day-count convention. Gregorian/workbook-system; no automatic rounding.`));
       } else {
-        const C = p(I[0]),
-          T = p(I[1]),
-          N = p(I[2]),
-          R = f(I[3]),
-          L = f(I[4], 1e3),
-          $ = B(I[5]),
-          U = g(f(I[7], 1));
-        (C >= N || T <= C || R <= 0 || L <= 0) &&
-          l(
+        const issueDateSerial = toCashFlowDate(argumentValues[0]),
+          firstInterestSerial = toCashFlowDate(argumentValues[1]),
+          accruedSettlementSerial = toCashFlowDate(argumentValues[2]),
+          accrualRate = toFinancialNumber(argumentValues[3]),
+          accrualPar = toFinancialNumber(argumentValues[4], 1e3),
+          accrualFrequency = readFrequency(argumentValues[5]),
+          calcMethod = validateTiming(toFinancialNumber(argumentValues[7], 1));
+        (issueDateSerial >= accruedSettlementSerial ||
+          firstInterestSerial <= issueDateSerial ||
+          accrualRate <= 0 ||
+          accrualPar <= 0) &&
+          throwFinancialError(
             "#NUM!",
             "Require issue before first interest and settlement, positive rate and positive par.",
           );
-        const G = !U && N > T ? T : C;
-        let H = Math.floor(
-          (d(G).year * 12 + d(G).month - d(T).year * 12 - d(T).month) /
-            (12 / $),
+        const accrualStartSerial =
+          !calcMethod && accruedSettlementSerial > firstInterestSerial
+            ? firstInterestSerial
+            : issueDateSerial;
+        let couponStepIndex = Math.floor(
+          (toDateParts(accrualStartSerial).year * 12 +
+            toDateParts(accrualStartSerial).month -
+            toDateParts(firstInterestSerial).year * 12 -
+            toDateParts(firstInterestSerial).month) /
+            (12 / accrualFrequency),
         );
-        for (; _(T, (H * 12) / $) > G;) H--;
-        let Q = _(T, (H * 12) / $),
-          X = _(T, ((H + 1) * 12) / $),
-          J = 0,
-          q = 0;
-        for (; Q < N;) {
-          ++q > financialSolverLimits.couponPeriods &&
-            l("#LIMIT!", "Accrual exceeds 1000 quasi-coupon periods.");
-          const W = Math.max(G, Q),
-            K = Math.min(N, X);
-          (K > W && (J += V(W, K) / D(Q, X, $)),
-            (Q = X),
-            (X = _(T, ((++H + 1) * 12) / $)));
+        for (
+          ;
+          addMonths(
+            firstInterestSerial,
+            (couponStepIndex * 12) / accrualFrequency,
+          ) > accrualStartSerial;
+        )
+          couponStepIndex--;
+        let periodBeginSerial = addMonths(
+            firstInterestSerial,
+            (couponStepIndex * 12) / accrualFrequency,
+          ),
+          periodEndSerial = addMonths(
+            firstInterestSerial,
+            ((couponStepIndex + 1) * 12) / accrualFrequency,
+          ),
+          accruedFractionSum = 0,
+          quasiCouponCount = 0;
+        for (; periodBeginSerial < accruedSettlementSerial;) {
+          ++quasiCouponCount > financialSolverLimits.couponPeriods &&
+            throwFinancialError(
+              "#LIMIT!",
+              "Accrual exceeds 1000 quasi-coupon periods.",
+            );
+          const segmentStart = Math.max(accrualStartSerial, periodBeginSerial),
+            segmentEnd = Math.min(accruedSettlementSerial, periodEndSerial);
+          (segmentEnd > segmentStart &&
+            (accruedFractionSum +=
+              daysBetween(segmentStart, segmentEnd) /
+              couponPeriodLength(
+                periodBeginSerial,
+                periodEndSerial,
+                accrualFrequency,
+              )),
+            (periodBeginSerial = periodEndSerial),
+            (periodEndSerial = addMonths(
+              firstInterestSerial,
+              ((++couponStepIndex + 1) * 12) / accrualFrequency,
+            )));
         }
-        ((O = ((L * R) / $) * J),
-          (convention = `Accrued coupon interest: quasi-coupon periods anchored to first_interest, basis ${z}, frequency ${$}; calc_method ${U} starts at ${!U && N > T ? "first_interest" : "issue"}. No business-day adjustment or automatic rounding.`));
+        ((financialResult =
+          ((accrualPar * accrualRate) / accrualFrequency) * accruedFractionSum),
+          (convention = `Accrued coupon interest: quasi-coupon periods anchored to first_interest, basis ${dayCountBasis}, frequency ${accrualFrequency}; calc_method ${calcMethod} starts at ${!calcMethod && accruedSettlementSerial > firstInterestSerial ? "first_interest" : "issue"}. No business-day adjustment or automatic rounding.`));
       }
     }
     return (
-      (O = c(O)),
-      o ||
-        u({
+      (financialResult = ensureFinite(financialResult)),
+      hasReported ||
+        reportCalculation({
           status: "calculated",
           message:
             "Calculated under the displayed sign, timing and day-count convention.",
         }),
-      O
+      financialResult
     );
   } catch (error) {
     throw (
-      o ||
-        u({
+      hasReported ||
+        reportCalculation({
           status: "error",
-          error: t.isIssue(error) ? (error.error ?? "#VALUE!") : "#VALUE!",
+          error: context.isIssue(error)
+            ? (error.error ?? "#VALUE!")
+            : "#VALUE!",
           message:
             "An input or dependent calculation failed; inspect the source values and dates.",
         }),
@@ -748,31 +1064,41 @@ const defaultColumnWidth = 84,
     ],
     ["XLSX compression", "200:1 maximum for any entry larger than 1 MiB"],
   ];
-function broadcastOverArrays(e, r, issue) {
-  if (!e.some(Array.isArray)) return r(e);
-  const n = e.map((s) =>
-      Array.isArray(s) ? (s.every(Array.isArray) ? s : [s]) : [[s]],
+function broadcastOverArrays(argumentValues, scalarFunction, issue) {
+  if (!argumentValues.some(Array.isArray))
+    return scalarFunction(argumentValues);
+  const grids = argumentValues.map((argument) =>
+      Array.isArray(argument)
+        ? argument.every(Array.isArray)
+          ? argument
+          : [argument]
+        : [[argument]],
     ),
-    o = Math.max(...n.map((s) => s.length)),
-    a = Math.max(...n.map((s) => s[0]?.length ?? 0));
-  return !o ||
-    !a ||
-    n.some(
-      (s) =>
-        !s.length ||
-        !s[0].length ||
-        s.some((d) => d.length !== s[0].length) ||
-        (s.length !== o && s.length !== 1) ||
-        (s[0].length !== a && s[0].length !== 1),
+    rowCount = Math.max(...grids.map((gridForRows) => gridForRows.length)),
+    columnCount = Math.max(
+      ...grids.map((gridForColumns) => gridForColumns[0]?.length ?? 0),
+    );
+  return !rowCount ||
+    !columnCount ||
+    grids.some(
+      (grid) =>
+        !grid.length ||
+        !grid[0].length ||
+        grid.some((row) => row.length !== grid[0].length) ||
+        (grid.length !== rowCount && grid.length !== 1) ||
+        (grid[0].length !== columnCount && grid[0].length !== 1),
     )
     ? issue("#VALUE!")
-    : o * a > fileImportLimits.maxSpillCells
+    : rowCount * columnCount > fileImportLimits.maxSpillCells
       ? issue("#LIMIT!")
-      : Array.from({ length: o }, (s, d) =>
-          Array.from({ length: a }, (u, l) =>
-            r(
-              n.map(
-                (c) => c[c.length === 1 ? 0 : d][c[0].length === 1 ? 0 : l],
+      : Array.from({ length: rowCount }, (s, rowIndex) =>
+          Array.from({ length: columnCount }, (u, columnIndex) =>
+            scalarFunction(
+              grids.map(
+                (argumentGrid) =>
+                  argumentGrid[argumentGrid.length === 1 ? 0 : rowIndex][
+                    argumentGrid[0].length === 1 ? 0 : columnIndex
+                  ],
               ),
             ),
           ),
@@ -805,60 +1131,71 @@ const supportedTextFunctionNames = [
   notTextFunctionSentinel = Symbol("not-text-function"),
   // Numbers become text with 15 significant digits, as they do in Excel, so
   // =0.1+0.2&"" gives "0.3" and not "0.30000000000000004".
-  coerceValueToText = (e) =>
-    e == null
+  coerceValueToText = (value) =>
+    value == null
       ? ""
-      : typeof e == "boolean"
-        ? e
+      : typeof value == "boolean"
+        ? value
           ? "TRUE"
           : "FALSE"
-        : typeof e == "number" && Number.isFinite(e)
-          ? String(Number(e.toPrecision(15)))
-          : String(e);
-function parseDateTimeText(e) {
-  const r =
+        : typeof value == "number" && Number.isFinite(value)
+          ? String(Number(value.toPrecision(15)))
+          : String(value);
+function parseDateTimeText(text) {
+  const dateMatch =
     /^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))(?:[ T](.+))?$/.exec(
-      e,
+      text,
     );
-  let t = 0,
-    n = e;
-  if (r) {
-    const c = Number(r[1] ?? r[6]),
-      h = Number(r[2] ?? r[4]),
-      f = Number(r[3] ?? r[5]);
-    if (c < 1900 || c > 9999 || h < 1 || h > 12 || f < 1) return;
-    const p = c === 1900 && h === 2 && f === 29,
-      m = Date.UTC(c, h - 1, f),
-      v = new Date(m);
-    if (!p && (v.getUTCMonth() !== h - 1 || v.getUTCDate() !== f)) return;
+  let dateSerial = 0,
+    timeText = text;
+  if (dateMatch) {
+    const year = Number(dateMatch[1] ?? dateMatch[6]),
+      month = Number(dateMatch[2] ?? dateMatch[4]),
+      day = Number(dateMatch[3] ?? dateMatch[5]);
+    if (year < 1900 || year > 9999 || month < 1 || month > 12 || day < 1)
+      return;
+    const isFakeLeapDay = year === 1900 && month === 2 && day === 29,
+      utcMillis = Date.UTC(year, month - 1, day),
+      utcDate = new Date(utcMillis);
     if (
-      ((t = p
-        ? 60
-        : (m - Date.UTC(1899, 11, 31)) / 864e5 +
-          (m >= Date.UTC(1900, 2, 1) ? 1 : 0)),
-      !r[7])
+      !isFakeLeapDay &&
+      (utcDate.getUTCMonth() !== month - 1 || utcDate.getUTCDate() !== day)
     )
-      return t;
-    n = r[7];
+      return;
+    if (
+      ((dateSerial = isFakeLeapDay
+        ? 60
+        : (utcMillis - Date.UTC(1899, 11, 31)) / 864e5 +
+          (utcMillis >= Date.UTC(1900, 2, 1) ? 1 : 0)),
+      !dateMatch[7])
+    )
+      return dateSerial;
+    timeText = dateMatch[7];
   }
-  const o = /^(\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?\s*(AM|PM)?$/i.exec(n);
-  if (!o) return;
-  let a = Number(o[1]);
-  const s = Number(o[2]),
-    d = Number(o[3] ?? 0),
-    u = o[4]?.toUpperCase();
-  if (!(s > 59 || d >= 60 || (u ? a < 1 || a > 12 : a > 23)))
+  const timeMatch =
+    /^(\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d+)?))?\s*(AM|PM)?$/i.exec(timeText);
+  if (!timeMatch) return;
+  let hours = Number(timeMatch[1]);
+  const minutes = Number(timeMatch[2]),
+    seconds = Number(timeMatch[3] ?? 0),
+    meridiem = timeMatch[4]?.toUpperCase();
+  if (!(
+    minutes > 59 ||
+    seconds >= 60 ||
+    (meridiem ? hours < 1 || hours > 12 : hours > 23)
+  ))
     return (
-      u && (a = (a % 12) + (u === "PM" ? 12 : 0)),
-      t + (a * 3600 + s * 60 + d) / 86400
+      meridiem && (hours = (hours % 12) + (meridiem === "PM" ? 12 : 0)),
+      dateSerial + (hours * 3600 + minutes * 60 + seconds) / 86400
     );
 }
-function evaluateTextFunction(e, r, t) {
-  if (!supportedTextFunctionNames.includes(e)) return notTextFunctionSentinel;
-  const n = (b = "#VALUE!") => {
-      throw t.issue(b);
+function evaluateTextFunction(functionName, args, context) {
+  if (!supportedTextFunctionNames.includes(functionName))
+    return notTextFunctionSentinel;
+  const fail = (errorCode = "#VALUE!") => {
+      throw context.issue(errorCode);
     },
-    o = {
+    argumentRanges = {
       LEFT: [1, 2],
       RIGHT: [1, 2],
       MID: [3, 3],
@@ -882,210 +1219,318 @@ function evaluateTextFunction(e, r, t) {
       TEXTBEFORE: [2, 6],
       TEXTAFTER: [2, 6],
     },
-    [a, s] = o[e];
-  (r.length < a || r.length > s) && n();
-  const d = r.map(t.retrieve),
-    u = d.flatMap(flattenNestedValues).find(t.isIssue);
-  if (u) return u;
-  ((!(e === "CONCAT" || e === "TEXTJOIN") && d.some(Array.isArray)) ||
-    (e === "TEXTJOIN" && d.slice(0, 2).some(Array.isArray))) &&
-    n();
-  const c = (b) => (b.length <= 32767 ? b : n("#LIMIT!")),
-    h = (b, y) => {
-      if (b === undefined && y !== undefined) return y;
-      if (Array.isArray(b) || (typeof b == "string" && !b.trim())) return n();
-      const w = Number(b ?? 0);
-      return Number.isFinite(w) ? w : n();
+    [minArgs, maxArgs] = argumentRanges[functionName];
+  (args.length < minArgs || args.length > maxArgs) && fail();
+  const argValues = args.map(context.retrieve),
+    issueValue = argValues.flatMap(flattenNestedValues).find(context.isIssue);
+  if (issueValue) return issueValue;
+  ((!(functionName === "CONCAT" || functionName === "TEXTJOIN") &&
+    argValues.some(Array.isArray)) ||
+    (functionName === "TEXTJOIN" &&
+      argValues.slice(0, 2).some(Array.isArray))) &&
+    fail();
+  const limitText = (text) => (text.length <= 32767 ? text : fail("#LIMIT!")),
+    coerceNumberArg = (rawArg, fallbackValue) => {
+      if (rawArg === undefined && fallbackValue !== undefined)
+        return fallbackValue;
+      if (
+        Array.isArray(rawArg) ||
+        (typeof rawArg == "string" && !rawArg.trim())
+      )
+        return fail();
+      const numericValue = Number(rawArg ?? 0);
+      return Number.isFinite(numericValue) ? numericValue : fail();
     },
-    f = (b, y) => Math.trunc(h(b, y)),
-    p = (b) =>
-      typeof b == "string"
-        ? (/^(true|false)$/i.test(b) || n(), b.toLowerCase() === "true")
-        : !!b,
-    m = coerceValueToText(d[0]);
-  if (e === "LEN") return [...m].length;
-  if (e === "TRIM") return c(m.replace(/^ +| +$/g, "").replace(/ +/g, " "));
-  if (e === "CLEAN") return c(m.replace(/[\u0000-\u001f]/g, ""));
-  if (e === "UPPER") return c(m.toUpperCase());
-  if (e === "LOWER") return c(m.toLowerCase());
-  if (e === "PROPER")
-    return c(
-      m
+    coerceIntegerArg = (integerArg, integerFallback) =>
+      Math.trunc(coerceNumberArg(integerArg, integerFallback)),
+    coerceBooleanArg = (booleanArg) =>
+      typeof booleanArg == "string"
+        ? (/^(true|false)$/i.test(booleanArg) || fail(),
+          booleanArg.toLowerCase() === "true")
+        : !!booleanArg,
+    sourceText = coerceValueToText(argValues[0]);
+  if (functionName === "LEN") return [...sourceText].length;
+  if (functionName === "TRIM")
+    return limitText(sourceText.replace(/^ +| +$/g, "").replace(/ +/g, " "));
+  if (functionName === "CLEAN")
+    return limitText(sourceText.replace(/[\u0000-\u001f]/g, ""));
+  if (functionName === "UPPER") return limitText(sourceText.toUpperCase());
+  if (functionName === "LOWER") return limitText(sourceText.toLowerCase());
+  if (functionName === "PROPER")
+    return limitText(
+      sourceText
         .toLowerCase()
         .replace(
           new RegExp("(^|[^\\p{L}\\p{M}])(\\p{L})", "gu"),
-          (b, y, w) => y + w.toUpperCase(),
+          (fullMatch, prefix, letter) => prefix + letter.toUpperCase(),
         ),
     );
-  if (e === "EXACT") return m === coerceValueToText(d[1]);
-  if (e === "LEFT" || e === "RIGHT") {
-    const b = f(d[1], 1),
-      y = [...m];
+  if (functionName === "EXACT")
+    return sourceText === coerceValueToText(argValues[1]);
+  if (functionName === "LEFT" || functionName === "RIGHT") {
+    const charCount = coerceIntegerArg(argValues[1], 1),
+      textChars = [...sourceText];
     return (
-      b < 0 && n(),
-      (e === "LEFT" ? y.slice(0, b) : b ? y.slice(-b) : []).join("")
+      charCount < 0 && fail(),
+      (functionName === "LEFT"
+        ? textChars.slice(0, charCount)
+        : charCount
+          ? textChars.slice(-charCount)
+          : []
+      ).join("")
     );
   }
-  if (e === "MID" || e === "REPLACE") {
-    const b = f(d[1]),
-      y = f(d[2]),
-      w = [...m];
+  if (functionName === "MID" || functionName === "REPLACE") {
+    const startPosition = coerceIntegerArg(argValues[1]),
+      numChars = coerceIntegerArg(argValues[2]),
+      sourceChars = [...sourceText];
     return (
-      (b < 1 || y < 0) && n(),
-      e === "MID"
-        ? w.slice(b - 1, b - 1 + y).join("")
-        : c(
-            w.slice(0, b - 1).join("") +
-              coerceValueToText(d[3]) +
-              w.slice(b - 1 + y).join(""),
+      (startPosition < 1 || numChars < 0) && fail(),
+      functionName === "MID"
+        ? sourceChars
+            .slice(startPosition - 1, startPosition - 1 + numChars)
+            .join("")
+        : limitText(
+            sourceChars.slice(0, startPosition - 1).join("") +
+              coerceValueToText(argValues[3]) +
+              sourceChars.slice(startPosition - 1 + numChars).join(""),
           )
     );
   }
-  if (e === "FIND" || e === "SEARCH") {
-    const b = [...coerceValueToText(d[1])],
-      y = f(d[2], 1);
-    (y < 1 || y > Math.max(1, b.length)) && n();
-    const w = [...m],
-      E = [];
-    for (let F = 0; F < w.length; F++) {
-      const char = w[F];
-      e === "SEARCH" && char === "~" && ["*", "?", "~"].includes(w[F + 1])
-        ? E.push({ char: w[++F], kind: "literal" })
-        : E.push({
+  if (functionName === "FIND" || functionName === "SEARCH") {
+    const searchChars = [...coerceValueToText(argValues[1])],
+      searchStart = coerceIntegerArg(argValues[2], 1);
+    (searchStart < 1 || searchStart > Math.max(1, searchChars.length)) &&
+      fail();
+    const withinChars = [...sourceText],
+      patternTokens = [];
+    for (let charIndex = 0; charIndex < withinChars.length; charIndex++) {
+      const char = withinChars[charIndex];
+      functionName === "SEARCH" &&
+      char === "~" &&
+      ["*", "?", "~"].includes(withinChars[charIndex + 1])
+        ? patternTokens.push({
+            char: withinChars[++charIndex],
+            kind: "literal",
+          })
+        : patternTokens.push({
             char: char,
             kind:
-              e === "SEARCH" && char === "*"
+              functionName === "SEARCH" && char === "*"
                 ? "many"
-                : e === "SEARCH" && char === "?"
+                : functionName === "SEARCH" && char === "?"
                   ? "one"
                   : "literal",
           });
     }
-    E.length * b.length > 2e6 && n("#LIMIT!");
-    let A = Array(b.length + 1).fill(true);
-    for (let F = E.length - 1; F >= 0; F--) {
-      const I = E[F],
-        O = Array(b.length + 1).fill(false);
-      O[b.length] = I.kind === "many" && A[b.length];
-      for (let j = b.length - 1; j >= y - 1; j--)
-        O[j] =
-          I.kind === "many"
-            ? A[j] || O[j + 1]
-            : A[j + 1] &&
-              (I.kind === "one" ||
-                (e === "SEARCH"
-                  ? b[j].toLowerCase() === I.char.toLowerCase()
-                  : b[j] === I.char));
-      A = O;
+    patternTokens.length * searchChars.length > 2e6 && fail("#LIMIT!");
+    let laterMatches = Array(searchChars.length + 1).fill(true);
+    for (
+      let tokenIndex = patternTokens.length - 1;
+      tokenIndex >= 0;
+      tokenIndex--
+    ) {
+      const token = patternTokens[tokenIndex],
+        currentMatches = Array(searchChars.length + 1).fill(false);
+      currentMatches[searchChars.length] =
+        token.kind === "many" && laterMatches[searchChars.length];
+      for (
+        let textIndex = searchChars.length - 1;
+        textIndex >= searchStart - 1;
+        textIndex--
+      )
+        currentMatches[textIndex] =
+          token.kind === "many"
+            ? laterMatches[textIndex] || currentMatches[textIndex + 1]
+            : laterMatches[textIndex + 1] &&
+              (token.kind === "one" ||
+                (functionName === "SEARCH"
+                  ? searchChars[textIndex].toLowerCase() ===
+                    token.char.toLowerCase()
+                  : searchChars[textIndex] === token.char));
+      laterMatches = currentMatches;
     }
-    const k = A.findIndex((F, I) => I >= y - 1 && F);
-    return k < 0 ? n() : k + 1;
+    const matchIndex = laterMatches.findIndex(
+      (isMatch, candidateIndex) => candidateIndex >= searchStart - 1 && isMatch,
+    );
+    return matchIndex < 0 ? fail() : matchIndex + 1;
   }
-  if (e === "SUBSTITUTE") {
-    const b = coerceValueToText(d[1]),
-      y = coerceValueToText(d[2]),
-      w = d[3] === undefined ? undefined : f(d[3]);
-    if ((w !== undefined && w < 1 && n(), !b)) return m;
-    const E = m.split(b),
-      A = E.length - 1;
+  if (functionName === "SUBSTITUTE") {
+    const oldText = coerceValueToText(argValues[1]),
+      newText = coerceValueToText(argValues[2]),
+      targetOccurrence =
+        argValues[3] === undefined ? undefined : coerceIntegerArg(argValues[3]);
+    if (
+      (targetOccurrence !== undefined && targetOccurrence < 1 && fail(),
+      !oldText)
+    )
+      return sourceText;
+    const textParts = sourceText.split(oldText),
+      occurrenceCount = textParts.length - 1;
     return (
-      m.length +
-        (w === undefined ? A : w <= A ? 1 : 0) * (y.length - b.length) >
-        32767 && n("#LIMIT!"),
-      E.reduce(
-        (k, F, I) =>
-          I === 0 ? F : k + (w === undefined || w === I ? y : b) + F,
+      sourceText.length +
+        (targetOccurrence === undefined
+          ? occurrenceCount
+          : targetOccurrence <= occurrenceCount
+            ? 1
+            : 0) *
+          (newText.length - oldText.length) >
+        32767 && fail("#LIMIT!"),
+      textParts.reduce(
+        (accumulated, part, partIndex) =>
+          partIndex === 0
+            ? part
+            : accumulated +
+              (targetOccurrence === undefined || targetOccurrence === partIndex
+                ? newText
+                : oldText) +
+              part,
         "",
       )
     );
   }
-  if (e === "CONCAT" || e === "CONCATENATE" || e === "TEXTJOIN") {
-    const b = e === "TEXTJOIN" ? coerceValueToText(d[0]) : "",
-      y = e === "TEXTJOIN" && p(d[1]),
-      w = d
-        .slice(e === "TEXTJOIN" ? 2 : 0)
+  if (
+    functionName === "CONCAT" ||
+    functionName === "CONCATENATE" ||
+    functionName === "TEXTJOIN"
+  ) {
+    const delimiter =
+        functionName === "TEXTJOIN" ? coerceValueToText(argValues[0]) : "",
+      ignoreEmpty =
+        functionName === "TEXTJOIN" && coerceBooleanArg(argValues[1]),
+      textPieces = argValues
+        .slice(functionName === "TEXTJOIN" ? 2 : 0)
         .flatMap(flattenNestedValues)
-        .filter((E) => !y || (E != null && E !== ""))
+        .filter((value) => !ignoreEmpty || (value != null && value !== ""))
         .map(coerceValueToText);
     return (
-      w.reduce((E, A) => E + A.length, 0) +
-        Math.max(0, w.length - 1) * b.length >
-        32767 && n("#LIMIT!"),
-      w.join(b)
+      textPieces.reduce((total, piece) => total + piece.length, 0) +
+        Math.max(0, textPieces.length - 1) * delimiter.length >
+        32767 && fail("#LIMIT!"),
+      textPieces.join(delimiter)
     );
   }
-  if (e === "NUMBERVALUE") {
-    const b = [...coerceValueToText(d[1] === undefined ? "." : d[1])][0],
-      y = [...coerceValueToText(d[2] === undefined ? "," : d[2])][0];
-    (!b || !y || b === y || /[0-9+\-eE%]/.test(b) || /[0-9+\-eE%]/.test(y)) &&
-      n();
-    let w = m.replace(/ /g, "");
-    if (!w) return 0;
-    const E = /%+$/.exec(w)?.[0].length ?? 0;
-    w = w.slice(0, w.length - E);
-    const A = w.split(b);
-    ((A.length > 2 || A[1]?.includes(y)) && n(),
-      (w = A[0].split(y).join("") + (A.length === 2 ? "." + A[1] : "")),
-      /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(w) || n());
-    let k = Number(w);
-    Number.isFinite(k) || n("#NUM!");
-    for (let F = 0; F < E; F++) k /= 100;
-    return k;
+  if (functionName === "NUMBERVALUE") {
+    const decimalSeparator = [
+        ...coerceValueToText(argValues[1] === undefined ? "." : argValues[1]),
+      ][0],
+      groupSeparator = [
+        ...coerceValueToText(argValues[2] === undefined ? "," : argValues[2]),
+      ][0];
+    (!decimalSeparator ||
+      !groupSeparator ||
+      decimalSeparator === groupSeparator ||
+      /[0-9+\-eE%]/.test(decimalSeparator) ||
+      /[0-9+\-eE%]/.test(groupSeparator)) &&
+      fail();
+    let numericText = sourceText.replace(/ /g, "");
+    if (!numericText) return 0;
+    const percentCount = /%+$/.exec(numericText)?.[0].length ?? 0;
+    numericText = numericText.slice(0, numericText.length - percentCount);
+    const decimalParts = numericText.split(decimalSeparator);
+    ((decimalParts.length > 2 || decimalParts[1]?.includes(groupSeparator)) &&
+      fail(),
+      (numericText =
+        decimalParts[0].split(groupSeparator).join("") +
+        (decimalParts.length === 2 ? "." + decimalParts[1] : "")),
+      /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(numericText) ||
+        fail());
+    let parsedNumber = Number(numericText);
+    Number.isFinite(parsedNumber) || fail("#NUM!");
+    for (let percentIndex = 0; percentIndex < percentCount; percentIndex++)
+      parsedNumber /= 100;
+    return parsedNumber;
   }
-  if (e === "VALUE") {
-    const b = t.temporal ? t.temporal(m.trim()) : parseDateTimeText(m.trim());
-    if (b !== undefined) return b;
-    let y = m.trim(),
-      w = false;
-    y.startsWith("(") &&
-      y.endsWith(")") &&
-      ((w = true), (y = y.slice(1, -1).trim()));
-    const E = y.endsWith("%");
-    (E && (y = y.slice(0, -1).trim()),
-      (y = y.replace(/^\$\s*/, "")),
-      w && /^[+-]/.test(y) && n(),
+  if (functionName === "VALUE") {
+    const temporalValue = context.temporal
+      ? context.temporal(sourceText.trim())
+      : parseDateTimeText(sourceText.trim());
+    if (temporalValue !== undefined) return temporalValue;
+    let numberText = sourceText.trim(),
+      isNegative = false;
+    numberText.startsWith("(") &&
+      numberText.endsWith(")") &&
+      ((isNegative = true), (numberText = numberText.slice(1, -1).trim()));
+    const isPercent = numberText.endsWith("%");
+    (isPercent && (numberText = numberText.slice(0, -1).trim()),
+      (numberText = numberText.replace(/^\$\s*/, "")),
+      isNegative && /^[+-]/.test(numberText) && fail(),
       /^[+-]?(?:(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(
-        y,
-      ) || n());
-    const A = (Number(y.replace(/,/g, "")) * (w ? -1 : 1)) / (E ? 100 : 1);
-    return Number.isFinite(A) ? A : n("#NUM!");
+        numberText,
+      ) || fail());
+    const parsedValue =
+      (Number(numberText.replace(/,/g, "")) * (isNegative ? -1 : 1)) /
+      (isPercent ? 100 : 1);
+    return Number.isFinite(parsedValue) ? parsedValue : fail("#NUM!");
   }
-  if (e === "TEXT") {
-    ((typeof d[1] != "string" || d[1].length > 256) && n(), h(d[0]));
-    const b = t.format();
-    return typeof b == "string" ? c(b) : b;
+  if (functionName === "TEXT") {
+    ((typeof argValues[1] != "string" || argValues[1].length > 256) && fail(),
+      coerceNumberArg(argValues[0]));
+    const formattedValue = context.format();
+    return typeof formattedValue == "string"
+      ? limitText(formattedValue)
+      : formattedValue;
   }
-  if (e === "TEXTBEFORE" || e === "TEXTAFTER") {
-    const b = coerceValueToText(d[1]),
-      y = f(d[2], 1),
-      w = h(d[3], 0),
-      E = h(d[4], 0);
-    if (((!y || ![0, 1].includes(w) || ![0, 1].includes(E)) && n(), !m))
+  if (functionName === "TEXTBEFORE" || functionName === "TEXTAFTER") {
+    const delimiterText = coerceValueToText(argValues[1]),
+      instanceNum = coerceIntegerArg(argValues[2], 1),
+      matchMode = coerceNumberArg(argValues[3], 0),
+      matchEndMode = coerceNumberArg(argValues[4], 0);
+    if (
+      ((!instanceNum ||
+        ![0, 1].includes(matchMode) ||
+        ![0, 1].includes(matchEndMode)) &&
+        fail(),
+      !sourceText)
+    )
       return "";
-    if ((Math.abs(y) > [...m].length && n(), !b))
-      return (e === "TEXTBEFORE") == y > 0 ? "" : m;
-    const A = b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
-      k = new RegExp(y < 0 ? `(?=${A})` : A, w ? "giu" : "gu");
-    let F = [...m.matchAll(k)].map((O) => O.index);
-    if (y < 0) {
-      const O = [];
-      let j = m.length;
-      for (let z = F.length - 1; z >= 0; z--)
-        F[z] + b.length <= j && (O.push(F[z]), (j = F[z]));
-      F = O.reverse();
+    if (
+      (Math.abs(instanceNum) > [...sourceText].length && fail(), !delimiterText)
+    )
+      return (functionName === "TEXTBEFORE") == instanceNum > 0
+        ? ""
+        : sourceText;
+    const escapedDelimiter = delimiterText.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      ),
+      delimiterRegex = new RegExp(
+        instanceNum < 0 ? `(?=${escapedDelimiter})` : escapedDelimiter,
+        matchMode ? "giu" : "gu",
+      );
+    let delimiterIndexes = [...sourceText.matchAll(delimiterRegex)].map(
+      (match) => match.index,
+    );
+    if (instanceNum < 0) {
+      const pickedIndexes = [];
+      let searchEnd = sourceText.length;
+      for (
+        let reverseIndex = delimiterIndexes.length - 1;
+        reverseIndex >= 0;
+        reverseIndex--
+      )
+        delimiterIndexes[reverseIndex] + delimiterText.length <= searchEnd &&
+          (pickedIndexes.push(delimiterIndexes[reverseIndex]),
+          (searchEnd = delimiterIndexes[reverseIndex]));
+      delimiterIndexes = pickedIndexes.reverse();
     }
-    const I = F[y > 0 ? y - 1 : F.length + y];
-    return I === undefined
-      ? E && Math.abs(y) === F.length + 1
-        ? (e === "TEXTBEFORE") == y > 0
-          ? m
+    const delimiterIndex =
+      delimiterIndexes[
+        instanceNum > 0
+          ? instanceNum - 1
+          : delimiterIndexes.length + instanceNum
+      ];
+    return delimiterIndex === undefined
+      ? matchEndMode && Math.abs(instanceNum) === delimiterIndexes.length + 1
+        ? (functionName === "TEXTBEFORE") == instanceNum > 0
+          ? sourceText
           : ""
-        : d[5] !== undefined
-          ? d[5]
-          : n("#N/A")
-      : e === "TEXTBEFORE"
-        ? m.slice(0, I)
-        : m.slice(I + b.length);
+        : argValues[5] !== undefined
+          ? argValues[5]
+          : fail("#N/A")
+      : functionName === "TEXTBEFORE"
+        ? sourceText.slice(0, delimiterIndex)
+        : sourceText.slice(delimiterIndex + delimiterText.length);
   }
   return notTextFunctionSentinel;
 }

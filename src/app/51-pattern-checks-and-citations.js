@@ -45,20 +45,20 @@ import {
   parseScreenReportRequest,
 } from "./50-materiality-screen-and-pattern-checks.js";
 
-function PatternCheckDialog(e) {
+function PatternCheckDialog(props) {
   const { text, language } = useWorkbookMessages(),
     cancellableOperation = useCancellableOperation(),
-    o = ne.useId(),
-    a = ne.useRef(null),
-    s = ne.useRef(0),
-    d = ne.useRef(true),
-    u = ne.useRef(""),
-    l = ne.useRef(2),
-    [c, h] = ne.useState(() =>
+    dialogTitleId = ne.useId(),
+    dialogRef = ne.useRef(null),
+    requestSequence = ne.useRef(0),
+    isMounted = ne.useRef(true),
+    latestStateKey = ne.useRef(""),
+    nextRuleNumber = ne.useRef(2),
+    [configuration, setConfiguration] = ne.useState(() =>
       structuredClone(
-        e.initialConfiguration ?? {
-          sheetId: e.sheetId,
-          range: e.range,
+        props.initialConfiguration ?? {
+          sheetId: props.sheetId,
+          range: props.range,
           headers: true,
           comparison: "calculated",
           excludeBlankRows: true,
@@ -68,134 +68,177 @@ function PatternCheckDialog(e) {
         },
       ),
     ),
-    [f, p] = ne.useState(() => c.excludedRows.join(", ")),
-    [checked, v] = ne.useState(false),
-    [g, b] = ne.useState("duplicates"),
-    [y, w] = ne.useState(null),
-    [E, A] = ne.useState(""),
-    [k, F] = ne.useState(""),
-    [I, O] = ne.useState(""),
-    [j, z] = ne.useState(""),
-    [V, D] = ne.useState(""),
-    [B, _] = ne.useState(0),
-    C = { ...c, sheetId: e.sheetId },
-    T = {
-      readOnly: e.readOnly,
-      allowedSheetIds: e.allowedSheetIds,
-      includeHidden: !!e.allowHidden && checked,
+    [excludedRowsText, setExcludedRowsText] = ne.useState(() =>
+      configuration.excludedRows.join(", "),
+    ),
+    [checked, setIncludeHidden] = ne.useState(false),
+    [newRuleKind, setNewRuleKind] = ne.useState("duplicates"),
+    [lastReport, setLastReport] = ne.useState(null),
+    [reportSourceKey, setReportSourceKey] = ne.useState(""),
+    [errorMessage, setErrorMessage] = ne.useState(""),
+    [errorStateKey, setErrorStateKey] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [evidenceRuleId, setEvidenceRuleId] = ne.useState(""),
+    [evidencePage, setEvidencePage] = ne.useState(0),
+    settings = { ...configuration, sheetId: props.sheetId },
+    checkOptions = {
+      readOnly: props.readOnly,
+      allowedSheetIds: props.allowedSheetIds,
+      includeHidden: !!props.allowHidden && checked,
     },
-    N = JSON.stringify([e.sheetId, e.range]),
-    R = JSON.stringify([e.workbook, e.allowedSheetIds, T, N]),
-    L = JSON.stringify([R, C, f]);
-  u.current = L;
-  const $ = y
-      ? E !== N
+    sourceKey = JSON.stringify([props.sheetId, props.range]),
+    contextKey = JSON.stringify([
+      props.workbook,
+      props.allowedSheetIds,
+      checkOptions,
+      sourceKey,
+    ]),
+    stateKey = JSON.stringify([contextKey, settings, excludedRowsText]);
+  latestStateKey.current = stateKey;
+  const reportCurrency = lastReport
+      ? reportSourceKey !== sourceKey
         ? {
             current: false,
             disclose: false,
             reason: "The host selection changed. Run checks again.",
           }
-        : checkReportCurrency(e.workbook, y, C, T)
+        : checkReportCurrency(
+            props.workbook,
+            lastReport,
+            settings,
+            checkOptions,
+          )
       : null,
-    U = $?.disclose ? y : null,
-    G = U?.results.find((result) => result.rule.id === V) ?? U?.results[0],
-    H = V === "combined" ? U?.combination : G,
-    Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
-    X$1 = Math.min(B, Q - 1),
-    rangeColumnIndexes = listRangeColumnIndexes(C.range),
-    sheet = e.workbook.sheets.find((sheet) => sheet.id === e.sheetId),
-    W = (ce) => h((ge) => ({ ...ge, ...ce })),
-    K = (ce, ge) =>
-      h((se) => ({
-        ...se,
-        rules: se.rules.map((rule, Ee) =>
-          Ee === ce ? { ...rule, ...ge } : rule,
+    disclosedReport = reportCurrency?.disclose ? lastReport : null,
+    selectedResult =
+      disclosedReport?.results.find(
+        (result) => result.rule.id === evidenceRuleId,
+      ) ?? disclosedReport?.results[0],
+    activeResult =
+      evidenceRuleId === "combined"
+        ? disclosedReport?.combination
+        : selectedResult,
+    pageCount = Math.max(
+      1,
+      Math.ceil((activeResult?.rows.length ?? 0) / gf.pageSize),
+    ),
+    X$1 = Math.min(evidencePage, pageCount - 1),
+    rangeColumnIndexes = listRangeColumnIndexes(settings.range),
+    sheet = props.workbook.sheets.find((sheet) => sheet.id === props.sheetId),
+    updateConfiguration = (patch) =>
+      setConfiguration((previous) => ({ ...previous, ...patch })),
+    updateRule = (ruleIndex, ruleChanges) =>
+      setConfiguration((previous) => ({
+        ...previous,
+        rules: previous.rules.map((rule, rulePosition) =>
+          rulePosition === ruleIndex ? { ...rule, ...ruleChanges } : rule,
         ),
       })),
-    te = (ce) => {
-      (F(
-        ce instanceof Error
-          ? ce.message
+    showCheckError = (error) => {
+      (setErrorMessage(
+        error instanceof Error
+          ? error.message
           : "The check failed. Review source and settings.",
       ),
-        O(R),
-        z(""));
+        setErrorStateKey(contextKey),
+        setStatusMessage(""));
     };
   ne.useEffect(() => {
-    d.current = true;
+    isMounted.current = true;
     const activeElement = document.activeElement;
     return (
-      a.current?.querySelector('[data-ui-label="Source range"]')?.focus(),
+      dialogRef.current
+        ?.querySelector('[data-ui-label="Source range"]')
+        ?.focus(),
       () => {
-        ((d.current = false),
-          s.current++,
+        ((isMounted.current = false),
+          requestSequence.current++,
           activeElement?.isConnected && activeElement.focus());
       }
     );
   }, []);
-  const ae = (ce, ge) => {
-      const se = URL.createObjectURL(
-          new Blob([ce], { type: "application/json" }),
+  const downloadJsonFile = (contents, fileName) => {
+      const objectUrl = URL.createObjectURL(
+          new Blob([contents], { type: "application/json" }),
         ),
-        we = document.createElement("a");
-      ((we.href = se), (we.download = ge), we.click(), URL.revokeObjectURL(se));
+        link = document.createElement("a");
+      ((link.href = objectUrl),
+        (link.download = fileName),
+        link.click(),
+        URL.revokeObjectURL(objectUrl));
     },
     onClick = () => {
-      s.current++;
+      requestSequence.current++;
       try {
-        const ce = runPatternChecks(e.workbook, C, T);
-        (w(ce), A(N), F(""), z(""), D(ce.results[0].rule.id), _(0));
+        const report = runPatternChecks(props.workbook, settings, checkOptions);
+        (setLastReport(report),
+          setReportSourceKey(sourceKey),
+          setErrorMessage(""),
+          setStatusMessage(""),
+          setEvidenceRuleId(report.results[0].rule.id),
+          setEvidencePage(0));
       } catch (error) {
-        (w(null), te(error));
+        (setLastReport(null), showCheckError(error));
       }
     },
-    de = async (ce) => {
-      if (!ce) return;
-      const ge = ++s.current,
-        se = L;
+    loadConfigurationFile = async (file) => {
+      if (!file) return;
+      const requestId = ++requestSequence.current,
+        startStateKey = stateKey;
       try {
-        if (ce.size > gf.reportBytes)
+        if (file.size > gf.reportBytes)
           throw Error("Choose a configuration no larger than 2,000,000 bytes.");
-        const we = await importNativeJsonFile(ce, cancellableOperation.begin());
-        if (!d.current || s.current !== ge || u.current !== se) return;
-        const screenReportRequest = parseScreenReportRequest(e.workbook, we);
-        if (screenReportRequest.sheetId !== e.sheetId)
+        const requestJson = await importNativeJsonFile(
+          file,
+          cancellableOperation.begin(),
+        );
+        if (
+          !isMounted.current ||
+          requestSequence.current !== requestId ||
+          latestStateKey.current !== startStateKey
+        )
+          return;
+        const screenReportRequest = parseScreenReportRequest(
+          props.workbook,
+          requestJson,
+        );
+        if (screenReportRequest.sheetId !== props.sheetId)
           throw Error("The saved configuration belongs to another worksheet.");
-        (h(screenReportRequest),
-          p(screenReportRequest.excludedRows.join(", ")),
-          w(null),
-          F(""),
-          z(
+        (setConfiguration(screenReportRequest),
+          setExcludedRowsText(screenReportRequest.excludedRows.join(", ")),
+          setLastReport(null),
+          setErrorMessage(""),
+          setStatusMessage(
             "Configuration loaded. Run checks against the current source; saved findings are not trusted.",
           ));
       } catch (error) {
-        d.current &&
-          s.current === ge &&
-          u.current === se &&
-          te(toFileProcessingError(error));
+        isMounted.current &&
+          requestSequence.current === requestId &&
+          latestStateKey.current === startStateKey &&
+          showCheckError(toFileProcessingError(error));
       }
     },
-    he = (ce) => {
+    columnLabel = (columnIndex) => {
       try {
-        const rangeAddress = parseRangeAddress(C.range),
-          we =
+        const rangeAddress = parseRangeAddress(settings.range),
+          headerValue =
             sheet?.cells[
-              `${columnIndexToLetters(ce)}${rangeAddress.firstRow + 1}`
+              `${columnIndexToLetters(columnIndex)}${rangeAddress.firstRow + 1}`
             ]?.raw;
-        return `${columnIndexToLetters(ce)}${C.headers && we !== null && we !== undefined ? " — " + String(we).slice(0, 60) : ""}`;
+        return `${columnIndexToLetters(columnIndex)}${settings.headers && headerValue !== null && headerValue !== undefined ? " — " + String(headerValue).slice(0, 60) : ""}`;
       } catch {
-        return columnIndexToLetters(ce);
+        return columnIndexToLetters(columnIndex);
       }
     },
-    Se = (ce, ge) =>
+    renderColumnSelect = (rule, ruleIndex) =>
       i.jsxs("label", {
         children: [
           i.jsx(LocalizedText, { children: "Field" }),
           i.jsxs("select", {
-            "aria-label": `${ce.id} field`,
-            value: "column" in ce ? (ce.column ?? "") : "",
+            "aria-label": `${rule.id} field`,
+            value: "column" in rule ? (rule.column ?? "") : "",
             onChange: (event) =>
-              K(ge, {
+              updateRule(ruleIndex, {
                 column:
                   event.target.value === "" ? null : Number(event.target.value),
               }),
@@ -204,7 +247,10 @@ function PatternCheckDialog(e) {
               rangeColumnIndexes.map((rangeColumnIndex) =>
                 i.jsx(
                   "option",
-                  { value: rangeColumnIndex, children: he(rangeColumnIndex) },
+                  {
+                    value: rangeColumnIndex,
+                    children: columnLabel(rangeColumnIndex),
+                  },
                   rangeColumnIndex,
                 ),
               ),
@@ -212,13 +258,13 @@ function PatternCheckDialog(e) {
           }),
         ],
       }),
-    le = (ce, ge, se, we) =>
+    renderColumnCheckboxes = (rule, ruleIndex, fieldName, selectedColumns) =>
       i.jsxs("fieldset", {
         className: "pattern-checks",
         children: [
           i.jsx("legend", {
             children:
-              se === "keyColumns"
+              fieldName === "keyColumns"
                 ? "Matching key fields"
                 : "Sequence grouping fields (optional)",
           }),
@@ -228,17 +274,20 @@ function PatternCheckDialog(e) {
               {
                 children: [
                   i.jsx("input", {
-                    "aria-label": `${ce.id} ${se} ${columnIndexToLetters(rangeColumnIndex)}`,
+                    "aria-label": `${rule.id} ${fieldName} ${columnIndexToLetters(rangeColumnIndex)}`,
                     type: "checkbox",
-                    checked: we.includes(rangeColumnIndex),
+                    checked: selectedColumns.includes(rangeColumnIndex),
                     onChange: (event) =>
-                      K(ge, {
-                        [se]: event.target.checked
-                          ? [...we, rangeColumnIndex]
-                          : we.filter((ye) => ye !== rangeColumnIndex),
+                      updateRule(ruleIndex, {
+                        [fieldName]: event.target.checked
+                          ? [...selectedColumns, rangeColumnIndex]
+                          : selectedColumns.filter(
+                              (selectedColumn) =>
+                                selectedColumn !== rangeColumnIndex,
+                            ),
                       }),
                   }),
-                  he(rangeColumnIndex),
+                  columnLabel(rangeColumnIndex),
                 ],
               },
               rangeColumnIndex,
@@ -252,25 +301,27 @@ function PatternCheckDialog(e) {
       className: "materiality-dialog pattern-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-labelledby": o,
-      ref: a,
+      "aria-labelledby": dialogTitleId,
+      ref: dialogRef,
       onKeyDown: (event) => {
         if (
-          (event.key === "Escape" && (event.stopPropagation(), e.onClose()),
+          (event.key === "Escape" && (event.stopPropagation(), props.onClose()),
           event.key === "Tab")
         ) {
-          const se = Array.from(
-              a.current?.querySelectorAll(
+          const focusableElements = Array.from(
+              dialogRef.current?.querySelectorAll(
                 "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
               ) ?? [],
-            ).filter((Ae) => Ae.getClientRects().length),
-            we = se[0],
-            Ee = se.at(-1);
-          event.shiftKey && document.activeElement === we
-            ? (event.preventDefault(), Ee == null || Ee.focus())
+            ).filter((element) => element.getClientRects().length),
+            firstFocusable = focusableElements[0],
+            lastFocusable = focusableElements.at(-1);
+          event.shiftKey && document.activeElement === firstFocusable
+            ? (event.preventDefault(),
+              lastFocusable == null || lastFocusable.focus())
             : !event.shiftKey &&
-              document.activeElement === Ee &&
-              (event.preventDefault(), we == null || we.focus());
+              document.activeElement === lastFocusable &&
+              (event.preventDefault(),
+              firstFocusable == null || firstFocusable.focus());
         }
       },
       children: [
@@ -279,7 +330,7 @@ function PatternCheckDialog(e) {
             i.jsxs("div", {
               children: [
                 i.jsx("h2", {
-                  id: o,
+                  id: dialogTitleId,
                   children: i.jsx(LocalizedText, {
                     children: "Pattern checks",
                   }),
@@ -294,7 +345,7 @@ function PatternCheckDialog(e) {
             }),
             i.jsx("button", {
               "aria-label": text("Close pattern checks"),
-              onClick: e.onClose,
+              onClick: props.onClose,
               lang: language("Close pattern checks"),
               "data-ui-label": "Close pattern checks",
               children: i.jsx(X, { size: 18 }),
@@ -315,8 +366,9 @@ function PatternCheckDialog(e) {
                 i.jsx(LocalizedText, { children: "Source range" }),
                 i.jsx("input", {
                   "aria-label": text("Source range"),
-                  value: C.range,
-                  onChange: (event) => W({ range: event.target.value }),
+                  value: settings.range,
+                  onChange: (event) =>
+                    updateConfiguration({ range: event.target.value }),
                   lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
@@ -327,8 +379,9 @@ function PatternCheckDialog(e) {
                 i.jsx(LocalizedText, { children: "Compare" }),
                 i.jsxs("select", {
                   "aria-label": text("Comparison basis"),
-                  value: C.comparison,
-                  onChange: (event) => W({ comparison: event.target.value }),
+                  value: settings.comparison,
+                  onChange: (event) =>
+                    updateConfiguration({ comparison: event.target.value }),
                   lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
                   children: [
@@ -351,10 +404,10 @@ function PatternCheckDialog(e) {
                 }),
                 i.jsx("input", {
                   "aria-label": text("Excluded rows"),
-                  value: f,
+                  value: excludedRowsText,
                   onChange: (event) => {
-                    (p(event.target.value),
-                      W({
+                    (setExcludedRowsText(event.target.value),
+                      updateConfiguration({
                         excludedRows: event.target.value.trim()
                           ? event.target.value.split(",").map(parseNumericText)
                           : [],
@@ -370,8 +423,9 @@ function PatternCheckDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: C.headers,
-                  onChange: (event) => W({ headers: event.target.checked }),
+                  checked: settings.headers,
+                  onChange: (event) =>
+                    updateConfiguration({ headers: event.target.checked }),
                 }),
                 i.jsx(LocalizedText, {
                   children: "First row contains headers",
@@ -383,23 +437,25 @@ function PatternCheckDialog(e) {
               children: [
                 i.jsx("input", {
                   type: "checkbox",
-                  checked: C.excludeBlankRows,
+                  checked: settings.excludeBlankRows,
                   onChange: (event) =>
-                    W({ excludeBlankRows: event.target.checked }),
+                    updateConfiguration({
+                      excludeBlankRows: event.target.checked,
+                    }),
                 }),
                 i.jsx(LocalizedText, {
                   children: "Exclude entirely blank rows",
                 }),
               ],
             }),
-            e.allowHidden &&
+            props.allowHidden &&
               i.jsxs("label", {
                 className: "materiality-check",
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
                     checked: checked,
-                    onChange: (event) => v(event.target.checked),
+                    onChange: (event) => setIncludeHidden(event.target.checked),
                   }),
                   i.jsx(LocalizedText, {
                     children:
@@ -409,7 +465,7 @@ function PatternCheckDialog(e) {
               }),
           ],
         }),
-        C.rules.map((rule, ge) =>
+        settings.rules.map((rule, ruleIndex) =>
           i.jsxs(
             "fieldset",
             {
@@ -417,7 +473,7 @@ function PatternCheckDialog(e) {
               children: [
                 i.jsxs("legend", {
                   children: [
-                    ge + 1,
+                    ruleIndex + 1,
                     ". ",
                     screenRuleLabels[rule.kind],
                     " · ",
@@ -435,18 +491,22 @@ function PatternCheckDialog(e) {
                           maxLength: 80,
                           value: rule.label,
                           onChange: (event) =>
-                            K(ge, { label: event.target.value }),
+                            updateRule(ruleIndex, {
+                              label: event.target.value,
+                            }),
                         }),
                       ],
                     }),
                     i.jsxs("button", {
-                      disabled: C.rules.length === 1,
+                      disabled: settings.rules.length === 1,
                       onClick: () =>
-                        W({
-                          rules: C.rules.filter((rule, we) => we !== ge),
+                        updateConfiguration({
+                          rules: settings.rules.filter(
+                            (rule, position) => position !== ruleIndex,
+                          ),
                           combination: {
-                            ...C.combination,
-                            ruleIds: C.combination.ruleIds.filter(
+                            ...settings.combination,
+                            ruleIds: settings.combination.ruleIds.filter(
                               (ruleId) => ruleId !== rule.id,
                             ),
                           },
@@ -461,7 +521,8 @@ function PatternCheckDialog(e) {
                 i.jsxs("div", {
                   className: "materiality-fields",
                   children: [
-                    rule.kind !== "duplicates" && Se(rule, ge),
+                    rule.kind !== "duplicates" &&
+                      renderColumnSelect(rule, ruleIndex),
                     (rule.kind === "duplicates" || rule.kind === "sequence") &&
                       i.jsxs(i.Fragment, {
                         children: [
@@ -472,7 +533,7 @@ function PatternCheckDialog(e) {
                                 type: "checkbox",
                                 checked: rule.caseSensitive,
                                 onChange: (event) =>
-                                  K(ge, {
+                                  updateRule(ruleIndex, {
                                     caseSensitive: event.target.checked,
                                   }),
                               }),
@@ -488,7 +549,9 @@ function PatternCheckDialog(e) {
                                 type: "checkbox",
                                 checked: rule.trimText,
                                 onChange: (event) =>
-                                  K(ge, { trimText: event.target.checked }),
+                                  updateRule(ruleIndex, {
+                                    trimText: event.target.checked,
+                                  }),
                               }),
                               i.jsx(LocalizedText, {
                                 children: "Trim key whitespace",
@@ -507,7 +570,9 @@ function PatternCheckDialog(e) {
                             "aria-label": `${rule.id} blank key policy`,
                             value: rule.blankKeys,
                             onChange: (event) =>
-                              K(ge, { blankKeys: event.target.value }),
+                              updateRule(ruleIndex, {
+                                blankKeys: event.target.value,
+                              }),
                             children: [
                               i.jsx("option", {
                                 value: "fail",
@@ -524,47 +589,50 @@ function PatternCheckDialog(e) {
                     rule.kind === "sequence" &&
                       i.jsxs(i.Fragment, {
                         children: [
-                          ["prefix", "suffix"].map((se) =>
+                          ["prefix", "suffix"].map((fieldName) =>
                             i.jsxs(
                               "label",
                               {
                                 children: [
-                                  se,
+                                  fieldName,
                                   i.jsx("input", {
-                                    "aria-label": `${rule.id} ${se}`,
-                                    value: rule[se],
+                                    "aria-label": `${rule.id} ${fieldName}`,
+                                    value: rule[fieldName],
                                     onChange: (event) =>
-                                      K(ge, { [se]: event.target.value }),
-                                  }),
-                                ],
-                              },
-                              se,
-                            ),
-                          ),
-                          ["step", "start", "end"].map((se) =>
-                            i.jsxs(
-                              "label",
-                              {
-                                children: [
-                                  se,
-                                  se !== "step" ? " (optional)" : "",
-                                  i.jsx(LocalizedNumberField, {
-                                    allowEmpty: se !== "step",
-                                    "aria-label": `${rule.id} ${se}`,
-                                    min: se === "step" ? 1 : 0,
-                                    step: "1",
-                                    value: nanToEmptyText(rule[se]),
-                                    onValueChange: (we) =>
-                                      K(ge, {
-                                        [se]:
-                                          se !== "step" && we === ""
-                                            ? null
-                                            : parseNumericText(we),
+                                      updateRule(ruleIndex, {
+                                        [fieldName]: event.target.value,
                                       }),
                                   }),
                                 ],
                               },
-                              se,
+                              fieldName,
+                            ),
+                          ),
+                          ["step", "start", "end"].map((fieldName) =>
+                            i.jsxs(
+                              "label",
+                              {
+                                children: [
+                                  fieldName,
+                                  fieldName !== "step" ? " (optional)" : "",
+                                  i.jsx(LocalizedNumberField, {
+                                    allowEmpty: fieldName !== "step",
+                                    "aria-label": `${rule.id} ${fieldName}`,
+                                    min: fieldName === "step" ? 1 : 0,
+                                    step: "1",
+                                    value: nanToEmptyText(rule[fieldName]),
+                                    onValueChange: (inputText) =>
+                                      updateRule(ruleIndex, {
+                                        [fieldName]:
+                                          fieldName !== "step" &&
+                                          inputText === ""
+                                            ? null
+                                            : parseNumericText(inputText),
+                                      }),
+                                  }),
+                                ],
+                              },
+                              fieldName,
                             ),
                           ),
                         ],
@@ -572,24 +640,29 @@ function PatternCheckDialog(e) {
                     rule.kind === "round-amount" &&
                       i.jsxs(i.Fragment, {
                         children: [
-                          ["increment", "precision", "tolerance"].map((se) =>
-                            i.jsxs(
-                              "label",
-                              {
-                                children: [
-                                  se,
-                                  i.jsx(LocalizedNumberField, {
-                                    "aria-label": `${rule.id} ${se}`,
-                                    min: "0",
-                                    step: se === "precision" ? "1" : "any",
-                                    value: nanToEmptyText(rule[se]),
-                                    onValueChange: (we) =>
-                                      K(ge, { [se]: parseNumericText(we) }),
-                                  }),
-                                ],
-                              },
-                              se,
-                            ),
+                          ["increment", "precision", "tolerance"].map(
+                            (fieldName) =>
+                              i.jsxs(
+                                "label",
+                                {
+                                  children: [
+                                    fieldName,
+                                    i.jsx(LocalizedNumberField, {
+                                      "aria-label": `${rule.id} ${fieldName}`,
+                                      min: "0",
+                                      step:
+                                        fieldName === "precision" ? "1" : "any",
+                                      value: nanToEmptyText(rule[fieldName]),
+                                      onValueChange: (inputText) =>
+                                        updateRule(ruleIndex, {
+                                          [fieldName]:
+                                            parseNumericText(inputText),
+                                        }),
+                                    }),
+                                  ],
+                                },
+                                fieldName,
+                              ),
                           ),
                           i.jsxs("label", {
                             className: "materiality-check",
@@ -598,7 +671,9 @@ function PatternCheckDialog(e) {
                                 type: "checkbox",
                                 checked: rule.includeZero,
                                 onChange: (event) =>
-                                  K(ge, { includeZero: event.target.checked }),
+                                  updateRule(ruleIndex, {
+                                    includeZero: event.target.checked,
+                                  }),
                               }),
                               i.jsx(LocalizedText, {
                                 children: "Flag zero amounts",
@@ -617,7 +692,9 @@ function PatternCheckDialog(e) {
                             "aria-label": `${rule.id} date system`,
                             value: rule.dateSystem,
                             onChange: (event) =>
-                              K(ge, { dateSystem: event.target.value }),
+                              updateRule(ruleIndex, {
+                                dateSystem: event.target.value,
+                              }),
                             children: [
                               i.jsx("option", {
                                 value: "1900",
@@ -643,7 +720,9 @@ function PatternCheckDialog(e) {
                                 "aria-label": `${rule.id} calendar name`,
                                 value: rule.calendarName,
                                 onChange: (event) =>
-                                  K(ge, { calendarName: event.target.value }),
+                                  updateRule(ruleIndex, {
+                                    calendarName: event.target.value,
+                                  }),
                               }),
                             ],
                           }),
@@ -656,7 +735,7 @@ function PatternCheckDialog(e) {
                                 "aria-label": `${rule.id} calendar version`,
                                 value: rule.calendarVersion,
                                 onChange: (event) =>
-                                  K(ge, {
+                                  updateRule(ruleIndex, {
                                     calendarVersion: event.target.value,
                                   }),
                               }),
@@ -674,7 +753,7 @@ function PatternCheckDialog(e) {
                                 value: rule.dates.join(`
 `),
                                 onChange: (event) =>
-                                  K(ge, {
+                                  updateRule(ruleIndex, {
                                     dates:
                                       event.target.value === ""
                                         ? []
@@ -689,11 +768,21 @@ function PatternCheckDialog(e) {
                   ],
                 }),
                 rule.kind === "duplicates" &&
-                  le(rule, ge, "keyColumns", rule.keyColumns),
+                  renderColumnCheckboxes(
+                    rule,
+                    ruleIndex,
+                    "keyColumns",
+                    rule.keyColumns,
+                  ),
                 rule.kind === "sequence" &&
                   i.jsxs(i.Fragment, {
                     children: [
-                      le(rule, ge, "groupColumns", rule.groupColumns),
+                      renderColumnCheckboxes(
+                        rule,
+                        ruleIndex,
+                        "groupColumns",
+                        rule.groupColumns,
+                      ),
                       i.jsx("p", {
                         children: i.jsx(LocalizedText, {
                           children:
@@ -711,7 +800,7 @@ function PatternCheckDialog(e) {
                           children: "Weekend weekdays",
                         }),
                       }),
-                      weekdayNames.map((weekdayName, we) =>
+                      weekdayNames.map((weekdayName, dayIndex) =>
                         i.jsxs(
                           "label",
                           {
@@ -719,12 +808,14 @@ function PatternCheckDialog(e) {
                               i.jsx("input", {
                                 "aria-label": `${rule.id} ${weekdayName}`,
                                 type: "checkbox",
-                                checked: rule.days.includes(we),
+                                checked: rule.days.includes(dayIndex),
                                 onChange: (event) =>
-                                  K(ge, {
+                                  updateRule(ruleIndex, {
                                     days: event.target.checked
-                                      ? [...rule.days, we]
-                                      : rule.days.filter((day) => day !== we),
+                                      ? [...rule.days, dayIndex]
+                                      : rule.days.filter(
+                                          (day) => day !== dayIndex,
+                                        ),
                                   }),
                               }),
                               weekdayName,
@@ -755,29 +846,39 @@ function PatternCheckDialog(e) {
                 i.jsx(LocalizedText, { children: "Add a rule" }),
                 i.jsx("select", {
                   "aria-label": text("New rule type"),
-                  value: g,
-                  onChange: (event) => b(event.target.value),
+                  value: newRuleKind,
+                  onChange: (event) => setNewRuleKind(event.target.value),
                   lang: language("New rule type"),
                   "data-ui-label": "New rule type",
-                  children: Object.entries(screenRuleLabels).map(([ce, ge]) =>
-                    i.jsx("option", { value: ce, children: ge }, ce),
+                  children: Object.entries(screenRuleLabels).map(
+                    ([ruleKind, ruleLabel]) =>
+                      i.jsx(
+                        "option",
+                        { value: ruleKind, children: ruleLabel },
+                        ruleKind,
+                      ),
                   ),
                 }),
               ],
             }),
             i.jsx("button", {
-              disabled: C.rules.length >= gf.rules,
+              disabled: settings.rules.length >= gf.rules,
               onClick: () => {
-                let ce = `rule${l.current++}`;
-                for (; C.rules.some((rule) => rule.id === ce);)
-                  ce = `rule${l.current++}`;
-                W({ rules: [...C.rules, buildScreenRule(g, ce)] });
+                let ruleId = `rule${nextRuleNumber.current++}`;
+                for (; settings.rules.some((rule) => rule.id === ruleId);)
+                  ruleId = `rule${nextRuleNumber.current++}`;
+                updateConfiguration({
+                  rules: [
+                    ...settings.rules,
+                    buildScreenRule(newRuleKind, ruleId),
+                  ],
+                });
               },
               children: i.jsx(LocalizedText, { children: "Add rule" }),
             }),
             i.jsxs("span", {
               children: [
-                C.rules.length,
+                settings.rules.length,
                 " ",
                 i.jsx(LocalizedText, { children: "/ 12 rules" }),
               ],
@@ -798,11 +899,11 @@ function PatternCheckDialog(e) {
                 " ",
                 i.jsxs("select", {
                   "aria-label": text("Combination mode"),
-                  value: C.combination.mode,
+                  value: settings.combination.mode,
                   onChange: (event) =>
-                    W({
+                    updateConfiguration({
                       combination: {
-                        ...C.combination,
+                        ...settings.combination,
                         mode: event.target.value,
                       },
                     }),
@@ -823,36 +924,38 @@ function PatternCheckDialog(e) {
             }),
             i.jsx("div", {
               className: "pattern-checks",
-              children: C.rules
+              children: settings.rules
                 .filter((rule) => rule.kind !== "sequence")
-                .map((ce) =>
+                .map((rule) =>
                   i.jsxs(
                     "label",
                     {
                       children: [
                         i.jsx("input", {
                           type: "checkbox",
-                          "aria-label": `Combine ${ce.id}`,
-                          checked: C.combination.ruleIds.includes(ce.id),
+                          "aria-label": `Combine ${rule.id}`,
+                          checked: settings.combination.ruleIds.includes(
+                            rule.id,
+                          ),
                           onChange: (event) =>
-                            W({
+                            updateConfiguration({
                               combination: {
-                                ...C.combination,
+                                ...settings.combination,
                                 ruleIds: event.target.checked
-                                  ? [...C.combination.ruleIds, ce.id]
-                                  : C.combination.ruleIds.filter(
-                                      (ruleId) => ruleId !== ce.id,
+                                  ? [...settings.combination.ruleIds, rule.id]
+                                  : settings.combination.ruleIds.filter(
+                                      (ruleId) => ruleId !== rule.id,
                                     ),
                               },
                             }),
                         }),
-                        ce.label,
+                        rule.label,
                         " (",
-                        ce.id,
+                        rule.id,
                         ")",
                       ],
                     },
-                    ce.id,
+                    rule.id,
                   ),
                 ),
             }),
@@ -875,19 +978,24 @@ function PatternCheckDialog(e) {
               }),
             }),
             i.jsx("button", {
-              disabled: !$?.current,
+              disabled: !reportCurrency?.current,
               onClick: () => {
                 try {
-                  if (!y) throw Error("Run a current report first.");
-                  (ae(
-                    exportScreenReportJson(e.workbook, y, C, T),
+                  if (!lastReport) throw Error("Run a current report first.");
+                  (downloadJsonFile(
+                    exportScreenReportJson(
+                      props.workbook,
+                      lastReport,
+                      settings,
+                      checkOptions,
+                    ),
                     "pattern-checks-report.json",
                   ),
-                    z(
+                    setStatusMessage(
                       "Report download requested with source evidence, settings, counts and findings.",
                     ));
                 } catch (error) {
-                  te(error);
+                  showCheckError(error);
                 }
               },
               children: i.jsx(LocalizedText, { children: "Download report" }),
@@ -895,21 +1003,24 @@ function PatternCheckDialog(e) {
             i.jsx("button", {
               onClick: () => {
                 try {
-                  (ae(
+                  (downloadJsonFile(
                     JSON.stringify(
                       {
                         schemaVersion: 1,
                         kind: "pattern-audit",
-                        request: normalizePatternCheckSettings(e.workbook, C),
+                        request: normalizePatternCheckSettings(
+                          props.workbook,
+                          settings,
+                        ),
                       },
                       null,
                       2,
                     ),
                     "pattern-checks-configuration.json",
                   ),
-                    z("Configuration download requested."));
+                    setStatusMessage("Configuration download requested."));
                 } catch (error) {
-                  te(error);
+                  showCheckError(error);
                 }
               },
               children: i.jsx(LocalizedText, {
@@ -924,7 +1035,8 @@ function PatternCheckDialog(e) {
                   type: "file",
                   accept: ".json,application/json",
                   onChange: (event) => {
-                    (de(event.target.files?.[0]), (event.target.value = ""));
+                    (loadConfigurationFile(event.target.files?.[0]),
+                      (event.target.value = ""));
                   },
                   lang: language("Load pattern configuration"),
                   "data-ui-label": "Load pattern configuration",
@@ -933,22 +1045,26 @@ function PatternCheckDialog(e) {
             }),
           ],
         }),
-        k &&
-          I === R &&
+        errorMessage &&
+          errorStateKey === contextKey &&
           i.jsxs("p", {
             className: "materiality-error",
             role: "alert",
-            children: [i.jsx(LocalizedText, { children: "Check failed: " }), k],
+            children: [
+              i.jsx(LocalizedText, { children: "Check failed: " }),
+              errorMessage,
+            ],
           }),
-        j && i.jsx("p", { role: "status", children: j }),
-        $ &&
-          !$.current &&
+        statusMessage &&
+          i.jsx("p", { role: "status", children: statusMessage }),
+        reportCurrency &&
+          !reportCurrency.current &&
           i.jsx("p", {
             role: "status",
             className: "materiality-stale",
-            children: $.reason,
+            children: reportCurrency.reason,
           }),
-        U &&
+        disclosedReport &&
           i.jsxs("section", {
             className: "materiality-result",
             "aria-label": text("Pattern report"),
@@ -957,47 +1073,47 @@ function PatternCheckDialog(e) {
             children: [
               i.jsxs("h3", {
                 children: [
-                  $?.current ? "Current" : "Previous",
+                  reportCurrency?.current ? "Current" : "Previous",
                   " ",
                   i.jsx(LocalizedText, { children: "report —" }),
                   " ",
-                  U.status,
+                  disclosedReport.status,
                 ],
               }),
               i.jsxs("p", {
                 children: [
-                  U.source.sheetName,
+                  disclosedReport.source.sheetName,
                   "!",
-                  U.source.range,
+                  disclosedReport.source.range,
                   " ",
                   i.jsx(LocalizedText, { children: "· revision" }),
                   " ",
-                  U.source.revision,
+                  disclosedReport.source.revision,
                   " · ",
-                  U.counts.population,
+                  disclosedReport.counts.population,
                   " ",
                   i.jsx(LocalizedText, { children: "population · " }),
-                  U.counts.excluded,
+                  disclosedReport.counts.excluded,
                   " ",
                   i.jsx(LocalizedText, { children: "globally excluded ·" }),
                   " ",
-                  U.counts.rulesComplete,
+                  disclosedReport.counts.rulesComplete,
                   " ",
                   i.jsx(LocalizedText, { children: "complete /" }),
                   " ",
-                  U.counts.rulesFailed,
+                  disclosedReport.counts.rulesFailed,
                   " ",
                   i.jsx(LocalizedText, { children: "failed /" }),
                   " ",
-                  U.counts.rulesNotApplicable,
+                  disclosedReport.counts.rulesNotApplicable,
                   " ",
                   i.jsx(LocalizedText, { children: "not applicable rules" }),
                 ],
               }),
-              U.messages.map((message, ge) =>
-                i.jsx("p", { role: "alert", children: message }, ge),
+              disclosedReport.messages.map((message, messageIndex) =>
+                i.jsx("p", { role: "alert", children: message }, messageIndex),
               ),
-              U.results.map((result) =>
+              disclosedReport.results.map((result) =>
                 i.jsxs(
                   "article",
                   {
@@ -1015,8 +1131,8 @@ function PatternCheckDialog(e) {
                       i.jsx("p", {
                         children: formatScreenCountsSummary(result.counts),
                       }),
-                      result.messages.map((message, se) =>
-                        i.jsx("p", { children: message }, se),
+                      result.messages.map((message, messageIndex) =>
+                        i.jsx("p", { children: message }, messageIndex),
                       ),
                     ],
                   },
@@ -1026,28 +1142,32 @@ function PatternCheckDialog(e) {
               i.jsxs("h4", {
                 children: [
                   i.jsx(LocalizedText, { children: "Combined result — " }),
-                  U.combination.status,
+                  disclosedReport.combination.status,
                 ],
               }),
               i.jsx("p", {
-                children: formatScreenCountsSummary(U.combination.counts),
+                children: formatScreenCountsSummary(
+                  disclosedReport.combination.counts,
+                ),
               }),
-              U.combination.messages.map((message, ge) =>
-                i.jsx("p", { children: message }, ge),
+              disclosedReport.combination.messages.map(
+                (message, messageIndex) =>
+                  i.jsx("p", { children: message }, messageIndex),
               ),
               i.jsxs("label", {
                 children: [
                   i.jsx(LocalizedText, { children: "Evidence ledger" }),
                   i.jsxs("select", {
                     "aria-label": text("Evidence rule"),
-                    value: V,
+                    value: evidenceRuleId,
                     onChange: (event) => {
-                      (D(event.target.value), _(0));
+                      (setEvidenceRuleId(event.target.value),
+                        setEvidencePage(0));
                     },
                     lang: language("Evidence rule"),
                     "data-ui-label": "Evidence rule",
                     children: [
-                      U.results.map((result) =>
+                      disclosedReport.results.map((result) =>
                         i.jsxs(
                           "option",
                           {
@@ -1101,31 +1221,35 @@ function PatternCheckDialog(e) {
                       }),
                     }),
                     i.jsx("tbody", {
-                      children: H?.rows
+                      children: activeResult?.rows
                         .slice(X$1 * 20, (X$1 + 1) * 20)
-                        .map((ce) =>
+                        .map((resultRow) =>
                           i.jsxs(
                             "tr",
                             {
                               children: [
-                                i.jsx("td", { children: ce.sourceRow }),
-                                i.jsx("td", { children: ce.disposition }),
+                                i.jsx("td", { children: resultRow.sourceRow }),
+                                i.jsx("td", {
+                                  children: resultRow.disposition,
+                                }),
                                 i.jsx("td", {
                                   children:
-                                    [...ce.reasons, ...ce.findingIds].join(
-                                      " · ",
-                                    ) || "—",
+                                    [
+                                      ...resultRow.reasons,
+                                      ...resultRow.findingIds,
+                                    ].join(" · ") || "—",
                                 }),
                                 i.jsx("td", {
                                   children: JSON.stringify(
-                                    U.rows.find(
-                                      (row) => row.sourceRow === ce.sourceRow,
+                                    disclosedReport.rows.find(
+                                      (row) =>
+                                        row.sourceRow === resultRow.sourceRow,
                                     )?.values,
                                   ),
                                 }),
                               ],
                             },
-                            ce.sourceRow,
+                            resultRow.sourceRow,
                           ),
                         ),
                     }),
@@ -1139,7 +1263,7 @@ function PatternCheckDialog(e) {
                 children: [
                   i.jsx("button", {
                     disabled: !X$1,
-                    onClick: () => _(X$1 - 1),
+                    onClick: () => setEvidencePage(X$1 - 1),
                     children: i.jsx(LocalizedText, {
                       children: "Previous rows",
                     }),
@@ -1150,12 +1274,12 @@ function PatternCheckDialog(e) {
                       X$1 + 1,
                       " ",
                       i.jsx(LocalizedText, { children: "of " }),
-                      Q,
+                      pageCount,
                     ],
                   }),
                   i.jsx("button", {
-                    disabled: X$1 >= Q - 1,
-                    onClick: () => _(X$1 + 1),
+                    disabled: X$1 >= pageCount - 1,
+                    onClick: () => setEvidencePage(X$1 + 1),
                     children: i.jsx(LocalizedText, { children: "Next rows" }),
                   }),
                 ],
@@ -1167,7 +1291,7 @@ function PatternCheckDialog(e) {
               }),
               i.jsxs("p", {
                 children: [
-                  H?.findings.length ?? 0,
+                  activeResult?.findings.length ?? 0,
                   " ",
                   i.jsx(LocalizedText, {
                     children:
@@ -1177,7 +1301,7 @@ function PatternCheckDialog(e) {
               }),
               i.jsx("div", {
                 className: "pattern-findings",
-                children: H?.findings.map((finding) =>
+                children: activeResult?.findings.map((finding) =>
                   i.jsxs(
                     "details",
                     {
@@ -1239,10 +1363,16 @@ function PatternCheckDialog(e) {
                         "Source ledger, settings and interpretation notes",
                     }),
                   }),
-                  U.notes.map((note) => i.jsx("p", { children: note }, note)),
+                  disclosedReport.notes.map((note) =>
+                    i.jsx("p", { children: note }, note),
+                  ),
                   i.jsx("pre", {
                     children: JSON.stringify(
-                      { request: U.request, source: U.source, rows: U.rows },
+                      {
+                        request: disclosedReport.request,
+                        source: disclosedReport.source,
+                        rows: disclosedReport.rows,
+                      },
                       null,
                       2,
                     ),
@@ -1253,7 +1383,7 @@ function PatternCheckDialog(e) {
           }),
         i.jsx("footer", {
           children: i.jsx("button", {
-            onClick: e.onClose,
+            onClick: props.onClose,
             children: i.jsx(LocalizedText, { children: "Close" }),
           }),
         }),
@@ -1261,7 +1391,8 @@ function PatternCheckDialog(e) {
     }),
   });
 }
-const hashCitationText = (e) => sha256HexDigest(new TextEncoder().encode(e));
+const hashCitationText = (text) =>
+  sha256HexDigest(new TextEncoder().encode(text));
 function buildCitationContext(assistantSelectionContext) {
   return hashCitationText(
     JSON.stringify({
@@ -1280,23 +1411,33 @@ function buildCitationContext(assistantSelectionContext) {
   );
 }
 const citationRangeCache = new WeakMap(),
-  citationRangeKey = (e) =>
+  citationRangeKey = (citation) =>
     JSON.stringify([
-      e.sheetId,
-      validateCitationRange(e.range),
-      e.ranges && e.ranges.length !== 1 ? e.ranges : undefined,
+      citation.sheetId,
+      validateCitationRange(citation.range),
+      citation.ranges && citation.ranges.length !== 1
+        ? citation.ranges
+        : undefined,
     ]);
-function validateCitationVisibility(workbook, sheetId, t) {
+function validateCitationVisibility(workbook, sheetId, cellAddresses) {
   const sheet = workbook.sheets.find((sheet) => sheet.id === sheetId);
   if (!sheet || sheet.hidden || sheet.veryHidden)
     throw Error("Citation worksheet is unavailable or hidden.");
-  const o = cn(sheet, "row"),
-    a = cn(sheet, "column");
-  for (const s of t) {
-    const d = _t(s);
+  const hiddenRows = cn(sheet, "row"),
+    hiddenColumns = cn(sheet, "column");
+  for (const cellAddress of cellAddresses) {
+    const cellPosition = _t(cellAddress);
     if (
-      o.some((u) => d.row >= u.start && d.row <= u.end) ||
-      a.some((u) => d.col >= u.start && d.col <= u.end)
+      hiddenRows.some(
+        (hiddenRange) =>
+          cellPosition.row >= hiddenRange.start &&
+          cellPosition.row <= hiddenRange.end,
+      ) ||
+      hiddenColumns.some(
+        (hiddenRange) =>
+          cellPosition.col >= hiddenRange.start &&
+          cellPosition.col <= hiddenRange.end,
+      )
     )
       throw Error(
         "Citation includes hidden cells. Make the cited evidence visible and request a fresh answer.",
@@ -1307,16 +1448,23 @@ function validateCitationVisibility(workbook, sheetId, t) {
 function buildAnswerCitations(
   activeWorkbook,
   assistantSelection,
-  t,
-  n,
-  o = {},
+  proposal,
+  approvedContext,
+  options = {},
 ) {
-  const a = validateProposedCalculation(activeWorkbook, assistantSelection, t),
+  const validatedProposal = validateProposedCalculation(
+      activeWorkbook,
+      assistantSelection,
+      proposal,
+    ),
     assistantSelectionContext = buildAssistantSelectionContext(
       activeWorkbook,
       assistantSelection,
     );
-  if (JSON.stringify(assistantSelectionContext) !== JSON.stringify(n))
+  if (
+    JSON.stringify(assistantSelectionContext) !==
+    JSON.stringify(approvedContext)
+  )
     throw Error(
       "Answer source is stale or outside the original approved context. Request a fresh answer.",
     );
@@ -1326,38 +1474,41 @@ function buildAnswerCitations(
       (sheet) => sheet.id === assistantSelectionContext.sheetId,
     ),
     citationContext = buildCitationContext(assistantSelectionContext),
-    l = new Map(
+    cellsByAddress = new Map(
       assistantSelectionContext.cells.map((cell) => [cell.address, cell]),
     ),
     citations = [],
-    h = new Map(),
-    f = (g) => {
-      const b = validateCitationRange(g);
-      if (b.some((E) => !l.has(E)))
+    citationIdByRange = new Map(),
+    citationIdForRange = (claimRange) => {
+      const cellAddresses = validateCitationRange(claimRange);
+      if (cellAddresses.some((address) => !cellsByAddress.has(address)))
         throw Error("Citation is outside approved context.");
       validateCitationVisibility(
         activeWorkbook,
         assistantSelectionContext.sheetId,
-        b,
+        cellAddresses,
       );
-      const range = b.length === 1 ? b[0] : `${b[0]}:${b.at(-1)}`;
-      let w = h.get(range);
+      const range =
+        cellAddresses.length === 1
+          ? cellAddresses[0]
+          : `${cellAddresses[0]}:${cellAddresses.at(-1)}`;
+      let citationId = citationIdByRange.get(range);
       return (
-        w ||
-        ((w = `cite-${citations.length + 1}`),
-        h.set(range, w),
+        citationId ||
+        ((citationId = `cite-${citations.length + 1}`),
+        citationIdByRange.set(range, citationId),
         citations.push({
-          id: w,
+          id: citationId,
           workbookId: activeWorkbook.id,
           revision: activeWorkbook.revision,
           sheetId: assistantSelectionContext.sheetId,
           sheetName: assistantSelectionContext.sheetName,
           range: range,
           contextSha256: citationContext,
-          cells: b.map((E) => {
-            const cell = l.get(E),
-              k = sheet.cells[E],
-              literal = !!k?.literal;
+          cells: cellAddresses.map((cellAddress) => {
+            const cell = cellsByAddress.get(cellAddress),
+              sheetCell = sheet.cells[cellAddress],
+              literal = !!sheetCell?.literal;
             return {
               ...cell,
               literal: literal,
@@ -1368,38 +1519,47 @@ function buildAnswerCitations(
                   ? cell.raw
                   : null,
               sourceOrigin:
-                o.includeSourceOrigins === false
+                options.includeSourceOrigins === false
                   ? null
-                  : findRowOrigin(activeWorkbook, sheet.id, _t(E).row),
+                  : findRowOrigin(
+                      activeWorkbook,
+                      sheet.id,
+                      _t(cellAddress).row,
+                    ),
             };
           }),
         }),
-        w)
+        citationId)
       );
     },
-    claims = a.grounding
-      ? a.grounding.claims.map((claim) => ({
+    claims = validatedProposal.grounding
+      ? validatedProposal.grounding.claims.map((claim) => ({
           id: claim.id,
           kind: claim.kind,
           text: claim.text,
-          citationIds: claim.kind === "workbook" ? claim.ranges.map(f) : [],
+          citationIds:
+            claim.kind === "workbook"
+              ? claim.ranges.map(citationIdForRange)
+              : [],
           sourceIds: claim.kind === "external" ? [...claim.sourceIds] : [],
         }))
       : [
           {
             id: "legacy",
             kind: "commentary",
-            text: a.explanation,
-            citationIds: [...new Set(a.citations.map(f))],
+            text: validatedProposal.explanation,
+            citationIds: [
+              ...new Set(validatedProposal.citations.map(citationIdForRange)),
+            ],
             sourceIds: [],
           },
         ],
-    m = {
+    evidence = {
       schemaVersion: 1,
       kind: "assistant-answer-evidence",
       capturedAt: new Date().toISOString(),
-      proposalId: a.id,
-      mode: a.grounding ? "linked-claims" : "legacy-unverified",
+      proposalId: validatedProposal.id,
+      mode: validatedProposal.grounding ? "linked-claims" : "legacy-unverified",
       contextSha256: citationContext,
       approvedSelection: {
         sheetId: assistantSelection.sheetId,
@@ -1407,11 +1567,13 @@ function buildAnswerCitations(
       },
       citations: citations,
       claims: claims,
-      externalSources: (a.grounding?.externalSources ?? []).map((g) => ({
-        ...g,
-        status: "supplied-not-verified",
-      })),
-      sourceOriginsIncluded: o.includeSourceOrigins !== false,
+      externalSources: (validatedProposal.grounding?.externalSources ?? []).map(
+        (externalSource) => ({
+          ...externalSource,
+          status: "supplied-not-verified",
+        }),
+      ),
+      sourceOriginsIncluded: options.includeSourceOrigins !== false,
       notes: [
         "Workbook citation identity, approved scope, captured values and revision are checked locally. These checks do not prove that the cited cells logically support every claim; the reviewer must inspect the evidence.",
         "Legacy narratives and commentary are unverified. A workbook citation cannot substantiate an external fact. External URLs are adapter-supplied references, not automatically fetched or verified.",
@@ -1420,108 +1582,132 @@ function buildAnswerCitations(
       ],
     };
   if (
-    new TextEncoder().encode(JSON.stringify(m, null, 2)).length >
+    new TextEncoder().encode(JSON.stringify(evidence, null, 2)).length >
     answerGroundingLimits.receiptBytes
   )
     throw Error(
       "Complete answer evidence exceeds 2,000,000 bytes. Reduce the selection or answer; evidence is never silently truncated.",
     );
   return (
-    citationRangeCache.set(m, {
+    citationRangeCache.set(evidence, {
       snapshot: JSON.stringify(activeWorkbook),
-      content: JSON.stringify(m),
+      content: JSON.stringify(evidence),
       selection: citationRangeKey(assistantSelection),
     }),
-    m
+    evidence
   );
 }
-function evaluateAnswerEvidence(workbook, r, t) {
-  const n = citationRangeCache.get(t),
-    o = (reason) => ({ current: false, disclose: false, reason: reason });
-  if (!n || JSON.stringify(t) !== n.content)
-    return o(
+function evaluateAnswerEvidence(workbook, selection, evidence) {
+  const cacheEntry = citationRangeCache.get(evidence),
+    unavailableResult = (reason) => ({
+      current: false,
+      disclose: false,
+      reason: reason,
+    });
+  if (!cacheEntry || JSON.stringify(evidence) !== cacheEntry.content)
+    return unavailableResult(
       "Answer evidence is untrusted or altered. Request a fresh answer.",
     );
   try {
-    if (citationRangeKey(r) !== n.selection)
-      return o(
+    if (citationRangeKey(selection) !== cacheEntry.selection)
+      return unavailableResult(
         "Approved selection changed. Previous answer and citations are unavailable.",
       );
-    if (JSON.stringify(workbook) !== n.snapshot)
-      return o(
+    if (JSON.stringify(workbook) !== cacheEntry.snapshot)
+      return unavailableResult(
         "Workbook content or revision changed. Previous answer and citations are stale.",
       );
-    for (const citation of t.citations)
+    for (const citation of evidence.citations)
       validateCitationVisibility(
         workbook,
         citation.sheetId,
         citation.cells.map((cell) => cell.address),
       );
-    return buildCitationContext(buildAssistantSelectionContext(workbook, r)) !==
-      t.contextSha256
-      ? o("Calculated source values changed. Request a fresh answer.")
+    return buildCitationContext(
+      buildAssistantSelectionContext(workbook, selection),
+    ) !== evidence.contextSha256
+      ? unavailableResult(
+          "Calculated source values changed. Request a fresh answer.",
+        )
       : {
           current: true,
           disclose: true,
           reason: "Current approved source and revision.",
         };
   } catch {
-    return o(
+    return unavailableResult(
       "Citation source is unavailable or outside the current authorized selection.",
     );
   }
 }
-function getCitationStatus(workbook, selection, evidence, n) {
-  const o = evaluateAnswerEvidence(workbook, selection, evidence);
-  if (!o.current) throw Error(o.reason);
-  const citation = evidence.citations.find((citation) => citation.id === n);
+function getCitationStatus(workbook, selection, evidence, citationId) {
+  const evidenceStatus = evaluateAnswerEvidence(workbook, selection, evidence);
+  if (!evidenceStatus.current) throw Error(evidenceStatus.reason);
+  const citation = evidence.citations.find(
+    (citation) => citation.id === citationId,
+  );
   if (!citation) throw Error("Unknown citation.");
   return structuredClone(citation);
 }
 function serializeCurrentCitation(workbook, selection, evidence) {
-  const n = evaluateAnswerEvidence(workbook, selection, evidence);
-  if (!n.current) throw Error(n.reason);
+  const evidenceStatus = evaluateAnswerEvidence(workbook, selection, evidence);
+  if (!evidenceStatus.current) throw Error(evidenceStatus.reason);
   return JSON.stringify(evidence, null, 2);
 }
-const formatCellValueForCitation = (e) =>
-  e === null ? "(blank)" : typeof e == "string" ? JSON.stringify(e) : String(e);
-function AssistantAnswerEvidence(e) {
+const formatCellValueForCitation = (value) =>
+  value === null
+    ? "(blank)"
+    : typeof value == "string"
+      ? JSON.stringify(value)
+      : String(value);
+function AssistantAnswerEvidence(props) {
   const { text, language } = useWorkbookMessages(),
-    [n, o] = ne.useState(null),
-    [a, s] = ne.useState(""),
-    [d, u] = ne.useState(""),
-    [l, c] = ne.useState(0),
-    h = evaluateAnswerEvidence(e.workbook, e.selection, e.evidence);
-  if (!h.disclose)
+    [selectedCitationId, setSelectedCitationId] = ne.useState(null),
+    [actionError, setActionError] = ne.useState(""),
+    [statusMessage, setStatusMessage] = ne.useState(""),
+    [cellPageIndex, setCellPageIndex] = ne.useState(0),
+    evidenceStatus = evaluateAnswerEvidence(
+      props.workbook,
+      props.selection,
+      props.evidence,
+    );
+  if (!evidenceStatus.disclose)
     return i.jsx("p", {
       role: "status",
       className: "lg-evidence-warning",
-      children: h.reason,
+      children: evidenceStatus.reason,
     });
-  const evidence = e.evidence,
-    citation = evidence.citations.find((citation) => citation.id === n),
-    m = Math.max(1, Math.ceil((citation?.cells.length ?? 0) / 20)),
-    v = Math.min(l, m - 1),
-    g = (b, y) => {
+  const evidence = props.evidence,
+    citation = evidence.citations.find(
+      (citation) => citation.id === selectedCitationId,
+    ),
+    pageCount = Math.max(1, Math.ceil((citation?.cells.length ?? 0) / 20)),
+    currentPageIndex = Math.min(cellPageIndex, pageCount - 1),
+    navigateToCitation = (targetCitationId, cellAddress) => {
       try {
         const citationStatus = getCitationStatus(
-          e.workbook,
-          e.selection,
+          props.workbook,
+          props.selection,
           evidence,
-          b,
+          targetCitationId,
         );
-        if (y && !citationStatus.cells.some((cell) => cell.address === y))
+        if (
+          cellAddress &&
+          !citationStatus.cells.some((cell) => cell.address === cellAddress)
+        )
           throw Error("Cell is outside this citation.");
-        (e.onNavigate(
+        (props.onNavigate(
           citationStatus.sheetId,
-          y ?? citationStatus.cells[0].address,
+          cellAddress ?? citationStatus.cells[0].address,
         ),
-          o(b),
-          y || c(0),
-          s(""),
-          u(""));
+          setSelectedCitationId(targetCitationId),
+          cellAddress || setCellPageIndex(0),
+          setActionError(""),
+          setStatusMessage(""));
       } catch (error) {
-        s(error instanceof Error ? error.message : "Citation unavailable.");
+        setActionError(
+          error instanceof Error ? error.message : "Citation unavailable.",
+        );
       }
     };
   return i.jsxs("section", {
@@ -1559,10 +1745,10 @@ function AssistantAnswerEvidence(e) {
                       ? "External claim · source not verified"
                       : "Commentary · unverified",
               }),
-              e.renderText
+              props.renderText
                 ? i.jsx("div", {
                     className: "lg-answer-text",
-                    children: e.renderText(claim.text),
+                    children: props.renderText(claim.text),
                   })
                 : i.jsx("p", { children: claim.text }),
               i.jsx("div", {
@@ -1576,7 +1762,7 @@ function AssistantAnswerEvidence(e) {
                     {
                       type: "button",
                       "aria-label": `Inspect citation ${citation.sheetName}!${citation.range}`,
-                      onClick: () => g(citationId),
+                      onClick: () => navigateToCitation(citationId),
                       children: [
                         citation.sheetName,
                         "!",
@@ -1625,13 +1811,13 @@ function AssistantAnswerEvidence(e) {
           claim.id,
         ),
       ),
-      a &&
+      actionError &&
         i.jsx("p", {
           role: "alert",
           className: "lg-evidence-warning",
-          children: a,
+          children: actionError,
         }),
-      d && i.jsx("p", { role: "status", children: d }),
+      statusMessage && i.jsx("p", { role: "status", children: statusMessage }),
       citation &&
         i.jsxs("section", {
           className: "lg-citation-inspector",
@@ -1672,105 +1858,108 @@ function AssistantAnswerEvidence(e) {
                 ".",
               ],
             }),
-            citation.cells.slice(v * 20, (v + 1) * 20).map((cell) =>
-              i.jsxs(
-                "article",
-                {
-                  className: "lg-citation-cell",
-                  children: [
-                    i.jsx("button", {
-                      onClick: () => g(citation.id, cell.address),
-                      "aria-label": `Focus cited cell ${cell.address}`,
-                      children: cell.address,
-                    }),
-                    i.jsxs("dl", {
-                      children: [
-                        i.jsx("dt", {
-                          children: i.jsx(LocalizedText, {
-                            children: "Stored input",
+            citation.cells
+              .slice(currentPageIndex * 20, (currentPageIndex + 1) * 20)
+              .map((cell) =>
+                i.jsxs(
+                  "article",
+                  {
+                    className: "lg-citation-cell",
+                    children: [
+                      i.jsx("button", {
+                        onClick: () =>
+                          navigateToCitation(citation.id, cell.address),
+                        "aria-label": `Focus cited cell ${cell.address}`,
+                        children: cell.address,
+                      }),
+                      i.jsxs("dl", {
+                        children: [
+                          i.jsx("dt", {
+                            children: i.jsx(LocalizedText, {
+                              children: "Stored input",
+                            }),
                           }),
-                        }),
-                        i.jsx("dd", {
-                          children: formatCellValueForCitation(cell.raw),
-                        }),
-                        i.jsx("dt", {
-                          children: i.jsx(LocalizedText, {
-                            children: "Formula",
+                          i.jsx("dd", {
+                            children: formatCellValueForCitation(cell.raw),
                           }),
-                        }),
-                        i.jsx("dd", {
-                          children:
-                            cell.formula ??
-                            (cell.literal
-                              ? "Literal text; not a formula"
-                              : "No formula"),
-                        }),
-                        i.jsx("dt", {
-                          children: i.jsx(LocalizedText, {
-                            children: "Captured value",
+                          i.jsx("dt", {
+                            children: i.jsx(LocalizedText, {
+                              children: "Formula",
+                            }),
                           }),
-                        }),
-                        i.jsx("dd", {
-                          children: formatCellValueForCitation(cell.value),
-                        }),
-                        i.jsx("dt", {
-                          children: i.jsx(LocalizedText, {
-                            children: "Source linkage",
+                          i.jsx("dd", {
+                            children:
+                              cell.formula ??
+                              (cell.literal
+                                ? "Literal text; not a formula"
+                                : "No formula"),
                           }),
-                        }),
-                        i.jsx("dd", {
-                          children: cell.sourceOrigin
-                            ? i.jsxs(i.Fragment, {
-                                children: [
-                                  cell.sourceOrigin.sourceName,
-                                  " ·",
-                                  " ",
-                                  cell.sourceOrigin.sourceSheet,
-                                  " ",
-                                  i.jsx(LocalizedText, {
-                                    children: "· original row",
-                                  }),
-                                  " ",
-                                  cell.sourceOrigin.originalRow,
-                                  i.jsx("br", {}),
-                                  i.jsx(LocalizedText, {
-                                    children: "Source ID: ",
-                                  }),
-                                  cell.sourceOrigin.sourceId,
-                                  i.jsx("br", {}),
-                                  i.jsx(LocalizedText, {
-                                    children: "Origin ID: ",
-                                  }),
-                                  cell.sourceOrigin.id,
-                                  " (",
-                                  cell.sourceOrigin.kind,
-                                  ")",
-                                  i.jsx("br", {}),
-                                  i.jsx("small", {
-                                    children: i.jsx(LocalizedText, {
-                                      children:
-                                        "Recorded row lineage; original file bytes and original column are not verified here.",
+                          i.jsx("dt", {
+                            children: i.jsx(LocalizedText, {
+                              children: "Captured value",
+                            }),
+                          }),
+                          i.jsx("dd", {
+                            children: formatCellValueForCitation(cell.value),
+                          }),
+                          i.jsx("dt", {
+                            children: i.jsx(LocalizedText, {
+                              children: "Source linkage",
+                            }),
+                          }),
+                          i.jsx("dd", {
+                            children: cell.sourceOrigin
+                              ? i.jsxs(i.Fragment, {
+                                  children: [
+                                    cell.sourceOrigin.sourceName,
+                                    " ·",
+                                    " ",
+                                    cell.sourceOrigin.sourceSheet,
+                                    " ",
+                                    i.jsx(LocalizedText, {
+                                      children: "· original row",
                                     }),
-                                  }),
-                                ],
-                              })
-                            : "No original source-row linkage is available in this evidence.",
-                        }),
-                      ],
-                    }),
-                  ],
-                },
-                cell.address,
+                                    " ",
+                                    cell.sourceOrigin.originalRow,
+                                    i.jsx("br", {}),
+                                    i.jsx(LocalizedText, {
+                                      children: "Source ID: ",
+                                    }),
+                                    cell.sourceOrigin.sourceId,
+                                    i.jsx("br", {}),
+                                    i.jsx(LocalizedText, {
+                                      children: "Origin ID: ",
+                                    }),
+                                    cell.sourceOrigin.id,
+                                    " (",
+                                    cell.sourceOrigin.kind,
+                                    ")",
+                                    i.jsx("br", {}),
+                                    i.jsx("small", {
+                                      children: i.jsx(LocalizedText, {
+                                        children:
+                                          "Recorded row lineage; original file bytes and original column are not verified here.",
+                                      }),
+                                    }),
+                                  ],
+                                })
+                              : "No original source-row linkage is available in this evidence.",
+                          }),
+                        ],
+                      }),
+                    ],
+                  },
+                  cell.address,
+                ),
               ),
-            ),
             i.jsxs("nav", {
               "aria-label": text("Citation evidence pages"),
               lang: language("Citation evidence pages"),
               "data-ui-label": "Citation evidence pages",
               children: [
                 i.jsx("button", {
-                  disabled: v === 0,
-                  onClick: () => c(v - 1),
+                  disabled: currentPageIndex === 0,
+                  onClick: () => setCellPageIndex(currentPageIndex - 1),
                   children: i.jsx(LocalizedText, {
                     children: "Previous cells",
                   }),
@@ -1778,15 +1967,15 @@ function AssistantAnswerEvidence(e) {
                 i.jsxs("span", {
                   children: [
                     i.jsx(LocalizedText, { children: "Page " }),
-                    v + 1,
+                    currentPageIndex + 1,
                     " ",
                     i.jsx(LocalizedText, { children: "of " }),
-                    m,
+                    pageCount,
                   ],
                 }),
                 i.jsx("button", {
-                  disabled: v >= m - 1,
-                  onClick: () => c(v + 1),
+                  disabled: currentPageIndex >= pageCount - 1,
+                  onClick: () => setCellPageIndex(currentPageIndex + 1),
                   children: i.jsx(LocalizedText, { children: "Next cells" }),
                 }),
               ],
@@ -1797,25 +1986,27 @@ function AssistantAnswerEvidence(e) {
         className: "lg-button full",
         onClick: () => {
           try {
-            const b = serializeCurrentCitation(
-                e.workbook,
-                e.selection,
+            const evidenceJson = serializeCurrentCitation(
+                props.workbook,
+                props.selection,
                 evidence,
               ),
-              y = URL.createObjectURL(
-                new Blob([b], { type: "application/json" }),
+              downloadUrl = URL.createObjectURL(
+                new Blob([evidenceJson], { type: "application/json" }),
               ),
-              w = document.createElement("a");
-            ((w.href = y),
-              (w.download = "assistant-answer-evidence.json"),
-              w.click(),
-              URL.revokeObjectURL(y),
-              u(
+              downloadLink = document.createElement("a");
+            ((downloadLink.href = downloadUrl),
+              (downloadLink.download = "assistant-answer-evidence.json"),
+              downloadLink.click(),
+              URL.revokeObjectURL(downloadUrl),
+              setStatusMessage(
                 "Evidence download requested. Preserve it with the original workpaper.",
               ),
-              s(""));
+              setActionError(""));
           } catch (error) {
-            s(error instanceof Error ? error.message : "Evidence unavailable.");
+            setActionError(
+              error instanceof Error ? error.message : "Evidence unavailable.",
+            );
           }
         },
         children: i.jsx(LocalizedText, {
@@ -1837,28 +2028,33 @@ const patternCheckBudgets = {
     keys: 8,
   },
   readFormulaText = (cell) => cell?.raw ?? null,
-  isBlankFormulaCell = (e) =>
-    readFormulaText(e) === null || readFormulaText(e) === "",
-  ww = (e, r) => {
-    if (e === r) return true;
-    if (!e || !r || typeof e != "object" || typeof r != "object") return false;
-    if (Array.isArray(e) || Array.isArray(r))
+  isBlankFormulaCell = (cell) =>
+    readFormulaText(cell) === null || readFormulaText(cell) === "",
+  ww = (left, right) => {
+    if (left === right) return true;
+    if (!left || !right || typeof left != "object" || typeof right != "object")
+      return false;
+    if (Array.isArray(left) || Array.isArray(right))
       return (
-        Array.isArray(e) &&
-        Array.isArray(r) &&
-        e.length === r.length &&
-        e.every((s, d) => ww(s, r[d]))
+        Array.isArray(left) &&
+        Array.isArray(right) &&
+        left.length === right.length &&
+        left.every((leftItem, itemIndex) => ww(leftItem, right[itemIndex]))
       );
-    const t = e,
-      n = r,
-      o = Object.keys(t)
-        .filter((s) => t[s] !== undefined)
+    const leftRecord = left,
+      rightRecord = right,
+      leftKeys = Object.keys(leftRecord)
+        .filter((leftKey) => leftRecord[leftKey] !== undefined)
         .sort(),
-      a = Object.keys(n)
-        .filter((s) => n[s] !== undefined)
+      rightKeys = Object.keys(rightRecord)
+        .filter((rightKey) => rightRecord[rightKey] !== undefined)
         .sort();
     return (
-      o.length === a.length && o.every((s, d) => s === a[d] && ww(t[s], n[s]))
+      leftKeys.length === rightKeys.length &&
+      leftKeys.every(
+        (key, keyIndex) =>
+          key === rightKeys[keyIndex] && ww(leftRecord[key], rightRecord[key]),
+      )
     );
   },
   unquotedSheetNamePattern = "[A-Za-z_.\\d\\u007F-\\uFFFF]+",
@@ -1872,93 +2068,112 @@ const patternCheckBudgets = {
     `^(${I3})\\s*!\\s*([A-Za-z_\\\\][A-Za-z0-9_.\\\\]*)`,
   ),
   sheetSpanPattern = new RegExp(`^${I3}\\s*:\\s*${I3}\\s*!`),
-  Bj = (e) =>
-    e
+  Bj = (rawSheetName) =>
+    rawSheetName
       .trim()
       .replace(/!\s*$/, "")
       .trim()
       .replace(/^'|'$/g, "")
       .replace(/''/g, "'"),
   identifierPattern = /^[A-Za-z_\\][A-Za-z0-9_.\\]*/,
-  isNonReferenceToken = (e) => !/[A-Za-z0-9_.!:]/.test(e),
-  o2e = (e, r) => {
-    const t = _t(r);
-    return e
+  isNonReferenceToken = (token) => !/[A-Za-z0-9_.!:]/.test(token),
+  o2e = (a1Text, originAddress) => {
+    const origin = _t(originAddress);
+    return a1Text
       .replace(/\s/g, "")
       .replace(
         /(\$?)([A-Za-z]{1,3})(\$?)([1-9]\d*)|(?:(\$?)([A-Za-z]{1,3}))|(?:(\$?)([1-9]\d*))/g,
-        (n, o, a, s, d, u, l, c, h) => {
-          const f = (p) =>
-            [...p.toUpperCase()].reduce(
-              (m, v) => m * 26 + v.charCodeAt(0) - 64,
+        (
+          match,
+          columnAbsolute,
+          columnLetters,
+          rowAbsolute,
+          rowNumber,
+          columnOnlyAbsolute,
+          columnOnlyLetters,
+          rowOnlyAbsolute,
+          rowOnlyNumber,
+        ) => {
+          const columnIndexOf = (letters) =>
+            [...letters.toUpperCase()].reduce(
+              (total, letter) => total * 26 + letter.charCodeAt(0) - 64,
               0,
             ) - 1;
-          return a
-            ? `${o ? "C$" + f(a) : "C[" + (f(a) - t.col) + "]"}${s ? "R$" + d : "R[" + (Number(d) - 1 - t.row) + "]"}`
-            : l
-              ? u
-                ? "C$" + f(l)
-                : "C[" + (f(l) - t.col) + "]"
-              : c
-                ? "R$" + h
-                : "R[" + (Number(h) - 1 - t.row) + "]";
+          return columnLetters
+            ? `${columnAbsolute ? "C$" + columnIndexOf(columnLetters) : "C[" + (columnIndexOf(columnLetters) - origin.col) + "]"}${rowAbsolute ? "R$" + rowNumber : "R[" + (Number(rowNumber) - 1 - origin.row) + "]"}`
+            : columnOnlyLetters
+              ? columnOnlyAbsolute
+                ? "C$" + columnIndexOf(columnOnlyLetters)
+                : "C[" + (columnIndexOf(columnOnlyLetters) - origin.col) + "]"
+              : rowOnlyAbsolute
+                ? "R$" + rowOnlyNumber
+                : "R[" + (Number(rowOnlyNumber) - 1 - origin.row) + "]";
         },
       );
   };
-function computeFormulaSignature(raw, r) {
+function computeFormulaSignature(raw, originAddress) {
   if (!raw.startsWith("=") || raw.length > 4096)
     throw Error(
       "Pattern comparison requires a formula of at most 4,096 characters.",
     );
-  _t(r);
-  let t = "",
-    n = 0;
-  for (; n < raw.length;) {
-    const a = raw.slice(n);
-    if (a[0] === '"') {
-      const l = /^"(?:[^"]|"")*"/.exec(a);
-      if (!l)
+  _t(originAddress);
+  let signature = "",
+    position = 0;
+  for (; position < raw.length;) {
+    const remainingText = raw.slice(position);
+    if (remainingText[0] === '"') {
+      const textLiteralMatch = /^"(?:[^"]|"")*"/.exec(remainingText);
+      if (!textLiteralMatch)
         throw Error(
           "An unterminated text literal has no reliable formula signature.",
         );
-      ((t += l[0]), (n += l[0].length));
+      ((signature += textLiteralMatch[0]),
+        (position += textLiteralMatch[0].length));
       continue;
     }
-    const s = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(a);
-    if (s) {
-      const l = n;
-      n += s[0].length;
-      let c = 1;
-      for (; n < raw.length && c;)
-        (raw[n] === "[" && c++, raw[n] === "]" && c--, n++);
-      if (c)
+    const structuredRefMatch = /^([A-Za-z_][A-Za-z0-9_.]*)?\[/.exec(
+      remainingText,
+    );
+    if (structuredRefMatch) {
+      const referenceStart = position;
+      position += structuredRefMatch[0].length;
+      let bracketDepth = 1;
+      for (; position < raw.length && bracketDepth;)
+        (raw[position] === "[" && bracketDepth++,
+          raw[position] === "]" && bracketDepth--,
+          position++);
+      if (bracketDepth)
         throw Error(
           "An incomplete structured reference has no reliable formula signature.",
         );
-      t += raw.slice(l, n);
+      signature += raw.slice(referenceStart, position);
       continue;
     }
-    const d = referenceTokenPattern.exec(a);
+    const referenceMatch = referenceTokenPattern.exec(remainingText);
     if (
-      d &&
-      isNonReferenceToken(a[d[0].length] ?? "") &&
-      !/^\s*\(/.test(a.slice(d[0].length))
+      referenceMatch &&
+      isNonReferenceToken(remainingText[referenceMatch[0].length] ?? "") &&
+      !/^\s*\(/.test(remainingText.slice(referenceMatch[0].length))
     ) {
-      ((t += (d[1]?.toUpperCase() ?? "") + o2e(d[2], r) + (d[3] ?? "")),
-        (n += d[0].length));
+      ((signature +=
+        (referenceMatch[1]?.toUpperCase() ?? "") +
+        o2e(referenceMatch[2], originAddress) +
+        (referenceMatch[3] ?? "")),
+        (position += referenceMatch[0].length));
       continue;
     }
-    const u =
+    const tokenMatch =
       /^(?:[A-Za-z_\\][A-Za-z0-9_.\\]*|(?:\d+(?:\.\d*)?|\.\d+)(?:[Ee][+-]?\d+)?)/.exec(
-        a,
+        remainingText,
       );
-    if (u) {
-      ((t += u[0].toUpperCase()), (n += u[0].length));
+    if (tokenMatch) {
+      ((signature += tokenMatch[0].toUpperCase()),
+        (position += tokenMatch[0].length));
       continue;
     }
-    t += raw[n++];
+    signature += raw[position++];
   }
-  return t;
+  return signature;
 }
 
 export {

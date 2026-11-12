@@ -45,16 +45,18 @@ function createFileAndAnalysisActions({
   async function importWorkbookFromFile(file) {
     if (!file) return;
     operationStatusState.activeOperationControllerRef.current?.abort();
-    const Oe = new AbortController(),
-      Be = ++operationStatusState.latestOperationIdRef.current;
-    operationStatusState.activeOperationControllerRef.current = Oe;
-    const Ue = {
+    const operationController = new AbortController(),
+      operationId = ++operationStatusState.latestOperationIdRef.current;
+    operationStatusState.activeOperationControllerRef.current =
+      operationController;
+    const operationOptions = {
         ...operationScope,
         signal: operationScope.signal
-          ? AbortSignal.any([Oe.signal, operationScope.signal])
-          : Oe.signal,
+          ? AbortSignal.any([operationController.signal, operationScope.signal])
+          : operationController.signal,
       },
-      Xe = () => Be === operationStatusState.latestOperationIdRef.current;
+      isLatestOperation = () =>
+        operationId === operationStatusState.latestOperationIdRef.current;
     (operationStatusState.setIsOperationBusy(true),
       operationStatusState.setErrorNotice(""));
     try {
@@ -67,8 +69,11 @@ function createFileAndAnalysisActions({
       if (/\.(bas|vba|cls|ts|osts|xlsm|xlam|xltm)$/i.test(file.name)) {
         if (file.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const wt = await importAutomationFile(file, Ue);
-        if (!Xe()) return;
+        const automationInspection = await importAutomationFile(
+          file,
+          operationOptions,
+        );
+        if (!isLatestOperation()) return;
         if (
           latestEditStateRef.current.book !== activeWorkbook ||
           latestEditStateRef.current.readOnly
@@ -76,15 +81,15 @@ function createFileAndAnalysisActions({
           throw new Error(
             "The workbook changed while the file was being read. Open the file again.",
           );
-        (dialogState.setAutomationInspection(wt),
+        (dialogState.setAutomationInspection(automationInspection),
           dialogState.setActiveDialogMode("automation"));
         return;
       }
       if (/\.(csv|tsv)$/i.test(file.name)) {
         if (file.size > workbookLimits.maxFileBytes)
           throw new Error("Files must be 10 MB or smaller.");
-        const initial = await importDelimitedFile(file, {}, Ue);
-        if (!Xe()) return;
+        const initial = await importDelimitedFile(file, {}, operationOptions);
+        if (!isLatestOperation()) return;
         if (
           latestEditStateRef.current.book !== activeWorkbook ||
           latestEditStateRef.current.readOnly
@@ -101,8 +106,8 @@ function createFileAndAnalysisActions({
         });
         return;
       }
-      const Nt = await importWorkbookFile(file, Ue);
-      if (!Xe()) return;
+      const importResult = await importWorkbookFile(file, operationOptions);
+      if (!isLatestOperation()) return;
       if (
         latestEditStateRef.current.book !== activeWorkbook ||
         latestEditStateRef.current.readOnly
@@ -110,26 +115,28 @@ function createFileAndAnalysisActions({
         throw new Error(
           "The workbook changed while the file was being read. Import again to replace the current revision.",
         );
-      if (Nt.report) {
+      if (importResult.report) {
         importExportState.setXlsxConversionReview({
           snapshot: activeWorkbook,
-          report: Nt.report,
-          imported: Nt.workbook,
+          report: importResult.report,
+          imported: importResult.workbook,
           fileName: file.name,
         });
         return;
       }
-      (persistenceActions.commitWorkbookChange(Nt.workbook),
+      (persistenceActions.commitWorkbookChange(importResult.workbook),
         navigationActions.switchActiveWorksheet(
-          Nt.workbook.sheets.find((sheet) => !sheet.hidden).id,
+          importResult.workbook.sheets.find((sheet) => !sheet.hidden).id,
         ),
         operationStatusState.setStatusNotice(
-          Nt.warnings.length ? Nt.warnings.join(" ") : "Workbook imported.",
+          importResult.warnings.length
+            ? importResult.warnings.join(" ")
+            : "Workbook imported.",
         ));
     } catch (error) {
-      if (!Xe()) return;
+      if (!isLatestOperation()) return;
       if (
-        !Oe.signal.aborted &&
+        !operationController.signal.aborted &&
         (!(error instanceof FileProcessingError) ||
           ["FILE_ACTIVE", "FILE_INVALID"].includes(error.code)) &&
         /\.xlsx$/i.test(file.name) &&
@@ -137,50 +144,56 @@ function createFileAndAnalysisActions({
         latestEditStateRef.current.book === activeWorkbook
       )
         try {
-          const wt = await importAutomationFile(file, Ue);
+          const fallbackInspection = await importAutomationFile(
+            file,
+            operationOptions,
+          );
           if (
-            Xe() &&
+            isLatestOperation() &&
             !latestEditStateRef.current.readOnly &&
-            wt.items.length &&
+            fallbackInspection.items.length &&
             latestEditStateRef.current.book === activeWorkbook
           ) {
-            (dialogState.setAutomationInspection(wt),
+            (dialogState.setAutomationInspection(fallbackInspection),
               dialogState.setActiveDialogMode("automation"));
             return;
           }
         } catch {}
-      Xe() &&
+      isLatestOperation() &&
         operationStatusState.setErrorNotice(
           toFileProcessingError(error).message,
         );
     } finally {
-      Xe() &&
+      isLatestOperation() &&
         ((operationStatusState.activeOperationControllerRef.current = null),
         operationStatusState.setIsOperationBusy(false),
         importExportState.importFileInputRef.current &&
           (importExportState.importFileInputRef.current.value = ""));
     }
   }
-  async function exportWorkbookAs(fe) {
+  async function exportWorkbookAs(format) {
     (operationStatusState.setIsOperationBusy(true),
       operationStatusState.setErrorNotice(""));
     try {
-      const Oe =
+      const baseFileName =
         activeWorkbook.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) ||
         "Workbook";
-      if (fe === "xlsx") {
-        const Be = await exportWorkbookToXlsx(activeWorkbook);
-        (Be.report.warnings.push(
+      if (format === "xlsx") {
+        const xlsxExport = await exportWorkbookToXlsx(activeWorkbook);
+        (xlsxExport.report.warnings.push(
           "Full workbook export includes all filtered and hidden rows. Session filter views are not saved in XLSX. Use CSV/TSV with Visible population for a filtered extract.",
         ),
           importExportState.setXlsxConversionReview({
             snapshot: activeWorkbook,
-            report: { ...Be.report, fileName: `${Oe}-derived.xlsx` },
-            blob: Be.blob,
-            fileName: `${Oe}-derived.xlsx`,
+            report: {
+              ...xlsxExport.report,
+              fileName: `${baseFileName}-derived.xlsx`,
+            },
+            blob: xlsxExport.blob,
+            fileName: `${baseFileName}-derived.xlsx`,
           }));
       }
-      (fe === "csv" &&
+      (format === "csv" &&
         importExportState.setDelimitedImportExportSource({
           snapshot: activeWorkbook,
           sheetId: activeSheet.id,
@@ -188,7 +201,7 @@ function createFileAndAnalysisActions({
             ? { population: filterResult.context.definition }
             : {}),
         }),
-        fe === "json" &&
+        format === "json" &&
           (operationStatusState.setStatusNotice(
             "Native JSON exports the full workbook, including all filtered and hidden rows and any named filter views. Active session masks are not saved; load named criteria, preview and apply after reopening.",
           ),
@@ -196,7 +209,7 @@ function createFileAndAnalysisActions({
             new Blob([encodeNativeWorkbook(activeWorkbook)], {
               type: "application/json",
             }),
-            `${Oe}.json`,
+            `${baseFileName}.json`,
           )));
     } catch (error) {
       operationStatusState.setErrorNotice(
@@ -212,7 +225,7 @@ function createFileAndAnalysisActions({
         throw Error(
           "Review and apply a current population filter before visible-only analysis.",
         );
-      const fe = runAuditAnalysis(
+      const auditResult = runAuditAnalysis(
         activeWorkbook,
         activeSheet.id,
         auditState.selectedAuditKind,
@@ -238,7 +251,7 @@ function createFileAndAnalysisActions({
           asOf: auditState.agingAsOfDate,
         },
       );
-      (auditState.setAuditAnalysisResult(fe),
+      (auditState.setAuditAnalysisResult(auditResult),
         auditState.setAgingReportPayload({
           schemaVersion: 1,
           workbookId: activeWorkbook.id,
@@ -262,7 +275,7 @@ function createFileAndAnalysisActions({
             seed: auditState.samplingSeed,
             asOf: auditState.agingAsOfDate,
           },
-          result: fe,
+          result: auditResult,
         }),
         operationStatusState.setStatusNotice(
           auditState.auditPopulationScope === "visible"
@@ -271,8 +284,8 @@ function createFileAndAnalysisActions({
         ));
     });
   }
-  async function askAssistantQuestion(fe, conversation) {
-    if (!fe.trim()) return null;
+  async function askAssistantQuestion(question, conversation) {
+    if (!question.trim()) return null;
     if (selectionAreas.length > 1)
       throw (
         operationStatusState.setErrorNotice(
@@ -281,67 +294,67 @@ function createFileAndAnalysisActions({
         new Error("Select one rectangular range before asking the assistant.")
       );
     assistantState.assistantAbortControllerRef.current?.abort();
-    const Be = ++assistantState.assistantRequestIdRef.current;
+    const requestId = ++assistantState.assistantRequestIdRef.current;
     (assistantState.setIsAssistantBusy(true),
       assistantState.setAssistantProposal(null),
       assistantState.setAnswerCitations(null),
       operationStatusState.setErrorNotice(""),
       operationStatusState.setStatusNotice(""));
-    const Ue = new AbortController();
-    assistantState.assistantAbortControllerRef.current = Ue;
+    const assistantController = new AbortController();
+    assistantState.assistantAbortControllerRef.current = assistantController;
     try {
       const assistantSelectionContext = buildAssistantSelectionContext(
           activeWorkbook,
           assistantSelection,
         ),
-        Nt = await requestAssistantAnswer(
+        assistantAnswer = await requestAssistantAnswer(
           adapter,
-          fe,
+          question,
           assistantSelectionContext,
           {
             conversation: conversation,
-            signal: Ue.signal,
+            signal: assistantController.signal,
             reliability: activeReliabilityMonitor,
           },
         );
       if (
-        Ue.signal.aborted ||
-        Be !== assistantState.assistantRequestIdRef.current
+        assistantController.signal.aborted ||
+        requestId !== assistantState.assistantRequestIdRef.current
       )
         return null;
-      const wt = validateProposedCalculation(
+      const validatedProposal = validateProposedCalculation(
         activeWorkbook,
         assistantSelection,
-        Nt,
+        assistantAnswer,
       );
       return (
         assistantState.setAnswerCitations(
           buildAnswerCitations(
             activeWorkbook,
             assistantSelection,
-            wt,
+            validatedProposal,
             assistantSelectionContext,
           ),
         ),
-        assistantState.setAssistantProposal(wt),
-        wt
+        assistantState.setAssistantProposal(validatedProposal),
+        validatedProposal
       );
     } catch (error) {
       if (
-        (Be === assistantState.assistantRequestIdRef.current &&
-          !Ue.signal.aborted &&
+        (requestId === assistantState.assistantRequestIdRef.current &&
+          !assistantController.signal.aborted &&
           operationStatusState.setErrorNotice(
             error instanceof Error
               ? error.message
               : "The assistant could not complete the request.",
           ),
-        Ue.signal.aborted ||
-          Be !== assistantState.assistantRequestIdRef.current)
+        assistantController.signal.aborted ||
+          requestId !== assistantState.assistantRequestIdRef.current)
       )
         return null;
       throw error;
     } finally {
-      Be === assistantState.assistantRequestIdRef.current &&
+      requestId === assistantState.assistantRequestIdRef.current &&
         assistantState.setIsAssistantBusy(false);
     }
   }

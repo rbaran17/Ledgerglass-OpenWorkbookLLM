@@ -12,23 +12,24 @@ function ColorPickerButton({
   onChange,
   disabled,
 }) {
-  const [s, d] = ne.useState(false),
-    u = ne.useRef(null),
-    l = kind === "fill" ? "Fill Color" : "Font Color";
+  const [isPaletteOpen, setPaletteOpen] = ne.useState(false),
+    controlRef = ne.useRef(null),
+    colorLabel = kind === "fill" ? "Fill Color" : "Font Color";
   return (
     ne.useEffect(() => {
-      if (!s) return;
-      const c = (event) => {
-        u.current?.contains(event.target) || d(false);
+      if (!isPaletteOpen) return;
+      const handleDocumentPointerDown = (event) => {
+        controlRef.current?.contains(event.target) || setPaletteOpen(false);
       };
       return (
-        document.addEventListener("pointerdown", c),
-        () => document.removeEventListener("pointerdown", c)
+        document.addEventListener("pointerdown", handleDocumentPointerDown),
+        () =>
+          document.removeEventListener("pointerdown", handleDocumentPointerDown)
       );
-    }, [s]),
+    }, [isPaletteOpen]),
     i.jsxs("div", {
       className: "xl-color-control",
-      ref: u,
+      ref: controlRef,
       children: [
         i.jsxs("button", {
           "data-workbook-command": commandId,
@@ -36,10 +37,10 @@ function ColorPickerButton({
           type: "button",
           className: "xl-icon-button xl-color-button",
           disabled,
-          "aria-label": l,
-          title: reason ? `${l}: ${reason}` : l,
-          "aria-expanded": s,
-          onClick: () => d(!s),
+          "aria-label": colorLabel,
+          title: reason ? `${colorLabel}: ${reason}` : colorLabel,
+          "aria-expanded": isPaletteOpen,
+          onClick: () => setPaletteOpen(!isPaletteOpen),
           children: [
             i.jsx("span", {
               className: "xl-color-glyph",
@@ -55,18 +56,18 @@ function ColorPickerButton({
             i.jsx(ChevronDown, { size: 9 }),
           ],
         }),
-        s &&
+        isPaletteOpen &&
           !disabled &&
           i.jsxs("div", {
             className: "xl-color-palette",
             role: "dialog",
-            "aria-label": l,
+            "aria-label": colorLabel,
             onKeyDown: (event) => {
               event.key === "Escape" &&
                 (event.preventDefault(),
                 event.stopPropagation(),
-                d(false),
-                u.current?.querySelector("button")?.focus());
+                setPaletteOpen(false),
+                controlRef.current?.querySelector("button")?.focus());
             },
             children: [
               i.jsx("strong", {
@@ -74,19 +75,19 @@ function ColorPickerButton({
               }),
               i.jsx("div", {
                 className: "xl-color-grid",
-                children: Wde.map((background, h) =>
+                children: Wde.map((background, swatchIndex) =>
                   i.jsx(
                     "button",
                     {
                       type: "button",
-                      "aria-label": `${l} ${background}`,
+                      "aria-label": `${colorLabel} ${background}`,
                       title: background,
                       style: { background: background },
                       onClick: () => {
-                        (onChange(background), d(false));
+                        (onChange(background), setPaletteOpen(false));
                       },
                     },
-                    `${background}-${h}`,
+                    `${background}-${swatchIndex}`,
                   ),
                 ),
               }),
@@ -96,7 +97,7 @@ function ColorPickerButton({
                   i.jsx(LocalizedText, { children: "More Colors…" }),
                   i.jsx("input", {
                     type: "color",
-                    "aria-label": `Custom ${l}`,
+                    "aria-label": `Custom ${colorLabel}`,
                     value,
                     onChange: (event) => onChange(event.target.value),
                   }),

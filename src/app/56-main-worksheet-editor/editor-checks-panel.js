@@ -151,41 +151,46 @@ function EditorChecksPanel({
                 icon: Clock3,
                 detail: "Bucket transactions by age",
               },
-            ].map((fe) =>
+            ].map((auditCheck) =>
               i.jsxs(
                 "button",
                 {
                   onClick: () => {
-                    if (fe.kind === "materiality" || fe.kind === "aging") {
-                      gridInteractionActions.runEditorCommand(fe.kind);
+                    if (
+                      auditCheck.kind === "materiality" ||
+                      auditCheck.kind === "aging"
+                    ) {
+                      gridInteractionActions.runEditorCommand(auditCheck.kind);
                       return;
                     }
-                    (auditState.setSelectedAuditKind(fe.kind),
+                    (auditState.setSelectedAuditKind(auditCheck.kind),
                       auditState.setAuditAnalysisResult(null));
                   },
                   className:
-                    auditState.selectedAuditKind === fe.kind ? "active" : "",
+                    auditState.selectedAuditKind === auditCheck.kind
+                      ? "active"
+                      : "",
                   children: [
-                    i.jsx(fe.icon, { size: 17 }),
+                    i.jsx(auditCheck.icon, { size: 17 }),
                     i.jsxs("span", {
                       children: [
                         i.jsx("strong", {
-                          children: fe.title,
+                          children: auditCheck.title,
                         }),
                         i.jsx("small", {
-                          children: fe.detail,
+                          children: auditCheck.detail,
                         }),
                       ],
                     }),
                     i.jsx("span", {
                       className: "lg-radio",
                       children:
-                        auditState.selectedAuditKind === fe.kind &&
+                        auditState.selectedAuditKind === auditCheck.kind &&
                         i.jsx("span", {}),
                     }),
                   ],
                 },
-                fe.kind,
+                auditCheck.kind,
               ),
             ),
           ],
@@ -231,8 +236,8 @@ function EditorChecksPanel({
                 "aria-label": text("Materiality threshold"),
                 min: "0",
                 value: auditState.materialityThreshold,
-                onValueChange: (fe) =>
-                  auditState.setMaterialityThreshold(Number(fe)),
+                onValueChange: (thresholdValue) =>
+                  auditState.setMaterialityThreshold(Number(thresholdValue)),
                 lang: language("Materiality threshold"),
                 "data-ui-label": "Materiality threshold",
               }),
@@ -252,8 +257,8 @@ function EditorChecksPanel({
                     "aria-label": text("Sample size"),
                     min: "1",
                     value: auditState.auditSampleSize,
-                    onValueChange: (fe) =>
-                      auditState.setAuditSampleSize(Number(fe)),
+                    onValueChange: (sampleSizeValue) =>
+                      auditState.setAuditSampleSize(Number(sampleSizeValue)),
                     lang: language("Sample size"),
                     "data-ui-label": "Sample size",
                   }),
@@ -363,51 +368,52 @@ function EditorChecksPanel({
                         }),
                         i.jsx("div", {
                           className: "lg-citations",
-                          children: finding.citations.map((citation, Be) =>
-                            i.jsxs(
-                              "button",
-                              {
-                                onClick: () => {
-                                  (filterSortState.setFilterStateByScope(
-                                    (Ue) => {
-                                      const Xe = {
-                                        ...Ue,
-                                      };
-                                      return (
-                                        delete Xe[
-                                          JSON.stringify([
-                                            activeWorkbook.id,
-                                            citation.sheetId,
-                                          ])
-                                        ],
-                                        Xe
-                                      );
-                                    },
-                                  ),
-                                    navigationActions.switchActiveWorksheet(
-                                      citation.sheetId,
+                          children: finding.citations.map(
+                            (citation, citationIndex) =>
+                              i.jsxs(
+                                "button",
+                                {
+                                  onClick: () => {
+                                    (filterSortState.setFilterStateByScope(
+                                      (previousFilterState) => {
+                                        const nextFilterState = {
+                                          ...previousFilterState,
+                                        };
+                                        return (
+                                          delete nextFilterState[
+                                            JSON.stringify([
+                                              activeWorkbook.id,
+                                              citation.sheetId,
+                                            ])
+                                          ],
+                                          nextFilterState
+                                        );
+                                      },
                                     ),
-                                    navigationActions.selectCellAddress(
-                                      citation.address,
-                                    ),
-                                    auditState.setAuditAnalysisResult(
-                                      auditState.auditAnalysisResult,
-                                    ),
-                                    operationStatusState.setStatusNotice(
-                                      `${citation.sheetName}!${citation.address}: ${String(citation.value ?? "")}`,
-                                    ));
+                                      navigationActions.switchActiveWorksheet(
+                                        citation.sheetId,
+                                      ),
+                                      navigationActions.selectCellAddress(
+                                        citation.address,
+                                      ),
+                                      auditState.setAuditAnalysisResult(
+                                        auditState.auditAnalysisResult,
+                                      ),
+                                      operationStatusState.setStatusNotice(
+                                        `${citation.sheetName}!${citation.address}: ${String(citation.value ?? "")}`,
+                                      ));
+                                  },
+                                  children: [
+                                    citation.sheetName,
+                                    "!",
+                                    citation.address,
+                                    i.jsx(ArrowUpRight, {
+                                      size: 10,
+                                    }),
+                                  ],
                                 },
-                                children: [
-                                  citation.sheetName,
-                                  "!",
-                                  citation.address,
-                                  i.jsx(ArrowUpRight, {
-                                    size: 10,
-                                  }),
-                                ],
-                              },
-                              `${citation.address}-${Be}`,
-                            ),
+                                `${citation.address}-${citationIndex}`,
+                              ),
                           ),
                         }),
                       ],

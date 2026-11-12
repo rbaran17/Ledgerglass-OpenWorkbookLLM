@@ -76,10 +76,11 @@ function WorksheetGridRow({
 }) {
   const { text, language } = useWorkbookMessages(),
     workbookMessages = useWorkbookMessages(),
-    se = (cell) => formatCellEntryForEdit(cell, workbookMessages.entryLocale),
+    formatCellForEdit = (cell) =>
+      formatCellEntryForEdit(cell, workbookMessages.entryLocale),
     inputRef = ne.useRef(null),
-    Ee = ne.useRef(null),
-    [caret, ye] = ne.useState(0);
+    suggestionListRef = ne.useRef(null),
+    [caret, setCaret] = ne.useState(0);
   return i.jsx(i.Fragment, {
     children: i.jsxs("tr", {
       role: "row",
@@ -93,7 +94,8 @@ function WorksheetGridRow({
             role: "rowheader",
             scope: "row",
             "data-row-header": row,
-            onClick: (Te) => onRowSelect(Te.shiftKey),
+            onClick: (headerClickEvent) =>
+              onRowSelect(headerClickEvent.shiftKey),
             "aria-label": `Select row ${row + 1}`,
             className: _t(active).row === row ? "lg-selected-header" : "",
             children: [
@@ -118,43 +120,45 @@ function WorksheetGridRow({
               }),
             ],
           }),
-        [...frozenColumns, ...columns].map((col, Pe) => {
+        [...frozenColumns, ...columns].map((col, columnPosition) => {
           const mergeBound = mergeBounds.find((mergeBound) =>
             Tp(mergeBound, row, col),
           );
           let colSpan = 1,
             rowSpan = 1,
-            Me = `${columnIndexToLetters(col)}${row + 1}`;
+            cellAddress = `${columnIndexToLetters(col)}${row + 1}`;
           if (mergeBound && !sortedView) {
-            const lt = (
+            const mergeColumns = (
                 frozenColumns.includes(col) ? frozenColumns : columns
               ).filter(
-                (ft) => ft >= mergeBound.firstCol && ft <= mergeBound.lastCol,
+                (mergeColumn) =>
+                  mergeColumn >= mergeBound.firstCol &&
+                  mergeColumn <= mergeBound.lastCol,
               ),
-              be = displayedRows.filter(
+              mergeRows = displayedRows.filter(
                 (displayedRow) =>
                   displayedRow >= mergeBound.firstRow &&
                   displayedRow <= mergeBound.lastRow,
               );
-            if (col !== lt[0] || row !== be[0]) return null;
-            ((colSpan = lt.length),
-              (rowSpan = be.length),
-              (Me = `${columnIndexToLetters(mergeBound.firstCol)}${mergeBound.firstRow + 1}`));
+            if (col !== mergeColumns[0] || row !== mergeRows[0]) return null;
+            ((colSpan = mergeColumns.length),
+              (rowSpan = mergeRows.length),
+              (cellAddress = `${columnIndexToLetters(mergeBound.firstCol)}${mergeBound.firstRow + 1}`));
           }
-          const cell = cells[Me],
-            je = {
+          const cell = cells[cellAddress],
+            displayCell = {
               ...cell,
               raw: cell?.raw ?? null,
-              style: { ...cell?.style, ...ruleStyles(Me) },
+              style: { ...cell?.style, ...ruleStyles(cellAddress) },
             },
-            $e = calc(sheetId, Me),
-            Je =
-              typeof je?.raw == "string" &&
-              je.raw.startsWith("=") &&
-              !je.literal,
-            ze = active === Me,
-            at = {
-              ...cellStyleToCss(je.style, $e),
+            cellValue = calc(sheetId, cellAddress),
+            isFormula =
+              typeof displayCell?.raw == "string" &&
+              displayCell.raw.startsWith("=") &&
+              !displayCell.literal,
+            isActive = active === cellAddress,
+            cellStyle = {
+              ...cellStyleToCss(displayCell.style, cellValue),
               ...(frozenColumns.includes(col)
                 ? {
                     position: "sticky",
@@ -167,7 +171,7 @@ function WorksheetGridRow({
             ne.Fragment,
             {
               children: [
-                Pe === frozenColumns.length &&
+                columnPosition === frozenColumns.length &&
                   leftGap > 0 &&
                   i.jsx("td", {
                     className: "lg-column-spacer",
@@ -176,51 +180,59 @@ function WorksheetGridRow({
                 i.jsxs(
                   "td",
                   {
-                    id: `${idPrefix}-${Me}`,
+                    id: `${idPrefix}-${cellAddress}`,
                     colSpan: colSpan,
                     rowSpan: rowSpan,
                     "aria-colspan": colSpan > 1 ? colSpan : undefined,
                     "aria-rowspan": rowSpan > 1 ? rowSpan : undefined,
                     role: "gridcell",
-                    "aria-label": `${Me} ${workbookMessages.entryLocale ? formatLocalizedNumberDisplay($e, je, workbook.datePolicy?.dateSystem, workbookMessages.entryLocale) : String($e ?? "")}`,
+                    "aria-label": `${cellAddress} ${workbookMessages.entryLocale ? formatLocalizedNumberDisplay(cellValue, displayCell, workbook.datePolicy?.dateSystem, workbookMessages.entryLocale) : String(cellValue ?? "")}`,
                     "aria-colindex": col + 2,
                     "aria-selected": selectionBounds.some((selectionBound) =>
                       Tp(selectionBound, row, col),
                     ),
-                    "data-address": Me,
+                    "data-address": cellAddress,
                     "data-formula-reference":
                       formulaReference && Tp(formulaReference, row, col)
                         ? "true"
                         : undefined,
-                    className: `${ze ? "lg-cell-active" : ""} ${selectionBounds.some((selectionBound) => Tp(selectionBound, row, col)) ? "lg-cell-selected" : ""} ${Je ? "lg-formula-cell" : ""} ${typeof $e == "string" && $e.startsWith("#") ? "lg-cell-error" : ""} ${frozenColumns.includes(col) ? "lg-frozen-column" : ""}`,
-                    style: at,
-                    title: `${Me}${je?.note ? ` · ${je.note}` : ""}${Je ? ` · ${je.raw}` : ""}`,
+                    className: `${isActive ? "lg-cell-active" : ""} ${selectionBounds.some((selectionBound) => Tp(selectionBound, row, col)) ? "lg-cell-selected" : ""} ${isFormula ? "lg-formula-cell" : ""} ${typeof cellValue == "string" && cellValue.startsWith("#") ? "lg-cell-error" : ""} ${frozenColumns.includes(col) ? "lg-frozen-column" : ""}`,
+                    style: cellStyle,
+                    title: `${cellAddress}${displayCell?.note ? ` · ${displayCell.note}` : ""}${isFormula ? ` · ${displayCell.raw}` : ""}`,
                     onPointerDown: (event) => {
                       event.button !== 0 ||
                         editing !== null ||
                         (event.preventDefault(),
-                        onDragStart(Me, event.ctrlKey || event.metaKey),
+                        onDragStart(
+                          cellAddress,
+                          event.ctrlKey || event.metaKey,
+                        ),
                         select(
-                          Me,
+                          cellAddress,
                           event.shiftKey,
                           event.ctrlKey || event.metaKey,
                         ));
                     },
-                    onPointerEnter: (lt) => onDragEnter(Me, lt.buttons),
-                    onClick: (lt) => {
-                      lt.detail === 0 &&
+                    onPointerEnter: (pointerEnterEvent) =>
+                      onDragEnter(cellAddress, pointerEnterEvent.buttons),
+                    onClick: (clickEvent) => {
+                      clickEvent.detail === 0 &&
                         ((formulaDraftActive &&
-                          onFormulaPick(Me, lt.shiftKey)) ||
-                          select(Me, lt.shiftKey, lt.ctrlKey || lt.metaKey));
+                          onFormulaPick(cellAddress, clickEvent.shiftKey)) ||
+                          select(
+                            cellAddress,
+                            clickEvent.shiftKey,
+                            clickEvent.ctrlKey || clickEvent.metaKey,
+                          ));
                     },
                     onDoubleClick: () => {
                       formulaDraftActive ||
-                        onPivotDrill(Me) ||
+                        onPivotDrill(cellAddress) ||
                         readOnly ||
-                        setEditing(se(je));
+                        setEditing(formatCellForEdit(displayCell));
                     },
                     children: [
-                      ze && editing !== null
+                      isActive && editing !== null
                         ? i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("input", {
@@ -230,14 +242,14 @@ function WorksheetGridRow({
                                   onFormulaInput(event.currentTarget),
                                 autoFocus: true,
                                 readOnly,
-                                "aria-label": `Edit ${Me}`,
+                                "aria-label": `Edit ${cellAddress}`,
                                 "aria-describedby": formulaDraftActive
                                   ? formulaHelpId
                                   : undefined,
                                 value: editing,
                                 onSelect: (event) => {
                                   (onFormulaInput(event.currentTarget),
-                                    ye(
+                                    setCaret(
                                       event.currentTarget.selectionStart ??
                                         editing.length,
                                     ));
@@ -245,7 +257,7 @@ function WorksheetGridRow({
                                 onChange: (event) => {
                                   (setEditing(event.target.value),
                                     onFormulaInput(event.currentTarget, true),
-                                    ye(
+                                    setCaret(
                                       event.target.selectionStart ??
                                         event.target.value.length,
                                     ));
@@ -266,14 +278,18 @@ function WorksheetGridRow({
                                       if (
                                         !formulaReference &&
                                         editing.length > 1 &&
-                                        Ee.current?.handleKeyDown(event)
+                                        suggestionListRef.current?.handleKeyDown(
+                                          event,
+                                        )
                                       )
                                         return;
                                       (event.preventDefault(), onCancelEdit());
                                       return;
                                     }
                                     onFormulaKey(event) ||
-                                      Ee.current?.handleKeyDown(event) ||
+                                      suggestionListRef.current?.handleKeyDown(
+                                        event,
+                                      ) ||
                                       ((event.key === "Enter" ||
                                         event.key === "Tab") &&
                                         (event.preventDefault(),
@@ -289,7 +305,7 @@ function WorksheetGridRow({
                                 },
                               }),
                               i.jsx(FormulaSuggestionList, {
-                                ref: Ee,
+                                ref: suggestionListRef,
                                 onExit: () => {
                                   saveCell(editing);
                                 },
@@ -299,14 +315,14 @@ function WorksheetGridRow({
                                 sheetId,
                                 inputRef: inputRef,
                                 disabled: readOnly,
-                                onAccept: (lt, be) => {
-                                  (setEditing(lt),
-                                    ye(be),
+                                onAccept: (nextValue, nextCaret) => {
+                                  (setEditing(nextValue),
+                                    setCaret(nextCaret),
                                     requestAnimationFrame(() => {
                                       (inputRef.current?.focus(),
                                         inputRef.current?.setSelectionRange(
-                                          be,
-                                          be,
+                                          nextCaret,
+                                          nextCaret,
                                         ));
                                     }));
                                 },
@@ -317,7 +333,7 @@ function WorksheetGridRow({
                             children: [
                               i.jsx("span", {
                                 style: {
-                                  ...textWrapToCss(je.style),
+                                  ...textWrapToCss(displayCell.style),
                                   ...(fixedHeight && rowSpan === 1
                                     ? {
                                         maxHeight: minimumHeight - 1,
@@ -326,22 +342,26 @@ function WorksheetGridRow({
                                     : {}),
                                 },
                                 children:
-                                  showFormulas && Je
-                                    ? String(je.raw)
+                                  showFormulas && isFormula
+                                    ? String(displayCell.raw)
                                     : i.jsx(ConditionalFormatIndicator, {
-                                        decoration: conditionalFormatter(Me),
+                                        decoration:
+                                          conditionalFormatter(cellAddress),
                                         children: i.jsx(CellValuePreview, {
-                                          value: $e,
-                                          cell: je,
+                                          value: cellValue,
+                                          cell: displayCell,
                                           dateSystem:
                                             workbook.datePolicy?.dateSystem,
                                         }),
                                       }),
                               }),
-                              filterHeader?.some((lt) => lt.column === col) &&
+                              filterHeader?.some(
+                                (filterHeaderEntry) =>
+                                  filterHeaderEntry.column === col,
+                              ) &&
                                 i.jsx("button", {
                                   className: "lg-header-filter",
-                                  "aria-label": `Filter ${filterHeader.find((lt) => lt.column === col).label} column`,
+                                  "aria-label": `Filter ${filterHeader.find((columnFilterEntry) => columnFilterEntry.column === col).label} column`,
                                   "aria-pressed": filteredColumns.includes(col),
                                   onPointerDown: (event) =>
                                     event.stopPropagation(),
@@ -353,16 +373,17 @@ function WorksheetGridRow({
                                   lang: language("Filter this column"),
                                   children: "▾",
                                 }),
-                              je?.hyperlink &&
-                                (je.hyperlink.kind === "external"
+                              displayCell?.hyperlink &&
+                                (displayCell.hyperlink.kind === "external"
                                   ? i.jsx("a", {
                                       className: "lg-cell-link",
-                                      href: je.hyperlink.url,
+                                      href: displayCell.hyperlink.url,
                                       target: "_blank",
                                       rel: "noopener noreferrer",
-                                      "aria-label": `Open link at ${Me}`,
+                                      "aria-label": `Open link at ${cellAddress}`,
                                       title:
-                                        je.hyperlink.label || je.hyperlink.url,
+                                        displayCell.hyperlink.label ||
+                                        displayCell.hyperlink.url,
                                       onPointerDown: (event) =>
                                         event.stopPropagation(),
                                       onClick: (event) =>
@@ -371,15 +392,15 @@ function WorksheetGridRow({
                                     })
                                   : i.jsx("button", {
                                       className: "lg-cell-link",
-                                      "aria-label": `Open link at ${Me}`,
+                                      "aria-label": `Open link at ${cellAddress}`,
                                       title:
-                                        je.hyperlink.label ||
-                                        `Go to ${je.hyperlink.address}`,
+                                        displayCell.hyperlink.label ||
+                                        `Go to ${displayCell.hyperlink.address}`,
                                       onPointerDown: (event) =>
                                         event.stopPropagation(),
                                       onClick: (event) => {
                                         event.stopPropagation();
-                                        const hyperlink = je.hyperlink;
+                                        const hyperlink = displayCell.hyperlink;
                                         hyperlink?.kind === "internal" &&
                                           onLink(
                                             hyperlink.sheetId,
@@ -388,28 +409,29 @@ function WorksheetGridRow({
                                       },
                                       children: "↗",
                                     })),
-                              commentAddresses.has(Me) &&
+                              commentAddresses.has(cellAddress) &&
                                 i.jsx("button", {
                                   className: "lg-comment-marker",
                                   style: {
-                                    right: je?.note ? 8 : 0,
+                                    right: displayCell?.note ? 8 : 0,
                                   },
-                                  "aria-label": `Review comments at ${Me}`,
+                                  "aria-label": `Review comments at ${cellAddress}`,
                                   title: text("Open review discussion"),
                                   onPointerDown: (event) =>
                                     event.stopPropagation(),
                                   onClick: (event) => {
-                                    (event.stopPropagation(), onReview(Me));
+                                    (event.stopPropagation(),
+                                      onReview(cellAddress));
                                   },
                                   lang: language("Open review discussion"),
                                   children: "●",
                                 }),
-                              je?.note &&
+                              displayCell?.note &&
                                 i.jsx("i", { className: "lg-note-marker" }),
-                              je?.tickmark &&
+                              displayCell?.tickmark &&
                                 i.jsx("span", {
                                   className: "lg-tick",
-                                  children: je.tickmark,
+                                  children: displayCell.tickmark,
                                 }),
                             ],
                           }),
@@ -425,9 +447,9 @@ function WorksheetGridRow({
                             "Drag to extend the selection; use Fill Series for keyboard options",
                           ),
                           onPointerDown: onFillStart,
-                          onClick: (lt) => {
-                            (lt.stopPropagation(),
-                              lt.detail === 0 && onFillOptions());
+                          onClick: (fillClickEvent) => {
+                            (fillClickEvent.stopPropagation(),
+                              fillClickEvent.detail === 0 && onFillOptions());
                           },
                           onDoubleClick: (event) => event.stopPropagation(),
                           lang: language("Fill handle"),
@@ -435,11 +457,11 @@ function WorksheetGridRow({
                         }),
                     ],
                   },
-                  `${Me}:${row}:${col}`,
+                  `${cellAddress}:${row}:${col}`,
                 ),
               ],
             },
-            `${Me}:${row}:${col}`,
+            `${cellAddress}:${row}:${col}`,
           );
         }),
         rightGap > 0 &&

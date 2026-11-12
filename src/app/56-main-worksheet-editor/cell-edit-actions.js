@@ -40,10 +40,13 @@ function createCellEditActions({
     patches,
     action = "Edit cells",
     selectionGuard,
-    Ue,
+    expectedSheetId,
   ) {
     try {
-      if (Ue && patches.some((patch) => patch.sheetId !== Ue))
+      if (
+        expectedSheetId &&
+        patches.some((patch) => patch.sheetId !== expectedSheetId)
+      )
         throw Error("The formula destination changed.");
       persistenceActions.commitWorkbookChange(
         applyCellPatchTransaction(
@@ -56,7 +59,7 @@ function createCellEditActions({
         false,
         undefined,
         true,
-        Ue,
+        expectedSheetId,
       );
     } catch (error) {
       throw (
@@ -83,34 +86,37 @@ function createCellEditActions({
       formulaEntryState.setActiveFormulaReference(null),
       formulaEntryState.setIsFormulaPointMode(true));
   }
-  function syncFormulaEditorSelection(fe, Oe = false) {
-    const Be = formulaEntryState.formulaPointerStateRef.current,
-      Ue = fe.selectionStart ?? fe.value.length,
-      Xe = fe.selectionEnd ?? Ue;
-    ((Be.input = fe),
-      !(Be.restoring && !Oe) &&
-        ((Be.restoring = false),
-        (Be.start = Ue),
-        (Be.end = Xe),
-        (Oe || (Be.span && (Ue !== Be.span.end || Xe !== Ue))) &&
-          ((Be.span = undefined),
-          (Be.anchor = undefined),
-          (Be.head = undefined),
+  function syncFormulaEditorSelection(inputElement, shouldForceReset = false) {
+    const pointerState = formulaEntryState.formulaPointerStateRef.current,
+      selectionStart = inputElement.selectionStart ?? inputElement.value.length,
+      selectionEnd = inputElement.selectionEnd ?? selectionStart;
+    ((pointerState.input = inputElement),
+      !(pointerState.restoring && !shouldForceReset) &&
+        ((pointerState.restoring = false),
+        (pointerState.start = selectionStart),
+        (pointerState.end = selectionEnd),
+        (shouldForceReset ||
+          (pointerState.span &&
+            (selectionStart !== pointerState.span.end ||
+              selectionEnd !== selectionStart))) &&
+          ((pointerState.span = undefined),
+          (pointerState.anchor = undefined),
+          (pointerState.head = undefined),
           formulaEntryState.setActiveFormulaReference(null))));
   }
   function restoreFormulaEditorFocus() {
     ((formulaEntryState.formulaPointerStateRef.current.restoring = true),
       requestAnimationFrame(() => {
         if (!formulaEntryState.activeCellEditRef.current) return;
-        const fe = formulaEntryState.formulaPointerStateRef.current,
-          Oe = fe.input?.isConnected
-            ? fe.input
+        const pointerState = formulaEntryState.formulaPointerStateRef.current,
+          inputElement = pointerState.input?.isConnected
+            ? pointerState.input
             : formulaEntryState.formulaInputRef.current;
-        (Oe &&
-          ((fe.input = Oe),
-          Oe.focus({ preventScroll: true }),
-          Oe.setSelectionRange(fe.start, fe.end)),
-          (fe.restoring = false));
+        (inputElement &&
+          ((pointerState.input = inputElement),
+          inputElement.focus({ preventScroll: true }),
+          inputElement.setSelectionRange(pointerState.start, pointerState.end)),
+          (pointerState.restoring = false));
       }));
   }
   function isFormulaEditingLocked() {
@@ -122,26 +128,29 @@ function createCellEditActions({
     );
     return readOnly || !sheet || !!sheet.protection?.enabled;
   }
-  function switchToEditSheet(fe) {
-    fe.sheetId !== activeSheet.id &&
-      (setActiveSheetId(fe.sheetId),
-      selectionState.setActiveCellAddress(fe.address),
-      selectionState.setSelectionAnchorAddress(fe.address),
-      viewAndSelectionActions.selectSingleRange(fe.address),
+  function switchToEditSheet(cellEdit) {
+    cellEdit.sheetId !== activeSheet.id &&
+      (setActiveSheetId(cellEdit.sheetId),
+      selectionState.setActiveCellAddress(cellEdit.address),
+      selectionState.setSelectionAnchorAddress(cellEdit.address),
+      viewAndSelectionActions.selectSingleRange(cellEdit.address),
       filterSortState.setActiveColumnSort(null),
       filterSortState.setFilterValueSearch(""),
-      navigationState.setPendingScrollAddress(fe.address));
+      navigationState.setPendingScrollAddress(cellEdit.address));
   }
-  function beginCellEdit(fe, Oe = false) {
-    const Be = formulaEntryState.activeCellEditRef.current
+  function beginCellEdit(editText, shouldSetCellEditState = false) {
+    const spillAnchorAddress = formulaEntryState.activeCellEditRef.current
       ? undefined
       : workbookCalculator.getSpillAnchor(
           activeSheet.id,
           selectionState.activeCellAddress,
         );
-    if (Be && Be !== selectionState.activeCellAddress) {
+    if (
+      spillAnchorAddress &&
+      spillAnchorAddress !== selectionState.activeCellAddress
+    ) {
       operationStatusState.setErrorNotice(
-        `This cell belongs to the array formula in ${Be}. Edit that cell instead.`,
+        `This cell belongs to the array formula in ${spillAnchorAddress}. Edit that cell instead.`,
       );
       return;
     }
@@ -153,7 +162,7 @@ function createCellEditActions({
         address:
           formulaEntryState.activeCellEditRef.current?.address ??
           selectionState.activeCellAddress,
-        value: fe,
+        value: editText,
         locale: formulaEntryState.activeCellEditRef.current
           ? formulaEntryState.activeCellEditRef.current.locale
           : workbookMessages.entryLocale,
@@ -163,17 +172,17 @@ function createCellEditActions({
             activeSheet.cells[selectionState.activeCellAddress],
           ),
       }),
-      formulaEntryState.setCellEditText(fe),
-      Oe && formulaEntryState.setCellEditState(fe));
+      formulaEntryState.setCellEditText(editText),
+      shouldSetCellEditState && formulaEntryState.setCellEditState(editText));
   }
   function cancelCellEdit() {
-    const fe = formulaEntryState.activeCellEditRef.current;
-    (fe && switchToEditSheet(fe),
+    const activeCellEdit = formulaEntryState.activeCellEditRef.current;
+    (activeCellEdit && switchToEditSheet(activeCellEdit),
       resetFormulaEditSession(),
       (formulaEntryState.activeCellEditRef.current = null),
       formulaEntryState.setCellEditState(null),
       formulaEntryState.setCellEditText(
-        fe?.originalText ??
+        activeCellEdit?.originalText ??
           getEditableCellText(
             activeSheet.cells[selectionState.activeCellAddress],
           ),
@@ -181,41 +190,44 @@ function createCellEditActions({
       viewAndSelectionActions.focusGridSurface());
   }
   function commitCellEdit(fe) {
-    const Oe = formulaEntryState.activeCellEditRef.current;
-    if (!Oe) return true;
+    const activeCellEdit = formulaEntryState.activeCellEditRef.current;
+    if (!activeCellEdit) return true;
     try {
-      const Xe = autoCloseFormulaParens(Oe.value),
+      const entryText = autoCloseFormulaParens(activeCellEdit.value),
         cell = latestEditStateRef.current.book.sheets.find(
-          (sheet) => sheet.id === Oe.sheetId,
-        )?.cells[Oe.address];
+          (sheet) => sheet.id === activeCellEdit.sheetId,
+        )?.cells[activeCellEdit.address];
       return (
-        Xe !== Oe.originalText &&
+        entryText !== activeCellEdit.originalText &&
           applyCellPatches(
             [
               {
-                sheetId: Oe.sheetId,
-                address: Oe.address,
+                sheetId: activeCellEdit.sheetId,
+                address: activeCellEdit.address,
                 cell: parseLocalizedCellEntry(
-                  Xe,
+                  entryText,
                   cell,
                   latestEditStateRef.current.book.datePolicy?.dateSystem,
-                  Oe.locale,
+                  activeCellEdit.locale,
                 ),
               },
             ],
             "Edit cells",
             undefined,
-            Oe.sheetId,
+            activeCellEdit.sheetId,
           ),
         (navigationState.pendingCrossSheetTargetRef.current =
-          Oe.sheetId !== activeSheet.id
-            ? { sheetId: Oe.sheetId, address: Oe.address }
+          activeCellEdit.sheetId !== activeSheet.id
+            ? {
+                sheetId: activeCellEdit.sheetId,
+                address: activeCellEdit.address,
+              }
             : null),
-        switchToEditSheet(Oe),
+        switchToEditSheet(activeCellEdit),
         resetFormulaEditSession(),
         (formulaEntryState.activeCellEditRef.current = null),
         formulaEntryState.setCellEditState(null),
-        formulaEntryState.setCellEditText(Xe),
+        formulaEntryState.setCellEditText(entryText),
         true
       );
     } catch (error) {
@@ -229,29 +241,34 @@ function createCellEditActions({
       );
     }
   }
-  function applyCellFormatPatch(fe) {
+  function applyCellFormatPatch(formatPatch) {
     viewAndSelectionActions.runGuardedAction(() => {
-      const Oe = viewAndSelectionActions.getSelectedCellAddresses();
+      const selectedAddresses =
+        viewAndSelectionActions.getSelectedCellAddresses();
       if (
-        fe.style &&
-        (Object.hasOwn(fe.style, "border") ||
-          Object.hasOwn(fe.style, "borders")) &&
-        Oe.some((Be) => (activeSheet.merges ?? []).some((Ue) => lD(Ue, Be)))
+        formatPatch.style &&
+        (Object.hasOwn(formatPatch.style, "border") ||
+          Object.hasOwn(formatPatch.style, "borders")) &&
+        selectedAddresses.some((address) =>
+          (activeSheet.merges ?? []).some((mergeRange) =>
+            lD(mergeRange, address),
+          ),
+        )
       )
         throw Error("Unmerge selected cells before changing border edges.");
       applyCellPatches(
-        Oe.map((address) => ({
+        selectedAddresses.map((address) => ({
           sheetId: activeSheet.id,
           address: address,
           cell: {
             ...activeSheet.cells[address],
             raw: activeSheet.cells[address]?.raw ?? null,
-            ...fe,
-            ...(fe.style
+            ...formatPatch,
+            ...(formatPatch.style
               ? {
                   style: {
                     ...activeSheet.cells[address]?.style,
-                    ...fe.style,
+                    ...formatPatch.style,
                   },
                 }
               : {}),
