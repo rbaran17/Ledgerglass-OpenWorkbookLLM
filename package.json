@@ -7,7 +7,6 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "build:lib": "node scripts/build-file-worker.mjs && node scripts/build-calculation-worker.mjs && vite build --config vite.lib.config.ts && vite build --config vite.mcp.config.ts && node scripts/build-node-calculation.mjs && tsc -p tsconfig.lib.json && node scripts/finalize-lib.mjs && node scripts/build-file-worker.mjs --emit-lib && node scripts/build-source-gateway.mjs && node scripts/build-source-connectors.mjs",
     "test": "npm run test:deployment && npm run test:unit",
     "test:unit": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
@@ -16,11 +15,6 @@
     "build:portable": "npm run build && node scripts/portable.mjs",
     "format": "prettier --write src tests scripts *.ts",
     "mcp": "node scripts/mcp-stdio.mjs",
-    "generate:examples": "node scripts/generate-examples.mjs",
-    "check:claims": "node scripts/release-claims.mjs",
-    "update:coverage": "node scripts/release-claims.mjs --write",
-    "verify:release": "npm run build:lib && npm run build:portable && npm test -- --reporter=json --outputFile=work/release-tests.json && npm run check:claims -- --report work/release-tests.json",
-    "demo:sources": "node scripts/source-connectors-demo.mjs",
     "build:container": "npm run build -- --outDir dist-container && node deploy/prepare-assets.mjs dist-container",
     "start:container": "node deploy/server.mjs",
     "test:deployment": "node --test deploy/tests/*.test.mjs",
@@ -61,36 +55,16 @@
     "vitest": "^5.1.0"
   },
   "exports": {
-    ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/ledgerglass.js"
-    },
-    "./style.css": "./lib/ledgerglass.css",
-    "./mcp": "./src/mcp/server.js",
-    "./calculation-node": {
-      "types": "./lib/integrations/node-calculation.d.ts",
-      "import": "./lib/node-calculation.js"
-    },
-    "./file-worker.js": "./lib/file-worker.js",
-    "./source-gateway": {
-      "types": "./lib/integrations/source-gateway.d.ts",
-      "import": "./lib/source-gateway.js"
-    },
-    "./source-connectors": {
-      "types": "./lib/integrations/source-connectors.d.ts",
-      "import": "./lib/source-connectors.js"
-    }
+    "./mcp": "./src/mcp/server.js"
   },
   "files": [
-    "lib",
-    "docs",
     "README.md",
     "LICENSE",
     "THIRD-PARTY-NOTICES.txt",
+    "docs",
     "scripts/mcp-stdio.mjs",
     "src/mcp",
-    "src/app",
-    "deploy/ReactHost.example.tsx"
+    "src/app"
   ],
   "overrides": {
     "exceljs": {
