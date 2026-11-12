@@ -58,10 +58,8 @@ export default function App() {
   const [status, setStatus] = useState("");
   // Download reads the latest workbook from here, so it never waits for a re-render.
   const latest = useRef(opened);
-  console.log('render App');
 
   const remember = useCallback((workbook) => {
-    window.__remember = (window.__remember ?? 0) + 1;
     latest.current = workbook;
     setCurrent({ name: workbook.name, revision: workbook.revision });
   }, []);
