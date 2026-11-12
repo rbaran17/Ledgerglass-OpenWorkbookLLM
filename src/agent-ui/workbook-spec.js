@@ -242,7 +242,8 @@ export function buildWorkbookFromSpec(spec, options = {}) {
     problems.push(
       `The workbook has ${cellCount} filled cells; the most that can be shown is ${workbookSpecLimits.maxCells}.`,
     );
-  if (problems.length) throw new WorkbookSpecError(problems.slice(0, 20));
+  if (problems.length)
+    throw new WorkbookSpecError([...new Set(problems)].slice(0, 20));
 
   const blank = createBlankWorkbook(title);
   const template = blank.sheets[0];
