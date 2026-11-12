@@ -142,15 +142,14 @@ const jR = "ledgerglass-analysis-v1",
     applied: boolean(),
   });
 function EU(e) {
-  var n, o;
   const r = xU.safeParse(e);
   if (!r.success)
     throw Error(
-      `Invalid analysis request: ${(n = r.error.issues[0]) == null ? void 0 : n.path.join(".")}: ${(o = r.error.issues[0]) == null ? void 0 : o.message}`,
+      `Invalid analysis request: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
     );
   const t = r.data;
   if (t.kind === "solver") {
-    if (t.direction === "target" && t.target === void 0)
+    if (t.direction === "target" && t.target === undefined)
       throw Error("Enter a finite target value.");
     if (
       new Set(t.variables.map((a) => JSON.stringify(a.cell))).size !==
@@ -178,22 +177,16 @@ function EU(e) {
   return t;
 }
 function Aoe(e, r) {
-  var o, a, s, d;
   const t = e;
   let n = 0;
   for (const u of r.sheets) {
-    const l =
-      (o = t.sheets.find((m) => m.id === u.id)) == null
-        ? void 0
-        : o.analysisReport;
-    if (l === void 0) continue;
+    const l = t.sheets.find((m) => m.id === u.id)?.analysisReport;
+    if (l === undefined) continue;
     if (((n += JSON.stringify(l).length), n > ig.metadataCharacters))
       throw Error("Analysis metadata exceeds 2,000,000 characters.");
     const c = Coe.safeParse(l);
     if (!c.success)
-      throw Error(
-        `Invalid analysis report: ${(a = c.error.issues[0]) == null ? void 0 : a.message}`,
-      );
+      throw Error(`Invalid analysis report: ${c.error.issues[0]?.message}`);
     const h = c.data;
     if (
       ((h.request = EU(h.request)),
@@ -220,11 +213,9 @@ function Aoe(e, r) {
     if (
       (h.request.kind === "solver" &&
         (h.result.status !== "optimal" ||
-          ((s = h.result.solution) == null ? void 0 : s.length) !==
-            h.request.variables.length ||
-          ((d = h.result.baseline) == null ? void 0 : d.length) !==
-            h.request.variables.length ||
-          h.result.objective === void 0)) ||
+          h.result.solution?.length !== h.request.variables.length ||
+          h.result.baseline?.length !== h.request.variables.length ||
+          h.result.objective === undefined)) ||
       (h.request.kind === "statistics" &&
         (h.result.status !== "complete" || h.applied))
     )
@@ -250,7 +241,7 @@ const CU = "ledgerglass-report-output-v1",
   zE = string().regex(/^[a-f0-9]{64}$/),
   AU = string().datetime();
 const W5 = (e) => {
-  const { hash: r, ...t } = e;
+  const { hash, ...t } = e;
   return hr(t);
 };
 const t0 = Object.freeze({
@@ -441,7 +432,7 @@ function UO(e) {
         );
       for (
         ;
-        d().kind === "op" && h[d().value] !== void 0 && h[d().value] >= m;
+        d().kind === "op" && h[d().value] !== undefined && h[d().value] >= m;
       ) {
         const y = u().value,
           w = h[y];
@@ -564,11 +555,10 @@ const PR = "ledgerglass-columnar-v1",
       throw Error(`${r} must be unique, including case variants.`);
   };
 function WE(e) {
-  var o, a;
   const r = SU.safeParse(e);
   if (!r.success)
     throw Error(
-      `Invalid data model: ${(o = r.error.issues[0]) == null ? void 0 : o.path.join(".")}: ${(a = r.error.issues[0]) == null ? void 0 : a.message}`,
+      `Invalid data model: ${r.error.issues[0]?.path.join(".")}: ${r.error.issues[0]?.message}`,
     );
   const t = r.data;
   if (
@@ -593,7 +583,7 @@ function WE(e) {
       "Measure names",
     ),
     t.tables.reduce(
-      (s, d) => s + d.columns.filter((u) => u.expression !== void 0).length,
+      (s, d) => s + d.columns.filter((u) => u.expression !== undefined).length,
       0,
     ) > t0.calculatedColumns)
   )
@@ -604,7 +594,7 @@ function WE(e) {
         s.columns.map((d) => d.name),
         `Columns in ${s.name}`,
       ),
-      !s.columns.some((d) => d.expression === void 0))
+      !s.columns.some((d) => d.expression === undefined))
     )
       throw Error(
         "A model table requires at least one physical source column.",
@@ -616,7 +606,7 @@ function WE(e) {
           d.name === s.dateColumn &&
           d.type === "date" &&
           !d.nullable &&
-          d.expression === void 0,
+          d.expression === undefined,
       )
     )
       throw Error(
@@ -625,7 +615,7 @@ function WE(e) {
   }
   const n = (s) => {
     const d = t.tables.find((l) => l.id === s.tableId),
-      u = d == null ? void 0 : d.columns.find((l) => l.name === s.column);
+      u = d?.columns.find((l) => l.name === s.column);
     if (!u) throw Error(`Unknown model field ${s.tableId}.${s.column}.`);
     return u;
   };
@@ -636,7 +626,7 @@ function WE(e) {
       );
     if (n(s.one).type !== n(s.many).type)
       throw Error(`Relationship ${s.id} requires matching key types.`);
-    if (n(s.one).expression !== void 0 || n(s.many).expression !== void 0)
+    if (n(s.one).expression !== undefined || n(s.many).expression !== undefined)
       throw Error(
         "Relationship keys must be physical source columns, not DAX calculated columns.",
       );
@@ -645,17 +635,17 @@ function WE(e) {
     if (!t.tables.some((d) => d.id === s.tableId))
       throw Error(`Unknown measure table ${s.tableId}.`);
     if (s.operation === "dax") {
-      if (!s.expression || s.column !== void 0)
+      if (!s.expression || s.column !== undefined)
         throw Error(
           "A DAX measure requires an expression and no aggregate column.",
         );
     } else {
-      if (s.expression !== void 0)
+      if (s.expression !== undefined)
         throw Error(
           "Unrecognized expression for an aggregate measure; only DAX measures may contain it.",
         );
       if (s.operation === "countRows") {
-        if (s.column !== void 0)
+        if (s.column !== undefined)
           throw Error("Count rows does not take a column.");
       } else {
         const d = n({ tableId: s.tableId, column: s.column ?? "" });
@@ -670,12 +660,10 @@ function WE(e) {
   return t;
 }
 function UR(e, r) {
-  var o, a;
+  var a;
   const t = TU.safeParse(e);
   if (!t.success)
-    throw Error(
-      `Invalid model query: ${(o = t.error.issues[0]) == null ? void 0 : o.message}`,
-    );
+    throw Error(`Invalid model query: ${t.error.issues[0]?.message}`);
   const n = t.data;
   (mp(n.measureIds, "Selected measures"),
     mp(
@@ -706,27 +694,21 @@ const lk = string().regex(/^[a-f0-9]{64}$/),
     totals: array(number().finite().nullable()).max(ta.measures),
   });
 function Boe(e, r) {
-  var o, a;
   const t = e;
   let n = 0;
-  if (t.dataModel !== void 0) {
+  if (t.dataModel !== undefined) {
     if (((n += JSON.stringify(t.dataModel).length), n > ta.metadataCharacters))
       throw Error("Data model metadata exceeds 2,000,000 characters.");
     r.dataModel = WE(t.dataModel);
   }
   for (const s of r.sheets) {
-    const d =
-      (o = t.sheets.find((c) => c.id === s.id)) == null
-        ? void 0
-        : o.dataModelReport;
-    if (d === void 0) continue;
+    const d = t.sheets.find((c) => c.id === s.id)?.dataModelReport;
+    if (d === undefined) continue;
     if (((n += JSON.stringify(d).length), n > ta.metadataCharacters))
       throw Error("Data model metadata exceeds 2,000,000 characters.");
     const u = Foe.safeParse(d);
     if (!u.success)
-      throw Error(
-        `Invalid model report: ${(a = u.error.issues[0]) == null ? void 0 : a.message}`,
-      );
+      throw Error(`Invalid model report: ${u.error.issues[0]?.message}`);
     const l = u.data;
     if (
       ((l.definition = WE(l.definition)),
@@ -849,7 +831,7 @@ const Uoe = object({
   })
     .strict()
     .refine(
-      (e) => e.decision !== "correct" || e.value !== void 0,
+      (e) => e.decision !== "correct" || e.value !== undefined,
       "A corrected value is required.",
     ),
   $oe = object({
@@ -894,9 +876,8 @@ function kC(e) {
   return r;
 }
 function $R(e) {
-  var a;
   const r = HE.parse(e),
-    t = (a = r.fileName.split(".").at(-1)) == null ? void 0 : a.toLowerCase();
+    t = r.fileName.split(".").at(-1)?.toLowerCase();
   if ((t === "jpg" ? "jpeg" : t === "htm" ? "html" : t) !== r.format)
     throw Error("Source extension and format disagree.");
   if (
@@ -941,7 +922,7 @@ function MU(e) {
   for (const r of Object.values(e)) r && typeof r == "object" && MU(r);
 }
 function Voe(e, r) {
-  if (e.sourceImports === void 0) return;
+  if (e.sourceImports === undefined) return;
   if (!Array.isArray(e.sourceImports) || e.sourceImports.length > Cd.imports)
     throw Error("Source import count exceeded.");
   if (
@@ -1052,7 +1033,7 @@ function Woe(e, r) {
   return (SC(n), Object.freeze(n), q5.add(n), n);
 }
 function Hoe(e, r) {
-  if (e.xlsxSource === void 0) return;
+  if (e.xlsxSource === undefined) return;
   const t = e.xlsxSource;
   if (t && typeof t == "object" && q5.has(t)) {
     r.xlsxSource = t;
@@ -1120,7 +1101,7 @@ function FU(e, r, t, n) {
   return (qR(o), Object.freeze(o.conversion), Object.freeze(o), jU.add(o), o);
 }
 function qoe(e, r) {
-  if (e.alternateSource === void 0) return;
+  if (e.alternateSource === undefined) return;
   const t = e.alternateSource;
   if (jU.has(t)) {
     r.alternateSource = t;
@@ -1220,7 +1201,7 @@ function VO(e) {
   return r;
 }
 function Yoe(e, r) {
-  if (e.automationArtifacts !== void 0) {
+  if (e.automationArtifacts !== undefined) {
     if (
       !Array.isArray(e.automationArtifacts) ||
       e.automationArtifacts.length > ol.maxArtifacts
@@ -1264,7 +1245,7 @@ function Yoe(e, r) {
       };
     });
   }
-  if (e.automationRuns !== void 0) {
+  if (e.automationRuns !== undefined) {
     if (
       !Array.isArray(e.automationRuns) ||
       e.automationRuns.length > ol.maxRuns
@@ -1318,7 +1299,7 @@ function Yoe(e, r) {
   }
 }
 function Joe(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (!e || typeof e != "object" || Array.isArray(e))
     throw Error("Invalid delimited source footprint.");
   const t = e;
@@ -1430,19 +1411,15 @@ Engagement: &[Engagement] · Period: &[Period]`,
   },
   GR = /&&|&\[(Workbook|Revision|Engagement|Period)\]|&[PNA]/g;
 function UU(e, r) {
-  var t, n;
   return e === "Workbook"
-    ? ((r == null ? void 0 : r.name) ?? "[Workbook not available]")
+    ? (r?.name ?? "[Workbook not available]")
     : e === "Revision"
       ? r
         ? String(r.revision)
         : "[Revision not available]"
       : e === "Engagement"
-        ? ((t = r == null ? void 0 : r.metadata) == null
-            ? void 0
-            : t.engagement) || "[Engagement not set]"
-        : ((n = r == null ? void 0 : r.metadata) == null ? void 0 : n.period) ||
-          "[Period not set]";
+        ? r?.metadata?.engagement || "[Engagement not set]"
+        : r?.metadata?.period || "[Period not set]";
 }
 function rae(e, r, t, n, o) {
   return e.replace(GR, (a, s) =>
@@ -1471,7 +1448,7 @@ function XO(e, r) {
   return t;
 }
 function GE(e, r) {
-  if (e !== void 0) {
+  if (e !== undefined) {
     if (
       !Array.isArray(e) ||
       e.length > wg.breaksPerAxis ||
@@ -1486,7 +1463,7 @@ function GE(e, r) {
       throw Error(
         "Manual page breaks require at most 100 distinct ascending boundaries within each worksheet axis (before row/column 2 or later).",
       );
-    return e.length ? [...e] : void 0;
+    return e.length ? [...e] : undefined;
   }
 }
 function nae(e) {
@@ -1697,11 +1674,10 @@ const Z5 = {
     steps: array(dae).max(12),
   });
 function KU(e) {
-  var n;
   const r = fae.safeParse(e);
   if (!r.success)
     throw Error(
-      `Invalid field transformation: ${((n = r.error.issues[0]) == null ? void 0 : n.message) ?? "review the recipe"}`,
+      `Invalid field transformation: ${r.error.issues[0]?.message ?? "review the recipe"}`,
     );
   const t = r.data;
   if (

@@ -24,7 +24,7 @@ import {
 } from "./50-materiality-screen.js";
 
 function Z4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -76,14 +76,9 @@ function Z4e(e) {
         : YW(e.workbook, y, C, T)
       : null,
     U = $ != null && $.disclose ? y : null,
-    G =
-      (U == null ? void 0 : U.results.find((ce) => ce.rule.id === V)) ??
-      (U == null ? void 0 : U.results[0]),
-    H = V === "combined" ? (U == null ? void 0 : U.combination) : G,
-    Q = Math.max(
-      1,
-      Math.ceil(((H == null ? void 0 : H.rows.length) ?? 0) / gf.pageSize),
-    ),
+    G = U?.results.find((ce) => ce.rule.id === V) ?? U?.results[0],
+    H = V === "combined" ? U?.combination : G,
+    Q = Math.max(1, Math.ceil((H?.rows.length ?? 0) / gf.pageSize)),
     X$1 = Math.min(B, Q - 1),
     J = G4e(C.range),
     q = e.workbook.sheets.find((ce) => ce.id === e.sheetId),
@@ -103,15 +98,12 @@ function Z4e(e) {
         z(""));
     };
   ne.useEffect(() => {
-    var ge, se;
+    var se;
     d.current = true;
     const ce = document.activeElement;
     return (
-      (se =
-        (ge = a.current) == null
-          ? void 0
-          : ge.querySelector('[data-ui-label="Source range"]')) == null ||
-        se.focus(),
+      (se = a.current?.querySelector('[data-ui-label="Source range"]')) ==
+        null || se.focus(),
       () => {
         ((d.current = false),
           s.current++,
@@ -159,16 +151,10 @@ function Z4e(e) {
       }
     },
     he = (ce) => {
-      var ge;
       try {
         const se = ct(C.range),
-          we =
-            (ge =
-              q == null ? void 0 : q.cells[`${ut(ce)}${se.firstRow + 1}`]) ==
-            null
-              ? void 0
-              : ge.raw;
-        return `${ut(ce)}${C.headers && we !== null && we !== void 0 ? " — " + String(we).slice(0, 60) : ""}`;
+          we = q?.cells[`${ut(ce)}${se.firstRow + 1}`]?.raw;
+        return `${ut(ce)}${C.headers && we !== null && we !== undefined ? " — " + String(we).slice(0, 60) : ""}`;
       } catch {
         return ut(ce);
       }
@@ -236,17 +222,14 @@ function Z4e(e) {
       "aria-labelledby": o,
       ref: a,
       onKeyDown: (ce) => {
-        var ge;
         if (
           (ce.key === "Escape" && (ce.stopPropagation(), e.onClose()),
           ce.key === "Tab")
         ) {
           const se = Array.from(
-              ((ge = a.current) == null
-                ? void 0
-                : ge.querySelectorAll(
-                    "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
-                  )) ?? [],
+              a.current?.querySelectorAll(
+                "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
+              ) ?? [],
             ).filter((Ae) => Ae.getClientRects().length),
             we = se[0],
             Ee = se.at(-1);
@@ -275,9 +258,9 @@ function Z4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close pattern checks"),
+              "aria-label": text("Close pattern checks"),
               onClick: e.onClose,
-              lang: t("Close pattern checks"),
+              lang: language("Close pattern checks"),
               "data-ui-label": "Close pattern checks",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -296,10 +279,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: C.range,
                   onChange: (ce) => W({ range: ce.target.value }),
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -308,10 +291,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Compare" }),
                 i.jsxs("select", {
-                  "aria-label": r("Comparison basis"),
+                  "aria-label": text("Comparison basis"),
                   value: C.comparison,
                   onChange: (ce) => W({ comparison: ce.target.value }),
-                  lang: t("Comparison basis"),
+                  lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
                   children: [
                     i.jsx("option", {
@@ -330,7 +313,7 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Exclude row numbers (comma separated)" }),
                 i.jsx("input", {
-                  "aria-label": r("Excluded rows"),
+                  "aria-label": text("Excluded rows"),
                   value: f,
                   onChange: (ce) => {
                     (p(ce.target.value),
@@ -340,7 +323,7 @@ function Z4e(e) {
                           : [],
                       }));
                   },
-                  lang: t("Excluded rows"),
+                  lang: language("Excluded rows"),
                   "data-ui-label": "Excluded rows",
                 }),
               ],
@@ -699,10 +682,10 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Add a rule" }),
                 i.jsx("select", {
-                  "aria-label": r("New rule type"),
+                  "aria-label": text("New rule type"),
                   value: g,
                   onChange: (ce) => b(ce.target.value),
-                  lang: t("New rule type"),
+                  lang: language("New rule type"),
                   "data-ui-label": "New rule type",
                   children: Object.entries(iN).map(([ce, ge]) =>
                     i.jsx("option", { value: ce, children: ge }, ce),
@@ -740,13 +723,13 @@ function Z4e(e) {
                 i.jsx(M, { children: "Match" }),
                 " ",
                 i.jsxs("select", {
-                  "aria-label": r("Combination mode"),
+                  "aria-label": text("Combination mode"),
                   value: C.combination.mode,
                   onChange: (ce) =>
                     W({
                       combination: { ...C.combination, mode: ce.target.value },
                     }),
-                  lang: t("Combination mode"),
+                  lang: language("Combination mode"),
                   "data-ui-label": "Combination mode",
                   children: [
                     i.jsx("option", {
@@ -853,15 +836,13 @@ function Z4e(e) {
               children: [
                 i.jsx(M, { children: "Load configuration" }),
                 i.jsx("input", {
-                  "aria-label": r("Load pattern configuration"),
+                  "aria-label": text("Load pattern configuration"),
                   type: "file",
                   accept: ".json,application/json",
                   onChange: (ce) => {
-                    var ge;
-                    (de((ge = ce.target.files) == null ? void 0 : ge[0]),
-                      (ce.target.value = ""));
+                    (de(ce.target.files?.[0]), (ce.target.value = ""));
                   },
-                  lang: t("Load pattern configuration"),
+                  lang: language("Load pattern configuration"),
                   "data-ui-label": "Load pattern configuration",
                 }),
               ],
@@ -886,8 +867,8 @@ function Z4e(e) {
         U &&
           i.jsxs("section", {
             className: "materiality-result",
-            "aria-label": r("Pattern report"),
-            lang: t("Pattern report"),
+            "aria-label": text("Pattern report"),
+            lang: language("Pattern report"),
             "data-ui-label": "Pattern report",
             children: [
               i.jsxs("h3", {
@@ -970,12 +951,12 @@ function Z4e(e) {
                 children: [
                   i.jsx(M, { children: "Evidence ledger" }),
                   i.jsxs("select", {
-                    "aria-label": r("Evidence rule"),
+                    "aria-label": text("Evidence rule"),
                     value: V,
                     onChange: (ce) => {
                       (D(ce.target.value), _(0));
                     },
-                    lang: t("Evidence rule"),
+                    lang: language("Evidence rule"),
                     "data-ui-label": "Evidence rule",
                     children: [
                       U.results.map((ce) =>
@@ -1021,44 +1002,40 @@ function Z4e(e) {
                       }),
                     }),
                     i.jsx("tbody", {
-                      children:
-                        H == null
-                          ? void 0
-                          : H.rows.slice(X$1 * 20, (X$1 + 1) * 20).map((ce) => {
-                              var ge;
-                              return i.jsxs(
-                                "tr",
-                                {
-                                  children: [
-                                    i.jsx("td", { children: ce.sourceRow }),
-                                    i.jsx("td", { children: ce.disposition }),
-                                    i.jsx("td", {
-                                      children:
-                                        [...ce.reasons, ...ce.findingIds].join(
-                                          " · ",
-                                        ) || "—",
-                                    }),
-                                    i.jsx("td", {
-                                      children: JSON.stringify(
-                                        (ge = U.rows.find(
-                                          (se) => se.sourceRow === ce.sourceRow,
-                                        )) == null
-                                          ? void 0
-                                          : ge.values,
-                                      ),
-                                    }),
-                                  ],
-                                },
-                                ce.sourceRow,
-                              );
-                            }),
+                      children: H?.rows
+                        .slice(X$1 * 20, (X$1 + 1) * 20)
+                        .map((ce) => {
+                          return i.jsxs(
+                            "tr",
+                            {
+                              children: [
+                                i.jsx("td", { children: ce.sourceRow }),
+                                i.jsx("td", { children: ce.disposition }),
+                                i.jsx("td", {
+                                  children:
+                                    [...ce.reasons, ...ce.findingIds].join(
+                                      " · ",
+                                    ) || "—",
+                                }),
+                                i.jsx("td", {
+                                  children: JSON.stringify(
+                                    U.rows.find(
+                                      (se) => se.sourceRow === ce.sourceRow,
+                                    )?.values,
+                                  ),
+                                }),
+                              ],
+                            },
+                            ce.sourceRow,
+                          );
+                        }),
                     }),
                   ],
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Evidence pages"),
-                lang: t("Evidence pages"),
+                "aria-label": text("Evidence pages"),
+                lang: language("Evidence pages"),
                 "data-ui-label": "Evidence pages",
                 children: [
                   i.jsx("button", {
@@ -1087,7 +1064,7 @@ function Z4e(e) {
               }),
               i.jsxs("p", {
                 children: [
-                  (H == null ? void 0 : H.findings.length) ?? 0,
+                  H?.findings.length ?? 0,
                   " ",
                   i.jsx(M, {
                     children:
@@ -1097,58 +1074,55 @@ function Z4e(e) {
               }),
               i.jsx("div", {
                 className: "pattern-findings",
-                children:
-                  H == null
-                    ? void 0
-                    : H.findings.map((ce) =>
-                        i.jsxs(
-                          "details",
-                          {
+                children: H?.findings.map((ce) =>
+                  i.jsxs(
+                    "details",
+                    {
+                      children: [
+                        i.jsxs("summary", {
+                          children: [ce.title, " · ", ce.id],
+                        }),
+                        i.jsx("p", { children: ce.detail }),
+                        i.jsxs("p", {
+                          children: [
+                            i.jsx(M, { children: "Rule " }),
+                            ce.rule.id,
+                            " ",
+                            i.jsx(M, { children: "v" }),
+                            ce.rule.version,
+                            i.jsx(M, { children: "; group " }),
+                            ce.group.id,
+                            i.jsx(M, { children: "; source rows " }),
+                            ce.group.memberRows.join(", "),
+                          ],
+                        }),
+                        ce.missing &&
+                          i.jsxs("p", {
                             children: [
-                              i.jsxs("summary", {
-                                children: [ce.title, " · ", ce.id],
-                              }),
-                              i.jsx("p", { children: ce.detail }),
-                              i.jsxs("p", {
-                                children: [
-                                  i.jsx(M, { children: "Rule " }),
-                                  ce.rule.id,
-                                  " ",
-                                  i.jsx(M, { children: "v" }),
-                                  ce.rule.version,
-                                  i.jsx(M, { children: "; group " }),
-                                  ce.group.id,
-                                  i.jsx(M, { children: "; source rows " }),
-                                  ce.group.memberRows.join(", "),
-                                ],
-                              }),
-                              ce.missing &&
-                                i.jsxs("p", {
-                                  children: [
-                                    i.jsx(M, { children: "Missing values: " }),
-                                    ce.missing.count,
-                                    i.jsx(M, { children: "; interval" }),
-                                    " ",
-                                    ce.missing.first,
-                                    "–",
-                                    ce.missing.last,
-                                    i.jsx(M, { children: "; step " }),
-                                    ce.missing.step,
-                                    i.jsx(M, { children: "; examples " }),
-                                    ce.missing.examples.join(", "),
-                                    ce.missing.examplesTruncated
-                                      ? " (first 20 only; complete interval above)"
-                                      : "",
-                                  ],
-                                }),
-                              i.jsx("pre", {
-                                children: JSON.stringify(ce, null, 2),
-                              }),
+                              i.jsx(M, { children: "Missing values: " }),
+                              ce.missing.count,
+                              i.jsx(M, { children: "; interval" }),
+                              " ",
+                              ce.missing.first,
+                              "–",
+                              ce.missing.last,
+                              i.jsx(M, { children: "; step " }),
+                              ce.missing.step,
+                              i.jsx(M, { children: "; examples " }),
+                              ce.missing.examples.join(", "),
+                              ce.missing.examplesTruncated
+                                ? " (first 20 only; complete interval above)"
+                                : "",
                             ],
-                          },
-                          ce.id,
-                        ),
-                      ),
+                          }),
+                        i.jsx("pre", {
+                          children: JSON.stringify(ce, null, 2),
+                        }),
+                      ],
+                    },
+                    ce.id,
+                  ),
+                ),
               }),
               i.jsxs("details", {
                 children: [
@@ -1190,10 +1164,10 @@ function JW(e) {
       sheetName: e.sheetName,
       range: e.range,
       ...PJ(e),
-      cells: e.cells.map(({ address: r, raw: t, value: n }) => ({
-        address: r,
-        raw: t,
-        value: n,
+      cells: e.cells.map(({ address, raw, value }) => ({
+        address,
+        raw,
+        value,
       })),
     }),
   );
@@ -1203,7 +1177,7 @@ const QW = new WeakMap(),
     JSON.stringify([
       e.sheetId,
       TI(e.range),
-      e.ranges && e.ranges.length !== 1 ? e.ranges : void 0,
+      e.ranges && e.ranges.length !== 1 ? e.ranges : undefined,
     ]);
 function tH(e, r, t) {
   const n = e.sheets.find((s) => s.id === r);
@@ -1224,7 +1198,6 @@ function tH(e, r, t) {
   return n;
 }
 function Mj(e, r, t, n, o = {}) {
-  var v;
   const a = X2(e, r, t),
     s = s3(e, r);
   if (JSON.stringify(s) !== JSON.stringify(n))
@@ -1305,9 +1278,10 @@ function Mj(e, r, t, n, o = {}) {
       approvedSelection: { sheetId: r.sheetId, range: s.range },
       citations: c,
       claims: p,
-      externalSources: (
-        ((v = a.grounding) == null ? void 0 : v.externalSources) ?? []
-      ).map((g) => ({ ...g, status: "supplied-not-verified" })),
+      externalSources: (a.grounding?.externalSources ?? []).map((g) => ({
+        ...g,
+        status: "supplied-not-verified",
+      })),
       sourceOriginsIncluded: o.includeSourceOrigins !== false,
       notes: [
         "Workbook citation identity, approved scope, captured values and revision are checked locally. These checks do not prove that the cited cells logically support every claim; the reviewer must inspect the evidence.",
@@ -1357,8 +1331,8 @@ function fg(e, r, t) {
     return JW(s3(e, r)) !== t.contextSha256
       ? o("Calculated source values changed. Request a fresh answer.")
       : {
-          current: !0,
-          disclose: !0,
+          current: true,
+          disclose: true,
           reason: "Current approved source and revision.",
         };
   } catch {
@@ -1382,7 +1356,7 @@ function J4e(e, r, t) {
 const jj = (e) =>
   e === null ? "(blank)" : typeof e == "string" ? JSON.stringify(e) : String(e);
 function Q4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(""),
     [d, u] = ne.useState(""),
@@ -1396,10 +1370,7 @@ function Q4e(e) {
     });
   const f = e.evidence,
     p = f.citations.find((b) => b.id === n),
-    m = Math.max(
-      1,
-      Math.ceil(((p == null ? void 0 : p.cells.length) ?? 0) / 20),
-    ),
+    m = Math.max(1, Math.ceil((p?.cells.length ?? 0) / 20)),
     v = Math.min(l, m - 1),
     g = (b, y) => {
       try {
@@ -1417,8 +1388,8 @@ function Q4e(e) {
     };
   return i.jsxs("section", {
     className: "lg-answer-evidence",
-    "aria-label": r("Assistant answer evidence"),
-    lang: t("Assistant answer evidence"),
+    "aria-label": text("Assistant answer evidence"),
+    lang: language("Assistant answer evidence"),
     "data-ui-label": "Assistant answer evidence",
     children: [
       f.mode === "legacy-unverified" &&
@@ -1522,8 +1493,8 @@ function Q4e(e) {
       p &&
         i.jsxs("section", {
           className: "lg-citation-inspector",
-          "aria-label": r("Citation source details"),
-          lang: t("Citation source details"),
+          "aria-label": text("Citation source details"),
+          lang: language("Citation source details"),
           "data-ui-label": "Citation source details",
           children: [
             i.jsxs("h4", { children: [p.sheetName, "!", p.range] }),
@@ -1623,8 +1594,8 @@ function Q4e(e) {
               ),
             ),
             i.jsxs("nav", {
-              "aria-label": r("Citation evidence pages"),
-              lang: t("Citation evidence pages"),
+              "aria-label": text("Citation evidence pages"),
+              lang: language("Citation evidence pages"),
               "data-ui-label": "Citation evidence pages",
               children: [
                 i.jsx("button", {
@@ -1689,7 +1660,7 @@ const $h = {
   },
   Vf = (e) =>
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("="),
-  yp = (e) => (e == null ? void 0 : e.raw) ?? null,
+  yp = (e) => e?.raw ?? null,
   Fj = (e) => yp(e) === null || yp(e) === "",
   ww = (e, r) => {
     if (e === r) return true;
@@ -1704,10 +1675,10 @@ const $h = {
     const t = e,
       n = r,
       o = Object.keys(t)
-        .filter((s) => t[s] !== void 0)
+        .filter((s) => t[s] !== undefined)
         .sort(),
       a = Object.keys(n)
-        .filter((s) => n[s] !== void 0)
+        .filter((s) => n[s] !== undefined)
         .sort();
     return (
       o.length === a.length && o.every((s, d) => s === a[d] && ww(t[s], n[s]))
@@ -1755,7 +1726,6 @@ const $h = {
       );
   };
 function a2e(e, r) {
-  var o;
   if (!e.startsWith("=") || e.length > 4096)
     throw Error(
       "Pattern comparison requires a formula of at most 4,096 characters.",
@@ -1790,10 +1760,7 @@ function a2e(e, r) {
     }
     const d = rH.exec(a);
     if (d && nH(a[d[0].length] ?? "") && !/^\s*\(/.test(a.slice(d[0].length))) {
-      ((t +=
-        (((o = d[1]) == null ? void 0 : o.toUpperCase()) ?? "") +
-        o2e(d[2], r) +
-        (d[3] ?? "")),
+      ((t += (d[1]?.toUpperCase() ?? "") + o2e(d[2], r) + (d[3] ?? "")),
         (n += d[0].length));
       continue;
     }

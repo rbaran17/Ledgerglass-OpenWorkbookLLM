@@ -3,21 +3,28 @@ import i from "react/jsx-runtime";
 import ne from "react";
 import { PR, Ta, _t, cn, ct, ta, ut } from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
-import { O7, fce, gce, hce, mce, pce, ql, uce, uz } from "./14-dax-data-model-engine.js";
+import {
+  O7,
+  fce,
+  gce,
+  hce,
+  mce,
+  pce,
+  ql,
+  uce,
+  uz,
+} from "./14-dax-data-model-engine.js";
 
 function vce(e) {
-  var ae, oe, de, he, Se;
-  const { text: r } = Dr(),
+  var oe, Se;
+  const { text } = Dr(),
     t = ne.useRef(e);
   t.current = e;
   const n = ne.useId(),
-    o =
-      (ae = e.workbook.sheets.find((le) => le.id === e.sheetId)) == null
-        ? void 0
-        : ae.dataModelReport,
+    o = e.workbook.sheets.find((le) => le.id === e.sheetId)?.dataModelReport,
     [a, s] = ne.useState(() =>
       structuredClone(
-        (o == null ? void 0 : o.definition) ??
+        o?.definition ??
           e.workbook.dataModel ?? {
             engine: PR,
             name: "Workbook model",
@@ -29,7 +36,7 @@ function vce(e) {
     ),
     [d, u] = ne.useState(() =>
       structuredClone(
-        (o == null ? void 0 : o.query) ?? {
+        o?.query ?? {
           groupBy: [],
           filters: [],
           measureIds: a.measures.map((le) => le.id),
@@ -62,11 +69,10 @@ function vce(e) {
     z = ne.useRef(null),
     V = ne.useRef(false);
   ne.useEffect(() => {
-    var ce, ge;
+    var ge;
     const le = document.activeElement;
     return (
-      (ge = (ce = z.current) == null ? void 0 : ce.querySelector("button")) ==
-        null || ge.focus(),
+      (ge = z.current?.querySelector("button")) == null || ge.focus(),
       () => {
         le != null && le.isConnected && le.focus();
       }
@@ -88,26 +94,25 @@ function vce(e) {
     },
     T = (le) => a.tables.find((ce) => ce.id === le),
     N = (le) => {
-      var ce, ge;
-      return (
-        ((ge = (ce = T(le)) == null ? void 0 : ce.columns[0]) == null
-          ? void 0
-          : ge.name) ?? ""
-      );
+      return T(le)?.columns[0]?.name ?? "";
     },
     R = (le, ce, ge) =>
       i.jsx("input", {
-        "aria-label": r(le),
+        "aria-label": text(le),
         value: ce,
         onChange: (se) => ge(se.target.value),
       }),
     L = (le, ce, ge, se) =>
       i.jsx("select", {
-        "aria-label": r(le),
+        "aria-label": text(le),
         value: ce,
         onChange: (we) => se(we.target.value),
         children: ge.map((we) =>
-          i.jsx("option", { value: we.value, children: r(we.label) }, we.value),
+          i.jsx(
+            "option",
+            { value: we.value, children: text(we.label) },
+            we.value,
+          ),
         ),
       }),
     $ = (le) => le.map((ce) => ({ value: ce, label: ce })),
@@ -119,16 +124,7 @@ function vce(e) {
         ge,
       ),
     G = (le, ce, ge, se) => {
-      var we;
-      return L(
-        le,
-        ge,
-        $(
-          ((we = T(ce)) == null ? void 0 : we.columns.map((Ee) => Ee.name)) ??
-            [],
-        ),
-        se,
-      );
+      return L(le, ge, $(T(ce)?.columns.map((Ee) => Ee.name) ?? []), se);
     },
     H = (le, ce) =>
       _({
@@ -156,7 +152,7 @@ function vce(e) {
     };
   function X$1() {
     try {
-      const le = uce(e.workbook, h, p, v || void 0, D);
+      const le = uce(e.workbook, h, p, v || undefined, D);
       let ce = le.name,
         ge = 2;
       for (; a.tables.some((se) => se.name.toLowerCase() === ce.toLowerCase());)
@@ -170,7 +166,7 @@ function vce(e) {
     try {
       (E(""),
         I(0),
-        (V.current = !1),
+        (V.current = false),
         k(fce(e.workbook, { definition: a, query: d, outputName: O }, D)),
         c("Preview"));
     } catch (le) {
@@ -186,7 +182,7 @@ function vce(e) {
             allowedSheetIds: ce.allowedSheetIds,
             includeHidden: !!ce.allowHidden && b,
           });
-        ((V.current = !0),
+        ((V.current = true),
           ce.onWorkbookChange(
             ge,
             le === "save"
@@ -198,7 +194,7 @@ function vce(e) {
         E(ce.message);
       }
   }
-  const W = A == null ? void 0 : A.result,
+  const W = A?.result,
     K =
       !!(W != null && W.complete) &&
       !e.readOnly &&
@@ -261,14 +257,14 @@ function vce(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close data model"),
+              "aria-label": text("Close data model"),
               onClick: e.onClose,
               children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
         i.jsx("nav", {
-          "aria-label": r("Data model sections"),
+          "aria-label": text("Data model sections"),
           children: [
             "Tables",
             "Calculated columns",
@@ -295,7 +291,7 @@ function vce(e) {
               i.jsx("p", {
                 role: "alert",
                 className: "lg-model-error",
-                children: r(w),
+                children: text(w),
               }),
             e.readOnly &&
               i.jsx("p", {
@@ -340,11 +336,8 @@ function vce(e) {
                           [
                             { value: "", label: "Cell range" },
                             ...(
-                              ((de = e.workbook.sheets.find(
-                                (le) => le.id === h,
-                              )) == null
-                                ? void 0
-                                : de.tables) ?? []
+                              e.workbook.sheets.find((le) => le.id === h)
+                                ?.tables ?? []
                             ).map((le) => ({ value: le.id, label: le.name })),
                           ],
                           g,
@@ -383,10 +376,7 @@ function vce(e) {
                   e.workbook.dataModel &&
                     i.jsx("button", {
                       disabled:
-                        e.readOnly ||
-                        ((he = e.workbook.structureProtection) == null
-                          ? void 0
-                          : he.enabled),
+                        e.readOnly || e.workbook.structureProtection?.enabled,
                       onClick: () => {
                         try {
                           const le = t.current;
@@ -402,7 +392,6 @@ function vce(e) {
                       children: i.jsx(M, { children: "Remove saved model" }),
                     }),
                   a.tables.map((le) => {
-                    var ce;
                     return i.jsxs(
                       "fieldset",
                       {
@@ -419,11 +408,9 @@ function vce(e) {
                               ),
                               i.jsxs("span", {
                                 children: [
-                                  ((ce = e.workbook.sheets.find(
+                                  e.workbook.sheets.find(
                                     (ge) => ge.id === le.sheetId,
-                                  )) == null
-                                    ? void 0
-                                    : ce.name) ?? r("Missing worksheet"),
+                                  )?.name ?? text("Missing worksheet"),
                                   " ",
                                   "· ",
                                   le.range,
@@ -945,7 +932,6 @@ function vce(e) {
                         }),
                       }),
                       d.filters.map((le, ce) => {
-                        var we, Ee;
                         const ge = (Ae) =>
                             C({
                               ...d,
@@ -953,15 +939,9 @@ function vce(e) {
                                 Te === ce ? Ae : ye,
                               ),
                             }),
-                          se =
-                            (Ee =
-                              (we = T(le.tableId)) == null
-                                ? void 0
-                                : we.columns.find(
-                                    (Ae) => Ae.name === le.column,
-                                  )) == null
-                              ? void 0
-                              : Ee.type;
+                          se = T(le.tableId)?.columns.find(
+                            (Ae) => Ae.name === le.column,
+                          )?.type;
                         return i.jsxs(
                           "div",
                           {
@@ -973,7 +953,7 @@ function vce(e) {
                                   tableId: Ae,
                                   column: N(Ae),
                                   operator: "blank",
-                                  value: void 0,
+                                  value: undefined,
                                 }),
                               ),
                               G(
@@ -985,7 +965,7 @@ function vce(e) {
                                     ...le,
                                     column: Ae,
                                     operator: "blank",
-                                    value: void 0,
+                                    value: undefined,
                                   }),
                               ),
                               L(
@@ -1006,7 +986,7 @@ function vce(e) {
                                     ...le,
                                     operator: Ae,
                                     value: ["blank", "notBlank"].includes(Ae)
-                                      ? void 0
+                                      ? undefined
                                       : se === "number"
                                         ? 0
                                         : se === "boolean"
@@ -1080,27 +1060,27 @@ function vce(e) {
                     children: [
                       i.jsxs("div", {
                         role: "status",
-                        "aria-label": r("Model preview status"),
+                        "aria-label": text("Model preview status"),
                         className: "lg-model-summary",
                         children: [
                           W.complete
-                            ? r("Model checks passed")
-                            : r("Model blocked"),
+                            ? text("Model checks passed")
+                            : text("Model blocked"),
                           " ",
                           "· ",
                           W.tables.length,
                           " ",
-                          r("tables"),
+                          text("tables"),
                           " ·",
                           " ",
                           W.operations.toLocaleString(),
                           " ",
-                          r("operations"),
+                          text("operations"),
                         ],
                       }),
                       W.diagnostics.length > 0 &&
                         i.jsxs("table", {
-                          "aria-label": r("Model diagnostics"),
+                          "aria-label": text("Model diagnostics"),
                           children: [
                             i.jsx("thead", {
                               children: i.jsxs("tr", {
@@ -1123,7 +1103,6 @@ function vce(e) {
                             }),
                             i.jsx("tbody", {
                               children: W.diagnostics.map((le, ce) => {
-                                var ge;
                                 return i.jsxs(
                                   "tr",
                                   {
@@ -1131,14 +1110,14 @@ function vce(e) {
                                       i.jsx("td", { children: le.code }),
                                       i.jsxs("td", {
                                         children: [
-                                          (ge = T(le.tableId ?? "")) == null
-                                            ? void 0
-                                            : ge.name,
+                                          T(le.tableId ?? "")?.name,
                                           " ",
                                           le.row ?? "",
                                         ],
                                       }),
-                                      i.jsx("td", { children: r(le.message) }),
+                                      i.jsx("td", {
+                                        children: text(le.message),
+                                      }),
                                     ],
                                   },
                                   ce,
@@ -1148,7 +1127,7 @@ function vce(e) {
                           ],
                         }),
                       i.jsxs("table", {
-                        "aria-label": r("Model source controls"),
+                        "aria-label": text("Model source controls"),
                         children: [
                           i.jsx("thead", {
                             children: i.jsx("tr", {
@@ -1170,7 +1149,6 @@ function vce(e) {
                           }),
                           i.jsx("tbody", {
                             children: W.tables.map((le) => {
-                              var ce;
                               return i.jsxs(
                                 "tr",
                                 {
@@ -1181,11 +1159,9 @@ function vce(e) {
                                     }),
                                     i.jsxs("td", {
                                       children: [
-                                        (ce = e.workbook.sheets.find(
+                                        e.workbook.sheets.find(
                                           (ge) => ge.id === le.sheetId,
-                                        )) == null
-                                          ? void 0
-                                          : ce.name,
+                                        )?.name,
                                         "!",
                                         le.range,
                                       ],
@@ -1219,7 +1195,7 @@ function vce(e) {
                               }),
                             }),
                             i.jsxs("table", {
-                              "aria-label": r("Calculated column results"),
+                              "aria-label": text("Calculated column results"),
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsxs("tr", {
@@ -1239,7 +1215,6 @@ function vce(e) {
                                 }),
                                 i.jsx("tbody", {
                                   children: W.calculatedColumns.map((le) => {
-                                    var ce;
                                     return i.jsxs(
                                       "tr",
                                       {
@@ -1247,9 +1222,7 @@ function vce(e) {
                                           i.jsxs("th", {
                                             scope: "row",
                                             children: [
-                                              (ce = T(le.tableId)) == null
-                                                ? void 0
-                                                : ce.name,
+                                              T(le.tableId)?.name,
                                               ".",
                                               le.name,
                                             ],
@@ -1259,7 +1232,7 @@ function vce(e) {
                                               .slice(0, 25)
                                               .map((ge) =>
                                                 ge === null
-                                                  ? r("Blank")
+                                                  ? text("Blank")
                                                   : String(ge),
                                               )
                                               .join(", "),
@@ -1279,7 +1252,7 @@ function vce(e) {
                         i.jsxs(i.Fragment, {
                           children: [
                             i.jsxs("table", {
-                              "aria-label": r("Model measure results"),
+                              "aria-label": text("Model measure results"),
                               children: [
                                 i.jsx("thead", {
                                   children: i.jsx("tr", {
@@ -1304,7 +1277,7 @@ function vce(e) {
                                               {
                                                 children:
                                                   ge === null
-                                                    ? r("Blank")
+                                                    ? text("Blank")
                                                     : String(ge),
                                               },
                                               se,
@@ -1330,7 +1303,9 @@ function vce(e) {
                                             "td",
                                             {
                                               children:
-                                                le === null ? r("Blank") : le,
+                                                le === null
+                                                  ? text("Blank")
+                                                  : le,
                                             },
                                             ce,
                                           ),
@@ -1428,15 +1403,10 @@ function vce(e) {
     }),
   });
 }
-function bce({ workbook: e, sheetId: r, options: t, onReview: n }) {
+function bce({ workbook, sheetId, options, onReview }) {
   const o = ne.useMemo(
-    () => mce(e, r, t),
-    [
-      e,
-      r,
-      t == null ? void 0 : t.includeHidden,
-      t == null ? void 0 : t.allowedSheetIds,
-    ],
+    () => mce(workbook, sheetId, options),
+    [workbook, sheetId, options?.includeHidden, options?.allowedSheetIds],
   );
   return o.status === "none"
     ? null
@@ -1458,7 +1428,7 @@ function bce({ workbook: e, sheetId: r, options: t, onReview: n }) {
             ],
           }),
           i.jsx("button", {
-            onClick: n,
+            onClick: onReview,
             children: i.jsx(M, { children: "Review model" }),
           }),
         ],
@@ -1495,7 +1465,7 @@ function K4(e) {
   );
 }
 function wce(e) {
-  const r = ne.useRef(void 0);
+  const r = ne.useRef(undefined);
   (ne.useLayoutEffect(() => {
     const t = e.current;
     if (!t) return;
@@ -1550,7 +1520,7 @@ function wce(e) {
                 w.setAttribute("aria-hidden", "true"));
             b = b.parentElement;
           }
-          const y = m ? a.get(m) : void 0;
+          const y = m ? a.get(m) : undefined;
           if (!p.contains(document.activeElement)) {
             const w =
               g && y && p.contains(y) && Hv(y) && !y.matches(":disabled")
@@ -1617,13 +1587,12 @@ function wce(e) {
           t.removeEventListener("keydown", h, true),
           document.removeEventListener("focusin", c, true),
           u(),
-          (r.current = void 0));
+          (r.current = undefined));
       }
     );
   }, [e]),
     ne.useLayoutEffect(() => {
-      var t;
-      return (t = r.current) == null ? void 0 : t.call(r);
+      return r.current?.call(r);
     }));
 }
 const ih = {
@@ -1733,7 +1702,7 @@ function Ace(e) {
     cz(e.delimiter),
     ["none", "first-row"].includes(e.header) ||
       Nn("Choose whether the first source row contains headings."),
-    e.formats !== void 0 &&
+    e.formats !== undefined &&
       (!Array.isArray(e.formats) ||
         e.formats.length > ih.fields ||
         e.formats.some((t) => !["text", "general"].includes(t))) &&
@@ -1786,10 +1755,10 @@ function Ace(e) {
 function wI(e, r) {
   return (
     [r.readOnly, r.includeHidden, r.allowNewSheet].some(
-      (t) => t !== void 0 && typeof t != "boolean",
+      (t) => t !== undefined && typeof t != "boolean",
     ) && Nn("Text to Columns permissions must be boolean."),
     r.readOnly && Nn("This workbook is read-only."),
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),

@@ -24,7 +24,7 @@ import {
 import { Dr, M, lI } from "./04-cell-input-paste-and-fill.js";
 
 function Cde() {
-  const { text: e, language: r } = Dr(),
+  const { text, language } = Dr(),
     [t, n] = ne.useState(
       () => typeof navigator > "u" || navigator.onLine !== false,
     );
@@ -46,8 +46,8 @@ function Cde() {
       : i.jsx("div", {
           className: "lg-notice",
           role: "status",
-          "aria-label": e("Connection status"),
-          lang: r("Connection status"),
+          "aria-label": text("Connection status"),
+          lang: language("Connection status"),
           "data-ui-label": "Connection status",
           children: i.jsx(M, {
             children:
@@ -94,7 +94,6 @@ function Ade(e, r, t, n = {}) {
       return h;
     },
     l = (c, h, f) => {
-      var p, m, v;
       if (f.length > 32)
         throw Error(
           "The defined-name chain exceeds the 32-name navigation limit.",
@@ -104,9 +103,7 @@ function Ade(e, r, t, n = {}) {
         let y = h,
           w = g;
         if (b) {
-          const k =
-              ((p = b[1]) == null ? void 0 : p.replace(/''/g, "'")) ??
-              b[2].trim(),
+          const k = b[1]?.replace(/''/g, "'") ?? b[2].trim(),
             F = e.sheets.find(
               (I) => a(I.id) && I.name.toLowerCase() === k.toLowerCase(),
             );
@@ -131,19 +128,13 @@ function Ade(e, r, t, n = {}) {
             "The Name Box accepts cell addresses and static range names. Computed, external, or three-dimensional destinations cannot be selected.",
           );
         const E =
-          ((m = e.definedNames) == null
-            ? void 0
-            : m.find(
-                (k) =>
-                  k.scopeSheetId === y &&
-                  k.name.toLowerCase() === w.toLowerCase(),
-              )) ??
-          ((v = e.definedNames) == null
-            ? void 0
-            : v.find(
-                (k) =>
-                  !k.scopeSheetId && k.name.toLowerCase() === w.toLowerCase(),
-              ));
+          e.definedNames?.find(
+            (k) =>
+              k.scopeSheetId === y && k.name.toLowerCase() === w.toLowerCase(),
+          ) ??
+          e.definedNames?.find(
+            (k) => !k.scopeSheetId && k.name.toLowerCase() === w.toLowerCase(),
+          );
         if (!E)
           throw Error(
             "The address or defined range name was not found in the current worksheet scope.",
@@ -164,13 +155,13 @@ function $7(e) {
   return (
     [
       r.fontFamily,
-      r.fontSize ? `${r.fontSize} pt` : void 0,
-      r.bold ? "Bold" : void 0,
-      r.italic ? "Italic" : void 0,
-      r.fill ? `Fill ${r.fill}` : void 0,
-      r.color ? `Text ${r.color}` : void 0,
-      r.borders || r.border ? "Borders" : void 0,
-      r.wrap ? "Wrap" : void 0,
+      r.fontSize ? `${r.fontSize} pt` : undefined,
+      r.bold ? "Bold" : undefined,
+      r.italic ? "Italic" : undefined,
+      r.fill ? `Fill ${r.fill}` : undefined,
+      r.color ? `Text ${r.color}` : undefined,
+      r.borders || r.border ? "Borders" : undefined,
+      r.wrap ? "Wrap" : undefined,
     ]
       .filter(Boolean)
       .join(", ") || "Default formatting"
@@ -191,8 +182,8 @@ const jz = {
   wrap: "Wrap",
   border: "Legacy border",
 };
-function kT({ style: e }) {
-  const r = ys(e);
+function kT({ style }) {
+  const r = ys(style);
   return i.jsxs("dl", {
     className: "ts-detail-fields",
     children: [
@@ -204,7 +195,7 @@ function kT({ style: e }) {
               i.jsx("dt", { children: n }),
               i.jsx("dd", {
                 children:
-                  r[t] === void 0
+                  r[t] === undefined
                     ? "Default"
                     : typeof r[t] == "boolean"
                       ? r[t]
@@ -243,15 +234,14 @@ function kT({ style: e }) {
     ],
   });
 }
-function z7({ style: e, catalog: r }) {
-  var a;
-  const t = e == null ? void 0 : e.binding,
-    { binding: n, ...o } = e ?? {};
+function z7({ style, catalog }) {
+  const t = style?.binding,
+    { binding, ...o } = style ?? {};
   return i.jsxs("details", {
     children: [
       i.jsx("summary", { children: i.jsx(M, { children: "Full formatting" }) }),
       i.jsx("h4", { children: i.jsx(M, { children: "Displayed formatting" }) }),
-      i.jsx(kT, { style: e }),
+      i.jsx(kT, { style }),
       t &&
         i.jsxs(i.Fragment, {
           children: [
@@ -259,12 +249,8 @@ function z7({ style: e, catalog: r }) {
               children: [
                 i.jsx(M, { children: "Named style:" }),
                 " ",
-                ((a =
-                  r == null
-                    ? void 0
-                    : r.styles.find((s) => s.id === t.styleId)) == null
-                  ? void 0
-                  : a.name) ?? "Missing style",
+                catalog?.styles.find((s) => s.id === t.styleId)?.name ??
+                  "Missing style",
               ],
             }),
             t.themeFallback &&
@@ -311,11 +297,11 @@ function z7({ style: e, catalog: r }) {
     ],
   });
 }
-function V7({ definition: e }) {
-  return e
+function V7({ definition }) {
+  return definition
     ? i.jsxs(i.Fragment, {
         children: [
-          i.jsx(kT, { style: e.base }),
+          i.jsx(kT, { style: definition.base }),
           i.jsxs("dl", {
             className: "ts-detail-fields",
             children: [
@@ -324,7 +310,9 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme font role" }),
                   }),
-                  i.jsx("dd", { children: e.fontRole ?? "Stored font" }),
+                  i.jsx("dd", {
+                    children: definition.fontRole ?? "Stored font",
+                  }),
                 ],
               }),
               i.jsxs("div", {
@@ -332,7 +320,9 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme fill role" }),
                   }),
-                  i.jsx("dd", { children: e.fillRole ?? "Stored fill" }),
+                  i.jsx("dd", {
+                    children: definition.fillRole ?? "Stored fill",
+                  }),
                 ],
               }),
               i.jsxs("div", {
@@ -340,11 +330,12 @@ function V7({ definition: e }) {
                   i.jsx("dt", {
                     children: i.jsx(M, { children: "Theme text role" }),
                   }),
-                  i.jsx("dd", { children: e.colorRole ?? "Stored text color" }),
+                  i.jsx("dd", {
+                    children: definition.colorRole ?? "Stored text color",
+                  }),
                 ],
               }),
               ["top", "right", "bottom", "left"].map((r) => {
-                var t;
                 return i.jsxs(
                   "div",
                   {
@@ -358,8 +349,7 @@ function V7({ definition: e }) {
                       }),
                       i.jsx("dd", {
                         children:
-                          ((t = e.borderRoles) == null ? void 0 : t[r]) ??
-                          "Stored border color",
+                          definition.borderRoles?.[r] ?? "Stored border color",
                       }),
                     ],
                   },
@@ -372,30 +362,30 @@ function V7({ definition: e }) {
       })
     : i.jsx("p", { children: i.jsx(M, { children: "No style" }) });
 }
-function kde({ plan: e }) {
-  const r = e.catalogBefore,
-    t = e.catalogAfter;
+function kde({ plan }) {
+  const r = plan.catalogBefore,
+    t = plan.catalogAfter;
   if (JSON.stringify(r) === JSON.stringify(t)) return null;
   const n = [
       {
         name: "Theme name",
-        before: r == null ? void 0 : r.theme.name,
-        after: t == null ? void 0 : t.theme.name,
+        before: r?.theme.name,
+        after: t?.theme.name,
       },
       {
         name: "Body font",
-        before: r == null ? void 0 : r.theme.fonts.body,
-        after: t == null ? void 0 : t.theme.fonts.body,
+        before: r?.theme.fonts.body,
+        after: t?.theme.fonts.body,
       },
       {
         name: "Heading font",
-        before: r == null ? void 0 : r.theme.fonts.heading,
-        after: t == null ? void 0 : t.theme.fonts.heading,
+        before: r?.theme.fonts.heading,
+        after: t?.theme.fonts.heading,
       },
       ..._g.map((a) => ({
         name: `${a} color`,
-        before: r == null ? void 0 : r.theme.palette[a],
-        after: t == null ? void 0 : t.theme.palette[a],
+        before: r?.theme.palette[a],
+        after: t?.theme.palette[a],
       })),
       {
         name: "Missing theme fallback",
@@ -405,8 +395,8 @@ function kde({ plan: e }) {
     ].filter((a) => a.before !== a.after),
     o = [
       ...new Set([
-        ...((r == null ? void 0 : r.styles.map((a) => a.id)) ?? []),
-        ...((t == null ? void 0 : t.styles.map((a) => a.id)) ?? []),
+        ...(r?.styles.map((a) => a.id) ?? []),
+        ...(t?.styles.map((a) => a.id) ?? []),
       ]),
     ];
   return i.jsxs("details", {
@@ -448,8 +438,8 @@ function kde({ plan: e }) {
           ],
         }),
       o.map((a) => {
-        const s = r == null ? void 0 : r.styles.find((u) => u.id === a),
-          d = t == null ? void 0 : t.styles.find((u) => u.id === a);
+        const s = r?.styles.find((u) => u.id === a),
+          d = t?.styles.find((u) => u.id === a);
         return JSON.stringify(s) === JSON.stringify(d)
           ? null
           : i.jsxs(
@@ -462,7 +452,7 @@ function kde({ plan: e }) {
                       ? d
                         ? `${s.name} → ${d.name}`
                         : `Delete ${s.name}`
-                      : `Create ${d == null ? void 0 : d.name}`,
+                      : `Create ${d?.name}`,
                   }),
                   i.jsxs("div", {
                     className: "ts-definition-columns",
@@ -475,7 +465,7 @@ function kde({ plan: e }) {
                             }),
                           }),
                           i.jsx(V7, {
-                            definition: s == null ? void 0 : s.definition,
+                            definition: s?.definition,
                           }),
                         ],
                       }),
@@ -485,7 +475,7 @@ function kde({ plan: e }) {
                             children: i.jsx(M, { children: "After change" }),
                           }),
                           i.jsx(V7, {
-                            definition: d == null ? void 0 : d.definition,
+                            definition: d?.definition,
                           }),
                         ],
                       }),
@@ -500,8 +490,8 @@ function kde({ plan: e }) {
   });
 }
 function Sde(e) {
-  var q, W, K, te, ae, oe;
-  const { text: r, language: t } = Dr(),
+  var ae;
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -520,28 +510,16 @@ function Sde(e) {
       e.active && W3(u, e.active)
         ? e.active
         : `${ut(l.firstCol)}${l.firstRow + 1}`,
-    f =
-      (K =
-        (W =
-          (q = c == null ? void 0 : c.cells[h]) == null ? void 0 : q.style) ==
-        null
-          ? void 0
-          : W.binding) == null
-        ? void 0
-        : K.styleId,
+    f = c?.cells[h]?.style?.binding?.styleId,
     [p, m] = ne.useState(
-      d.styles.some((de) => de.id === f)
-        ? f
-        : (((te = d.styles[0]) == null ? void 0 : te.id) ?? ""),
+      d.styles.some((de) => de.id === f) ? f : (d.styles[0]?.id ?? ""),
     ),
     v = d.styles.find((de) => de.id === p),
     [g, b] = ne.useState("Theme"),
     [y, w] = ne.useState(Tv(d.theme)),
-    [E, A] = ne.useState(
-      Tv((v == null ? void 0 : v.definition) ?? { base: {} }),
-    ),
+    [E, A] = ne.useState(Tv(v?.definition ?? { base: {} })),
     [k, F] = ne.useState("Custom style"),
-    [I, O] = ne.useState((v == null ? void 0 : v.name) ?? ""),
+    [I, O] = ne.useState(v?.name ?? ""),
     [j, z] = ne.useState(),
     [V, D] = ne.useState(""),
     [B, _] = ne.useState(0),
@@ -551,12 +529,9 @@ function Sde(e) {
       s.ranges !== JSON.stringify(e.ranges ?? [e.range]) ||
       s.active !== e.active,
     T = e.readOnly || C || !c,
-    N =
-      T ||
-      !!((ae = c == null ? void 0 : c.protection) != null && ae.enabled) ||
-      y1(u) > 500;
+    N = T || !!((ae = c?.protection) != null && ae.enabled) || y1(u) > 500;
   function R() {
-    (z(void 0), D(""), _(0));
+    (z(undefined), D(""), _(0));
   }
   function L(de) {
     (w(de), R());
@@ -573,7 +548,7 @@ function Sde(e) {
         );
       z(yB(e.workbook, de, { readOnly: e.readOnly }));
     } catch (he) {
-      (z(void 0),
+      (z(undefined),
         D(
           he instanceof Error
             ? he.message
@@ -599,26 +574,21 @@ function Sde(e) {
   function H(de) {
     m(de);
     const he = d.styles.find((Se) => Se.id === de);
-    (A(Tv((he == null ? void 0 : he.definition) ?? { base: {} })),
-      O((he == null ? void 0 : he.name) ?? ""),
-      R());
+    (A(Tv(he?.definition ?? { base: {} })), O(he?.name ?? ""), R());
   }
   ne.useEffect(() => {
-    var he, Se;
+    var Se;
     const de = document.activeElement;
     return (
-      (Se =
-        (he = o.current) == null
-          ? void 0
-          : he.querySelector('[role="tab"][aria-selected="true"]')) == null ||
-        Se.focus(),
+      (Se = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
+        null || Se.focus(),
       () => {
         de != null && de.isConnected && de.focus();
       }
     );
   }, []);
   const Q = bB(e.workbook),
-    X$1 = Math.max(1, Math.ceil(((j == null ? void 0 : j.count) ?? 0) / 20));
+    X$1 = Math.max(1, Math.ceil((j?.count ?? 0) / 20));
   let J = {};
   try {
     J = vB(E, y);
@@ -632,18 +602,15 @@ function Sde(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (de) => {
-        var he;
         if (
           (de.stopPropagation(),
           de.key === "Escape" && (de.preventDefault(), a.current()),
           de.key === "Tab")
         ) {
           const Se = Array.from(
-              ((he = o.current) == null
-                ? void 0
-                : he.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ).filter((ge) => !ge.hidden),
             le = Se[0],
             ce = Se.at(-1);
@@ -663,9 +630,9 @@ function Sde(e) {
               children: i.jsx(M, { children: "Themes & Cell Styles" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close Themes and Cell Styles"),
+              "aria-label": text("Close Themes and Cell Styles"),
               onClick: e.onClose,
-              lang: t("Close Themes and Cell Styles"),
+              lang: language("Close Themes and Cell Styles"),
               "data-ui-label": "Close Themes and Cell Styles",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -674,7 +641,7 @@ function Sde(e) {
         i.jsxs("div", {
           className: "ts-location",
           children: [
-            (c == null ? void 0 : c.name) ?? "Missing sheet",
+            c?.name ?? "Missing sheet",
             " · ",
             u.join(", "),
             " ·",
@@ -687,8 +654,8 @@ function Sde(e) {
         i.jsx("div", {
           className: "ts-tabs",
           role: "tablist",
-          "aria-label": r("Theme settings"),
-          lang: t("Theme settings"),
+          "aria-label": text("Theme settings"),
+          lang: language("Theme settings"),
           "data-ui-label": "Theme settings",
           children: ["Theme", "Cell Styles"].map((de, he) =>
             i.jsx(
@@ -700,7 +667,7 @@ function Sde(e) {
                 tabIndex: g === de ? 0 : -1,
                 onClick: () => b(de),
                 onKeyDown: (Se) => {
-                  var le, ce;
+                  var ce;
                   if (
                     ["ArrowLeft", "ArrowRight", "Home", "End"].includes(Se.key)
                   ) {
@@ -708,10 +675,8 @@ function Sde(e) {
                     const ge =
                       Se.key === "Home" ? 0 : Se.key === "End" ? 1 : 1 - he;
                     (b(ge === 0 ? "Theme" : "Cell Styles"),
-                      (ce =
-                        (le = Se.currentTarget.parentElement) == null
-                          ? void 0
-                          : le.children[ge]) == null || ce.focus());
+                      (ce = Se.currentTarget.parentElement?.children[ge]) ==
+                        null || ce.focus());
                   }
                 },
                 children: de,
@@ -754,7 +719,7 @@ function Sde(e) {
                               children: [
                                 i.jsx(M, { children: "Theme preset" }),
                                 i.jsxs("select", {
-                                  "aria-label": r("Theme preset"),
+                                  "aria-label": text("Theme preset"),
                                   value: c6.some(
                                     (de) =>
                                       JSON.stringify(de) === JSON.stringify(y),
@@ -768,7 +733,7 @@ function Sde(e) {
                                     );
                                     he && L(Tv(he));
                                   },
-                                  lang: t("Theme preset"),
+                                  lang: language("Theme preset"),
                                   "data-ui-label": "Theme preset",
                                   children: [
                                     i.jsx("option", {
@@ -896,11 +861,11 @@ function Sde(e) {
                               children: [
                                 i.jsx(M, { children: "Named style" }),
                                 i.jsxs("select", {
-                                  "aria-label": r("Named style"),
+                                  "aria-label": text("Named style"),
                                   value: p,
                                   disabled: T || !d.styles.length,
                                   onChange: (de) => H(de.target.value),
-                                  lang: t("Named style"),
+                                  lang: language("Named style"),
                                   "data-ui-label": "Named style",
                                   children: [
                                     !d.styles.length &&
@@ -978,9 +943,7 @@ function Sde(e) {
                               "Apply keeps direct formatting. Reapply clears direct font, fill, alignment and border overrides. Values, formulas, number formats and review evidence are preserved.",
                           }),
                         }),
-                        ((oe = c == null ? void 0 : c.protection) == null
-                          ? void 0
-                          : oe.enabled) &&
+                        c?.protection?.enabled &&
                           i.jsx("p", {
                             className: "ts-notice",
                             children: i.jsx(M, {
@@ -1015,17 +978,17 @@ function Sde(e) {
                                   children: [
                                     i.jsx(M, { children: "Style font" }),
                                     i.jsxs("select", {
-                                      "aria-label": r("Style font"),
+                                      "aria-label": text("Style font"),
                                       value: E.fontRole ?? "fixed",
                                       onChange: (de) =>
                                         $({
                                           ...E,
                                           fontRole:
                                             de.target.value === "fixed"
-                                              ? void 0
+                                              ? undefined
                                               : de.target.value,
                                         }),
-                                      lang: t("Style font"),
+                                      lang: language("Style font"),
                                       "data-ui-label": "Style font",
                                       children: [
                                         i.jsx("option", {
@@ -1063,7 +1026,7 @@ function Sde(e) {
                                               ...E,
                                               [de]:
                                                 he.target.value === "fixed"
-                                                  ? void 0
+                                                  ? undefined
                                                   : he.target.value,
                                             }),
                                           children: [
@@ -1128,17 +1091,8 @@ function Sde(e) {
                               children: [
                                 i.jsx("button", {
                                   onClick: () => {
-                                    var de;
                                     return $({
-                                      base: Tv(
-                                        ys(
-                                          (de =
-                                            c == null ? void 0 : c.cells[h]) ==
-                                            null
-                                            ? void 0
-                                            : de.style,
-                                        ),
-                                      ),
+                                      base: Tv(ys(c?.cells[h]?.style)),
                                     });
                                   },
                                   children: i.jsx(M, {
@@ -1241,8 +1195,8 @@ function Sde(e) {
             j &&
               i.jsxs("section", {
                 className: "ts-preview",
-                "aria-label": r("Theme change preview"),
-                lang: t("Theme change preview"),
+                "aria-label": text("Theme change preview"),
+                lang: language("Theme change preview"),
                 "data-ui-label": "Theme change preview",
                 children: [
                   i.jsx("h3", { children: j.summary }),
@@ -1295,34 +1249,24 @@ function Sde(e) {
                                 children: j.changes
                                   .slice(B * 20, B * 20 + 20)
                                   .map((de) => {
-                                    var he, Se, le;
                                     return i.jsxs(
                                       "tr",
                                       {
                                         children: [
                                           i.jsxs("th", {
                                             children: [
-                                              (he = e.workbook.sheets.find(
+                                              e.workbook.sheets.find(
                                                 (ce) => ce.id === de.sheetId,
-                                              )) == null
-                                                ? void 0
-                                                : he.name,
+                                              )?.name,
                                               "!",
                                               de.address,
                                             ],
                                           }),
                                           i.jsxs("td", {
                                             children: [
-                                              $7(
-                                                (Se = de.before) == null
-                                                  ? void 0
-                                                  : Se.style,
-                                              ),
+                                              $7(de.before?.style),
                                               i.jsx(z7, {
-                                                style:
-                                                  (le = de.before) == null
-                                                    ? void 0
-                                                    : le.style,
+                                                style: de.before?.style,
                                                 catalog: j.catalogBefore,
                                               }),
                                             ],
@@ -1401,14 +1345,17 @@ function Sde(e) {
     }),
   });
 }
-function jI({ value: e, cell: r, dateSystem: t }) {
+function jI({ value, cell, dateSystem }) {
   const n = Dr(),
-    o = r != null && r.numberFormat ? vg(e, r.numberFormat, t) : void 0,
-    a = r ? SE(r) : void 0;
+    o =
+      cell != null && cell.numberFormat
+        ? vg(value, cell.numberFormat, dateSystem)
+        : undefined,
+    a = cell ? SE(cell) : undefined;
   if (o != null && o.accounting) {
-    const { symbol: s, amount: d, symbolPosition: u } = o.accounting;
+    const { symbol, amount, symbolPosition } = o.accounting;
     return i.jsxs("span", {
-      title: a || void 0,
+      title: a || undefined,
       "aria-label": o.text,
       style: {
         display: "inline-flex",
@@ -1419,19 +1366,21 @@ function jI({ value: e, cell: r, dateSystem: t }) {
         fontVariantNumeric: "tabular-nums",
       },
       children: [
-        u === "start" && i.jsx("span", { "aria-hidden": "true", children: s }),
+        symbolPosition === "start" &&
+          i.jsx("span", { "aria-hidden": "true", children: symbol }),
         i.jsx("span", {
           "aria-hidden": "true",
           style: { textAlign: "right", flex: 1 },
-          children: d,
+          children: amount,
         }),
-        u === "end" && i.jsx("span", { "aria-hidden": "true", children: s }),
+        symbolPosition === "end" &&
+          i.jsx("span", { "aria-hidden": "true", children: symbol }),
       ],
     });
   }
   return i.jsx("span", {
-    title: a || void 0,
-    children: (o == null ? void 0 : o.text) ?? lI(e, r, t, n.entryLocale),
+    title: a || undefined,
+    children: o?.text ?? lI(value, cell, dateSystem, n.entryLocale),
   });
 }
 const oy = ["Font", "Alignment", "Border"],
@@ -1439,7 +1388,7 @@ const oy = ["Font", "Alignment", "Border"],
     Array.from({ length: 9 }, (e, r) => `${ut(r % 3)}${Math.floor(r / 3) + 1}`),
   ),
   $k = (e, r) =>
-    (e == null ? void 0 : e.length) === 4
+    e?.length === 4
       ? "#" +
         e
           .slice(1)

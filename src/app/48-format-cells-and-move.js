@@ -124,7 +124,6 @@ function XW(e, r, t = new Set()) {
       }));
 }
 function yS(e, r, t, n, o = false) {
-  var u;
   ((e.characters += r.length),
     e.characters > D1.formulaCharacters &&
       zn(
@@ -176,11 +175,9 @@ function yS(e, r, t, n, o = false) {
     }
     if (l.kind === "reference") {
       const h = l.sheet
-        ? (u = e.book.sheets.find(
+        ? e.book.sheets.find(
             (f) => f.name.toLowerCase() === l.sheet.toLowerCase(),
-          )) == null
-          ? void 0
-          : u.id
+          )?.id
         : t;
       if (!h)
         !l.sheet &&
@@ -354,10 +351,7 @@ function ZW(e, r, t, n, o, a = {}) {
   if (
     (!y &&
       e.sheets.some((B) => {
-        var _;
-        return (_ = B.conditionalFormats) == null
-          ? void 0
-          : _.some((C) => C.kind === "formula");
+        return B.conditionalFormats?.some((C) => C.kind === "formula");
       }) &&
       zn(
         "Range moves cannot repair formula-based conditional rules yet. Remove those rules before moving cells.",
@@ -406,11 +400,7 @@ function ZW(e, r, t, n, o, a = {}) {
           G !== L.raw && ((L.raw = G), k++);
         }
         const U = L.hyperlink;
-        if (
-          (U == null ? void 0 : U.kind) === "internal" &&
-          U.sheetId === r &&
-          pp(u, _t(U.address))
-        ) {
+        if (U?.kind === "internal" && U.sheetId === r && pp(u, _t(U.address))) {
           const G = _t(U.address),
             H = `${s.name}!${U.address}`;
           ((L.hyperlink = {
@@ -555,12 +545,9 @@ function ZW(e, r, t, n, o, a = {}) {
     v0(
       w,
       I.filter((B) => {
-        var _, C, T, N;
         return (
-          ((_ = B.before) == null ? void 0 : _.raw) !==
-            ((C = B.after) == null ? void 0 : C.raw) ||
-          ((T = B.before) == null ? void 0 : T.literal) !==
-            ((N = B.after) == null ? void 0 : N.literal)
+          B.before?.raw !== B.after?.raw ||
+          B.before?.literal !== B.after?.literal
         );
       }),
     ));
@@ -629,8 +616,8 @@ function wj(e) {
   const r = [String(e.raw ?? "(empty)")];
   return (
     e.literal && r.push("Literal text"),
-    e.note !== void 0 && r.push("Note: " + e.note),
-    e.tickmark !== void 0 && r.push("Tickmark: " + e.tickmark),
+    e.note !== undefined && r.push("Note: " + e.note),
+    e.tickmark !== undefined && r.push("Tickmark: " + e.tickmark),
     e.hyperlink &&
       r.push(
         "Link: " +
@@ -662,8 +649,7 @@ function wj(e) {
 const xj =
   "The workbook or destination changed. Cancel and cut the current cells again.";
 function I4e(e) {
-  var b, y, w, E, A;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e);
@@ -673,13 +659,11 @@ function I4e(e) {
       range: e.range,
       source: e.source,
       sourceName:
-        ((b = e.workbook.sheets.find((k) => k.id === e.source.sheetId)) == null
-          ? void 0
-          : b.name) ?? "Deleted worksheet",
+        e.workbook.sheets.find((k) => k.id === e.source.sheetId)?.name ??
+        "Deleted worksheet",
       targetName:
-        ((y = e.workbook.sheets.find((k) => k.id === e.sheetId)) == null
-          ? void 0
-          : y.name) ?? "Deleted worksheet",
+        e.workbook.sheets.find((k) => k.id === e.sheetId)?.name ??
+        "Deleted worksheet",
       book: JSON.stringify(e.workbook),
     }),
     [d, u] = ne.useState(""),
@@ -710,27 +694,25 @@ function I4e(e) {
       }
     }),
     p = [
-      ...(((w = f.plan) == null ? void 0 : w.previewChanges) ?? []).map(
-        (k) => ({
-          label: `${k.sheetName}!${k.address}`,
-          before: wj(k.before),
-          after: wj(k.after),
-        }),
-      ),
-      ...(((E = f.plan) == null ? void 0 : E.metadataChanges) ?? []).map(
-        (k) => ({ label: k.label, before: k.before, after: k.after }),
-      ),
+      ...(f.plan?.previewChanges ?? []).map((k) => ({
+        label: `${k.sheetName}!${k.address}`,
+        before: wj(k.before),
+        after: wj(k.after),
+      })),
+      ...(f.plan?.metadataChanges ?? []).map((k) => ({
+        label: k.label,
+        before: k.before,
+        after: k.after,
+      })),
     ],
     m = Math.max(1, Math.ceil(p.length / 15)),
     v = Math.min(l, m - 1);
   ne.useEffect(() => {
-    var F, I;
+    var I;
     const k = document.activeElement;
     return (
-      (I =
-        (F = o.current) == null
-          ? void 0
-          : F.querySelector("button:not(:disabled)")) == null || I.focus(),
+      (I = o.current?.querySelector("button:not(:disabled)")) == null ||
+        I.focus(),
       () => {
         k != null && k.isConnected && k.focus();
       }
@@ -767,18 +749,15 @@ function I4e(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (k) => {
-        var F;
         if (
           (k.key === "Escape" &&
             (k.preventDefault(), k.stopPropagation(), a.current.onClose()),
           k.key === "Tab")
         ) {
           const I = Array.from(
-              ((F = o.current) == null
-                ? void 0
-                : F.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
-                  )) ?? [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ),
             O = I[0],
             j = I.at(-1);
@@ -802,9 +781,9 @@ function I4e(e) {
             }),
             i.jsx("button", {
               type: "button",
-              "aria-label": r("Close move preview"),
+              "aria-label": text("Close move preview"),
               onClick: e.onClose,
-              lang: t("Close move preview"),
+              lang: language("Close move preview"),
               "data-ui-label": "Close move preview",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -831,8 +810,7 @@ function I4e(e) {
                   children: [
                     s.current.targetName,
                     "!",
-                    ((A = f.plan) == null ? void 0 : A.targetRange) ??
-                      s.current.range,
+                    f.plan?.targetRange ?? s.current.range,
                   ],
                 }),
               ],
@@ -840,8 +818,8 @@ function I4e(e) {
             f.plan &&
               i.jsxs("section", {
                 className: "et-preview",
-                "aria-label": r("Move preview"),
-                lang: t("Move preview"),
+                "aria-label": text("Move preview"),
+                lang: language("Move preview"),
                 "data-ui-label": "Move preview",
                 children: [
                   i.jsxs("p", {
@@ -988,25 +966,21 @@ const _4e = {
     "en-IN": "English (India)",
   };
 function O4e(e) {
-  var s;
   const r = ct(e.range),
     t = `${ut(r.firstCol)}${r.firstRow + 1}`,
     n = e.active && W3(e.ranges ?? [e.range], e.active) ? e.active : t,
-    o =
-      (s = e.workbook.sheets.find((d) => d.id === e.sheetId)) == null
-        ? void 0
-        : s.cells[n];
+    o = e.workbook.sheets.find((d) => d.id === e.sheetId)?.cells[n];
   if (o != null && o.numberFormat)
     try {
       return l0(o.numberFormat);
     } catch {}
-  const a = (o == null ? void 0 : o.format) ?? "general";
+  const a = o?.format ?? "general";
   return l0({
     category: a,
     locale: "en-US",
     ...(["number", "currency", "percent"].includes(a)
       ? {
-          decimals: Math.min(12, $B(o == null ? void 0 : o.numFmt) ?? 2),
+          decimals: Math.min(12, $B(o?.numFmt) ?? 2),
           useGrouping:
             o != null && o.numFmt ? o.numFmt.includes(",") : a !== "percent",
         }
@@ -1014,8 +988,8 @@ function O4e(e) {
   });
 }
 function M4e(e) {
-  var q, W, K;
-  const { text: r, language: t } = Dr(),
+  var q;
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -1045,7 +1019,7 @@ function M4e(e) {
       e.active && W3(z, e.active)
         ? e.active
         : `${ut(V.firstCol)}${V.firstRow + 1}`,
-    B = j == null ? void 0 : j.cells[D],
+    B = j?.cells[D],
     _ = y1(z),
     C = SE(B),
     T =
@@ -1058,7 +1032,7 @@ function M4e(e) {
     N =
       e.readOnly ||
       T ||
-      !!((q = j == null ? void 0 : j.protection) != null && q.enabled) ||
+      !!((q = j?.protection) != null && q.enabled) ||
       !j ||
       _ > 500,
     R = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
@@ -1090,7 +1064,7 @@ function M4e(e) {
   }
   const X$1 = [
       {
-        name: `${(j == null ? void 0 : j.name) ?? "Worksheet"}!${D}`,
+        name: `${j?.name ?? "Worksheet"}!${D}`,
         value: Q,
       },
       ...(U || (u === "custom" && /[ymdhs]/i.test(k.replace(/"[^"]*"/g, "")))
@@ -1105,29 +1079,24 @@ function M4e(e) {
           ]),
     ],
     J = (te) => {
-      var ae;
       (l(te),
         O(""),
         te in Ay && F(Ay[te][0]),
         te === "custom" &&
           F(
-            ((ae = B == null ? void 0 : B.numberFormat) == null
-              ? void 0
-              : ae.category) === "custom"
+            B?.numberFormat?.category === "custom"
               ? B.numberFormat.pattern
               : '#,##0.00;(#,##0.00);"-"',
           ));
     };
   return (
     ne.useEffect(() => {
-      var ae, oe;
+      var oe;
       const te = document.activeElement;
       return (
-        (oe =
-          (ae = o.current) == null
-            ? void 0
-            : ae.querySelector('[role="option"][aria-selected="true"]')) ==
-          null || oe.focus(),
+        (oe = o.current?.querySelector(
+          '[role="option"][aria-selected="true"]',
+        )) == null || oe.focus(),
         () => {
           te != null && te.isConnected && te.focus();
         }
@@ -1142,18 +1111,15 @@ function M4e(e) {
         "aria-labelledby": `${n}-title`,
         ref: o,
         onKeyDown: (te) => {
-          var ae;
           if (
             (te.stopPropagation(),
             te.key === "Escape" && (te.preventDefault(), a.current()),
             te.key === "Tab")
           ) {
             const oe = [
-                ...(((ae = o.current) == null
-                  ? void 0
-                  : ae.querySelectorAll(
-                      'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                    )) ?? []),
+                ...(o.current?.querySelectorAll(
+                  'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+                ) ?? []),
               ],
               de = oe[0],
               he = oe.at(-1);
@@ -1173,9 +1139,9 @@ function M4e(e) {
                 children: i.jsx(M, { children: "Format Cells" }),
               }),
               i.jsx("button", {
-                "aria-label": r("Close number formats"),
+                "aria-label": text("Close number formats"),
                 onClick: e.onClose,
-                lang: t("Close number formats"),
+                lang: language("Close number formats"),
                 "data-ui-label": "Close number formats",
                 children: i.jsx(X, { size: 18 }),
               }),
@@ -1199,8 +1165,8 @@ function M4e(e) {
               i.jsx("div", {
                 className: "nf-category",
                 role: "listbox",
-                "aria-label": r("Number format category"),
-                lang: t("Number format category"),
+                "aria-label": text("Number format category"),
+                lang: language("Number format category"),
                 "data-ui-label": "Number format category",
                 children: Uv.map((te, ae) =>
                   i.jsx(
@@ -1211,7 +1177,7 @@ function M4e(e) {
                       tabIndex: u === te ? 0 : -1,
                       onClick: () => J(te),
                       onKeyDown: (oe) => {
-                        var de, he;
+                        var he;
                         if (
                           ["ArrowUp", "ArrowDown", "Home", "End"].includes(
                             oe.key,
@@ -1230,9 +1196,8 @@ function M4e(e) {
                                   Uv.length;
                           (J(Uv[Se]),
                             (he =
-                              (de = oe.currentTarget.parentElement) == null
-                                ? void 0
-                                : de.children[Se]) == null || he.focus());
+                              oe.currentTarget.parentElement?.children[Se]) ==
+                              null || he.focus());
                         }
                       },
                       children: _4e[te],
@@ -1286,9 +1251,7 @@ function M4e(e) {
                           "This workbook is read-only. You can inspect format previews.",
                       }),
                     }),
-                  ((W = j == null ? void 0 : j.protection) == null
-                    ? void 0
-                    : W.enabled) &&
+                  j?.protection?.enabled &&
                     i.jsx("p", {
                       className: "nf-notice",
                       children: i.jsx(M, {
@@ -1308,8 +1271,8 @@ function M4e(e) {
                   C && i.jsx("p", { className: "nf-notice", children: C }),
                   i.jsxs("section", {
                     className: "nf-preview",
-                    "aria-label": r("Number format preview"),
-                    lang: t("Number format preview"),
+                    "aria-label": text("Number format preview"),
+                    lang: language("Number format preview"),
                     "data-ui-label": "Number format preview",
                     children: [
                       i.jsx("h3", {
@@ -1336,16 +1299,13 @@ function M4e(e) {
                           }),
                           i.jsx("tbody", {
                             children: X$1.map((te) => {
-                              var oe;
                               const ae = G
                                 ? vg(
                                     te.value,
                                     G,
-                                    (oe = e.workbook.datePolicy) == null
-                                      ? void 0
-                                      : oe.dateSystem,
+                                    e.workbook.datePolicy?.dateSystem,
                                   )
-                                : void 0;
+                                : undefined;
                               return i.jsxs(
                                 "tr",
                                 {
@@ -1376,8 +1336,7 @@ function M4e(e) {
                                                 }),
                                               ],
                                             })
-                                          : ((ae == null ? void 0 : ae.text) ??
-                                            "Unsupported pattern"),
+                                          : (ae?.text ?? "Unsupported pattern"),
                                     }),
                                   ],
                                 },
@@ -1393,13 +1352,8 @@ function M4e(e) {
                           " ",
                           i.jsx("strong", {
                             children:
-                              Af(
-                                Q,
-                                B,
-                                (K = e.workbook.datePolicy) == null
-                                  ? void 0
-                                  : K.dateSystem,
-                              ) || "Blank",
+                              Af(Q, B, e.workbook.datePolicy?.dateSystem) ||
+                              "Blank",
                           }),
                           i.jsx(M, {
                             children:
@@ -1413,10 +1367,10 @@ function M4e(e) {
                     children: [
                       i.jsx(M, { children: "Locale" }),
                       i.jsx("select", {
-                        "aria-label": r("Number format locale"),
+                        "aria-label": text("Number format locale"),
                         value: c,
                         onChange: (te) => h(te.target.value),
-                        lang: t("Number format locale"),
+                        lang: language("Number format locale"),
                         "data-ui-label": "Number format locale",
                         children: PB.map((te) =>
                           i.jsx("option", { value: te, children: D4e[te] }, te),
@@ -1432,13 +1386,13 @@ function M4e(e) {
                           children: [
                             i.jsx(M, { children: "Decimal places" }),
                             i.jsx(ci, {
-                              "aria-label": r("Decimal places"),
+                              "aria-label": text("Decimal places"),
                               min: 0,
                               max: 12,
                               step: 1,
                               value: m,
                               onValueChange: (te) => v(te),
-                              lang: t("Decimal places"),
+                              lang: language("Decimal places"),
                               "data-ui-label": "Decimal places",
                             }),
                           ],
@@ -1448,12 +1402,12 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Currency" }),
                               i.jsx("select", {
-                                "aria-label": r("Currency"),
+                                "aria-label": text("Currency"),
                                 value: f,
                                 onChange: (te) => {
                                   p(te.target.value);
                                 },
-                                lang: t("Currency"),
+                                lang: language("Currency"),
                                 "data-ui-label": "Currency",
                                 children: UB.map((te) =>
                                   i.jsx(
@@ -1470,10 +1424,10 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Display scale" }),
                               i.jsxs("select", {
-                                "aria-label": r("Display scale"),
+                                "aria-label": text("Display scale"),
                                 value: y,
                                 onChange: (te) => w(te.target.value),
-                                lang: t("Display scale"),
+                                lang: language("Display scale"),
                                 "data-ui-label": "Display scale",
                                 children: [
                                   i.jsx("option", {
@@ -1497,10 +1451,10 @@ function M4e(e) {
                             children: [
                               i.jsx(M, { children: "Negative numbers" }),
                               i.jsxs("select", {
-                                "aria-label": r("Negative numbers"),
+                                "aria-label": text("Negative numbers"),
                                 value: E,
                                 onChange: (te) => A(te.target.value),
-                                lang: t("Negative numbers"),
+                                lang: language("Negative numbers"),
                                 "data-ui-label": "Negative numbers",
                                 children: [
                                   i.jsx("option", {
@@ -1520,10 +1474,10 @@ function M4e(e) {
                           children: [
                             i.jsx("input", {
                               type: "checkbox",
-                              "aria-label": r("Use thousands separator"),
+                              "aria-label": text("Use thousands separator"),
                               checked: g,
                               onChange: (te) => b(te.target.checked),
-                              lang: t("Use thousands separator"),
+                              lang: language("Use thousands separator"),
                               "data-ui-label": "Use thousands separator",
                             }),
                             i.jsx(M, { children: "Use thousands separator" }),
@@ -1536,10 +1490,10 @@ function M4e(e) {
                       children: [
                         i.jsx(M, { children: "Type" }),
                         i.jsxs("select", {
-                          "aria-label": r("Date or time format"),
+                          "aria-label": text("Date or time format"),
                           value: k,
                           onChange: (te) => F(te.target.value),
-                          lang: t("Date or time format"),
+                          lang: language("Date or time format"),
                           "data-ui-label": "Date or time format",
                           children: [
                             !Ay[u].some((te) => te === k) &&
@@ -1558,11 +1512,11 @@ function M4e(e) {
                           children: [
                             i.jsx(M, { children: "Type" }),
                             i.jsx("input", {
-                              "aria-label": r("Custom number format"),
+                              "aria-label": text("Custom number format"),
                               value: k,
                               maxLength: 200,
                               onChange: (te) => F(te.target.value),
-                              lang: t("Custom number format"),
+                              lang: language("Custom number format"),
                               "data-ui-label": "Custom number format",
                             }),
                           ],

@@ -8,7 +8,7 @@ var QR = Object.getPrototypeOf,
   eT = Object.prototype.hasOwnProperty;
 var ye = (e, t) => () => (t || e((t = { exports: {} }).exports, t), t.exports),
   Tn = (e, t) => {
-    for (var r in t) Qf(e, r, { get: t[r], enumerable: !0 });
+    for (var r in t) Qf(e, r, { get: t[r], enumerable: true });
   },
   tT = (e, t, r, o) => {
     if ((t && typeof t == "object") || typeof t == "function")
@@ -25,7 +25,7 @@ var rT = (e, t, r) => (
   (r = e != null ? XR(QR(e)) : {}),
   tT(
     t || !e || !e.__esModule
-      ? Qf(r, "default", { value: e, enumerable: !0 })
+      ? Qf(r, "default", { value: e, enumerable: true })
       : r,
     e,
   )
@@ -377,7 +377,7 @@ var Zi = E.string().regex(/^[0-9a-f]{64}$/),
   });
 var ks = (e) => e.replace(/^_xlfn\.(?:_xlws\.)?/i, "").toUpperCase(),
   vn = (e) => e.replace(/^_xlpm\./i, "").toLowerCase();
-function K$(e, t = !1) {
+function K$(e, t = false) {
   return (
     (e = e.replace(/^_xlpm\./i, "")),
     /^[A-Za-z_\\][A-Za-z0-9_.\\]{0,254}$/.test(e) &&
@@ -473,7 +473,7 @@ function Gi(e) {
   return (t !== e.length && r(), a);
 }
 var qi = (e) => e.filter((t) => t.kind !== "text" || t.text.trim());
-function Hi(e, t = !1) {
+function Hi(e, t = false) {
   let r = qi(e),
     o = r[0];
   if (r.length !== 1 || o?.kind !== "symbol" || o.qualifier || !K$(o.name, t))
@@ -508,7 +508,7 @@ function gu(e) {
 function Pn(e, t, r = new Set()) {
   for (let o of e) {
     if (
-      (o.kind === "symbol" && t(o, r, !1, !1),
+      (o.kind === "symbol" && t(o, r, false, false),
       o.kind === "group" && Pn(o.body, t, r),
       o.kind !== "call")
     )
@@ -516,7 +516,7 @@ function Pn(e, t, r = new Set()) {
     let n = gu(o);
     if (
       (o.callee.kind === "symbol"
-        ? t(o.callee, r, !0, !1)
+        ? t(o.callee, r, true, false)
         : Pn([o.callee], t, r),
       !n)
     ) {
@@ -526,7 +526,7 @@ function Pn(e, t, r = new Set()) {
     let i = new Set(r);
     for (let a = 0; a < o.args.length - 1; a += n === "LET" ? 2 : 1) {
       let l = Hi(o.args[a], n === "LAMBDA");
-      (t(l, i, !1, !0),
+      (t(l, i, false, true),
         n === "LET" && Pn(o.args[a + 1], t, i),
         i.add(vn(l.name)));
     }
@@ -538,8 +538,10 @@ function ex(e) {
     let t = qi(Gi(e)),
       r = t[0];
     return t.length !== 1 || r.kind !== "call" || gu(r) !== "LAMBDA"
-      ? void 0
-      : r.args.slice(0, -1).map((o) => Hi(o, !0).name.replace(/^_xlpm\./i, ""));
+      ? undefined
+      : r.args
+          .slice(0, -1)
+          .map((o) => Hi(o, true).name.replace(/^_xlpm\./i, ""));
   } catch {
     return;
   }
@@ -881,7 +883,7 @@ var X$ = Object.freeze({
     recalculation: E.strictObject({
       mode: E.literal("manual"),
       invalidateOn: E.literal("argument-values"),
-      volatile: E.literal(!1),
+      volatile: E.literal(false),
     }),
     functions: E.array(
       E.strictObject({
@@ -1104,8 +1106,8 @@ function S0(e, t) {
       n.outlineGroups,
     ]);
     let i = dn(n.cells),
-      a = i ? ix.get(n.cells) : void 0;
-    if (a !== void 0) r += a;
+      a = i ? ix.get(n.cells) : undefined;
+    if (a !== undefined) r += a;
     else {
       let l = r;
       for (let s in n.cells)
@@ -1172,14 +1174,14 @@ function Ns(e) {
   let t = e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'/g, ""),
     r = 0;
   for (let o of t) {
-    if (((o === "(" || o === "{") && r++, r > T0.maxNesting)) return !1;
+    if (((o === "(" || o === "{") && r++, r > T0.maxNesting)) return false;
     (o === ")" || o === "}") && r--;
   }
-  return !0;
+  return true;
 }
 var Iu = Object.freeze({
     mode: "automatic",
-    iterative: !1,
+    iterative: false,
     maxIterations: 100,
     maxChange: 0.001,
     timeBudgetMs: 2500,
@@ -1212,11 +1214,11 @@ function _0(e) {
     !Number.isInteger(e.timeBudgetMs) ||
     Number(e.timeBudgetMs) < 1 ||
     Number(e.timeBudgetMs) > 1e4 ||
-    (e.memoryBudgetMiB !== void 0 &&
+    (e.memoryBudgetMiB !== undefined &&
       (!Number.isInteger(e.memoryBudgetMiB) ||
         Number(e.memoryBudgetMiB) < 1 ||
         Number(e.memoryBudgetMiB) > 128)) ||
-    (e.workBudget !== void 0 &&
+    (e.workBudget !== undefined &&
       (!Number.isInteger(e.workBudget) ||
         Number(e.workBudget) < 1e3 ||
         Number(e.workBudget) > 1e7))
@@ -1227,10 +1229,10 @@ function _0(e) {
         maxIterations: Number(e.maxIterations),
         maxChange: e.maxChange,
         timeBudgetMs: Number(e.timeBudgetMs),
-        ...(e.memoryBudgetMiB !== void 0
+        ...(e.memoryBudgetMiB !== undefined
           ? { memoryBudgetMiB: Number(e.memoryBudgetMiB) }
           : {}),
-        ...(e.workBudget !== void 0
+        ...(e.workBudget !== undefined
           ? { workBudget: Number(e.workBudget) }
           : {}),
       };
@@ -1343,7 +1345,7 @@ function Un(e, t = $0) {
   )
     return;
   let l = o[7] ? ax(o[7]) : 0;
-  return l === void 0 ? void 0 : Yi(n, i, a, t.dateSystem) + l;
+  return l === undefined ? undefined : Yi(n, i, a, t.dateSystem) + l;
 }
 function Ts(e, t = new Date()) {
   let r = Ji(e),
@@ -1493,10 +1495,10 @@ function Cs(e, t, r) {
         !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(b)
           ? Un(b, r.clock)
           : p(b);
-      return x === void 0 ? s() : m(x);
+      return x === undefined ? s() : m(x);
     },
     v = (b) => Math.floor(h(b)),
-    g = (b, x, k = !1) => {
+    g = (b, x, k = false) => {
       let w = a(b),
         A = w.year * 12 + w.month - 1 + x,
         I = Math.floor(A / 12),
@@ -1526,7 +1528,7 @@ function Cs(e, t, r) {
     typeof b != "string" && s();
     let x = Un(b, r.clock);
     return (
-      x === void 0 && s(),
+      x === undefined && s(),
       e === "DATEVALUE" &&
         !/^(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})(?:[ T]|$)/.test(
           b.trim(),
@@ -1630,7 +1632,7 @@ function Cs(e, t, r) {
     );
   };
   if (e === "DAYS360") {
-    let b = d(f[2] ?? !1);
+    let b = d(f[2] ?? false);
     return (
       typeof b != "boolean" && typeof b != "number" && s(),
       y(v(f[0]), v(f[1]), !!b)
@@ -1674,7 +1676,7 @@ function Cs(e, t, r) {
       );
     }
     let I = (Z) => (Array.isArray(Z) ? Z.flatMap(I) : [Z]),
-      N = f[x ? 3 : 2] === void 0 ? [] : I(f[x ? 3 : 2]);
+      N = f[x ? 3 : 2] === undefined ? [] : I(f[x ? 3 : 2]);
     N.length > Xi.holidays && s("#LIMIT!");
     let R = new Set();
     for (let Z of N)
@@ -1741,7 +1743,7 @@ function cx(e, t, r = $r.minRate) {
         return { ...g, normalized: g.value / g.scale };
     },
     c = (v, g) => {
-      if (!g || Math.abs(g.normalized) > $r.relativeResidual) return !1;
+      if (!g || Math.abs(g.normalized) > $r.relativeResidual) return false;
       let y = Math.expm1(v);
       return (
         l.some(
@@ -1752,7 +1754,7 @@ function cx(e, t, r = $r.minRate) {
             residual: g.value,
             relativeResidual: Math.abs(g.normalized),
           }),
-        !0
+        true
       );
     };
   if ([0, Math.log1p(0.1), Math.log1p(0.5)].map(s).every((v) => v?.value === 0))
@@ -1760,7 +1762,7 @@ function cx(e, t, r = $r.minRate) {
       status: "indeterminate",
       candidates: l,
       evaluations: a,
-      exhaustive: !1,
+      exhaustive: false,
     };
   let f = i;
   for (let v = 0; v < 60; v++) {
@@ -1807,7 +1809,7 @@ function cx(e, t, r = $r.minRate) {
   for (let v of d) {
     let g = s(v);
     if (!g) {
-      p = void 0;
+      p = undefined;
       continue;
     }
     if ((c(v, g), p && p.y.normalized * g.normalized < 0)) {
@@ -1834,7 +1836,7 @@ function cx(e, t, r = $r.minRate) {
     candidates: l,
     evaluations: a,
     status: h ? "limit" : m ? "converged" : "no-convergence",
-    exhaustive: !1,
+    exhaustive: false,
   };
 }
 var P0 = [
@@ -1901,12 +1903,12 @@ function ux(e, t, r) {
   if (!P0.includes(e)) return U0;
   let o =
       "Cash paid out is negative; cash received is positive. Rates and periods must use the same interval. No automatic cent rounding.",
-    n = !1,
+    n = false,
     i = r.clock.dateSystem,
     a = (w, A, I) => Yi(w, A, I, i),
     l = (w) => Nu(w, i),
     s = (w) => {
-      ((n = !0), r.report?.({ functionName: e, convention: o, ...w }));
+      ((n = true), r.report?.({ functionName: e, convention: o, ...w }));
     },
     c = (w, A) => {
       throw (s({ status: "error", error: w, message: A }), r.issue(w));
@@ -1948,7 +1950,7 @@ function ux(e, t, r) {
           "A cash-flow or security date is missing or is not a date.",
         );
       let A = typeof w == "string" ? Un(w, r.clock) : d(w);
-      return A === void 0 || A < (i === "1904" ? 0 : 1) || A >= Ki(i) + 1
+      return A === undefined || A < (i === "1904" ? 0 : 1) || A >= Ki(i) + 1
         ? c(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
@@ -1970,7 +1972,7 @@ function ux(e, t, r) {
     g = (w, A) => Math.exp(A * Math.log1p(w)),
     y = (w, A) => (w === 0 ? A : Math.expm1(A * Math.log1p(w)) / w),
     b = (w, A, I, N, R) => -(I * g(w, A) + N) / ((1 + w * R) * y(w, A)),
-    x = (w, A = !1) => {
+    x = (w, A = false) => {
       let I = M0(w);
       I.length > $r.cashFlows &&
         c("#LIMIT!", "Cash-flow input exceeds 10000 positions.");
@@ -2003,7 +2005,7 @@ function ux(e, t, r) {
           signChanges: I,
           solver: R,
           message: R.selected
-            ? `Residual-checked rate. ${R.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== void 0 && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
+            ? `Residual-checked rate. ${R.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== undefined && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
             : R.status === "indeterminate"
               ? "The equation does not identify a unique rate; no rate has been invented."
               : "No residual-checked rate converged within the supported search interval and evaluation budget. Review signs, timing and guess.",
@@ -2268,7 +2270,7 @@ function ux(e, t, r) {
                   return { value: me - te, scale: Math.abs(me) + te };
                 },
                 0.1,
-                void 0,
+                undefined,
                 0,
               );
       } else if (e === "ACCRINTM") {
@@ -2500,7 +2502,7 @@ function D0(e, t, r) {
     o();
   let u = (h) => (h.length <= 32767 ? h : o("#LIMIT!")),
     f = (h, v) => {
-      if (h === void 0 && v !== void 0) return v;
+      if (h === undefined && v !== undefined) return v;
       if (Array.isArray(h) || (typeof h == "string" && !h.trim())) return o();
       let g = Number(h ?? 0);
       return Number.isFinite(g) ? g : o();
@@ -2566,10 +2568,10 @@ function D0(e, t, r) {
           });
     }
     y.length * h.length > 2e6 && o("#LIMIT!");
-    let b = Array(h.length + 1).fill(!0);
+    let b = Array(h.length + 1).fill(true);
     for (let k = y.length - 1; k >= 0; k--) {
       let w = y[k],
-        A = Array(h.length + 1).fill(!1);
+        A = Array(h.length + 1).fill(false);
       A[h.length] = w.kind === "many" && b[h.length];
       for (let I = h.length - 1; I >= v - 1; I--)
         A[I] =
@@ -2588,15 +2590,17 @@ function D0(e, t, r) {
   if (e === "SUBSTITUTE") {
     let h = tn(l[1]),
       v = tn(l[2]),
-      g = l[3] === void 0 ? void 0 : d(l[3]);
-    if ((g !== void 0 && g < 1 && o(), !h)) return m;
+      g = l[3] === undefined ? undefined : d(l[3]);
+    if ((g !== undefined && g < 1 && o(), !h)) return m;
     let y = m.split(h),
       b = y.length - 1;
     return (
-      m.length + (g === void 0 ? b : g <= b ? 1 : 0) * (v.length - h.length) >
+      m.length +
+        (g === undefined ? b : g <= b ? 1 : 0) * (v.length - h.length) >
         32767 && o("#LIMIT!"),
       y.reduce(
-        (x, k, w) => (w === 0 ? k : x + (g === void 0 || g === w ? v : h) + k),
+        (x, k, w) =>
+          w === 0 ? k : x + (g === undefined || g === w ? v : h) + k,
         "",
       )
     );
@@ -2617,8 +2621,8 @@ function D0(e, t, r) {
     );
   }
   if (e === "NUMBERVALUE") {
-    let h = [...tn(l[1] === void 0 ? "." : l[1])][0],
-      v = [...tn(l[2] === void 0 ? "," : l[2])][0];
+    let h = [...tn(l[1] === undefined ? "." : l[1])][0],
+      v = [...tn(l[2] === undefined ? "," : l[2])][0];
     (!h || !v || h === v || /[0-9+\-eE%]/.test(h) || /[0-9+\-eE%]/.test(v)) &&
       o();
     let g = m.replace(/ /g, "");
@@ -2636,12 +2640,12 @@ function D0(e, t, r) {
   }
   if (e === "VALUE") {
     let h = r.temporal ? r.temporal(m.trim()) : pO(m.trim());
-    if (h !== void 0) return h;
+    if (h !== undefined) return h;
     let v = m.trim(),
-      g = !1;
+      g = false;
     v.startsWith("(") &&
       v.endsWith(")") &&
-      ((g = !0), (v = v.slice(1, -1).trim()));
+      ((g = true), (v = v.slice(1, -1).trim()));
     let y = v.endsWith("%");
     (y && (v = v.slice(0, -1).trim()),
       (v = v.replace(/^\$\s*/, "")),
@@ -2677,12 +2681,12 @@ function D0(e, t, r) {
       k = A.reverse();
     }
     let w = k[v > 0 ? v - 1 : k.length + v];
-    return w === void 0
+    return w === undefined
       ? y && Math.abs(v) === k.length + 1
         ? (e === "TEXTBEFORE") == v > 0
           ? m
           : ""
-        : l[5] !== void 0
+        : l[5] !== undefined
           ? l[5]
           : o("#N/A")
       : e === "TEXTBEFORE"
@@ -2702,7 +2706,7 @@ function kO(e) {
     throw Error("Axis capacity must be a nonnegative integer.");
 }
 function Vo(e, t) {
-  if ((kO(t), e === void 0)) return [];
+  if ((kO(t), e === undefined)) return [];
   if (!Array.isArray(e) || e.length > IO.maxIntervalsPerAxis)
     throw Error("Hidden indices require at most 10,000 intervals per axis.");
   let r = e
@@ -2778,7 +2782,7 @@ function Ss(e, t = []) {
     isHidden: l,
     viewIndex: (c) =>
       Number.isInteger(c) && c >= 0 && c < e && !l(c) ? a(c) : null,
-    next: (c, u, f = !1) => {
+    next: (c, u, f = false) => {
       let d = Math.trunc(c) + (f ? 0 : u);
       if (!n || (u === 1 && d >= e) || (u === -1 && d < 0)) return null;
       let p = u === 1 ? a(Math.max(0, d)) : a(Math.min(e, d + 1)) - 1,
@@ -2798,7 +2802,7 @@ function ea(e, t) {
       ...Vo(t === "row" ? e.hiddenRows : e.hiddenCols, r),
       ...(e.outlineGroups ?? [])
         .filter((i) => i.axis === t && i.collapsed)
-        .map(({ start: i, end: a }) => ({ start: i, end: a })),
+        .map(({ start, end }) => ({ start, end })),
     ].sort((i, a) => i.start - a.start || i.end - a.end),
     n = [];
   for (let i of o) {
@@ -2948,13 +2952,13 @@ function mx(e) {
       let s = t.currency ?? "USD";
       (OO.includes(s) || Ze("Choose a supported currency."), (n.currency = s));
     } else
-      t.currency !== void 0 &&
+      t.currency !== undefined &&
         Ze("Currency applies only to Currency or Accounting formats.");
     let a = t.decimals ?? (n.currency === "JPY" ? 0 : 2);
     ((typeof a != "number" || !Number.isInteger(a) || a < 0 || a > 12) &&
       Ze("Choose 0\u201312 decimal places."),
       (n.decimals = a),
-      t.useGrouping !== void 0 &&
+      t.useGrouping !== undefined &&
         typeof t.useGrouping != "boolean" &&
         Ze("The grouping option must be true or false."),
       (n.useGrouping = t.useGrouping ?? r !== "percent"));
@@ -2962,21 +2966,21 @@ function mx(e) {
     ((![1, 1e3, 1e6].includes(l) || (r === "percent" && l !== 1)) &&
       Ze("Choose units, thousands or millions; percentages use units."),
       (n.scale = l),
-      t.negative !== void 0 &&
+      t.negative !== undefined &&
         (typeof t.negative != "string" ||
           !["minus", "parentheses"].includes(t.negative)) &&
         Ze("Choose minus signs or parentheses for negatives."),
       r === "accounting" &&
-        t.negative !== void 0 &&
+        t.negative !== undefined &&
         t.negative !== "parentheses" &&
         Ze("Accounting negatives use parentheses."),
       (n.negative =
         r === "accounting" ? "parentheses" : (t.negative ?? "minus")),
-      t.pattern !== void 0 &&
+      t.pattern !== undefined &&
         Ze("Use the Custom category to enter a format pattern."));
   } else if (
     ([t.currency, t.decimals, t.useGrouping, t.scale, t.negative].some(
-      (i) => i !== void 0,
+      (i) => i !== undefined,
     ) && Ze("These numeric settings do not apply to the chosen category."),
     LO.has(r) || r === "custom")
   ) {
@@ -3001,12 +3005,12 @@ function mx(e) {
         );
     }
   } else
-    t.pattern !== void 0 && Ze("General does not accept a custom pattern.");
+    t.pattern !== undefined && Ze("General does not accept a custom pattern.");
   return n;
 }
 function FO(e) {
   let t = [""],
-    r = !1;
+    r = false;
   for (let o = 0; o < e.length; o++) {
     let n = e[o];
     if (n === "\\" && o + 1 < e.length) {
@@ -3016,7 +3020,7 @@ function FO(e) {
     (n === '"' && (r = !r),
       n === ";" && !r ? t.push("") : (t[t.length - 1] += n));
   }
-  return r || t.length > 4 ? void 0 : t;
+  return r || t.length > 4 ? undefined : t;
 }
 function zO(e) {
   let t = {
@@ -3025,9 +3029,9 @@ function zO(e) {
       minDecimals: 0,
       maxDecimals: 0,
       minIntegerDigits: 1,
-      grouping: !1,
-      percent: !1,
-      hasNumber: !1,
+      grouping: false,
+      percent: false,
+      hasNumber: false,
     },
     r = (o) => {
       t.hasNumber ? (t.suffix += o) : (t.prefix += o);
@@ -3061,10 +3065,12 @@ function zO(e) {
         t.maxDecimals > 20 || t.minIntegerDigits > 21)
       )
         return;
-      ((t.grouping = a[1].includes(",")), (t.hasNumber = !0), (o += i.length));
+      ((t.grouping = a[1].includes(",")),
+        (t.hasNumber = true),
+        (o += i.length));
     } else if (n === "%") {
       if (t.percent) return;
-      ((t.percent = !0), r(n), o++);
+      ((t.percent = true), r(n), o++);
     } else if (/[$€£¥ ()+\-]/.test(n)) (r(n), o++);
     else return;
   }
@@ -3191,7 +3197,7 @@ function WO(e) {
 function BO(e) {
   let t = "",
     r = 1,
-    o = !1;
+    o = false;
   for (let i = 0; i < e.length;) {
     let a = e.slice(i);
     if (a[0] === '"') {
@@ -3212,7 +3218,7 @@ function BO(e) {
         (r = 1e3 ** s.length),
         (t += l.slice(0, l.length - s.length)),
         (i += l.length),
-        (o = !0));
+        (o = true));
     } else ((t += a[0]), i++);
   }
   /\[/.test(t.replace(/"[^"]*"|\\./g, "")) &&
@@ -3241,7 +3247,7 @@ function Os(e) {
   let r,
     o = FO(e);
   o || Ze("A format has at most four sections and must close quoted literals.");
-  let n = o.length === 1 ? WO(e) : void 0;
+  let n = o.length === 1 ? WO(e) : undefined;
   return (
     n
       ? (r = n)
@@ -3274,23 +3280,23 @@ var px = (e) =>
     ?.value ?? ".";
 function ZO(e, t, r) {
   let o = e < 0 && t.sections.length > 1,
-    { parsed: n, divisor: i } =
+    { parsed, divisor } =
       t.sections[e === 0 && t.sections.length > 2 ? 2 : o ? 1 : 0];
-  if (!n.hasNumber) return n.prefix + n.suffix;
-  let a = (Math.abs(e) / i) * (n.percent ? 100 : 1);
+  if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
+  let a = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
   if (!Number.isFinite(a)) return "#NUM!";
   let l = new Intl.NumberFormat(r, {
-    minimumFractionDigits: n.minDecimals,
-    maximumFractionDigits: n.maxDecimals,
-    minimumIntegerDigits: Math.max(1, n.minIntegerDigits),
-    useGrouping: n.grouping,
+    minimumFractionDigits: parsed.minDecimals,
+    maximumFractionDigits: parsed.maxDecimals,
+    minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
+    useGrouping: parsed.grouping,
   }).format(a);
   return (
-    n.minIntegerDigits ||
-      (l === "0" && !n.minDecimals
+    parsed.minIntegerDigits ||
+      (l === "0" && !parsed.minDecimals
         ? (l = "")
         : l.startsWith(`0${px(r)}`) && (l = l.slice(1))),
-    (e < 0 && !o ? "-" : "") + n.prefix + l + n.suffix
+    (e < 0 && !o ? "-" : "") + parsed.prefix + l + parsed.suffix
   );
 }
 function GO(e, t, r, o) {
@@ -3375,7 +3381,7 @@ function hx(e, t, r = "1900") {
   if (typeof e == "string") {
     if (o.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(e)) {
       let c = Os(o.pattern);
-      if (c.kind === "numeric" && c.textSection !== void 0)
+      if (c.kind === "numeric" && c.textSection !== undefined)
         return { text: jO(c.textSection, e) };
     }
     return { text: e };
@@ -3385,7 +3391,7 @@ function hx(e, t, r = "1900") {
     return {
       text: new Intl.NumberFormat(o.locale, {
         maximumSignificantDigits: 15,
-        useGrouping: !1,
+        useGrouping: false,
       }).format(e === 0 ? 0 : e),
     };
   if (o.pattern) {
@@ -3446,8 +3452,8 @@ function KN(e) {
   let t = new Map();
   for (let i of e) {
     if (!Number.isFinite(i)) return;
-    let { coefficient: a, exponent: l } = HN(i);
-    t.set(l, (t.get(l) ?? 0n) + a);
+    let { coefficient, exponent } = HN(i);
+    t.set(exponent, (t.get(exponent) ?? 0n) + coefficient);
   }
   let r = [...t].filter(([, i]) => i !== 0n);
   if (!r.length) return { coefficient: 0n, exponent: 0 };
@@ -3532,11 +3538,11 @@ function k4(e, t, r) {
 }
 function JN(e, t, r) {
   if (!x4.has(e)) return cy;
-  let { retrieve: o, issue: n, isIssue: i } = r,
-    a = t.map(o),
-    l = (d) => (Number.isFinite(d) ? (d === 0 ? 0 : d) : n("#NUM!"));
+  let { retrieve, issue, isIssue } = r,
+    a = t.map(retrieve),
+    l = (d) => (Number.isFinite(d) ? (d === 0 ? 0 : d) : issue("#NUM!"));
   if (e === "SUMPRODUCT") {
-    if (!t.length || t.length > 255) return n("#VALUE!");
+    if (!t.length || t.length > 255) return issue("#VALUE!");
     let d = a.map((v) =>
         Array.isArray(v) ? (v.every(Array.isArray) ? v : [v]) : [[v]],
       ),
@@ -3547,35 +3553,36 @@ function JN(e, t, r) {
       !m ||
       d.some((v) => v.length !== p || v.some((g) => g.length !== m))
     )
-      return n("#VALUE!");
-    if (p * m * d.length > 1e5) return n("#LIMIT!");
+      return issue("#VALUE!");
+    if (p * m * d.length > 1e5) return issue("#LIMIT!");
     let h = [];
     for (let v = 0; v < p; v++)
       for (let g = 0; g < m; g++) {
         let y = [];
         for (let x of d) {
           let k = x[v][g];
-          if (i(k)) return k;
+          if (isIssue(k)) return k;
           y.push(typeof k == "number" ? k : 0);
         }
         let b = _f(y);
-        if (!Number.isFinite(b)) return n("#NUM!");
+        if (!Number.isFinite(b)) return issue("#NUM!");
         h.push(b);
       }
     return l(Nr(h));
   }
-  if (t.length < (e === "TRUNC" ? 1 : 2) || t.length > 2) return n("#VALUE!");
+  if (t.length < (e === "TRUNC" ? 1 : 2) || t.length > 2)
+    return issue("#VALUE!");
   let s = [];
   for (let d of a) {
-    if (i(d)) return d;
+    if (isIssue(d)) return d;
     if (
       Array.isArray(d) ||
       (typeof d == "string" &&
         !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(d.trim()))
     )
-      return n("#VALUE!");
+      return issue("#VALUE!");
     let p = d == null ? 0 : Number(d);
-    if (!Number.isFinite(p)) return n("#NUM!");
+    if (!Number.isFinite(p)) return issue("#NUM!");
     s.push(p);
   }
   let [c, u = 0] = s;
@@ -3588,7 +3595,7 @@ function JN(e, t, r) {
     (e === "MROUND" && Math.sign(c) !== Math.sign(u)) ||
     (e === "FLOOR" && c > 0 && u < 0)
   )
-    return n("#NUM!");
+    return issue("#NUM!");
   let f =
     e === "MROUND"
       ? "nearest"
@@ -3649,7 +3656,7 @@ function YN(e, t, r) {
       let ne = r.retrieve(z);
       if (r.isIssue(ne)) throw ne;
       return ne == null
-        ? !1
+        ? false
         : typeof ne == "boolean"
           ? ne
           : typeof ne == "number"
@@ -3660,8 +3667,8 @@ function YN(e, t, r) {
     },
     s = e === "TREND" || e === "GROWTH",
     c = e === "LOGEST" || e === "GROWTH",
-    u = l(t[s ? 3 : 2], !0),
-    f = !s && l(t[3], !1),
+    u = l(t[s ? 3 : 2], true),
+    f = !s && l(t[3], false),
     d = a(r.retrieve(t[0])),
     p = d.length * d[0].length;
   p > rl.observations && o("#LIMIT!");
@@ -3912,13 +3919,13 @@ function QN(e, t, r) {
   x || o("#DIV/0!");
   let w = n(Math.abs(b) / Math.sqrt(x));
   n(k);
-  let A = r.distribution("BETA.DIST", [k / (k + w * w), k / 2, 0.5, !0]);
+  let A = r.distribution("BETA.DIST", [k / (k + w * w), k / 2, 0.5, true]);
   return (f(A) * m) / 2;
 }
 var py = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
   hy = Symbol("not-specialist"),
   nl = [],
-  ge = (e, t, r, o = !1, n = 0, i = 1) => {
+  ge = (e, t, r, o = false, n = 0, i = 1) => {
     for (let a of e.split("|"))
       nl.push({
         symbol: a,
@@ -3929,7 +3936,7 @@ var py = ["CONVERT", "SLOPE", "RSQ", "STEYX", "PEARSON"],
         power: i,
       });
   };
-ge("g", "mass", 0.001, !0);
+ge("g", "mass", 0.001, true);
 ge("lbm", "mass", 0.45359237);
 ge("ozm", "mass", 0.45359237 / 16);
 ge("grain", "mass", 0.45359237 / 7e3);
@@ -3938,43 +3945,43 @@ ge("ton", "mass", 0.45359237 * 2e3);
 ge("uk_ton|LTON|brton", "mass", 0.45359237 * 2240);
 ge("cwt|shweight", "mass", 0.45359237 * 100);
 ge("uk_cwt|lcwt|hweight", "mass", 0.45359237 * 112);
-ge("m", "length", 1, !0);
+ge("m", "length", 1, true);
 ge("in", "length", 0.0254);
 ge("ft", "length", 0.3048);
 ge("yd", "length", 0.9144);
 ge("mi", "length", 1609.344);
 ge("Nmi", "length", 1852);
-ge("ang", "length", 1e-10, !0);
+ge("ang", "length", 1e-10, true);
 ge("Picapt|Pica", "length", 0.0254 / 72);
 ge("pica", "length", 0.0254 / 6);
-ge("sec|s", "time", 1, !0);
+ge("sec|s", "time", 1, true);
 ge("mn|min", "time", 60);
 ge("hr", "time", 3600);
 ge("day|d", "time", 86400);
 ge("yr", "time", 365.25 * 86400);
-ge("Pa|p", "pressure", 1, !0);
+ge("Pa|p", "pressure", 1, true);
 ge("atm|at", "pressure", 101325);
 ge("psi", "pressure", 6894.757293168361);
-ge("N", "force", 1, !0);
-ge("dyn|dy", "force", 1e-5, !0);
+ge("N", "force", 1, true);
+ge("dyn|dy", "force", 1e-5, true);
 ge("lbf", "force", 4.4482216152605);
-ge("J", "energy", 1, !0);
-ge("e", "energy", 1e-7, !0);
-ge("c", "energy", 4.184, !0);
-ge("cal", "energy", 4.1868, !0);
-ge("Wh|wh", "energy", 3600, !0);
+ge("J", "energy", 1, true);
+ge("e", "energy", 1e-7, true);
+ge("c", "energy", 4.184, true);
+ge("cal", "energy", 4.1868, true);
+ge("Wh|wh", "energy", 3600, true);
 ge("BTU|btu", "energy", 1055.05585262);
-ge("W|w", "power", 1, !0);
+ge("W|w", "power", 1, true);
 ge("HP|h", "power", 745.6998715822702);
 ge("PS", "power", 735.49875);
-ge("T", "magnetism", 1, !0);
-ge("ga", "magnetism", 1e-4, !0);
-ge("K|kel", "temperature", 1, !0);
-ge("C|cel", "temperature", 1, !1, 273.15);
-ge("F|fah", "temperature", 5 / 9, !1, 273.15 - 160 / 9);
+ge("T", "magnetism", 1, true);
+ge("ga", "magnetism", 1e-4, true);
+ge("K|kel", "temperature", 1, true);
+ge("C|cel", "temperature", 1, false, 273.15);
+ge("F|fah", "temperature", 5 / 9, false, 273.15 - 160 / 9);
 ge("Rank", "temperature", 5 / 9);
-ge("Reau", "temperature", 1.25, !1, 273.15);
-ge("l|L|lt", "volume", 0.001, !0);
+ge("Reau", "temperature", 1.25, false, 273.15);
+ge("l|L|lt", "volume", 0.001, true);
 ge("gal", "volume", 0.003785411784);
 ge("qt", "volume", 0.003785411784 / 4);
 ge("pt|us_pt", "volume", 0.003785411784 / 8);
@@ -3998,14 +4005,14 @@ for (let [e, t] of [
 ])
   (ge(`${e}2|${e}^2`, "area", t ** 2, e === "m" || e === "ang", 0, 2),
     ge(`${e}3|${e}^3`, "volume", t ** 3, e === "m" || e === "ang", 0, 3));
-ge("ar", "area", 100, !0);
+ge("ar", "area", 100, true);
 ge("ha", "area", 1e4);
 ge("uk_acre", "area", 4046.8564224);
 ge("us_acre", "area", (1200 / 3937) ** 2 * 43560);
-ge("bit", "information", 1, !0);
-ge("byte", "information", 8, !0);
-ge("m/s|m/sec", "speed", 1, !0);
-ge("m/h|m/hr", "speed", 1 / 3600, !0);
+ge("bit", "information", 1, true);
+ge("byte", "information", 8, true);
+ge("m/s|m/sec", "speed", 1, true);
+ge("m/h|m/hr", "speed", 1 / 3600, true);
 ge("mph", "speed", 1609.344 / 3600);
 ge("kn", "speed", 1852 / 3600);
 var _W = Object.freeze(nl.map((e) => Object.freeze(e))),
@@ -4219,7 +4226,7 @@ function nR(e, t, r) {
   for (let N of u) d(N);
   let p = (N) => (Number.isFinite(N) ? N : o("#NUM!")),
     m = (N, R) => {
-      if (N === void 0 && R !== void 0) return R;
+      if (N === undefined && R !== undefined) return R;
       if (r.isIssue(N)) throw N;
       if (N == null) return 0;
       if (Array.isArray(N) || (typeof N == "string" && !N.trim())) return o();
@@ -4369,7 +4376,7 @@ function iR(e, t, r) {
     },
     i = (h) => {
       if (r.isIssue(h)) throw h;
-      h === void 0 && o();
+      h === undefined && o();
       let v = Array.isArray(h) ? (h.every(Array.isArray) ? h : [h]) : [[h]];
       return (
         (!v.length ||
@@ -4392,11 +4399,11 @@ function iR(e, t, r) {
     t.length > (e === "LOOKUP" ? 3 : 4)) &&
     o();
   let l = n(r.retrieve(t[0]));
-  l === void 0 && o();
+  l === undefined && o();
   let s = i(r.retrieve(t[1])),
     c,
     u,
-    f = !0;
+    f = true;
   if (e === "LOOKUP")
     t.length === 3
       ? ((c = a(s)), (u = a(i(r.retrieve(t[2])))), c.length !== u.length && o())
@@ -4409,7 +4416,7 @@ function iR(e, t, r) {
     let v = Math.trunc(Number(h));
     ((!Number.isFinite(v) || v < 1) && o(),
       v > (e === "VLOOKUP" ? s[0].length : s.length) && o("#REF!"));
-    let g = t[3] == null ? !0 : n(r.retrieve(t[3]));
+    let g = t[3] == null ? true : n(r.retrieve(t[3]));
     (typeof g == "string" && !/^(true|false)$/i.test(g) && o(),
       (f = typeof g == "string" ? g.toLowerCase() === "true" : !!g),
       (c = e === "VLOOKUP" ? s.map((y) => y[0]) : s[0]),
@@ -4435,7 +4442,7 @@ function iR(e, t, r) {
     m = c.findIndex((g) =>
       v
         ? typeof g != "string"
-          ? !1
+          ? false
           : ((h += g.length * l.length),
             h > 1e5 && o("#LIMIT!"),
             r.matches(g, `=${l}`))
@@ -4456,9 +4463,9 @@ function aR(e, t, r) {
     a = (l, s) => {
       if (++i > 1e5) throw r.issue("#LIMIT!");
       if (r.isIssue(l)) throw l;
-      if (Array.isArray(l)) (e === "NOT" && o(), l.forEach((c) => a(c, !0)));
+      if (Array.isArray(l)) (e === "NOT" && o(), l.forEach((c) => a(c, true)));
       else if (typeof l == "boolean" || typeof l == "number") n.push(!!l);
-      else if (l == null) s || n.push(!1);
+      else if (l == null) s || n.push(false);
       else if (typeof l == "string") {
         if (s) return;
         (/^(true|false)$/i.test(l) || o(), n.push(l.toLowerCase() === "true"));
@@ -4574,7 +4581,7 @@ function cR(e, t, r) {
     },
     n = (f, d) => {
       if (r.isIssue(f)) throw f;
-      if (f === void 0 && d !== void 0) return d;
+      if (f === undefined && d !== undefined) return d;
       if (Array.isArray(f) || (typeof f == "string" && !f.trim())) return o();
       let p = Number(f);
       return Number.isFinite(p) ? p : o();
@@ -4626,7 +4633,7 @@ function cR(e, t, r) {
     }[e];
   if (
     (u && (t.length < u[0] || t.length > u[1]) && o(),
-    u && e !== "SEQUENCE" && s[0] === void 0 && o(),
+    u && e !== "SEQUENCE" && s[0] === undefined && o(),
     u && !["HSTACK", "VSTACK"].includes(e) && r.isIssue(s[0]))
   )
     throw s[0];
@@ -4767,9 +4774,9 @@ function cR(e, t, r) {
     ((t.length < (e === "XMATCH" ? 2 : 3) ||
       t.length > (e === "XMATCH" ? 4 : 6)) &&
       o(),
-      (s[0] === void 0 ||
-        s[1] === void 0 ||
-        (e === "XLOOKUP" && s[2] === void 0)) &&
+      (s[0] === undefined ||
+        s[1] === undefined ||
+        (e === "XLOOKUP" && s[2] === undefined)) &&
         o());
     let f = s[0],
       d = _t(s[1]);
@@ -4812,17 +4819,17 @@ function cR(e, t, r) {
         m !== 2 || typeof f != "string"
           ? sR(p[k], f)
           : typeof p[k] != "string"
-            ? !1
+            ? false
             : ((b += p[k].length * f.length),
               b > 1e5 && o("#LIMIT!"),
               r.matches(p[k], `=${f}`)),
       );
-    if (x === void 0 && (m === -1 || m === 1)) {
+    if (x === undefined && (m === -1 || m === 1)) {
       let k = y.filter((w) => Math.sign(Of(p[w], f)) === m);
       (k.sort((w, A) => Of(p[w], p[A]) * m), (x = k[0]));
     }
-    return x === void 0
-      ? e === "XLOOKUP" && s[3] !== void 0
+    return x === undefined
+      ? e === "XLOOKUP" && s[3] !== undefined
         ? (s[3] ?? 0)
         : o("#N/A")
       : e === "XMATCH"
@@ -4836,7 +4843,7 @@ function cR(e, t, r) {
             : g.map((k) => [k[x]]);
   }
   if (e === "SEQUENCE") {
-    s[0] === void 0 && s[1] === void 0 && o();
+    s[0] === undefined && s[1] === undefined && o();
     let f = i(s[0], 1),
       d = i(s[1], 1),
       p = n(s[2], 1),
@@ -4851,7 +4858,7 @@ function cR(e, t, r) {
   if (e === "FILTER") {
     let f = _t(s[0]),
       d = _t(s[1]);
-    s[1] === void 0 && o();
+    s[1] === undefined && o();
     let p = Lr(d).find(r.isIssue);
     if (p) throw p;
     let m;
@@ -4861,7 +4868,7 @@ function cR(e, t, r) {
       m = f.map((h) => h.filter((v, g) => l(d[0][g])));
     else return o();
     return !m.length || !m[0].length
-      ? s[2] !== void 0
+      ? s[2] !== undefined
         ? _t(s[2])
         : o("#CALC!")
       : m;
@@ -4872,7 +4879,7 @@ function cR(e, t, r) {
     let f = _t(s[0]).map((g) => [...g]);
     if (e === "SORTBY") {
       let g = _t(s[1]);
-      s[1] === void 0 && o();
+      s[1] === undefined && o();
       let y =
           g.length === 1 &&
           g[0].length === f[0].length &&
@@ -4880,7 +4887,7 @@ function cR(e, t, r) {
         b = y ? f[0].length : f.length,
         x = [];
       for (let w = 1; w < s.length; w += 2) {
-        s[w] === void 0 && o();
+        s[w] === undefined && o();
         let A = _t(s[w]),
           I = n(s[w + 1], 1);
         ((y
@@ -4904,7 +4911,7 @@ function cR(e, t, r) {
     }
     let d = i(s[1], 1) - 1,
       p = n(s[2], 1),
-      m = s[3] === void 0 ? !1 : l(s[3]);
+      m = s[3] === undefined ? false : l(s[3]);
     [-1, 1].includes(p) || o();
     let h = m ? f[0].map((g, y) => f.map((b) => b[y])) : f;
     (d < 0 || d >= h[0].length) && o();
@@ -4917,8 +4924,8 @@ function cR(e, t, r) {
   }
   if (e === "UNIQUE") {
     let f = _t(s[0]),
-      d = s[1] === void 0 ? !1 : l(s[1]),
-      p = s[2] === void 0 ? !1 : l(s[2]),
+      d = s[1] === undefined ? false : l(s[1]),
+      p = s[2] === undefined ? false : l(s[2]),
       m = d ? f[0].map((b, x) => f.map((k) => k[x])) : f,
       h = (b) =>
         JSON.stringify(
@@ -4929,7 +4936,7 @@ function cR(e, t, r) {
     let g = new Set(),
       y = m.filter((b) => {
         let x = h(b);
-        return g.has(x) || (p && v.get(x) !== 1) ? !1 : (g.add(x), !0);
+        return g.has(x) || (p && v.get(x) !== 1) ? false : (g.add(x), true);
       });
     return (
       y.length || o("#CALC!"),
@@ -4938,10 +4945,10 @@ function cR(e, t, r) {
   }
   if (e === "TAKE" || e === "DROP") {
     let f = _t(s[0]),
-      d = s[1] === void 0 ? void 0 : i(s[1]),
-      p = s[2] === void 0 ? void 0 : i(s[2]),
+      d = s[1] === undefined ? undefined : i(s[1]),
+      p = s[2] === undefined ? undefined : i(s[2]),
       m = (v, g) =>
-        g === void 0
+        g === undefined
           ? v
           : e === "TAKE"
             ? g > 0
@@ -4950,7 +4957,8 @@ function cR(e, t, r) {
             : g >= 0
               ? v.slice(g)
               : v.slice(0, g);
-    (d === void 0 && p === void 0 && o(), (d === 0 || p === 0) && o("#CALC!"));
+    (d === undefined && p === undefined && o(),
+      (d === 0 || p === 0) && o("#CALC!"));
     let h = m(f, d).map((v) => m(v, p));
     return ((!h.length || !h[0].length) && o("#CALC!"), h);
   }
@@ -5002,7 +5010,7 @@ function cR(e, t, r) {
   if (e === "TOCOL" || e === "TOROW") {
     let f = _t(s[0]),
       d = i(s[1], 0),
-      p = s[2] === void 0 ? !1 : l(s[2]);
+      p = s[2] === undefined ? false : l(s[2]);
     [0, 1, 2, 3].includes(d) || o();
     let m = (p ? f[0].flatMap((h, v) => f.map((g) => g[v])) : f.flat()).filter(
       (h) =>
@@ -5044,7 +5052,7 @@ function cR(e, t, r) {
       (y.push(k), (x = k + g.length));
     }
     let b = y[p > 0 ? p - 1 : y.length + p];
-    return b === void 0
+    return b === undefined
       ? h && Math.abs(p) === y.length + 1
         ? e === "TEXTBEFORE"
           ? p > 0
@@ -5053,7 +5061,7 @@ function cR(e, t, r) {
           : p > 0
             ? ""
             : f
-        : s[5] !== void 0
+        : s[5] !== undefined
           ? s[5]
           : o("#N/A")
       : e === "TEXTBEFORE"
@@ -5065,7 +5073,7 @@ function cR(e, t, r) {
     let f = s.slice(0, 5).flatMap(Lr).find(r.isIssue);
     if (f) return f;
     let d = Hn(s[0]),
-      p = s[3] === void 0 ? !1 : l(s[3]),
+      p = s[3] === undefined ? false : l(s[3]),
       m = n(s[4], 0);
     (Array.isArray(s[0]) || ![0, 1].includes(m)) && o();
     let h = (k) =>
@@ -5107,7 +5115,7 @@ function cR(e, t, r) {
 }
 var R4 = (e) => `${e.scopeSheetId ?? ""}:${e.name.toLowerCase()}`,
   T4 = (e) => `'${e.replace(/'/g, "''")}'!`;
-function C4(e, t = !1) {
+function C4(e, t = false) {
   let r = [],
     o = 0,
     n = (a) => {
@@ -5124,12 +5132,12 @@ function C4(e, t = !1) {
       l = e[o];
     if (l === '"') {
       o++;
-      let m = !1;
+      let m = false;
       for (; o < e.length;)
         if (e[o++] === '"')
           if (e[o] === '"') o++;
           else {
-            m = !0;
+            m = true;
             break;
           }
       m || n("An unterminated formula string cannot be safely migrated.");
@@ -5176,7 +5184,7 @@ function C4(e, t = !1) {
       let m = /^([A-Za-z0-9_\\][A-Za-z0-9_.\\]*)!/.exec(e.slice(o));
       m && ((c = m[1]), (o += m[0].length));
     }
-    if (c === void 0 && l === "[") {
+    if (c === undefined && l === "[") {
       (e.startsWith("[@", o) ||
         n(
           "External or unqualified bracket references cannot be safely migrated.",
@@ -5196,11 +5204,11 @@ function C4(e, t = !1) {
           text: e.slice(a, o),
           name: u[0],
           ...(c ? { qualifier: c } : {}),
-          cell: !0,
+          cell: true,
         }));
       continue;
     }
-    if (c === void 0 && /[0-9.]/.test(l)) {
+    if (c === undefined && /[0-9.]/.test(l)) {
       let m = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/.exec(e.slice(o));
       if (m) {
         o += m[0].length;
@@ -5234,14 +5242,14 @@ function C4(e, t = !1) {
           end: o,
           text: e.slice(a, o),
           name: d,
-          ...(p ? { call: !0 } : {}),
+          ...(p ? { call: true } : {}),
           ...(c ? { qualifier: c } : {}),
-          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(d) ? { cell: !0 } : {}),
+          ...(/^\$?[A-Za-z]{1,3}\$?[1-9]\d*$/.test(d) ? { cell: true } : {}),
         }));
   }
   return r;
 }
-function uR(e, t = !1) {
+function uR(e, t = false) {
   let r = C4(e, t);
   if (!/\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(e)) return r;
   let o = new Map();
@@ -5367,12 +5375,12 @@ function Iy(e) {
     if (!r && (l === '"' || l === "'")) {
       let s = l,
         c = n++,
-        u = !1;
+        u = false;
       for (; n < e.length;)
         if (e[n++] === s)
           if (e[n] === s) n++;
           else {
-            u = !0;
+            u = true;
             break;
           }
       if (!u) return Nn("Unterminated formula string or worksheet qualifier.");
@@ -5509,14 +5517,14 @@ function mR(e, t, r, o) {
           t.definedNames?.find(
             (N) => !N.scopeSheetId && N.name.toLowerCase() === A,
           );
-      return I ? { found: I, sheetId: I.scopeSheetId ?? w } : void 0;
+      return I ? { found: I, sheetId: I.scopeSheetId ?? w } : undefined;
     },
     m = (x, k, w) => {
       try {
         return o.parse(x, k, w);
       } catch (A) {
         let I =
-          A && typeof A == "object" && "details" in A ? A.details : void 0;
+          A && typeof A == "object" && "details" in A ? A.details : undefined;
         return o.isIssue(I) ? I : o.isIssue(A) ? A : o.issue("#ERROR!");
       }
     },
@@ -5587,7 +5595,7 @@ function mR(e, t, r, o) {
       if (N === "LAMBDA")
         return {
           kind: "formula-closure",
-          parameters: x.args.slice(0, -1).map((S) => vn(Hi(S, !0).name)),
+          parameters: x.args.slice(0, -1).map((S) => vn(Hi(S, true).name)),
           body: x.args.at(-1),
           source: k,
           environment: new Map(w),
@@ -5614,7 +5622,7 @@ function mR(e, t, r, o) {
               `IF: ${F ? "true" : "false"} branch selected`,
               S,
             ),
-            x.args[F ? 1 : 2] ? b(x.args[F ? 1 : 2], k, w, A, I + 1) : !1
+            x.args[F ? 1 : 2] ? b(x.args[F ? 1 : 2], k, w, A, I + 1) : false
           );
         }
       }
@@ -5735,9 +5743,9 @@ function Lf(e, t, r, o) {
     m && v && (i = { sheet: m, table: v });
   }
   if (!i) return null;
-  let { sheet: a, table: l } = i,
-    s = pt(l.range),
-    c = L4(l),
+  let { sheet, table } = i,
+    s = pt(table.range),
+    c = L4(table),
     u = n[2]
       .replace(/^\[|\]$/g, "")
       .replace(/[\[\]]/g, "")
@@ -5760,11 +5768,11 @@ function Lf(e, t, r, o) {
     f === "#headers" && Object.assign(c, s, { lastRow: s.firstRow }),
     f === "#totals")
   ) {
-    if (!l.showTotals) return null;
+    if (!table.showTotals) return null;
     Object.assign(c, s, { firstRow: s.lastRow });
   }
   if (d) {
-    if (!o || a.id !== t) return null;
+    if (!o || sheet.id !== t) return null;
     let m = je(o);
     if (m.row < c.firstRow || m.row > c.lastRow) return null;
     ((c.firstRow = m.row), (c.lastRow = m.row));
@@ -5773,7 +5781,7 @@ function Lf(e, t, r, o) {
   if (p.length) {
     if (p.length > 2) return null;
     let m = p.map((h) =>
-      l.columns.findIndex((v) => v.name.toLowerCase() === h.toLowerCase()),
+      table.columns.findIndex((v) => v.name.toLowerCase() === h.toLowerCase()),
     );
     if (m.some((h) => h < 0)) return null;
     ((c.firstCol = s.firstCol + Math.min(...m)),
@@ -5782,7 +5790,7 @@ function Lf(e, t, r, o) {
   return c.firstRow > c.lastRow
     ? null
     : {
-        sheetId: a.id,
+        sheetId: sheet.id,
         range: `${hR(c.firstRow, c.firstCol)}:${hR(c.lastRow, c.lastCol)}`,
       };
 }
@@ -5881,7 +5889,7 @@ function yR(e, t) {
   let r = F4(e);
   for (let o of r.reverse()) {
     let n = t(o);
-    n !== void 0 && (e = e.slice(0, o.start) + n + e.slice(o.end));
+    n !== undefined && (e = e.slice(0, o.start) + n + e.slice(o.end));
   }
   return e;
 }
@@ -5959,7 +5967,7 @@ function ER(e) {
       for (; e.sheets.some((p) => p.id === f);) f += "_";
       let d = {};
       for (let [p, m] of Object.entries(c.cells))
-        ((d[p] = { raw: m.value, literal: !0 }), r.set(`${f}:${p}`, m));
+        ((d[p] = { raw: m.value, literal: true }), r.set(`${f}:${p}`, m));
       (t.push({ id: f, name: u, rowCount: 1048576, colCount: 16384, cells: d }),
         o.set(JSON.stringify([l.target, c.name.toLowerCase()]), u));
     }
@@ -5977,7 +5985,7 @@ function ER(e) {
       }),
   };
 }
-function xR(e, t, r, o, n = !0) {
+function xR(e, t, r, o, n = true) {
   let i = "";
   for (let u = 0; u < e.length;) {
     let f = u,
@@ -6187,17 +6195,17 @@ function IR(e, t, r) {
       }
       let Z = K.toLowerCase(),
         B = [],
-        X = !1;
+        X = false;
       for (let L = 0; L < Z.length; L++) {
         let U = Z[L];
         if (U === "~") {
           let Y = Z[L + 1];
           Y && ["*", "?", "~"].includes(Y)
-            ? (B.push({ kind: "literal", char: Y }), L++, (X = !0))
+            ? (B.push({ kind: "literal", char: Y }), L++, (X = true))
             : B.push({ kind: "literal", char: U });
         } else
           U === "*" || U === "?"
-            ? ((X = !0),
+            ? ((X = true),
               (U === "?" || B.at(-1)?.kind !== "many") &&
                 B.push({ kind: U === "*" ? "many" : "one" }))
             : B.push({ kind: "literal", char: U });
@@ -6207,7 +6215,7 @@ function IR(e, t, r) {
           ? o()
           : (L) =>
               typeof L != "string"
-                ? !1
+                ? false
                 : (p(L.length + Z.length), m(L.toLowerCase(), Z, te))
         : (!Q[1] && !X && B.push({ kind: "many" }),
           (L) => {
@@ -6238,7 +6246,7 @@ function IR(e, t, r) {
       .slice(1)
       .map((D, Q) =>
         D.map((te, K) =>
-          c[K] < 0 ? r.criterionFormula?.(t[2], Q + 1, K) : void 0,
+          c[K] < 0 ? r.criterionFormula?.(t[2], Q + 1, K) : undefined,
         ),
       );
   c.forEach((D, Q) => {
@@ -6263,27 +6271,27 @@ function IR(e, t, r) {
     T = 0,
     _;
   for (let [D, Q] of i.slice(1).entries()) {
-    let te = !1;
+    let te = false;
     for (let [B, X] of y.entries()) {
-      let L = !0;
+      let L = true;
       for (let U = 0; U < X.length; U++) {
         let Y = g[B][U];
         if (Y) {
           ++v > vo.formulaEvaluations && o("#LIMIT!");
           let $ = Y(D);
           if (r.isIssue($)) throw $;
-          (typeof $ != "boolean" && o(), $ || (L = !1));
+          (typeof $ != "boolean" && o(), $ || (L = false));
           continue;
         }
         let ie = X[U];
         if (!ie) continue;
         let ve = Q[c[U]];
         if (r.isIssue(ve)) throw ve;
-        ie(ve) || (L = !1);
+        ie(ve) || (L = false);
       }
-      L && (te = !0);
+      L && (te = true);
     }
-    if (!te || (x++, f === void 0)) continue;
+    if (!te || (x++, f === undefined)) continue;
     let K = Q[f];
     if (((_ = K), K != null && w++, r.isIssue(K))) {
       if (!["DCOUNT", "DCOUNTA", "DGET"].includes(e)) throw K;
@@ -6299,8 +6307,8 @@ function IR(e, t, r) {
     if (r.isIssue(_)) throw _;
     return _ ?? 0;
   }
-  if (e === "DCOUNT") return f === void 0 ? x : k;
-  if (e === "DCOUNTA") return f === void 0 ? x : w;
+  if (e === "DCOUNT") return f === undefined ? x : k;
+  if (e === "DCOUNTA") return f === undefined ? x : w;
   let P = (D) => (Number.isFinite(D) ? D : o("#NUM!"));
   if (e === "DSUM") return P(A);
   if (e === "DMAX") return k ? R : 0;
@@ -6334,7 +6342,7 @@ function kR(e, t = {}) {
   if (!yo(t) || Object.keys(t).some((s) => s !== "filteredRowsBySheet"))
     throw Error("Calculation options support only filteredRowsBySheet.");
   let r = t.filteredRowsBySheet;
-  if (r !== void 0 && !yo(r))
+  if (r !== undefined && !yo(r))
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
@@ -6355,20 +6363,21 @@ function kR(e, t = {}) {
   for (let s of e.sheets) l.set(s.id, Ss(s.rowCount, ea(s, "row")));
   return (s, c, u) => {
     if (!Cy.includes(s)) return Sy;
-    let { issue: f, isIssue: d } = u,
+    let { issue, isIssue } = u,
       p = (L) => {
-        if (d(L)) throw L;
-        if (!yo(L) || !yo(L.ref)) throw f("#VALUE!");
+        if (isIssue(L)) throw L;
+        if (!yo(L) || !yo(L.ref)) throw issue("#VALUE!");
         let U = L.ref;
-        if (U.sheet !== void 0 && typeof U.sheet != "string") throw f("#REF!");
+        if (U.sheet !== undefined && typeof U.sheet != "string")
+          throw issue("#REF!");
         let Y = n.get(
           String(U.sheet ?? u.currentSheetName ?? "").toLowerCase(),
         );
-        if (!Y) throw f("#REF!");
+        if (!Y) throw issue("#REF!");
         let ie = yo(U.from) ? U.from : U,
           ve = yo(U.to) ? U.to : U,
           $ = [ie.row, ie.col, ve.row, ve.col];
-        if ($.some((ue) => !Number.isInteger(ue))) throw f("#REF!");
+        if ($.some((ue) => !Number.isInteger(ue))) throw issue("#REF!");
         let [W, se, me, we] = $;
         if (
           W < 1 ||
@@ -6378,7 +6387,7 @@ function kR(e, t = {}) {
           me > Y.rowCount ||
           we > Y.colCount
         )
-          throw f("#REF!");
+          throw issue("#REF!");
         return {
           sheet: Y,
           firstRow: W,
@@ -6388,7 +6397,7 @@ function kR(e, t = {}) {
         };
       };
     if (s === "FORMULATEXT" || s === "ISFORMULA") {
-      if (c.length !== 1) return f("#VALUE!");
+      if (c.length !== 1) return issue("#VALUE!");
       let L = p(c[0]),
         U = (ie, ve) => {
           let $ = `${Me(ve - 1)}${ie}`;
@@ -6396,11 +6405,11 @@ function kR(e, t = {}) {
         };
       if (s === "FORMULATEXT") {
         let ie = U(L.firstRow, L.firstCol);
-        return Df(ie) && ie.raw.length <= 8192 ? ie.raw : f("#N/A");
+        return Df(ie) && ie.raw.length <= 8192 ? ie.raw : issue("#N/A");
       }
       let Y = (L.lastRow - L.firstRow + 1) * (L.lastCol - L.firstCol + 1);
       return Y > 1e4
-        ? f("#LIMIT!")
+        ? issue("#LIMIT!")
         : Y === 1
           ? Df(U(L.firstRow, L.firstCol))
           : Array.from({ length: L.lastRow - L.firstRow + 1 }, (ie, ve) =>
@@ -6410,31 +6419,31 @@ function kR(e, t = {}) {
             );
     }
     let m = s === "AGGREGATE";
-    if (c.length < (m ? 3 : 2) || c.length > 255) return f("#VALUE!");
+    if (c.length < (m ? 3 : 2) || c.length > 255) return issue("#VALUE!");
     let h = (L) => {
         let U = u.retrieve(L);
-        if (d(U)) throw U;
+        if (isIssue(U)) throw U;
         if (
           Array.isArray(U) ||
           !["number", "string", "boolean"].includes(typeof U) ||
           (typeof U == "string" && U.trim() === "") ||
           !Number.isFinite(Number(U))
         )
-          throw f("#VALUE!");
+          throw issue("#VALUE!");
         return Number(U);
       },
       v = h(c[0]);
-    if (m && !Number.isInteger(v)) return f("#VALUE!");
+    if (m && !Number.isInteger(v)) return issue("#VALUE!");
     let g = Math.trunc(v),
       y = !m && g > 100 ? g - 100 : g;
-    if (y < 1 || y > (m ? 19 : 11)) return f("#VALUE!");
+    if (y < 1 || y > (m ? 19 : 11)) return issue("#VALUE!");
     let b = m ? (c[1] == null ? 0 : h(c[1])) : 0;
-    if (!Number.isInteger(b) || b < 0 || b > 7) return f("#VALUE!");
+    if (!Number.isInteger(b) || b < 0 || b > 7) return issue("#VALUE!");
     let x = m ? b % 2 === 1 : g > 100,
       k = m && [2, 3, 6, 7].includes(b),
       w = !m || b < 4,
       A = m && y >= 14;
-    if (A && (c.length !== 4 || c[3] == null)) return f("#VALUE!");
+    if (A && (c.length !== 4 || c[3] == null)) return issue("#VALUE!");
     let I = A ? h(c[3]) : 0,
       N = A ? [c[2]] : c.slice(m ? 2 : 1),
       C = A && !((L) => yo(L) && yo(L.ref))(N[0]),
@@ -6442,12 +6451,13 @@ function kR(e, t = {}) {
       _ = 0;
     for (let L of T) {
       let U = (L.lastRow - L.firstRow + 1) * (L.lastCol - L.firstCol + 1);
-      if (((_ += U), U > 2e4 || _ > 1e5)) return f("#LIMIT!");
+      if (((_ += U), U > 2e4 || _ > 1e5)) return issue("#LIMIT!");
     }
     for (let L of T)
       for (let U = L.firstRow; U <= L.lastRow; U++)
         for (let Y = L.firstCol; Y <= L.lastCol; Y++)
-          if (u.isActive(L.sheet.id, `${Me(Y - 1)}${U}`)) return f("#CYCLE!");
+          if (u.isActive(L.sheet.id, `${Me(Y - 1)}${U}`))
+            return issue("#CYCLE!");
     let P = 0,
       S = 0,
       F = 1 / 0,
@@ -6456,13 +6466,13 @@ function kR(e, t = {}) {
       te = 0,
       K = [],
       Z = (L) => {
-        if (d(L)) {
+        if (isIssue(L)) {
           if (["#LIMIT!", "#CYCLE!"].includes(L.error)) return L;
           if (k) return;
           if (y !== 2 && y !== 3) return L;
         }
         if ((L != null && S++, typeof L != "number")) return;
-        if (!Number.isFinite(L)) return f("#NUM!");
+        if (!Number.isFinite(L)) return issue("#NUM!");
         (P++, (F = Math.min(F, L)), (D = Math.max(D, L)));
         let U = L - Q;
         ((Q += U / P),
@@ -6472,20 +6482,20 @@ function kR(e, t = {}) {
     if (C) {
       let L = u.retrieve(N[0]),
         U = Array.isArray(L) ? L : [[L]];
-      if (!U.length || U.length > 1e4) return f("#LIMIT!");
+      if (!U.length || U.length > 1e4) return issue("#LIMIT!");
       let Y = U.every(Array.isArray) ? U : [U],
         ie = Y[0]?.length ?? 0;
       if (!ie || Y.some((ve) => ve.length !== ie || ve.some(Array.isArray)))
-        return f("#VALUE!");
-      if (Y.length * ie > 1e4) return f("#LIMIT!");
+        return issue("#VALUE!");
+      if (Y.length * ie > 1e4) return issue("#LIMIT!");
       for (let ve of Y)
         for (let $ of ve) {
           if (
             $ != null &&
-            !d($) &&
+            !isIssue($) &&
             !["number", "string", "boolean"].includes(typeof $)
           )
-            return f("#VALUE!");
+            return issue("#VALUE!");
           let W = Z($);
           if (W) return W;
         }
@@ -6515,9 +6525,9 @@ function kR(e, t = {}) {
           ((me = ue === we ? me + 1 : 1),
             me > W && ((W = me), (se = ue)),
             (we = ue));
-        return W > 1 ? se : f("#N/A");
+        return W > 1 ? se : issue("#N/A");
       }
-      if (!K.length) return f("#NUM!");
+      if (!K.length) return issue("#NUM!");
       if (y === 12) {
         let W = Math.floor(K.length / 2);
         return K.length % 2 ? K[W] : K[W - 1] / 2 + K[W] / 2;
@@ -6526,13 +6536,13 @@ function kR(e, t = {}) {
         let W = I;
         return Number.isInteger(W) && W >= 1 && W <= K.length
           ? K[y === 14 ? K.length - W : W - 1]
-          : f("#NUM!");
+          : issue("#NUM!");
       }
       let L = y >= 18,
         U = y === 17 || y === 19 ? Math.trunc(I) / 4 : I;
-      if (U < 0 || U > 1 || (L && (U === 0 || U === 1))) return f("#NUM!");
+      if (U < 0 || U > 1 || (L && (U === 0 || U === 1))) return issue("#NUM!");
       let Y = L ? U * (K.length + 1) - 1 : U * (K.length - 1);
-      if (Y < 0 || Y > K.length - 1) return f("#NUM!");
+      if (Y < 0 || Y > K.length - 1) return issue("#NUM!");
       let ie = Math.floor(Y),
         ve = Math.ceil(Y),
         $ = Y - ie;
@@ -6541,12 +6551,12 @@ function kR(e, t = {}) {
     if (y === 2) return P;
     if (y === 3) return S;
     if (y === 9) return Nr(K);
-    if (y === 1) return P ? Zt(K) : f("#DIV/0!");
+    if (y === 1) return P ? Zt(K) : issue("#DIV/0!");
     if (y === 4) return P ? D : 0;
     if (y === 5) return P ? F : 0;
     if (y === 6) return P ? _f(K) : 0;
     let B = y === 7 || y === 10;
-    if (P < (B ? 2 : 1)) return f("#DIV/0!");
+    if (P < (B ? 2 : 1)) return issue("#DIV/0!");
     let X = Math.max(0, te / (P - (B ? 1 : 0)));
     return y === 7 || y === 8 ? Math.sqrt(X) : X;
   };
@@ -6661,17 +6671,17 @@ function al(e, t) {
     let s = [];
     for (let f = 0; f < n.length; f++)
       n[f] === "~" && f + 1 < n.length
-        ? s.push({ char: n[++f].toLowerCase(), wildcard: !1 })
+        ? s.push({ char: n[++f].toLowerCase(), wildcard: false })
         : s.push({
             char: n[f].toLowerCase(),
             wildcard: n[f] === "*" || n[f] === "?",
           });
     let c = String(e ?? "").toLowerCase();
     if (s.length * c.length > 1e5) throw G4("#LIMIT!");
-    let u = Array(c.length + 1).fill(!1);
-    u[0] = !0;
+    let u = Array(c.length + 1).fill(false);
+    u[0] = true;
     for (let f of s) {
-      let d = Array(c.length + 1).fill(!1);
+      let d = Array(c.length + 1).fill(false);
       d[0] = f.wildcard && f.char === "*" && u[0];
       for (let p = 1; p <= c.length; p++)
         d[p] =
@@ -6712,7 +6722,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
         typeof g == "string" &&
         typeof y == "string" &&
         ((g = g.toLowerCase()), (y = y.toLowerCase())),
-      a({ val: g, isArray: !1 }, c, { val: y, isArray: !1 })
+      a({ val: g, isArray: false }, c, { val: y, isArray: false })
     );
     if (!Array.isArray(s.val) && !Array.isArray(u.val)) return f(s.val, u.val);
     let d = (g) =>
@@ -6764,7 +6774,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
         .replace(/^_xlfn\./i, "")
         .replace(/^_xlws\./i, "")
         .toUpperCase();
-      let u = (f) => (f == null ? void 0 : e.retrieveRef(f));
+      let u = (f) => (f == null ? undefined : e.retrieveRef(f));
       try {
         if (!Z4.has(s)) return r("#NAME?");
         if (s === "RAND") return c.length ? r("#VALUE!") : Math.random();
@@ -6777,7 +6787,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
             T.some(
               (F) =>
                 Array.isArray(F) ||
-                F === void 0 ||
+                F === undefined ||
                 (typeof F == "string" && F.trim() === "") ||
                 !Number.isFinite(Number(F)),
             )
@@ -6909,7 +6919,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
           if (Ce(T)) return T;
           if (Array.isArray(T))
             return Ru(
-              [T, u(c[1]), c.length === 3 ? u(c[2]) : !1],
+              [T, u(c[1]), c.length === 3 ? u(c[2]) : false],
               ([P, S, F]) =>
                 Ce(P)
                   ? P
@@ -6925,7 +6935,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
           if (typeof T == "string" && !/^(TRUE|FALSE)$/i.test(T))
             return r("#VALUE!");
           let _ = typeof T == "string" ? T.toUpperCase() === "TRUE" : !!T;
-          return u(_ ? c[1] : c.length === 3 ? c[2] : !1) ?? 0;
+          return u(_ ? c[1] : c.length === 3 ? c[2] : false) ?? 0;
         }
         if (s === "IFERROR" || s === "IFNA") {
           if (c.length !== 2) return r("#VALUE!");
@@ -7008,7 +7018,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
         if (s === "N")
           return Ce(I[0]) || typeof I[0] == "number"
             ? I[0]
-            : I[0] === !0
+            : I[0] === true
               ? 1
               : 0;
         if (s === "T") return Ce(I[0]) || typeof I[0] == "string" ? I[0] : "";
@@ -7129,10 +7139,10 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
         if (s === "VALUE") {
           if (I.length !== 1 || Array.isArray(I[0])) return r("#VALUE!");
           let T = String(I[0] ?? "").trim(),
-            _ = !1;
+            _ = false;
           T.startsWith("(") &&
             T.endsWith(")") &&
-            ((_ = !0), (T = T.slice(1, -1).trim()));
+            ((_ = true), (T = T.slice(1, -1).trim()));
           let P = T.endsWith("%");
           if (
             (P && (T = T.slice(0, -1).trim()),
@@ -7157,7 +7167,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
             return r("#N/A");
           let _ = nr(T),
             P = I[0],
-            S = I[2] === void 0 ? 1 : Number(I[2]);
+            S = I[2] === undefined ? 1 : Number(I[2]);
           if (![0, -1, 1].includes(S)) return r("#N/A");
           if (S === 0) {
             let K = _.findIndex((Z) =>
@@ -7253,18 +7263,19 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
             P = String(I[2] ?? ""),
             S = _.length ? T.split(_).length - 1 : 0;
           if (
-            I[3] !== void 0 &&
+            I[3] !== undefined &&
             (!Number.isInteger(Number(I[3])) || Number(I[3]) < 1)
           )
             return r("#VALUE!");
           if (
             T.length +
-              (I[3] === void 0 ? S : Math.min(S, 1)) * (P.length - _.length) >
+              (I[3] === undefined ? S : Math.min(S, 1)) *
+                (P.length - _.length) >
             32767
           )
             return r("#LIMIT!");
           if (!_.length) return T;
-          if (I[3] === void 0) return T.split(_).join(P);
+          if (I[3] === undefined) return T.split(_).join(P);
           let F = 0;
           return T.split(_).reduce(
             (D, Q, te) =>
@@ -7277,7 +7288,7 @@ function q4(e, t, r = Oy, o = Ts(), n, i) {
             return r("#VALUE!");
           let T = String(I[0] ?? "").toLowerCase(),
             _ = String(I[1] ?? "").toLowerCase(),
-            P = I[2] === void 0 ? 1 : Number(I[2]);
+            P = I[2] === undefined ? 1 : Number(I[2]);
           if (!Number.isInteger(P) || P < 1 || P > _.length)
             return r("#VALUE!");
           if (!/[?*~]/.test(T)) {
@@ -7350,7 +7361,7 @@ function B0(e, t = {}, r, o) {
           `(?:^|[^A-Za-z0-9_.\\\\])(?:${e.definedNames.map(($) => $.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
           "i",
         )
-      : void 0,
+      : undefined,
     T = ($) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test($) || !!(R && C?.test($)),
     _ = ER(e),
@@ -7389,12 +7400,12 @@ function B0(e, t = {}, r, o) {
           return me.row - we.row || me.col - we.col;
         }),
     );
-  let Z = ($, W, se, me = !0) => {
-      let we = (Ee, fe = !0) => {
+  let Z = ($, W, se, me = true) => {
+      let we = (Ee, fe = true) => {
         let ke = xR(Ee, e, W, se, fe);
         if (ke) throw (c.set(`${W}:${se}`, ke), d(ke.error));
       };
-      (($ = _.rewrite($)), we($, !1));
+      (($ = _.rewrite($)), we($, false));
       let ue = me ? il($, e, W, [], r?.allowName) : $;
       ((ue = _.rewrite(ue)), we(ue));
       let xe = "",
@@ -7471,39 +7482,42 @@ function B0(e, t = {}, r, o) {
       let $ = q4(
         new $y.default({
           onVariable: () => null,
-          onCell: ({ sheet: xe, row: re, col: Ee }) => {
-            let fe = B(xe);
+          onCell: ({ sheet, row, col }) => {
+            let fe = B(sheet);
             if (
-              !Number.isInteger(re) ||
-              !Number.isInteger(Ee) ||
-              re < 1 ||
-              Ee < 1 ||
-              re > fe.rowCount ||
-              Ee > fe.colCount
+              !Number.isInteger(row) ||
+              !Number.isInteger(col) ||
+              row < 1 ||
+              col < 1 ||
+              row > fe.rowCount ||
+              col > fe.colCount
             )
               throw d("#REF!");
-            return U(fe.id, `${Me(Ee - 1)}${re}`);
+            return U(fe.id, `${Me(col - 1)}${row}`);
           },
-          onRange: ({ sheet: xe, from: re, to: Ee }) => {
-            let fe = B(xe),
-              ke = Ee.row,
-              z = Ee.col;
+          onRange: ({ sheet, from, to }) => {
+            let fe = B(sheet),
+              ke = to.row,
+              z = to.col;
             if (
-              re.row < 1 ||
-              re.col < 1 ||
+              from.row < 1 ||
+              from.col < 1 ||
               ke > fe.rowCount ||
               z > fe.colCount ||
-              ke < re.row ||
-              z < re.col
+              ke < from.row ||
+              z < from.col
             )
               throw d("#REF!");
-            if ((ke - re.row + 1) * (z - re.col + 1) > 2e4) throw d("#LIMIT!");
-            let J = a.reserve((ke - re.row + 1) * (32 + (z - re.col + 1) * 8));
+            if ((ke - from.row + 1) * (z - from.col + 1) > 2e4)
+              throw d("#LIMIT!");
+            let J = a.reserve(
+              (ke - from.row + 1) * (32 + (z - from.col + 1) * 8),
+            );
             if (J) throw d(J);
             let ne = [];
-            for (let ce = re.row; ce <= ke; ce++) {
+            for (let ce = from.row; ce <= ke; ce++) {
               let Te = [];
-              for (let rt = re.col; rt <= z; rt++) {
+              for (let rt = from.col; rt <= z; rt++) {
                 let Le = U(fe.id, `${Me(rt - 1)}${ce}`);
                 if (
                   Ce(Le) &&
@@ -7537,7 +7551,7 @@ function B0(e, t = {}, r, o) {
                       result: null,
                     });
                   }
-                : void 0,
+                : undefined,
             isActive: (fe, ke) => y.has(`${fe}:${ke}`),
             expandedFormula: (fe, ke) => {
               try {
@@ -7559,7 +7573,8 @@ function B0(e, t = {}, r, o) {
           f.set(ke, { ...xe, sheetId: Ee, address: fe });
         },
         (xe, re, Ee) => {
-          let fe = xe && typeof xe == "object" && "ref" in xe ? xe.ref : void 0;
+          let fe =
+            xe && typeof xe == "object" && "ref" in xe ? xe.ref : undefined;
           if (!fe?.from || !fe.to) return;
           let ke = B(fe.sheet ?? $.position?.sheet),
             z = `${Me(fe.from.col + Ee - 1)}${fe.from.row + re}`;
@@ -7590,7 +7605,7 @@ function B0(e, t = {}, r, o) {
                       row: fe.from.row + re,
                       col: fe.from.col + Ee,
                     },
-                    !0,
+                    true,
                   );
             } finally {
               N--;
@@ -7696,7 +7711,7 @@ function B0(e, t = {}, r, o) {
                 operation: we,
                 result: ue,
               })
-          : void 0,
+          : undefined,
         diagnostic: (me, we) =>
           u.set(`${W}:${se}`, {
             sheetId: W,
@@ -7705,7 +7720,7 @@ function B0(e, t = {}, r, o) {
             message: we,
           }),
         parse: (me, we, ue) => {
-          let xe = Z(me, we, se, !1),
+          let xe = Z(me, we, se, false),
             re = xe.replace(/"(?:[^"]|"")*"/g, '""');
           if (/[\[\]|]/.test(re) || /(?:https?:|file:|\\\\)/i.test(re))
             throw d("#BLOCKED!");
@@ -7734,7 +7749,7 @@ function B0(e, t = {}, r, o) {
             return fe.parse(
               xe,
               { sheet: S.get(we).name, row: z.row + 1, col: z.col + 1 },
-              !0,
+              true,
             );
           } finally {
             ((fe._callFunction = ke), A--);
@@ -7859,7 +7874,7 @@ function B0(e, t = {}, r, o) {
                 : Ke.parse(
                     ne,
                     { sheet: we.name, row: se + 1, col: me + 1 },
-                    !0,
+                    true,
                   );
             if (Ce(Ct)) Le = d(Ct.error);
             else if (typeof Ct == "number")
@@ -7888,8 +7903,8 @@ function B0(e, t = {}, r, o) {
                 }),
                   (Le = d("#SPILL!")));
               else {
-                let ni = !1,
-                  Hy = !1,
+                let ni = false,
+                  Hy = false,
                   ll = {
                     firstRow: se,
                     lastRow: se + Tr.length - 1,
@@ -7908,7 +7923,7 @@ function B0(e, t = {}, r, o) {
                   cl = we.merges?.find(Ky),
                   Yf = we.tables?.find((pr) => Ky(pr.range));
                 if (cl || Yf) {
-                  ni = !0;
+                  ni = true;
                   let pr = cl ?? Yf.range;
                   g.set(ue, {
                     sheetId: $,
@@ -7925,14 +7940,14 @@ function B0(e, t = {}, r, o) {
                     let Xr = `${Me(me + mt)}${se + pr + 1}`,
                       Ia = we.cells[Xr];
                     if (x.get(ue)?.has(`${$}:${Xr}`)) {
-                      Hy = !0;
+                      Hy = true;
                       break;
                     }
                     if (
                       Xr !== W &&
                       ((Ia && Ia.raw !== null) || h.has(`${$}:${Xr}`))
                     ) {
-                      ((ni = !0),
+                      ((ni = true),
                         g.set(ue, {
                           sheetId: $,
                           anchor: W,
@@ -7981,7 +7996,7 @@ function B0(e, t = {}, r, o) {
             let Ct =
               Ke && typeof Ke == "object" && "details" in Ke
                 ? Ke.details
-                : void 0;
+                : undefined;
             Le = Ce(Ct) ? d(Ct.error) : Ce(Ke) ? d(Ke.error) : d("#ERROR!");
           } finally {
             (y.delete(ue), x.delete(ue));
@@ -8020,7 +8035,7 @@ function B0(e, t = {}, r, o) {
     },
     ie = ($, W) => ie.getTypedValue($, W).value;
   ie.getTypedValue = ($, W) => {
-    if (o?.running?.() === !1)
+    if (o?.running?.() === false)
       try {
         let se = je(W),
           me = S.get($);
@@ -8028,7 +8043,7 @@ function B0(e, t = {}, r, o) {
           return { type: "error", value: "#REF!" };
         let we = `${Me(se.col)}${se.row + 1}`,
           ue = `${$}:${we}`,
-          xe = o.value(ue, !1);
+          xe = o.value(ue, false);
         if (xe) return { ...xe };
         let re = m.get(ue) ?? h.get(ue)?.value ?? me.cells[we]?.raw ?? null;
         return Ce(re)
@@ -8102,7 +8117,7 @@ function B0(e, t = {}, r, o) {
             : (ve ??= X()).parse(
                 re,
                 { sheet: we.name, row: ue.row + 1, col: ue.col + 1 },
-                !0,
+                true,
               ),
           ke = a.value(fe) ?? o?.check();
         return ke
@@ -8126,7 +8141,9 @@ function B0(e, t = {}, r, o) {
                       : "#VALUE!";
       } catch (we) {
         let ue =
-          we && typeof we == "object" && "details" in we ? we.details : void 0;
+          we && typeof we == "object" && "details" in we
+            ? we.details
+            : undefined;
         return Ce(ue)
           ? d(ue.error).error
           : Ce(we)
@@ -8142,7 +8159,7 @@ function B0(e, t = {}, r, o) {
     (ie.getSpillDiagnostic = ($, W) => {
       ie($, W);
       let se = g.get(`${$}:${W}`);
-      return se ? { ...se } : void 0;
+      return se ? { ...se } : undefined;
     }),
     (ie.getSpillAnchor = ($, W) => (ie($, W), h.get(`${$}:${W}`)?.anchor)),
     (ie.getSpillEntries = ($) => {
@@ -8155,7 +8172,7 @@ function B0(e, t = {}, r, o) {
             new Error("Spill discovery exceeds 1,000 possible array formulas.")
           );
         D = 0;
-        for (let me of o?.running?.() === !1 ? [] : W)
+        for (let me of o?.running?.() === false ? [] : W)
           if ((U($, me), D > yt.maxCells))
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
@@ -8163,9 +8180,9 @@ function B0(e, t = {}, r, o) {
         let se = `${$}:`;
         return [...h.entries()]
           .filter(([me]) => me.startsWith(se))
-          .map(([me, { anchor: we }]) => ({
+          .map(([me, { anchor }]) => ({
             address: me.slice(se.length),
-            anchor: we,
+            anchor,
           }));
       } finally {
         a.end();
@@ -8350,7 +8367,7 @@ var CR = "ledgerglass-sources-v1",
     .min(1)
     .max(128)
     .refine((e) => e === e.trim() && !/[\u0000-\u001f\u007f]/.test(e)),
-  sl = E.string().datetime({ offset: !0 }),
+  sl = E.string().datetime({ offset: true }),
   TR = E.string().regex(/^[a-f0-9]{64}$/),
   rD = E.strictObject({
     name: Wf,
@@ -8389,7 +8406,7 @@ var CR = "ledgerglass-sources-v1",
     sourceTimestamp: sl,
     version: zf,
     rows: E.array(E.array(nD).max(Ff.columns)).max(Ff.rows),
-    complete: E.literal(!0),
+    complete: E.literal(true),
   }),
   oD = [
     "unavailable",
@@ -8884,14 +8901,14 @@ var xa = Object.freeze({
       "Source region must fit its page.",
     );
 function TD(e, t) {
-  if (typeof e != "string") return !1;
+  if (typeof e != "string") return false;
   try {
     let r = JSON.parse(e);
     return t === "array"
       ? Array.isArray(r)
       : !!r && typeof r == "object" && !Array.isArray(r);
   } catch {
-    return !1;
+    return false;
   }
 }
 var CD = E.object({
@@ -8966,7 +8983,7 @@ var CD = E.object({
   })
     .strict()
     .refine(
-      (e) => e.decision !== "correct" || e.value !== void 0,
+      (e) => e.decision !== "correct" || e.value !== undefined,
       "A corrected value is required.",
     ),
   tj = E.object({
@@ -9097,7 +9114,7 @@ var qf = E.string().refine((e) => {
       let t = je(e);
       return `${Me(t.col)}${t.row + 1}` === e;
     } catch {
-      return !1;
+      return false;
     }
   }, "Invalid evidence address."),
   FD = E.strictObject({
@@ -9210,7 +9227,7 @@ function Xf(e) {
 }
 var Zy = new WeakMap();
 function ZD(e) {
-  let t = dn(e.cells) ? Zy.get(e.cells)?.get(e.id) : void 0;
+  let t = dn(e.cells) ? Zy.get(e.cells)?.get(e.id) : undefined;
   if (t) return t;
   let r = [],
     o,
@@ -9310,20 +9327,20 @@ function jR(e, t) {
       JSON.stringify(e.importedCalculationCaches) !==
         JSON.stringify(t.importedCalculationCaches))
   )
-    return !1;
+    return false;
   for (let r = 0; r < e.sheets.length; r++) {
     let o = e.sheets[r].cells,
       n = t.sheets[r].cells;
     if (o === n) continue;
     let i = Object.keys(o);
-    if (i.length !== Object.keys(n).length) return !1;
+    if (i.length !== Object.keys(n).length) return false;
     for (let a of i) {
       let l = o[a],
         s = n[a];
-      if (!s || l.raw !== s.raw || !!l.literal != !!s.literal) return !1;
+      if (!s || l.raw !== s.raw || !!l.literal != !!s.literal) return false;
     }
   }
-  return !0;
+  return true;
 }
 function By(e, t) {
   if (e === t || e.id !== t.id || t.revision <= e.revision) return;
@@ -9341,7 +9358,7 @@ function My(e) {
   let t = Xf(e),
     r = ri.get(e);
   if (Jf(r, e, t)) return { calculator: r.calculator, report: r.report };
-  let o = qR(e, t, r ? void 0 : ti.get(e), !1);
+  let o = qR(e, t, r ? undefined : ti.get(e), false);
   return (
     qy(o.report),
     ri.set(e, o),
@@ -9352,7 +9369,7 @@ function My(e) {
 function ZR(e) {
   let t = Xf(e),
     r = ri.get(e),
-    o = qR(e, t, Jf(r, e, t) ? r : void 0, !0);
+    o = qR(e, t, Jf(r, e, t) ? r : undefined, true);
   return (
     qy(o.report),
     ri.set(e, o),
@@ -9401,7 +9418,7 @@ function GR(e, t) {
 }
 function qR(e, t, r, o) {
   let n = Wo(),
-    { formulas: i, settings: a } = t,
+    { formulas, settings } = t,
     l = Ts(e.datePolicy),
     s = xu(e);
   s.begin();
@@ -9414,8 +9431,14 @@ function qR(e, t, r, o) {
       : r
         ? "Changed inputs and transitive dependents"
         : "First calculation of this snapshot";
-  if (o || !r || t.metadata !== r.metadata || jy(e, i) || jy(e, r.formulas))
-    (i.forEach((B, X) => c.add(X)),
+  if (
+    o ||
+    !r ||
+    t.metadata !== r.metadata ||
+    jy(e, formulas) ||
+    jy(e, r.formulas)
+  )
+    (formulas.forEach((B, X) => c.add(X)),
       r &&
         !o &&
         (p =
@@ -9428,7 +9451,7 @@ function qR(e, t, r, o) {
       L = r.inputs();
     for (let ie of new Set([...X.keys(), ...L.keys()]))
       X.get(ie) !== L.get(ie) && B.add(ie);
-    (i.forEach((ie, ve) => {
+    (formulas.forEach((ie, ve) => {
       (WR.test(ie.formula) ||
         !r.values.has(ve) ||
         ["#TIMEOUT!", "#LIMIT!"].includes(String(r.values.get(ve)?.value))) &&
@@ -9446,10 +9469,10 @@ function qR(e, t, r, o) {
     for (let ie = 0; ie < Y.length; ie++)
       for (let ve of U.get(Y[ie]) ?? []) B.has(ve) || (B.add(ve), Y.push(ve));
     B.forEach((ie) => {
-      i.has(ie) && c.add(ie);
+      formulas.has(ie) && c.add(ie);
     });
   }
-  i.forEach((B, X) => {
+  formulas.forEach((B, X) => {
     !c.has(X) &&
       r?.values.has(X) &&
       (f.set(X, r.values.get(X)), u.set(X, new Set(r.dependencies.get(X))));
@@ -9457,17 +9480,17 @@ function qR(e, t, r, o) {
   let h = new Map(f),
     v = [],
     g = new Set(),
-    y = !0,
+    y = true,
     b,
     x = [...u.values()].reduce((B, X) => B + X.size, 0),
     k = () => (
       y && !b && (b = s.check()),
-      y && !b && Wo() - n > a.timeBudgetMs && (b = "#TIMEOUT!"),
-      y ? b : void 0
+      y && !b && Wo() - n > settings.timeBudgetMs && (b = "#TIMEOUT!"),
+      y ? b : undefined
     ),
     w = (B, X) => {
       let L = [];
-      return B0(e, {}, void 0, {
+      return B0(e, {}, undefined, {
         budget: s,
         running: () => y,
         dateContext: l,
@@ -9502,26 +9525,26 @@ function qR(e, t, r, o) {
         },
       });
     },
-    A = a.mode === "manual" && !o;
+    A = settings.mode === "manual" && !o;
   A &&
     c.forEach((B) => {
       (f.set(B, Kf), h.set(B, Kf), u.set(B, new Set(r?.dependencies.get(B))));
     });
   let I = w(h),
     N = () => {
-      for (let [B, X] of i)
+      for (let [B, X] of formulas)
         f.set(B, h.get(B) ?? I.getTypedValue(X.sheetId, X.address));
     };
   A || N();
   let R = {
-    status: a.iterative ? "not-needed" : "off",
+    status: settings.iterative ? "not-needed" : "off",
     passes: 0,
     maxDelta: null,
-    message: a.iterative
+    message: settings.iterative
       ? "No circular calculation was required."
       : "Iteration is disabled. Circular references return #CYCLE!.",
   };
-  if (!A && g.size && a.iterative) {
+  if (!A && g.size && settings.iterative) {
     let B = new Set(g),
       X = new Map();
     u.forEach((U, Y) =>
@@ -9538,27 +9561,27 @@ function qR(e, t, r, o) {
         B.has(Y) || h.set(Y, U);
       }),
       (R.status = "failed"),
-      jy(e, i) ||
-        [...i.values()].some((U) => WR.test(U.formula)) ||
+      jy(e, formulas) ||
+        [...formulas.values()].some((U) => WR.test(U.formula)) ||
         g.size > 1e3)
     )
       R.message =
         "Iteration supports at most 1,000 deterministic scalar cycle cells. Names, arrays, dynamic references and volatile formulas must be removed from this calculation.";
     else {
       let U = new Map([...g].map((Y) => [Y, { type: "number", value: 0 }]));
-      R.message = `No convergence within ${a.maxIterations} simultaneous passes from zero.`;
-      for (let Y = 0; Y < a.maxIterations && !k(); Y++) {
+      R.message = `No convergence within ${settings.maxIterations} simultaneous passes from zero.`;
+      for (let Y = 0; Y < settings.maxIterations && !k(); Y++) {
         I = w(h, U);
         let ie = new Map(),
           ve = 0,
-          $ = !0;
+          $ = true;
         for (let W of g) {
-          let se = i.get(W),
+          let se = formulas.get(W),
             me = I.getTypedValue(se.sheetId, se.address);
           if (
             (ie.set(W, me), me.type !== "number" || !Number.isFinite(me.value))
           ) {
-            $ = !1;
+            $ = false;
             break;
           }
           ve = Math.max(
@@ -9575,7 +9598,7 @@ function qR(e, t, r, o) {
             "The circular calculation produced a nonnumeric value or calculation error.";
           break;
         }
-        if (((U = ie), ve <= a.maxChange)) {
+        if (((U = ie), ve <= settings.maxChange)) {
           ((R.status = "converged"),
             (R.message = `Converged from zero in ${Y + 1} simultaneous passes; maximum change ${ve}.`));
           break;
@@ -9593,9 +9616,9 @@ function qR(e, t, r, o) {
       (c.forEach((B) => f.set(B, zR(b))),
       R.status === "converged" && (R.status = "failed"),
       g.size &&
-        a.iterative &&
+        settings.iterative &&
         (R.message = `Calculation stopped with ${b}; no intermediate result is current.`)),
-    (y = !1),
+    (y = false),
     s.end());
   let C = (B, X) => C.getTypedValue(B, X).value;
   Object.assign(C, I);
@@ -9662,7 +9685,7 @@ function qR(e, t, r, o) {
       ...B.filter(
         (L) =>
           !c.has(`${L.sheetId}:${L.address}`) &&
-          i.has(`${L.sheetId}:${L.address}`),
+          formulas.has(`${L.sheetId}:${L.address}`),
       ),
       ...X,
     ],
@@ -9678,11 +9701,11 @@ function qR(e, t, r, o) {
       r?.report.cells.map((B) => [`${B.sheetId}:${B.address}`, B]),
     ),
     K = new Map();
-  for (let { sheetId: B, address: X, ...L } of C.getFinancialDiagnostics()) {
-    let U = `${B}:${X}`;
+  for (let { sheetId, address, ...L } of C.getFinancialDiagnostics()) {
+    let U = `${sheetId}:${address}`;
     K.set(U, [...(K.get(U) ?? []), L]);
   }
-  let Z = [...i].map(([B, X]) => {
+  let Z = [...formulas].map(([B, X]) => {
     let L = f.get(B) ?? Kf,
       U = r?.values.get(B);
     return {
@@ -9717,7 +9740,7 @@ function qR(e, t, r, o) {
       volatile: {
         functions: [
           ...new Set(
-            [...i.values()]
+            [...formulas.values()]
               .flatMap((B) => Qi(B.formula))
               .concat((e.definedNames ?? []).flatMap((B) => Qi(B.refersTo))),
           ),
@@ -9742,11 +9765,11 @@ function qR(e, t, r, o) {
       workbookId: e.id,
       revision: e.revision,
       run: (r?.report.run ?? 0) + 1,
-      settings: a,
+      settings,
       reason: p,
-      formulaCount: i.size,
+      formulaCount: formulas.size,
       evaluated: Z.filter((B) => B.evaluations > 0).length,
-      reused: i.size - c.size,
+      reused: formulas.size - c.size,
       pending: Z.filter((B) => B.status === "pending").length,
       elapsedMs: Math.max(0, Wo() - n),
       dependencyEdges: [...u.values()].reduce((B, X) => B + X.size, 0),
@@ -9755,8 +9778,8 @@ function qR(e, t, r, o) {
       cells: Z,
       limits: {
         dependencyEdges: FR,
-        cooperativeTimeBudgetMs: a.timeBudgetMs,
-        hardInterrupt: !1,
+        cooperativeTimeBudgetMs: settings.timeBudgetMs,
+        hardInterrupt: false,
       },
     },
   };
@@ -9766,7 +9789,7 @@ function HR() {
   return (t) => {
     let r = t.workbook;
     try {
-      if (t.baseRevision !== void 0) {
+      if (t.baseRevision !== undefined) {
         if (!e || e.id !== r.id || e.revision !== t.baseRevision)
           throw Error("Stale calculation delta");
         r = {
@@ -9783,22 +9806,22 @@ function HR() {
           }),
         };
       }
-      let { memoryBudgetBytes: o } = C0(r.calculation);
-      if (S0(r, o) > o)
+      let { memoryBudgetBytes } = C0(r.calculation);
+      if (S0(r, memoryBudgetBytes) > memoryBudgetBytes)
         throw Error(
           "#LIMIT! Calculation inputs exceed the working-data budget.",
         );
       (oi(r), nx(r, t.extensionAvailability ?? []), e && (Vy(e, r), By(e, r)));
       let n = t.force ? ZR(r) : My(r),
         i = GR(r, n);
-      if (Eu(i, o) > o)
+      if (Eu(i, memoryBudgetBytes) > memoryBudgetBytes)
         throw Error(
           "#LIMIT! Calculation result payload exceeds the working-data budget.",
         );
       return ((e = r), { id: t.id, result: i });
     } catch (o) {
       return (
-        (e = void 0),
+        (e = undefined),
         {
           id: t.id,
           error:
@@ -9812,4 +9835,4 @@ function HR() {
 }
 var qD = HR(),
   KR = self;
-KR.onmessage = ({ data: e }) => KR.postMessage(qD(e));
+KR.onmessage = ({ data }) => KR.postMessage(qD(data));

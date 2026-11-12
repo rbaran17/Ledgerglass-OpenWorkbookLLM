@@ -35,25 +35,25 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { m0 } from "./12-formula-dependency-inspector.js";
 
 function qde({
-  workbook: e,
-  sheetId: r,
-  range: t,
-  readOnly: n,
-  onClose: o,
-  onWorkbookChange: a,
-  onNavigate: s,
+  workbook,
+  sheetId,
+  range,
+  readOnly,
+  onClose,
+  onWorkbookChange,
+  onNavigate,
 }) {
-  var he, Se, le;
-  const { text: d, language: u } = Dr(),
-    l = e.sheets.find((ce) => ce.id === r),
+  var he;
+  const { text, language } = Dr(),
+    l = workbook.sheets.find((ce) => ce.id === sheetId),
     [c, h] = ne.useState(),
-    [f, p] = ne.useState(t),
+    [f, p] = ne.useState(range),
     [m, v] = ne.useState("list"),
     [g, b] = ne.useState("between"),
     [y, w] = ne.useState("Pending,Complete,Reviewed"),
     [E, A] = ne.useState("0"),
     [k, F] = ne.useState("100"),
-    [I, O] = ne.useState(`=LEN(${t.split(":")[0]})>0`),
+    [I, O] = ne.useState(`=LEN(${range.split(":")[0]})>0`),
     [j, z] = ne.useState(true),
     [V, D] = ne.useState(true),
     [B, _] = ne.useState(true),
@@ -66,16 +66,14 @@ function qde({
     [q, W] = ne.useState(),
     K = ne.useRef(null);
   ne.useEffect(() => {
-    var ge, se;
+    var se;
     const ce = document.activeElement;
     return (
-      (se =
-        (ge = K.current) == null ? void 0 : ge.querySelector("button,input")) ==
-        null || se.focus(),
-      () => (ce == null ? void 0 : ce.focus())
+      (se = K.current?.querySelector("button,input")) == null || se.focus(),
+      () => ce?.focus()
     );
   }, []);
-  const te = n || !!((he = l.protection) != null && he.enabled),
+  const te = readOnly || !!((he = l.protection) != null && he.enabled),
     ae = (ce) => {
       J("");
       try {
@@ -123,16 +121,16 @@ function qde({
               ? (l.validations ?? []).map((se) => (se.id === c ? ce : se))
               : [...(l.validations ?? []), ce],
           );
-        (a(
+        (onWorkbookChange(
           {
-            ...e,
-            sheets: e.sheets.map((se) =>
-              se.id === r ? { ...se, validations: ge } : se,
+            ...workbook,
+            sheets: workbook.sheets.map((se) =>
+              se.id === sheetId ? { ...se, validations: ge } : se,
             ),
           },
           c ? "Update data validation" : "Add data validation",
         ),
-          o());
+          onClose());
       }),
     de = (ce) => {
       (h(ce.id),
@@ -155,16 +153,14 @@ function qde({
   return i.jsx("div", {
     className: "wt-backdrop",
     onKeyDown: (ce) => {
-      var ge;
       if (
-        (ce.key === "Escape" && (ce.stopPropagation(), o()), ce.key === "Tab")
+        (ce.key === "Escape" && (ce.stopPropagation(), onClose()),
+        ce.key === "Tab")
       ) {
         const se = [
-            ...(((ge = K.current) == null
-              ? void 0
-              : ge.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)",
-                )) ?? []),
+            ...(K.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)",
+            ) ?? []),
           ],
           we = se[0],
           Ee = se.at(-1);
@@ -179,10 +175,10 @@ function qde({
       className: "wt-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": d("Data Validation"),
+      "aria-label": text("Data Validation"),
       ref: K,
       style: { width: "min(760px, 100%)" },
-      lang: u("Data Validation"),
+      lang: language("Data Validation"),
       "data-ui-label": "Data Validation",
       children: [
         i.jsxs("header", {
@@ -191,9 +187,9 @@ function qde({
               children: i.jsx(M, { children: "Data Validation" }),
             }),
             i.jsx("button", {
-              "aria-label": d("Close data validation"),
-              onClick: o,
-              lang: u("Close data validation"),
+              "aria-label": text("Close data validation"),
+              onClick: onClose,
+              lang: language("Close data validation"),
               "data-ui-label": "Close data validation",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -210,20 +206,25 @@ function qde({
             }),
             i.jsx("button", {
               onClick: () =>
-                ae(() => W({ value: LQ(e, r), snapshot: JSON.stringify(e) })),
+                ae(() =>
+                  W({
+                    value: LQ(workbook, sheetId),
+                    snapshot: JSON.stringify(workbook),
+                  }),
+                ),
               children: i.jsx(M, { children: "Inspect existing values" }),
             }),
             q &&
               i.jsxs("section", {
-                "aria-label": d("Existing validation findings"),
-                lang: u("Existing validation findings"),
+                "aria-label": text("Existing validation findings"),
+                lang: language("Existing validation findings"),
                 "data-ui-label": "Existing validation findings",
                 children: [
                   i.jsx("button", {
-                    disabled: q.snapshot !== JSON.stringify(e),
+                    disabled: q.snapshot !== JSON.stringify(workbook),
                     onClick: () =>
                       ae(() => {
-                        const ce = BQ(e, q.value),
+                        const ce = BQ(workbook, q.value),
                           ge = URL.createObjectURL(
                             new Blob([ce], { type: "application/json" }),
                           ),
@@ -240,7 +241,7 @@ function qde({
                   i.jsx("p", {
                     role: "status",
                     children:
-                      q.snapshot === JSON.stringify(e)
+                      q.snapshot === JSON.stringify(workbook)
                         ? q.value.message
                         : "Workbook changed. Inspect existing values again.",
                   }),
@@ -250,7 +251,7 @@ function qde({
                         "Inspection recalculates locally, including in Manual mode; it does not publish current calculation results or change source data.",
                     }),
                   }),
-                  q.snapshot === JSON.stringify(e) &&
+                  q.snapshot === JSON.stringify(workbook) &&
                     i.jsx("div", {
                       style: { maxHeight: 200, overflow: "auto" },
                       children: q.value.issues.map((ce, ge) =>
@@ -260,10 +261,11 @@ function qde({
                             children: [
                               i.jsxs("button", {
                                 onClick: () => {
-                                  (s == null || s(ce.sheetId, ce.address),
-                                    s && o());
+                                  (onNavigate == null ||
+                                    onNavigate(ce.sheetId, ce.address),
+                                    onNavigate && onClose());
                                 },
-                                disabled: !s,
+                                disabled: !onNavigate,
                                 children: [ce.sheetName, "!", ce.address],
                               }),
                               " ",
@@ -284,73 +286,64 @@ function qde({
               children: [
                 i.jsxs("summary", {
                   children: [
-                    ((Se = l.validations) == null ? void 0 : Se.length) ?? 0,
+                    l.validations?.length ?? 0,
                     " ",
                     i.jsx(M, { children: "existing rules" }),
                   ],
                 }),
-                (le = l.validations) == null
-                  ? void 0
-                  : le.map((ce) =>
-                      i.jsxs(
-                        "div",
-                        {
-                          className: "wt-existing",
+                l.validations?.map((ce) =>
+                  i.jsxs(
+                    "div",
+                    {
+                      className: "wt-existing",
+                      children: [
+                        i.jsxs("span", {
                           children: [
-                            i.jsxs("span", {
-                              children: [
-                                ce.range,
-                                " · ",
-                                ce.kind,
-                                " · ",
-                                ce.errorStyle ?? "stop",
-                              ],
-                            }),
-                            i.jsxs("button", {
-                              disabled: te,
-                              onClick: () => de(ce),
-                              children: [
-                                i.jsx(M, { children: "Edit " }),
-                                ce.range,
-                              ],
-                            }),
-                            i.jsxs("button", {
-                              disabled: te,
-                              onClick: () =>
-                                ae(() => {
-                                  (jn(l),
-                                    a(
-                                      {
-                                        ...e,
-                                        sheets: e.sheets.map((ge) => {
-                                          var se;
-                                          return ge.id === r
-                                            ? {
-                                                ...ge,
-                                                validations:
-                                                  (se = ge.validations) == null
-                                                    ? void 0
-                                                    : se.filter(
-                                                        (we) => we.id !== ce.id,
-                                                      ),
-                                              }
-                                            : ge;
-                                        }),
-                                      },
-                                      "Remove data validation",
-                                    ),
-                                    o());
-                                }),
-                              children: [
-                                i.jsx(M, { children: "Remove " }),
-                                ce.range,
-                              ],
-                            }),
+                            ce.range,
+                            " · ",
+                            ce.kind,
+                            " · ",
+                            ce.errorStyle ?? "stop",
                           ],
-                        },
-                        ce.id,
-                      ),
-                    ),
+                        }),
+                        i.jsxs("button", {
+                          disabled: te,
+                          onClick: () => de(ce),
+                          children: [i.jsx(M, { children: "Edit " }), ce.range],
+                        }),
+                        i.jsxs("button", {
+                          disabled: te,
+                          onClick: () =>
+                            ae(() => {
+                              (jn(l),
+                                onWorkbookChange(
+                                  {
+                                    ...workbook,
+                                    sheets: workbook.sheets.map((ge) => {
+                                      return ge.id === sheetId
+                                        ? {
+                                            ...ge,
+                                            validations: ge.validations?.filter(
+                                              (we) => we.id !== ce.id,
+                                            ),
+                                          }
+                                        : ge;
+                                    }),
+                                  },
+                                  "Remove data validation",
+                                ),
+                                onClose());
+                            }),
+                          children: [
+                            i.jsx(M, { children: "Remove " }),
+                            ce.range,
+                          ],
+                        }),
+                      ],
+                    },
+                    ce.id,
+                  ),
+                ),
               ],
             }),
             i.jsxs("fieldset", {
@@ -362,10 +355,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Apply to" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation range"),
+                      "aria-label": text("Validation range"),
                       value: f,
                       onChange: (ce) => p(ce.target.value),
-                      lang: u("Validation range"),
+                      lang: language("Validation range"),
                       "data-ui-label": "Validation range",
                     }),
                   ],
@@ -377,10 +370,10 @@ function qde({
                       children: [
                         i.jsx(M, { children: "Allow" }),
                         i.jsx("select", {
-                          "aria-label": d("Validation type"),
+                          "aria-label": text("Validation type"),
                           value: m,
                           onChange: (ce) => v(ce.target.value),
-                          lang: u("Validation type"),
+                          lang: language("Validation type"),
                           "data-ui-label": "Validation type",
                           children: [
                             ["list", "List"],
@@ -401,10 +394,10 @@ function qde({
                         children: [
                           i.jsx(M, { children: "Condition" }),
                           i.jsx("select", {
-                            "aria-label": d("Validation operator"),
+                            "aria-label": text("Validation operator"),
                             value: g,
                             onChange: (ce) => b(ce.target.value),
-                            lang: u("Validation operator"),
+                            lang: language("Validation operator"),
                             "data-ui-label": "Validation operator",
                             children: [
                               ["between", "Between"],
@@ -431,10 +424,10 @@ function qde({
                             "Values, separated by commas (or a JSON array for exact text)",
                         }),
                         i.jsx("input", {
-                          "aria-label": d("Validation values"),
+                          "aria-label": text("Validation values"),
                           value: y,
                           onChange: (ce) => w(ce.target.value),
-                          lang: u("Validation values"),
+                          lang: language("Validation values"),
                           "data-ui-label": "Validation values",
                         }),
                       ],
@@ -446,10 +439,10 @@ function qde({
                             children: "Formula relative to the top-left cell",
                           }),
                           i.jsx("input", {
-                            "aria-label": d("Validation formula"),
+                            "aria-label": text("Validation formula"),
                             value: I,
                             onChange: (ce) => O(ce.target.value),
-                            lang: u("Validation formula"),
+                            lang: language("Validation formula"),
                             "data-ui-label": "Validation formula",
                           }),
                           i.jsx("small", {
@@ -469,10 +462,10 @@ function qde({
                                 children: "Minimum / comparison value",
                               }),
                               i.jsx(ci, {
-                                "aria-label": d("Validation values"),
+                                "aria-label": text("Validation values"),
                                 value: E,
                                 onValueChange: A,
-                                lang: u("Validation values"),
+                                lang: language("Validation values"),
                                 "data-ui-label": "Validation values",
                               }),
                             ],
@@ -482,10 +475,10 @@ function qde({
                               children: [
                                 i.jsx(M, { children: "Maximum" }),
                                 i.jsx(ci, {
-                                  "aria-label": d("Validation maximum"),
+                                  "aria-label": text("Validation maximum"),
                                   value: k,
                                   onValueChange: F,
-                                  lang: u("Validation maximum"),
+                                  lang: language("Validation maximum"),
                                   "data-ui-label": "Validation maximum",
                                 }),
                               ],
@@ -537,11 +530,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Input title" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation input title"),
+                      "aria-label": text("Validation input title"),
                       maxLength: 100,
                       value: C,
                       onChange: (ce) => T(ce.target.value),
-                      lang: u("Validation input title"),
+                      lang: language("Validation input title"),
                       "data-ui-label": "Validation input title",
                     }),
                   ],
@@ -550,11 +543,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Input message" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation input message"),
+                      "aria-label": text("Validation input message"),
                       maxLength: 500,
                       value: N,
                       onChange: (ce) => R(ce.target.value),
-                      lang: u("Validation input message"),
+                      lang: language("Validation input message"),
                       "data-ui-label": "Validation input message",
                     }),
                   ],
@@ -563,10 +556,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error style" }),
                     i.jsxs("select", {
-                      "aria-label": d("Validation error style"),
+                      "aria-label": text("Validation error style"),
                       value: L,
                       onChange: (ce) => $(ce.target.value),
-                      lang: u("Validation error style"),
+                      lang: language("Validation error style"),
                       "data-ui-label": "Validation error style",
                       children: [
                         i.jsx("option", { value: "stop", children: "Stop" }),
@@ -586,10 +579,10 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error title" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation error title"),
+                      "aria-label": text("Validation error title"),
                       value: U,
                       onChange: (ce) => G(ce.target.value),
-                      lang: u("Validation error title"),
+                      lang: language("Validation error title"),
                       "data-ui-label": "Validation error title",
                     }),
                   ],
@@ -598,11 +591,11 @@ function qde({
                   children: [
                     i.jsx(M, { children: "Error message" }),
                     i.jsx("input", {
-                      "aria-label": d("Validation message"),
+                      "aria-label": text("Validation message"),
                       maxLength: 500,
                       value: H,
                       onChange: (ce) => Q(ce.target.value),
-                      lang: u("Validation message"),
+                      lang: language("Validation message"),
                       "data-ui-label": "Validation message",
                     }),
                   ],
@@ -615,7 +608,7 @@ function qde({
         i.jsxs("footer", {
           children: [
             i.jsx("button", {
-              onClick: o,
+              onClick: onClose,
               children: i.jsx(M, { children: "Cancel" }),
             }),
             i.jsx("button", {
@@ -695,20 +688,16 @@ function Xde(e, r, t) {
   return a;
 }
 function Gde(e, r) {
-  var u;
   const t = r.axis,
     n = r,
     o = t === "row" ? "hiddenRows" : "hiddenCols",
     a = t === "row" ? e.rowCount : e.colCount,
     s = (e[o] ?? []).flatMap((l) => xB(l.start, l.end, n)),
-    d =
-      (u = e.outlineGroups) == null
-        ? void 0
-        : u.map((l) =>
-            l.axis !== t
-              ? l
-              : { ...l, ...H3(l.start, l.end, n, "outline group", true) },
-          );
+    d = e.outlineGroups?.map((l) =>
+      l.axis !== t
+        ? l
+        : { ...l, ...H3(l.start, l.end, n, "outline group", true) },
+    );
   return { [o]: Ad(s, a), ...(d ? { outlineGroups: d } : {}) };
 }
 function Zde(e, r) {
@@ -733,7 +722,7 @@ function Zde(e, r) {
   );
 }
 function Kf(e, r) {
-  return r.moveBefore !== void 0
+  return r.moveBefore !== undefined
     ? Jf(e, r)
     : r.remove && e >= r.index && e < r.index + r.count
       ? null
@@ -758,7 +747,7 @@ function Zh(e, r) {
   const t = ct(e);
   let n = r.axis === "row" ? t.firstRow : t.firstCol,
     o = r.axis === "row" ? t.lastRow : t.lastCol;
-  if (r.moveBefore !== void 0) {
+  if (r.moveBefore !== undefined) {
     const d = H3(n, o, r, `reference ${e}`);
     ((n = d.start), (o = d.end));
   } else if (r.remove) {
@@ -877,11 +866,11 @@ function ay(e, r, t, n) {
                     _ = F.row <= I.row === V ? k.firstRow : k.lastRow;
                   return `${D[1]}${ut(B)}${D[2]}${_ + 1}`;
                 };
-              v = p + z(!0, O) + ":" + z(!1, j);
+              v = p + z(true, O) + ":" + z(false, j);
             }
           } else v = p + (cg(g, n) ?? "#REF!");
         } catch (w) {
-          if (n.moveBefore !== void 0) throw w;
+          if (n.moveBefore !== undefined) throw w;
           v = p + "#REF!";
         }
       }
@@ -893,8 +882,7 @@ function ay(e, r, t, n) {
   return d;
 }
 function LC(e, r, t) {
-  var l;
-  if (t.permutation !== void 0 && t.moveBefore === void 0)
+  if (t.permutation !== undefined && t.moveBefore === undefined)
     throw Error(
       "A structural permutation requires an explicit move operation.",
     );
@@ -908,7 +896,7 @@ function LC(e, r, t) {
     t.index + t.count > (t.axis === "row" ? Mt.maxRows : Mt.maxCols)
   )
     throw Error("Choose a valid position and 1–10,000 rows or columns.");
-  if (t.moveBefore !== void 0) {
+  if (t.moveBefore !== undefined) {
     if (t.remove)
       throw Error(
         "A structural operation cannot delete and move at the same time.",
@@ -919,12 +907,11 @@ function LC(e, r, t) {
   if (!n) throw Error("The worksheet was not found.");
   jn(n);
   const o =
-    t.moveBefore !== void 0
+    t.moveBefore !== undefined
       ? Xde(e, r, t)
       : cie(e, r, t.axis, t.index, t.count, t.remove);
   let a = 0;
   const s = o.sheets.map((c) => {
-      var k, F, I;
       const h = {};
       for (const [O, j] of Object.entries(c.cells)) {
         const z = c.id === r ? cg(O, t) : O;
@@ -998,8 +985,8 @@ function LC(e, r, t) {
           }
           return (V !== O.formula && jn(c), { ...O, formula: V });
         },
-        p = (k = c.conditionalFormats) == null ? void 0 : k.map(f),
-        m = (F = c.validations) == null ? void 0 : F.map(f);
+        p = c.conditionalFormats?.map(f),
+        m = c.validations?.map(f);
       if (c.id !== r)
         return {
           ...c,
@@ -1021,7 +1008,9 @@ function LC(e, r, t) {
       }
       const b = (c.merges ?? [])
           .map((O) =>
-            t.moveBefore !== void 0 ? G2(O, t, "merged range", true) : Zh(O, t),
+            t.moveBefore !== undefined
+              ? G2(O, t, "merged range", true)
+              : Zh(O, t),
           )
           .filter((O) => !!O),
         y = (m ?? []).flatMap((O) => {
@@ -1032,100 +1021,95 @@ function LC(e, r, t) {
           const j = Zh(O.range, t);
           return j ? [{ ...O, range: j }] : [];
         }),
-        E =
-          (I = c.objects) == null
-            ? void 0
-            : I.map((O) => {
-                const j = cg(O.anchor, t);
-                if (!j)
-                  throw Error(
-                    `This edit would remove the anchor of ${O.label || O.kind}. Move or delete that drawing first.`,
-                  );
-                if (O.kind !== "chart" || !O.range) return { ...O, anchor: j };
-                const z = ct(O.range),
-                  V = t.index + t.count - 1;
-                if (
-                  t.remove &&
-                  t.axis === "row" &&
-                  O.headers &&
-                  t.index <= z.firstRow &&
-                  V >= z.firstRow
-                )
-                  throw Error(
-                    "This edit would remove a chart header row. Adjust or delete the chart first.",
-                  );
-                if (
-                  t.remove &&
-                  t.axis === "column" &&
-                  z.lastCol > z.firstCol &&
-                  t.index <= z.firstCol &&
-                  V >= z.firstCol
-                )
-                  throw Error(
-                    "This edit would remove chart category labels. Adjust or delete the chart first.",
-                  );
-                const D = Zh(O.range, t);
-                if (!D)
-                  throw Error(
-                    "This edit would remove the entire chart source. Adjust or delete the chart first.",
-                  );
-                const B = sR(D, c);
-                if (
-                  t.moveBefore !== void 0 &&
-                  ((t.axis === "row" &&
-                    O.headers &&
-                    Kf(z.firstRow, t) !== B.firstRow) ||
-                    (t.axis === "column" &&
-                      z.lastCol > z.firstCol &&
-                      Kf(z.firstCol, t) !== B.firstCol))
-                )
-                  throw Error(
-                    "This move would displace chart headers or category labels. Move the complete chart source or only its data rows or value columns.",
-                  );
-                if (
-                  (O.headers && B.lastRow === B.firstRow) ||
-                  (z.lastCol > z.firstCol && B.lastCol === B.firstCol)
-                )
-                  throw Error(
-                    "This edit would remove all chart data. Adjust or delete the chart first.",
-                  );
-                const _ = O.chartOptions
-                  ? structuredClone(O.chartOptions)
-                  : void 0;
-                if (_) {
-                  const C = (T, N) => {
-                    const R = Kf(T - 1, t);
-                    if (R === null)
-                      throw Error(
-                        `This edit would remove a selected chart ${N}. Reset the chart selection before deleting it.`,
-                      );
-                    return R + 1;
-                  };
-                  (t.axis === "row" &&
-                    _.includedRows &&
-                    (_.includedRows = _.includedRows.map((T) =>
-                      C(T, "filter row"),
-                    )),
-                    t.axis === "column" &&
-                      _.series &&
-                      (_.series = _.series.map((T) => ({
-                        ...T,
-                        column: C(T.column, "series"),
-                      }))));
-                }
-                return {
-                  ...O,
-                  anchor: j,
-                  range: D,
-                  ...(_ ? { chartOptions: _ } : {}),
-                };
-              }),
+        E = c.objects?.map((O) => {
+          const j = cg(O.anchor, t);
+          if (!j)
+            throw Error(
+              `This edit would remove the anchor of ${O.label || O.kind}. Move or delete that drawing first.`,
+            );
+          if (O.kind !== "chart" || !O.range) return { ...O, anchor: j };
+          const z = ct(O.range),
+            V = t.index + t.count - 1;
+          if (
+            t.remove &&
+            t.axis === "row" &&
+            O.headers &&
+            t.index <= z.firstRow &&
+            V >= z.firstRow
+          )
+            throw Error(
+              "This edit would remove a chart header row. Adjust or delete the chart first.",
+            );
+          if (
+            t.remove &&
+            t.axis === "column" &&
+            z.lastCol > z.firstCol &&
+            t.index <= z.firstCol &&
+            V >= z.firstCol
+          )
+            throw Error(
+              "This edit would remove chart category labels. Adjust or delete the chart first.",
+            );
+          const D = Zh(O.range, t);
+          if (!D)
+            throw Error(
+              "This edit would remove the entire chart source. Adjust or delete the chart first.",
+            );
+          const B = sR(D, c);
+          if (
+            t.moveBefore !== undefined &&
+            ((t.axis === "row" &&
+              O.headers &&
+              Kf(z.firstRow, t) !== B.firstRow) ||
+              (t.axis === "column" &&
+                z.lastCol > z.firstCol &&
+                Kf(z.firstCol, t) !== B.firstCol))
+          )
+            throw Error(
+              "This move would displace chart headers or category labels. Move the complete chart source or only its data rows or value columns.",
+            );
+          if (
+            (O.headers && B.lastRow === B.firstRow) ||
+            (z.lastCol > z.firstCol && B.lastCol === B.firstCol)
+          )
+            throw Error(
+              "This edit would remove all chart data. Adjust or delete the chart first.",
+            );
+          const _ = O.chartOptions
+            ? structuredClone(O.chartOptions)
+            : undefined;
+          if (_) {
+            const C = (T, N) => {
+              const R = Kf(T - 1, t);
+              if (R === null)
+                throw Error(
+                  `This edit would remove a selected chart ${N}. Reset the chart selection before deleting it.`,
+                );
+              return R + 1;
+            };
+            (t.axis === "row" &&
+              _.includedRows &&
+              (_.includedRows = _.includedRows.map((T) => C(T, "filter row"))),
+              t.axis === "column" &&
+                _.series &&
+                (_.series = _.series.map((T) => ({
+                  ...T,
+                  column: C(T.column, "series"),
+                }))));
+          }
+          return {
+            ...O,
+            anchor: j,
+            range: D,
+            ...(_ ? { chartOptions: _ } : {}),
+          };
+        }),
         A =
-          t.moveBefore !== void 0
+          t.moveBefore !== undefined
             ? Zde(c, t)
             : c.pageLayout
               ? iae(c.pageLayout, c, t.axis, t.index, t.count, t.remove)
-              : void 0;
+              : undefined;
       if (A) {
         const O = Zh(A.printArea, t);
         if (!O)
@@ -1137,7 +1121,7 @@ function LC(e, r, t) {
       return {
         ...c,
         cells: h,
-        ...(t.moveBefore !== void 0
+        ...(t.moveBefore !== undefined
           ? Gde(c, t)
           : xQ({ ...c, merges: b }, t.axis, t.index, t.count, t.remove)),
         ...(t.axis === "row" && c.rowOriginIds
@@ -1163,23 +1147,17 @@ function LC(e, r, t) {
         ...(A ? { pageLayout: A } : {}),
       };
     }),
-    d =
-      (l = o.definedNames) == null
-        ? void 0
-        : l.map((c) => {
-            var p;
-            const h = c.scopeSheetId
-                ? (((p = o.sheets.find((m) => m.id === c.scopeSheetId)) == null
-                    ? void 0
-                    : p.name) ?? "")
-                : "",
-              f = ay(c.refersTo, h, n.name, t);
-            if (!c.scopeSheetId && ay(c.refersTo, n.name, n.name, t) !== f)
-              throw Error(
-                `Workbook-scoped name ${c.name} has ambiguous unqualified worksheet references. Qualify those references before inserting or deleting rows or columns.`,
-              );
-            return { ...c, refersTo: f };
-          }),
+    d = o.definedNames?.map((c) => {
+      const h = c.scopeSheetId
+          ? (o.sheets.find((m) => m.id === c.scopeSheetId)?.name ?? "")
+          : "",
+        f = ay(c.refersTo, h, n.name, t);
+      if (!c.scopeSheetId && ay(c.refersTo, n.name, n.name, t) !== f)
+        throw Error(
+          `Workbook-scoped name ${c.name} has ambiguous unqualified worksheet references. Qualify those references before inserting or deleting rows or columns.`,
+        );
+      return { ...c, refersTo: f };
+    }),
     u = sQ(
       dQ({ ...o, sheets: s, ...(d ? { definedNames: d } : {}) }, r, t),
       r,
@@ -1207,10 +1185,10 @@ const Kde = (e, r) => JSON.stringify([e, r]),
     !!e && !e.literal && typeof e.raw == "string" && e.raw.startsWith("=");
 function Yde(e, r) {
   return (
-    r.includeHidden !== void 0 &&
+    r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
       qi("Include hidden must be boolean."),
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
       (!Array.isArray(r.allowedSheetIds) ||
         r.allowedSheetIds.some(
           (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),

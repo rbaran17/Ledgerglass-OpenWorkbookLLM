@@ -68,7 +68,7 @@ function qj(e) {
   var t;
   if (!es(e)) return true;
   let r = m8.get(e);
-  if (r === void 0) {
+  if (r === undefined) {
     r = false;
     for (const n in e)
       if (e[n].hyperlink || ((t = e[n].style) != null && t.binding)) {
@@ -87,21 +87,19 @@ function v8(e) {
     : Zq.encode(JSON.stringify(e)).byteLength;
 }
 function lE(e) {
-  var o;
   if (typeof e == "string") return v8(e);
-  if (!e || typeof e != "object")
-    return ((o = JSON.stringify(e)) == null ? void 0 : o.length) ?? 0;
-  const r = es(e) ? g8.get(e) : void 0;
-  if (r !== void 0) return r;
+  if (!e || typeof e != "object") return JSON.stringify(e)?.length ?? 0;
+  const r = es(e) ? g8.get(e) : undefined;
+  if (r !== undefined) return r;
   let t = 2,
     n = 0;
   if (Array.isArray(e))
-    for (const a of e) t += (n++ ? 1 : 0) + lE(a === void 0 ? null : a);
+    for (const a of e) t += (n++ ? 1 : 0) + lE(a === undefined ? null : a);
   else
     for (const a in e) {
       if (!Object.prototype.hasOwnProperty.call(e, a)) continue;
       const s = e[a];
-      s !== void 0 && (t += (n++ ? 1 : 0) + v8(a) + 1 + lE(s));
+      s !== undefined && (t += (n++ ? 1 : 0) + v8(a) + 1 + lE(s));
     }
   return (es(e) && g8.set(e, t), t);
 }
@@ -366,12 +364,8 @@ function hr(e) {
   return iu(new Uint8Array(new TextEncoder().encode(r)));
 }
 function CN(e) {
-  var t;
   const r = EN.safeParse(e);
-  if (!r.success)
-    throw Error(
-      `Invalid recipe: ${(t = r.error.issues[0]) == null ? void 0 : t.message}`,
-    );
+  if (!r.success) throw Error(`Invalid recipe: ${r.error.issues[0]?.message}`);
   return r.data;
 }
 const o1 = string().regex(/^[0-9a-f]{64}$/),
@@ -443,16 +437,13 @@ const o1 = string().regex(/^[0-9a-f]{64}$/),
     ),
   });
 function GF(e, r) {
-  var o, a, s;
   const t = e;
-  if (t.transformationRecipes !== void 0) {
+  if (t.transformationRecipes !== undefined) {
     if (JSON.stringify(t.transformationRecipes).length > Yl.metadataCharacters)
       throw Error("Saved recipe metadata exceeds 2,000,000 characters.");
     const d = SJ.safeParse(t.transformationRecipes);
     if (!d.success)
-      throw Error(
-        `Invalid saved recipes: ${(o = d.error.issues[0]) == null ? void 0 : o.message}`,
-      );
+      throw Error(`Invalid saved recipes: ${d.error.issues[0]?.message}`);
     if (
       new Set(d.data.map((u) => u.id)).size !== d.data.length ||
       new Set(d.data.map((u) => u.name.toLowerCase())).size !== d.data.length
@@ -468,8 +459,8 @@ function GF(e, r) {
   }
   let n = 0;
   for (const d of r.sheets) {
-    const u = (a = t.sheets) == null ? void 0 : a.find((h) => h.id === d.id);
-    if ((u == null ? void 0 : u.transformationRun) === void 0) continue;
+    const u = t.sheets?.find((h) => h.id === d.id);
+    if (u?.transformationRun === undefined) continue;
     if (
       ((n += JSON.stringify(u.transformationRun).length),
       n > Yl.runMetadataCharacters)
@@ -480,7 +471,7 @@ function GF(e, r) {
     const l = NJ.safeParse(u.transformationRun);
     if (!l.success)
       throw Error(
-        `Invalid recipe execution evidence: ${(s = l.error.issues[0]) == null ? void 0 : s.message}`,
+        `Invalid recipe execution evidence: ${l.error.issues[0]?.message}`,
       );
     const c = l.data;
     if (
@@ -540,7 +531,6 @@ function Pg(e) {
       l && t();
     },
     a = (d) => {
-      var l;
       if (d > 128) throw Error("#LIMIT!");
       const u = [];
       for (; r < e.length && ![",", ")"].includes(e[r]);) {
@@ -561,10 +551,7 @@ function Pg(e) {
             /^(?:'((?:[^']|'')+)'|([A-Za-z0-9_\\][A-Za-z0-9_.\\]*))!/.exec(
               e.slice(r),
             );
-          m &&
-            ((p =
-              ((l = m[1]) == null ? void 0 : l.replace(/''/g, "'")) ?? m[2]),
-            (r += m[0].length));
+          m && ((p = m[1]?.replace(/''/g, "'") ?? m[2]), (r += m[0].length));
           const v =
             /^(?:#(?:REF!|NAME\?|VALUE!|DIV\/0!|N\/A|NUM!|NULL!|SPILL!|CALC!|CYCLE!|LIMIT!|BLOCKED!|ERROR!)|\$?[A-Za-z]{1,3}:\$?[A-Za-z]{1,3}(?![\w.])|\$?[1-9]\d*:\$?[1-9]\d*(?![\w.])|\$?[A-Za-z]{1,3}\$?[1-9]\d*(?![\w.\\])|(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)/i.exec(
               e.slice(r),
@@ -610,12 +597,7 @@ const Tw = (e) => e.filter((r) => r.kind !== "text" || r.text.trim());
 function Nw(e, r = false) {
   const t = Tw(e),
     n = t[0];
-  if (
-    t.length !== 1 ||
-    (n == null ? void 0 : n.kind) !== "symbol" ||
-    n.qualifier ||
-    !RJ(n.name, r)
-  )
+  if (t.length !== 1 || n?.kind !== "symbol" || n.qualifier || !RJ(n.name, r))
     throw Error(
       `Invalid ${r ? "LAMBDA parameter" : "LET variable"}: use a name, not a cell address${r ? ", without a period" : ""}.`,
     );
@@ -675,8 +657,10 @@ function $p(e) {
     const r = Tw(Pg(e)),
       t = r[0];
     return r.length !== 1 || t.kind !== "call" || AN(t) !== "LAMBDA"
-      ? void 0
-      : t.args.slice(0, -1).map((n) => Nw(n, !0).name.replace(/^_xlpm\./i, ""));
+      ? undefined
+      : t.args
+          .slice(0, -1)
+          .map((n) => Nw(n, true).name.replace(/^_xlpm\./i, ""));
   } catch {
     return;
   }
@@ -1117,18 +1101,15 @@ function m1(e, r) {
 }
 const tD = new WeakSet();
 function jJ(e, r) {
-  if (e.extensions === void 0) return;
+  if (e.extensions === undefined) return;
   const t = new Set((r.definedNames ?? []).map((u) => u.name.toUpperCase())),
     n = e.extensions;
   if (
-    Array.isArray(n == null ? void 0 : n.installed) &&
+    Array.isArray(n?.installed) &&
     n.installed.some((u) => {
-      var l, c;
-      return (c =
-        (l = u == null ? void 0 : u.manifest) == null ? void 0 : l.functions) ==
-        null
-        ? void 0
-        : c.some((h) => t.has(`${u.manifest.namespace}.${h.id}`));
+      return u?.manifest?.functions?.some((h) =>
+        t.has(`${u.manifest.namespace}.${h.id}`),
+      );
     })
   )
     throw Error("Extension functions cannot shadow defined names.");
@@ -1181,12 +1162,9 @@ function jJ(e, r) {
     const l = a.find((h) =>
         u.functionName.startsWith(h.manifest.namespace + "."),
       ),
-      c =
-        l == null
-          ? void 0
-          : l.manifest.functions.find(
-              (h) => `${l.manifest.namespace}.${h.id}` === u.functionName,
-            );
+      c = l?.manifest.functions.find(
+        (h) => `${l.manifest.namespace}.${h.id}` === u.functionName,
+      );
     if (!c || !l || u.arguments.length !== c.parameters.length)
       throw Error("Extension cache does not match an installed function.");
     if (
@@ -1215,14 +1193,12 @@ function jJ(e, r) {
 const bf = (e) => hr(Rw(e)),
   $3 = (e, r, t, n, o, a) => hr([e, r, t, n, o, a]);
 function z3(e) {
-  var r;
-  return (((r = e.extensions) == null ? void 0 : r.installed) ?? []).flatMap(
-    (t) =>
-      t.manifest.functions.map((n) => ({
-        entry: t,
-        fn: n,
-        name: `${t.manifest.namespace}.${n.id}`,
-      })),
+  return (e.extensions?.installed ?? []).flatMap((t) =>
+    t.manifest.functions.map((n) => ({
+      entry: t,
+      fn: n,
+      name: `${t.manifest.namespace}.${n.id}`,
+    })),
   );
 }
 const vE = new WeakMap();
@@ -1242,7 +1218,6 @@ function BJ(e, r, t, n) {
   );
 }
 function LJ(e, r, t, n, o) {
-  var h, f, p;
   const a = z3(e).find((m) => m.name === r);
   if (!a) return { error: "#NAME?" };
   const s = bf(a.entry.manifest);
@@ -1258,15 +1233,9 @@ function LJ(e, r, t, n, o) {
   } catch {
     return { error: "#VALUE!" };
   }
-  const u = String(
-      ((f =
-        (h = e.sheets.find((m) => m.id === n)) == null ? void 0 : h.cells[o]) ==
-      null
-        ? void 0
-        : f.raw) ?? "",
-    ),
+  const u = String(e.sheets.find((m) => m.id === n)?.cells[o]?.raw ?? ""),
     l = $3(n, o, u, r, d, s),
-    c = (p = e.extensions) == null ? void 0 : p.caches.find((m) => m.key === l);
+    c = e.extensions?.caches.find((m) => m.key === l);
   return c &&
     !g1(e).some(
       (m) => m.id === a.entry.manifest.id && m.scopeHash === c.scopeHash,
@@ -1295,10 +1264,8 @@ function pd() {
 function JF(e) {
   return {
     memoryBudgetBytes:
-      ((e == null ? void 0 : e.memoryBudgetMiB) ?? Iw.defaultMemoryBudgetMiB) *
-      1024 *
-      1024,
-    workBudget: (e == null ? void 0 : e.workBudget) ?? Iw.defaultWorkBudget,
+      (e?.memoryBudgetMiB ?? Iw.defaultMemoryBudgetMiB) * 1024 * 1024,
+    workBudget: e?.workBudget ?? Iw.defaultWorkBudget,
   };
 }
 function kN(e, r) {
@@ -1353,8 +1320,8 @@ function QF(e, r) {
       o.outlineGroups,
     ]);
     const a = es(o.cells),
-      s = a ? rD.get(o.cells) : void 0;
-    if (s !== void 0) t += s;
+      s = a ? rD.get(o.cells) : undefined;
+    if (s !== undefined) t += s;
     else {
       const d = t;
       for (const u in o.cells)
@@ -1375,7 +1342,6 @@ function SN(e) {
     d = 0,
     u = 0;
   const l = () => {
-    var c;
     return (
       !o &&
         t > r.memoryBudgetBytes &&
@@ -1384,8 +1350,7 @@ function SN(e) {
         n > r.workBudget &&
         ((o = "#LIMIT!"), (a = "Calculation work budget exceeded")),
       !o &&
-        d + (u ? pd() - s : 0) >
-          (((c = e.calculation) == null ? void 0 : c.timeBudgetMs) ?? 2500) &&
+        d + (u ? pd() - s : 0) > (e.calculation?.timeBudgetMs ?? 2500) &&
         ((o = "#TIMEOUT!"),
         (a = "Cooperative calculation time budget exceeded")),
       o
@@ -1554,7 +1519,6 @@ function rB(e, r = "1900") {
   };
 }
 function nD(e) {
-  var s;
   const r = /^(\d{1,2}):(\d{2})(?::(\d{2}(?:\.\d{1,9})?))?\s*(AM|PM)?$/i.exec(
     e,
   );
@@ -1562,7 +1526,7 @@ function nD(e) {
   let t = Number(r[1]);
   const n = Number(r[2]),
     o = Number(r[3] ?? 0),
-    a = (s = r[4]) == null ? void 0 : s.toUpperCase();
+    a = r[4]?.toUpperCase();
   if (!(n > 59 || o >= 60 || (a ? t < 1 || t > 12 : t > 23)))
     return (
       a && (t = (t % 12) + (a === "PM" ? 12 : 0)),
@@ -1589,7 +1553,7 @@ function zp(e, r = TN) {
   )
     return;
   const d = n[7] ? nD(n[7]) : 0;
-  return d === void 0 ? void 0 : V3(o, a, s, r.dateSystem) + d;
+  return d === undefined ? undefined : V3(o, a, s, r.dateSystem) + d;
 }
 function lx(e, r = new Date()) {
   const t = ts(e),
@@ -1605,10 +1569,7 @@ function lx(e, r = new Date()) {
       hourCycle: "h23",
     }).formatToParts(r),
     a = (v) => {
-      var g;
-      return Number(
-        (g = o.find((b) => b.type === v)) == null ? void 0 : g.value,
-      );
+      return Number(o.find((b) => b.type === v)?.value);
     },
     s = a("year"),
     d = a("month"),
@@ -1759,7 +1720,7 @@ function WS(e, r, t) {
         !/^\s*[+-]?(?:\d+\.?\d*|\.\d+)(?:E[+-]?\d+)?\s*$/i.test(w)
           ? zp(w, t.clock)
           : p(w);
-      return E === void 0 ? u() : m(E);
+      return E === undefined ? u() : m(E);
     },
     g = (w) => Math.floor(v(w)),
     b = (w, E, A = false) => {
@@ -1792,7 +1753,7 @@ function WS(e, r, t) {
     typeof w != "string" && u();
     const E = zp(w, t.clock);
     return (
-      E === void 0 && u(),
+      E === undefined && u(),
       e === "DATEVALUE" &&
         !/^(?:\d{4}-\d{1,2}-\d{1,2}|\d{1,2}\/\d{1,2}\/\d{4})(?:[ T]|$)/.test(
           w.trim(),
@@ -1940,7 +1901,7 @@ function WS(e, r, t) {
       );
     }
     const I = ($) => (Array.isArray($) ? $.flatMap(I) : [$]),
-      O = h[E ? 3 : 2] === void 0 ? [] : I(h[E ? 3 : 2]);
+      O = h[E ? 3 : 2] === undefined ? [] : I(h[E ? 3 : 2]);
     O.length > Cy.holidays && u("#LIMIT!");
     const j = new Set();
     for (const $ of O)

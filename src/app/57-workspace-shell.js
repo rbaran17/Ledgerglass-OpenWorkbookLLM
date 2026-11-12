@@ -34,7 +34,7 @@ const iEe = "embedded-excel-demo-v1",
   T_ = (e) => `embedded-excel-demo-v2:${e}`,
   xp = ["ledger", "draft"],
   Wf = { ledger: "General ledger", draft: "Draft workbook" };
-function RS({ label: e, trigger: r, children: t, className: n = "" }) {
+function RS({ label, trigger, children, className = "" }) {
   const o = ne.useRef(null);
   return (
     ne.useEffect(() => {
@@ -53,7 +53,7 @@ function RS({ label: e, trigger: r, children: t, className: n = "" }) {
     }, []),
     i.jsxs("details", {
       ref: o,
-      className: `emb-header-menu ${n}`,
+      className: `emb-header-menu ${className}`,
       onKeyDown: (a) => {
         var s;
         a.key === "Escape" &&
@@ -64,21 +64,22 @@ function RS({ label: e, trigger: r, children: t, className: n = "" }) {
           (s = a.currentTarget.querySelector("summary")) == null || s.focus());
       },
       children: [
-        i.jsx("summary", { "aria-label": e, title: e, children: r }),
+        i.jsx("summary", {
+          "aria-label": label,
+          title: label,
+          children: trigger,
+        }),
         i.jsx("div", {
           className: "emb-menu-panel",
           role: "region",
-          "aria-label": e,
+          "aria-label": label,
           onClick: (a) => {
-            var s, d;
+            var d;
             a.target.closest("button") &&
               (o.current && (o.current.open = false),
-              (d =
-                (s = o.current) == null
-                  ? void 0
-                  : s.querySelector("summary")) == null || d.focus());
+              (d = o.current?.querySelector("summary")) == null || d.focus());
           },
-          children: t,
+          children,
         }),
       ],
     })
@@ -98,7 +99,7 @@ function _H() {
       t.version !== 1 ||
       !t.documents ||
       !xp.includes(t.activeDocument) ||
-      (t.versionStores !== void 0 &&
+      (t.versionStores !== undefined &&
         (!t.versionStores ||
           typeof t.versionStores != "object" ||
           Array.isArray(t.versionStores) ||
@@ -107,7 +108,7 @@ function _H() {
       throw new Error("Invalid workspace");
     return {
       version: 1,
-      legacy: !0,
+      legacy: true,
       activeDocument: t.activeDocument,
       documents: {
         ledger: rn(t.documents.ledger),
@@ -124,9 +125,8 @@ function _H() {
   }
 }
 function DH(e, r) {
-  var s;
   const t = e.documents[r];
-  let n = ((s = e.versionStores) == null ? void 0 : s[r]) ?? JSON.stringify(t);
+  let n = e.versionStores?.[r] ?? JSON.stringify(t);
   const o = BC(
       {
         getItem: () => n,
@@ -209,7 +209,7 @@ async function aEe(e) {
         return {
           id: t,
           store: o,
-          workbook: (a == null ? void 0 : a.workbook) ?? e.documents[t],
+          workbook: a?.workbook ?? e.documents[t],
           problem: "",
         };
       } catch (a) {
@@ -224,13 +224,12 @@ async function aEe(e) {
     }),
   );
   return {
-    documents: Object.fromEntries(r.map(({ id: t, workbook: n }) => [t, n])),
-    stores: Object.fromEntries(r.map(({ id: t, store: n }) => [t, n])),
-    problems: Object.fromEntries(r.map(({ id: t, problem: n }) => [t, n])),
+    documents: Object.fromEntries(r.map(({ id, workbook }) => [id, workbook])),
+    stores: Object.fromEntries(r.map(({ id, store }) => [id, store])),
+    problems: Object.fromEntries(r.map(({ id, problem }) => [id, problem])),
   };
 }
 function sEe() {
-  var N;
   const [e] = ne.useState(_H),
     [r, t] = ne.useState(e.documents),
     [n, o] = ne.useState(null),
@@ -266,20 +265,19 @@ function sEe() {
     [k, F] = ne.useState({}),
     I = l[a],
     O =
-      (n == null ? void 0 : n.problems[a]) ||
-      ((I == null ? void 0 : I.status) === "error" ||
-      (I == null ? void 0 : I.status) === "conflict"
+      n?.problems[a] ||
+      (I?.status === "error" || I?.status === "conflict"
         ? (I.message ??
           "The workbook could not be saved. Changes remain in this tab.")
         : ""),
-    j = !O && (I == null ? void 0 : I.status) === "saved",
+    j = !O && I?.status === "saved",
     z = ne.useMemo(() => kz(), []),
     V = r[a],
     D = k[a]
       ? V.sheets.find((R) => R.id === k[a].sheetId)
       : V.sheets.find((R) => !R.hidden),
-    B = ((N = k[a]) == null ? void 0 : N.range) ?? "A1",
-    _ = `${(D == null ? void 0 : D.name) ?? "Sheet1"}!${B}`,
+    B = k[a]?.range ?? "A1",
+    _ = `${D?.name ?? "Sheet1"}!${B}`,
     C = xp.filter((R) =>
       `${Wf[R]} ${r[R].name}`.toLowerCase().includes(y.toLowerCase()),
     );
@@ -574,7 +572,7 @@ function sEe() {
                     type: "button",
                     className: `emb-document ${a === R && f ? "emb-document-active" : ""}`,
                     "aria-label": `Open ${Wf[R]}`,
-                    "aria-current": a === R && f ? "page" : void 0,
+                    "aria-current": a === R && f ? "page" : undefined,
                     onClick: () => T(R),
                     children: [
                       i.jsx("div", {
@@ -706,7 +704,7 @@ function sEe() {
             className: `emb-workbook-window ${m ? "emb-window-expanded" : ""}`,
             "aria-label": "Embedded workbook window",
             hidden: !f,
-            style: f ? void 0 : { display: "none" },
+            style: f ? undefined : { display: "none" },
             children: [
               i.jsxs("div", {
                 className: "emb-window-titlebar",
@@ -789,7 +787,7 @@ function sEe() {
                     {
                       className: "emb-editor",
                       hidden: R !== a,
-                      style: R !== a ? { display: "none" } : void 0,
+                      style: R !== a ? { display: "none" } : undefined,
                       children: i.jsx(IH, {
                         initialWorkbook: n.documents[R],
                         ...h[R],
@@ -986,8 +984,10 @@ Hq.createRoot(document.getElementById("root")).render(
     ? i.jsx(sEe, {})
     : i.jsx(IH, {
         actor: "Preparer",
-        initialWorkbook: k2.has("demo") ? FI() : void 0,
+        initialWorkbook: k2.has("demo") ? FI() : undefined,
         persistenceKey:
-          k2.has("temporary") || k2.has("demo") ? void 0 : "excel-workbook-v2",
+          k2.has("temporary") || k2.has("demo")
+            ? undefined
+            : "excel-workbook-v2",
       }),
 );

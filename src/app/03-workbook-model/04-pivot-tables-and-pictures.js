@@ -14,7 +14,19 @@ import {
 import { L3, Lg, iu, ZF, P3, $p } from "../01-core-schemas-and-hashing.js";
 import { jn } from "./01-cell-styles-and-themes.js";
 import { JN, QN, XL, YL, ZL, nne, rP } from "./02-number-formats.js";
-import { Ba, FE, Hw, R5, Vg, g5, hne, m5, pC, sne, zv } from "./03-defined-names.js";
+import {
+  Ba,
+  FE,
+  Hw,
+  R5,
+  Vg,
+  g5,
+  hne,
+  m5,
+  pC,
+  sne,
+  zv,
+} from "./03-defined-names.js";
 
 function P1(e) {
   var s;
@@ -197,7 +209,8 @@ function _P(e, r) {
     "containerFilename",
     "mediaReference",
   ])
-    e[o] !== void 0 && (n[o] = Jne(e[o], o === "sourceLocator" ? 2e3 : 512, o));
+    e[o] !== undefined &&
+      (n[o] = Jne(e[o], o === "sourceLocator" ? 2e3 : 512, o));
   if (n.origin === "local-file" && !n.filename)
     throw Error("A local evidence picture requires its original filename.");
   if (n.origin !== "xlsx-media" && (n.containerFilename || n.mediaReference))
@@ -209,17 +222,17 @@ function _P(e, r) {
   return n;
 }
 function ek(e, r) {
-  const { bytes: t } = P1(e),
-    n = FE(t);
+  const { bytes } = P1(e),
+    n = FE(bytes);
   return _P(
     {
       ...r,
       version: 1,
       sourceReference: `sha256:${n}`,
       sha256: n,
-      byteLength: t.length,
+      byteLength: bytes.length,
     },
-    t,
+    bytes,
   );
 }
 function F2(e, r, t) {
@@ -229,7 +242,7 @@ function F2(e, r, t) {
     workbookId: e.id,
     revision: e.revision,
     sheetId: r,
-    ...(t !== void 0 ? { selection: t } : {}),
+    ...(t !== undefined ? { selection: t } : {}),
     guard: JSON.stringify(e),
   };
 }
@@ -397,11 +410,10 @@ function SO(e, r) {
         Pa("Aggregation exceeds finite numeric bounds.")));
 }
 function rie(e, r) {
-  var t;
   return r === "count"
     ? e.count
     : r === "distinctCount"
-      ? (((t = e.distinct) == null ? void 0 : t.size) ?? 0)
+      ? (e.distinct?.size ?? 0)
       : r === "sum"
         ? e.sum
         : e.numeric
@@ -430,11 +442,7 @@ function OP(e, r, t) {
       n(C.field),
       C.otherField && n(C.otherField));
   const s = e.values.map((C) => {
-      var N;
-      const T =
-        (N = e.calculatedFields) == null
-          ? void 0
-          : N.find((R) => R.name === C.field);
+      const T = e.calculatedFields?.find((R) => R.name === C.field);
       return (
         T &&
           C.operation !== "sum" &&
@@ -443,16 +451,16 @@ function OP(e, r, t) {
           ),
         {
           ...C,
-          index: n((T == null ? void 0 : T.field) ?? C.field),
+          index: n(T?.field ?? C.field),
           calculated: T,
-          other: T != null && T.otherField ? n(T.otherField) : void 0,
+          other: T != null && T.otherField ? n(T.otherField) : undefined,
         }
       );
     }),
     d = () =>
       s.map((C) => ({
         ...tk(C.operation === "distinctCount"),
-        ...(C.other !== void 0 ? { right: tk() } : {}),
+        ...(C.other !== undefined ? { right: tk() } : {}),
       }));
   t.length *
     s.length *
@@ -465,24 +473,23 @@ function OP(e, r, t) {
   let u = 0;
   const l = (C, T) =>
       s.forEach((N, R) => {
-        var $, U;
-        const L = (($ = C[R].distinct) == null ? void 0 : $.size) ?? 0;
+        const L = C[R].distinct?.size ?? 0;
         (SO(C[R], T[N.index]),
-          (u += (((U = C[R].distinct) == null ? void 0 : U.size) ?? 0) - L),
+          (u += (C[R].distinct?.size ?? 0) - L),
           u > 25e4 &&
             Pa(
               "Pivot distinct counts exceed 250,000 retained group entries. Reduce groups, value fields or source rows.",
             ),
-          N.other !== void 0 && SO(C[R].right, T[N.other]));
+          N.other !== undefined && SO(C[R].right, T[N.other]));
       }),
     c = (C, T) => {
       const N = s[T],
-        R = C == null ? void 0 : C[T];
+        R = C?.[T];
       if (!N.calculated)
         return rie(R ?? tk(N.operation === "distinctCount"), N.operation);
       if (!R) return null;
       const L = R.sum,
-        $ = N.other !== void 0 ? R.right.sum : N.calculated.constant;
+        $ = N.other !== undefined ? R.right.sum : N.calculated.constant;
       N.calculated.operation === "divide" &&
         $ === 0 &&
         Pa(
@@ -502,11 +509,7 @@ function OP(e, r, t) {
     },
     h = (C, T) =>
       C.map((N) => {
-        var $;
-        const R =
-            ($ = e.dateGroups) == null
-              ? void 0
-              : $.find((U) => U.field === r[N]),
+        const R = e.dateGroups?.find((U) => U.field === r[N]),
           L = T.values[N];
         return R ? DP(L, R, T.index) : LE(L) ? null : L;
       }),
@@ -570,16 +573,8 @@ function OP(e, r, t) {
         }
     const R = [],
       L = (U) => {
-        var X, J;
-        const G =
-            (X = e.sorts) == null
-              ? void 0
-              : X.find((q) => q.field === T[U.length]),
-          H = [
-            ...(((J = N.get(JSON.stringify(U))) == null
-              ? void 0
-              : J.values()) ?? []),
-          ];
+        const G = e.sorts?.find((q) => q.field === T[U.length]),
+          H = [...(N.get(JSON.stringify(U))?.values() ?? [])];
         G &&
           H.sort((q, W) => {
             const K = q.at(-1),
@@ -614,9 +609,7 @@ function OP(e, r, t) {
     I = (C) => (LE(C) ? "(blank)" : String(C)),
     O = e.rowFields.length
       ? e.rowFields.map((C) => {
-          var N;
-          const T =
-            (N = e.dateGroups) == null ? void 0 : N.find((R) => R.field === C);
+          const T = e.dateGroups?.find((R) => R.field === C);
           return T ? `${C} (${T.unit})` : C;
         })
       : ["Row labels"];
@@ -727,9 +720,8 @@ const nie = ["value", "percentGrand", "percentRow", "percentColumn"],
       typeof e == "string" ? e.toLocaleLowerCase("en-US") : e,
     ]);
 function iie(e) {
-  var t;
   const r = {};
-  (e.slicers !== void 0 &&
+  (e.slicers !== undefined &&
     (r.slicers = U4(e.slicers, 20).map((n) => {
       if (!P4(n)) return Lu("Invalid pivot slicer.");
       const o = U4(n.selected, 500).map(
@@ -748,7 +740,7 @@ function iie(e) {
         { field: rk(n.field), selected: o }
       );
     })),
-    e.timelines !== void 0 &&
+    e.timelines !== undefined &&
       (r.timelines = U4(e.timelines, 10).map((n) =>
         !P4(n) ||
         !_5(n.from) ||
@@ -767,7 +759,7 @@ function iie(e) {
               dateSystem: n.dateSystem,
             },
       )),
-    e.sorts !== void 0 &&
+    e.sorts !== undefined &&
       (r.sorts = U4(e.sorts, 100).map((n) =>
         !P4(n) || !["ascending", "descending"].includes(String(n.direction))
           ? Lu("Pivot field sorting requires ascending or descending order.")
@@ -777,14 +769,14 @@ function iie(e) {
     n &&
       new Set(n.map((o) => o.field)).size !== n.length &&
       Lu("Choose only one control of each kind per field.");
-  if (e.chart !== void 0) {
+  if (e.chart !== undefined) {
     const n = e.chart;
     if (
       !P4(n) ||
       !["column", "bar", "line"].includes(String(n.kind)) ||
       !Number.isInteger(n.valueIndex) ||
       Number(n.valueIndex) < 0 ||
-      Number(n.valueIndex) >= Number((t = e.values) == null ? void 0 : t.length)
+      Number(n.valueIndex) >= Number(e.values?.length)
     )
       return Lu(
         "PivotChart requires a supported chart and an existing value field.",
@@ -794,10 +786,7 @@ function iie(e) {
   return r;
 }
 function uR(e, r) {
-  var o;
-  const t = new Set(
-      (o = e.calculatedFields) == null ? void 0 : o.map((a) => a.name),
-    ),
+  const t = new Set(e.calculatedFields?.map((a) => a.name)),
     n = [
       ...e.rowFields,
       ...e.columnFields,
@@ -906,7 +895,10 @@ const TO = (e) =>
   $4 = (e, r) => typeof e == "string" && e.length > 0 && e.length <= r;
 function aie(e, r) {
   const t = e.sheets;
-  if (e.rowOrigins === void 0 && !t.some((a) => a.rowOriginIds !== void 0))
+  if (
+    e.rowOrigins === undefined &&
+    !t.some((a) => a.rowOriginIds !== undefined)
+  )
     return;
   if (!Array.isArray(e.rowOrigins) || e.rowOrigins.length > Mt.maxCells)
     throw Error(
@@ -942,7 +934,7 @@ function aie(e, r) {
   let o = 0;
   for (let a = 0; a < t.length; a++) {
     const s = t[a].rowOriginIds;
-    if (s === void 0) continue;
+    if (s === undefined) continue;
     if (!TO(s))
       throw Error("Source row associations must be a plain index map.");
     const d = {};
@@ -961,15 +953,8 @@ function aie(e, r) {
   }
 }
 function U1(e, r, t) {
-  var a, s, d;
-  const n =
-      (s =
-        (a = e.sheets.find((u) => u.id === r)) == null
-          ? void 0
-          : a.rowOriginIds) == null
-        ? void 0
-        : s[t],
-    o = n && ((d = e.rowOrigins) == null ? void 0 : d.find((u) => u.id === n));
+  const n = e.sheets.find((u) => u.id === r)?.rowOriginIds?.[t],
+    o = n && e.rowOrigins?.find((u) => u.id === n);
   return o ? { ...o } : null;
 }
 function sie(e, r) {
@@ -1046,22 +1031,16 @@ const WP = (e) => {
   return FE(new Uint8Array(strToU8(JSON.stringify([r.length, ...t]))));
 };
 function Sx(e, r) {
-  var o;
   const t = e.sheets.find((a) => {
-      var s;
-      return (s = a.pivots) == null ? void 0 : s.some((d) => d.id === r);
+      return a.pivots?.some((d) => d.id === r);
     }),
-    n =
-      (o = t == null ? void 0 : t.pivots) == null
-        ? void 0
-        : o.find((a) => a.id === r);
+    n = t?.pivots?.find((a) => a.id === r);
   return (
     (!t || !n) && Xt("Pivot definition not found."),
     { owner: t, definition: n }
   );
 }
 function qP(e, r, t) {
-  var n, o, a;
   return {
     workbookId: e.id,
     revision: e.revision,
@@ -1069,9 +1048,8 @@ function qP(e, r, t) {
     name: r.name,
     source: structuredClone(r.source),
     sourceRevision: r.sourceRevision,
-    refreshedAt: ((n = r.refresh) == null ? void 0 : n.at) ?? null,
-    sourceFingerprint:
-      ((o = r.refresh) == null ? void 0 : o.sourceFingerprint) ?? null,
+    refreshedAt: r.refresh?.at ?? null,
+    sourceFingerprint: r.refresh?.sourceFingerprint ?? null,
     status: t.state,
     diagnostic: t.reason,
     outputRange: r.outputRange,
@@ -1092,9 +1070,7 @@ function qP(e, r, t) {
           excluded: r.refresh.excludedRows,
         }
       : null,
-    measures: structuredClone(
-      ((a = r.refresh) == null ? void 0 : a.measures) ?? [],
-    ),
+    measures: structuredClone(r.refresh?.measures ?? []),
     semantics:
       "Controls intersect. Slicer items use type-sensitive, case-insensitive equality; an empty selection includes no records. Hidden source rows are included. Percentages use filtered aggregate totals. Drill-through returns numerator records, including blank/nonnumeric measure inputs; it does not expand denominator populations.",
   };
@@ -1219,7 +1195,7 @@ function xR(e, r) {
   const t = eU(e);
   for (const n of t.reverse()) {
     const o = r(n);
-    o !== void 0 && (e = e.slice(0, n.start) + o + e.slice(n.end));
+    o !== undefined && (e = e.slice(0, n.start) + o + e.slice(n.end));
   }
   return e;
 }
@@ -1286,8 +1262,7 @@ const Aie = (e, r, t) => `'${(e + r).replace(/'/g, "''")}'!${t}`,
   }),
   IO = new WeakSet();
 function Nie(e, r) {
-  var a, s;
-  if (e.workbookLinks === void 0) return;
+  if (e.workbookLinks === undefined) return;
   if (
     e.workbookLinks &&
     typeof e.workbookLinks == "object" &&
@@ -1302,8 +1277,8 @@ function Nie(e, r) {
   if (new Set(t.sources.map((d) => d.target)).size !== t.sources.length)
     throw Error("Workbook link targets must be unique.");
   if (
-    new Set((a = t.packageTargets) == null ? void 0 : a.map((d) => d.key))
-      .size !== (((s = t.packageTargets) == null ? void 0 : s.length) ?? 0)
+    new Set(t.packageTargets?.map((d) => d.key)).size !==
+    (t.packageTargets?.length ?? 0)
   )
     throw Error("Package link identities must be unique.");
   let n = 0,
@@ -1352,14 +1327,11 @@ function ER(e) {
   return iu(r);
 }
 function rU(e) {
-  var s;
   const r = [],
     t = new Map(),
     n = new Map(),
     o = new Set(e.sheets.map((d) => d.name.toLowerCase()));
-  for (const [d, u] of (
-    ((s = e.workbookLinks) == null ? void 0 : s.sources) ?? []
-  ).entries())
+  for (const [d, u] of (e.workbookLinks?.sources ?? []).entries())
     for (const [l, c] of u.sheets.entries()) {
       let h = `_LG_LINK_${d}_${l}`;
       for (; o.has(h.toLowerCase());) h += "_";
@@ -1377,17 +1349,10 @@ function rU(e) {
     values: t,
     rewrite: (d) =>
       xR(d, (u) => {
-        var h;
-        const l =
-            (h = e.workbookLinks) == null
-              ? void 0
-              : h.sources.find((f) => f.target === u.target),
-          c =
-            l == null
-              ? void 0
-              : l.sheets.find(
-                  (f) => f.name.toLowerCase() === u.sheet.toLowerCase(),
-                );
+        const l = e.workbookLinks?.sources.find((f) => f.target === u.target),
+          c = l?.sheets.find(
+            (f) => f.name.toLowerCase() === u.sheet.toLowerCase(),
+          );
         if (!(!c || !Tx(u.range).every((f) => Object.hasOwn(c.cells, f))))
           return `'${n.get(JSON.stringify([u.target, u.sheet.toLowerCase()]))}'!${u.range}`;
       }),
@@ -1506,7 +1471,6 @@ function Rie(e, r, t) {
                 ? T >= N
                 : T === N,
     v = (T) => {
-      var H;
       if (t.isIssue(T)) throw T;
       if (T == null || T === "") return null;
       if (typeof T == "number" || typeof T == "boolean") return (Q) => Q === T;
@@ -1544,8 +1508,7 @@ function Rie(e, r, t) {
         } else
           X === "*" || X === "?"
             ? ((G = true),
-              (X === "?" ||
-                ((H = U.at(-1)) == null ? void 0 : H.kind) !== "many") &&
+              (X === "?" || U.at(-1)?.kind !== "many") &&
                 U.push({ kind: X === "*" ? "many" : "one" }))
             : U.push({ kind: "literal", char: X });
       }
@@ -1584,12 +1547,7 @@ function Rie(e, r, t) {
   let g = 0;
   const b = s.slice(1).map((T, N) =>
     T.map((R, L) => {
-      var $;
-      return l[L] < 0
-        ? ($ = t.criterionFormula) == null
-          ? void 0
-          : $.call(t, r[2], N + 1, L)
-        : void 0;
+      return l[L] < 0 ? t.criterionFormula?.call(t, r[2], N + 1, L) : undefined;
     }),
   );
   l.forEach((T, N) => {
@@ -1634,7 +1592,7 @@ function Rie(e, r, t) {
       }
       H && (R = true);
     }
-    if (!R || (E++, h === void 0)) continue;
+    if (!R || (E++, h === undefined)) continue;
     const L = N[h];
     if (((D = L), L != null && k++, t.isIssue(L))) {
       if (!["DCOUNT", "DCOUNTA", "DGET"].includes(e)) throw L;
@@ -1650,8 +1608,8 @@ function Rie(e, r, t) {
     if (t.isIssue(D)) throw D;
     return D ?? 0;
   }
-  if (e === "DCOUNT") return h === void 0 ? E : A;
-  if (e === "DCOUNTA") return h === void 0 ? E : k;
+  if (e === "DCOUNT") return h === undefined ? E : A;
+  if (e === "DCOUNTA") return h === undefined ? E : k;
   const B = (T) => (Number.isFinite(T) ? T : n("#NUM!"));
   if (e === "DSUM") return B(F);
   if (e === "DMAX") return A ? j : 0;
@@ -1670,10 +1628,7 @@ const iU = ["SUBTOTAL", "AGGREGATE", "ISFORMULA", "FORMULATEXT"],
     typeof e == "object" &&
     !Array.isArray(e) &&
     [Object.prototype, null].includes(Object.getPrototypeOf(e)),
-  z4 = (e) =>
-    typeof (e == null ? void 0 : e.raw) == "string" &&
-    e.raw.startsWith("=") &&
-    !e.literal;
+  z4 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal;
 function Iie(e) {
   return /(?:^|[^A-Za-z0-9_.])(?:_xlfn\.(?:_xlws\.)?)?SUBTOTAL\s*\(/i.test(
     e.replace(/"(?:[^"]|"")*"|'(?:[^']|'')*'(?=\s*!)/g, ""),
@@ -1785,30 +1740,20 @@ const Oie = [
   Gl = (e) => (Array.isArray(e) ? e.flatMap(Gl) : [e]),
   M5 = (e) => e.flatMap(Gl).find(wn);
 function dp(e, r, t) {
-  var o, a, s;
   if (e.cell || (e.call && !e.qualifier && Fc.includes(P3(e.name)))) return;
   const n = e.qualifier
-    ? (o = r.sheets.find(
-        (d) => d.name.toLowerCase() === e.qualifier.toLowerCase(),
-      )) == null
-      ? void 0
-      : o.id
+    ? r.sheets.find((d) => d.name.toLowerCase() === e.qualifier.toLowerCase())
+        ?.id
     : t;
   if (n)
     return (
-      ((a = r.definedNames) == null
-        ? void 0
-        : a.find(
-            (d) =>
-              d.scopeSheetId === n &&
-              d.name.toLowerCase() === e.name.toLowerCase(),
-          )) ??
-      ((s = r.definedNames) == null
-        ? void 0
-        : s.find(
-            (d) =>
-              !d.scopeSheetId && d.name.toLowerCase() === e.name.toLowerCase(),
-          ))
+      r.definedNames?.find(
+        (d) =>
+          d.scopeSheetId === n && d.name.toLowerCase() === e.name.toLowerCase(),
+      ) ??
+      r.definedNames?.find(
+        (d) => !d.scopeSheetId && d.name.toLowerCase() === e.name.toLowerCase(),
+      )
     );
 }
 function pf(e, r, t, n = [], o) {
@@ -1834,9 +1779,7 @@ function pf(e, r, t, n = [], o) {
       c = g5(c, f, (p) => {
         const m = f.indexOf(p),
           v = f[m - 1],
-          g =
-            (v == null ? void 0 : v.cell) &&
-            c.slice(v.end, p.start).trim() === ":";
+          g = v?.cell && c.slice(v.end, p.start).trim() === ":";
         return p.cell && !p.qualifier && !g ? sne(h.name) + p.text : p.text;
       });
     }

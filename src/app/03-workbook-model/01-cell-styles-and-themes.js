@@ -45,10 +45,13 @@ function cB(e) {
       Object.keys(e).some((r) => !["style", "color"].includes(r)) ||
       !uB.includes(e.style)) &&
       vs("Choose a supported border line style and hexadecimal color."),
-    e.color !== void 0 && GS(e.color),
+    e.color !== undefined && GS(e.color),
     e.style === "none"
       ? { style: "none" }
-      : { style: e.style, color: e.color === void 0 ? "#000000" : GS(e.color) }
+      : {
+          style: e.style,
+          color: e.color === undefined ? "#000000" : GS(e.color),
+        }
   );
 }
 function oh(e) {
@@ -56,48 +59,48 @@ function oh(e) {
   for (const t of Object.keys(e))
     ZJ.has(t) || vs(`Unsupported cell style setting: ${t}.`);
   const r = {};
-  e.binding !== void 0 && (r.binding = NN(e.binding));
+  e.binding !== undefined && (r.binding = NN(e.binding));
   for (const t of ["bold", "italic", "underline", "strikethrough", "wrap"])
-    e[t] !== void 0 &&
+    e[t] !== undefined &&
       (typeof e[t] != "boolean" && vs(`Style ${t} must be boolean.`),
       (r[t] = e[t]));
-  (e.fontFamily !== void 0 &&
+  (e.fontFamily !== undefined &&
     (dx.includes(e.fontFamily) || vs("Unsupported font family."),
     (r.fontFamily = e.fontFamily)),
-    e.fontSize !== void 0 &&
+    e.fontSize !== undefined &&
       ((typeof e.fontSize != "number" ||
         !Number.isInteger(e.fontSize) ||
         e.fontSize < 8 ||
         e.fontSize > 72) &&
         vs("Font size must be an integer between 8 and 72."),
       (r.fontSize = e.fontSize)));
-  for (const t of ["fill", "color"]) e[t] !== void 0 && (r[t] = GS(e[t]));
+  for (const t of ["fill", "color"]) e[t] !== undefined && (r[t] = GS(e[t]));
   if (
-    (e.align !== void 0 &&
+    (e.align !== undefined &&
       (["left", "center", "right"].includes(e.align) ||
         vs("Invalid text alignment."),
       (r.align = e.align)),
-    e.verticalAlign !== void 0 &&
+    e.verticalAlign !== undefined &&
       (["top", "middle", "bottom"].includes(e.verticalAlign) ||
         vs("Choose Top, Center or Bottom vertical alignment."),
       (r.verticalAlign = e.verticalAlign)),
-    e.indent !== void 0 &&
+    e.indent !== undefined &&
       ((typeof e.indent != "number" ||
         !Number.isInteger(e.indent) ||
         e.indent < 0 ||
         e.indent > 15) &&
         vs("Indent must be an integer between 0 and 15."),
       (r.indent = e.indent)),
-    e.border !== void 0 &&
+    e.border !== undefined &&
       (["all", "bottom", "none"].includes(e.border) ||
         vs("Unsupported cell border."),
       (r.border = e.border)),
-    e.borders !== void 0)
+    e.borders !== undefined)
   ) {
     (!_w(e.borders) || Object.keys(e.borders).some((n) => !s0.includes(n))) &&
       vs("Cell borders support top, right, bottom and left edges only.");
     const t = {};
-    for (const n of s0) e.borders[n] !== void 0 && (t[n] = cB(e.borders[n]));
+    for (const n of s0) e.borders[n] !== undefined && (t[n] = cB(e.borders[n]));
     Object.keys(t).length && (r.borders = t);
   }
   return r;
@@ -124,7 +127,7 @@ function NN(e) {
   (!_w(e.base) || Object.hasOwn(e.base, "binding")) &&
     vs("A named style base cannot contain another binding.");
   for (const t of ["missing", "themeFallback"])
-    e[t] !== void 0 &&
+    e[t] !== undefined &&
       e[t] !== true &&
       vs("Invalid named style fallback flag.");
   const r = oh(e.base);
@@ -143,9 +146,9 @@ function NN(e) {
 }
 function ys(e) {
   if (!e) return {};
-  const { binding: r, ...t } = e;
-  if (!r) return t;
-  const n = r.missing ? {} : r.base,
+  const { binding, ...t } = e;
+  if (!binding) return t;
+  const n = binding.missing ? {} : binding.base,
     o = { ...n, ...t };
   return (
     Object.hasOwn(t, "border")
@@ -157,13 +160,9 @@ function ys(e) {
 }
 function md(e, r) {
   var t;
-  if (((e = ys(e)), (t = e == null ? void 0 : e.borders) != null && t[r]))
-    return e.borders[r];
-  if ((e == null ? void 0 : e.border) === "none") return { style: "none" };
-  if (
-    (e == null ? void 0 : e.border) === "all" ||
-    ((e == null ? void 0 : e.border) === "bottom" && r === "bottom")
-  )
+  if (((e = ys(e)), (t = e?.borders) != null && t[r])) return e.borders[r];
+  if (e?.border === "none") return { style: "none" };
+  if (e?.border === "all" || (e?.border === "bottom" && r === "bottom"))
     return { style: "thin", color: "#000000" };
 }
 function dB(e) {
@@ -184,33 +183,28 @@ function M4(e) {
 function fB(e) {
   return (
     (e = ys(e)),
-    ((e == null ? void 0 : e.indent) ?? 0) *
+    (e?.indent ?? 0) *
       GJ.indentEm *
       (e != null && e.fontSize ? (e.fontSize * 4) / 3 : 14)
   );
 }
 function Dw(e, r, t = {}) {
   e = ys(e);
-  const n =
-      (e == null ? void 0 : e.align) ??
-      (typeof r == "number" ? "right" : "left"),
+  const n = e?.align ?? (typeof r == "number" ? "right" : "left"),
     o = fB(e),
-    a = [
-      (e == null ? void 0 : e.underline) && "underline",
-      (e == null ? void 0 : e.strikethrough) && "line-through",
-    ]
+    a = [e?.underline && "underline", e?.strikethrough && "line-through"]
       .filter(Boolean)
       .join(" ");
   return {
-    background: e == null ? void 0 : e.fill,
-    color: e == null ? void 0 : e.color,
+    background: e?.fill,
+    color: e?.color,
     fontWeight: e != null && e.bold ? 700 : 400,
     fontStyle: e != null && e.italic ? "italic" : "normal",
-    fontFamily: e == null ? void 0 : e.fontFamily,
-    fontSize: e != null && e.fontSize ? `${e.fontSize}pt` : void 0,
+    fontFamily: e?.fontFamily,
+    fontSize: e != null && e.fontSize ? `${e.fontSize}pt` : undefined,
     textDecoration: a || "none",
     textAlign: n,
-    verticalAlign: e == null ? void 0 : e.verticalAlign,
+    verticalAlign: e?.verticalAlign,
     paddingLeft: 3 + (n === "left" ? o : 0),
     paddingRight: 3 + (n === "right" ? o : 0),
     borderTop: M4(md(e, "top")) ?? t.defaultBorder,
@@ -224,18 +218,13 @@ function RN(e) {
     (e = ys(e)),
     {
       whiteSpace: e != null && e.wrap ? "pre-wrap" : "nowrap",
-      overflowWrap: e != null && e.wrap ? "anywhere" : void 0,
+      overflowWrap: e != null && e.wrap ? "anywhere" : undefined,
     }
   );
 }
 function hB(e) {
   if (((e = ys(e)), !(e != null && e.borders))) {
-    const t =
-      (e == null ? void 0 : e.border) === "all"
-        ? 2
-        : (e == null ? void 0 : e.border) === "none"
-          ? 0
-          : 1;
+    const t = e?.border === "all" ? 2 : e?.border === "none" ? 0 : 1;
     return { horizontal: t, vertical: t };
   }
   const r = (t) => {
@@ -349,7 +338,7 @@ function Ql(e) {
     ? `[${e.map(Ql).join(",")}]`
     : ah(e)
       ? `{${Object.keys(e)
-          .filter((r) => e[r] !== void 0)
+          .filter((r) => e[r] !== undefined)
           .sort()
           .map((r) => `${JSON.stringify(r)}:${Ql(e[r])}`)
           .join(",")}}`
@@ -378,7 +367,6 @@ function mB(e) {
   };
 }
 function ZS(e) {
-  var t;
   (ah(e) || ho("Named style definition must be an object."),
     mg(
       e,
@@ -390,24 +378,23 @@ function ZS(e) {
         "A named style definition needs supported formatting without another binding.",
       ));
   const r = { base: oh(e.base) };
-  e.fontRole !== void 0 &&
+  e.fontRole !== undefined &&
     (["body", "heading"].includes(e.fontRole) ||
       ho("Choose Body or Heading theme font."),
     (r.fontRole = e.fontRole));
   for (const n of ["fillRole", "colorRole"])
-    e[n] !== void 0 &&
+    e[n] !== undefined &&
       (_g.includes(e[n]) || ho("Choose a supported theme color role."),
       (r[n] = e[n]));
-  if (e.borderRoles !== void 0) {
+  if (e.borderRoles !== undefined) {
     (ah(e.borderRoles) || ho("Border color roles must be an object."),
       mg(e.borderRoles, s0, "border role"));
     const n = {};
     for (const o of s0)
-      e.borderRoles[o] !== void 0 &&
+      e.borderRoles[o] !== undefined &&
         (_g.includes(e.borderRoles[o]) ||
           ho("Choose a supported border color role."),
-        (!md(r.base, o) ||
-          ((t = md(r.base, o)) == null ? void 0 : t.style) === "none") &&
+        (!md(r.base, o) || md(r.base, o)?.style === "none") &&
           ho("Add a border line before assigning its theme color."),
         (n[o] = e.borderRoles[o]));
     Object.keys(n).length && (r.borderRoles = n);
@@ -421,7 +408,7 @@ function IN(e) {
       ["namespace", "theme", "styles", "missingTheme"],
       "workbook style catalog",
     ),
-    e.missingTheme !== void 0 &&
+    e.missingTheme !== undefined &&
       e.missingTheme !== true &&
       ho("Invalid missing theme flag."),
     (!Array.isArray(e.styles) || e.styles.length > YJ.maxStyles) &&
@@ -441,8 +428,8 @@ function IN(e) {
         { id: d, name: u, definition: ZS(s.definition) }
       );
     }),
-    o = e.theme === void 0 || e.missingTheme === true,
-    a = e.theme === void 0 ? Ac(wE) : mB(e.theme);
+    o = e.theme === undefined || e.missingTheme === true,
+    a = e.theme === undefined ? Ac(wE) : mB(e.theme);
   return (
     o &&
       Ql(a) !== Ql(wE) &&
@@ -531,7 +518,7 @@ function xE(e, r) {
     ho(
       "This style belongs to another workbook. Import or remap its style catalog before pasting the binding.",
     );
-  const t = e == null ? void 0 : e.styles.find((n) => n.id === r.styleId);
+  const t = e?.styles.find((n) => n.id === r.styleId);
   return {
     namespace: r.namespace,
     styleId: r.styleId,
@@ -542,9 +529,9 @@ function xE(e, r) {
 }
 function JJ(e, r) {
   var o;
-  const t = e === void 0 ? void 0 : IN(e);
+  const t = e === undefined ? undefined : IN(e);
   t ? (r.styleCatalog = t) : delete r.styleCatalog;
-  const n = ah(e) && e.theme === void 0;
+  const n = ah(e) && e.theme === undefined;
   for (const a of r.sheets)
     for (const s of qj(a.cells) ? Object.values(a.cells) : []) {
       if (!((o = s.style) != null && o.binding)) continue;
@@ -570,9 +557,9 @@ function _N(e, r) {
 }
 function KS(e) {
   var r, t;
-  if ((r = e == null ? void 0 : e.binding) != null && r.missing)
+  if ((r = e?.binding) != null && r.missing)
     return "Named style is missing. Default formatting and direct cell formatting are shown.";
-  if ((t = e == null ? void 0 : e.binding) != null && t.themeFallback)
+  if ((t = e?.binding) != null && t.themeFallback)
     return "Workbook theme is missing. The Office theme is shown.";
 }
 function bB(e) {
@@ -592,18 +579,13 @@ function QJ(e, r) {
   return s0.some((t) => Ql(md(e, t)) !== Ql(md(r, t)));
 }
 function tQ(e, r) {
-  var s;
   const t = Rp(r, "Style namespace", 100),
     n = Ac(e),
-    o = (s = n.styleCatalog) == null ? void 0 : s.namespace;
+    o = n.styleCatalog?.namespace;
   if (!o) return n;
   n.styleCatalog.namespace = t;
   const a = (d) => {
-    var u, l;
-    ((l = (u = d == null ? void 0 : d.style) == null ? void 0 : u.binding) ==
-    null
-      ? void 0
-      : l.namespace) === o && (d.style.binding.namespace = t);
+    d?.style?.binding?.namespace === o && (d.style.binding.namespace = t);
   };
   for (const d of n.sheets) for (const u of Object.values(d.cells)) a(u);
   for (const d of n.events)
@@ -625,7 +607,7 @@ function rQ(e, r) {
     throw new Error(
       "Choose a valid source, 1–10,000 rows or columns, and a destination within the worksheet.",
     );
-  if (e.permutation !== void 0) {
+  if (e.permutation !== undefined) {
     if (
       !Array.isArray(e.permutation) ||
       e.permutation.length !== e.count ||
@@ -649,14 +631,14 @@ function Jf(e, r) {
     return e >= r.index && e < r.index + r.count
       ? r.permutation[e - r.index]
       : e;
-  const { index: t, count: n, moveBefore: o } = r,
-    a = o < t ? o : o - n;
-  return e >= t && e < t + n
-    ? a + e - t
-    : o < t && e >= o && e < t
-      ? e + n
-      : o > t && e >= t + n && e < o
-        ? e - n
+  const { index, count, moveBefore } = r,
+    a = moveBefore < index ? moveBefore : moveBefore - count;
+  return e >= index && e < index + count
+    ? a + e - index
+    : moveBefore < index && e >= moveBefore && e < index
+      ? e + count
+      : moveBefore > index && e >= index + count && e < moveBefore
+        ? e - count
         : e;
 }
 function wB(e, r, t) {
@@ -764,7 +746,7 @@ function w1(e = "Reviewer") {
 }
 function fx(e = {}, r) {
   const t =
-    e.timestamp === void 0
+    e.timestamp === undefined
       ? new Date(Math.max(Date.now(), r ? Date.parse(r) : 0)).toISOString()
       : Lv(e.timestamp);
   return (
@@ -773,34 +755,28 @@ function fx(e = {}, r) {
   );
 }
 function aQ(e, r) {
-  var s;
   const t = new Map(e.sheets.map((d) => [d.id, d]));
   let n = false;
-  const o =
-      (s = e.reviewThreads) == null
-        ? void 0
-        : s.map((d) => {
-            if (d.orphaned) return d;
-            const u = t.get(d.anchor.sheetId);
-            if (!u) {
-              n = true;
-              const l = fx({ timestamp: r }, d.updatedAt);
-              return {
-                ...d,
-                updatedAt: l,
-                orphaned: { reason: "worksheet-deleted", createdAt: l },
-              };
-            }
-            return u.name !== d.anchor.sheetName
-              ? ((n = true),
-                { ...d, anchor: { ...d.anchor, sheetName: u.name } })
-              : d;
-          }),
+  const o = e.reviewThreads?.map((d) => {
+      if (d.orphaned) return d;
+      const u = t.get(d.anchor.sheetId);
+      if (!u) {
+        n = true;
+        const l = fx({ timestamp: r }, d.updatedAt);
+        return {
+          ...d,
+          updatedAt: l,
+          orphaned: { reason: "worksheet-deleted", createdAt: l },
+        };
+      }
+      return u.name !== d.anchor.sheetName
+        ? ((n = true), { ...d, anchor: { ...d.anchor, sheetName: u.name } })
+        : d;
+    }),
     a = e.sheets.map((d) => {
-      var l;
       let u;
       for (const [c, h] of Object.entries(d.cells))
-        ((l = h.hyperlink) == null ? void 0 : l.kind) !== "internal" ||
+        h.hyperlink?.kind !== "internal" ||
           t.has(h.hyperlink.sheetId) ||
           (u ?? (u = { ...d.cells }),
           (u[c] = { ...h }),
@@ -828,10 +804,9 @@ function uQ(e, r) {
       ...t,
       cells: Object.fromEntries(
         Object.entries(t.cells).map(([n, o]) => {
-          var a;
           return [
             n,
-            ((a = o.hyperlink) == null ? void 0 : a.kind) === "internal"
+            o.hyperlink?.kind === "internal"
               ? {
                   ...o,
                   hyperlink: {
@@ -891,14 +866,9 @@ function hQ(e, r) {
 function Pv(e) {
   return [
     "top-left",
-    ...((e == null ? void 0 : e.vertical) !== void 0 ? ["top-right"] : []),
-    ...((e == null ? void 0 : e.horizontal) !== void 0
-      ? [
-          "bottom-left",
-          ...((e == null ? void 0 : e.vertical) !== void 0
-            ? ["bottom-right"]
-            : []),
-        ]
+    ...(e?.vertical !== undefined ? ["top-right"] : []),
+    ...(e?.horizontal !== undefined
+      ? ["bottom-left", ...(e?.vertical !== undefined ? ["bottom-right"] : [])]
       : []),
   ];
 }
@@ -908,7 +878,7 @@ function aD(e, r, t) {
   );
 }
 function AB(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !e ||
     typeof e != "object" ||
@@ -923,10 +893,10 @@ function AB(e, r) {
       "Split panes require divider percentages and valid row/column anchors.",
     );
   const t = e;
-  if (t.horizontal === void 0 && t.vertical === void 0)
+  if (t.horizontal === undefined && t.vertical === undefined)
     throw Error("Choose a horizontal split, vertical split, or both.");
   for (const n of [t.horizontal, t.vertical])
-    if (n !== void 0 && (!Number.isFinite(n) || n < 20 || n > 80))
+    if (n !== undefined && (!Number.isFinite(n) || n < 20 || n > 80))
       throw Error("Split dividers must be between 20% and 80%.");
   if (
     !Number.isInteger(t.row) ||
@@ -942,8 +912,8 @@ function AB(e, r) {
   return {
     row: t.row,
     col: t.col,
-    ...(t.horizontal !== void 0 ? { horizontal: t.horizontal } : {}),
-    ...(t.vertical !== void 0 ? { vertical: t.vertical } : {}),
+    ...(t.horizontal !== undefined ? { horizontal: t.horizontal } : {}),
+    ...(t.vertical !== undefined ? { vertical: t.vertical } : {}),
   };
 }
 function EE(e, r) {
@@ -962,13 +932,15 @@ function EE(e, r) {
 }
 function mQ(e, r) {
   const t =
-      e.defaultRowHeight === void 0 ? void 0 : EE(e.defaultRowHeight, "row"),
+      e.defaultRowHeight === undefined
+        ? undefined
+        : EE(e.defaultRowHeight, "row"),
     n =
-      e.defaultColumnWidth === void 0
-        ? void 0
+      e.defaultColumnWidth === undefined
+        ? undefined
         : EE(e.defaultColumnWidth, "column");
-  (t !== void 0 && (r.defaultRowHeight = t),
-    n !== void 0 && (r.defaultColumnWidth = n));
+  (t !== undefined && (r.defaultRowHeight = t),
+    n !== undefined && (r.defaultColumnWidth = n));
 }
 function Dg(e) {
   return e.defaultRowHeight ?? lB;
@@ -977,16 +949,14 @@ function Og(e) {
   return e.defaultColumnWidth ?? sB;
 }
 function gg(e, r) {
-  var t;
   if (!Number.isInteger(r) || r < 0 || r >= e.rowCount)
     throw Error("Row index is outside the worksheet.");
-  return ((t = e.rowHeights) == null ? void 0 : t[r]) ?? Dg(e);
+  return e.rowHeights?.[r] ?? Dg(e);
 }
 function Ip(e, r) {
-  var t;
   if (!Number.isInteger(r) || r < 0 || r >= e.colCount)
     throw Error("Column index is outside the worksheet.");
-  return ((t = e.columnWidths) == null ? void 0 : t[r]) ?? Og(e);
+  return e.columnWidths?.[r] ?? Og(e);
 }
 function gQ(e) {
   return Object.freeze({
@@ -1011,7 +981,7 @@ function bQ(e) {
     throw Error("Axis capacity must be a nonnegative integer.");
 }
 function Ad(e, r) {
-  if ((bQ(r), e === void 0)) return [];
+  if ((bQ(r), e === undefined)) return [];
   if (!Array.isArray(e) || e.length > x1.maxIntervalsPerAxis)
     throw Error("Hidden indices require at most 10,000 intervals per axis.");
   const t = e
@@ -1124,7 +1094,7 @@ function Ow(e, r) {
   });
 }
 function TB(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
-  if (e.outlineGroups === void 0) return;
+  if (e.outlineGroups === undefined) return;
   if (!Array.isArray(e.outlineGroups) || e.outlineGroups.length > kB.maxGroups)
     throw Error("A worksheet supports at most 1,000 outline groups.");
   const n = new Set(),
@@ -1176,7 +1146,7 @@ function cn(e, r) {
       ...Ad(r === "row" ? e.hiddenRows : e.hiddenCols, t),
       ...(e.outlineGroups ?? [])
         .filter((a) => a.axis === r && a.collapsed)
-        .map(({ start: a, end: s }) => ({ start: a, end: s })),
+        .map(({ start, end }) => ({ start, end })),
     ].sort((a, s) => a.start - s.start || a.end - s.end),
     o = [];
   for (const a of n) {
@@ -1188,10 +1158,7 @@ function cn(e, r) {
   return Ad(o, t);
 }
 function RB(e) {
-  var r;
-  return (r = e.outlineGroups) == null
-    ? void 0
-    : r.map((t) => ({ ...t, id: crypto.randomUUID() }));
+  return e.outlineGroups?.map((t) => ({ ...t, id: crypto.randomUUID() }));
 }
 function TQ(e, r, t, n, o) {
   F1(r);
@@ -1261,7 +1228,7 @@ function e5(e) {
   return e;
 }
 function px(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !QS(e) ||
     Object.keys(e).some(
@@ -1282,10 +1249,10 @@ function px(e, r) {
     throw new Error("Workbook modified time cannot precede its creation time.");
   const o = { createdAt: t, modifiedAt: n };
   if (
-    (e.engagement !== void 0 &&
+    (e.engagement !== undefined &&
       (o.engagement = uf(e.engagement, "Engagement", 200)),
-    e.period !== void 0 && (o.period = uf(e.period, "Period", 100)),
-    e.template !== void 0)
+    e.period !== undefined && (o.period = uf(e.period, "Period", 100)),
+    e.template !== undefined)
   ) {
     const a = e.template;
     if (
@@ -1302,7 +1269,7 @@ function px(e, r) {
       ) ||
       !Number.isSafeInteger(a.version) ||
       Number(a.version) < 1 ||
-      (a.sourceRevision !== void 0 &&
+      (a.sourceRevision !== undefined &&
         (!Number.isSafeInteger(a.sourceRevision) ||
           Number(a.sourceRevision) < 0))
     )
@@ -1316,7 +1283,7 @@ function px(e, r) {
         "Template source workbook ID",
         100,
       ),
-      ...(a.sourceRevision !== void 0
+      ...(a.sourceRevision !== undefined
         ? { sourceRevision: Number(a.sourceRevision) }
         : {}),
     };
@@ -1328,14 +1295,9 @@ function mx(e = {}, r = new Date().toISOString()) {
   return (px({ createdAt: r, modifiedAt: r, ...e }, t), t.metadata);
 }
 function gx(e, r = new Date().toISOString()) {
-  var o, a;
   const t = { ...e };
   e5(r);
-  const n = [
-    r,
-    ((o = e.metadata) == null ? void 0 : o.createdAt) ?? r,
-    ((a = e.metadata) == null ? void 0 : a.modifiedAt) ?? r,
-  ]
+  const n = [r, e.metadata?.createdAt ?? r, e.metadata?.modifiedAt ?? r]
     .sort()
     .at(-1);
   return (px(e.metadata ? { ...e.metadata, modifiedAt: n } : mx({}, r), t), t);
@@ -1456,7 +1418,8 @@ function vx(e, r) {
   const t = r.getSpillEntries(e.id);
   if (!t.length) return e.cells;
   const n = { ...e.cells };
-  for (const { address: o } of t) n[o] = { ...e.cells[o], raw: r(e.id, o) };
+  for (const { address } of t)
+    n[address] = { ...e.cells[address], raw: r(e.id, address) };
   return n;
 }
 const BB = [
@@ -1513,12 +1476,12 @@ function jn(e) {
     al("This sheet is protected. Unprotect it before changing its contents.");
 }
 function vQ(e, r, t, n = {}) {
-  if (n.readOnly !== void 0 && typeof n.readOnly != "boolean")
+  if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = n.expectedSnapshot;
   if (
-    o !== void 0 &&
+    o !== undefined &&
     (!o ||
       o.workbookId !== e.id ||
       o.revision !== e.revision ||
@@ -1548,16 +1511,16 @@ function vQ(e, r, t, n = {}) {
   )
     throw Error("Choose valid worksheet size settings.");
   for (const l of [t.resetRowOverrides, t.resetColumnOverrides])
-    if (l !== void 0 && typeof l != "boolean")
+    if (l !== undefined && typeof l != "boolean")
       throw Error("Reset choices must be boolean.");
-  const s = t.rowHeight === void 0 ? void 0 : EE(t.rowHeight, "row"),
-    d = t.columnWidth === void 0 ? void 0 : EE(t.columnWidth, "column"),
+  const s = t.rowHeight === undefined ? undefined : EE(t.rowHeight, "row"),
+    d = t.columnWidth === undefined ? undefined : EE(t.columnWidth, "column"),
     u = { ...a };
   return (
-    s !== void 0 &&
+    s !== undefined &&
       s !== Dg(a) &&
       (s === lB ? delete u.defaultRowHeight : (u.defaultRowHeight = s)),
-    d !== void 0 &&
+    d !== undefined &&
       d !== Og(a) &&
       (d === sB ? delete u.defaultColumnWidth : (u.defaultColumnWidth = d)),
     t.resetRowOverrides &&
@@ -1654,7 +1617,7 @@ function BN(e) {
     (o === '"' && (t = !t),
       o === ";" && !t ? r.push("") : (r[r.length - 1] += o));
   }
-  return t || r.length > 4 ? void 0 : r;
+  return t || r.length > 4 ? undefined : r;
 }
 function LN(e) {
   const r = {
@@ -1715,7 +1678,7 @@ function $B(e) {
   const r = BN(e);
   if (!r) return;
   const t = LN(r[0]);
-  return t != null && t.hasNumber ? t.maxDecimals : void 0;
+  return t != null && t.hasNumber ? t.maxDecimals : undefined;
 }
 function zB(e, r) {
   const t = BN(r);
@@ -1813,13 +1776,11 @@ function KQ(e) {
   }
   const o = t.filter((u) => u.kind !== "literal");
   o.forEach((u, l) => {
-    var c, h, f;
     u.kind === "month" &&
       u.text.length <= 2 &&
-      (((c = o[l - 1]) == null ? void 0 : c.kind) === "hour" ||
-        (((h = o[l - 1]) == null ? void 0 : h.kind) === "elapsed" &&
-          o[l - 1].text.startsWith("h")) ||
-        ((f = o[l + 1]) == null ? void 0 : f.kind) === "second") &&
+      (o[l - 1]?.kind === "hour" ||
+        (o[l - 1]?.kind === "elapsed" && o[l - 1].text.startsWith("h")) ||
+        o[l + 1]?.kind === "second") &&
       (u.kind = "minute");
   });
   const a = o.some((u) => ["year", "month", "day"].includes(u.kind)),
@@ -1860,7 +1821,6 @@ function KQ(e) {
   );
 }
 function YQ(e) {
-  var a;
   let r = "",
     t = 1,
     n = false;
@@ -1878,7 +1838,7 @@ function YQ(e) {
     else if (/^[0#]/.test(d)) {
       n && Si("Only one numeric field per custom section is supported.");
       const u = /^[0#.,]+/.exec(d)[0],
-        l = ((a = /,+$/.exec(u)) == null ? void 0 : a[0]) ?? "";
+        l = /,+$/.exec(u)?.[0] ?? "";
       (l.length > 2 &&
         Si("Custom display scaling supports at most two trailing commas."),
         (t = 1e3 ** l.length),
@@ -1916,7 +1876,7 @@ function Bw(e) {
   let t;
   const n = BN(e);
   n || Si("A format has at most four sections and must close quoted literals.");
-  const o = n.length === 1 ? KQ(e) : void 0;
+  const o = n.length === 1 ? KQ(e) : undefined;
   return (
     o
       ? (t = o)

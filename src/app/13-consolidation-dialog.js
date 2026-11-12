@@ -3,7 +3,20 @@ import ne from "react";
 import { X } from "lucide-react";
 import { hr } from "./01-core-schemas-and-hashing.js";
 import { Mt } from "./02-financial-functions.js";
-import { $a, CC, DR, Ku, Op, Ta, Vn, ct, k1, on, rn, ut } from "./03-workbook-model.js";
+import {
+  $a,
+  CC,
+  DR,
+  Ku,
+  Op,
+  Ta,
+  Vn,
+  ct,
+  k1,
+  on,
+  rn,
+  ut,
+} from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { H1 } from "./07-xlsx-archive-reader.js";
 import { yh } from "./09-workbook-links.js";
@@ -214,7 +227,7 @@ function tce(e, r, t = {}) {
       try {
         const s = ez(e, a, t),
           d = n.review.sources.find((u) => u.sourceId === a.id);
-        s.fingerprint !== (d == null ? void 0 : d.fingerprint) &&
+        s.fingerprint !== d?.fingerprint &&
           o.push(
             `${a.id}: source data, context, layout or formula dependencies changed.`,
           );
@@ -235,24 +248,14 @@ function rce(e, r) {
     setTimeout(() => URL.revokeObjectURL(t), 5e3));
 }
 function iz(e, r) {
-  var t, n;
   try {
-    const o = e == null ? void 0 : e.sheets.find((s) => s.id === r.sheetId);
+    const o = e?.sheets.find((s) => s.id === r.sheetId);
     if (!o) return [];
-    const a = ct(
-      ((n =
-        (t = o.tables) == null ? void 0 : t.find((s) => s.id === r.tableId)) ==
-      null
-        ? void 0
-        : n.range) ?? r.range,
-    );
+    const a = ct(o.tables?.find((s) => s.id === r.tableId)?.range ?? r.range);
     return a.lastCol - a.firstCol >= 50
       ? []
       : Array.from({ length: a.lastCol - a.firstCol + 1 }, (s, d) => {
-          var u;
-          return (u = o.cells[`${ut(a.firstCol + d)}${a.firstRow + 1}`]) == null
-            ? void 0
-            : u.raw;
+          return o.cells[`${ut(a.firstCol + d)}${a.firstRow + 1}`]?.raw;
         }).filter((s) => typeof s == "string" && !!s);
   } catch {
     return [];
@@ -282,20 +285,20 @@ function Z4(e, r, t, n) {
   }
   return o;
 }
-function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
-  const { text: o, language: a } = Dr(),
-    s = e.sheets.find((l) => l.id === r),
-    d = s != null && s.consolidation ? JSON.stringify([e, t]) : "",
+function nce({ workbook, sheetId, options = {}, onReview }) {
+  const { text, language } = Dr(),
+    s = workbook.sheets.find((l) => l.id === sheetId),
+    d = s != null && s.consolidation ? JSON.stringify([workbook, options]) : "",
     u = ne.useMemo(
-      () => (s != null && s.consolidation ? tce(e, s, t) : null),
-      [d, r],
+      () => (s != null && s.consolidation ? tce(workbook, s, options) : null),
+      [d, sheetId],
     );
   return u
     ? i.jsxs("div", {
         className: `lg-consolidation-status ${u.state}`,
         role: "status",
-        "aria-label": o("Consolidation source status"),
-        lang: a("Consolidation source status"),
+        "aria-label": text("Consolidation source status"),
+        lang: language("Consolidation source status"),
         "data-ui-label": "Consolidation source status",
         children: [
           i.jsxs("span", {
@@ -315,7 +318,7 @@ function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
             ],
           }),
           i.jsx("button", {
-            onClick: n,
+            onClick: onReview,
             children: i.jsx(M, { children: "Review / refresh" }),
           }),
         ],
@@ -324,7 +327,7 @@ function nce({ workbook: e, sheetId: r, options: t = {}, onReview: n }) {
 }
 function ice(e) {
   var W;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useRef(null),
     a = ne.useRef(null),
@@ -344,15 +347,10 @@ function ice(e) {
     ]);
   d.current = c;
   const [h, f] = ne.useState(() => {
-      var de, he;
       const K =
         e.initialDefinition ??
-        ((he =
-          (de = e.workbook.sheets.find((Se) => Se.id === e.sheetId)) == null
-            ? void 0
-            : de.consolidation) == null
-          ? void 0
-          : he.definition);
+        e.workbook.sheets.find((Se) => Se.id === e.sheetId)?.consolidation
+          ?.definition;
       if (K) return structuredClone(K);
       const te = {
           engine: CC,
@@ -405,7 +403,7 @@ function ice(e) {
       approvedWorkbooks: _,
     },
     T = JSON.stringify([c, h, p, C]),
-    N = (O == null ? void 0 : O.stamp) === T,
+    N = O?.stamp === T,
     R = N ? O.plan.review : null,
     L = [
       {
@@ -416,14 +414,12 @@ function ice(e) {
       ..._,
     ];
   (ne.useEffect(() => {
-    var te, ae;
+    var ae;
     u.current = true;
     const K = document.activeElement;
     return (
-      (ae =
-        (te = a.current) == null
-          ? void 0
-          : te.querySelector("input,select,button")) == null || ae.focus(),
+      (ae = a.current?.querySelector("input,select,button")) == null ||
+        ae.focus(),
       () => {
         ((u.current = false),
           s.current++,
@@ -434,7 +430,8 @@ function ice(e) {
     ne.useEffect(() => {
       var K, te;
       N &&
-        ((te = (K = o.current) == null ? void 0 : K.scrollIntoView) == null ||
+        ((te = (K = o.current) == null ? undefined : K.scrollIntoView) ==
+          null ||
           te.call(K, { block: "start" }));
     }, [O, N]));
   const $ = (K) => {
@@ -536,9 +533,9 @@ function ice(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close consolidation"),
+              "aria-label": text("Close consolidation"),
               onClick: e.onClose,
-              lang: t("Close consolidation"),
+              lang: language("Close consolidation"),
               "data-ui-label": "Close consolidation",
               children: i.jsx(X, { size: 20 }),
             }),
@@ -549,21 +546,21 @@ function ice(e) {
           children: [
             i.jsxs("section", {
               className: "lg-consolidation-settings",
-              "aria-label": r("Consolidation settings"),
-              lang: t("Consolidation settings"),
+              "aria-label": text("Consolidation settings"),
+              lang: language("Consolidation settings"),
               "data-ui-label": "Consolidation settings",
               children: [
                 i.jsxs("label", {
                   children: [
                     i.jsx(M, { children: "Output worksheet" }),
                     i.jsx("input", {
-                      "aria-label": r("Output worksheet"),
+                      "aria-label": text("Output worksheet"),
                       value: p,
                       maxLength: 31,
                       onChange: (K) => {
                         (m(K.target.value), j(null));
                       },
-                      lang: t("Output worksheet"),
+                      lang: language("Output worksheet"),
                       "data-ui-label": "Output worksheet",
                     }),
                   ],
@@ -589,7 +586,7 @@ function ice(e) {
                   children: [
                     i.jsx(M, { children: "Category levels" }),
                     i.jsx("select", {
-                      "aria-label": r("Category levels"),
+                      "aria-label": text("Category levels"),
                       value: h.categoryLabels.length,
                       onChange: (K) => {
                         const te = Number(K.target.value),
@@ -609,7 +606,7 @@ function ice(e) {
                           })),
                         });
                       },
-                      lang: t("Category levels"),
+                      lang: language("Category levels"),
                       "data-ui-label": "Category levels",
                       children: [1, 2, 3].map((K) =>
                         i.jsx("option", { children: K }, K),
@@ -694,23 +691,21 @@ function ice(e) {
               }),
             }),
             i.jsxs("section", {
-              "aria-label": r("Consolidation sources"),
-              lang: t("Consolidation sources"),
+              "aria-label": text("Consolidation sources"),
+              lang: language("Consolidation sources"),
               "data-ui-label": "Consolidation sources",
               children: [
                 h.sources.map((K, te) => {
-                  var ce, ge;
+                  var ce;
                   const ae = L.find((se) => se.workbook.id === K.workbookId),
-                    oe = ae == null ? void 0 : ae.workbook,
+                    oe = ae?.workbook,
                     de =
-                      (oe == null
-                        ? void 0
-                        : oe.sheets.filter(
-                            (se) =>
-                              ae.allowedSheetIds.includes(se.id) &&
-                              ((!se.hidden && !se.veryHidden) ||
-                                (v && ae.includeHidden)),
-                          )) ?? [],
+                      oe?.sheets.filter(
+                        (se) =>
+                          ae.allowedSheetIds.includes(se.id) &&
+                          ((!se.hidden && !se.veryHidden) ||
+                            (v && ae.includeHidden)),
+                      ) ?? [],
                     he = de.find((se) => se.id === K.sheetId),
                     Se = he ? iz(oe, K) : [],
                     le = (se, we, Ee) =>
@@ -860,7 +855,7 @@ function ice(e) {
                                   "aria-label": `Source ${te + 1} Source type`,
                                   value: K.tableId ?? "",
                                   onChange: (se) => {
-                                    const { tableId: we, ...Ee } = K;
+                                    const { tableId, ...Ee } = K;
                                     U(te, {
                                       ...Ee,
                                       ...(se.target.value
@@ -875,25 +870,20 @@ function ice(e) {
                                     }),
                                     K.tableId &&
                                       !(
-                                        (ce =
-                                          he == null ? void 0 : he.tables) !=
-                                          null &&
+                                        (ce = he?.tables) != null &&
                                         ce.some((se) => se.id === K.tableId)
                                       ) &&
                                       i.jsx("option", {
                                         value: K.tableId,
                                         children: "Missing table",
                                       }),
-                                    (ge = he == null ? void 0 : he.tables) ==
-                                    null
-                                      ? void 0
-                                      : ge.map((se) =>
-                                          i.jsx(
-                                            "option",
-                                            { value: se.id, children: se.name },
-                                            se.id,
-                                          ),
-                                        ),
+                                    he?.tables?.map((se) =>
+                                      i.jsx(
+                                        "option",
+                                        { value: se.id, children: se.name },
+                                        se.id,
+                                      ),
+                                    ),
                                   ],
                                 }),
                               ],
@@ -1068,14 +1058,12 @@ function ice(e) {
                       i.jsx("input", {
                         type: "file",
                         accept: ".json,.xlsx",
-                        "aria-label": r("Inspect consolidation workbook"),
+                        "aria-label": text("Inspect consolidation workbook"),
                         disabled: A || _.length >= 8,
                         onChange: (K) => {
-                          var te;
-                          (H((te = K.target.files) == null ? void 0 : te[0]),
-                            (K.target.value = ""));
+                          (H(K.target.files?.[0]), (K.target.value = ""));
                         },
-                        lang: t("Inspect consolidation workbook"),
+                        lang: language("Inspect consolidation workbook"),
                         "data-ui-label": "Inspect consolidation workbook",
                       }),
                     ],
@@ -1085,10 +1073,10 @@ function ice(e) {
                       role: "status",
                       children: i.jsx(M, { children: "Inspecting workbook…" }),
                     }),
-                  (w == null ? void 0 : w.stamp) === c &&
+                  w?.stamp === c &&
                     i.jsxs("div", {
-                      "aria-label": r("Pending workbook approval"),
-                      lang: t("Pending workbook approval"),
+                      "aria-label": text("Pending workbook approval"),
+                      lang: language("Pending workbook approval"),
                       "data-ui-label": "Pending workbook approval",
                       children: [
                         i.jsx("strong", { children: w.workbook.name }),
@@ -1173,9 +1161,9 @@ function ice(e) {
             R &&
               i.jsxs("section", {
                 ref: o,
-                "aria-label": r("Consolidation preview"),
+                "aria-label": text("Consolidation preview"),
                 className: "lg-consolidation-preview",
-                lang: t("Consolidation preview"),
+                lang: language("Consolidation preview"),
                 "data-ui-label": "Consolidation preview",
                 children: [
                   i.jsx("h3", {
@@ -1559,7 +1547,7 @@ const qf = (e) => e.toLowerCase(),
           "The result is not finite. Use DIVIDE for a blank or zero denominator.",
         );
 function oce(e, r, t = false) {
-  if (t && (e === null || r === null)) return e === r ? 0 : void 0;
+  if (t && (e === null || r === null)) return e === r ? 0 : undefined;
   if (e === null && r === null) return 0;
   if (
     (e === null &&

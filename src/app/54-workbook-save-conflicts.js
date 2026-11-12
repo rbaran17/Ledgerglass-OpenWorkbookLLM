@@ -73,7 +73,7 @@ function yH(e, r, t = {}) {
       maxBytes: t.maxBytes,
       maxCheckpoints: t.maxCheckpoints,
     }),
-    o = t.locks === void 0 ? j2e() : t.locks,
+    o = t.locks === undefined ? j2e() : t.locks,
     a = t.lockTimeoutMs ?? 5e3,
     s = oN(r);
   if (!Number.isInteger(a) || a < 1 || a > 6e4)
@@ -93,7 +93,7 @@ function yH(e, r, t = {}) {
         w,
         E;
       const A = () => {
-          (E !== void 0 && clearTimeout(E),
+          (E !== undefined && clearTimeout(E),
             l == null || l.removeEventListener("abort", F));
         },
         k = (j) => {
@@ -135,7 +135,7 @@ function yH(e, r, t = {}) {
           );
           return;
         }
-        (l == null || l.addEventListener("abort", F, { once: !0 }),
+        (l == null || l.addEventListener("abort", F, { once: true }),
           (E = setTimeout(() => k(I()), a)));
         const j = o.request(s, { mode: "exclusive", signal: p.signal }, (z) => {
           if (!v || p.signal.aborted)
@@ -148,15 +148,15 @@ function yH(e, r, t = {}) {
             throw f(
               "The browser did not grant the required exclusive save lock.",
             );
-          ((g = !0), A());
+          ((g = true), A());
           try {
             return u();
           } catch (V) {
-            throw ((b = !0), (y = V), V);
+            throw ((b = true), (y = V), V);
           }
         });
         Promise.resolve(j).then((z) => {
-          ((v = !1), A(), c(z));
+          ((v = false), A(), c(z));
         }, O);
       } catch (j) {
         O(j);
@@ -264,14 +264,14 @@ const F2e = {
         : (JSON.stringify(e) ?? "undefined"),
   oE = (e, r = 220) => (e.length > r ? `${e.slice(0, r)}…` : e);
 function _3(e, r = 0) {
-  if (e === void 0) return "Not set";
+  if (e === undefined) return "Not set";
   if (e === null || e === "") return "Blank";
   if (typeof e == "boolean") return e ? "Yes" : "No";
   if (typeof e == "string")
     return e.startsWith("data:image/")
       ? "Embedded image"
       : /^\d{4}-\d{2}-\d{2}T/.test(e) && Number.isFinite(Date.parse(e))
-        ? new Date(e).toLocaleString(void 0, {
+        ? new Date(e).toLocaleString(undefined, {
             year: "numeric",
             month: "short",
             day: "numeric",
@@ -331,8 +331,8 @@ function L2e(e) {
         if (
           s < 3 &&
           (wp(o) || wp(a)) &&
-          (o === void 0 || wp(o)) &&
-          (a === void 0 || wp(a))
+          (o === undefined || wp(o)) &&
+          (a === undefined || wp(a))
         ) {
           const d = wp(o) ? o : {},
             u = wp(a) ? a : {},
@@ -348,7 +348,7 @@ function L2e(e) {
   return (t(e.path.split("."), e.before, e.after, 0), r);
 }
 function P2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState(null),
     [a, s] = ne.useState(null),
     [d, u] = ne.useState(""),
@@ -361,7 +361,7 @@ function P2e(e) {
         const w = e.loadSaved();
         (o(w),
           s(
-            (w == null ? void 0 : w.workbook.id) === e.workbook.id
+            w?.workbook.id === e.workbook.id
               ? fT(w.workbook, e.workbook)
               : null,
           ),
@@ -382,26 +382,19 @@ function P2e(e) {
     };
   (ne.useEffect(m, [e.workbook]),
     ne.useEffect(() => {
-      var E, A;
+      var A;
       const w = document.activeElement;
       return (
-        (A = (E = p.current) == null ? void 0 : E.querySelector("button")) ==
-          null || A.focus(),
+        (A = p.current?.querySelector("button")) == null || A.focus(),
         () => {
           w != null && w.isConnected && w.focus();
         }
       );
     }, []));
   const v = (w) => {
-      var E, A;
       return (
-        ((E = e.workbook.sheets.find((k) => k.id === w)) == null
-          ? void 0
-          : E.name) ??
-        ((A = n == null ? void 0 : n.workbook.sheets.find((k) => k.id === w)) ==
-        null
-          ? void 0
-          : A.name) ??
+        e.workbook.sheets.find((k) => k.id === w)?.name ??
+        n?.workbook.sheets.find((k) => k.id === w)?.name ??
         "Removed worksheet"
       );
     },
@@ -423,20 +416,17 @@ function P2e(e) {
       className: "wm-dialog pc-dialog",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": r("Workbook save conflict"),
+      "aria-label": text("Workbook save conflict"),
       onKeyDown: (w) => {
-        var E;
         if (
           (w.key === "Escape" &&
             (w.preventDefault(), w.stopPropagation(), e.onClose()),
           w.key === "Tab")
         ) {
           const A = [
-              ...(((E = p.current) == null
-                ? void 0
-                : E.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
-                  )) ?? []),
+              ...(p.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
+              ) ?? []),
             ],
             k = A[0],
             F = A.at(-1);
@@ -447,7 +437,7 @@ function P2e(e) {
               (w.preventDefault(), k == null || k.focus());
         }
       },
-      lang: t("Workbook save conflict"),
+      lang: language("Workbook save conflict"),
       "data-ui-label": "Workbook save conflict",
       children: [
         i.jsxs("header", {
@@ -456,9 +446,9 @@ function P2e(e) {
               children: i.jsx(M, { children: "Workbook save conflict" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close save conflict"),
+              "aria-label": text("Close save conflict"),
               onClick: e.onClose,
-              lang: t("Close save conflict"),
+              lang: language("Close save conflict"),
               "data-ui-label": "Close save conflict",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -522,8 +512,8 @@ function P2e(e) {
               }),
             a &&
               i.jsxs("section", {
-                "aria-label": r("Conflicting workbook changes"),
-                lang: t("Conflicting workbook changes"),
+                "aria-label": text("Conflicting workbook changes"),
+                lang: language("Conflicting workbook changes"),
                 "data-ui-label": "Conflicting workbook changes",
                 children: [
                   i.jsx("h3", {
@@ -578,11 +568,9 @@ function P2e(e) {
                                 ...Object.keys(w.after ?? {}),
                               ]),
                             ].filter((A) => {
-                              var k, F;
                               return (
                                 A !== "raw" &&
-                                O1((k = w.before) == null ? void 0 : k[A]) !==
-                                  O1((F = w.after) == null ? void 0 : F[A])
+                                O1(w.before?.[A]) !== O1(w.after?.[A])
                               );
                             });
                             return i.jsxs(
@@ -614,11 +602,7 @@ function P2e(e) {
                                                         children: [iE(F), ":"],
                                                       }),
                                                       " ",
-                                                      _3(
-                                                        A == null
-                                                          ? void 0
-                                                          : A[F],
-                                                      ),
+                                                      _3(A?.[F]),
                                                     ],
                                                   },
                                                   F,
@@ -841,14 +825,14 @@ const kS = {
 function U2e(e) {
   try {
     if (e && typeof e == "object") {
-      const { code: r, name: t } = e;
-      if (typeof r == "string") {
-        if (wH.has(r)) return r;
-        if (Object.hasOwn($j, r)) return $j[r];
+      const { code, name } = e;
+      if (typeof code == "string") {
+        if (wH.has(code)) return code;
+        if (Object.hasOwn($j, code)) return $j[code];
       }
-      if (t === "AbortError") return "cancelled";
-      if (t === "TimeoutError") return "timeout";
-      if (t === "QuotaExceededError") return "quota";
+      if (name === "AbortError") return "cancelled";
+      if (name === "TimeoutError") return "timeout";
+      if (name === "QuotaExceededError") return "quota";
     }
   } catch {}
   return "unknown";
@@ -901,7 +885,6 @@ function xH(e = {}) {
     };
   let h = 0;
   const f = (m, v) => {
-      var y;
       const g = [...d.events, Object.freeze(m)],
         b = Math.max(0, g.length - r);
       if (
@@ -918,7 +901,7 @@ function xH(e = {}) {
         return;
       }
       try {
-        const w = (y = e.onEvent) == null ? void 0 : y.call(e, m);
+        const w = e.onEvent?.call(e, m);
         w &&
           (h++,
           Promise.resolve(w).then(
@@ -1145,8 +1128,12 @@ const zj = {
   source: "External sources",
   host: "Application callbacks",
 };
-function V2e({ monitor: e, onClose: r }) {
-  const t = ne.useSyncExternalStore(e.subscribe, e.getSnapshot, e.getSnapshot),
+function V2e({ monitor, onClose }) {
+  const t = ne.useSyncExternalStore(
+      monitor.subscribe,
+      monitor.getSnapshot,
+      monitor.getSnapshot,
+    ),
     n = ne.useId(),
     o = ne.useRef(null),
     a = Dr();
@@ -1165,7 +1152,10 @@ function V2e({ monitor: e, onClose: r }) {
         new Blob(
           [
             JSON.stringify(
-              { format: "ledgerglass-reliability-v1", ...e.getSnapshot() },
+              {
+                format: "ledgerglass-reliability-v1",
+                ...monitor.getSnapshot(),
+              },
               null,
               2,
             ),
@@ -1189,7 +1179,8 @@ function V2e({ monitor: e, onClose: r }) {
       onKeyDown: (d) => {
         var u, l;
         if (
-          (d.key === "Escape" && (d.stopPropagation(), r()), d.key === "Tab")
+          (d.key === "Escape" && (d.stopPropagation(), onClose()),
+          d.key === "Tab")
         ) {
           const c = [
             ...d.currentTarget.querySelectorAll("button:not(:disabled)"),
@@ -1212,7 +1203,7 @@ function V2e({ monitor: e, onClose: r }) {
               ref: o,
               type: "button",
               "aria-label": a.text("Close workbook health"),
-              onClick: r,
+              onClick: onClose,
               children: i.jsx(M, { children: "Close" }),
             }),
           ],
@@ -1318,7 +1309,7 @@ function V2e({ monitor: e, onClose: r }) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: () => e.clearEvents(),
+              onClick: () => monitor.clearEvents(),
               children: i.jsx(M, { children: "Clear diagnostic history" }),
             }),
           ],
@@ -1333,7 +1324,7 @@ function A_(e) {
     cells: Object.fromEntries(
       Object.entries(e.cells).map(([r, t]) => [
         r,
-        { ...t, style: void 0, numFmt: void 0, format: void 0 },
+        { ...t, style: undefined, numFmt: undefined, format: undefined },
       ]),
     ),
     tables: e.tables,
@@ -1369,7 +1360,7 @@ function CH(e, r, t, n, o = {}, a = []) {
     d = bU(r, s.source),
     u = n.sheetId
       ? e.sheets.find((h) => h.id === n.sheetId).externalConnection
-      : void 0;
+      : undefined;
   if (u && !AC(u.source, d.source)) throw new Rn("schema");
   if (
     !n.sheetId &&
@@ -1410,15 +1401,9 @@ function CH(e, r, t, n, o = {}, a = []) {
   };
   if (
     c.controls.some((h) => {
-      var f, p;
       return !Number.isFinite(
         h.sum -
-          (((p =
-            (f = c.previous) == null
-              ? void 0
-              : f.controls.find((m) => m.field === h.field)) == null
-            ? void 0
-            : p.sum) ?? 0),
+          (c.previous?.controls.find((m) => m.field === h.field)?.sum ?? 0),
       );
     })
   )
@@ -1449,7 +1434,7 @@ function AH(e, r) {
     (d, u) =>
       d.forEach((l, c) => {
         const h = `${ut(c)}${u + 1}`,
-          f = t == null ? void 0 : t.cells[h];
+          f = t?.cells[h];
         o[h] = {
           raw: l,
           ...(typeof l == "string" && /^[=+@-]/.test(l)
@@ -1595,11 +1580,11 @@ function lN(e, r, t, n, o = {}) {
   });
 }
 async function $x(e, r, t = {}) {
-  var u, l, c;
+  var l, c;
   const n = t.timeoutMs ?? fl.timeoutMs;
   if (!Number.isInteger(n) || n < 1 || n > fl.timeoutMs)
     throw new Rn("invalid");
-  const o = (u = t.reliability) == null ? void 0 : u.start("source", e),
+  const o = t.reliability?.start("source", e),
     a = new AbortController();
   let s,
     d = () => {};
@@ -1611,7 +1596,7 @@ async function $x(e, r, t = {}) {
           (a.abort(), m(new Rn("cancelled")));
         }),
           (v = t.signal) == null ||
-            v.addEventListener("abort", d, { once: !0 }),
+            v.addEventListener("abort", d, { once: true }),
           (s = setTimeout(() => {
             (a.abort(), m(new Rn("timeout")));
           }, n)));
@@ -1724,9 +1709,9 @@ async function X2e(e, r, t, n = {}) {
         });
     return s === "limit"
       ? {
-          entries: o.map(({ sheetId: d, sourceId: u }) => ({
-            sheetId: d,
-            sourceId: u,
+          entries: o.map(({ sheetId, sourceId }) => ({
+            sheetId,
+            sourceId,
             error: s,
           })),
           error: s,

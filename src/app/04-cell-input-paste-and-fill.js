@@ -66,26 +66,24 @@ function r$(e, r) {
   return {
     ...r,
     raw: e,
-    literal: typeof e == "string" && e.startsWith("=") ? true : void 0,
+    literal: typeof e == "string" && e.startsWith("=") ? true : undefined,
   };
 }
 function xae(e, r) {
   return {
     ...e,
-    ...((r == null ? void 0 : r.note) !== void 0 ? { note: r.note } : {}),
-    ...((r == null ? void 0 : r.hyperlink) !== void 0
+    ...(r?.note !== undefined ? { note: r.note } : {}),
+    ...(r?.hyperlink !== undefined
       ? { hyperlink: structuredClone(r.hyperlink) }
       : {}),
-    ...((r == null ? void 0 : r.tickmark) !== void 0
-      ? { tickmark: r.tickmark }
-      : {}),
+    ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
   };
 }
 function Eae(e, r) {
   return JSON.stringify(hi(e ?? { raw: null })) === JSON.stringify(hi(r));
 }
 function n$(e) {
-  (e !== void 0 && typeof e != "boolean" && gs("Read-only must be boolean."),
+  (e !== undefined && typeof e != "boolean" && gs("Read-only must be boolean."),
     e && gs("This workbook is read-only."));
 }
 function Cae(e) {
@@ -243,7 +241,7 @@ function i$(e, r, t, n, o = {}) {
     !["none", "add", "subtract", "multiply", "divide"].includes(c)) &&
     gs("Choose a supported paste mode and arithmetic operation."),
     [o.transpose, o.skipBlanks].some(
-      (k) => k !== void 0 && typeof k != "boolean",
+      (k) => k !== undefined && typeof k != "boolean",
     ) && gs("Transpose and skip blanks must be boolean."),
     c !== "none" &&
       (l === "formats" || l === "formulas") &&
@@ -322,10 +320,10 @@ function i$(e, r, t, n, o = {}) {
         _ = { ...(D ?? { raw: null }) };
         for (const C of ["style", "format", "numFmt", "numberFormat"])
           delete _[C];
-        (B.style !== void 0 && (_.style = B.style),
-          B.format !== void 0 && (_.format = B.format),
-          B.numFmt !== void 0 && (_.numFmt = B.numFmt),
-          B.numberFormat !== void 0 &&
+        (B.style !== undefined && (_.style = B.style),
+          B.format !== undefined && (_.format = B.format),
+          B.numFmt !== undefined && (_.numFmt = B.numFmt),
+          B.numberFormat !== undefined &&
             (_.numberFormat = structuredClone(B.numberFormat)));
       }
       if ((_N(e, _.style), c !== "none")) {
@@ -392,13 +390,11 @@ function xg(e) {
 function rI(e, r) {
   return {
     ...e,
-    ...((r == null ? void 0 : r.note) !== void 0 ? { note: r.note } : {}),
-    ...((r == null ? void 0 : r.hyperlink) !== void 0
+    ...(r?.note !== undefined ? { note: r.note } : {}),
+    ...(r?.hyperlink !== undefined
       ? { hyperlink: structuredClone(r.hyperlink) }
       : {}),
-    ...((r == null ? void 0 : r.tickmark) !== void 0
-      ? { tickmark: r.tickmark }
-      : {}),
+    ...(r?.tickmark !== undefined ? { tickmark: r.tickmark } : {}),
   };
 }
 function nI(e, r) {
@@ -574,7 +570,6 @@ function Nae(e, r, t, n, o) {
   return ((a < 0 || a > wd(o)) && QE(), a);
 }
 function Rae(e, r, t, n) {
-  var k, F, I;
   const o = o$(n.direction),
     a = Nr(e, r),
     s = ct(t),
@@ -614,19 +609,19 @@ function Rae(e, r, t, n) {
     );
   const b =
       n.kind === "date"
-        ? T1(g, (k = e.datePolicy) == null ? void 0 : k.dateSystem)
+        ? T1(g, e.datePolicy?.dateSystem)
         : typeof g == "number" && Number.isFinite(g)
           ? g
           : Mo("Numeric series require a finite numeric start value."),
     y =
-      n.stop === void 0
-        ? void 0
+      n.stop === undefined
+        ? undefined
         : n.kind === "date"
-          ? T1(n.stop, (F = e.datePolicy) == null ? void 0 : F.dateSystem)
+          ? T1(n.stop, e.datePolicy?.dateSystem)
           : typeof n.stop == "number" && Number.isFinite(n.stop)
             ? n.stop
             : Mo("Numeric series require a finite numeric stop value.");
-  y !== void 0 &&
+  y !== undefined &&
     ((p > 0 && y < b) || (p < 0 && y > b)) &&
     Mo("The stop value is opposite the series step direction.");
   const w = [],
@@ -637,19 +632,13 @@ function Rae(e, r, t, n) {
     try {
       j =
         n.kind === "date"
-          ? Nae(
-              b,
-              O * p,
-              m,
-              v,
-              ((I = e.datePolicy) == null ? void 0 : I.dateSystem) ?? "1900",
-            )
+          ? Nae(b, O * p, m, v, e.datePolicy?.dateSystem ?? "1900")
           : b + O * p;
     } catch (D) {
-      if (y !== void 0 && O > 0 && D instanceof c$) break;
+      if (y !== undefined && O > 0 && D instanceof c$) break;
       throw D;
     }
-    if (y !== void 0 && (p > 0 ? j > y : j < y)) break;
+    if (y !== undefined && (p > 0 ? j > y : j < y)) break;
     Number.isFinite(j) || Mo("The numeric series would overflow.");
     const z = nh(
       l + (d ? O * (o === "up" ? -1 : 1) : 0),
@@ -661,9 +650,9 @@ function Rae(e, r, t, n) {
         {
           ...f,
           raw: j,
-          literal: void 0,
+          literal: undefined,
           ...(n.kind === "date"
-            ? { format: "date", numFmt: "yyyy-mm-dd", numberFormat: void 0 }
+            ? { format: "date", numFmt: "yyyy-mm-dd", numberFormat: undefined }
             : {}),
         },
         a.cells[z],
@@ -764,13 +753,14 @@ function Iae(e, r, t, n, o = {}) {
           for (let O = F; O <= I; O++) yield { row: k, col: O };
   }
   if (p)
-    for (const { row: k, col: F } of A()) {
-      const I = u === "series" ? s.firstRow : s.firstRow + E(k - s.firstRow, l),
-        O = u === "series" ? s.firstCol : s.firstCol + E(F - s.firstCol, c),
+    for (const { row, col } of A()) {
+      const I =
+          u === "series" ? s.firstRow : s.firstRow + E(row - s.firstRow, l),
+        O = u === "series" ? s.firstCol : s.firstCol + E(col - s.firstCol, c),
         j = a$(a, nh(I, O), b, s),
-        z = nh(k, F);
+        z = nh(row, col);
       if (u === "series") {
-        const D = y + (h ? k - s.firstRow : F - s.firstCol) * w;
+        const D = y + (h ? row - s.firstRow : col - s.firstCol) * w;
         (Number.isFinite(D) || Mo("The handle series would overflow."),
           (j.raw = D),
           delete j.literal);
@@ -778,7 +768,7 @@ function Iae(e, r, t, n, o = {}) {
         typeof j.raw == "string" &&
           j.raw.startsWith("=") &&
           !j.literal &&
-          (j.raw = xd(j.raw, k - I, F - O));
+          (j.raw = xd(j.raw, row - I, col - O));
       const V = hi(rI(j, a.cells[z]));
       (g.push(z),
         nI(a.cells[z], V) && v.push({ sheetId: r, address: z, cell: V }));
@@ -834,7 +824,7 @@ function _ae(e) {
 }
 const Dae = ["en-US", "en-GB", "de-DE", "fr-FR"];
 function oI(e) {
-  if (e === void 0) return "en-US";
+  if (e === undefined) return "en-US";
   if (!Dae.includes(e))
     throw new Error("Choose a supported workbook interface locale.");
   return e;
@@ -846,10 +836,7 @@ function Oae(e, r, t = true) {
   }).format(e);
 }
 function Mae(e, r, t = "1900", n) {
-  if (
-    (oI(n),
-    typeof (r == null ? void 0 : r.raw) == "number" && e === Xh(r.raw, n))
-  )
+  if ((oI(n), typeof r?.raw == "number" && e === Xh(r.raw, n)))
     return hi(structuredClone(r));
   if (!n || /^[=']/.test(e) || /^\d{4}-\d{2}-\d{2}$/.test(e))
     return Gm(e, r, t);
@@ -872,9 +859,9 @@ function Mae(e, r, t = "1900", n) {
         : Gm(e, r, t);
 }
 function aI(e, r) {
-  return typeof (e == null ? void 0 : e.raw) == "number" && r
+  return typeof e?.raw == "number" && r
     ? Xh(e.raw, r)
-    : `${e != null && e.literal && typeof e.raw == "string" ? "'" : ""}${String((e == null ? void 0 : e.raw) ?? "")}`;
+    : `${e != null && e.literal && typeof e.raw == "string" ? "'" : ""}${String(e?.raw ?? "")}`;
 }
 function Xh(e, r) {
   return Number.isFinite(e)
@@ -908,23 +895,23 @@ function lI(e, r, t = "1900", n) {
     typeof e != "number" ||
     (r != null && r.numberFormat) ||
     (r != null && r.numFmt) ||
-    (r == null ? void 0 : r.format) === "date"
+    r?.format === "date"
     ? Af(e, r, t)
     : Number.isFinite(e)
-      ? (r == null ? void 0 : r.format) === "currency"
+      ? r?.format === "currency"
         ? new Intl.NumberFormat(n, {
             style: "currency",
             currency: "USD",
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
           }).format(e)
-        : (r == null ? void 0 : r.format) === "percent"
+        : r?.format === "percent"
           ? new Intl.NumberFormat(n, {
               style: "percent",
               minimumFractionDigits: 2,
               maximumFractionDigits: 2,
             }).format(e)
-          : (r == null ? void 0 : r.format) === "number"
+          : r?.format === "number"
             ? new Intl.NumberFormat(n, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
@@ -1278,11 +1265,10 @@ function d$(e = {}) {
       t[n(d)].trim().length > 0 &&
       o(d) === o(t[n(d)]),
     s = (d) => {
-      var u, l;
       return a(d)
         ? n(d) === d
           ? t[d]
-          : `${((u = d.match(/^\s*/)) == null ? void 0 : u[0]) ?? ""}${t[n(d)]}${((l = d.match(/\s*$/)) == null ? void 0 : l[0]) ?? ""}`
+          : `${d.match(/^\s*/)?.[0] ?? ""}${t[n(d)]}${d.match(/\s*$/)?.[0] ?? ""}`
         : d;
     };
   return {
@@ -1297,52 +1283,51 @@ function d$(e = {}) {
   };
 }
 const f$ = ne.createContext(d$());
-function Bae({ options: e, children: r }) {
-  const t = ne.useMemo(
-    () => d$(e),
-    [e == null ? void 0 : e.locale, e == null ? void 0 : e.messages],
-  );
-  return i.jsx(f$.Provider, { value: t, children: r });
+function Bae({ options, children }) {
+  const t = ne.useMemo(() => d$(options), [options?.locale, options?.messages]);
+  return i.jsx(f$.Provider, { value: t, children });
 }
 const Dr = () => ne.useContext(f$);
-function M({ children: e }) {
+function M({ children }) {
   const r = Dr(),
-    t = ne.Children.toArray(e);
+    t = ne.Children.toArray(children);
   if (!t.every((o) => typeof o == "string"))
-    return i.jsx(i.Fragment, { children: e });
+    return i.jsx(i.Fragment, { children });
   const n = t.join("");
   return r.locale.startsWith("en") && r.text(n) === n
-    ? i.jsx(i.Fragment, { children: e })
+    ? i.jsx(i.Fragment, { children })
     : i.jsx("span", { lang: r.language(n), children: r.text(n) });
 }
 function ci({
-  value: e,
-  onValueChange: r,
-  allowEmpty: t = false,
-  min: n,
-  max: o,
-  step: a,
-  onFocus: s,
-  onBlur: d,
-  onKeyDown: u,
-  className: l,
+  value,
+  onValueChange,
+  allowEmpty = false,
+  min,
+  max,
+  step,
+  onFocus,
+  onBlur,
+  onKeyDown,
+  className,
   ...c
 }) {
   const h = Dr(),
     f = ne.useId(),
     [p, m] = ne.useState(() =>
-      e === "" || e === void 0 ? "" : Xh(Number(e), h.entryLocale),
+      value === "" || value === undefined
+        ? ""
+        : Xh(Number(value), h.entryLocale),
     ),
     [v, g] = ne.useState(false),
     [b, y] = ne.useState(false),
     w = ne.useRef(h.entryLocale),
-    E = ne.useRef(void 0),
-    A = n === void 0 ? void 0 : Number(n),
-    k = o === void 0 ? void 0 : Number(o),
+    E = ne.useRef(undefined),
+    A = min === undefined ? undefined : Number(min),
+    k = max === undefined ? undefined : Number(max),
     F = (V) => {
-      if (!V.trim() && t) return;
+      if (!V.trim() && allowEmpty) return;
       const D = sI(V, "Value", w.current);
-      if ((A !== void 0 && D < A) || (k !== void 0 && D > k))
+      if ((A !== undefined && D < A) || (k !== undefined && D > k))
         throw Error("bounds");
       return D;
     };
@@ -1354,35 +1339,39 @@ function ci({
     O =
       V instanceof Error && V.message === "bounds"
         ? h.message("Enter a number from {min} to {max}.", {
-            min: A === void 0 ? "−∞" : Xh(A, h.entryLocale),
-            max: k === void 0 ? "∞" : Xh(k, h.entryLocale),
+            min: A === undefined ? "−∞" : Xh(A, h.entryLocale),
+            max: k === undefined ? "∞" : Xh(k, h.entryLocale),
           })
         : h.text("Enter a valid number using the selected locale.");
   }
   (ne.useLayoutEffect(() => {
-    const V = e === "" || e === void 0 ? "" : String(Number(e));
-    (E.current !== void 0 &&
+    const V = value === "" || value === undefined ? "" : String(Number(value));
+    (E.current !== undefined &&
       (V === E.current || (V === "" && E.current === "NaN"))) ||
       ((w.current = h.entryLocale),
-      m(e === "" || e === void 0 ? "" : Xh(Number(e), h.entryLocale)),
+      m(
+        value === "" || value === undefined
+          ? ""
+          : Xh(Number(value), h.entryLocale),
+      ),
       y(false));
-  }, [e]),
+  }, [value]),
     ne.useLayoutEffect(() => {
       v ||
         O ||
         ((w.current = h.entryLocale),
-        m(I === void 0 ? "" : Xh(I, h.entryLocale)));
+        m(I === undefined ? "" : Xh(I, h.entryLocale)));
     }, [h.entryLocale, v]));
   const j = (V) => {
       m(V);
       let D;
       try {
         const B = F(V);
-        D = B === void 0 ? "" : String(B);
+        D = B === undefined ? "" : String(B);
       } catch {
         D = "NaN";
       }
-      ((E.current = D), r(D));
+      ((E.current = D), onValueChange(D));
     },
     z =
       [
@@ -1391,13 +1380,13 @@ function ci({
         v && w.current !== h.entryLocale ? `${f}-locale` : null,
       ]
         .filter(Boolean)
-        .join(" ") || void 0;
+        .join(" ") || undefined;
   return i.jsxs("span", {
     className: "lg-number-field",
     children: [
       i.jsx("input", {
         ...c,
-        className: l,
+        className,
         type: "text",
         inputMode: "decimal",
         role: "spinbutton",
@@ -1405,19 +1394,21 @@ function ci({
         "aria-valuenow": I,
         "aria-valuemin": A,
         "aria-valuemax": k,
-        "aria-valuetext": p || void 0,
-        "aria-invalid": !!O || void 0,
+        "aria-valuetext": p || undefined,
+        "aria-invalid": !!O || undefined,
         "aria-describedby": z,
         onChange: (V) => j(V.target.value),
         onFocus: (V) => {
-          (O || (w.current = h.entryLocale), g(true), s == null || s(V));
+          (O || (w.current = h.entryLocale),
+            g(true),
+            onFocus == null || onFocus(V));
         },
         onBlur: (V) => {
-          (y(true), g(false), d == null || d(V));
+          (y(true), g(false), onBlur == null || onBlur(V));
         },
         onKeyDown: (V) => {
           if (
-            (u == null || u(V),
+            (onKeyDown == null || onKeyDown(V),
             !(
               V.defaultPrevented ||
               c.readOnly ||
@@ -1430,7 +1421,7 @@ function ci({
               (V.key === "ArrowUp" || V.key === "ArrowDown"))
           ) {
             V.preventDefault();
-            const D = a === void 0 || a === "any" ? 1 : Number(a);
+            const D = step === undefined || step === "any" ? 1 : Number(step);
             if (!Number.isFinite(D) || D <= 0) return;
             const B = Math.min(
               k ?? 1 / 0,
@@ -1447,7 +1438,7 @@ function ci({
         i.jsx("span", {
           id: `${f}-error`,
           className: b ? "lg-number-error" : "lg-sr-only",
-          role: b ? "status" : void 0,
+          role: b ? "status" : undefined,
           children: O,
         }),
       v &&
@@ -1506,7 +1497,7 @@ function J5(e, r, t = r) {
   }
 }
 function Uae(e, r, t, n) {
-  const o = n === void 0 ? t : `'${n.replaceAll("'", "''")}'!${t}`;
+  const o = n === undefined ? t : `'${n.replaceAll("'", "''")}'!${t}`;
   return {
     value: e.slice(0, r.start) + o + e.slice(r.end),
     span: { start: r.start, end: r.start + o.length },
@@ -1579,7 +1570,7 @@ function zae(e) {
 const l7 = new WeakMap();
 function y$(e, r) {
   const t = es(e);
-  let n = t ? l7.get(e) : void 0;
+  let n = t ? l7.get(e) : undefined;
   if (!n) {
     n = { calls: [], external: [] };
     for (const o in e) {
@@ -1602,7 +1593,7 @@ function Lse(e) {
 function mf(e, r) {
   const t = r.extensions ?? [],
     n = r.allowedSheetIds ?? e.sheets.map((a) => a.id);
-  if (r.readOnly !== void 0 && typeof r.readOnly != "boolean")
+  if (r.readOnly !== undefined && typeof r.readOnly != "boolean")
     throw Error("Read-only policy must be boolean.");
   if (
     !Array.isArray(t) ||
@@ -1621,7 +1612,7 @@ function mf(e, r) {
       a.allowedSheetIds.some((d) => !e.sheets.some((u) => u.id === d)) ||
       !Array.isArray(a.grantedPermissions) ||
       a.grantedPermissions.some((d) => !s.permissions.includes(d)) ||
-      (a.includeHidden !== void 0 && typeof a.includeHidden != "boolean")
+      (a.includeHidden !== undefined && typeof a.includeHidden != "boolean")
     )
       throw Error("Invalid host extension registration.");
     o.add(s.id);
@@ -1738,11 +1729,7 @@ function pI(e) {
   return n;
 }
 function E$(e, r, t) {
-  var a;
-  const n =
-    (a = e.extensions) == null
-      ? void 0
-      : a.installed.find((s) => s.manifest.id === r);
+  const n = e.extensions?.installed.find((s) => s.manifest.id === r);
   if (!n || !n.enabled) throw Error("The extension is missing or disabled.");
   const o = mf(e, t).extensions.find((s) => s.manifest.id === r);
   if (!o || bf(o.manifest) !== bf(n.manifest))
@@ -1778,7 +1765,6 @@ function C$(e, r, t, n) {
       "The extension formula is outside its approved worksheet scope.",
     );
   return t.arguments.map((s, d) => {
-    var v;
     if (!s.trim()) throw Error("Extension arguments cannot be omitted.");
     const u = o.parameters[d].schema,
       l =
@@ -1786,7 +1772,7 @@ function C$(e, r, t, n) {
           s.trim(),
         );
     if (l) {
-      const g = ((v = l[1]) == null ? void 0 : v.replace(/''/g, "'")) ?? l[2],
+      const g = l[1]?.replace(/''/g, "'") ?? l[2],
         b = g
           ? e.sheets.find((F) => F.name.toLowerCase() === g.toLowerCase())
           : e.sheets.find((F) => F.id === r.sheetId);
@@ -1851,15 +1837,13 @@ function C$(e, r, t, n) {
   });
 }
 function A$(e, r = {}) {
-  var d;
   const t = mf(e, r),
     n = pI(e),
     o = n.length ? IC(e, t.extensions) : e,
-    a = n.length ? Cf(o) : void 0,
+    a = n.length ? Cf(o) : undefined,
     s = n.map((u) => {
-      var f, p, m;
       const l = a.getTypedValue(u.sheetId, u.address),
-        c = (((f = e.extensions) == null ? void 0 : f.caches) ?? []).filter(
+        c = (e.extensions?.caches ?? []).filter(
           (v) => v.sheetId === u.sheetId && v.address === u.address,
         ),
         h = u.calls.map((v) => {
@@ -1897,18 +1881,12 @@ function A$(e, r = {}) {
         });
       return {
         ...u,
-        importedCache:
-          (m =
-            (p = e.importedCalculationCaches) == null
-              ? void 0
-              : p.entries.find(
-                  (v) =>
-                    v.sheetId === u.sheetId &&
-                    v.address === u.address &&
-                    v.formula === u.formula,
-                )) == null
-            ? void 0
-            : m.cache,
+        importedCache: e.importedCalculationCaches?.entries.find(
+          (v) =>
+            v.sheetId === u.sheetId &&
+            v.address === u.address &&
+            v.formula === u.formula,
+        )?.cache,
         functions: h,
         result: l,
         caches: c,
@@ -1920,7 +1898,7 @@ function A$(e, r = {}) {
       };
     });
   return {
-    installed: ((d = e.extensions) == null ? void 0 : d.installed) ?? [],
+    installed: e.extensions?.installed ?? [],
     cells: s,
     available: t.extensions.map((u) => ({
       manifest: u.manifest,
@@ -1934,23 +1912,12 @@ function A$(e, r = {}) {
 }
 const tT = new WeakMap();
 function Pse(e, r, t, n = {}) {
-  var p;
   const o = mf(e, n),
-    a =
-      (p = e.extensions) == null
-        ? void 0
-        : p.installed.find((m) => m.manifest.id === r),
+    a = e.extensions?.installed.find((m) => m.manifest.id === r),
     s = o.extensions.find((m) => m.manifest.id === r);
   if (!["install", "enable", "disable", "remove"].includes(t))
     throw Error("Unknown extension operation.");
-  const d =
-    t === "install"
-      ? s == null
-        ? void 0
-        : s.manifest
-      : a == null
-        ? void 0
-        : a.manifest;
+  const d = t === "install" ? s?.manifest : a?.manifest;
   if (!d) throw Error("The requested extension is unavailable.");
   if (
     (Rw(d),

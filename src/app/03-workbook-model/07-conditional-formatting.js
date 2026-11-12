@@ -56,7 +56,15 @@ import {
 } from "./01-cell-styles-and-themes.js";
 import { Rc, Us, WL } from "./02-number-formats.js";
 import { Pi, Uw, Vg, Yy, b5, eg, iP, nP, pC, une } from "./03-defined-names.js";
-import { Iie, P1, _ie, iU, ip, oU, z4 } from "./04-pivot-tables-and-pictures.js";
+import {
+  Iie,
+  P1,
+  _ie,
+  iU,
+  ip,
+  oU,
+  z4,
+} from "./04-pivot-tables-and-pictures.js";
 import {
   B2,
   Ep,
@@ -82,7 +90,7 @@ function Die(e, r = {}) {
   if (!ip(r) || Object.keys(r).some((u) => u !== "filteredRowsBySheet"))
     throw Error("Calculation options support only filteredRowsBySheet.");
   const t = r.filteredRowsBySheet;
-  if (t !== void 0 && !ip(t))
+  if (t !== undefined && !ip(t))
     throw Error(
       "Filtered rows must be a worksheet-ID map of inclusive row intervals.",
     );
@@ -102,22 +110,23 @@ function Die(e, r = {}) {
   const d = new Map();
   for (const u of e.sheets) d.set(u.id, ul(u.rowCount, cn(u, "row")));
   return (u, l, c) => {
-    var H, Q, X;
+    var Q, X;
     if (!iU.includes(u)) return oU;
-    const { issue: h, isIssue: f } = c,
+    const { issue, isIssue } = c,
       p = (J) => {
-        if (f(J)) throw J;
-        if (!ip(J) || !ip(J.ref)) throw h("#VALUE!");
+        if (isIssue(J)) throw J;
+        if (!ip(J) || !ip(J.ref)) throw issue("#VALUE!");
         const q = J.ref;
-        if (q.sheet !== void 0 && typeof q.sheet != "string") throw h("#REF!");
+        if (q.sheet !== undefined && typeof q.sheet != "string")
+          throw issue("#REF!");
         const W = o.get(
           String(q.sheet ?? c.currentSheetName ?? "").toLowerCase(),
         );
-        if (!W) throw h("#REF!");
+        if (!W) throw issue("#REF!");
         const K = ip(q.from) ? q.from : q,
           te = ip(q.to) ? q.to : q,
           ae = [K.row, K.col, te.row, te.col];
-        if (ae.some((le) => !Number.isInteger(le))) throw h("#REF!");
+        if (ae.some((le) => !Number.isInteger(le))) throw issue("#REF!");
         const [oe, de, he, Se] = ae;
         if (
           oe < 1 ||
@@ -127,7 +136,7 @@ function Die(e, r = {}) {
           he > W.rowCount ||
           Se > W.colCount
         )
-          throw h("#REF!");
+          throw issue("#REF!");
         return {
           sheet: W,
           firstRow: oe,
@@ -137,7 +146,7 @@ function Die(e, r = {}) {
         };
       };
     if (u === "FORMULATEXT" || u === "ISFORMULA") {
-      if (l.length !== 1) return h("#VALUE!");
+      if (l.length !== 1) return issue("#VALUE!");
       const J = p(l[0]),
         q = (K, te) => {
           var oe;
@@ -149,11 +158,11 @@ function Die(e, r = {}) {
         };
       if (u === "FORMULATEXT") {
         const K = q(J.firstRow, J.firstCol);
-        return z4(K) && K.raw.length <= 8192 ? K.raw : h("#N/A");
+        return z4(K) && K.raw.length <= 8192 ? K.raw : issue("#N/A");
       }
       const W = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
       return W > 1e4
-        ? h("#LIMIT!")
+        ? issue("#LIMIT!")
         : W === 1
           ? z4(q(J.firstRow, J.firstCol))
           : Array.from({ length: J.lastRow - J.firstRow + 1 }, (K, te) =>
@@ -163,31 +172,31 @@ function Die(e, r = {}) {
             );
     }
     const m = u === "AGGREGATE";
-    if (l.length < (m ? 3 : 2) || l.length > 255) return h("#VALUE!");
+    if (l.length < (m ? 3 : 2) || l.length > 255) return issue("#VALUE!");
     const v = (J) => {
         const q = c.retrieve(J);
-        if (f(q)) throw q;
+        if (isIssue(q)) throw q;
         if (
           Array.isArray(q) ||
           !["number", "string", "boolean"].includes(typeof q) ||
           (typeof q == "string" && q.trim() === "") ||
           !Number.isFinite(Number(q))
         )
-          throw h("#VALUE!");
+          throw issue("#VALUE!");
         return Number(q);
       },
       g = v(l[0]);
-    if (m && !Number.isInteger(g)) return h("#VALUE!");
+    if (m && !Number.isInteger(g)) return issue("#VALUE!");
     const b = Math.trunc(g),
       y = !m && b > 100 ? b - 100 : b;
-    if (y < 1 || y > (m ? 19 : 11)) return h("#VALUE!");
+    if (y < 1 || y > (m ? 19 : 11)) return issue("#VALUE!");
     const w = m ? (l[1] == null ? 0 : v(l[1])) : 0;
-    if (!Number.isInteger(w) || w < 0 || w > 7) return h("#VALUE!");
+    if (!Number.isInteger(w) || w < 0 || w > 7) return issue("#VALUE!");
     const E = m ? w % 2 === 1 : b > 100,
       A = m && [2, 3, 6, 7].includes(w),
       k = !m || w < 4,
       F = m && y >= 14;
-    if (F && (l.length !== 4 || l[3] == null)) return h("#VALUE!");
+    if (F && (l.length !== 4 || l[3] == null)) return issue("#VALUE!");
     const I = F ? v(l[3]) : 0,
       O = F ? [l[2]] : l.slice(m ? 2 : 1),
       z = F && !((J) => ip(J) && ip(J.ref))(O[0]),
@@ -195,12 +204,13 @@ function Die(e, r = {}) {
     let D = 0;
     for (const J of V) {
       const q = (J.lastRow - J.firstRow + 1) * (J.lastCol - J.firstCol + 1);
-      if (((D += q), q > 2e4 || D > 1e5)) return h("#LIMIT!");
+      if (((D += q), q > 2e4 || D > 1e5)) return issue("#LIMIT!");
     }
     for (const J of V)
       for (let q = J.firstRow; q <= J.lastRow; q++)
         for (let W = J.firstCol; W <= J.lastCol; W++)
-          if (c.isActive(J.sheet.id, `${ut(W - 1)}${q}`)) return h("#CYCLE!");
+          if (c.isActive(J.sheet.id, `${ut(W - 1)}${q}`))
+            return issue("#CYCLE!");
     let B = 0,
       _ = 0,
       C = 1 / 0,
@@ -209,13 +219,13 @@ function Die(e, r = {}) {
       R = 0;
     const L = [],
       $ = (J) => {
-        if (f(J)) {
+        if (isIssue(J)) {
           if (["#LIMIT!", "#CYCLE!"].includes(J.error)) return J;
           if (A) return;
           if (y !== 2 && y !== 3) return J;
         }
         if ((J != null && _++, typeof J != "number")) return;
-        if (!Number.isFinite(J)) return h("#NUM!");
+        if (!Number.isFinite(J)) return issue("#NUM!");
         (B++, (C = Math.min(C, J)), (T = Math.max(T, J)));
         const q = J - N;
         ((N += q / B),
@@ -225,20 +235,20 @@ function Die(e, r = {}) {
     if (z) {
       const J = c.retrieve(O[0]),
         q = Array.isArray(J) ? J : [[J]];
-      if (!q.length || q.length > 1e4) return h("#LIMIT!");
+      if (!q.length || q.length > 1e4) return issue("#LIMIT!");
       const W = q.every(Array.isArray) ? q : [q],
-        K = ((H = W[0]) == null ? void 0 : H.length) ?? 0;
+        K = W[0]?.length ?? 0;
       if (!K || W.some((te) => te.length !== K || te.some(Array.isArray)))
-        return h("#VALUE!");
-      if (W.length * K > 1e4) return h("#LIMIT!");
+        return issue("#VALUE!");
+      if (W.length * K > 1e4) return issue("#LIMIT!");
       for (const te of W)
         for (const ae of te) {
           if (
             ae != null &&
-            !f(ae) &&
+            !isIssue(ae) &&
             !["number", "string", "boolean"].includes(typeof ae)
           )
-            return h("#VALUE!");
+            return issue("#VALUE!");
           const oe = $(ae);
           if (oe) return oe;
         }
@@ -272,9 +282,9 @@ function Die(e, r = {}) {
           ((he = le === Se ? he + 1 : 1),
             he > oe && ((oe = he), (de = le)),
             (Se = le));
-        return oe > 1 ? de : h("#N/A");
+        return oe > 1 ? de : issue("#N/A");
       }
-      if (!L.length) return h("#NUM!");
+      if (!L.length) return issue("#NUM!");
       if (y === 12) {
         const oe = Math.floor(L.length / 2);
         return L.length % 2 ? L[oe] : L[oe - 1] / 2 + L[oe] / 2;
@@ -283,13 +293,13 @@ function Die(e, r = {}) {
         const oe = I;
         return Number.isInteger(oe) && oe >= 1 && oe <= L.length
           ? L[y === 14 ? L.length - oe : oe - 1]
-          : h("#NUM!");
+          : issue("#NUM!");
       }
       const J = y >= 18,
         q = y === 17 || y === 19 ? Math.trunc(I) / 4 : I;
-      if (q < 0 || q > 1 || (J && (q === 0 || q === 1))) return h("#NUM!");
+      if (q < 0 || q > 1 || (J && (q === 0 || q === 1))) return issue("#NUM!");
       const W = J ? q * (L.length + 1) - 1 : q * (L.length - 1);
-      if (W < 0 || W > L.length - 1) return h("#NUM!");
+      if (W < 0 || W > L.length - 1) return issue("#NUM!");
       const K = Math.floor(W),
         te = Math.ceil(W),
         ae = W - K;
@@ -298,12 +308,12 @@ function Die(e, r = {}) {
     if (y === 2) return B;
     if (y === 3) return _;
     if (y === 9) return Rc(L);
-    if (y === 1) return B ? Us(L) : h("#DIV/0!");
+    if (y === 1) return B ? Us(L) : issue("#DIV/0!");
     if (y === 4) return B ? T : 0;
     if (y === 5) return B ? C : 0;
     if (y === 6) return B ? WL(L) : 0;
     const U = y === 7 || y === 10;
-    if (B < (U ? 2 : 1)) return h("#DIV/0!");
+    if (B < (U ? 2 : 1)) return issue("#DIV/0!");
     const G = Math.max(0, R / (B - (U ? 1 : 0)));
     return y === 7 || y === 8 ? Math.sqrt(G) : G;
   };
@@ -352,8 +362,8 @@ function q3(e) {
 function X3(e) {
   const r = Xm(e, "Hyperlink"),
     t =
-      r.label === void 0 || r.label === ""
-        ? void 0
+      r.label === undefined || r.label === ""
+        ? undefined
         : kc(r.label, "Link display text", Jl.labelLength);
   if (r.kind === "internal")
     return {
@@ -406,7 +416,7 @@ function X3(e) {
 }
 function EB(e, r) {
   const t = Xm(e, "Workbook review metadata");
-  if (t.reviewThreads !== void 0) {
+  if (t.reviewThreads !== undefined) {
     (!Array.isArray(t.reviewThreads) || t.reviewThreads.length > Jl.threads) &&
       ji(`A workbook can contain at most ${Jl.threads} review threads.`);
     const n = new Set(),
@@ -453,7 +463,7 @@ function EB(e, r) {
           );
         }),
         g = { id: c, anchor: p, messages: v, createdAt: h, updatedAt: f };
-      if (u.resolved !== void 0) {
+      if (u.resolved !== undefined) {
         const b = Xm(u.resolved, "Review resolution"),
           y = Lv(b.createdAt);
         ((y < v.at(-1).createdAt || y > f) &&
@@ -463,7 +473,7 @@ function EB(e, r) {
             createdAt: y,
           }));
       }
-      if (u.orphaned !== void 0) {
+      if (u.orphaned !== undefined) {
         const b = Xm(u.orphaned, "Orphaned review target"),
           y = Lv(b.createdAt);
         ((!["worksheet-deleted", "cell-deleted"].includes(String(b.reason)) ||
@@ -485,7 +495,7 @@ function EB(e, r) {
   }
   for (const n of r.sheets)
     for (const o of qj(n.cells) ? Object.values(n.cells) : []) {
-      if (o.hyperlink === void 0) continue;
+      if (o.hyperlink === undefined) continue;
       const a = X3(o.hyperlink);
       (a.kind === "internal" &&
         !r.sheets.some((s) => s.id === a.sheetId) &&
@@ -507,7 +517,6 @@ function ON(e, r) {
   return (EB(t, n), n);
 }
 function sQ(e, r, t, n) {
-  var l;
   const o = t.axis === "row" ? Mt.maxRows : Mt.maxCols;
   (!["row", "column"].includes(t.axis) ||
     !Number.isInteger(t.index) ||
@@ -519,11 +528,13 @@ function sQ(e, r, t, n) {
   const a = (c) => {
     const h = _t(c),
       f = t.axis === "row" ? h.row : h.col;
-    if (t.moveBefore === void 0 && f < t.index) return c;
-    if (t.moveBefore === void 0 && t.remove && f < t.index + t.count)
+    if (t.moveBefore === undefined && f < t.index) return c;
+    if (t.moveBefore === undefined && t.remove && f < t.index + t.count)
       return null;
     const p =
-      t.moveBefore !== void 0 ? Jf(f, t) : f + (t.remove ? -t.count : t.count);
+      t.moveBefore !== undefined
+        ? Jf(f, t)
+        : f + (t.remove ? -t.count : t.count);
     return (
       p >= o &&
         ji(
@@ -533,28 +544,23 @@ function sQ(e, r, t, n) {
     );
   };
   let s = false;
-  const d =
-      (l = e.reviewThreads) == null
-        ? void 0
-        : l.map((c) => {
-            if (c.orphaned || c.anchor.sheetId !== r) return c;
-            const h = a(c.anchor.address);
-            if (h === c.anchor.address) return c;
-            if (((s = true), h))
-              return { ...c, anchor: { ...c.anchor, address: h } };
-            const f = fx({ timestamp: n }, c.updatedAt);
-            return {
-              ...c,
-              updatedAt: f,
-              orphaned: { reason: "cell-deleted", createdAt: f },
-            };
-          }),
+  const d = e.reviewThreads?.map((c) => {
+      if (c.orphaned || c.anchor.sheetId !== r) return c;
+      const h = a(c.anchor.address);
+      if (h === c.anchor.address) return c;
+      if (((s = true), h)) return { ...c, anchor: { ...c.anchor, address: h } };
+      const f = fx({ timestamp: n }, c.updatedAt);
+      return {
+        ...c,
+        updatedAt: f,
+        orphaned: { reason: "cell-deleted", createdAt: f },
+      };
+    }),
     u = e.sheets.map((c) => {
       let h;
       for (const [f, p] of Object.entries(c.cells)) {
         const m = p.hyperlink;
-        if ((m == null ? void 0 : m.kind) !== "internal" || m.sheetId !== r)
-          continue;
+        if (m?.kind !== "internal" || m.sheetId !== r) continue;
         const v = a(m.address);
         v !== m.address &&
           (h ?? (h = { ...c.cells }),
@@ -576,14 +582,14 @@ function dQ(e, r, t) {
           const a = _t(o.anchor.address),
             s = t.axis === "row" ? a.row : a.col;
           if (
-            t.moveBefore === void 0 &&
+            t.moveBefore === undefined &&
             t.remove &&
             s >= t.index &&
             s < t.index + t.count
           )
             return { ...o, orphaned: "deleted-cells" };
           const d =
-            t.moveBefore !== void 0
+            t.moveBefore !== undefined
               ? Jf(s, t)
               : s >= t.index + (t.remove ? t.count : 0)
                 ? s + (t.remove ? -t.count : t.count)
@@ -616,7 +622,6 @@ function Qne(e, r) {
   };
 }
 function eie(e, r, t) {
-  var o, a;
   const n = [];
   for (const s of t.objects ?? []) {
     if (s.kind !== "picture") {
@@ -625,22 +630,17 @@ function eie(e, r, t) {
       );
       continue;
     }
-    const { extension: d } = P1(s.dataURL);
+    const { extension } = P1(s.dataURL);
     s.evidence &&
       n.push(
         `${s.label || "Picture"}: XLSX retains the image bytes and placement, but original filename, source reference and evidence provenance require native JSON; a later XLSX import records only observed media.`,
       );
     const u = _t(s.anchor),
-      l = e.addImage({ base64: s.dataURL, extension: d });
+      l = e.addImage({ base64: s.dataURL, extension });
     r.addImage(l, {
       tl: {
-        col:
-          u.col +
-          s.offsetX /
-            (((o = t.columnWidths) == null ? void 0 : o[u.col]) ?? 84),
-        row:
-          u.row +
-          s.offsetY / (((a = t.rowHeights) == null ? void 0 : a[u.row]) ?? 21),
+        col: u.col + s.offsetX / (t.columnWidths?.[u.col] ?? 84),
+        row: u.row + s.offsetY / (t.rowHeights?.[u.row] ?? 21),
       },
       ext: { width: s.width, height: s.height },
       editAs: "oneCell",
@@ -657,7 +657,7 @@ function eae(e) {
   return `${ut(r.col)}${r.row + 1}`;
 }
 function TC(e, r) {
-  if (e === void 0) return [];
+  if (e === undefined) return [];
   if (!Array.isArray(e) || e.length > B2)
     throw Error("A workbook may contain at most 100 formula watches.");
   const t = new Set(),
@@ -674,12 +674,12 @@ function TC(e, r) {
     )
       throw Error("Invalid formula watch metadata.");
     if (t.has(o.id)) throw Error("Formula watch IDs must be unique.");
-    if ((t.add(o.id), o.orphaned !== void 0 && !Qoe.includes(o.orphaned)))
+    if ((t.add(o.id), o.orphaned !== undefined && !Qoe.includes(o.orphaned)))
       throw Error("Invalid formula watch orphan reason.");
     const a = o.anchor,
       s = eae(a.address),
       d = r.sheets.find((c) => c.id === a.sheetId),
-      u = o.orphaned ?? (d ? void 0 : "missing-sheet"),
+      u = o.orphaned ?? (d ? undefined : "missing-sheet"),
       l = JSON.stringify([o.anchor.sheetId, s]);
     if (!u && n.has(l))
       throw Error("Active formula watches must not repeat the same cell.");
@@ -840,24 +840,20 @@ function tae(e) {
             qE(m.raw) ||
             (typeof m.raw == "string" && m.raw.length <= 32767)
           ) ||
-            (m.literal !== void 0 && typeof m.literal != "boolean"))
+            (m.literal !== undefined && typeof m.literal != "boolean"))
         )
           throw Error("Invalid saved what-if assumption.");
         return {
           ...v,
           sheetName: Ep(m.sheetName, 31),
           raw: m.raw,
-          ...(m.literal === void 0 ? {} : { literal: m.literal }),
+          ...(m.literal === undefined ? {} : { literal: m.literal }),
         };
       });
     if (
       [...s.inputs, ...s.outputs].some((p) => !h.has(Vu(p))) ||
       s.inputs.some((p, m) => {
-        var v;
-        return (
-          ((v = f.find((g) => Vu(g) === Vu(p))) == null ? void 0 : v.raw) !==
-          u.inputs[m]
-        );
+        return f.find((g) => Vu(g) === Vu(p))?.raw !== u.inputs[m];
       })
     )
       throw Error(
@@ -906,7 +902,7 @@ function XR(e, r) {
   };
 }
 function Fg(e, r, t) {
-  if (e === void 0 || e === "") return;
+  if (e === undefined || e === "") return;
   if (typeof e != "string")
     throw Error("Print titles must be a single row or column interval.");
   const n = (
@@ -943,21 +939,23 @@ function iae(e, r, t, n, o, a) {
     u = { ...e },
     l = Fg(e[s], t, r);
   if (l) {
-    let { start: f, end: p } = l;
-    if (!a) (n <= f && (f += o), n <= p && (p += o));
+    let { start, end } = l;
+    if (!a) (n <= start && (start += o), n <= end && (end += o));
     else {
       const m = n + o - 1,
         v = [
-          f < n ? { start: f, end: Math.min(p, n - 1) } : void 0,
-          p > m ? { start: Math.max(f, m + 1) - o, end: p - o } : void 0,
+          start < n ? { start, end: Math.min(end, n - 1) } : undefined,
+          end > m
+            ? { start: Math.max(start, m + 1) - o, end: end - o }
+            : undefined,
         ].filter(Boolean);
       if (!v.length)
         throw Error(
           "This edit removes every repeated print title. Clear or change print titles first.",
         );
-      ((f = v[0].start), (p = v.at(-1).end));
+      ((start = v[0].start), (end = v.at(-1).end));
     }
-    ((u[s] = G5({ start: f, end: p }, t)), Fg(u[s], t, r));
+    ((u[s] = G5({ start, end }, t)), Fg(u[s], t, r));
   }
   const c = t === "row" ? r.rowCount : r.colCount,
     h = (e[d] ?? [])
@@ -1109,7 +1107,6 @@ function Np(e, r = Mt.maxPatches) {
   return [...o];
 }
 function pQ(e, r, t, n, o) {
-  var h;
   const a = ct(t),
     s = ct(o),
     d = (f, p) => {
@@ -1124,39 +1121,36 @@ function pQ(e, r, t, n, o) {
     u = [],
     l = e.sheets.find((f) => f.id === n);
   return {
-    watches:
-      (h = e.formulaWatches) == null
-        ? void 0
-        : h.map((f) => {
-            if (f.orphaned) return f;
-            const p = `${f.anchor.sheetName}!${f.anchor.address}`;
-            if (f.anchor.sheetId === r && d(a, f.anchor.address)) {
-              const m = _t(f.anchor.address),
-                v = `${ut(m.col + s.firstCol - a.firstCol)}${m.row + s.firstRow - a.firstRow + 1}`,
-                g = `${l.name}!${v}`;
-              return p === g && r === n
-                ? f
-                : (u.push({
-                    kind: "formula-watch",
-                    label: f.id,
-                    before: p,
-                    after: g,
-                  }),
-                  {
-                    ...f,
-                    anchor: { sheetId: n, sheetName: l.name, address: v },
-                  });
-            }
-            return f.anchor.sheetId === n && d(s, f.anchor.address)
-              ? (u.push({
-                  kind: "formula-watch",
-                  label: f.id,
-                  before: p,
-                  after: `${p} — watched source overwritten`,
-                }),
-                { ...f, orphaned: "overwritten" })
-              : f;
+    watches: e.formulaWatches?.map((f) => {
+      if (f.orphaned) return f;
+      const p = `${f.anchor.sheetName}!${f.anchor.address}`;
+      if (f.anchor.sheetId === r && d(a, f.anchor.address)) {
+        const m = _t(f.anchor.address),
+          v = `${ut(m.col + s.firstCol - a.firstCol)}${m.row + s.firstRow - a.firstRow + 1}`,
+          g = `${l.name}!${v}`;
+        return p === g && r === n
+          ? f
+          : (u.push({
+              kind: "formula-watch",
+              label: f.id,
+              before: p,
+              after: g,
+            }),
+            {
+              ...f,
+              anchor: { sheetId: n, sheetName: l.name, address: v },
+            });
+      }
+      return f.anchor.sheetId === n && d(s, f.anchor.address)
+        ? (u.push({
+            kind: "formula-watch",
+            label: f.id,
+            before: p,
+            after: `${p} — watched source overwritten`,
           }),
+          { ...f, orphaned: "overwritten" })
+        : f;
+    }),
     changes: u,
   };
 }
@@ -1173,8 +1167,8 @@ function K3(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
     u = ul(r.colCount, cn(s, "column"));
   if (!d.count || !u.count)
     throw Error("At least one row and one column must remain visible.");
-  const l = e.frozenRows === void 0 ? 0 : e.frozenRows,
-    c = e.frozenCols === void 0 ? 0 : e.frozenCols;
+  const l = e.frozenRows === undefined ? 0 : e.frozenRows,
+    c = e.frozenCols === undefined ? 0 : e.frozenCols;
   if (
     !Number.isInteger(l) ||
     !Number.isInteger(c) ||
@@ -1204,10 +1198,10 @@ function K3(e, r, t = { rows: r.rowCount, cols: r.colCount }) {
         "Freeze panes cannot cross a merged range. Unmerge those cells first.",
       );
   }
-  (e.hiddenRows !== void 0 && (r.hiddenRows = o),
-    e.hiddenCols !== void 0 && (r.hiddenCols = a),
-    e.frozenRows !== void 0 && (r.frozenRows = l),
-    e.frozenCols !== void 0 && (r.frozenCols = c));
+  (e.hiddenRows !== undefined && (r.hiddenRows = o),
+    e.hiddenCols !== undefined && (r.hiddenCols = a),
+    e.frozenRows !== undefined && (r.frozenRows = l),
+    e.frozenCols !== undefined && (r.frozenCols = c));
 }
 function Y3(e, r, t) {
   const n = e.sheets.find((a) => a.id === r);
@@ -1264,7 +1258,7 @@ function JS(e, r, t) {
     e,
     r,
     (n) => (
-      t === void 0
+      t === undefined
         ? delete n.splitPanes
         : ((n.splitPanes = AB(t, { rows: n.rowCount, cols: n.colCount })),
           (n.frozenRows = 0),
@@ -1331,7 +1325,7 @@ function xQ(e, r, t, n, o) {
   );
 }
 function hx(e, r, t, n = {}) {
-  if (n.readOnly !== void 0 && typeof n.readOnly != "boolean")
+  if (n.readOnly !== undefined && typeof n.readOnly != "boolean")
     throw Error("Read-only state must be boolean.");
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = e.sheets.find((s) => s.id === r);
@@ -1388,9 +1382,7 @@ function AQ(e, r, t, n, o) {
     e,
     r,
     (a) => {
-      var d;
-      const s =
-        (d = a.outlineGroups) == null ? void 0 : d.find((u) => u.id === t);
+      const s = a.outlineGroups?.find((u) => u.id === t);
       if (!s) throw Error("Outline group not found.");
       s.collapsed = n;
     },
@@ -1404,18 +1396,14 @@ function kQ(e, r, t, n, o) {
       e,
       r,
       (a) => {
-        var l;
         const s = NB(a, t),
           d = Math.max(0, ...s.map((c) => c.depth)) + 1;
         if (!Number.isInteger(n) || n < 1 || n > d)
           throw Error("Choose an available outline level.");
         const u = new Map(s.map((c) => [c.id, c.depth]));
-        a.outlineGroups =
-          (l = a.outlineGroups) == null
-            ? void 0
-            : l.map((c) =>
-                c.axis === t ? { ...c, collapsed: u.get(c.id) >= n } : c,
-              );
+        a.outlineGroups = a.outlineGroups?.map((c) =>
+          c.axis === t ? { ...c, collapsed: u.get(c.id) >= n } : c,
+        );
       },
       o,
     )
@@ -1428,11 +1416,7 @@ function SQ(e, r, t, n) {
       e,
       r,
       (o) => {
-        var a;
-        o.outlineGroups =
-          (a = o.outlineGroups) == null
-            ? void 0
-            : a.filter((s) => s.axis !== t);
+        o.outlineGroups = o.outlineGroups?.filter((s) => s.axis !== t);
       },
       n,
     )
@@ -1505,7 +1489,7 @@ function _B(e) {
         "Time bounds must be fractions from 0 up to, but excluding, 1.",
       );
     if (
-      t.formula !== void 0 &&
+      t.formula !== undefined &&
       ((a.formula = yv(t.formula, 8192, "formula")),
       !a.formula.startsWith("=") || a.formula.length < 2)
     )
@@ -1514,13 +1498,13 @@ function _B(e) {
       throw Error(
         "A custom rule requires a formula relative to the range's top-left cell.",
       );
-    if (t.errorStyle !== void 0) {
+    if (t.errorStyle !== undefined) {
       if (!["stop", "warning", "information"].includes(String(t.errorStyle)))
         throw Error("Invalid validation error style.");
       a.errorStyle = t.errorStyle;
     }
     for (const s of ["showInputMessage", "showDropdown"])
-      if (t[s] !== void 0) {
+      if (t[s] !== undefined) {
         if (typeof t[s] != "boolean")
           throw Error("Invalid validation display setting.");
         a[s] = t[s];
@@ -1530,17 +1514,13 @@ function _B(e) {
       ["inputMessage", 500],
       ["errorTitle", 100],
     ])
-      t[s] !== void 0 && (a[s] = yv(t[s], d, s));
+      t[s] !== undefined && (a[s] = yv(t[s], d, s));
     return a;
   });
 }
 function DB(e, r, t) {
-  var o;
   const n = _t(t);
-  return (
-    ((o = e.sheets.find((a) => a.id === r)) == null ? void 0 : o.validations) ??
-    []
-  ).filter((a) => {
+  return (e.sheets.find((a) => a.id === r)?.validations ?? []).filter((a) => {
     const s = ct(a.range);
     return (
       n.row >= s.firstRow &&
@@ -1573,7 +1553,7 @@ function FN(e) {
         fill: m6(n.fill),
         color: m6(n.color),
       };
-    if (n.priority !== void 0) {
+    if (n.priority !== undefined) {
       if (
         !Number.isInteger(n.priority) ||
         Number(n.priority) < 1 ||
@@ -1585,7 +1565,7 @@ function FN(e) {
         );
       ((s.priority = Number(n.priority)), t.add(s.priority));
     }
-    if (n.stopIfTrue !== void 0) {
+    if (n.stopIfTrue !== undefined) {
       if (typeof n.stopIfTrue != "boolean")
         throw Error("Stop if true must be boolean.");
       if (n.stopIfTrue && ["colorScale", "dataBar", "iconSet"].includes(s.kind))
@@ -1595,7 +1575,7 @@ function FN(e) {
       s.stopIfTrue = n.stopIfTrue;
     }
     if (
-      (n.formula !== void 0 &&
+      (n.formula !== undefined &&
         (s.formula = Ub(n.formula, 4096, "conditional formula")),
       s.kind === "formula" &&
         (!((d = s.formula) != null && d.startsWith("=")) ||
@@ -1603,13 +1583,13 @@ function FN(e) {
     )
       throw Error("A formula rule requires a formula beginning with =.");
     for (const u of ["minColor", "maxColor"])
-      n[u] !== void 0 && (s[u] = m6(n[u]));
-    if (n.thresholdType !== void 0) {
+      n[u] !== undefined && (s[u] = m6(n[u]));
+    if (n.thresholdType !== undefined) {
       if (n.thresholdType !== "percent" && n.thresholdType !== "number")
         throw Error("Invalid icon threshold type.");
       s.thresholdType = n.thresholdType;
     }
-    if (n.iconThresholds !== void 0) {
+    if (n.iconThresholds !== undefined) {
       if (
         !Array.isArray(n.iconThresholds) ||
         n.iconThresholds.length !== 2 ||
@@ -1679,14 +1659,14 @@ function Fw(e, r, t) {
         ))
       ) {
         u && (b = u);
-        for (const { address: y, point: w } of l) {
+        for (const { address, point } of l) {
           if (++a > 1e6) {
             b =
               "Conditional statistics exceed 1,000,000 inspected cells; narrow the rule ranges or remove rules.";
             break;
           }
-          if (!n5(p, w)) continue;
-          const E = r(e.id, y);
+          if (!n5(p, point)) continue;
+          const E = r(e.id, address);
           if (
             (typeof E == "number" &&
               Number.isFinite(E) &&
@@ -1708,22 +1688,15 @@ function Fw(e, r, t) {
       const p = _t(f),
         m = { style: {}, errors: [] },
         v = r(e.id, f);
-      for (const {
-        rule: g,
-        bounds: b,
-        counts: y,
-        min: w,
-        max: E,
-        failure: A,
-      } of c) {
-        if (!n5(b, p)) continue;
-        if (A) {
-          m.errors.push(d(g.id, f, A));
+      for (const { rule, bounds, counts, min, max, failure } of c) {
+        if (!n5(bounds, p)) continue;
+        if (failure) {
+          m.errors.push(d(rule.id, f, failure));
           continue;
         }
         let k = false,
           F = {};
-        if (g.kind === "formula") {
+        if (rule.kind === "formula") {
           let I;
           try {
             if (++s > 5e3)
@@ -1734,7 +1707,11 @@ function Fw(e, r, t) {
               throw Error(
                 "This calculator cannot evaluate conditional formulas.",
               );
-            const O = xd(g.formula, p.row - b.firstRow, p.col - b.firstCol);
+            const O = xd(
+              rule.formula,
+              p.row - bounds.firstRow,
+              p.col - bounds.firstCol,
+            );
             if (((I = r.evaluateFormula(e.id, f, O)), UQ(I)))
               throw Error(`Formula returned ${I}.`);
             if (typeof I != "number" && typeof I != "boolean")
@@ -1743,16 +1720,16 @@ function Fw(e, r, t) {
           } catch (O) {
             m.errors.push(
               d(
-                g.id,
+                rule.id,
                 f,
                 O instanceof Error ? O.message : "Formula evaluation failed.",
               ),
             );
             continue;
           }
-        } else if (g.kind === "blank" || g.kind === "notBlank")
-          k = (v === null || v === "") == (g.kind === "blank");
-        else if (g.kind === "error" || g.kind === "notError")
+        } else if (rule.kind === "blank" || rule.kind === "notBlank")
+          k = (v === null || v === "") == (rule.kind === "blank");
+        else if (rule.kind === "error" || rule.kind === "notError")
           try {
             if (++s > 5e3)
               throw Error(
@@ -1765,11 +1742,11 @@ function Fw(e, r, t) {
             const I = r.evaluateFormula(e.id, f, "=ISERROR(" + f + ")");
             if (typeof I != "boolean")
               throw Error("Error rule could not evaluate: " + String(I) + ".");
-            k = I === (g.kind === "error");
+            k = I === (rule.kind === "error");
           } catch (I) {
             m.errors.push(
               d(
-                g.id,
+                rule.id,
                 f,
                 I instanceof Error
                   ? I.message
@@ -1778,29 +1755,31 @@ function Fw(e, r, t) {
             );
             continue;
           }
-        else if (g.kind === "duplicate" || g.kind === "unique")
+        else if (rule.kind === "duplicate" || rule.kind === "unique")
           k =
             v !== null &&
             v !== "" &&
-            (y.get(String(v).toLowerCase()) ?? 0) > 1 ==
-              (g.kind === "duplicate");
-        else if (g.kind === "contains")
+            (counts.get(String(v).toLowerCase()) ?? 0) > 1 ==
+              (rule.kind === "duplicate");
+        else if (rule.kind === "contains")
           k = String(v ?? "")
             .toLowerCase()
-            .includes(g.value.toLowerCase());
-        else if (g.kind === "equal")
-          k = String(v ?? "").toLowerCase() === g.value.toLowerCase();
+            .includes(rule.value.toLowerCase());
+        else if (rule.kind === "equal")
+          k = String(v ?? "").toLowerCase() === rule.value.toLowerCase();
         else if (typeof v == "number") {
-          if (g.kind === "greater") k = v > Number(g.value);
-          else if (g.kind === "less") k = v < Number(g.value);
-          else if (g.kind === "between")
-            k = v >= Number(g.value) && v <= Number(g.second);
-          else if (Number.isFinite(w) && Number.isFinite(E)) {
+          if (rule.kind === "greater") k = v > Number(rule.value);
+          else if (rule.kind === "less") k = v < Number(rule.value);
+          else if (rule.kind === "between")
+            k = v >= Number(rule.value) && v <= Number(rule.second);
+          else if (Number.isFinite(min) && Number.isFinite(max)) {
             const I =
-              E === w ? 0.5 : Math.max(0, Math.min(1, (v - w) / (E - w)));
-            if (g.kind === "colorScale") {
-              const O = g.minColor ?? "#f8e99b",
-                j = g.maxColor ?? "#63be7b";
+              max === min
+                ? 0.5
+                : Math.max(0, Math.min(1, (v - min) / (max - min)));
+            if (rule.kind === "colorScale") {
+              const O = rule.minColor ?? "#f8e99b",
+                j = rule.maxColor ?? "#63be7b";
               ((F.fill =
                 "#" +
                 [1, 3, 5]
@@ -1816,9 +1795,9 @@ function Fw(e, r, t) {
                   )
                   .join("")),
                 (k = true));
-            } else if (g.kind === "dataBar" && !m.dataBar) {
-              const O = Math.min(0, w),
-                j = Math.max(0, E),
+            } else if (rule.kind === "dataBar" && !m.dataBar) {
+              const O = Math.min(0, min),
+                j = Math.max(0, max),
                 z = j - O || 1,
                 V = (-O / z) * 100,
                 D = ((v - O) / z) * 100;
@@ -1826,13 +1805,14 @@ function Fw(e, r, t) {
                 start: Math.min(V, D),
                 width: Math.abs(D - V),
                 axis: V,
-                color: v < 0 ? "#d13438" : g.fill,
+                color: v < 0 ? "#d13438" : rule.fill,
                 negative: v < 0,
               }),
                 (k = true));
-            } else if (g.kind === "iconSet" && !m.icon) {
-              const O = g.iconThresholds ?? [33, 67],
-                j = (g.thresholdType ?? "percent") === "percent" ? I * 100 : v;
+            } else if (rule.kind === "iconSet" && !m.icon) {
+              const O = rule.iconThresholds ?? [33, 67],
+                j =
+                  (rule.thresholdType ?? "percent") === "percent" ? I * 100 : v;
               ((m.icon =
                 j < O[0]
                   ? { symbol: "▼", color: "#c42b1c", label: "Low" }
@@ -1845,10 +1825,10 @@ function Fw(e, r, t) {
         }
         if (
           k &&
-          (["colorScale", "dataBar", "iconSet"].includes(g.kind) ||
-            (F = { fill: g.fill, color: g.color }),
+          (["colorScale", "dataBar", "iconSet"].includes(rule.kind) ||
+            (F = { fill: rule.fill, color: rule.color }),
           (m.style = { ...F, ...m.style }),
-          g.stopIfTrue)
+          rule.stopIfTrue)
         )
           break;
       }
@@ -1886,7 +1866,7 @@ const zQ = (e, r = 200) =>
   };
 function VQ(e, r) {
   if (sD(e)) {
-    if (e.merges !== void 0) {
+    if (e.merges !== undefined) {
       (!Array.isArray(e.merges) || e.merges.length > 1e3) &&
         al("At most1,000 merged ranges are supported.");
       const t = [];
@@ -1901,15 +1881,15 @@ function VQ(e, r) {
       r.merges = t;
     }
     if (
-      (e.validations !== void 0 && (r.validations = _B(e.validations)),
-      e.conditionalFormats !== void 0 &&
+      (e.validations !== undefined && (r.validations = _B(e.validations)),
+      e.conditionalFormats !== undefined &&
         (r.conditionalFormats = FN(e.conditionalFormats)),
-      e.protection !== void 0)
+      e.protection !== undefined)
     ) {
       const t = e.protection;
       ((!sD(t) ||
         typeof t.enabled != "boolean" ||
-        (t.hash !== void 0 &&
+        (t.hash !== undefined &&
           (!/^[a-f\d]{64}$/i.test(String(t.hash)) ||
             typeof t.salt != "string" ||
             t.salt.length > 100))) &&
@@ -1922,7 +1902,6 @@ function VQ(e, r) {
   }
 }
 function kE(e, r, t, n = false) {
-  var l, c;
   const o = e.sheets.find((h) => h.id === r);
   jn(o);
   const a = CE(t),
@@ -1936,8 +1915,8 @@ function kE(e, r, t, n = false) {
     const h = `${ut(s.firstCol)}${s.firstRow + 1}`;
     u[h] = {
       ...u[h],
-      raw: ((l = u[h]) == null ? void 0 : l.raw) ?? null,
-      style: { ...((c = u[h]) == null ? void 0 : c.style), align: "center" },
+      raw: u[h]?.raw ?? null,
+      style: { ...u[h]?.style, align: "center" },
     };
   }
   return {
@@ -1957,9 +1936,9 @@ function kE(e, r, t, n = false) {
 }
 function oP(e) {
   let r = 0;
-  for (const { refersTo: t } of e) {
+  for (const { refersTo } of e) {
     const n = Vg(
-      t.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
+      refersTo.replace(/"(?:[^"]|"")*"/g, '""').replace(/'(?:[^']|'')+'!/g, ""),
     );
     for (const o of n.matchAll(
       /(?:^|[^A-Za-z0-9_.])((?:\$?[A-Za-z]{1,3}\$?[1-9]\d*)(?::\$?[A-Za-z]{1,3}\$?[1-9]\d*)?)(?![A-Za-z0-9_.])/g,
@@ -2003,7 +1982,10 @@ function aP(e) {
     for (const v of Object.keys(u))
       if (v.startsWith("xmlns") && u[v] !== Uw)
         return Pi("Unsupported definedName namespace.");
-    if (c !== void 0 && (!/^\d+$/.test(c) || !Number.isSafeInteger(Number(c))))
+    if (
+      c !== undefined &&
+      (!/^\d+$/.test(c) || !Number.isSafeInteger(Number(c)))
+    )
       return Pi(`Name "${l}" has an invalid localSheetId.`);
     const p = `=${nP(
       (d[3] ?? "").replace(
@@ -2012,9 +1994,9 @@ function aP(e) {
 `,
       ),
     ).replace(/^=/, "")}`;
-    if ((pC(p), c !== void 0 && Number(c) >= s))
+    if ((pC(p), c !== undefined && Number(c) >= s))
       return Pi(`Name "${l}" has an out-of-range localSheetId.`);
-    const m = `${c === void 0 ? "workbook" : Number(c)}:${l.toLowerCase()}`;
+    const m = `${c === undefined ? "workbook" : Number(c)}:${l.toLowerCase()}`;
     if (a.has(m)) return Pi(`Duplicate name "${l}" in the same scope.`);
     if ((a.add(m), une.has(l.toLowerCase())))
       t.builtinXml += `<definedName${Object.entries(u)
@@ -2031,7 +2013,7 @@ function aP(e) {
       if (++o > 1e3)
         return Pi("The workbook exceeds the 1,000-defined-name limit.");
       for (const g of ["function", "vbProcedure", "xlm"])
-        if (u[g] !== void 0 && !["0", "false"].includes(u[g]))
+        if (u[g] !== undefined && !["0", "false"].includes(u[g]))
           return Pi(`Name "${l}" has an executable ${g} attribute.`);
       const v = Object.keys(u).filter(
         (g) =>
@@ -2045,8 +2027,8 @@ function aP(e) {
         t.names.push({
           name: l,
           refersTo: p,
-          ...(c !== void 0 ? { localSheetId: Number(c) } : {}),
-          ...(u.comment !== void 0 ? { comment: u.comment } : {}),
+          ...(c !== undefined ? { localSheetId: Number(c) } : {}),
+          ...(u.comment !== undefined ? { comment: u.comment } : {}),
         }));
     }
     n = n.slice(d[0].length);
@@ -2057,16 +2039,16 @@ function aP(e) {
       t.names.map((d) => ({
         name: d.name,
         refersTo: d.refersTo,
-        ...(d.localSheetId !== void 0
+        ...(d.localSheetId !== undefined
           ? { scopeSheetId: String(d.localSheetId) }
           : {}),
-        ...(d.comment !== void 0 ? { comment: d.comment } : {}),
+        ...(d.comment !== undefined ? { comment: d.comment } : {}),
       })),
       {
         sheets: [
           ...new Set(
             t.names.flatMap((d) =>
-              d.localSheetId === void 0 ? [] : [d.localSheetId],
+              d.localSheetId === undefined ? [] : [d.localSheetId],
             ),
           ),
         ].map((d) => ({ id: String(d) })),

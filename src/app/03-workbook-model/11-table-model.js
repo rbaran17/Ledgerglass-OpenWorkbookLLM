@@ -89,7 +89,18 @@ import {
   xd,
   yae,
 } from "./06-data-model-and-analysis.js";
-import { EB, GO, K3, TC, VQ, X3, _t, ct, tae, vae } from "./07-conditional-formatting.js";
+import {
+  EB,
+  GO,
+  K3,
+  TC,
+  VQ,
+  X3,
+  _t,
+  ct,
+  tae,
+  vae,
+} from "./07-conditional-formatting.js";
 import {
   $1,
   Ax,
@@ -143,9 +154,9 @@ function Ku(e) {
       };
 }
 function gR(e, r, t, n) {
-  var h, f, p, m, v;
+  var f, p, m, v;
   (n != null && n.sheetId) || $a(e);
-  const o = ((h = t[0]) == null ? void 0 : h.length) ?? 0;
+  const o = t[0]?.length ?? 0;
   ((!o || t.length * o > Mt.maxCells) &&
     Xt("The analysis output exceeds 100,000 cells."),
     t.some((g) => g.some((b) => typeof b == "string" && b.length > 32767)) &&
@@ -154,11 +165,9 @@ function gR(e, r, t, n) {
       ));
   const a = structuredClone(e),
     s =
-      n != null && n.sheetId
-        ? Nr(a, n.sheetId)
-        : Ku(pie(a, (n == null ? void 0 : n.sheetName) ?? r));
+      n != null && n.sheetId ? Nr(a, n.sheetId) : Ku(pie(a, n?.sheetName ?? r));
   ((n != null && n.sheetId) || a.sheets.push(s), jn(s));
-  const d = _t((n == null ? void 0 : n.address) ?? "A1"),
+  const d = _t(n?.address ?? "A1"),
     u = d.row + t.length - 1,
     l = d.col + o - 1;
   (u >= s.rowCount || l >= s.colCount) &&
@@ -201,14 +210,14 @@ function gR(e, r, t, n) {
   );
 }
 function yR(e, r) {
-  var c, h;
+  var h;
   const t = wC(r),
     n = V1(e, t.source),
     o = jP(t, n.fields, mR(n, t.filters ?? [])),
     a = OP(t, n.fields, o),
     s = gR(e, t.name, a.matrix, t.destination),
-    { destination: d, ...u } = t,
-    l = _t(((c = t.destination) == null ? void 0 : c.address) ?? "A1");
+    { destination, ...u } = t,
+    l = _t(t.destination?.address ?? "A1");
   for (let f = 1; f < a.matrix.length; f++)
     for (let p = Math.max(1, t.rowFields.length); p < a.matrix[0].length; p++) {
       const m =
@@ -286,14 +295,14 @@ function NO(e, r, t, n) {
       Xt(
         "Pivot view changes can only set filters, sorting, value display and chart settings.",
       ));
-  const { owner: o, definition: a } = Sx(e, r);
+  const { owner, definition } = Sx(e, r);
   return (
-    jn(o),
+    jn(owner),
     yR(e, {
-      ...a,
+      ...definition,
       ...t,
-      name: `${a.name.slice(0, 88)} filtered`,
-      destination: void 0,
+      name: `${definition.name.slice(0, 88)} filtered`,
+      destination: undefined,
     })
   );
 }
@@ -302,9 +311,9 @@ function bie(e, r, t, n) {
     n.snapshot !== JSON.stringify(e) &&
       Xt("The workbook changed. Preview drill-through again."));
   const o = O5(e, r, t),
-    { owner: a } = Sx(e, r);
-  jn(a);
-  const s = JSON.stringify({ ...o, records: void 0 });
+    { owner } = Sx(e, r);
+  jn(owner);
+  const s = JSON.stringify({ ...o, records: undefined });
   s.length > 32700 &&
     Xt(
       "Drill context exceeds the cell-note budget. Reduce filter selections before extracting.",
@@ -319,13 +328,12 @@ function bie(e, r, t, n) {
         ...o.fields,
       ],
       ...o.records.map((l) => {
-        var c, h, f;
         return [
           `${l.locator.sheetName}!${l.locator.range}`,
           o.context.sourceRevision,
-          ((c = l.locator.original) == null ? void 0 : c.sourceName) ?? null,
-          ((h = l.locator.original) == null ? void 0 : h.sourceSheet) ?? null,
-          ((f = l.locator.original) == null ? void 0 : f.originalRow) ?? null,
+          l.locator.original?.sourceName ?? null,
+          l.locator.original?.sourceSheet ?? null,
+          l.locator.original?.originalRow ?? null,
           ...l.values,
         ];
       }),
@@ -351,12 +359,14 @@ function bie(e, r, t, n) {
           Xt("Row provenance exceeds its 100,000 identity budget."),
         u.workbook.rowOrigins.push(h)),
         (u.sheet.rowOriginIds[c + 1] = h.id),
-        l.cells.forEach(({ cell: f }, p) => {
+        l.cells.forEach(({ cell }, p) => {
           const m = [
-            f.note,
-            typeof f.raw == "string" && f.raw.startsWith("=") && !f.literal
-              ? `Source formula at extraction: ${f.raw}`
-              : void 0,
+            cell.note,
+            typeof cell.raw == "string" &&
+            cell.raw.startsWith("=") &&
+            !cell.literal
+              ? `Source formula at extraction: ${cell.raw}`
+              : undefined,
           ].filter(Boolean).join(`
 `);
           (m.length > 32767 &&
@@ -380,7 +390,7 @@ function ZP(e, r) {
     s = (t.derived ?? []).map((f) => ({
       ...f,
       index: Yv(n.fields, f.field),
-      other: f.otherField ? Yv(n.fields, f.otherField) : void 0,
+      other: f.otherField ? Yv(n.fields, f.otherField) : undefined,
     }));
   if (t.sort) {
     const f = Yv(n.fields, t.sort.field),
@@ -409,7 +419,7 @@ function ZP(e, r) {
     const p = a.map((m) => f.values[m]);
     for (const m of s) {
       const v = f.values[m.index],
-        g = m.other !== void 0 ? f.values[m.other] : (m.constant ?? null);
+        g = m.other !== undefined ? f.values[m.other] : (m.constant ?? null);
       if (m.operation === "upper") p.push(String(v ?? "").toUpperCase());
       else if (m.operation === "lower") p.push(String(v ?? "").toLowerCase());
       else if (m.operation === "trim") p.push(String(v ?? "").trim());
@@ -443,7 +453,7 @@ function ZP(e, r) {
       u.push(p));
   }
   const l = gR(e, t.name, u, t.destination),
-    { destination: c, ...h } = t;
+    { destination, ...h } = t;
   return (
     (l.sheet.queries = [
       ...(l.sheet.queries ?? []),
@@ -496,26 +506,26 @@ function U2(e, r) {
         : Ja.maxCellTextLength,
     );
   const n = { raw: t };
-  if (e.literal !== void 0) {
+  if (e.literal !== undefined) {
     if (typeof e.literal != "boolean")
       return Hn("Cell literal flag must be boolean.");
     n.literal = e.literal;
   }
   if (
-    (e.numberFormat !== void 0 && (n.numberFormat = l0(e.numberFormat)),
-    e.numFmt !== void 0 &&
+    (e.numberFormat !== undefined && (n.numberFormat = l0(e.numberFormat)),
+    e.numFmt !== undefined &&
       (n.numFmt = Bu(e.numFmt, "Excel number format", 200)),
-    e.format !== void 0)
+    e.format !== undefined)
   ) {
     if (typeof e.format != "string" || !yae.has(e.format))
       return Hn("Unsupported cell format.");
     n.format = e.format;
   }
   return (
-    e.hyperlink !== void 0 && (n.hyperlink = X3(e.hyperlink)),
-    e.note !== void 0 && (n.note = Bu(e.note, "Cell note", 1e4)),
-    e.tickmark !== void 0 && (n.tickmark = Bu(e.tickmark, "Tickmark", 40)),
-    e.style !== void 0 && (n.style = oh(e.style)),
+    e.hyperlink !== undefined && (n.hyperlink = X3(e.hyperlink)),
+    e.note !== undefined && (n.note = Bu(e.note, "Cell note", 1e4)),
+    e.tickmark !== undefined && (n.tickmark = Bu(e.tickmark, "Tickmark", 40)),
+    e.style !== undefined && (n.style = oh(e.style)),
     n
   );
 }
@@ -523,7 +533,6 @@ function hi(e) {
   return U2(e, false);
 }
 function qQ(e, r, t, n) {
-  var u;
   const o = e.sheets.find((l) => l.id === r);
   jn(o);
   const a = Ix(n);
@@ -533,11 +542,13 @@ function qQ(e, r, t, n) {
   for (const l of a)
     d[l] = hi({
       ...d[l],
-      raw: ((u = d[l]) == null ? void 0 : u.raw) ?? null,
+      raw: d[l]?.raw ?? null,
       style: structuredClone(s.style ?? {}),
       format: s.format ?? "general",
       numFmt: s.numFmt,
-      numberFormat: s.numberFormat ? structuredClone(s.numberFormat) : void 0,
+      numberFormat: s.numberFormat
+        ? structuredClone(s.numberFormat)
+        : undefined,
     });
   return {
     ...e,
@@ -545,7 +556,7 @@ function qQ(e, r, t, n) {
   };
 }
 function bC(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   const t = () => {
       throw Error(
         "Invalid or over-capacity table source evidence. Keep the native backup.",
@@ -591,7 +602,7 @@ function bC(e, r) {
             d.columnId.length > 100) &&
             t(),
           iR(d.dataType))
-        : (d.columnId !== void 0 || d.dataType !== void 0) && t(),
+        : (d.columnId !== undefined || d.dataType !== undefined) && t(),
       o.add(d.id));
     const u = new Set(),
       l = d.changes.map((c) => {
@@ -609,7 +620,7 @@ function bC(e, r) {
           u.add(f),
           {
             address: f,
-            ...(h.before !== void 0 ? { before: hi(h.before) } : {}),
+            ...(h.before !== undefined ? { before: hi(h.before) } : {}),
             after: hi(h.after),
           }
         );
@@ -618,7 +629,6 @@ function bC(e, r) {
   });
 }
 function RP(e, r, t, n, o = {}) {
-  var y, w;
   if (o.readOnly) throw Error("This workbook is read-only.");
   if (
     !n ||
@@ -640,8 +650,8 @@ function RP(e, r, t, n, o = {}) {
     (iR(n.dataType),
     !["convert", "tag"].includes(n.mode) ||
       !["reject", "keep"].includes(n.invalid) ||
-      ![void 0, ".", ","].includes(n.decimal) ||
-      ![void 0, "", ".", ",", " "].includes(n.group) ||
+      ![undefined, ".", ","].includes(n.decimal) ||
+      ![undefined, "", ".", ",", " "].includes(n.group) ||
       (n.decimal ?? ".") === (n.group ?? ","))
   )
     throw Error(
@@ -649,7 +659,7 @@ function RP(e, r, t, n, o = {}) {
     );
   const a = structuredClone(n),
     s = Nr(e, r),
-    d = (y = s.tables) == null ? void 0 : y.find((E) => E.id === t);
+    d = s.tables?.find((E) => E.id === t);
   if ((jn(s), !d)) throw Error("Table not found.");
   const u = d.columns.findIndex((E) => E.id === a.columnId);
   if (u < 0) throw Error("Select an existing table column.");
@@ -669,7 +679,7 @@ function RP(e, r, t, n, o = {}) {
   for (let E = 1; E <= c; E++) {
     const A = `${ut(l.firstCol + u)}${l.firstRow + E + 1}`,
       k = s.cells[A],
-      F = (k == null ? void 0 : k.raw) ?? null,
+      F = k?.raw ?? null,
       I =
         typeof F == "string" && F.startsWith("=") && !(k != null && k.literal);
     try {
@@ -696,8 +706,8 @@ function RP(e, r, t, n, o = {}) {
           ...k,
           raw: j,
           ...(typeof j == "string" && j.startsWith("=")
-            ? { literal: !0 }
-            : { literal: void 0 }),
+            ? { literal: true }
+            : { literal: undefined }),
         });
         ((f.cells[A] = z),
           m.push({
@@ -716,7 +726,7 @@ function RP(e, r, t, n, o = {}) {
       ((h.tableEvidence = [
         ...(h.tableEvidence ?? []),
         {
-          id: `${t}:${p.id}:${e.revision}:${((w = e.tableEvidence) == null ? void 0 : w.length) ?? 0}`,
+          id: `${t}:${p.id}:${e.revision}:${e.tableEvidence?.length ?? 0}`,
           kind: "columnType",
           sourceRevision: e.revision,
           sheetId: r,
@@ -769,10 +779,7 @@ function fie(e, r, t) {
       c.some((f) => Qf(a, ct(f))) &&
       Xt("A table cannot overlap merged cells. Unmerge the source first."),
     e.sheets.some((f) => {
-      var p;
-      return (p = f.tables) == null
-        ? void 0
-        : p.some((m) => m.name.toLowerCase() === o.toLowerCase());
+      return f.tables?.some((m) => m.name.toLowerCase() === o.toLowerCase());
     }) && Xt("A table with that name already exists."),
     t.showTotals)
   ) {
@@ -803,7 +810,7 @@ function fie(e, r, t) {
     const m = Cn(a.firstRow, a.firstCol + p),
       v = n.cells[m],
       g = d.cells[m];
-    return (v == null ? void 0 : v.raw) === f.name &&
+    return v?.raw === f.name &&
       !(f.name.startsWith("=") && !(v != null && v.literal))
       ? []
       : [
@@ -846,11 +853,9 @@ function KP(e, r, t, n) {
       }
 }
 function hie(e, r, t, n) {
-  var y, w, E;
+  var w;
   const o = Nr(e, r),
-    a =
-      ((y = o.tables) == null ? void 0 : y.find((A) => A.id === t)) ??
-      Xt("Table not found.");
+    a = o.tables?.find((A) => A.id === t) ?? Xt("Table not found.");
   jn(o);
   const s = dR(n.name),
     d = Ef(n.range, o),
@@ -860,10 +865,9 @@ function hie(e, r, t, n) {
       "Resize a table from its existing top-left header. Moving table source cells is a separate operation.",
     ),
     e.sheets.some((A) => {
-      var k;
-      return (k = A.tables) == null
-        ? void 0
-        : k.some((F) => F.id !== t && F.name.toLowerCase() === s.toLowerCase());
+      return A.tables?.some(
+        (F) => F.id !== t && F.name.toLowerCase() === s.toLowerCase(),
+      );
     }) && Xt("A table with that name already exists."));
   const l = n.showTotals ?? a.showTotals;
   if (
@@ -903,12 +907,9 @@ function hie(e, r, t, n) {
     }
   const p = zP(h, r, n.range, n.headers),
     m = p.map((A, k) => {
-      var F;
       return {
         ...a.columns[k],
-        id:
-          ((F = a.columns[k]) == null ? void 0 : F.id) ??
-          `${a.id}:column:${k}:${e.revision}`,
+        id: a.columns[k]?.id ?? `${a.id}:column:${k}:${e.revision}`,
         name: A,
       };
     }),
@@ -931,8 +932,7 @@ function hie(e, r, t, n) {
     const F = Cn(d.firstRow, d.firstCol + k),
       I = o.cells[F],
       O = f.cells[F];
-    return (I == null ? void 0 : I.raw) === O.raw &&
-      !!(I != null && I.literal) == !!O.literal
+    return I?.raw === O.raw && !!(I != null && I.literal) == !!O.literal
       ? []
       : [
           {
@@ -947,7 +947,7 @@ function hie(e, r, t, n) {
       ((h.tableEvidence = [
         ...(h.tableEvidence ?? []),
         {
-          id: `${t}:headers:${e.revision}:${((E = h.tableEvidence) == null ? void 0 : E.length) ?? 0}`,
+          id: `${t}:headers:${e.revision}:${h.tableEvidence?.length ?? 0}`,
           kind: "headers",
           sourceRevision: e.revision,
           sheetId: r,
@@ -977,12 +977,10 @@ function hie(e, r, t, n) {
   return xC(hR(e, h));
 }
 function QP(e, r, t, n, o = {}) {
-  var p, m;
+  var m;
   o.readOnly && Xt("This workbook is read-only.");
   const a = Nr(e, r),
-    s =
-      ((p = a.tables) == null ? void 0 : p.find((v) => v.id === t)) ??
-      Xt("Select an existing table.");
+    s = a.tables?.find((v) => v.id === t) ?? Xt("Select an existing table.");
   (jn(a), dl(n) || Xt("Choose a table operation."));
   const d = {
     setColumnFormula: ["kind", "columnId", "formula"],
@@ -1010,7 +1008,7 @@ function QP(e, r, t, n, o = {}) {
           {
             ...c,
             columns: c.columns.map((b) =>
-              b.id === v.id ? b : { ...b, calculatedFormula: void 0 },
+              b.id === v.id ? b : { ...b, calculatedFormula: undefined },
             ),
           },
           g.firstRow,
@@ -1028,8 +1026,8 @@ function QP(e, r, t, n, o = {}) {
       y = 0,
       w;
     n.kind === "appendRows"
-      ? (n.rows !== void 0
-          ? (n.count !== void 0 &&
+      ? (n.rows !== undefined
+          ? (n.count !== undefined &&
               Xt("Specify raw rows or a row count, not both."),
             (!Array.isArray(n.rows) ||
               n.rows.length > Jv.appendedRows ||
@@ -1091,7 +1089,7 @@ function QP(e, r, t, n, o = {}) {
               raw: I,
               ...(typeof I == "string" && I.startsWith("=")
                 ? { literal: true }
-                : { literal: void 0 }),
+                : { literal: undefined }),
             });
           l.cells[O] = j;
         }
@@ -1130,7 +1128,7 @@ function QP(e, r, t, n, o = {}) {
     ["review", e.reviewThreads, u.reviewThreads],
   ])
     for (const y of b ?? []) {
-      const w = g == null ? void 0 : g.find((E) => E.id === y.id);
+      const w = g?.find((E) => E.id === y.id);
       w &&
         w.anchor.address !== y.anchor.address &&
         f.push({
@@ -1165,7 +1163,7 @@ function Eie(e, r, t = {}) {
   );
 }
 function HU(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   (!Array.isArray(e) || e.length > 100 || JSON.stringify(e).length > 5e6) &&
     gp();
   const t = new Set();
@@ -1221,14 +1219,14 @@ function HU(e, r) {
             gp(),
           s.add(l.sourceAddress),
           d.add(l.outputAddress));
-        const c = l.original === void 0 ? void 0 : hi(l.original);
+        const c = l.original === undefined ? undefined : hi(l.original);
         c &&
           typeof c.raw == "string" &&
           c.raw.startsWith("=") &&
           !c.literal &&
           gp();
         let h;
-        if (l.origin !== void 0) {
+        if (l.origin !== undefined) {
           L2(l.origin, [
             "id",
             "sourceId",
@@ -1261,7 +1259,7 @@ function HU(e, r) {
   });
 }
 function YU(e, r) {
-  if (e === void 0) return;
+  if (e === undefined) return;
   if (
     !Array.isArray(e) ||
     e.length > 100 ||
@@ -1273,11 +1271,10 @@ function YU(e, r) {
   const t = new Set();
   let n = 0;
   r.fieldTransforms = e.map((o) => {
-    var f;
     const a = vae.safeParse(o);
     if (!a.success)
       throw Error(
-        `Invalid field transformation evidence: ${(f = a.error.issues[0]) == null ? void 0 : f.message}`,
+        `Invalid field transformation evidence: ${a.error.issues[0]?.message}`,
       );
     const s = a.data,
       d = KU(s.request),
@@ -1311,7 +1308,7 @@ function YU(e, r) {
           );
         if (l.has(p.address)) throw Error("Duplicate original field source.");
         l.add(p.address);
-        const v = p.original === void 0 ? void 0 : hi(p.original);
+        const v = p.original === undefined ? undefined : hi(p.original);
         if (
           v &&
           typeof v.raw == "string" &&
@@ -1377,8 +1374,8 @@ function e$(e, r) {
       const g = P2(p.rowCount, 1, Mt.maxRows, "Row count"),
         b = P2(p.colCount, 1, Mt.maxCols, "Column count");
       if (!Vh(p.cells)) return Hn("Sheet cells must be an address map.");
-      const y = r && es(p) ? YE.get(p) : void 0;
-      if (y !== void 0) {
+      const y = r && es(p) ? YE.get(p) : undefined;
+      if (y !== undefined) {
         if (((a += y), a > Mt.maxCells))
           return Hn("Workbook exceeds the 100,000 populated cell limit.");
         const A = { ...p };
@@ -1400,7 +1397,7 @@ function e$(e, r) {
         colCount: Mt.maxCols,
         cells: w,
       };
-      if (p.columnWidths !== void 0) {
+      if (p.columnWidths !== undefined) {
         if (!Vh(p.columnWidths))
           return Hn("Column widths must be an index map.");
         E.columnWidths = {};
@@ -1419,7 +1416,7 @@ function e$(e, r) {
           E.columnWidths[A] = k;
         }
       }
-      if (p.rowHeights !== void 0) {
+      if (p.rowHeights !== undefined) {
         if (
           !Vh(p.rowHeights) ||
           (Object.getPrototypeOf(p.rowHeights) !== Object.prototype &&
@@ -1442,7 +1439,7 @@ function e$(e, r) {
           E.rowHeights[A] = k;
         }
       }
-      if (p.hidden !== void 0) {
+      if (p.hidden !== undefined) {
         if (typeof p.hidden != "boolean")
           return Hn("Sheet hidden flag must be boolean.");
         E.hidden = p.hidden;
@@ -1454,8 +1451,8 @@ function e$(e, r) {
         wP(p, E),
         Joe(p.delimitedSource, E),
         Ax(p, E),
-        p.objects !== void 0 && yC(p.objects, E),
-        p.pageLayout !== void 0 && Rx(p.pageLayout, E),
+        p.objects !== undefined && yC(p.objects, E),
+        p.pageLayout !== undefined && Rx(p.pageLayout, E),
         E
       );
     });
@@ -1493,15 +1490,15 @@ function e$(e, r) {
                   const b = _t(g.address);
                   return g.address !== `${ut(b.col)}${b.row + 1}`
                     ? Hn("History cell address is not canonical.")
-                    : g.before === void 0 && g.after === void 0
+                    : g.before === undefined && g.after === undefined
                       ? Hn("History change must have a before or after value.")
                       : {
                           sheetId: g.sheetId,
                           address: g.address,
-                          ...(g.before !== void 0
+                          ...(g.before !== undefined
                             ? { before: U2(g.before, r) }
                             : {}),
-                          ...(g.after !== void 0
+                          ...(g.after !== undefined
                             ? { after: U2(g.after, r) }
                             : {}),
                         };
@@ -1511,7 +1508,7 @@ function e$(e, r) {
     f = { schemaVersion: 1, id: t, name: n, revision: o, sheets: u, events: h };
   return (
     Lie(e, f),
-    e.datePolicy !== void 0 && (f.datePolicy = ts(e.datePolicy)),
+    e.datePolicy !== undefined && (f.datePolicy = ts(e.datePolicy)),
     fU(e.savedFilterViews, f),
     GF(e, f),
     uoe(e, f),
@@ -1528,15 +1525,17 @@ function e$(e, r) {
     HU(e.textCleanups, f),
     YU(e.fieldTransforms, f),
     bC(e.tableEvidence, f),
-    e.whatIfAnalyses !== void 0 && (f.whatIfAnalyses = tae(e.whatIfAnalyses)),
-    e.definedNames !== void 0 && (f.definedNames = eg(e.definedNames, f)),
+    e.whatIfAnalyses !== undefined &&
+      (f.whatIfAnalyses = tae(e.whatIfAnalyses)),
+    e.definedNames !== undefined && (f.definedNames = eg(e.definedNames, f)),
     jJ(e, f),
     nR(e.structureProtection, f),
     px(e.metadata, f),
     UP(f),
     EB(e, f),
     JJ(e.styleCatalog, f),
-    e.formulaWatches !== void 0 && (f.formulaWatches = TC(e.formulaWatches, f)),
+    e.formulaWatches !== undefined &&
+      (f.formulaWatches = TC(e.formulaWatches, f)),
     zie(e, f),
     FJ(e, f),
     f
@@ -1579,19 +1578,19 @@ function IB(e, r) {
     throw new Error("Invalid workbook property fields.");
   const t = Mw(e);
   if (
-    (r.name !== void 0 && (t.name = uf(r.name, "Workbook name", 200)),
-    r.engagement !== void 0 || r.period !== void 0)
+    (r.name !== undefined && (t.name = uf(r.name, "Workbook name", 200)),
+    r.engagement !== undefined || r.period !== undefined)
   ) {
     if (typeof r.engagement == "string" && r.engagement.length > 200)
       throw new Error("Engagement must contain at most 200 characters.");
     if (typeof r.period == "string" && r.period.length > 100)
       throw new Error("Period must contain at most 100 characters.");
     const n = { ...(t.metadata ?? mx()) };
-    (r.engagement !== void 0 &&
+    (r.engagement !== undefined &&
       (typeof r.engagement == "string" && !r.engagement.trim()
         ? delete n.engagement
         : (n.engagement = uf(r.engagement, "Engagement", 200))),
-      r.period !== void 0 &&
+      r.period !== undefined &&
         (typeof r.period == "string" && !r.period.trim()
           ? delete n.period
           : (n.period = uf(r.period, "Period", 100))),
@@ -1630,8 +1629,7 @@ function RQ(e) {
   const o = [
     r.dataModel,
     ...r.sheets.map((a) => {
-      var s;
-      return (s = a.dataModelReport) == null ? void 0 : s.definition;
+      return a.dataModelReport?.definition;
     }),
   ].filter(Boolean);
   for (const a of o)
@@ -1682,7 +1680,6 @@ function RQ(e) {
   return Mw(cQ(hQ(tQ(r, crypto.randomUUID()), t), t));
 }
 function IQ(e, r) {
-  var d, u;
   const t = uf(r.name, "Workbook name", 200),
     n = uf(r.engagement, "Engagement", 200),
     o = uf(r.period, "Period", 100),
@@ -1696,10 +1693,7 @@ function IQ(e, r) {
       template: {
         id: a.id,
         name: a.name,
-        version:
-          ((u = (d = a.metadata) == null ? void 0 : d.template) == null
-            ? void 0
-            : u.version) ?? 1,
+        version: a.metadata?.template?.version ?? 1,
         sourceWorkbookId: a.id,
         sourceRevision: a.revision,
       },
@@ -1832,7 +1826,7 @@ function Une(e, r, t) {
 function EO(e, r, t) {
   $a(e);
   const n = qp(e, r),
-    o = t === void 0 ? void 0 : yP(t);
+    o = t === undefined ? undefined : yP(t);
   return n.tabColor === o
     ? e
     : w0({
@@ -1969,17 +1963,17 @@ function Vne(e, r, t = false) {
     for (const d of s.tables ?? [])
       for (const u of d.columns)
         if (u.calculatedFormula) {
-          const l = e0(u.calculatedFormula, e, n, void 0, true);
+          const l = e0(u.calculatedFormula, e, n, undefined, true);
           (l !== u.calculatedFormula && jn(s), (u.calculatedFormula = l));
         }
     for (const d of Object.values(s.cells))
       !d.literal &&
         typeof d.raw == "string" &&
         d.raw.startsWith("=") &&
-        (d.raw = e0(d.raw, e, n, void 0, true));
+        (d.raw = e0(d.raw, e, n, undefined, true));
     for (const d of [...(s.conditionalFormats ?? []), ...(s.validations ?? [])])
       if ((d.kind === "formula" || d.kind === "custom") && d.formula) {
-        const u = e0(d.formula, e, n, void 0, true);
+        const u = e0(d.formula, e, n, undefined, true);
         (u !== d.formula && jn(s), (d.formula = u));
       }
     (s.pivots && (s.pivots = s.pivots.filter((d) => d.source.sheetId !== r)),
@@ -1990,7 +1984,10 @@ function Vne(e, r, t = false) {
     a.definedNames &&
       (a.definedNames = a.definedNames
         .filter((s) => s.scopeSheetId !== r)
-        .map((s) => ({ ...s, refersTo: e0(s.refersTo, e, n, void 0, true) }))),
+        .map((s) => ({
+          ...s,
+          refersTo: e0(s.refersTo, e, n, undefined, true),
+        }))),
     w0(fQ(a, r))
   );
 }
@@ -2021,8 +2018,7 @@ function t$(e) {
     for (const n of t) JU.add(n);
     (QU.set(r.cells, t.length),
       t.some((n) => {
-        var o;
-        return n.hyperlink || ((o = n.style) == null ? void 0 : o.binding);
+        return n.hyperlink || n.style?.binding;
       }) || YE.set(r, t.length));
   }
   return (NC.add(e), e);

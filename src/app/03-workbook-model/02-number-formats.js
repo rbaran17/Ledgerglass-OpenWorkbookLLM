@@ -1,6 +1,17 @@
 import qre from "fast-formula-parser";
 import { ax } from "../01-core-schemas-and-hashing.js";
-import { Ay, Bw, GQ, PB, Si, UB, Uv, XQ, ZQ, zB } from "./01-cell-styles-and-themes.js";
+import {
+  Ay,
+  Bw,
+  GQ,
+  PB,
+  Si,
+  UB,
+  Uv,
+  XQ,
+  ZQ,
+  zB,
+} from "./01-cell-styles-and-themes.js";
 
 function l0(e) {
   (!ZQ(e) ||
@@ -29,13 +40,13 @@ function l0(e) {
       const u = r.currency ?? "USD";
       (UB.includes(u) || Si("Choose a supported currency."), (o.currency = u));
     } else
-      r.currency !== void 0 &&
+      r.currency !== undefined &&
         Si("Currency applies only to Currency or Accounting formats.");
     const s = r.decimals ?? (o.currency === "JPY" ? 0 : 2);
     ((typeof s != "number" || !Number.isInteger(s) || s < 0 || s > 12) &&
       Si("Choose 0–12 decimal places."),
       (o.decimals = s),
-      r.useGrouping !== void 0 &&
+      r.useGrouping !== undefined &&
         typeof r.useGrouping != "boolean" &&
         Si("The grouping option must be true or false."),
       (o.useGrouping = r.useGrouping ?? t !== "percent"));
@@ -43,21 +54,21 @@ function l0(e) {
     ((![1, 1e3, 1e6].includes(d) || (t === "percent" && d !== 1)) &&
       Si("Choose units, thousands or millions; percentages use units."),
       (o.scale = d),
-      r.negative !== void 0 &&
+      r.negative !== undefined &&
         (typeof r.negative != "string" ||
           !["minus", "parentheses"].includes(r.negative)) &&
         Si("Choose minus signs or parentheses for negatives."),
       t === "accounting" &&
-        r.negative !== void 0 &&
+        r.negative !== undefined &&
         r.negative !== "parentheses" &&
         Si("Accounting negatives use parentheses."),
       (o.negative =
         t === "accounting" ? "parentheses" : (r.negative ?? "minus")),
-      r.pattern !== void 0 &&
+      r.pattern !== undefined &&
         Si("Use the Custom category to enter a format pattern."));
   } else if (
     ([r.currency, r.decimals, r.useGrouping, r.scale, r.negative].some(
-      (a) => a !== void 0,
+      (a) => a !== undefined,
     ) && Si("These numeric settings do not apply to the chosen category."),
     GQ.has(t) || t === "custom")
   ) {
@@ -82,7 +93,7 @@ function l0(e) {
         );
     }
   } else
-    r.pattern !== void 0 && Si("General does not accept a custom pattern.");
+    r.pattern !== undefined && Si("General does not accept a custom pattern.");
   return o;
 }
 function QQ(e, r) {
@@ -92,34 +103,31 @@ function QQ(e, r) {
   );
 }
 const VB = (e) => {
-  var r;
   return (
-    ((r = new Intl.NumberFormat(e)
+    new Intl.NumberFormat(e)
       .formatToParts(1.1)
-      .find((t) => t.type === "decimal")) == null
-      ? void 0
-      : r.value) ?? "."
+      .find((t) => t.type === "decimal")?.value ?? "."
   );
 };
 function eee(e, r, t) {
   const n = e < 0 && r.sections.length > 1,
-    { parsed: o, divisor: a } =
+    { parsed, divisor } =
       r.sections[e === 0 && r.sections.length > 2 ? 2 : n ? 1 : 0];
-  if (!o.hasNumber) return o.prefix + o.suffix;
-  const s = (Math.abs(e) / a) * (o.percent ? 100 : 1);
+  if (!parsed.hasNumber) return parsed.prefix + parsed.suffix;
+  const s = (Math.abs(e) / divisor) * (parsed.percent ? 100 : 1);
   if (!Number.isFinite(s)) return "#NUM!";
   let d = new Intl.NumberFormat(t, {
-    minimumFractionDigits: o.minDecimals,
-    maximumFractionDigits: o.maxDecimals,
-    minimumIntegerDigits: Math.max(1, o.minIntegerDigits),
-    useGrouping: o.grouping,
+    minimumFractionDigits: parsed.minDecimals,
+    maximumFractionDigits: parsed.maxDecimals,
+    minimumIntegerDigits: Math.max(1, parsed.minIntegerDigits),
+    useGrouping: parsed.grouping,
   }).format(s);
   return (
-    o.minIntegerDigits ||
-      (d === "0" && !o.minDecimals
+    parsed.minIntegerDigits ||
+      (d === "0" && !parsed.minDecimals
         ? (d = "")
         : d.startsWith(`0${VB(t)}`) && (d = d.slice(1))),
-    (e < 0 && !n ? "-" : "") + o.prefix + d + o.suffix
+    (e < 0 && !n ? "-" : "") + parsed.prefix + d + parsed.suffix
   );
 }
 function tee(e, r, t, n) {
@@ -198,14 +206,13 @@ function tee(e, r, t, n) {
   return (o && e < 0 ? "-" : "") + O;
 }
 function vg(e, r, t = "1900") {
-  var l;
   const n = l0(r);
   if (e === null) return { text: "" };
   if (typeof e == "boolean") return { text: e ? "TRUE" : "FALSE" };
   if (typeof e == "string") {
     if (n.category === "custom" && !/^#[A-Z0-9/?!]+$/.test(e)) {
       const c = Bw(n.pattern);
-      if (c.kind === "numeric" && c.textSection !== void 0)
+      if (c.kind === "numeric" && c.textSection !== undefined)
         return { text: QQ(c.textSection, e) };
     }
     return { text: e };
@@ -240,10 +247,7 @@ function vg(e, r, t = "1900") {
         style: "currency",
         currency: n.currency,
       }).formatToParts(Math.abs(o)),
-      f =
-        ((l = h.find((g) => g.type === "currency")) == null
-          ? void 0
-          : l.value) ?? n.currency,
+      f = h.find((g) => g.type === "currency")?.value ?? n.currency,
       p =
         h.findIndex((g) => g.type === "currency") <
         h.findIndex((g) => g.type === "integer")
@@ -268,7 +272,6 @@ function vg(e, r, t = "1900") {
   return { text: (d ? `(${u})` : u) + a };
 }
 function SE(e) {
-  var r;
   if (e) {
     if (e.numberFormat)
       try {
@@ -281,10 +284,7 @@ function SE(e) {
       }
     if (
       !(e.numFmt === "@" && typeof e.raw == "string") &&
-      !(
-        e.format === "date" &&
-        ((r = e.numFmt) == null ? void 0 : r.toLowerCase()) === "yyyy-mm-dd"
-      )
+      !(e.format === "date" && e.numFmt?.toLowerCase() === "yyyy-mm-dd")
     ) {
       if (
         e.numFmt &&
@@ -296,7 +296,7 @@ function SE(e) {
       if (
         e.numFmt &&
         e.numFmt.toLowerCase() !== "general" &&
-        zB(1.25, e.numFmt) === void 0
+        zB(1.25, e.numFmt) === undefined
       )
         return `The imported pattern “${e.numFmt}” is outside the legacy display subset. The basic ${e.format ?? "general"} display is used; the original pattern and raw values are retained. Choose a supported format to change its display explicitly.`;
     }
@@ -351,8 +351,8 @@ function VL(e) {
   const r = new Map();
   for (const a of e) {
     if (!Number.isFinite(a)) return;
-    const { coefficient: s, exponent: d } = zL(a);
-    r.set(d, (r.get(d) ?? 0n) + s);
+    const { coefficient, exponent } = zL(a);
+    r.set(exponent, (r.get(exponent) ?? 0n) + coefficient);
   }
   const t = [...r].filter(([, a]) => a !== 0n);
   if (!t.length) return { coefficient: 0n, exponent: 0 };
@@ -436,52 +436,52 @@ function Zre(e, r, t) {
   return Math.sign(e) * +`${u * o.coefficient}e${o.exponent}`;
 }
 function Kre(e, r, t) {
-  var f;
   if (!Xre.has(e)) return HL;
-  const { retrieve: n, issue: o, isIssue: a } = t,
-    s = r.map(n),
-    d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : o("#NUM!"));
+  const { retrieve, issue, isIssue } = t,
+    s = r.map(retrieve),
+    d = (p) => (Number.isFinite(p) ? (p === 0 ? 0 : p) : issue("#NUM!"));
   if (e === "SUMPRODUCT") {
-    if (!r.length || r.length > 255) return o("#VALUE!");
+    if (!r.length || r.length > 255) return issue("#VALUE!");
     const p = s.map((b) =>
         Array.isArray(b) ? (b.every(Array.isArray) ? b : [b]) : [[b]],
       ),
       m = p[0].length,
-      v = ((f = p[0][0]) == null ? void 0 : f.length) ?? 0;
+      v = p[0][0]?.length ?? 0;
     if (
       !m ||
       !v ||
       p.some((b) => b.length !== m || b.some((y) => y.length !== v))
     )
-      return o("#VALUE!");
-    if (m * v * p.length > 1e5) return o("#LIMIT!");
+      return issue("#VALUE!");
+    if (m * v * p.length > 1e5) return issue("#LIMIT!");
     const g = [];
     for (let b = 0; b < m; b++)
       for (let y = 0; y < v; y++) {
         const w = [];
         for (const A of p) {
           const k = A[b][y];
-          if (a(k)) return k;
+          if (isIssue(k)) return k;
           w.push(typeof k == "number" ? k : 0);
         }
         const E = WL(w);
-        if (!Number.isFinite(E)) return o("#NUM!");
+        if (!Number.isFinite(E)) return issue("#NUM!");
         g.push(E);
       }
     return d(Rc(g));
   }
-  if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2) return o("#VALUE!");
+  if (r.length < (e === "TRUNC" ? 1 : 2) || r.length > 2)
+    return issue("#VALUE!");
   const u = [];
   for (const p of s) {
-    if (a(p)) return p;
+    if (isIssue(p)) return p;
     if (
       Array.isArray(p) ||
       (typeof p == "string" &&
         !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(p.trim()))
     )
-      return o("#VALUE!");
+      return issue("#VALUE!");
     const m = p == null ? 0 : Number(p);
-    if (!Number.isFinite(m)) return o("#NUM!");
+    if (!Number.isFinite(m)) return issue("#NUM!");
     u.push(m);
   }
   const [l, c = 0] = u;
@@ -498,7 +498,7 @@ function Kre(e, r, t) {
     (e === "MROUND" && Math.sign(l) !== Math.sign(c)) ||
     (e === "FLOOR" && l > 0 && c < 0)
   )
-    return o("#NUM!");
+    return issue("#NUM!");
   const h =
     e === "MROUND"
       ? "nearest"
@@ -539,14 +539,13 @@ function jE(e, r, t) {
   (!r.length || r.length > 4 || r[0] == null) && n();
   let a = 0;
   const s = (se) => {
-      var Ae;
       if (t.isIssue(se)) throw se;
       const we = Array.isArray(se)
           ? se.every(Array.isArray)
             ? se
             : [se]
           : [[se]],
-        Ee = ((Ae = we[0]) == null ? void 0 : Ae.length) ?? 0;
+        Ee = we[0]?.length ?? 0;
       return (
         (!we.length || !Ee || we.some((ye) => ye.length !== Ee)) && n(),
         (a += we.length * Ee),
@@ -1136,7 +1135,7 @@ function rne(e, r, t) {
   for (const O of c) f(O);
   const p = (O) => (Number.isFinite(O) ? O : n("#NUM!")),
     m = (O, j) => {
-      if (O === void 0 && j !== void 0) return j;
+      if (O === undefined && j !== undefined) return j;
       if (t.isIssue(O)) throw O;
       if (O == null) return 0;
       if (Array.isArray(O) || (typeof O == "string" && !O.trim())) return n();
@@ -1286,7 +1285,7 @@ function ine(e, r, t) {
     },
     a = (v) => {
       if (t.isIssue(v)) throw v;
-      v === void 0 && n();
+      v === undefined && n();
       const g = Array.isArray(v) ? (v.every(Array.isArray) ? v : [v]) : [[v]];
       return (
         (!g.length ||
@@ -1309,7 +1308,7 @@ function ine(e, r, t) {
     r.length > (e === "LOOKUP" ? 3 : 4)) &&
     n();
   const d = o(t.retrieve(r[0]));
-  d === void 0 && n();
+  d === undefined && n();
   const u = a(t.retrieve(r[1]));
   let l,
     c,

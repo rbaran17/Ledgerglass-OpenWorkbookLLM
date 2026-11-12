@@ -9,10 +9,10 @@ import { dS, d_, fW, hW, txe } from "./34-function-browser-and-names.js";
 
 function nxe(e, r = {}) {
   for (const v of ["includeHidden", "resolveNames", "includeMetadata"])
-    if (r[v] !== void 0 && typeof r[v] != "boolean")
+    if (r[v] !== undefined && typeof r[v] != "boolean")
       throw Error(`${v} must be boolean.`);
   if (
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
         (v) => typeof v != "string" || !e.sheets.some((g) => g.id === v),
@@ -81,7 +81,6 @@ function nxe(e, r = {}) {
   let h = false;
   const f = o ? (e.definedNames ?? []) : [],
     p = (v, g, b = []) => {
-      var E;
       if (
         v.length > 4096 ||
         l.coverage.charactersScanned + v.length > t.maxCharacters
@@ -92,7 +91,7 @@ function nxe(e, r = {}) {
         );
       l.coverage.charactersScanned += v.length;
       const y = [];
-      CR(v, e, g ?? ((E = d[0]) == null ? void 0 : E.id) ?? "", "A1") &&
+      CR(v, e, g ?? d[0]?.id ?? "", "A1") &&
         y.push({
           kind: "external-reference",
           message:
@@ -109,7 +108,7 @@ function nxe(e, r = {}) {
             ? e.sheets.find(
                 (B) => B.name.toLowerCase() === A.qualifier.toLowerCase(),
               )
-            : void 0;
+            : undefined;
           if (A.qualifier && (!z || !u.has(z.id))) {
             y.push({
               kind: "excluded",
@@ -118,7 +117,7 @@ function nxe(e, r = {}) {
             });
             return;
           }
-          const V = (z == null ? void 0 : z.id) ?? g,
+          const V = z?.id ?? g,
             D =
               f.find(
                 (B) =>
@@ -126,7 +125,7 @@ function nxe(e, r = {}) {
                   B.name.toLowerCase() === A.name.toLowerCase(),
               ) ??
               (A.qualifier
-                ? void 0
+                ? undefined
                 : f.find(
                     (B) =>
                       !B.scopeSheetId &&
@@ -203,7 +202,7 @@ function nxe(e, r = {}) {
           ));
         return;
       }
-      const w = p(v, y == null ? void 0 : y.id);
+      const w = p(v, y?.id);
       for (const E of w) {
         if (l.findings.length >= t.maxFindings) {
           ((h = true),
@@ -234,8 +233,8 @@ function nxe(e, r = {}) {
         if (!n) {
           const E = _t(y);
           if (
-            g.some(({ start: A, end: k }) => E.row >= A && E.row <= k) ||
-            b.some(({ start: A, end: k }) => E.col >= A && E.col <= k)
+            g.some(({ start, end }) => E.row >= start && E.row <= end) ||
+            b.some(({ start, end }) => E.col >= start && E.col <= end)
           )
             continue;
         }
@@ -271,7 +270,7 @@ function nxe(e, r = {}) {
   );
 }
 function ixe(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     [n, o] = ne.useState("report"),
     [a, s] = ne.useState(true),
     [d, u] = ne.useState(""),
@@ -326,8 +325,8 @@ function ixe(e) {
       className: "formula-tools function-compatibility",
       role: "dialog",
       "aria-modal": "true",
-      "aria-label": r("Formula compatibility"),
-      lang: t("Formula compatibility"),
+      "aria-label": text("Formula compatibility"),
+      lang: language("Formula compatibility"),
       "data-ui-label": "Formula compatibility",
       children: [
         i.jsxs("header", {
@@ -336,9 +335,9 @@ function ixe(e) {
               children: i.jsx(M, { children: "Formula compatibility" }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close compatibility"),
+              "aria-label": text("Close compatibility"),
               onClick: e.onClose,
-              lang: t("Close compatibility"),
+              lang: language("Close compatibility"),
               "data-ui-label": "Close compatibility",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -352,8 +351,8 @@ function ixe(e) {
         }),
         i.jsxs("div", {
           role: "tablist",
-          "aria-label": r("Compatibility views"),
-          lang: t("Compatibility views"),
+          "aria-label": text("Compatibility views"),
+          lang: language("Compatibility views"),
           "data-ui-label": "Compatibility views",
           children: [
             i.jsx("button", {
@@ -374,8 +373,8 @@ function ixe(e) {
         n === "report"
           ? i.jsxs("div", {
               role: "tabpanel",
-              "aria-label": r("Compatibility report"),
-              lang: t("Compatibility report"),
+              "aria-label": text("Compatibility report"),
+              lang: language("Compatibility report"),
               "data-ui-label": "Compatibility report",
               children: [
                 i.jsxs("label", {
@@ -583,8 +582,8 @@ function ixe(e) {
             })
           : i.jsxs("div", {
               role: "tabpanel",
-              "aria-label": r("Function registry"),
-              lang: t("Function registry"),
+              "aria-label": text("Function registry"),
+              lang: language("Function registry"),
               "data-ui-label": "Function registry",
               children: [
                 i.jsxs("div", {
@@ -628,11 +627,11 @@ function ixe(e) {
                       className: "formula-function-layout",
                       children: [
                         i.jsx("select", {
-                          "aria-label": r("Function contracts"),
+                          "aria-label": text("Function contracts"),
                           size: 12,
                           value: g.name,
                           onChange: (w) => f(w.target.value),
-                          lang: t("Function contracts"),
+                          lang: language("Function contracts"),
                           "data-ui-label": "Function contracts",
                           children: v.map((w) =>
                             i.jsxs(
@@ -655,8 +654,8 @@ function ixe(e) {
                           ),
                         }),
                         i.jsxs("div", {
-                          "aria-label": r("Selected function contract"),
-                          lang: t("Selected function contract"),
+                          "aria-label": text("Selected function contract"),
+                          lang: language("Selected function contract"),
                           "data-ui-label": "Selected function contract",
                           children: [
                             i.jsx("h3", { children: g.name }),
@@ -738,7 +737,6 @@ function ixe(e) {
   });
 }
 function VT(e) {
-  var t, n, o;
   if (e instanceof Error && "error" in e)
     return { kind: "error", text: String(e.error) };
   if (Array.isArray(e)) {
@@ -753,11 +751,11 @@ function VT(e) {
     }
     return {
       kind: "array",
-      text: `${a.length} × ${((t = a[0]) == null ? void 0 : t.length) ?? 0} array`,
+      text: `${a.length} × ${a[0]?.length ?? 0} array`,
       rows: a.length,
-      columns: ((n = a[0]) == null ? void 0 : n.length) ?? 0,
+      columns: a[0]?.length ?? 0,
       preview: s,
-      truncated: a.length * (((o = a[0]) == null ? void 0 : o.length) ?? 0) > 8,
+      truncated: a.length * (a[0]?.length ?? 0) > 8,
     };
   }
   if (e && typeof e == "object") {
@@ -789,21 +787,20 @@ function VT(e) {
   };
 }
 const tj = (e, r) => {
-  if (e === void 0) return r;
+  if (e === undefined) return r;
   if (!Number.isInteger(e) || e < 1 || e > r)
     throw Error(`Inspection limits must be integers between 1 and ${r}.`);
   return e;
 };
 function oxe(e, r) {
-  var V, D, B, _;
-  const t = tj((V = r.limits) == null ? void 0 : V.maxSteps, 500),
-    n = tj((D = r.limits) == null ? void 0 : D.maxReads, 2e3);
-  if (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+  const t = tj(r.limits?.maxSteps, 500),
+    n = tj(r.limits?.maxReads, 2e3);
+  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("includeHidden must be boolean.");
-  if (r.includeNames !== void 0 && typeof r.includeNames != "boolean")
+  if (r.includeNames !== undefined && typeof r.includeNames != "boolean")
     throw Error("includeNames must be boolean.");
   if (
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some((C) => !e.sheets.some((T) => T.id === C)))
   )
@@ -811,16 +808,13 @@ function oxe(e, r) {
   const o = new Set(r.allowedSheetIds ?? e.sheets.map((C) => C.id)),
     a = _t(r.address),
     s = `${ut(a.col)}${a.row + 1}`,
-    d =
-      (B = r.allowedRanges) == null
-        ? void 0
-        : B.map((C) => {
-            if (!o.has(C.sheetId))
-              throw Error(
-                "Inspection ranges must remain within authorized worksheets.",
-              );
-            return { ...C, bounds: ct(C.range) };
-          }),
+    d = r.allowedRanges?.map((C) => {
+      if (!o.has(C.sheetId))
+        throw Error(
+          "Inspection ranges must remain within authorized worksheets.",
+        );
+      return { ...C, bounds: ct(C.range) };
+    }),
     u = new Map(
       e.sheets.map((C) => [
         C.id,
@@ -830,23 +824,23 @@ function oxe(e, r) {
     l = (C, T) => {
       const N = u.get(C);
       if (!N || !o.has(C)) return false;
-      const { row: R, col: L } = _t(T);
-      return R >= N.sheet.rowCount ||
-        L >= N.sheet.colCount ||
+      const { row, col } = _t(T);
+      return row >= N.sheet.rowCount ||
+        col >= N.sheet.colCount ||
         (d &&
           !d.some(
             ($) =>
               $.sheetId === C &&
-              R >= $.bounds.firstRow &&
-              R <= $.bounds.lastRow &&
-              L >= $.bounds.firstCol &&
-              L <= $.bounds.lastCol,
+              row >= $.bounds.firstRow &&
+              row <= $.bounds.lastRow &&
+              col >= $.bounds.firstCol &&
+              col <= $.bounds.lastCol,
           ))
         ? false
         : !!r.includeHidden ||
             (!N.sheet.hidden &&
-              !N.rows.some(($) => R >= $.start && R <= $.end) &&
-              !N.cols.some(($) => L >= $.start && L <= $.end));
+              !N.rows.some(($) => row >= $.start && row <= $.end) &&
+              !N.cols.some(($) => col >= $.start && col <= $.end));
     };
   if (!l(r.sheetId, s))
     throw Error(
@@ -881,7 +875,6 @@ function oxe(e, r) {
             : true;
         },
         allowRead(C, T) {
-          var L;
           if (++f > n)
             return (
               (v = true),
@@ -891,7 +884,7 @@ function oxe(e, r) {
               ),
               false
             );
-          const N = (L = u.get(C)) == null ? void 0 : L.sheet;
+          const N = u.get(C)?.sheet;
           if (!N) return true;
           const R = _t(T);
           return R.row >= N.rowCount || R.col >= N.colCount || l(C, T)
@@ -920,10 +913,10 @@ function oxe(e, r) {
       },
     ),
     w = e.sheets.find((C) => C.id === r.sheetId).cells[s],
-    E = (w == null ? void 0 : w.raw) ?? null,
+    E = w?.raw ?? null,
     A = typeof E == "string" && E.startsWith("=") && !(w != null && w.literal),
     k = y(r.sheetId, s),
-    { range: F, diagnostic: I } = y.peekSpill(r.sheetId, s);
+    { range, diagnostic } = y.peekSpill(r.sheetId, s);
   for (const C of y.getReferenceDiagnostics()) g("reference", C.message);
   for (const C of y.getNamedFormulaDiagnostics()) g("name", C.message);
   for (const C of y.getFinancialDiagnostics())
@@ -954,10 +947,9 @@ function oxe(e, r) {
     result: z ? null : k,
     resultStatus: z ? "withheld" : A ? "calculated" : "literal",
     steps: c,
-    firstErrorStep:
-      (_ = c.find((C) => C.result.kind === "error")) == null ? void 0 : _.index,
-    ...(!z && F ? { spillRange: F } : {}),
-    ...(!z && I ? { spillDiagnostic: I } : {}),
+    firstErrorStep: c.find((C) => C.result.kind === "error")?.index,
+    ...(!z && range ? { spillRange: range } : {}),
+    ...(!z && diagnostic ? { spillDiagnostic: diagnostic } : {}),
     issues: h,
     coverage: {
       complete: !j && !z && !O.length,
@@ -994,7 +986,7 @@ const axe = {
   "#CALC!": "Review empty arrays and uninvoked reusable functions.",
 };
 function sxe(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     [a, s] = ne.useState(false),
@@ -1023,11 +1015,10 @@ function sxe(e) {
     (u(0), c(""));
   }, [h]),
     ne.useEffect(() => {
-      var y, w;
+      var w;
       const b = document.activeElement;
       return (
-        (w = (y = o.current) == null ? void 0 : y.querySelector("button")) ==
-          null || w.focus(),
+        (w = o.current?.querySelector("button")) == null || w.focus(),
         () => {
           b != null && b.isConnected && b.focus();
         }
@@ -1035,10 +1026,9 @@ function sxe(e) {
     }, []));
   const f = h.report,
     p = f ? Math.min(d, f.steps.length - 1) : -1,
-    m = f == null ? void 0 : f.steps[p],
+    m = f?.steps[p],
     v = (b, y) => {
-      var w;
-      return `${((w = e.workbook.sheets.find((E) => E.id === b)) == null ? void 0 : w.name) ?? "Unavailable sheet"}!${y}`;
+      return `${e.workbook.sheets.find((E) => E.id === b)?.name ?? "Unavailable sheet"}!${y}`;
     },
     g = () => {
       if (f)
@@ -1112,9 +1102,9 @@ function sxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close formula evaluation"),
+              "aria-label": text("Close formula evaluation"),
               onClick: e.onClose,
-              lang: t("Close formula evaluation"),
+              lang: language("Close formula evaluation"),
               "data-ui-label": "Close formula evaluation",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1151,8 +1141,8 @@ function sxe(e) {
                 children: [
                   i.jsxs("section", {
                     className: "fi-target",
-                    "aria-label": r("Evaluation target"),
-                    lang: t("Evaluation target"),
+                    "aria-label": text("Evaluation target"),
+                    lang: language("Evaluation target"),
                     "data-ui-label": "Evaluation target",
                     children: [
                       i.jsx("h3", { children: v(f.sheetId, f.address) }),
@@ -1198,8 +1188,8 @@ function sxe(e) {
                   }),
                   f.issues.length > 0 &&
                     i.jsx("ul", {
-                      "aria-label": r("Evaluation diagnostics"),
-                      lang: t("Evaluation diagnostics"),
+                      "aria-label": text("Evaluation diagnostics"),
+                      lang: language("Evaluation diagnostics"),
                       "data-ui-label": "Evaluation diagnostics",
                       children: f.issues.map((b, y) =>
                         i.jsxs(
@@ -1252,9 +1242,9 @@ function sxe(e) {
                   m &&
                     i.jsxs("section", {
                       className: "fe-step",
-                      "aria-label": r("Current calculation step"),
+                      "aria-label": text("Current calculation step"),
                       "aria-live": "polite",
-                      lang: t("Current calculation step"),
+                      lang: language("Current calculation step"),
                       "data-ui-label": "Current calculation step",
                       children: [
                         i.jsxs("h3", {
@@ -1335,9 +1325,7 @@ function sxe(e) {
                             {
                               children: i.jsxs("button", {
                                 "aria-current":
-                                  b.index === (m == null ? void 0 : m.index)
-                                    ? "step"
-                                    : void 0,
+                                  b.index === m?.index ? "step" : undefined,
                                 onClick: () => u(b.index - 1),
                                 children: [
                                   b.index,
@@ -1392,7 +1380,7 @@ const g2 = (e) =>
       ? String(e).toUpperCase()
       : String(e);
 function lxe(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -1436,14 +1424,11 @@ function lxe(e) {
     (p(0), v(""));
   }, [g]),
     ne.useEffect(() => {
-      var F, I;
+      var I;
       const k = document.activeElement;
       return (
-        (I =
-          (F = o.current) == null
-            ? void 0
-            : F.querySelector('[role="tab"][aria-selected="true"]')) == null ||
-          I.focus(),
+        (I = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
+          null || I.focus(),
         () => {
           k != null && k.isConnected && k.focus();
         }
@@ -1451,14 +1436,10 @@ function lxe(e) {
     }, []));
   const b = g.result,
     y = (k) => {
-      var O;
       const [F, I] = JSON.parse(k);
-      return `${((O = e.workbook.sheets.find((j) => j.id === F)) == null ? void 0 : O.name) ?? "Unavailable sheet"}!${I}`;
+      return `${e.workbook.sheets.find((j) => j.id === F)?.name ?? "Unavailable sheet"}!${I}`;
     },
-    w = Math.max(
-      1,
-      Math.ceil(((b == null ? void 0 : b.nodes.length) ?? 0) / 50),
-    ),
+    w = Math.max(1, Math.ceil((b?.nodes.length ?? 0) / 50)),
     E = Math.min(f, w - 1),
     A = (k) => {
       try {
@@ -1492,18 +1473,15 @@ function lxe(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (k) => {
-        var F;
         if (
           (k.stopPropagation(),
           k.key === "Escape" && (k.preventDefault(), a.current()),
           k.key === "Tab")
         ) {
           const I = [
-              ...(((F = o.current) == null
-                ? void 0
-                : F.querySelectorAll(
-                    'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
-                  )) ?? []),
+              ...(o.current?.querySelectorAll(
+                'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),summary,[tabindex="0"]',
+              ) ?? []),
             ].filter((z) => !z.hidden),
             O = I[0],
             j = I.at(-1);
@@ -1534,9 +1512,9 @@ function lxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close calculation inspection"),
+              "aria-label": text("Close calculation inspection"),
               onClick: e.onClose,
-              lang: t("Close calculation inspection"),
+              lang: language("Close calculation inspection"),
               "data-ui-label": "Close calculation inspection",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1547,8 +1525,8 @@ function lxe(e) {
           children: [
             i.jsx("div", {
               role: "tablist",
-              "aria-label": r("Formula relationships"),
-              lang: t("Formula relationships"),
+              "aria-label": text("Formula relationships"),
+              lang: language("Formula relationships"),
               "data-ui-label": "Formula relationships",
               children: ["precedents", "dependents"].map((k) =>
                 i.jsx(
@@ -1589,10 +1567,10 @@ function lxe(e) {
               children: [
                 i.jsx(M, { children: "Traversal depth" }),
                 i.jsx("select", {
-                  "aria-label": r("Traversal depth"),
+                  "aria-label": text("Traversal depth"),
                   value: u,
                   onChange: (k) => l(Number(k.target.value)),
-                  lang: t("Traversal depth"),
+                  lang: language("Traversal depth"),
                   "data-ui-label": "Traversal depth",
                   children: Array.from({ length: 8 }, (k, F) =>
                     i.jsx(
@@ -1640,8 +1618,8 @@ function lxe(e) {
             children: [
               i.jsxs("section", {
                 className: "fi-target",
-                "aria-label": r("Selected cell"),
-                lang: t("Selected cell"),
+                "aria-label": text("Selected cell"),
+                lang: language("Selected cell"),
                 "data-ui-label": "Selected cell",
                 children: [
                   i.jsxs("h3", {
@@ -1813,8 +1791,8 @@ function lxe(e) {
               w > 1 &&
                 i.jsxs("nav", {
                   className: "fi-pages",
-                  "aria-label": r("Inspection result pages"),
-                  lang: t("Inspection result pages"),
+                  "aria-label": text("Inspection result pages"),
+                  lang: language("Inspection result pages"),
                   "data-ui-label": "Inspection result pages",
                   children: [
                     i.jsx("button", {
@@ -1841,8 +1819,8 @@ function lxe(e) {
               b.cycles.length > 0 &&
                 i.jsxs("section", {
                   className: "fi-warning",
-                  "aria-label": r("Detected cycles"),
-                  lang: t("Detected cycles"),
+                  "aria-label": text("Detected cycles"),
+                  lang: language("Detected cycles"),
                   "data-ui-label": "Detected cycles",
                   children: [
                     i.jsx("h3", {
@@ -1868,7 +1846,6 @@ function lxe(e) {
                   }),
                   i.jsx("ul", {
                     children: b.references.map((k, F) => {
-                      var I;
                       return i.jsxs(
                         "li",
                         {
@@ -1876,11 +1853,8 @@ function lxe(e) {
                             i.jsx("code", { children: y(k.from) }),
                             " →",
                             " ",
-                            (I = e.workbook.sheets.find(
-                              (O) => O.id === k.sheetId,
-                            )) == null
-                              ? void 0
-                              : I.name,
+                            e.workbook.sheets.find((O) => O.id === k.sheetId)
+                              ?.name,
                             "!",
                             k.range,
                             " · ",
@@ -1968,10 +1942,10 @@ function lxe(e) {
   });
 }
 function f_(e, r) {
-  if (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+  if (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
         (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),

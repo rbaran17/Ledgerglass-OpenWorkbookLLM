@@ -17,7 +17,19 @@ import {
   v0,
 } from "./03-workbook-model.js";
 import { X1, Y$, m0 } from "./12-formula-dependency-inspector.js";
-import { Ace, Bg, Cce, Nn, Tce, hp, ih, kce, lg, wI, xI } from "./15-data-model-dialog.js";
+import {
+  Ace,
+  Bg,
+  Cce,
+  Nn,
+  Tce,
+  hp,
+  ih,
+  kce,
+  lg,
+  wI,
+  xI,
+} from "./15-data-model-dialog.js";
 
 function EI(e, r, t) {
   const n = [];
@@ -104,10 +116,10 @@ function EI(e, r, t) {
         })),
     },
     c = Vn(l);
-  for (const { sheet: h, anchor: f } of n) {
-    const p = c.getSpillRange(h.id, f);
+  for (const { sheet, anchor } of n) {
+    const p = c.getSpillRange(sheet.id, anchor);
     p &&
-      r.some((m) => m.sheet.id === h.id && hp(m.range, p)) &&
+      r.some((m) => m.sheet.id === sheet.id && hp(m.range, p)) &&
       Nn(
         "The selected source or destination intersects a generated array. Convert its results to ordinary values explicitly before splitting.",
       );
@@ -118,7 +130,7 @@ function EI(e, r, t) {
     );
 }
 function dz(e, r, t = {}) {
-  var w, E, A, k, F, I;
+  var w, A, k, F, I;
   const n = wI(e, t),
     o = Ace(r),
     a = e.sheets.find((O) => O.id === o.sourceSheetId);
@@ -145,7 +157,7 @@ function dz(e, r, t = {}) {
       Nn(
         `Source ${j} contains a formula. Copy its results to ordinary values explicitly before splitting.`,
       );
-    const V = kce((z == null ? void 0 : z.raw) ?? null);
+    const V = kce(z?.raw ?? null);
     (f += V.length) > ih.sourceCharacters &&
       Nn(
         "Selected source text exceeds the 200,000-character processing budget.",
@@ -169,11 +181,10 @@ function dz(e, r, t = {}) {
     Nn(
       "Split output may contain at most 500 cells. Select fewer source rows or fields.",
     ),
-    (((E = o.formats) == null ? void 0 : E.length) ?? 0) > h &&
+    (o.formats?.length ?? 0) > h &&
       Nn("A column conversion refers to a field outside the split result."));
   const p = Array.from({ length: h }, (O, j) => {
-    var z;
-    return ((z = o.formats) == null ? void 0 : z[j]) ?? "text";
+    return o.formats?.[j] ?? "text";
   });
   let m,
     v,
@@ -563,7 +574,6 @@ function _ce(e, r) {
   return (o.push(a), o);
 }
 function pz(e, r, t = "1900") {
-  var o, a;
   if (r.to === "text") return kp(e);
   if (q2(e)) return null;
   if (r.to === "boolean") {
@@ -588,7 +598,7 @@ function pz(e, r, t = "1900") {
         "Expected a full-year ISO date or an explicitly ordered slash date.",
       );
     const s = zp(e, { textDateOrder: r.dateOrder, dateSystem: t });
-    if (s === void 0)
+    if (s === undefined)
       throw Error(`The date is impossible or outside ${t}–9999.`);
     return s;
   }
@@ -599,10 +609,10 @@ function pz(e, r, t = "1900") {
   else {
     let d = e.trim();
     /^\(.*\)$/.test(d) && (d = "-" + d.slice(1, -1));
-    const u = ((o = /[eE][+-]?\d+$/.exec(d)) == null ? void 0 : o[0]) ?? "",
+    const u = /[eE][+-]?\d+$/.exec(d)?.[0] ?? "",
       c = (u ? d.slice(0, -u.length) : d).split(r.decimal);
     if (c.length > 2) throw Error("More than one decimal separator.");
-    const h = ((a = /^[+-]/.exec(c[0])) == null ? void 0 : a[0]) ?? "",
+    const h = /^[+-]/.exec(c[0])?.[0] ?? "",
       f = c[0].slice(h.length),
       p = c[1];
     if (r.group && f.includes(r.group)) {
@@ -613,13 +623,13 @@ function pz(e, r, t = "1900") {
         );
     }
     const m = r.group ? f.split(r.group).join("") : f;
-    if (!/^\d*$/.test(m) || (p !== void 0 && !/^\d+$/.test(p)) || (!m && !p))
+    if (!/^\d*$/.test(m) || (p !== undefined && !/^\d+$/.test(p)) || (!m && !p))
       throw Error("The field does not match the explicit numeric separators.");
     if ((m + (p ?? "")).replace(/^0+/, "").replace(/0+$/, "").length > 15)
       throw Error(
         "More than 15 significant digits; original text is retained.",
       );
-    const g = h + (m || "0") + (p === void 0 ? "" : "." + p) + u;
+    const g = h + (m || "0") + (p === undefined ? "" : "." + p) + u;
     if (
       ((n = Number(g)),
       !Number.isFinite(n) ||
@@ -680,7 +690,7 @@ function mz(e, r, t) {
         throw Error(
           `Source ${y} is a formula. Create a reviewed values snapshot first.`,
         );
-      if ((h += kp((w == null ? void 0 : w.raw) ?? null).length) > 2e5)
+      if ((h += kp(w?.raw ?? null).length) > 2e5)
         throw Error(
           "Source text exceeds the 200,000-character processing budget.",
         );
@@ -690,7 +700,7 @@ function mz(e, r, t) {
         ...(w ? { original: structuredClone(w) } : {}),
         ...(E ? { origin: E } : {}),
       }),
-        g.push(qv((w == null ? void 0 : w.raw) ?? null, [y])));
+        g.push(qv(w?.raw ?? null, [y])));
     }
     c.push({ row: v + 1, fields: g });
   }
@@ -789,10 +799,11 @@ function gz(e, r, t, n = "1900") {
           for (const E of g) {
             const A = d.groupColumns.map((I) => E.fields[I]),
               k = JSON.stringify(A.map((I) => I.value));
-            (k !== w || A.some((I) => I.exception)) && ((y = void 0), (w = k));
+            (k !== w || A.some((I) => I.exception)) &&
+              ((y = undefined), (w = k));
             const F = E.fields[b];
             if (F.exception) {
-              y = void 0;
+              y = undefined;
               continue;
             }
             if (!q2(F.value)) {
@@ -929,46 +940,38 @@ function M7(e, r, t) {
   });
 }
 function a3(e, r, t = {}) {
-  var m;
-  const {
-    request: n,
-    context: o,
-    source: a,
-    sources: s,
-    rows: d,
-    headers: u,
-  } = mz(e, r, t);
-  if (!n.steps.length)
+  const { request, context, source, sources, rows, headers } = mz(e, r, t);
+  if (!request.steps.length)
     throw Error("Add at least one transformation step before previewing.");
-  const { exceptions: l, stages: c } = gz(
-      d,
-      u,
-      n.steps,
-      (m = e.datePolicy) == null ? void 0 : m.dateSystem,
+  const { exceptions, stages } = gz(
+      rows,
+      headers,
+      request.steps,
+      e.datePolicy?.dateSystem,
     ),
     h = [],
     f = {};
   if (
-    (u.forEach((v, g) => {
+    (headers.forEach((v, g) => {
       f[Gh(0, g)] = { raw: v, literal: true, style: { bold: true } };
     }),
-    d.forEach((v, g) =>
+    rows.forEach((v, g) =>
       v.fields.forEach((b, y) => {
         const w = Gh(g + 1, y);
-        h.push({ address: w, row: v.row, field: u[y], ...b });
+        h.push({ address: w, row: v.row, field: headers[y], ...b });
         const E = `Clean & Reshape derivation
 Workbook: ${JSON.stringify(e.id)}
 Source revision: ${e.revision}
-Worksheet: ${JSON.stringify(a.name)} (${JSON.stringify(a.id)})
+Worksheet: ${JSON.stringify(source.name)} (${JSON.stringify(source.id)})
 Original cells: ${b.sources.join(", ")}
 Result type: ${b.type}
 ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Original source values are retained."}`;
         f[w] = M7(b.value, E, b.type);
       }),
     ),
-    l.length)
+    exceptions.length)
   ) {
-    const v = d.length + 3;
+    const v = rows.length + 3;
     ((f[Gh(v, 0)] = {
       raw: "Transformation exceptions",
       style: { bold: true },
@@ -983,13 +986,13 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
       ].forEach(
         (b, y) => (f[Gh(v + 1, y)] = { raw: b, style: { bold: true } }),
       ),
-      l.forEach((b, y) =>
+      exceptions.forEach((b, y) =>
         [
           b.row,
           b.field,
           b.step,
           b.raw,
-          b.sources.map((w) => `${a.name}!${w}`).join(", "),
+          b.sources.map((w) => `${source.name}!${w}`).join(", "),
           b.reason,
         ].forEach(
           (w, E) =>
@@ -1013,36 +1016,31 @@ ${b.exception ? "Parse exception retained; see the exceptions appendix." : "Orig
     );
   const p = {
     snapshot: JSON.stringify(e),
-    context: o,
-    request: n,
-    sourceSheetName: a.name,
-    sources: s,
-    headers: u,
+    context,
+    request,
+    sourceSheetName: source.name,
+    sources,
+    headers,
     outputs: h,
-    exceptions: l,
-    stages: c,
+    exceptions,
+    stages,
     cells: f,
-    targetRange: `A1:${Gh(l.length ? d.length + 4 + l.length : d.length, Math.max(u.length, l.length ? 6 : 0) - 1)}`,
+    targetRange: `A1:${Gh(exceptions.length ? rows.length + 4 + exceptions.length : rows.length, Math.max(headers.length, exceptions.length ? 6 : 0) - 1)}`,
     counts: {
-      sourceRows: d.length,
-      sourceCells: s.length,
+      sourceRows: rows.length,
+      sourceCells: sources.length,
       outputCells: Object.keys(f).length,
       changedCells: h.filter((v) => {
-        var g, b;
         return (
           v.sources.length !== 1 ||
           JSON.stringify(
-            ((b =
-              (g = s.find((y) => y.address === v.sources[0])) == null
-                ? void 0
-                : g.original) == null
-              ? void 0
-              : b.raw) ?? null,
+            sources.find((y) => y.address === v.sources[0])?.original?.raw ??
+              null,
           ) !== JSON.stringify(v.value)
         );
       }).length,
-      exceptions: l.length,
-      exceptionRows: new Set(l.map((v) => v.row)).size,
+      exceptions: exceptions.length,
+      exceptionRows: new Set(exceptions.map((v) => v.row)).size,
     },
   };
   return (
@@ -1098,14 +1096,8 @@ function Dce(e, r, t) {
   );
 }
 function Oce(e, r, t, n, o = {}) {
-  var d;
   const a = mz(e, r, o);
-  gz(
-    a.rows,
-    a.headers,
-    a.request.steps,
-    (d = e.datePolicy) == null ? void 0 : d.dateSystem,
-  );
+  gz(a.rows, a.headers, a.request.steps, e.datePolicy?.dateSystem);
   const s = a.rows.filter((u) =>
     n.every((l) => u.fields[l] && !u.fields[l].exception),
   );
@@ -1123,7 +1115,7 @@ function Mce(e, r, t = {}) {
     throw Error(
       "The transformation preview is stale or altered. Preview again.",
     );
-  const { snapshot: n, context: o, cells: a, ...s } = r;
+  const { snapshot, context, cells, ...s } = r;
   return JSON.stringify(
     {
       schemaVersion: 1,
@@ -1219,14 +1211,14 @@ function jce(e, r) {
       if (v === "[") {
         t++;
         let k = "",
-          F = !1;
+          F = false;
         for (; t < a.length;) {
           if (a[t] === "]") {
             if (a[t + 1] === "]") {
               ((k += "]"), (t += 2));
               continue;
             }
-            (t++, (F = !0));
+            (t++, (F = true));
             break;
           }
           k += a[t++];
@@ -1284,14 +1276,10 @@ function jce(e, r) {
     "/": 4,
   };
   function f(v) {
-    var b;
     let g = c();
     for (;;) {
       s();
-      const y =
-        (b = a.slice(t).match(/^(<>|<=|>=|[=<>+*/&-])/)) == null
-          ? void 0
-          : b[0];
+      const y = a.slice(t).match(/^(<>|<=|>=|[=<>+*/&-])/)?.[0];
       if (!y || h[y] < v) break;
       ((t += y.length),
         (g = l({ kind: "binary", operator: y, left: g, right: f(h[y] + 1) })));
@@ -1466,14 +1454,12 @@ function bz(e) {
   return e;
 }
 function Fce(e, r, t) {
-  var l;
   const n = e.sheets.find((c) => c.id === r.sheetId);
   if (!n || (t.allowedSheetIds && !t.allowedSheetIds.includes(n.id)))
     throw Error("A recipe source is outside the authorized host context.");
   let o = r.range;
   if (r.tableId) {
-    const c =
-      (l = n.tables) == null ? void 0 : l.find((f) => f.id === r.tableId);
+    const c = n.tables?.find((f) => f.id === r.tableId);
     if (!c)
       throw Error(
         "The selected source table no longer exists. Review the recipe source.",
@@ -1564,12 +1550,7 @@ function Bce(e, r, t, n) {
       )
         throw Error("Rename each input field only once per step.");
       const s = (d) => {
-        var u;
-        return (
-          ((u = t.mappings.find((l) => l.from === d)) == null
-            ? void 0
-            : u.to) ?? d
-        );
+        return t.mappings.find((l) => l.from === d)?.to ?? d;
       };
       return {
         data: {
@@ -1686,7 +1667,10 @@ function Bce(e, r, t, n) {
     case "filter": {
       const s = t.conditions.map((u) => {
           const l = Hf(o, u.field);
-          if (!["blank", "notBlank"].includes(u.operator) && u.value === void 0)
+          if (
+            !["blank", "notBlank"].includes(u.operator) &&
+            u.value === undefined
+          )
             throw Error("This filter requires an explicit typed value.");
           if (
             ["contains", "startsWith", "endsWith"].includes(u.operator) &&
@@ -1802,14 +1786,14 @@ function Bce(e, r, t, n) {
       };
     }
     case "group": {
-      const { indices: s, groups: d } = F7(o, t.keys),
+      const { indices, groups } = F7(o, t.keys),
         u = t.values.map((l) => ({ ...l, i: Hf(o, l.field) }));
       return {
         data: {
           fields: [...t.keys, ...u.map((l) => l.name)],
-          rows: [...d.values()].map((l) => ({
+          rows: [...groups.values()].map((l) => ({
             values: [
-              ...s.map((c) => l[0].values[c]),
+              ...indices.map((c) => l[0].values[c]),
               ...u.map((c) => j7(l, c.i, c.operation)),
             ],
             sources: jk(l),
@@ -1827,7 +1811,7 @@ function Bce(e, r, t, n) {
         throw Error("Pivot keys, attribute and value fields must be distinct.");
       const s = Hf(o, t.column),
         d = Hf(o, t.value),
-        { indices: u, groups: l } = F7(o, t.keys),
+        { indices, groups } = F7(o, t.keys),
         c = [
           ...new Map(
             o.rows.map((p) => [AI([p.values[s]]), p.values[s]]),
@@ -1839,9 +1823,9 @@ function Bce(e, r, t, n) {
         );
       if (t.keys.length + h.length > 50)
         throw Error("Pivot exceeds 50 output columns.");
-      const f = [...l.values()].map((p) => ({
+      const f = [...groups.values()].map((p) => ({
         values: [
-          ...u.map((m) => p[0].values[m]),
+          ...indices.map((m) => p[0].values[m]),
           ...c.map((m) =>
             j7(
               p.filter((v) => v.values[s] === m),
@@ -1911,8 +1895,8 @@ function Bce(e, r, t, n) {
             throw Error("Merge exceeds 1,000 intermediate records.");
           p.push({
             values: [
-              ...((v == null ? void 0 : v.values) ?? o.fields.map(() => null)),
-              ...((g == null ? void 0 : g.values) ?? s.fields.map(() => null)),
+              ...(v?.values ?? o.fields.map(() => null)),
+              ...(g?.values ?? s.fields.map(() => null)),
             ],
             sources: jk([v, g].filter((b) => !!b)),
           });
@@ -1924,10 +1908,10 @@ function Bce(e, r, t, n) {
             for (const b of g) m(o.rows[v.row], s.rows[b.record.row]);
         } else
           ["left", "full", "leftAnti"].includes(t.mode) &&
-            m(o.rows[v.row], void 0);
+            m(o.rows[v.row], undefined);
       }
       if (["right", "full", "rightAnti"].includes(t.mode))
-        for (const v of f.unmatchedRight) m(void 0, s.rows[v.row]);
+        for (const v of f.unmatchedRight) m(undefined, s.rows[v.row]);
       return {
         data: {
           fields: [...o.fields, ...s.fields.map((v) => t.prefix + v)],

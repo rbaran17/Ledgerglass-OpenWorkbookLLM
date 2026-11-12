@@ -35,14 +35,14 @@ function Yw(e, r = 0) {
       const t = Yw(e.slice(0, -pk.length), r + 1);
       if (t) return t + pk;
     }
-    for (const { parts: t, expression: n } of tle) {
-      const o = n.exec(e);
+    for (const { parts, expression } of tle) {
+      const o = expression.exec(e);
       if (o)
-        return t
+        return parts
           .map(
             (a, s) =>
               a +
-              (s < t.length - 1
+              (s < parts.length - 1
                 ? (Yw(o[s + 1], r + 1) ?? "[source detail omitted]")
                 : ""),
           )
@@ -69,7 +69,7 @@ function rle(e) {
   const r = e,
     t = r && Object.hasOwn(sg, r.code ?? "") ? r.code : "FILE_WORKER",
     n =
-      typeof (r == null ? void 0 : r.message) == "string"
+      typeof r?.message == "string"
         ? (Yw(r.message) ??
           (Object.values(sg).includes(r.message) ? r.message : sg[t]))
         : sg[t];
@@ -132,11 +132,11 @@ function c7(e, r, t) {
         ? "Native workbook exceeds the 50 MB import limit."
         : mk(e, r) === Mt.maxFileBytes
           ? "Files must be 10 MB or smaller."
-          : void 0,
+          : undefined,
     );
 }
 function nle(e = {}) {
-  const r = e.url === void 0,
+  const r = e.url === undefined,
     t =
       e.url ?? URL.createObjectURL(new Blob([R$], { type: "text/javascript" }));
   try {
@@ -151,16 +151,13 @@ function nle(e = {}) {
       };
     return (
       (n.onmessage = (a) => {
-        var s;
-        return (s = o.onmessage) == null ? void 0 : s.call(o, { data: a.data });
+        return o.onmessage?.call(o, { data: a.data });
       }),
       (n.onerror = () => {
-        var a;
-        return (a = o.onerror) == null ? void 0 : a.call(o, {});
+        return o.onerror?.call(o, {});
       }),
       (n.onmessageerror = () => {
-        var a;
-        return (a = o.onerror) == null ? void 0 : a.call(o, {});
+        return o.onerror?.call(o, {});
       }),
       o
     );
@@ -170,8 +167,8 @@ function nle(e = {}) {
 }
 async function ile() {
   const e = "node:worker_threads",
-    { Worker: r } = await import(e),
-    t = new r(
+    { Worker } = await import(e),
+    t = new Worker(
       `const {parentPort}=require("node:worker_threads");globalThis.self=globalThis;globalThis.postMessage=v=>parentPort.postMessage(v);parentPort.on("message",data=>globalThis.onmessage({data}));
 ` + R$,
       {
@@ -193,20 +190,16 @@ async function ile() {
     };
   return (
     t.on("message", (o) => {
-      var a;
-      return (a = n.onmessage) == null ? void 0 : a.call(n, { data: o });
+      return n.onmessage?.call(n, { data: o });
     }),
     t.on("error", () => {
-      var o;
-      return (o = n.onerror) == null ? void 0 : o.call(n, {});
+      return n.onerror?.call(n, {});
     }),
     t.on("messageerror", () => {
-      var o;
-      return (o = n.onerror) == null ? void 0 : o.call(n, {});
+      return n.onerror?.call(n, {});
     }),
     t.on("exit", () => {
-      var o;
-      return (o = n.onerror) == null ? void 0 : o.call(n, {});
+      return n.onerror?.call(n, {});
     }),
     n
   );
@@ -251,8 +244,8 @@ function sle(e, r) {
 async function im(e, r, t = {}, n) {
   var a;
   if (t.reliability) {
-    const { reliability: s, ...d } = t;
-    return s.run("file", e, () => im(e, r, d, n));
+    const { reliability, ...d } = t;
+    return reliability.run("file", e, () => im(e, r, d, n));
   }
   c7(e, r.name, r.size);
   const o = t.timeoutMs ?? u1.defaultTimeoutMs;
@@ -321,7 +314,7 @@ async function im(e, r, t = {}, n) {
         const w =
           e === "automation" || e === "formats" || e === "source"
             ? y.slice()
-            : void 0;
+            : undefined;
         try {
           const E = await (t.workerFactory ?? ole)();
           if (u) {
@@ -332,15 +325,15 @@ async function im(e, r, t = {}, n) {
           }
           ((l = E),
             (l.onerror = () => p(new La("FILE_WORKER"))),
-            (l.onmessage = ({ data: A }) => {
+            (l.onmessage = ({ data }) => {
               if (u) return;
-              const k = A;
+              const k = data;
               if (!(!k || k.id !== h)) {
                 if (performance.now() - f > o) {
                   p(new La("FILE_TIMEOUT"));
                   return;
                 }
-                if (k.ok !== !0) {
+                if (k.ok !== true) {
                   p(rle(k.error));
                   return;
                 }
@@ -352,7 +345,7 @@ async function im(e, r, t = {}, n) {
                   (w && e === "source" && T$(k.value, w, r.name),
                     w && e === "formats" && Yse(k.value, w, r.name),
                     w && e === "automation" && ale(k.value, w, r.name),
-                    p(void 0, k.value));
+                    p(undefined, k.value));
                 } catch {
                   p(new La("FILE_WORKER"));
                 }
@@ -400,11 +393,7 @@ function ple(e, r, t) {
 }
 function mle(e, r, t = 0) {
   const n = (c, h) => {
-      var f;
-      return (f = new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)) ==
-        null
-        ? void 0
-        : f[2];
+      return new RegExp(`(?:^|\\s)${h}\\s*=\\s*(["'])(.*?)\\1`).exec(c)?.[2];
     },
     o = e.replace(/<!--[\s\S]*?-->|<!\[CDATA\[[\s\S]*?\]\]>/g, "");
   let a = 0,
@@ -488,7 +477,6 @@ function ble(e, r = {}) {
   );
 }
 function O$(e) {
-  var f;
   const r = new DataView(e.buffer, e.byteOffset, e.byteLength);
   (e.length >= 8 &&
     r.getUint32(0, true) === 3759263696 &&
@@ -523,7 +511,7 @@ function O$(e) {
     u = [],
     l = (p) => {
       try {
-        return new TextDecoder("utf-8", { fatal: !0 }).decode(p);
+        return new TextDecoder("utf-8", { fatal: true }).decode(p);
       } catch {
         return Zn("Unsupported XLSX path encoding.");
       }
@@ -596,7 +584,7 @@ function O$(e) {
     u.sort((p, m) => p.start - m.start),
     (c !== t ||
       u.some((p, m) => p.start !== (m ? u[m - 1].end : 0)) ||
-      ((f = u.at(-1)) == null ? void 0 : f.end) !== a) &&
+      u.at(-1)?.end !== a) &&
       Zn("Overlapping or unlisted XLSX archive entries."),
     s
   );
@@ -660,8 +648,7 @@ function Cle(e, r, t, n) {
       (++a > 128 || ++s > 1e6) &&
         Zn(`XML complexity exceeds the supported budget in ${r}.`);
       const f = (m) => {
-          var v;
-          return (v = h.attributes[m]) == null ? void 0 : v.value;
+          return h.attributes[m]?.value;
         },
         p = u.at(-1);
       if (
@@ -684,7 +671,7 @@ function Cle(e, r, t, n) {
             formula: false,
           }));
         const v = f("s");
-        v !== void 0 &&
+        v !== undefined &&
           ((!/^\d+$/.test(v) || !Number.isSafeInteger(Number(v))) &&
             Zn(`Invalid cell style index in ${r}.`),
           (n.maxStyle = Math.max(n.maxStyle, Number(v))));
@@ -817,7 +804,7 @@ function Cle(e, r, t, n) {
         }
         l.inValue = false;
       }
-      (h.local === "c" && (l = void 0), u.pop(), a--);
+      (h.local === "c" && (l = undefined), u.pop(), a--);
     }),
     o.write(e).close());
 }
@@ -939,7 +926,7 @@ function Sle(e) {
   });
   s.register(UnzipInflate);
   try {
-    s.push(e, !0);
+    s.push(e, true);
   } catch {
     throw Error("Unable to inspect corrupt alternate workbook archive.");
   }
@@ -972,7 +959,6 @@ function Yb(e, r) {
     n.write(t).close());
 }
 function m7(e) {
-  var d;
   const r = (u) =>
     Object.fromEntries(
       Object.values(u.attributes).map((l) => [l.local, l.value]),
@@ -1037,8 +1023,7 @@ function m7(e) {
       }
     }
   });
-  const s =
-    (d = Object.entries(aT).find(([, u]) => u === t)) == null ? void 0 : d[0];
+  const s = Object.entries(aT).find(([, u]) => u === t)?.[0];
   if (
     !s ||
     !e[n] ||
@@ -1112,12 +1097,10 @@ function Nle(e) {
       });
 }
 function M$(e, r) {
-  var a, s;
   const t = e.name.replace(/[^a-zA-Z0-9 _-]/g, "").slice(0, 80) || "Workbook",
-    n = [
-      (a = e.xlsxSource) == null ? void 0 : a.fileName,
-      (s = e.alternateSource) == null ? void 0 : s.fileName,
-    ].map((d) => (d == null ? void 0 : d.toLowerCase()));
+    n = [e.xlsxSource?.fileName, e.alternateSource?.fileName].map((d) =>
+      d?.toLowerCase(),
+    );
   let o = t + "-derived";
   for (; n.includes((o + "." + r).toLowerCase());) o += "-copy";
   return o + "." + r;

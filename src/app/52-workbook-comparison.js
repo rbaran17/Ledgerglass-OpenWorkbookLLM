@@ -2,7 +2,20 @@ import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { Mt } from "./02-financial-functions.js";
-import { Af, Nr, Ta, Vn, _t, cn, ct, ff, hi, ul, ut, z1 } from "./03-workbook-model.js";
+import {
+  Af,
+  Nr,
+  Ta,
+  Vn,
+  _t,
+  cn,
+  ct,
+  ff,
+  hi,
+  ul,
+  ut,
+  z1,
+} from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { H1 } from "./07-xlsx-archive-reader.js";
 import { yh } from "./09-workbook-links.js";
@@ -31,11 +44,11 @@ function s2e(e, r, t, n = {}) {
     t.mappings.length > $h.mappings
   )
     throw Error("Choose 1–20 explicit worksheet/range mappings.");
-  if (n.includeHidden !== void 0 && typeof n.includeHidden != "boolean")
+  if (n.includeHidden !== undefined && typeof n.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   const o = (b, y) => {
       if (
-        y !== void 0 &&
+        y !== undefined &&
         (!Array.isArray(y) ||
           y.some(
             (w) => typeof w != "string" || !b.sheets.some((E) => E.id === w),
@@ -143,11 +156,7 @@ function s2e(e, r, t, n = {}) {
       const O = Array.from({ length: F }, (j, z) => {
         if (!w) return ut(z);
         const V = E.cells[xc(A.firstRow, A.firstCol + z)];
-        if (
-          Vf(V) ||
-          typeof (V == null ? void 0 : V.raw) != "string" ||
-          !V.raw.trim()
-        )
+        if (Vf(V) || typeof V?.raw != "string" || !V.raw.trim())
           throw Error(
             "Header rows require nonempty literal text in every column. Turn off headers for an unstructured sheet.",
           );
@@ -326,8 +335,8 @@ function s2e(e, r, t, n = {}) {
       for (const V of new Set([...y.headers, ...w.headers])) {
         const D = y.headers.indexOf(V),
           B = w.headers.indexOf(V),
-          _ = D < 0 ? void 0 : j.cells[D],
-          C = B < 0 ? void 0 : z.cells[B];
+          _ = D < 0 ? undefined : j.cells[D],
+          C = B < 0 ? undefined : z.cells[B];
         (D >= 0 && B >= 0 && ww(_ ?? { raw: null }, C ?? { raw: null })) ||
           u({
             kind: Vf(_) && !Vf(C) ? "formula-to-value" : "cell-change",
@@ -567,22 +576,17 @@ function s2e(e, r, t, n = {}) {
                   }
                 },
                 C = (T, N) => {
-                  var $, U;
                   const R =
-                    (($ = y.definedNames) == null
-                      ? void 0
-                      : $.find(
-                          (G) =>
-                            G.scopeSheetId === N &&
-                            G.name.toLowerCase() === T.toLowerCase(),
-                        )) ??
-                    ((U = y.definedNames) == null
-                      ? void 0
-                      : U.find(
-                          (G) =>
-                            !G.scopeSheetId &&
-                            G.name.toLowerCase() === T.toLowerCase(),
-                        ));
+                    y.definedNames?.find(
+                      (G) =>
+                        G.scopeSheetId === N &&
+                        G.name.toLowerCase() === T.toLowerCase(),
+                    ) ??
+                    y.definedNames?.find(
+                      (G) =>
+                        !G.scopeSheetId &&
+                        G.name.toLowerCase() === T.toLowerCase(),
+                    );
                   if (!R) {
                     O(
                       "broken-link",
@@ -687,9 +691,9 @@ function s2e(e, r, t, n = {}) {
                 }
                 const U = rH.exec(T);
                 if (U && nH(T[U[0].length] ?? "")) {
-                  const X = U[1] ? Bj(U[1]) : void 0;
+                  const X = U[1] ? Bj(U[1]) : undefined;
                   (_(
-                    X === void 0
+                    X === undefined
                       ? y.sheets.find((J) => J.id === V)
                       : y.sheets.find(
                           (J) => J.name.toLowerCase() === X.toLowerCase(),
@@ -778,7 +782,7 @@ const l2e = [
     "unmapped-sheet",
   ],
   Lj = (e) =>
-    e === void 0
+    e === undefined
       ? "—"
       : e === null
         ? "(blank)"
@@ -786,7 +790,7 @@ const l2e = [
           ? String(e).toUpperCase()
           : String(e);
 function u2e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -809,8 +813,8 @@ function u2e(e) {
     ].sort(),
     C = [
       ...new Set(
-        (u ? void 0 : e.baselineAllowedSheetIds) ??
-          (B == null ? void 0 : B.sheets.map((oe) => oe.id)) ??
+        (u ? undefined : e.baselineAllowedSheetIds) ??
+          B?.sheets.map((oe) => oe.id) ??
           [],
       ),
     ].sort(),
@@ -819,11 +823,9 @@ function u2e(e) {
       (oe) => _.includes(oe.id) && (T || (!oe.hidden && !oe.veryHidden)),
     ),
     R =
-      (B == null
-        ? void 0
-        : B.sheets.filter(
-            (oe) => C.includes(oe.id) && (T || (!oe.hidden && !oe.veryHidden)),
-          )) ?? [],
+      B?.sheets.filter(
+        (oe) => C.includes(oe.id) && (T || (!oe.hidden && !oe.veryHidden)),
+      ) ?? [],
     L = JSON.stringify([
       e.workbook,
       e.sheetId,
@@ -851,7 +853,7 @@ function u2e(e) {
       );
       return {
         before: {
-          sheetId: (he == null ? void 0 : he.id) ?? "",
+          sheetId: he?.id ?? "",
           range: he ? Ta(he) : "A1",
         },
         after: { sheetId: e.sheetId, range: e.range },
@@ -861,14 +863,12 @@ function u2e(e) {
       };
     };
   (ne.useEffect(() => {
-    var de, he;
+    var he;
     const oe = document.activeElement;
     return (
-      (he =
-        (de = a.current) == null
-          ? void 0
-          : de.querySelector('[data-ui-label="Comparison baseline file"]')) ==
-        null || he.focus(),
+      (he = a.current?.querySelector(
+        '[data-ui-label="Comparison baseline file"]',
+      )) == null || he.focus(),
       (d.current = true),
       () => {
         ((d.current = false),
@@ -893,7 +893,7 @@ function u2e(e) {
           throw Error("Choose a native JSON or XLSX comparison baseline.");
         const Se = await H1(oe, n.begin());
         if (!d.current || de !== s.current || $.current !== he) return;
-        (l(Se.workbook), h(Se.warnings), b([Q(Se.workbook, !0)]));
+        (l(Se.workbook), h(Se.warnings), b([Q(Se.workbook, true)]));
       } catch (Se) {
         d.current &&
           de === s.current &&
@@ -951,18 +951,16 @@ function u2e(e) {
       "aria-modal": "true",
       "aria-labelledby": `${o}-title`,
       onKeyDown: (oe) => {
-        var de, he, Se;
+        var he, Se;
         if (
           (oe.stopPropagation(),
           oe.key === "Escape" && (oe.preventDefault(), ae()),
           oe.key === "Tab")
         ) {
           const le = [
-            ...(((de = a.current) == null
-              ? void 0
-              : de.querySelectorAll(
-                  'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                )) ?? []),
+            ...(a.current?.querySelectorAll(
+              'button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+            ) ?? []),
           ].filter((ce) => !ce.hidden);
           oe.shiftKey && document.activeElement === le[0]
             ? (oe.preventDefault(), (he = le.at(-1)) == null || he.focus())
@@ -989,9 +987,9 @@ function u2e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close workbook comparison"),
+              "aria-label": text("Close workbook comparison"),
               onClick: ae,
-              lang: t("Close workbook comparison"),
+              lang: language("Close workbook comparison"),
               "data-ui-label": "Close workbook comparison",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1010,15 +1008,13 @@ function u2e(e) {
               children: [
                 i.jsx(M, { children: "Comparison baseline file" }),
                 i.jsx("input", {
-                  "aria-label": r("Comparison baseline file"),
+                  "aria-label": text("Comparison baseline file"),
                   type: "file",
                   accept: ".json,.xlsx",
                   onChange: (oe) => {
-                    var de;
-                    (J((de = oe.target.files) == null ? void 0 : de[0]),
-                      (oe.target.value = ""));
+                    (J(oe.target.files?.[0]), (oe.target.value = ""));
                   },
-                  lang: t("Comparison baseline file"),
+                  lang: language("Comparison baseline file"),
                   "data-ui-label": "Comparison baseline file",
                 }),
               ],
@@ -1085,7 +1081,6 @@ function u2e(e) {
             }),
             B &&
               g.map((oe, de) => {
-                var he, Se;
                 return i.jsxs(
                   "fieldset",
                   {
@@ -1206,7 +1201,7 @@ function u2e(e) {
                                     keys:
                                       le.target.value === "keys"
                                         ? [{ before: "", after: "" }]
-                                        : void 0,
+                                        : undefined,
                                   }),
                                 children: [
                                   i.jsx("option", {
@@ -1249,94 +1244,87 @@ function u2e(e) {
                                   "Enter exact header text. Without headers, use relative column labels A, B, C. Values of different types, case or whitespace do not match.",
                               }),
                             }),
-                            (he = oe.keys) == null
-                              ? void 0
-                              : he.map((le, ce) =>
-                                  i.jsxs(
-                                    "div",
-                                    {
-                                      className: "wc-keys",
+                            oe.keys?.map((le, ce) =>
+                              i.jsxs(
+                                "div",
+                                {
+                                  className: "wc-keys",
+                                  children: [
+                                    i.jsxs("label", {
                                       children: [
-                                        i.jsxs("label", {
-                                          children: [
-                                            i.jsx(M, {
-                                              children: "Before key ",
-                                            }),
-                                            de + 1,
-                                            ".",
-                                            ce + 1,
-                                            i.jsx("input", {
-                                              value: le.before,
-                                              onChange: (ge) =>
-                                                X$1(de, {
-                                                  ...oe,
-                                                  keys: oe.keys.map((se, we) =>
-                                                    we === ce
-                                                      ? {
-                                                          ...se,
-                                                          before:
-                                                            ge.target.value,
-                                                        }
-                                                      : se,
-                                                  ),
-                                                }),
-                                            }),
-                                          ],
+                                        i.jsx(M, {
+                                          children: "Before key ",
                                         }),
-                                        i.jsxs("label", {
-                                          children: [
-                                            i.jsx(M, {
-                                              children: "After key ",
-                                            }),
-                                            de + 1,
-                                            ".",
-                                            ce + 1,
-                                            i.jsx("input", {
-                                              value: le.after,
-                                              onChange: (ge) =>
-                                                X$1(de, {
-                                                  ...oe,
-                                                  keys: oe.keys.map((se, we) =>
-                                                    we === ce
-                                                      ? {
-                                                          ...se,
-                                                          after:
-                                                            ge.target.value,
-                                                        }
-                                                      : se,
-                                                  ),
-                                                }),
-                                            }),
-                                          ],
-                                        }),
-                                        i.jsxs("button", {
-                                          disabled: oe.keys.length < 2,
-                                          onClick: () =>
+                                        de + 1,
+                                        ".",
+                                        ce + 1,
+                                        i.jsx("input", {
+                                          value: le.before,
+                                          onChange: (ge) =>
                                             X$1(de, {
                                               ...oe,
-                                              keys: oe.keys.filter(
-                                                (ge, se) => se !== ce,
+                                              keys: oe.keys.map((se, we) =>
+                                                we === ce
+                                                  ? {
+                                                      ...se,
+                                                      before: ge.target.value,
+                                                    }
+                                                  : se,
                                               ),
                                             }),
-                                          children: [
-                                            i.jsx(M, {
-                                              children: "Remove key ",
-                                            }),
-                                            de + 1,
-                                            ".",
-                                            ce + 1,
-                                          ],
                                         }),
                                       ],
-                                    },
-                                    ce,
-                                  ),
-                                ),
+                                    }),
+                                    i.jsxs("label", {
+                                      children: [
+                                        i.jsx(M, {
+                                          children: "After key ",
+                                        }),
+                                        de + 1,
+                                        ".",
+                                        ce + 1,
+                                        i.jsx("input", {
+                                          value: le.after,
+                                          onChange: (ge) =>
+                                            X$1(de, {
+                                              ...oe,
+                                              keys: oe.keys.map((se, we) =>
+                                                we === ce
+                                                  ? {
+                                                      ...se,
+                                                      after: ge.target.value,
+                                                    }
+                                                  : se,
+                                              ),
+                                            }),
+                                        }),
+                                      ],
+                                    }),
+                                    i.jsxs("button", {
+                                      disabled: oe.keys.length < 2,
+                                      onClick: () =>
+                                        X$1(de, {
+                                          ...oe,
+                                          keys: oe.keys.filter(
+                                            (ge, se) => se !== ce,
+                                          ),
+                                        }),
+                                      children: [
+                                        i.jsx(M, {
+                                          children: "Remove key ",
+                                        }),
+                                        de + 1,
+                                        ".",
+                                        ce + 1,
+                                      ],
+                                    }),
+                                  ],
+                                },
+                                ce,
+                              ),
+                            ),
                             i.jsxs("button", {
-                              disabled:
-                                (((Se = oe.keys) == null
-                                  ? void 0
-                                  : Se.length) ?? 0) >= 8,
+                              disabled: (oe.keys?.length ?? 0) >= 8,
                               onClick: () =>
                                 X$1(de, {
                                   ...oe,
@@ -1398,9 +1386,9 @@ function u2e(e) {
               }),
             G &&
               i.jsxs("section", {
-                "aria-label": r("Workbook audit comparison report"),
+                "aria-label": text("Workbook audit comparison report"),
                 className: "wc-report",
-                lang: t("Workbook audit comparison report"),
+                lang: language("Workbook audit comparison report"),
                 "data-ui-label": "Workbook audit comparison report",
                 children: [
                   i.jsx("h3", {
@@ -1481,7 +1469,6 @@ function u2e(e) {
                         ],
                       }),
                       y.request.mappings.map((oe, de) => {
-                        var he;
                         return i.jsxs(
                           "p",
                           {
@@ -1504,11 +1491,9 @@ function u2e(e) {
                               oe.headers ? "headers" : "no headers",
                               ";",
                               " ",
-                              (he = oe.keys) == null
-                                ? void 0
-                                : he
-                                    .map((Se) => `${Se.before} → ${Se.after}`)
-                                    .join(", "),
+                              oe.keys
+                                ?.map((Se) => `${Se.before} → ${Se.after}`)
+                                .join(", "),
                               ".",
                             ],
                           },
@@ -1550,8 +1535,8 @@ function u2e(e) {
                     className: "wc-scroll",
                     tabIndex: 0,
                     role: "region",
-                    "aria-label": r("Scrollable comparison findings"),
-                    lang: t("Scrollable comparison findings"),
+                    "aria-label": text("Scrollable comparison findings"),
+                    lang: language("Scrollable comparison findings"),
                     "data-ui-label": "Scrollable comparison findings",
                     children: [
                       i.jsxs("table", {
@@ -1702,10 +1687,7 @@ const r0 = {
     throw new Error(e);
   },
   xw = (e, r) => `${ut(r)}${e + 1}`,
-  E_ = (e) =>
-    typeof (e == null ? void 0 : e.raw) == "string" &&
-    e.raw.startsWith("=") &&
-    !e.literal,
+  E_ = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
   c2e = (e) =>
     e === null
       ? ""
@@ -1733,7 +1715,7 @@ function iH(e, r) {
     (!["selection", "sheet", "workbook"].includes(a) ||
       !["rows", "columns"].includes(s)) &&
       Eo("Choose a valid search scope and order."),
-    r.includeHidden !== void 0 &&
+    r.includeHidden !== undefined &&
       typeof r.includeHidden != "boolean" &&
       Eo("Include hidden must be boolean."),
     o.some((d) => d.lastRow >= t.rowCount || d.lastCol >= t.colCount) &&
@@ -1759,7 +1741,7 @@ function d2e(e, r) {
     ["raw", "formulas", "calculated", "formatted"].includes(n) ||
       Eo("Choose a supported Look in option."));
   for (const o of [r.matchCase, r.wholeCell, r.wildcards])
-    o !== void 0 &&
+    o !== undefined &&
       typeof o != "boolean" &&
       Eo("Search switches must be boolean.");
   return {
@@ -1773,7 +1755,6 @@ function d2e(e, r) {
 }
 const oH = () => ({ text: 0, work: 0, calculated: 0, scanned: 0 });
 function aH(e) {
-  var n;
   const r = Array.from(e.query),
     t = [];
   for (let o = 0; o < r.length; o++) {
@@ -1781,8 +1762,7 @@ function aH(e) {
     e.wildcards && a === "~" && ["~", "?", "*"].includes(r[o + 1])
       ? t.push({ kind: "literal", value: r[++o] })
       : e.wildcards && a === "*"
-        ? ((n = t.at(-1)) == null ? void 0 : n.kind) !== "star" &&
-          t.push({ kind: "star" })
+        ? t.at(-1)?.kind !== "star" && t.push({ kind: "star" })
         : e.wildcards && a === "?"
           ? t.push({ kind: "any" })
           : t.push({ kind: "literal", value: a });
@@ -1838,7 +1818,7 @@ function lH(e) {
         ? "hidden row"
         : t.isHidden(o)
           ? "hidden column"
-          : void 0;
+          : undefined;
 }
 const uH = (e, r, t) =>
   e >= t.firstRow && e <= t.lastRow && r >= t.firstCol && r <= t.lastCol;
@@ -1848,7 +1828,7 @@ function aA(e, r, t) {
     : r.row - t.row || r.col - t.col;
 }
 function cH(e, r) {
-  var c, h;
+  var h;
   const t = d2e(e, r),
     n = oH(),
     o = aH(t),
@@ -1866,17 +1846,17 @@ function cH(e, r) {
     for (const g of p) {
       ++n.scanned > Mt.maxCells &&
         Eo("This search exceeds 100,000 populated cells. Narrow its scope.");
-      const { row: b, col: y } = _t(g),
-        w = m(b, y),
+      const { row, col } = _t(g),
+        w = m(row, col),
         E = f.cells[g];
       if (
-        (t.scope === "selection" && !u.some((O) => uH(b, y, O))) ||
+        (t.scope === "selection" && !u.some((O) => uH(row, col, O))) ||
         (w && !t.includeHidden)
       )
         continue;
       const A = E_(E);
       if (t.lookIn === "formulas" && !A) continue;
-      let k = (E == null ? void 0 : E.raw) ?? null;
+      let k = E?.raw ?? null;
       l &&
         (++n.calculated > r0.maxCalculatedCells &&
           Eo(
@@ -1885,7 +1865,7 @@ function cH(e, r) {
         (k = s(f.id, g)));
       const F =
           t.lookIn === "formatted"
-            ? Af(k, E, (c = e.datePolicy) == null ? void 0 : c.dateSystem)
+            ? Af(k, E, e.datePolicy?.dateSystem)
             : c2e(k),
         I = sH(F, t, o, n);
       I.length &&
@@ -1893,10 +1873,10 @@ function cH(e, r) {
           sheetId: f.id,
           sheetName: f.name,
           address: g,
-          row: b,
-          col: y,
+          row,
+          col,
           text: F,
-          raw: (E == null ? void 0 : E.raw) ?? null,
+          raw: E?.raw ?? null,
           isFormula: A,
           protected: !!((h = f.protection) != null && h.enabled),
           hidden: !!w,
@@ -1947,7 +1927,7 @@ function h2e(e, r, t = "next") {
     const o = _t(r.address),
       a = new Map(e.sheetOrder.map((d, u) => [d, u])),
       s = a.get(r.sheetId);
-    if (s !== void 0) {
+    if (s !== undefined) {
       const d = (u) => a.get(u.sheetId) - s || aA(e.options.order, u, o);
       return t === "next"
         ? (e.results.find((u) => d(u) > 0) ?? e.results[0])

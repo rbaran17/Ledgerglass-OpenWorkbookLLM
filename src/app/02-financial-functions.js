@@ -32,11 +32,7 @@ function $J(e, r, t = of.minRate) {
         true
       );
     };
-  if (
-    [0, Math.log1p(0.1), Math.log1p(0.5)]
-      .map(u)
-      .every((g) => (g == null ? void 0 : g.value) === 0)
-  )
+  if ([0, Math.log1p(0.1), Math.log1p(0.5)].map(u).every((g) => g?.value === 0))
     return {
       status: "indeterminate",
       candidates: d,
@@ -88,7 +84,7 @@ function $J(e, r, t = of.minRate) {
   for (const g of f) {
     const b = u(g);
     if (!b) {
-      p = void 0;
+      p = undefined;
       continue;
     }
     if ((l(g, b), p && p.y.normalized * b.normalized < 0)) {
@@ -232,7 +228,7 @@ function WJ(e, r, t) {
           "A cash-flow or security date is missing or is not a date.",
         );
       const F = typeof k == "string" ? zp(k, t.clock) : f(k);
-      return F === void 0 || F < (a === "1904" ? 0 : 1) || F >= wd(a) + 1
+      return F === undefined || F < (a === "1904" ? 0 : 1) || F >= wd(a) + 1
         ? l(
             "#VALUE!",
             "Invalid cash-flow or security date. Use a valid Gregorian/workbook-system serial or explicit full-year date text.",
@@ -287,7 +283,7 @@ function WJ(e, r, t) {
           signChanges: I,
           solver: j,
           message: j.selected
-            ? `Residual-checked rate. ${j.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== void 0 && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
+            ? `Residual-checked rate. ${j.candidates.length} candidate root(s) found; selected nearest the guess in log-rate space. ${I !== undefined && I > 1 ? "Cash flows change sign more than once; multiple returns may exist. " : ""}The bounded search does not prove uniqueness.`
             : j.status === "indeterminate"
               ? "The equation does not identify a unique rate; no rate has been invented."
               : "No residual-checked rate converged within the supported search interval and evaluation budget. Review signs, timing and guess.",
@@ -552,7 +548,7 @@ function WJ(e, r, t) {
                   return { value: ae - R, scale: Math.abs(ae) + R };
                 },
                 0.1,
-                void 0,
+                undefined,
                 0,
               );
       } else if (e === "ACCRINTM") {
@@ -702,8 +698,7 @@ function u6(e, r, t) {
     o = Math.max(...n.map((s) => s.length)),
     a = Math.max(
       ...n.map((s) => {
-        var d;
-        return ((d = s[0]) == null ? void 0 : d.length) ?? 0;
+        return s[0]?.length ?? 0;
       }),
     );
   return !o ||
@@ -758,7 +753,6 @@ const qJ = [
   Zd = (e) =>
     e == null ? "" : typeof e == "boolean" ? (e ? "TRUE" : "FALSE") : String(e);
 function XJ(e) {
-  var l;
   const r =
     /^(?:(\d{4})-(\d{1,2})-(\d{1,2})|(\d{1,2})\/(\d{1,2})\/(\d{4}))(?:[ T](.+))?$/.exec(
       e,
@@ -789,7 +783,7 @@ function XJ(e) {
   let a = Number(o[1]);
   const s = Number(o[2]),
     d = Number(o[3] ?? 0),
-    u = (l = o[4]) == null ? void 0 : l.toUpperCase();
+    u = o[4]?.toUpperCase();
   if (!(s > 59 || d >= 60 || (u ? a < 1 || a > 12 : a > 23)))
     return (
       u && (a = (a % 12) + (u === "PM" ? 12 : 0)),
@@ -797,7 +791,7 @@ function XJ(e) {
     );
 }
 function iD(e, r, t) {
-  var v, g;
+  var g;
   if (!qJ.includes(e)) return qS;
   const n = (b = "#VALUE!") => {
       throw t.issue(b);
@@ -836,7 +830,7 @@ function iD(e, r, t) {
     n();
   const c = (b) => (b.length <= 32767 ? b : n("#LIMIT!")),
     h = (b, y) => {
-      if (b === void 0 && y !== void 0) return y;
+      if (b === undefined && y !== undefined) return y;
       if (Array.isArray(b) || (typeof b == "string" && !b.trim())) return n();
       const w = Number(b ?? 0);
       return Number.isFinite(w) ? w : n();
@@ -924,15 +918,17 @@ function iD(e, r, t) {
   if (e === "SUBSTITUTE") {
     const b = Zd(d[1]),
       y = Zd(d[2]),
-      w = d[3] === void 0 ? void 0 : f(d[3]);
-    if ((w !== void 0 && w < 1 && n(), !b)) return m;
+      w = d[3] === undefined ? undefined : f(d[3]);
+    if ((w !== undefined && w < 1 && n(), !b)) return m;
     const E = m.split(b),
       A = E.length - 1;
     return (
-      m.length + (w === void 0 ? A : w <= A ? 1 : 0) * (y.length - b.length) >
+      m.length +
+        (w === undefined ? A : w <= A ? 1 : 0) * (y.length - b.length) >
         32767 && n("#LIMIT!"),
       E.reduce(
-        (k, F, I) => (I === 0 ? F : k + (w === void 0 || w === I ? y : b) + F),
+        (k, F, I) =>
+          I === 0 ? F : k + (w === undefined || w === I ? y : b) + F,
         "",
       )
     );
@@ -953,13 +949,13 @@ function iD(e, r, t) {
     );
   }
   if (e === "NUMBERVALUE") {
-    const b = [...Zd(d[1] === void 0 ? "." : d[1])][0],
-      y = [...Zd(d[2] === void 0 ? "," : d[2])][0];
+    const b = [...Zd(d[1] === undefined ? "." : d[1])][0],
+      y = [...Zd(d[2] === undefined ? "," : d[2])][0];
     (!b || !y || b === y || /[0-9+\-eE%]/.test(b) || /[0-9+\-eE%]/.test(y)) &&
       n();
     let w = m.replace(/ /g, "");
     if (!w) return 0;
-    const E = ((v = /%+$/.exec(w)) == null ? void 0 : v[0].length) ?? 0;
+    const E = /%+$/.exec(w)?.[0].length ?? 0;
     w = w.slice(0, w.length - E);
     const A = w.split(b);
     ((A.length > 2 || ((g = A[1]) != null && g.includes(y))) && n(),
@@ -972,7 +968,7 @@ function iD(e, r, t) {
   }
   if (e === "VALUE") {
     const b = t.temporal ? t.temporal(m.trim()) : XJ(m.trim());
-    if (b !== void 0) return b;
+    if (b !== undefined) return b;
     let y = m.trim(),
       w = false;
     y.startsWith("(") &&
@@ -1013,12 +1009,12 @@ function iD(e, r, t) {
       F = O.reverse();
     }
     const I = F[y > 0 ? y - 1 : F.length + y];
-    return I === void 0
+    return I === undefined
       ? E && Math.abs(y) === F.length + 1
         ? (e === "TEXTBEFORE") == y > 0
           ? m
           : ""
-        : d[5] !== void 0
+        : d[5] !== undefined
           ? d[5]
           : n("#N/A")
       : e === "TEXTBEFORE"

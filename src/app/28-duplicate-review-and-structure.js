@@ -7,7 +7,7 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { LC, Uz, Z7, cg, lw, qk, rfe } from "./27-data-validation-dialog.js";
 
 function $z(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -61,14 +61,11 @@ function $z(e) {
         ));
     };
   ne.useEffect(() => {
-    var ce, ge;
+    var ge;
     const le = document.activeElement;
     return (
-      (ge =
-        (ce = o.current) == null
-          ? void 0
-          : ce.querySelector('[data-ui-label="Source range"]')) == null ||
-        ge.focus(),
+      (ge = o.current?.querySelector('[data-ui-label="Source range"]')) ==
+        null || ge.focus(),
       () => {
         le != null && le.isConnected && le.focus();
       }
@@ -115,13 +112,10 @@ function $z(e) {
         }
     },
     ae =
-      (I == null
-        ? void 0
-        : I.rows.filter(
-            (le) =>
-              C === "all" ||
-              (C === "groups" ? !!le.groupId : le.disposition === C),
-          )) ?? [],
+      I?.rows.filter(
+        (le) =>
+          C === "all" || (C === "groups" ? !!le.groupId : le.disposition === C),
+      ) ?? [],
     oe = Math.max(1, Math.ceil(ae.length / lw.pageSize)),
     de = Math.min(N, oe - 1),
     he = ae.slice(de * 20, de * 20 + 20),
@@ -172,18 +166,16 @@ function $z(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (le) => {
-        var ce, ge, se;
+        var ge, se;
         if (
           (le.stopPropagation(),
           le.key === "Escape" && (le.preventDefault(), a.current()),
           le.key === "Tab")
         ) {
           const we = [
-            ...(((ce = o.current) == null
-              ? void 0
-              : ce.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
-                )) ?? []),
+            ...(o.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
+            ) ?? []),
           ].filter(
             (Ee) =>
               !Ee.closest("details:not([open])") || Ee.tagName === "SUMMARY",
@@ -213,9 +205,9 @@ function $z(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close duplicate review"),
+              "aria-label": text("Close duplicate review"),
               onClick: e.onClose,
-              lang: t("Close duplicate review"),
+              lang: language("Close duplicate review"),
               "data-ui-label": "Close duplicate review",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -242,14 +234,14 @@ function $z(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: H ? s : "",
                   readOnly: e.readOnly,
                   onChange: (le) => {
                     const ce = le.target.value;
                     (d(ce), l(qk(ce)), q());
                   },
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -258,13 +250,13 @@ function $z(e) {
               children: [
                 i.jsx(M, { children: "New worksheet name" }),
                 i.jsx("input", {
-                  "aria-label": r("New worksheet name"),
+                  "aria-label": text("New worksheet name"),
                   value: E,
                   readOnly: e.readOnly,
                   onChange: (le) => {
                     (A(le.target.value), q());
                   },
-                  lang: t("New worksheet name"),
+                  lang: language("New worksheet name"),
                   "data-ui-label": "New worksheet name",
                 }),
               ],
@@ -273,13 +265,13 @@ function $z(e) {
               children: [
                 i.jsx(M, { children: "Compare" }),
                 i.jsxs("select", {
-                  "aria-label": r("Comparison basis"),
+                  "aria-label": text("Comparison basis"),
                   value: f,
                   disabled: e.readOnly,
                   onChange: (le) => {
                     (p(le.target.value), q());
                   },
-                  lang: t("Comparison basis"),
+                  lang: language("Comparison basis"),
                   "data-ui-label": "Comparison basis",
                   children: [
                     i.jsx("option", {
@@ -298,13 +290,13 @@ function $z(e) {
               children: [
                 i.jsx(M, { children: "Blank key policy" }),
                 i.jsxs("select", {
-                  "aria-label": r("Blank key policy"),
+                  "aria-label": text("Blank key policy"),
                   value: y,
                   disabled: e.readOnly,
                   onChange: (le) => {
                     (w(le.target.value), q());
                   },
-                  lang: t("Blank key policy"),
+                  lang: language("Blank key policy"),
                   "data-ui-label": "Blank key policy",
                   children: [
                     i.jsx("option", {
@@ -434,8 +426,8 @@ function $z(e) {
         I &&
           i.jsxs("section", {
             className: "dup-preview",
-            "aria-label": r("Duplicate review preview"),
-            lang: t("Duplicate review preview"),
+            "aria-label": text("Duplicate review preview"),
+            lang: language("Duplicate review preview"),
             "data-ui-label": "Duplicate review preview",
             children: [
               J
@@ -512,12 +504,12 @@ function $z(e) {
                         children: [
                           i.jsx(M, { children: "Preview view" }),
                           i.jsxs("select", {
-                            "aria-label": r("Preview view"),
+                            "aria-label": text("Preview view"),
                             value: C,
                             onChange: (le) => {
                               (T(le.target.value), R(0));
                             },
-                            lang: t("Preview view"),
+                            lang: language("Preview view"),
                             "data-ui-label": "Preview view",
                             children: [
                               i.jsx("option", {
@@ -665,8 +657,8 @@ function $z(e) {
                         ],
                       }),
                       i.jsxs("nav", {
-                        "aria-label": r("Duplicate preview pages"),
-                        lang: t("Duplicate preview pages"),
+                        "aria-label": text("Duplicate preview pages"),
+                        lang: language("Duplicate preview pages"),
                         "data-ui-label": "Duplicate preview pages",
                         children: [
                           i.jsx("button", {
@@ -753,14 +745,10 @@ function $z(e) {
   });
 }
 const zz = new WeakMap(),
-  K7 = (e) =>
-    typeof (e == null ? void 0 : e.raw) == "string" &&
-    e.raw.startsWith("=") &&
-    !e.literal,
+  K7 = (e) => typeof e?.raw == "string" && e.raw.startsWith("=") && !e.literal,
   n2 = (e) => /#REF!/i.test(e.replace(/"(?:[^"]|"")*"/g, '""')),
   nfe = (e, r) => (e.axis === "row" ? String(r + 1) : ut(r));
 function ife(e, r, t, n = {}) {
-  var f, p, m;
   if (n.readOnly) throw Error("This workbook is read-only.");
   const o = Vn(e),
     a = LC(e, r, t),
@@ -774,7 +762,7 @@ function ife(e, r, t, n = {}) {
     );
   const u = e.sheets.find((v) => v.id === r),
     l =
-      t.moveBefore !== void 0
+      t.moveBefore !== undefined
         ? `Move ${t.count} ${t.axis}${t.count === 1 ? "" : "s"} before ${t.moveBefore === (t.axis === "row" ? u.rowCount : u.colCount) ? "worksheet end" : nfe(t, t.moveBefore)}`
         : `${t.remove ? "Delete" : "Insert"} ${t.count} ${t.axis}${t.count === 1 ? "" : "s"}`,
     c = {
@@ -800,14 +788,14 @@ function ife(e, r, t, n = {}) {
       w !== b && c.movedCells++;
       const E = g.cells[w];
       K7(y) &&
-        ((E == null ? void 0 : E.raw) !== y.raw &&
+        (E?.raw !== y.raw &&
           c.formulaChanges.push({
             sheetId: v.id,
             sheetName: v.name,
             beforeAddress: b,
             address: w,
             before: String(y.raw),
-            after: String((E == null ? void 0 : E.raw) ?? ""),
+            after: String(E?.raw ?? ""),
           }),
         s(v.id, w) === "#REF!" &&
           o(v.id, b) !== "#REF!" &&
@@ -816,22 +804,19 @@ function ife(e, r, t, n = {}) {
             sheetName: v.name,
             address: w,
             before: String(y.raw),
-            after: String((E == null ? void 0 : E.raw) ?? ""),
+            after: String(E?.raw ?? ""),
           }));
     }
     for (const b of g.conditionalFormats ?? []) {
-      const y =
-        (f = v.conditionalFormats) == null
-          ? void 0
-          : f.find((w) => w.id === b.id);
+      const y = v.conditionalFormats?.find((w) => w.id === b.id);
       b.formula &&
         n2(b.formula) &&
-        !n2((y == null ? void 0 : y.formula) ?? "") &&
+        !n2(y?.formula ?? "") &&
         c.referenceIssues.push({
           kind: "conditional rule",
           sheetName: g.name,
           address: b.range,
-          before: (y == null ? void 0 : y.formula) ?? "",
+          before: y?.formula ?? "",
           after: b.formula,
         });
     }
@@ -856,20 +841,17 @@ function ife(e, r, t, n = {}) {
         c.metadataChanges.push({ sheetName: v.name, field: b });
   }
   for (const v of a.definedNames ?? []) {
-    const g =
-      (p = e.definedNames) == null
-        ? void 0
-        : p.find((b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId);
+    const g = e.definedNames?.find(
+      (b) => b.name === v.name && b.scopeSheetId === v.scopeSheetId,
+    );
     n2(v.refersTo) &&
-      !n2((g == null ? void 0 : g.refersTo) ?? "") &&
+      !n2(g?.refersTo ?? "") &&
       c.referenceIssues.push({
         kind: "name",
         sheetName:
-          ((m = e.sheets.find((b) => b.id === v.scopeSheetId)) == null
-            ? void 0
-            : m.name) ?? "Workbook",
+          e.sheets.find((b) => b.id === v.scopeSheetId)?.name ?? "Workbook",
         address: v.name,
-        before: (g == null ? void 0 : g.refersTo) ?? "",
+        before: g?.refersTo ?? "",
         after: v.refersTo,
       });
   }
@@ -905,17 +887,17 @@ function ofe(e, r, t = {}) {
   return LC(e, r.sheetId, r.edit);
 }
 function afe({
-  workbook: e,
-  sheetId: r,
-  range: t,
-  mode: n,
-  readOnly: o,
-  onClose: a,
-  onWorkbookChange: s,
+  workbook,
+  sheetId,
+  range,
+  mode,
+  readOnly,
+  onClose,
+  onWorkbookChange,
 }) {
-  const { text: d, language: u } = Dr(),
-    l = n === "insertRow" ? "row" : "column",
-    c = ct(t),
+  const { text, language } = Dr(),
+    l = mode === "insertRow" ? "row" : "column",
+    c = ct(range),
     h = l === "row" ? Mt.maxRows : Mt.maxCols,
     [f, p] = ne.useState(l === "row" ? String(c.firstRow + 1) : ut(c.firstCol)),
     [m, v] = ne.useState(1),
@@ -927,14 +909,13 @@ function afe({
     [j, z] = ne.useState("formulas"),
     [V, D] = ne.useState(false),
     B = ne.useRef(null),
-    _ = e.sheets.find((G) => G.id === r);
+    _ = workbook.sheets.find((G) => G.id === sheetId);
   ne.useEffect(() => {
-    var H, Q;
+    var Q;
     const G = document.activeElement;
     return (
-      (Q = (H = B.current) == null ? void 0 : H.querySelector("select")) ==
-        null || Q.focus(),
-      () => (G == null ? void 0 : G.focus())
+      (Q = B.current?.querySelector("select")) == null || Q.focus(),
+      () => G?.focus()
     );
   }, []);
   const C = () => {
@@ -960,18 +941,18 @@ function afe({
     try {
       F("");
       const G = ife(
-        e,
-        r,
+        workbook,
+        sheetId,
         {
           axis: l,
           index: T(f),
           count: m,
           remove: g === "delete",
-          ...(g === "move" ? { moveBefore: T(y, !0) } : {}),
+          ...(g === "move" ? { moveBefore: T(y, true) } : {}),
         },
-        { readOnly: o },
+        { readOnly },
       );
-      (A(G), D(!1), O(0));
+      (A(G), D(false), O(0));
     } catch (G) {
       (F(G.message), A(null));
     }
@@ -983,12 +964,12 @@ function afe({
         throw Error(
           "Confirm the deletion and reference changes before applying.",
         );
-      const G = ofe(e, E, { readOnly: o });
-      (s(
+      const G = ofe(workbook, E, { readOnly });
+      (onWorkbookChange(
         G,
         `${E.action}${E.referenceIssues.length ? `; ${E.referenceIssues.length} new reference error(s) — reviewed` : ""}`,
       ),
-        a());
+        onClose());
     } catch (G) {
       F(G.message);
     }
@@ -1019,12 +1000,12 @@ function afe({
       : [];
   let U = null;
   try {
-    U = U1(e, r, l === "row" ? T(f) : c.firstRow);
+    U = U1(workbook, sheetId, l === "row" ? T(f) : c.firstRow);
   } catch {}
   return i.jsx("div", {
     className: "st-backdrop",
     onPointerDown: (G) => {
-      G.target === G.currentTarget && a();
+      G.target === G.currentTarget && onClose();
     },
     children: i.jsxs("section", {
       className: "st-dialog",
@@ -1033,16 +1014,14 @@ function afe({
       "aria-modal": "true",
       "aria-label": `Insert / Delete / Move ${l === "row" ? "Rows" : "Columns"}`,
       onKeyDown: (G) => {
-        var H;
         if (
-          (G.key === "Escape" && (G.stopPropagation(), a()), G.key === "Tab")
+          (G.key === "Escape" && (G.stopPropagation(), onClose()),
+          G.key === "Tab")
         ) {
           const Q = Array.from(
-              ((H = B.current) == null
-                ? void 0
-                : H.querySelectorAll(
-                    "button:not([disabled]),input:not([disabled]),select:not([disabled])",
-                  )) ?? [],
+              B.current?.querySelectorAll(
+                "button:not([disabled]),input:not([disabled]),select:not([disabled])",
+              ) ?? [],
             ),
             X = Q[0],
             J = Q.at(-1);
@@ -1061,9 +1040,9 @@ function afe({
               children: [l === "row" ? "Rows" : "Columns", " · ", _.name],
             }),
             i.jsx("button", {
-              "aria-label": d("Close structure tool"),
-              onClick: a,
-              lang: u("Close structure tool"),
+              "aria-label": text("Close structure tool"),
+              onClick: onClose,
+              lang: language("Close structure tool"),
               "data-ui-label": "Close structure tool",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1079,12 +1058,12 @@ function afe({
                   children: [
                     i.jsx(M, { children: "Operation" }),
                     i.jsxs("select", {
-                      "aria-label": d("Structure operation"),
+                      "aria-label": text("Structure operation"),
                       value: g,
                       onChange: (G) => {
                         (C(), b(G.target.value));
                       },
-                      lang: u("Structure operation"),
+                      lang: language("Structure operation"),
                       "data-ui-label": "Structure operation",
                       children: [
                         i.jsx("option", {
@@ -1107,12 +1086,12 @@ function afe({
                   children: [
                     l === "row" ? "First row" : "First column",
                     i.jsx("input", {
-                      "aria-label": d("Structure start"),
+                      "aria-label": text("Structure start"),
                       value: f,
                       onChange: (G) => {
                         (C(), p(G.target.value));
                       },
-                      lang: u("Structure start"),
+                      lang: language("Structure start"),
                       "data-ui-label": "Structure start",
                     }),
                   ],
@@ -1121,14 +1100,14 @@ function afe({
                   children: [
                     i.jsx(M, { children: "Count" }),
                     i.jsx(ci, {
-                      "aria-label": d("Structure count"),
+                      "aria-label": text("Structure count"),
                       min: 1,
                       max: 1e4,
                       value: m,
                       onValueChange: (G) => {
                         (C(), v(Number(G)));
                       },
-                      lang: u("Structure count"),
+                      lang: language("Structure count"),
                       "data-ui-label": "Structure count",
                     }),
                   ],
@@ -1144,13 +1123,13 @@ function afe({
                   " ",
                   i.jsx(M, { children: "(original position)" }),
                   i.jsx("input", {
-                    "aria-label": d("Structure destination"),
+                    "aria-label": text("Structure destination"),
                     value: y,
                     placeholder: l === "row" ? "10, or end" : "F, or end",
                     onChange: (G) => {
                       (C(), w(G.target.value));
                     },
-                    lang: u("Structure destination"),
+                    lang: language("Structure destination"),
                     "data-ui-label": "Structure destination",
                   }),
                 ],
@@ -1182,8 +1161,8 @@ function afe({
               i.jsx("p", { role: "alert", className: "st-error", children: k }),
             E &&
               i.jsxs("section", {
-                "aria-label": d("Structure preview"),
-                lang: u("Structure preview"),
+                "aria-label": text("Structure preview"),
+                lang: language("Structure preview"),
                 "data-ui-label": "Structure preview",
                 children: [
                   i.jsx("h3", { children: E.action }),
@@ -1229,12 +1208,12 @@ function afe({
                     children: [
                       i.jsx(M, { children: "Review" }),
                       i.jsxs("select", {
-                        "aria-label": d("Structure review category"),
+                        "aria-label": text("Structure review category"),
                         value: j,
                         onChange: (G) => {
                           (z(G.target.value), O(0));
                         },
-                        lang: u("Structure review category"),
+                        lang: language("Structure review category"),
                         "data-ui-label": "Structure review category",
                         children: [
                           i.jsxs("option", {
@@ -1289,8 +1268,8 @@ function afe({
                   }),
                   $.length > 25 &&
                     i.jsxs("nav", {
-                      "aria-label": d("Structure review pages"),
-                      lang: u("Structure review pages"),
+                      "aria-label": text("Structure review pages"),
+                      lang: language("Structure review pages"),
                       "data-ui-label": "Structure review pages",
                       children: [
                         i.jsx("button", {
@@ -1391,17 +1370,17 @@ function afe({
             i.jsxs("div", {
               children: [
                 i.jsx("button", {
-                  onClick: a,
+                  onClick: onClose,
                   children: i.jsx(M, { children: "Cancel" }),
                 }),
                 i.jsx("button", {
-                  disabled: o,
+                  disabled: readOnly,
                   onClick: N,
                   children: E ? "Refresh preview" : "Preview changes",
                 }),
                 i.jsx("button", {
                   className: "st-primary",
-                  disabled: !E || o || (L && !V),
+                  disabled: !E || readOnly || (L && !V),
                   onClick: R,
                   children: i.jsx(M, { children: "Apply changes" }),
                 }),

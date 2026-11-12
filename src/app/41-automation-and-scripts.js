@@ -47,7 +47,7 @@ function qxe(e) {
       const p = Hxe(h);
       if (!p || /^Rem(?:\s|$)/i.test(p)) continue;
       if (!s && !d && /^Option Explicit$/i.test(p)) {
-        a = !0;
+        a = true;
         continue;
       }
       if (
@@ -62,12 +62,12 @@ function qxe(e) {
       if (m) {
         if (s || d)
           throw Error("Only one parameterless VBA Sub may be migrated.");
-        ((s = !0), (u = m[1]));
+        ((s = true), (u = m[1]));
         continue;
       }
       if (/^End Sub$/i.test(p)) {
         if (!s) throw Error("Unexpected End Sub.");
-        ((s = !1), (d = !0));
+        ((s = false), (d = true));
         continue;
       }
       if (!s) throw Error("Code outside the single Sub is unsupported.");
@@ -213,7 +213,6 @@ const Xxe = (e) => {
   return t;
 };
 function Gxe(e, r, t, n = {}) {
-  var f, p;
   if ((jC(r), !r.script))
     throw Error(
       "This artifact supports inventory only. Export/import UTF-8 VBA or Office Scripts source for migration.",
@@ -248,7 +247,7 @@ function Gxe(e, r, t, n = {}) {
     for (const m of u.commands)
       try {
         if (
-          m.sheet !== void 0 &&
+          m.sheet !== undefined &&
           m.sheet.toLowerCase() !== s.name.toLowerCase()
         )
           throw Error(
@@ -262,7 +261,7 @@ function Gxe(e, r, t, n = {}) {
           throw Error(
             "Migration exceeds 500 touched cells across all commands.",
           );
-        const w = Array.isArray(m.values) ? m.values : void 0;
+        const w = Array.isArray(m.values) ? m.values : undefined;
         if (
           w &&
           (w.length !== g || w.some((E) => !Array.isArray(E) || E.length !== b))
@@ -299,7 +298,7 @@ function Gxe(e, r, t, n = {}) {
               throw Error(
                 "Formula-like value assignment has different Excel semantics. Use an explicit setFormula / .Formula statement or change the reviewed source.",
               );
-            const I = ((f = c.get(k)) == null ? void 0 : f.cell) ?? s.cells[k],
+            const I = c.get(k)?.cell ?? s.cells[k],
               O = { ...I, raw: F };
             if ((delete O.literal, m.kind === "set-formulas")) {
               if (typeof F != "string" || !F.startsWith("="))
@@ -319,7 +318,7 @@ function Gxe(e, r, t, n = {}) {
   if (!l.issues.length)
     try {
       const m = p0(o, h, "Migration preview", "Preview migrated automation"),
-        v = ((p = m.events.at(-1)) == null ? void 0 : p.changes) ?? [],
+        v = m.events.at(-1)?.changes ?? [],
         g = Vn(m);
       for (const b of h) {
         if (typeof b.cell.raw != "string" || !b.cell.raw.startsWith("="))
@@ -350,7 +349,7 @@ function Gxe(e, r, t, n = {}) {
         before: b.before ?? null,
         after: b.after,
       }))),
-        (l.valid = !0));
+        (l.valid = true));
     } catch (m) {
       l.issues.push(
         m instanceof Error ? m.message : "Workbook validation failed.",
@@ -401,7 +400,6 @@ function Kxe(e, r, t) {
   );
 }
 function Yxe(e, r, t) {
-  var d;
   const n = YT.get(r);
   if (!n || n.signature !== JSON.stringify(r) || !r.valid)
     throw Error(
@@ -414,7 +412,7 @@ function Yxe(e, r, t) {
   if (
     (NW(e, r.scope, t.readOnly),
     jC(n.inspection),
-    (((d = e.automationRuns) == null ? void 0 : d.length) ?? 0) >= ol.maxRuns)
+    (e.automationRuns?.length ?? 0) >= ol.maxRuns)
   )
     throw Error(
       "Automation run evidence is full (100 runs). Export native JSON before continuing.",
@@ -452,8 +450,8 @@ function Yxe(e, r, t) {
   );
 }
 function Jxe(e) {
-  var Q, X, J;
-  const { text: r, language: t } = Dr(),
+  var J;
+  const { text, language } = Dr(),
     n = FC(),
     o = ne.useRef(null),
     a = ne.useId(),
@@ -530,7 +528,7 @@ function Jxe(e) {
         signal: n.signal ? AbortSignal.any([W.signal, n.signal]) : W.signal,
       });
       if (K !== u.current) return;
-      (h(ae), T(""), p(null), D(!1));
+      (h(ae), T(""), p(null), D(false));
     } catch (ae) {
       if (K !== u.current) return;
       O(ae instanceof Error ? ae.message : "Unable to inspect automation.");
@@ -552,18 +550,15 @@ function Jxe(e) {
       tabIndex: -1,
       ref: s,
       onKeyDown: (q) => {
-        var W;
         if (
           (q.stopPropagation(),
           q.key === "Escape" && (q.preventDefault(), e.onClose()),
           q.key === "Tab")
         ) {
           const K = [
-              ...(((W = s.current) == null
-                ? void 0
-                : W.querySelectorAll(
-                    "button:not(:disabled),input:not(:disabled):not([type=file]),select:not(:disabled),textarea:not(:disabled),summary",
-                  )) ?? []),
+              ...(s.current?.querySelectorAll(
+                "button:not(:disabled),input:not(:disabled):not([type=file]),select:not(:disabled),textarea:not(:disabled),summary",
+              ) ?? []),
             ],
             te = K[0],
             ae = K.at(-1);
@@ -590,9 +585,9 @@ function Jxe(e) {
               }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close automation review"),
+              "aria-label": text("Close automation review"),
               onClick: e.onClose,
-              lang: t("Close automation review"),
+              lang: language("Close automation review"),
               "data-ui-label": "Close automation review",
               children: "×",
             }),
@@ -613,8 +608,7 @@ function Jxe(e) {
                 i.jsx("button", {
                   disabled: j,
                   onClick: () => {
-                    var q;
-                    return (q = d.current) == null ? void 0 : q.click();
+                    return d.current?.click();
                   },
                   children: i.jsx(M, { children: "Inspect automation file" }),
                 }),
@@ -622,14 +616,13 @@ function Jxe(e) {
                   ref: d,
                   type: "file",
                   hidden: true,
-                  "aria-label": r("Automation source file"),
+                  "aria-label": text("Automation source file"),
                   accept:
                     ".bas,.vba,.cls,.ts,.osts,.xlsm,.xlam,.xltm,.xlsx,.xltx,.xls,.xlsb",
                   onChange: (q) => {
-                    var W;
-                    return void G((W = q.target.files) == null ? void 0 : W[0]);
+                    return void G(q.target.files?.[0]);
                   },
-                  lang: t("Automation source file"),
+                  lang: language("Automation source file"),
                   "data-ui-label": "Automation source file",
                 }),
                 i.jsxs("label", {
@@ -639,12 +632,10 @@ function Jxe(e) {
                       value: C,
                       onChange: (q) =>
                         U(() => {
-                          var K;
                           ($(), T(q.target.value));
-                          const W =
-                            (K = e.workbook.automationArtifacts) == null
-                              ? void 0
-                              : K.find((te) => te.id === q.target.value);
+                          const W = e.workbook.automationArtifacts?.find(
+                            (te) => te.id === q.target.value,
+                          );
                           W && (G(new File([X5(W.base64)], W.fileName)), L());
                         }),
                       children: [
@@ -652,22 +643,20 @@ function Jxe(e) {
                           value: "",
                           children: "Select an artifact",
                         }),
-                        (Q = e.workbook.automationArtifacts) == null
-                          ? void 0
-                          : Q.map((q) =>
-                              i.jsxs(
-                                "option",
-                                {
-                                  value: q.id,
-                                  children: [
-                                    q.fileName,
-                                    " · ",
-                                    q.sha256.slice(0, 12),
-                                  ],
-                                },
-                                q.id,
-                              ),
-                            ),
+                        e.workbook.automationArtifacts?.map((q) =>
+                          i.jsxs(
+                            "option",
+                            {
+                              value: q.id,
+                              children: [
+                                q.fileName,
+                                " · ",
+                                q.sha256.slice(0, 12),
+                              ],
+                            },
+                            q.id,
+                          ),
+                        ),
                       ],
                     }),
                   ],
@@ -794,8 +783,8 @@ function Jxe(e) {
                     children: [i.jsx(M, { children: "SHA-256: " }), c.sha256],
                   }),
                   i.jsxs("table", {
-                    "aria-label": r("Automation inventory"),
-                    lang: t("Automation inventory"),
+                    "aria-label": text("Automation inventory"),
+                    lang: language("Automation inventory"),
                     "data-ui-label": "Automation inventory",
                     children: [
                       i.jsx("thead", {
@@ -853,7 +842,7 @@ function Jxe(e) {
                         disabled: e.readOnly || !c.retainedEligible,
                         onClick: () =>
                           U(() => {
-                            (e.onPreserve(c), p(null), D(!1));
+                            (e.onPreserve(c), p(null), D(false));
                           }),
                         children: i.jsx(M, {
                           children: "Preserve original source",
@@ -862,16 +851,12 @@ function Jxe(e) {
                       i.jsx("button", {
                         onClick: () =>
                           U(() => {
-                            var W;
                             const q =
-                              (W = l.current.workbook.automationArtifacts) ==
-                              null
-                                ? void 0
-                                : W.find(
-                                    (K) =>
-                                      K.sha256 === c.sha256 &&
-                                      K.fileName === c.fileName,
-                                  );
+                              l.current.workbook.automationArtifacts?.find(
+                                (K) =>
+                                  K.sha256 === c.sha256 &&
+                                  K.fileName === c.fileName,
+                              );
                             if (!q)
                               throw Error(
                                 "Preserve the original source before downloading it from the workbook.",
@@ -909,8 +894,8 @@ function Jxe(e) {
                           ],
                         }),
                         i.jsx("ul", {
-                          "aria-label": r("Source compatibility issues"),
-                          lang: t("Source compatibility issues"),
+                          "aria-label": text("Source compatibility issues"),
+                          lang: language("Source compatibility issues"),
                           "data-ui-label": "Source compatibility issues",
                           children: N.issues.map((q, W) =>
                             i.jsxs(
@@ -940,8 +925,7 @@ function Jxe(e) {
                               }),
                             }),
                             i.jsx("pre", {
-                              children:
-                                (X = c.script) == null ? void 0 : X.text,
+                              children: c.script?.text,
                             }),
                           ],
                         }),
@@ -988,7 +972,7 @@ function Jxe(e) {
                           disabled: e.readOnly || !N.supported,
                           onClick: () =>
                             U(() => {
-                              (D(!1),
+                              (D(false),
                                 p(
                                   Gxe(e.workbook, c, R, {
                                     readOnly: e.readOnly,
@@ -1042,8 +1026,8 @@ function Jxe(e) {
                       }),
                     }),
                   i.jsxs("table", {
-                    "aria-label": r("Migrated workbook commands"),
-                    lang: t("Migrated workbook commands"),
+                    "aria-label": text("Migrated workbook commands"),
+                    lang: language("Migrated workbook commands"),
                     "data-ui-label": "Migrated workbook commands",
                     children: [
                       i.jsx("thead", {
@@ -1085,8 +1069,8 @@ function Jxe(e) {
                     ],
                   }),
                   i.jsxs("table", {
-                    "aria-label": r("Automation change preview"),
-                    lang: t("Automation change preview"),
+                    "aria-label": text("Automation change preview"),
+                    lang: language("Automation change preview"),
                     "data-ui-label": "Automation change preview",
                     children: [
                       i.jsx("thead", {
@@ -1106,17 +1090,13 @@ function Jxe(e) {
                       }),
                       i.jsx("tbody", {
                         children: f.changes.map((q) => {
-                          var W;
                           return i.jsxs(
                             "tr",
                             {
                               children: [
                                 i.jsx("td", { children: q.address }),
                                 i.jsx("td", {
-                                  children: String(
-                                    ((W = q.before) == null ? void 0 : W.raw) ??
-                                      "(blank)",
-                                  ),
+                                  children: String(q.before?.raw ?? "(blank)"),
                                 }),
                                 i.jsx("td", {
                                   children: String(q.after.raw ?? "(blank)"),
@@ -1230,7 +1210,7 @@ function Jxe(e) {
               onClick: () =>
                 e.onDownload(
                   H(),
-                  `${(c == null ? void 0 : c.fileName) ?? "automation"}.compatibility.json`,
+                  `${c?.fileName ?? "automation"}.compatibility.json`,
                 ),
               children: i.jsx(M, { children: "Save automation report" }),
             }),
@@ -1238,7 +1218,7 @@ function Jxe(e) {
               disabled: !V || !(f != null && f.valid) || e.readOnly,
               onClick: () =>
                 U(() => {
-                  !f || !V || (e.onApply(f, R, B), p(null), D(!1));
+                  !f || !V || (e.onApply(f, R, B), p(null), D(false));
                 }),
               children: i.jsx(M, { children: "Run approved migration" }),
             }),

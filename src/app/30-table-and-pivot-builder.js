@@ -16,29 +16,34 @@ import {
   yie,
 } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
-import { BI, Xk, Y7, cfe, ffe, hfe, ufe } from "./29-conditional-formatting-dialog.js";
+import {
+  BI,
+  Xk,
+  Y7,
+  cfe,
+  ffe,
+  hfe,
+  ufe,
+} from "./29-conditional-formatting-dialog.js";
 
 function pfe({
-  mode: e,
-  workbook: r,
-  sheetId: t,
-  range: n,
-  readOnly: o,
-  onClose: a,
-  onWorkbookChange: s,
+  mode,
+  workbook,
+  sheetId,
+  range,
+  readOnly,
+  onClose,
+  onWorkbookChange,
 }) {
-  var Ut, Jt, fr, br;
-  const { text: d, language: u } = Dr(),
+  var br;
+  const { text, language } = Dr(),
     l = ne.useRef(null);
   ne.useEffect(() => {
     const rt = document.activeElement,
       Le = l.current,
-      et =
-        Le == null
-          ? void 0
-          : Le.querySelector(
-              "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
-            );
+      et = Le?.querySelector(
+        "input:not(:disabled), select:not(:disabled), button:not(:disabled)",
+      );
     return (
       et == null || et.focus(),
       () => {
@@ -48,19 +53,19 @@ function pfe({
   }, []);
   const c = ne.useMemo(() => {
       try {
-        return die(r, t, n);
+        return die(workbook, sheetId, range);
       } catch {
-        return n;
+        return range;
       }
     }, []),
-    h = ne.useMemo(() => hfe(r, t, c), []),
-    [f, p] = ne.useState(t),
+    h = ne.useMemo(() => hfe(workbook, sheetId, c), []),
+    [f, p] = ne.useState(sheetId),
     [m, v] = ne.useState(c),
     [g, b] = ne.useState(h),
     [y, w] = ne.useState(
-      e === "table"
-        ? Y7(r)
-        : e === "pivot"
+      mode === "table"
+        ? Y7(workbook)
+        : mode === "pivot"
           ? "Pivot summary"
           : "Extracted data",
     ),
@@ -99,7 +104,7 @@ function pfe({
     [he, Se] = ne.useState("ascending"),
     [le, ce] = ne.useState([]),
     [ge, se] = ne.useState(false),
-    [we, Ee] = ne.useState(t),
+    [we, Ee] = ne.useState(sheetId),
     [Ae, ye] = ne.useState("A1"),
     [Te, Pe] = ne.useState(""),
     [qe, ht] = ne.useState(""),
@@ -108,8 +113,8 @@ function pfe({
     [$e, Je] = ne.useState(null),
     [ze, at] = ne.useState(0),
     _e = JSON.stringify({
-      sheetId: t,
-      range: n,
+      sheetId,
+      range,
       tableId: E,
       name: y,
       sourceRange: m,
@@ -120,27 +125,26 @@ function pfe({
       columnFormula: Re,
       appendCount: ke,
     }),
-    Ze = !!$e && ($e.plan.snapshot !== JSON.stringify(r) || $e.context !== _e),
+    Ze =
+      !!$e &&
+      ($e.plan.snapshot !== JSON.stringify(workbook) || $e.context !== _e),
     [lt, be] = ne.useState(""),
     [ft, pt] = ne.useState(""),
     [Fe, nt] = ne.useState(null),
-    mt =
-      ((Ut = r.sheets.find((rt) => rt.id === t)) == null
-        ? void 0
-        : Ut.tables) ?? [],
-    Wt = r.sheets.flatMap((rt) =>
-      (e === "pivot" ? (rt.pivots ?? []) : (rt.queries ?? [])).map((Le) => ({
+    mt = workbook.sheets.find((rt) => rt.id === sheetId)?.tables ?? [],
+    Wt = workbook.sheets.flatMap((rt) =>
+      (mode === "pivot" ? (rt.pivots ?? []) : (rt.queries ?? [])).map((Le) => ({
         sheetName: rt.name,
         definition: Le,
       })),
     ),
-    Zt = () => (ge ? { sheetId: we, address: Ae } : void 0);
+    Zt = () => (ge ? { sheetId: we, address: Ae } : undefined);
   function xt(rt, Le) {
-    if (!o) {
+    if (!readOnly) {
       (be(""), pt(""));
       try {
         const et = rt();
-        (s(et, Le), pt(`${Le} completed.`));
+        (onWorkbookChange(et, Le), pt(`${Le} completed.`));
       } catch (et) {
         be(
           et instanceof Error
@@ -153,7 +157,7 @@ function pfe({
   function or() {
     be("");
     try {
-      const rt = pR(r, f, m);
+      const rt = pR(workbook, f, m);
       (b(rt),
         K(rt),
         D(rt.slice(0, 1)),
@@ -170,16 +174,15 @@ function pfe({
     }
   }
   function Wr(rt) {
-    var et, st;
     (nt(null), A(rt), Je(null));
     const Le = mt.find((kt) => kt.id === rt);
     if (!Le) {
-      (w(Y7(r)), v(c), F("blue"), O(false), z({}));
+      (w(Y7(workbook)), v(c), F("blue"), O(false), z({}));
       return;
     }
     (w(Le.name),
-      ht(((et = Le.columns[0]) == null ? void 0 : et.id) ?? ""),
-      Me(((st = Le.columns[0]) == null ? void 0 : st.calculatedFormula) ?? ""),
+      ht(Le.columns[0]?.id ?? ""),
+      Me(Le.columns[0]?.calculatedFormula ?? ""),
       v(Le.range),
       b(Le.columns.map((kt) => kt.name)),
       F(Le.style),
@@ -197,7 +200,7 @@ function pfe({
   function qt(rt) {
     (be(""), pt(""), Je(null), at(0));
     try {
-      Je({ plan: QP(r, t, E, rt, { readOnly: o }), context: _e });
+      Je({ plan: QP(workbook, sheetId, E, rt, { readOnly }), context: _e });
     } catch (Le) {
       be(Le.message);
     }
@@ -210,12 +213,13 @@ function pfe({
           throw Error(
             "Table settings or the current selection changed. Preview again.",
           );
-        const rt = Eie(r, $e.plan, { readOnly: o });
-        (rt !== r && s(rt, "Apply reviewed table operation"),
+        const rt = Eie(workbook, $e.plan, { readOnly });
+        (rt !== workbook &&
+          onWorkbookChange(rt, "Apply reviewed table operation"),
           v($e.plan.afterRange),
           Je(null),
           pt(
-            rt === r
+            rt === workbook
               ? "No table changes were needed."
               : "Reviewed table operation completed.",
           ));
@@ -225,7 +229,7 @@ function pfe({
     }
   }
   function bt() {
-    e === "table"
+    mode === "table"
       ? E
         ? qt({
             kind: "updateTable",
@@ -233,7 +237,7 @@ function pfe({
           })
         : xt(
             () =>
-              fie(r, t, {
+              fie(workbook, sheetId, {
                 name: y,
                 range: m,
                 style: k,
@@ -242,7 +246,10 @@ function pfe({
                 ...(Fe
                   ? {
                       headers: (() => {
-                        if (Fe.snapshot !== JSON.stringify(r) || Fe.range !== m)
+                        if (
+                          Fe.snapshot !== JSON.stringify(workbook) ||
+                          Fe.range !== m
+                        )
                           throw Error(
                             "The workbook or source range changed. Review headers again.",
                           );
@@ -253,10 +260,10 @@ function pfe({
               }),
             "Create table",
           )
-      : e === "pivot"
+      : mode === "pivot"
         ? xt(
             () =>
-              yR(r, {
+              yR(workbook, {
                 name: y,
                 source: { sheetId: f, range: m },
                 rowFields: V,
@@ -273,7 +280,7 @@ function pfe({
           )
         : xt(
             () =>
-              ZP(r, {
+              ZP(workbook, {
                 name: y,
                 source: { sheetId: f, range: m },
                 fields: W,
@@ -289,7 +296,7 @@ function pfe({
   const St = (rt) =>
       i.jsxs(i.Fragment, {
         children: [
-          rt !== void 0 && i.jsx("option", { value: "", children: rt }),
+          rt !== undefined && i.jsx("option", { value: "", children: rt }),
           g.map((Le) => i.jsx("option", { value: Le, children: Le }, Le)),
         ],
       }),
@@ -323,9 +330,9 @@ function pfe({
         ],
       }),
     dr =
-      e === "table"
+      mode === "table"
         ? "Table tools"
-        : e === "pivot"
+        : mode === "pivot"
           ? "PivotTable builder"
           : "From Table / Range";
   return i.jsxs("div", {
@@ -335,18 +342,15 @@ function pfe({
     "aria-modal": "true",
     "aria-label": dr,
     onKeyDown: (rt) => {
-      var Le;
       if (
         (rt.key === "Escape" &&
-          (rt.preventDefault(), rt.stopPropagation(), a()),
+          (rt.preventDefault(), rt.stopPropagation(), onClose()),
         rt.key === "Tab")
       ) {
         const et = Array.from(
-            ((Le = l.current) == null
-              ? void 0
-              : Le.querySelectorAll(
-                  "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex='0']",
-                )) ?? [],
+            l.current?.querySelectorAll(
+              "button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex='0']",
+            ) ?? [],
           ).filter(
             (gr) =>
               (!gr.closest("fieldset:disabled") &&
@@ -371,9 +375,9 @@ function pfe({
               i.jsx("h2", { children: dr }),
               i.jsx("p", {
                 children:
-                  e === "table"
+                  mode === "table"
                     ? "Organize a headed range with a name, style and totals."
-                    : e === "pivot"
+                    : mode === "pivot"
                       ? "Group source values into a summary with refreshable settings."
                       : "Select, filter, sort and transform values into a separate result.",
               }),
@@ -382,7 +386,7 @@ function pfe({
           i.jsx("button", {
             type: "button",
             "aria-label": `Close ${dr}`,
-            onClick: a,
+            onClick: onClose,
             children: "×",
           }),
         ],
@@ -394,24 +398,24 @@ function pfe({
           children: lt,
         }),
       ft && i.jsx("p", { role: "status", children: ft }),
-      o &&
+      readOnly &&
         i.jsx("p", {
           className: "lg-table-readonly",
           children: i.jsx(M, { children: "This workbook is read-only." }),
         }),
       i.jsxs("fieldset", {
-        disabled: o,
+        disabled: readOnly,
         className: "lg-table-form",
         children: [
-          e === "table" &&
+          mode === "table" &&
             i.jsxs("label", {
               children: [
                 i.jsx(M, { children: "Existing table" }),
                 i.jsxs("select", {
-                  "aria-label": d("Existing table"),
+                  "aria-label": text("Existing table"),
                   value: E,
                   onChange: (rt) => Wr(rt.target.value),
-                  lang: u("Existing table"),
+                  lang: language("Existing table"),
                   "data-ui-label": "Existing table",
                   children: [
                     i.jsx("option", {
@@ -431,22 +435,22 @@ function pfe({
             }),
           i.jsxs("label", {
             children: [
-              e === "table" ? "Table name" : "Result name",
+              mode === "table" ? "Table name" : "Result name",
               i.jsx("input", {
-                "aria-label": e === "table" ? "Table name" : "Result name",
+                "aria-label": mode === "table" ? "Table name" : "Result name",
                 value: y,
                 onChange: (rt) => w(rt.target.value),
               }),
             ],
           }),
-          e !== "table" &&
+          mode !== "table" &&
             i.jsxs("label", {
               children: [
                 i.jsx(M, { children: "Source sheet" }),
                 i.jsx("select", {
                   value: f,
                   onChange: (rt) => p(rt.target.value),
-                  children: r.sheets.map((rt) =>
+                  children: workbook.sheets.map((rt) =>
                     i.jsx("option", { value: rt.id, children: rt.name }, rt.id),
                   ),
                 }),
@@ -457,10 +461,10 @@ function pfe({
             children: [
               i.jsxs("label", {
                 children: [
-                  e === "table" ? "Table range" : "Source range",
+                  mode === "table" ? "Table range" : "Source range",
                   i.jsx("input", {
                     "aria-label":
-                      e === "table" ? "Table range" : "Source range",
+                      mode === "table" ? "Table range" : "Source range",
                     value: m,
                     onChange: (rt) => v(rt.target.value),
                   }),
@@ -473,7 +477,7 @@ function pfe({
               }),
             ],
           }),
-          e === "table"
+          mode === "table"
             ? i.jsxs(i.Fragment, {
                 children: [
                   !E &&
@@ -484,9 +488,9 @@ function pfe({
                           onClick: () => {
                             be("");
                             try {
-                              const rt = $P(r, t, m);
+                              const rt = $P(workbook, sheetId, m);
                               (nt({
-                                snapshot: JSON.stringify(r),
+                                snapshot: JSON.stringify(workbook),
                                 range: m,
                                 headers: rt,
                               }),
@@ -499,9 +503,9 @@ function pfe({
                         }),
                         Fe &&
                           i.jsxs("section", {
-                            "aria-label": d("Table header resolution"),
+                            "aria-label": text("Table header resolution"),
                             className: "lg-table-list",
-                            lang: u("Table header resolution"),
+                            lang: language("Table header resolution"),
                             "data-ui-label": "Table header resolution",
                             children: [
                               i.jsx("h3", {
@@ -630,12 +634,12 @@ function pfe({
                     i.jsx(
                       ufe,
                       {
-                        workbook: r,
-                        sheetId: t,
+                        workbook,
+                        sheetId,
                         tableId: E,
                         context: _e,
-                        readOnly: o,
-                        onWorkbookChange: s,
+                        readOnly,
+                        onWorkbookChange,
                       },
                       E,
                     ),
@@ -652,44 +656,38 @@ function pfe({
                           children: [
                             i.jsx(M, { children: "Calculated column" }),
                             i.jsx("select", {
-                              "aria-label": d("Calculated column"),
+                              "aria-label": text("Calculated column"),
                               value: qe,
                               onChange: (rt) => {
-                                var Le, et;
                                 (ht(rt.target.value),
                                   Me(
-                                    ((et =
-                                      (Le = mt.find((st) => st.id === E)) ==
-                                      null
-                                        ? void 0
-                                        : Le.columns.find(
-                                            (st) => st.id === rt.target.value,
-                                          )) == null
-                                      ? void 0
-                                      : et.calculatedFormula) ?? "",
+                                    mt
+                                      .find((st) => st.id === E)
+                                      ?.columns.find(
+                                        (st) => st.id === rt.target.value,
+                                      )?.calculatedFormula ?? "",
                                   ),
                                   Je(null));
                               },
-                              lang: u("Calculated column"),
+                              lang: language("Calculated column"),
                               "data-ui-label": "Calculated column",
-                              children:
-                                (Jt = mt.find((rt) => rt.id === E)) == null
-                                  ? void 0
-                                  : Jt.columns.map((rt) =>
-                                      i.jsxs(
-                                        "option",
-                                        {
-                                          value: rt.id,
-                                          children: [
-                                            rt.name,
-                                            rt.calculatedFormula
-                                              ? " · calculated"
-                                              : "",
-                                          ],
-                                        },
-                                        rt.id,
-                                      ),
-                                    ),
+                              children: mt
+                                .find((rt) => rt.id === E)
+                                ?.columns.map((rt) =>
+                                  i.jsxs(
+                                    "option",
+                                    {
+                                      value: rt.id,
+                                      children: [
+                                        rt.name,
+                                        rt.calculatedFormula
+                                          ? " · calculated"
+                                          : "",
+                                      ],
+                                    },
+                                    rt.id,
+                                  ),
+                                ),
                             }),
                           ],
                         }),
@@ -697,11 +695,11 @@ function pfe({
                           children: [
                             i.jsx(M, { children: "First data-row formula" }),
                             i.jsx("input", {
-                              "aria-label": d("First data-row formula"),
+                              "aria-label": text("First data-row formula"),
                               value: Re,
                               onChange: (rt) => Me(rt.target.value),
-                              placeholder: d("=[@Quantity]*[@Rate]"),
-                              lang: u("First data-row formula"),
+                              placeholder: text("=[@Quantity]*[@Rate]"),
+                              lang: language("First data-row formula"),
                               "data-ui-label": "First data-row formula",
                             }),
                           ],
@@ -731,10 +729,9 @@ function pfe({
                             i.jsx("button", {
                               type: "button",
                               disabled: !(
-                                (br =
-                                  (fr = mt.find((rt) => rt.id === E)) == null
-                                    ? void 0
-                                    : fr.columns.find((rt) => rt.id === qe)) !=
+                                (br = mt
+                                  .find((rt) => rt.id === E)
+                                  ?.columns.find((rt) => rt.id === qe)) !=
                                   null && br.calculatedFormula
                               ),
                               onClick: () =>
@@ -752,12 +749,12 @@ function pfe({
                           children: [
                             i.jsx(M, { children: "Rows to append" }),
                             i.jsx(ci, {
-                              "aria-label": d("Rows to append"),
+                              "aria-label": text("Rows to append"),
                               min: "1",
                               max: "100",
                               value: ke,
                               onValueChange: (rt) => je(rt),
-                              lang: u("Rows to append"),
+                              lang: language("Rows to append"),
                               "data-ui-label": "Rows to append",
                             }),
                           ],
@@ -782,8 +779,8 @@ function pfe({
                   $e &&
                     i.jsxs("section", {
                       className: "lg-table-preview",
-                      "aria-label": d("Table change preview"),
-                      lang: u("Table change preview"),
+                      "aria-label": text("Table change preview"),
+                      lang: language("Table change preview"),
                       "data-ui-label": "Table change preview",
                       children: [
                         i.jsx("h3", {
@@ -823,7 +820,6 @@ function pfe({
                                       }),
                                     }),
                                     $e.plan.afterColumns.map((rt, Le) => {
-                                      var et;
                                       return i.jsxs(
                                         "p",
                                         {
@@ -834,11 +830,8 @@ function pfe({
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "Before:" }),
                                             " ",
-                                            ((et = $e.plan.beforeColumns[Le]) ==
-                                            null
-                                              ? void 0
-                                              : et.calculatedFormula) ??
-                                              "No rule",
+                                            $e.plan.beforeColumns[Le]
+                                              ?.calculatedFormula ?? "No rule",
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "After: " }),
                                             rt.calculatedFormula ?? "No rule",
@@ -854,18 +847,15 @@ function pfe({
                                   children: $e.plan.changes
                                     .slice(ze * 20, ze * 20 + 20)
                                     .map((rt) => {
-                                      var Le, et, st;
                                       return i.jsxs(
                                         "li",
                                         {
                                           children: [
                                             i.jsxs("strong", {
                                               children: [
-                                                (Le = r.sheets.find(
+                                                workbook.sheets.find(
                                                   (kt) => kt.id === rt.sheetId,
-                                                )) == null
-                                                  ? void 0
-                                                  : Le.name,
+                                                )?.name,
                                                 "!",
                                                 rt.address,
                                               ],
@@ -873,16 +863,12 @@ function pfe({
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "Before: " }),
                                             JSON.stringify(
-                                              ((et = rt.before) == null
-                                                ? void 0
-                                                : et.raw) ?? null,
+                                              rt.before?.raw ?? null,
                                             ),
                                             i.jsx("br", {}),
                                             i.jsx(M, { children: "After: " }),
                                             JSON.stringify(
-                                              ((st = rt.after) == null
-                                                ? void 0
-                                                : st.raw) ?? null,
+                                              rt.after?.raw ?? null,
                                             ),
                                             i.jsxs("details", {
                                               children: [
@@ -1000,7 +986,7 @@ function pfe({
               })
             : i.jsxs(i.Fragment, {
                 children: [
-                  e === "pivot"
+                  mode === "pivot"
                     ? i.jsxs(i.Fragment, {
                         children: [
                           cr("Row groups", V, D),
@@ -1351,7 +1337,7 @@ function pfe({
                                                               otherField:
                                                                 et.target
                                                                   .value ||
-                                                                void 0,
+                                                                undefined,
                                                             }
                                                           : kt,
                                                       ),
@@ -1387,7 +1373,7 @@ function pfe({
                                                       })
                                                     : i.jsx(ci, {
                                                         "aria-label":
-                                                          d("Constant"),
+                                                          text("Constant"),
                                                         value:
                                                           rt.constant ?? "",
                                                         onValueChange: (et) =>
@@ -1578,7 +1564,7 @@ function pfe({
                             i.jsx("select", {
                               value: we,
                               onChange: (rt) => Ee(rt.target.value),
-                              children: r.sheets.map((rt) =>
+                              children: workbook.sheets.map((rt) =>
                                 i.jsx(
                                   "option",
                                   { value: rt.id, children: rt.name },
@@ -1626,14 +1612,18 @@ function pfe({
                                   value: "",
                                   children: "Choose a result",
                                 }),
-                                Wt.map(({ sheetName: rt, definition: Le }) =>
+                                Wt.map(({ sheetName, definition }) =>
                                   i.jsxs(
                                     "option",
                                     {
-                                      value: Le.id,
-                                      children: [rt, ": ", Le.name],
+                                      value: definition.id,
+                                      children: [
+                                        sheetName,
+                                        ": ",
+                                        definition.name,
+                                      ],
                                     },
-                                    Le.id,
+                                    definition.id,
                                   ),
                                 ),
                               ],
@@ -1646,10 +1636,10 @@ function pfe({
                           onClick: () =>
                             xt(
                               () =>
-                                e === "pivot"
-                                  ? mie(r, Te, Zt())
-                                  : yie(r, Te, Zt()),
-                              e === "pivot"
+                                mode === "pivot"
+                                  ? mie(workbook, Te, Zt())
+                                  : yie(workbook, Te, Zt()),
+                              mode === "pivot"
                                 ? "Refresh pivot summary"
                                 : "Refresh extracted data",
                             ),
@@ -1657,9 +1647,9 @@ function pfe({
                             children: "Refresh into a new result",
                           }),
                         }),
-                        e === "pivot" &&
+                        mode === "pivot" &&
                           Te &&
-                          i.jsx(BI, { workbook: r, pivotId: Te }),
+                          i.jsx(BI, { workbook, pivotId: Te }),
                       ],
                     }),
                 ],
@@ -1670,11 +1660,11 @@ function pfe({
               type: "button",
               onClick: bt,
               children:
-                e === "table"
+                mode === "table"
                   ? E
                     ? "Update table"
                     : "Create table"
-                  : e === "pivot"
+                  : mode === "pivot"
                     ? "Create pivot summary"
                     : "Extract data",
             }),
@@ -1696,11 +1686,11 @@ const Vz = {
       : e === ""
         ? "(empty text)"
         : `${typeof e}: ${String(e)}`;
-function gfe({ book: e, id: r }) {
-  const { text: t, language: n } = Dr();
+function gfe({ book, id }) {
+  const { text, language } = Dr();
   let o;
   try {
-    o = vie(e, r);
+    o = vie(book, id);
   } catch (m) {
     return i.jsx("p", { role: "alert", children: m.message });
   }
@@ -1723,8 +1713,8 @@ function gfe({ book: e, id: r }) {
     p = o.showAs !== "value";
   return i.jsxs("figure", {
     className: "lg-pivot-chart",
-    "aria-label": t("PivotChart"),
-    lang: n("PivotChart"),
+    "aria-label": text("PivotChart"),
+    lang: language("PivotChart"),
     "data-ui-label": "PivotChart",
     children: [
       i.jsxs("figcaption", {
@@ -1781,9 +1771,7 @@ function gfe({ book: e, id: r }) {
                         stroke: "#217346",
                         strokeWidth: "3",
                         points: m
-                          .map(
-                            ({ v: g, i: b }) => `${35 + h * (b + 0.5)},${c(g)}`,
-                          )
+                          .map(({ v, i }) => `${35 + h * (i + 0.5)},${c(v)}`)
                           .join(" "),
                       },
                       v,

@@ -123,60 +123,45 @@ function lT(e) {
     n = [],
     o = new Map();
   Cg(e["[Content_Types].xml"], (a) => {
-    var s, d, u, l;
     (a.local === "Override" &&
       r.set(
-        (((s = a.attributes.PartName) == null ? void 0 : s.value) ?? "").slice(
-          1,
-        ),
-        ((d = a.attributes.ContentType) == null ? void 0 : d.value) ?? "",
+        (a.attributes.PartName?.value ?? "").slice(1),
+        a.attributes.ContentType?.value ?? "",
       ),
       a.local === "Default" &&
         t.set(
-          ((u = a.attributes.Extension) == null ? void 0 : u.value) ?? "",
-          ((l = a.attributes.ContentType) == null ? void 0 : l.value) ?? "",
+          a.attributes.Extension?.value ?? "",
+          a.attributes.ContentType?.value ?? "",
         ));
   });
   for (const [a, s] of Object.entries(e))
     a.endsWith(".rels") &&
       Cg(s, (d) => {
-        var c, h, f, p;
         if (d.local !== "Relationship") return;
-        const u =
-            ((c = d.attributes.TargetMode) == null ? void 0 : c.value) ===
-            "External",
-          l = ((h = d.attributes.Target) == null ? void 0 : h.value) ?? "";
+        const u = d.attributes.TargetMode?.value === "External",
+          l = d.attributes.Target?.value ?? "";
         n.push({
           owner: j$(a),
           rels: a,
-          id: ((f = d.attributes.Id) == null ? void 0 : f.value) ?? "",
-          type: ((p = d.attributes.Type) == null ? void 0 : p.value) ?? "",
+          id: d.attributes.Id?.value ?? "",
+          type: d.attributes.Type?.value ?? "",
           external: u,
           target: u ? l : r3(a, l),
         });
       });
   return (
     Cg(e["xl/workbook.xml"], (a) => {
-      var s;
       if (a.local === "sheet") {
         const d = n.find((u) => {
-          var l;
           return (
             u.owner === "xl/workbook.xml" &&
             u.id ===
-              ((l = Object.values(a.attributes).find(
+              Object.values(a.attributes).find(
                 (c) => c.local === "id" && c.uri === z2.slice(0, -1),
-              )) == null
-                ? void 0
-                : l.value)
+              )?.value
           );
         });
-        d &&
-          o.set(
-            d.target,
-            ((s = a.attributes.name) == null ? void 0 : s.value) ??
-              "Unknown worksheet",
-          );
+        d && o.set(d.target, a.attributes.name?.value ?? "Unknown worksheet");
       }
     }),
     {
@@ -464,8 +449,7 @@ function F$(e, r) {
           v,
           (D) => {
             const B = (_) => {
-              var C;
-              return (C = D.attributes[_]) == null ? void 0 : C.value;
+              return D.attributes[_]?.value;
             };
             (D.local === "c" &&
               ((k = B("r") ?? ""),
@@ -474,7 +458,7 @@ function F$(e, r) {
               D.local === "v" && ((z = true), (V = "")),
               D.local === "f" && ((j = true), (O = "")),
               D.local === "definedName" &&
-                ((I = B("name")), A("defined name", "editable", void 0, I)),
+                ((I = B("name")), A("defined name", "editable", undefined, I)),
               D.local === "dataValidation" &&
                 A("data validation", "editable", B("sqref"), B("type")),
               D.local === "conditionalFormatting" &&
@@ -523,7 +507,7 @@ function F$(e, r) {
                   ? A(
                       "chart source reference",
                       "dropped",
-                      void 0,
+                      undefined,
                       O.slice(0, 1024),
                     )
                   : /(?:\[|https?:|file:|WEBSERVICE|HYPERLINK|RTD|DDE|CALL\s*\(|EXEC\s*\()/i.test(
@@ -533,7 +517,7 @@ function F$(e, r) {
                       "external/action formula",
                       "flattened",
                       k,
-                      void 0,
+                      undefined,
                       "External/action references may be neutralized to literal text; the formula cache report provides the actual conversion outcome.",
                     )));
           },
@@ -547,7 +531,7 @@ function F$(e, r) {
           A(
             "external relationship",
             "dropped",
-            void 0,
+            undefined,
             k.type.split("/").at(-1),
             "External target is never fetched or carried into the derived copy; its URI remains only in the original.",
           );
@@ -625,9 +609,7 @@ function Mle(e, r, t) {
         b = new Set();
       s[v] &&
         Cg(s[v], (E) => {
-          var A;
-          E.local === "Relationship" &&
-            b.add(((A = E.attributes.Id) == null ? void 0 : A.value) ?? "");
+          E.local === "Relationship" && b.add(E.attributes.Id?.value ?? "");
         });
       let y = 1;
       const w = h
@@ -700,10 +682,9 @@ function Ble(e) {
     a = "",
     s = false;
   t.on("opentag", (u) => {
-    var l, c;
     u.local === "c"
-      ? ((n = String(((l = u.attributes.r) == null ? void 0 : l.value) ?? "")),
-        (o = String(((c = u.attributes.t) == null ? void 0 : c.value) ?? "n")))
+      ? ((n = String(u.attributes.r?.value ?? "")),
+        (o = String(u.attributes.t?.value ?? "n")))
       : u.local === "v" && n && ((s = true), (a = ""));
   });
   const d = (u) => {
@@ -747,12 +728,9 @@ function Lle(e) {
     /<(?:\w+:)?dataValidation\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:\w+:)?dataValidation>)/g,
   )) {
     const n = (d) => {
-        var u;
-        return (u = new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(
+        return new RegExp("\\b" + d + `=["\\']([^"\\']*)["\\']`).exec(
           t[1],
-        )) == null
-          ? void 0
-          : u[1];
+        )?.[1];
       },
       o = (n("sqref") ?? "").trim().split(/\s+/).filter(Boolean);
     if (!o.length) continue;
@@ -779,13 +757,9 @@ function Lle(e) {
 }
 function Ple(e, r) {
   return e.replace(/<dataValidation\b[^>]*>/g, (t) => {
-    var a, s;
-    const n = (a = /\bsqref="([^"]+)"/.exec(t)) == null ? void 0 : a[1],
-      o =
-        (s = r.validations) == null
-          ? void 0
-          : s.find((d) => n && Jw(d.range) === Jw(n));
-    return (o == null ? void 0 : o.kind) === "list" && o.showDropdown === false
+    const n = /\bsqref="([^"]+)"/.exec(t)?.[1],
+      o = r.validations?.find((d) => n && Jw(d.range) === Jw(n));
+    return o?.kind === "list" && o.showDropdown === false
       ? t
           .replace(/\s+showDropDown="[^"]*"/, "")
           .replace(/>$/, ' showDropDown="1">')
@@ -903,29 +877,24 @@ function Hle(e) {
   );
 }
 function qle(e) {
-  var n, o, a;
   const r = {},
     t = new Set();
   for (const s of e.matchAll(/<(?:\w+:)?cfRule\b([^>]*)>/g)) {
-    const d =
-        (n = /\bpriority=["']([^"']*)["']/.exec(s[1])) == null ? void 0 : n[1],
-      u =
-        (o = /\bstopIfTrue=["']([^"']+)["']/.exec(s[1])) == null
-          ? void 0
-          : o[1];
-    if (d === void 0 && /\bid=["']/.test(s[1])) continue;
+    const d = /\bpriority=["']([^"']*)["']/.exec(s[1])?.[1],
+      u = /\bstopIfTrue=["']([^"']+)["']/.exec(s[1])?.[1];
+    if (d === undefined && /\bid=["']/.test(s[1])) continue;
     const l = Number(d);
     if (!d || !/^\d+$/.test(d) || !Number.isSafeInteger(l) || l < 1 || t.has(l))
       throw Error("Invalid or duplicate conditional-format priority.");
-    if ((t.add(l), d && u !== void 0)) {
+    if ((t.add(l), d && u !== undefined)) {
       if (!["1", "0", "true", "false"].includes(u))
         throw Error("Invalid conditional-format stop flag.");
       r[String(l)] = u === "1" || u === "true";
     }
   }
   for (const s of e.matchAll(/<(?:\w+:)?cfvo\b([^>]*)>/g)) {
-    const d = (a = /\bgte=["']([^"']*)["']/.exec(s[1])) == null ? void 0 : a[1];
-    if (d !== void 0 && d !== "1" && d !== "true")
+    const d = /\bgte=["']([^"']*)["']/.exec(s[1])?.[1];
+    if (d !== undefined && d !== "1" && d !== "true")
       throw Error(
         "Strict or malformed conditional icon thresholds are not supported. Use inclusive thresholds or native JSON.",
       );
@@ -935,10 +904,7 @@ function qle(e) {
 function Xle(e, r) {
   const t = J3(r.conditionalFormats ?? []);
   return e.replace(/<cfRule\b[^>]*>/g, (n) => {
-    var s;
-    const o = Number(
-        (s = /\bpriority="(\d+)"/.exec(n)) == null ? void 0 : s[1],
-      ),
+    const o = Number(/\bpriority="(\d+)"/.exec(n)?.[1]),
       a = t[o - 1];
     return a != null && a.stopIfTrue
       ? n.replace(/\s+stopIfTrue="[^"]*"/, "").replace(/>$/, ' stopIfTrue="1">')
@@ -1155,13 +1121,13 @@ function Kle(e) {
         c = a("fullPrecision");
       if (
         !["auto", "autoNoTable", "manual"].includes(s) ||
-        (c !== void 0 && !["true", "false", "1", "0"].includes(c)) ||
-        (d !== void 0 && !["true", "false", "1", "0"].includes(d)) ||
-        (u !== void 0 &&
+        (c !== undefined && !["true", "false", "1", "0"].includes(c)) ||
+        (d !== undefined && !["true", "false", "1", "0"].includes(d)) ||
+        (u !== undefined &&
           (!/^\d+$/.test(u) ||
             !Number.isSafeInteger(Number(u)) ||
             Number(u) < 1)) ||
-        (l !== void 0 &&
+        (l !== undefined &&
           (!l.trim() || !Number.isFinite(Number(l)) || Number(l) < 0))
       )
         throw Error(
@@ -1170,9 +1136,11 @@ function Kle(e) {
       r = {
         mode: s,
         iterative: d === "true" || d === "1",
-        maxIterations: u === void 0 ? null : Number(u),
-        maxChange: l === void 0 ? null : Number(l),
-        ...(c === void 0 ? {} : { fullPrecision: c === "true" || c === "1" }),
+        maxIterations: u === undefined ? null : Number(u),
+        maxChange: l === undefined ? null : Number(l),
+        ...(c === undefined
+          ? {}
+          : { fullPrecision: c === "true" || c === "1" }),
       };
     }),
     t.on("doctype", () => {
@@ -1341,24 +1309,19 @@ function tue(e) {
     return e.type === "error"
       ? eue.has(String(e.value))
         ? { error: e.value }
-        : void 0
+        : undefined
       : e.value;
 }
 function rue(e, r) {
   const t = (o, a) => {
-    var d;
-    const s =
-      (d = new RegExp(`(?:^|\\s)${a}\\s*=\\s*(["'])(.*?)\\1`, "i").exec(o)) ==
-      null
-        ? void 0
-        : d[2];
-    return s == null
-      ? void 0
-      : s.replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (u, l) =>
-          String.fromCodePoint(
-            l[0].toLowerCase() === "x" ? parseInt(l.slice(1), 16) : Number(l),
-          ),
-        );
+    const s = new RegExp(`(?:^|\\s)${a}\\s*=\\s*(["'])(.*?)\\1`, "i").exec(
+      o,
+    )?.[2];
+    return s?.replace(/&#(x[0-9a-f]+|[0-9]+);/gi, (u, l) =>
+      String.fromCodePoint(
+        l[0].toLowerCase() === "x" ? parseInt(l.slice(1), 16) : Number(l),
+      ),
+    );
   };
   let n;
   for (const o of e.matchAll(
@@ -1366,14 +1329,14 @@ function rue(e, r) {
   )) {
     if (!o[2]) continue;
     if (o[2].toLowerCase() === "c") {
-      n = o[1] || /\/\s*$/.test(o[3]) ? void 0 : o[3];
+      n = o[1] || /\/\s*$/.test(o[3]) ? undefined : o[3];
       continue;
     }
-    if (n === void 0 || o[1] || t(o[3], "t") !== "array") continue;
+    if (n === undefined || o[1] || t(o[3], "t") !== "array") continue;
     const a = t(n, "r") ?? "unknown address",
       s = t(o[3], "ref") ?? a,
       d =
-        t(n, "cm") !== void 0
+        t(n, "cm") !== undefined
           ? "Metadata-qualified Excel array formula (dynamic/legacy classification requires Excel metadata)"
           : "Legacy CSE array formula";
     throw new Error(
@@ -1413,7 +1376,7 @@ const E7 = (e, r, t, n, o) => {
           record: r,
           column: t,
           message: n,
-          ...(o !== void 0 ? { value: o.slice(0, 200) } : {}),
+          ...(o !== undefined ? { value: o.slice(0, 200) } : {}),
         }));
   },
   C7 = (e, r, t, n, o, a, s) => {
@@ -1593,11 +1556,10 @@ function pue(e, r, t, n = "1900") {
   return { raw: a };
 }
 function z$(e, r) {
-  var o, a;
   const t = e.sheets.find((s) => s.id === r);
   if (!t) throw Error("Worksheet not found.");
   const n = RC(t, false);
-  return `A1:${ut(Math.max((n == null ? void 0 : n.lastCol) ?? 0, (((o = t.delimitedSource) == null ? void 0 : o.columns) ?? 1) - 1))}${Math.max((n == null ? void 0 : n.lastRow) ?? 0, (((a = t.delimitedSource) == null ? void 0 : a.records) ?? 1) - 1) + 1}`;
+  return `A1:${ut(Math.max(n?.lastCol ?? 0, (t.delimitedSource?.columns ?? 1) - 1))}${Math.max(n?.lastRow ?? 0, (t.delimitedSource?.records ?? 1) - 1) + 1}`;
 }
 function mue(e, r, t) {
   if (
@@ -1620,7 +1582,7 @@ function mue(e, r, t) {
       d = [];
     for (const u of e) {
       const l = s.get(u);
-      if (l === void 0)
+      if (l === undefined)
         throw Error(
           "A character cannot be represented in Windows-1252. Choose UTF-8; text is never replaced.",
         );
@@ -1662,7 +1624,6 @@ function vue(e, r) {
   return r.quote + n + r.quote;
 }
 function V$(e, r, t = {}) {
-  var g, b, y;
   const n = rn(e),
     o = n.sheets.find((w) => w.id === r);
   if (!o) throw Error("Worksheet not found.");
@@ -1680,10 +1641,7 @@ function V$(e, r, t = {}) {
     bom: t.bom ?? false,
     quoteAll: t.quoteAll ?? false,
     dateOutput: t.dateOutput ?? "calendar",
-    range:
-      t.range ??
-      ((g = t.population) == null ? void 0 : g.definition.range) ??
-      z$(n, r),
+    range: t.range ?? t.population?.definition.range ?? z$(n, r),
     ...(t.population ? { population: t.population } : {}),
   };
   for (const w of ["includeHeader", "bom", "quoteAll"])
@@ -1776,12 +1734,7 @@ function V$(e, r, t = {}) {
             ? { raw: _ }
             : typeof _ == "number" && ["number", "integer", "date"].includes(C)
               ? { raw: _ }
-              : pue(
-                  T,
-                  C,
-                  a,
-                  (b = n.datePolicy) == null ? void 0 : b.dateSystem,
-                );
+              : pue(T, C, a, n.datePolicy?.dateSystem);
         if (
           !A &&
           C === "integer" &&
@@ -1794,14 +1747,9 @@ function V$(e, r, t = {}) {
           (T = String(R.raw ?? "")),
           typeof R.raw == "number" &&
             (!A &&
-            (C === "date" ||
-              (C === "auto" && (B == null ? void 0 : B.format) === "date")) &&
+            (C === "date" || (C === "auto" && B?.format === "date")) &&
             a.dateOutput === "calendar"
-              ? (T = hue(
-                  R.raw,
-                  a.dateOrder,
-                  (y = n.datePolicy) == null ? void 0 : y.dateSystem,
-                ))
+              ? (T = hue(R.raw, a.dateOrder, n.datePolicy?.dateSystem))
               : (T = T.replace(".", a.decimal))),
           N && gue(T))
         ) {
@@ -1836,7 +1784,7 @@ function V$(e, r, t = {}) {
           throw Error(
             "Safe-export prefix would exceed the 32,767-character field limit. Shorten the text before exporting.",
           );
-        (T !== "" && (O = !1), k.push(vue(T, a)));
+        (T !== "" && (O = false), k.push(vue(T, a)));
       } catch (R) {
         (E7(
           l,
@@ -1873,7 +1821,7 @@ function V$(e, r, t = {}) {
   try {
     v = mue(m, a.encoding, a.bom);
   } catch (w) {
-    E7(l, 0, void 0, w instanceof Error ? w.message : "Encoding failure.");
+    E7(l, 0, undefined, w instanceof Error ? w.message : "Encoding failure.");
   }
   if (v.length > Mt.maxFileBytes)
     throw Error(
@@ -1896,12 +1844,9 @@ const bue = Ja.maxXlsxExpandedBytes,
       e,
     );
 function il(e, r) {
-  var t;
-  return (t = new RegExp(
-    "(?:^|\\s)" + r + `\\s*=\\s*(["'])([\\s\\S]*?)\\1`,
-  ).exec(e)) == null
-    ? void 0
-    : t[2];
+  return new RegExp("(?:^|\\s)" + r + `\\s*=\\s*(["'])([\\s\\S]*?)\\1`).exec(
+    e,
+  )?.[2];
 }
 function xue(e) {
   const r = [];
@@ -1911,7 +1856,6 @@ function xue(e) {
 }
 const Ev = (e) =>
   e.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[a-f\d]+);/gi, (r) => {
-    var t, n;
     return r === "&amp;"
       ? "&"
       : r === "&lt;"
@@ -1924,15 +1868,8 @@ const Ev = (e) =>
               ? "'"
               : String.fromCodePoint(
                   Number.parseInt(
-                    r.slice(
-                      ((t = r[2]) == null ? void 0 : t.toLowerCase()) === "x"
-                        ? 3
-                        : 2,
-                      -1,
-                    ),
-                    ((n = r[2]) == null ? void 0 : n.toLowerCase()) === "x"
-                      ? 16
-                      : 10,
+                    r.slice(r[2]?.toLowerCase() === "x" ? 3 : 2, -1),
+                    r[2]?.toLowerCase() === "x" ? 16 : 10,
                   ),
                 );
   });
@@ -1970,11 +1907,10 @@ function W2(e, r) {
       g.add(w.name);
       let E = 0;
       const A = /\.(?:xml|rels|vml)$/i.test(w.name),
-        k = A ? new TextDecoder("utf-8", { fatal: true }) : void 0;
+        k = A ? new TextDecoder("utf-8", { fatal: true }) : undefined;
       let F = -1,
         I = "";
       ((w.ondata = (O, j, z) => {
-        var V;
         if (O) {
           d = new Error(
             `Corrupt XLSX compressed content in ${w.name}. Repair the original workbook and save a clean XLSX copy.`,
@@ -2019,7 +1955,7 @@ function W2(e, r) {
             if ((A && Cle(I, w.name, t, a), /^xl\/styles\.xml$/i.test(w.name)))
               for (const D of I.matchAll(/<(?:\w+:)?sz\b([^>]*)>/g)) {
                 const B = Number(il(D[1], "val"));
-                (!Number.isInteger(B) || B < 8 || B > 72) && (v = !0);
+                (!Number.isInteger(B) || B < 8 || B > 72) && (v = true);
               }
             if (/^xl\/worksheets\//i.test(w.name)) {
               (rue(I, w.name),
@@ -2029,7 +1965,7 @@ function W2(e, r) {
               for (const C of I.matchAll(/<(?:\w+:)?pageSetup\b([^>]*)>/gi)) {
                 const T = il(C[1], "pageOrder");
                 if (
-                  T !== void 0 &&
+                  T !== undefined &&
                   !["overThenDown", "downThenOver"].includes(Ev(T))
                 )
                   throw new Error(
@@ -2059,9 +1995,9 @@ function W2(e, r) {
                   );
                 const $ = [];
                 let U = 0;
-                for (const H of (
-                  ((V = L[0]) == null ? void 0 : V[1]) ?? ""
-                ).matchAll(/<(?:\w+:)?brk\b([^>]*)\/?\s*>/gi)) {
+                for (const H of (L[0]?.[1] ?? "").matchAll(
+                  /<(?:\w+:)?brk\b([^>]*)\/?\s*>/gi,
+                )) {
                   if (++U > 100)
                     throw Error(
                       "XLSX page breaks exceed 100 boundaries per axis.",
@@ -2111,9 +2047,9 @@ function W2(e, r) {
                   throw Error(
                     "XLSX column metadata must stay within 16,384 nonoverlapping columns.",
                   );
-                const U = R === void 0 ? void 0 : Number(R);
+                const U = R === undefined ? undefined : Number(R);
                 if (
-                  U !== void 0 &&
+                  U !== undefined &&
                   (!(R != null && R.trim()) || !Number.isFinite(U) || U < 0)
                 )
                   throw Error(
@@ -2122,7 +2058,7 @@ function W2(e, r) {
                 _.push({
                   start: L,
                   end: $,
-                  ...(U === void 0 ? {} : { width: U }),
+                  ...(U === undefined ? {} : { width: U }),
                 });
               }
               _.sort((C, T) => C.start - T.start);
@@ -2261,25 +2197,20 @@ const kk = (e) => {
 function Cue(e, r) {
   if (
     !r.some((n) => {
-      var o, a;
-      return (
-        ((o = n.hiddenRows) == null ? void 0 : o.length) ||
-        ((a = n.hiddenCols) == null ? void 0 : a.length)
-      );
+      return n.hiddenRows?.length || n.hiddenCols?.length;
     })
   )
     return e;
   const t = unzipSync(e);
   return (
     r.forEach((n, o) => {
-      var h, f;
+      var h;
       const a = E1(n, "row");
       if (!a.length && !((h = n.hiddenCols) != null && h.length)) return;
       const s = "xl/worksheets/sheet" + (o + 1) + ".xml";
       let d = strFromU8(t[s]);
       if (
         ((d = d.replace(/<col\b([^>]*)\/>/g, (p, m) => {
-          var w, E;
           const v = Number(il(m, "min")) - 1,
             g = Number(il(m, "max")) - 1;
           if (
@@ -2298,13 +2229,9 @@ function Cue(e, r) {
               .replace(/\/\s*$/, ""),
             y = [];
           for (let A = v; A <= g;) {
-            const k = (w = n.columnWidths) == null ? void 0 : w[A];
+            const k = n.columnWidths?.[A];
             let F = A;
-            for (
-              ;
-              F < g && ((E = n.columnWidths) == null ? void 0 : E[F + 1]) === k;
-            )
-              F++;
+            for (; F < g && n.columnWidths?.[F + 1] === k;) F++;
             (y.push(
               "<col" +
                 b +
@@ -2313,7 +2240,7 @@ function Cue(e, r) {
                 '" max="' +
                 (F + 1) +
                 '"' +
-                (k === void 0
+                (k === undefined
                   ? ' customWidth="0"'
                   : ' width="' + k / 7 + '" customWidth="1"') +
                 "/>",
@@ -2337,12 +2264,7 @@ function Cue(e, r) {
       for (const p of (u[1] ?? "").matchAll(
         /<row\b[^>]*(?:\/>|>[\s\S]*?<\/row>)/g,
       )) {
-        const m = Number(
-          il(
-            ((f = /^<row\b([^>]*)>/.exec(p[0])) == null ? void 0 : f[1]) ?? "",
-            "r",
-          ),
-        );
+        const m = Number(il(/^<row\b([^>]*)>/.exec(p[0])?.[1] ?? "", "r"));
         if (!Number.isInteger(m) || m < 1 || m > Mt.maxRows)
           throw new Error("The generated worksheet has an invalid row number.");
         l.set(m, p[0]);
@@ -2379,14 +2301,8 @@ function Cue(e, r) {
 function Aue(e, r) {
   if (
     !r.some((n) => {
-      var o, a, s, d;
       return (
-        ((a = (o = n.pageLayout) == null ? void 0 : o.rowBreaks) == null
-          ? void 0
-          : a.length) ||
-        ((d = (s = n.pageLayout) == null ? void 0 : s.columnBreaks) == null
-          ? void 0
-          : d.length)
+        n.pageLayout?.rowBreaks?.length || n.pageLayout?.columnBreaks?.length
       );
     })
   )
@@ -2397,8 +2313,8 @@ function Aue(e, r) {
       var c, h;
       const a = n.pageLayout;
       if (
-        !((c = a == null ? void 0 : a.rowBreaks) != null && c.length) &&
-        !((h = a == null ? void 0 : a.columnBreaks) != null && h.length)
+        !((c = a?.rowBreaks) != null && c.length) &&
+        !((h = a?.columnBreaks) != null && h.length)
       )
         return;
       const s = `xl/worksheets/sheet${o + 1}.xml`;
@@ -2429,14 +2345,9 @@ function Aue(e, r) {
 function kue(e, r) {
   if (
     !r.some((n) => {
-      var o, a;
       return (
-        ((o = n.conditionalFormats) == null
-          ? void 0
-          : o.some((s) => s.stopIfTrue)) ||
-        ((a = n.validations) == null
-          ? void 0
-          : a.some((s) => s.showDropdown === false))
+        n.conditionalFormats?.some((s) => s.stopIfTrue) ||
+        n.validations?.some((s) => s.showDropdown === false)
       );
     })
   )
@@ -2451,7 +2362,7 @@ function kue(e, r) {
   );
 }
 async function gI(e) {
-  var p, m, v, g, b, y, w, E, A, k, F, I, O, j, z, V;
+  var p, m, v, g, y, w, E, A, k, F, I, O, j, z, V;
   const r = [
     "Dynamic-array formulas are exported as ordinary anchor formulas without Excel dynamic-array metadata. Native JSON retains local spill behavior. Legacy CSE and metadata-qualified Excel arrays are identified and refused on import; convert a reviewed copy in Excel before importing. Independent Excel round-trip acceptance is required.",
     `Date calculations use the Gregorian ${ts(e.datePolicy).dateSystem} serial system, preserved in XLSX. Native JSON retains the explicit text-date order and calculation time zone; XLSX does not retain that policy or the calculation clock evidence. DATEVALUE/VALUE text interpretation and TODAY/NOW results may change in Excel. Export calculation evidence separately and review calendar-sensitive formulas.`,
@@ -2460,8 +2371,7 @@ async function gI(e) {
   (e.styleCatalog ||
     e.sheets.some((D) =>
       Object.values(D.cells).some((B) => {
-        var _;
-        return (_ = B.style) == null ? void 0 : _.binding;
+        return B.style?.binding;
       }),
     )) &&
     r.push(
@@ -2509,7 +2419,7 @@ async function gI(e) {
       r.push(
         "Original imported formula caches, source file hash and cache comparisons are native JSON evidence only. XLSX writes current local results; it never writes imported historical caches as current values.",
       ),
-    ((b = t.calculation) == null ? void 0 : b.mode) === "manual" &&
+    t.calculation?.mode === "manual" &&
       r.push(
         "Manual calculation mode is exported. Pending formula caches are omitted; choose Calculate Now before relying on formula results in another application.",
       ),
@@ -2524,18 +2434,14 @@ async function gI(e) {
         "What-if scenario and sensitivity definitions, retained assumptions and baseline evidence are native JSON metadata. XLSX preserves report cells only; native Excel Scenario Manager and data-table formulas are not created. Keep native JSON to reopen and refresh the analysis.",
       ),
     t.sheets.some((D) => {
-      var B;
-      return (B = D.pivots) == null ? void 0 : B.length;
+      return D.pivots?.length;
     }) &&
       r.push(
         "Native PivotTable definitions, slicers, timelines, Show values as settings, field sorting, PivotCharts, calculated fields, grouping, refresh fingerprints and freshness labels are not preserved in XLSX. Only the current output cells are exported; keep native JSON and export pivot context to verify and refresh the result.",
       ),
     (((A = t.tableEvidence) != null && A.length) ||
       t.sheets.some((D) => {
-        var B;
-        return (B = D.tables) == null
-          ? void 0
-          : B.some((_) => _.columns.some((C) => C.dataType));
+        return D.tables?.some((_) => _.columns.some((C) => C.dataType));
       })) &&
       r.push(
         "Table column types and original header/conversion evidence are native JSON only. XLSX retains supported tables and current cell values; save native JSON to retain the original source values and type contracts.",
@@ -2569,10 +2475,7 @@ async function gI(e) {
         "Clean & Reshape recipes, reviewed inference examples and original source snapshots are native JSON only. XLSX keeps current output values, derivation notes and the exceptions appendix; save native JSON to retain reversible transformation evidence.",
       ),
     t.sheets.some((D) => {
-      var B;
-      return (B = D.tables) == null
-        ? void 0
-        : B.some((_) => _.columns.some((C) => C.calculatedFormula));
+      return D.tables?.some((_) => _.columns.some((C) => C.calculatedFormula));
     }) &&
       r.push(
         "Calculated table column rules are retained in native JSON only. XLSX retains the individual cell formulas and values, but does not preserve the reusable calculated-column rule for future appends.",
@@ -2662,10 +2565,10 @@ async function gI(e) {
       ) {
         const N = tue(n.getTypedValue(D.id, _));
         (d.caches.total++,
-          N === void 0 ? d.caches.omitted++ : d.caches.written++,
+          N === undefined ? d.caches.omitted++ : d.caches.written++,
           (T.value = {
             formula: C.raw.slice(1),
-            ...(N !== void 0 ? { result: N } : {}),
+            ...(N !== undefined ? { result: N } : {}),
           }));
       } else
         ((T.value = C.raw),
@@ -2696,9 +2599,9 @@ async function gI(e) {
               fgColor: { argb: kk(N.fill) },
             }),
           (N.align ||
-            N.wrap !== void 0 ||
+            N.wrap !== undefined ||
             N.verticalAlign ||
-            N.indent !== void 0) &&
+            N.indent !== undefined) &&
             (T.alignment = {
               horizontal: N.align,
               wrapText: N.wrap,

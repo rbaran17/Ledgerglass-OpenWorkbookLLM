@@ -112,12 +112,12 @@ function Lce(e, r, t, n, o = {}) {
   if (((r = r.trim()), !r || r.length > 128))
     throw Error("Use a recipe name of 1–128 characters.");
   const s = structuredClone(e.transformationRecipes ?? []),
-    d = n ? s.find((c) => c.id === n) : void 0;
+    d = n ? s.find((c) => c.id === n) : undefined;
   if (n && !d) throw Error("Saved recipe no longer exists.");
   if (s.some((c) => c.id !== n && c.name.toLowerCase() === r.toLowerCase()))
     throw Error("A recipe with this name already exists.");
   const u = {
-    version: ((d == null ? void 0 : d.versions.length) ?? 0) + 1,
+    version: (d?.versions.length ?? 0) + 1,
     definition: a,
     definitionHash: hr(a),
     createdAt: new Date().toISOString(),
@@ -145,7 +145,6 @@ function Pce(e, r, t = {}) {
   };
 }
 function yz(e, r, t = {}) {
-  var a, s;
   const n = CN(r.definition);
   if (
     Object.keys(r).some(
@@ -153,16 +152,12 @@ function yz(e, r, t = {}) {
     )
   )
     throw Error("Unknown recipe request field.");
-  if ((r.recipeId === void 0) != (r.version === void 0))
+  if ((r.recipeId === undefined) != (r.version === undefined))
     throw Error("Choose a saved recipe ID and version together.");
   if (r.recipeId) {
-    const d =
-      (s =
-        (a = e.transformationRecipes) == null
-          ? void 0
-          : a.find((u) => u.id === r.recipeId)) == null
-        ? void 0
-        : s.versions.find((u) => u.version === r.version);
+    const d = e.transformationRecipes
+      ?.find((u) => u.id === r.recipeId)
+      ?.versions.find((u) => u.version === r.version);
     if (!d || d.definitionHash !== hr(n))
       throw Error(
         "The recipe differs from the saved version. Save a new version or reload the selected version.",
@@ -274,24 +269,26 @@ const Q4 = {
   append: "Append rows",
   merge: "Merge populations",
 };
-function $ce({ label: e, fields: r, selected: t, onChange: n }) {
+function $ce({ label, fields, selected, onChange }) {
   return i.jsxs("fieldset", {
     className: "recipe-fields",
     children: [
-      i.jsx("legend", { children: e }),
-      r.length
-        ? r.map((o) =>
+      i.jsx("legend", { children: label }),
+      fields.length
+        ? fields.map((o) =>
             i.jsxs(
               "label",
               {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    "aria-label": `${e}: ${o}`,
-                    checked: t.includes(o),
+                    "aria-label": `${label}: ${o}`,
+                    checked: selected.includes(o),
                     onChange: (a) =>
-                      n(
-                        a.target.checked ? [...t, o] : t.filter((s) => s !== o),
+                      onChange(
+                        a.target.checked
+                          ? [...selected, o]
+                          : selected.filter((s) => s !== o),
                       ),
                   }),
                   o,
@@ -308,26 +305,28 @@ function $ce({ label: e, fields: r, selected: t, onChange: n }) {
     ],
   });
 }
-function CT({ label: e, source: r, sheets: t, onChange: n }) {
-  var a;
-  const o = t.find((s) => s.id === r.sheetId);
+function CT({ label, source, sheets, onChange }) {
+  const o = sheets.find((s) => s.id === source.sheetId);
   return i.jsxs("fieldset", {
     className: "recipe-source",
     children: [
-      i.jsx("legend", { children: e }),
+      i.jsx("legend", { children: label }),
       i.jsxs("label", {
         children: [
           i.jsx(M, { children: "Worksheet" }),
           i.jsxs("select", {
-            "aria-label": `${e} worksheet`,
-            value: r.sheetId,
+            "aria-label": `${label} worksheet`,
+            value: source.sheetId,
             onChange: (s) => {
-              const d = t.find((u) => u.id === s.target.value);
-              n({ sheetId: s.target.value, range: d ? Ta(d) : "A1:B10" });
+              const d = sheets.find((u) => u.id === s.target.value);
+              onChange({
+                sheetId: s.target.value,
+                range: d ? Ta(d) : "A1:B10",
+              });
             },
             children: [
               i.jsx("option", { value: "", children: "Choose worksheet" }),
-              t.map((s) =>
+              sheets.map((s) =>
                 i.jsx("option", { value: s.id, children: s.name }, s.id),
               ),
             ],
@@ -338,23 +337,22 @@ function CT({ label: e, source: r, sheets: t, onChange: n }) {
         children: [
           i.jsx(M, { children: "Source type" }),
           i.jsxs("select", {
-            "aria-label": `${e} table`,
-            value: r.tableId ?? "",
-            onChange: (s) => n({ ...r, tableId: s.target.value || void 0 }),
+            "aria-label": `${label} table`,
+            value: source.tableId ?? "",
+            onChange: (s) =>
+              onChange({ ...source, tableId: s.target.value || undefined }),
             children: [
               i.jsx("option", { value: "", children: "Explicit headed range" }),
-              (a = o == null ? void 0 : o.tables) == null
-                ? void 0
-                : a.map((s) =>
-                    i.jsxs(
-                      "option",
-                      {
-                        value: s.id,
-                        children: [s.name, " · current table body"],
-                      },
-                      s.id,
-                    ),
-                  ),
+              o?.tables?.map((s) =>
+                i.jsxs(
+                  "option",
+                  {
+                    value: s.id,
+                    children: [s.name, " · current table body"],
+                  },
+                  s.id,
+                ),
+              ),
             ],
           }),
         ],
@@ -363,23 +361,23 @@ function CT({ label: e, source: r, sheets: t, onChange: n }) {
         children: [
           i.jsx(M, { children: "Headed range" }),
           i.jsx("input", {
-            "aria-label": `${e} range`,
-            value: r.range,
-            disabled: !!r.tableId,
-            onChange: (s) => n({ ...r, range: s.target.value }),
+            "aria-label": `${label} range`,
+            value: source.range,
+            disabled: !!source.tableId,
+            onChange: (s) => onChange({ ...source, range: s.target.value }),
           }),
         ],
       }),
     ],
   });
 }
-function Fk({ label: e, value: r, onChange: t }) {
+function Fk({ label, value, onChange }) {
   const n =
-    r === null
+    value === null
       ? "blank"
-      : typeof r == "number"
+      : typeof value == "number"
         ? "number"
-        : typeof r == "boolean"
+        : typeof value == "boolean"
           ? "boolean"
           : "text";
   return i.jsxs("span", {
@@ -387,14 +385,14 @@ function Fk({ label: e, value: r, onChange: t }) {
     children: [
       i.jsxs("label", {
         children: [
-          e,
+          label,
           " ",
           i.jsx(M, { children: "type" }),
           i.jsxs("select", {
-            "aria-label": `${e} type`,
+            "aria-label": `${label} type`,
             value: n,
             onChange: (o) =>
-              t(
+              onChange(
                 o.target.value === "blank"
                   ? null
                   : o.target.value === "number"
@@ -416,11 +414,11 @@ function Fk({ label: e, value: r, onChange: t }) {
         (n === "boolean"
           ? i.jsxs("label", {
               children: [
-                e,
+                label,
                 i.jsxs("select", {
-                  "aria-label": e,
-                  value: String(r),
-                  onChange: (o) => t(o.target.value === "true"),
+                  "aria-label": label,
+                  value: String(value),
+                  onChange: (o) => onChange(o.target.value === "true"),
                   children: [
                     i.jsx("option", { value: "true", children: "TRUE" }),
                     i.jsx("option", { value: "false", children: "FALSE" }),
@@ -430,16 +428,16 @@ function Fk({ label: e, value: r, onChange: t }) {
             })
           : i.jsxs("label", {
               children: [
-                e,
+                label,
                 i.jsx("input", {
-                  "aria-label": e,
+                  "aria-label": label,
                   type: n === "number" ? "number" : "text",
                   value:
-                    typeof r == "number" && !Number.isFinite(r)
+                    typeof value == "number" && !Number.isFinite(value)
                       ? ""
-                      : String(r ?? ""),
+                      : String(value ?? ""),
                   onChange: (o) =>
-                    t(
+                    onChange(
                       n === "number"
                         ? o.target.value === ""
                           ? NaN
@@ -453,10 +451,9 @@ function Fk({ label: e, value: r, onChange: t }) {
   });
 }
 const B7 = ["sum", "count", "average", "min", "max", "distinctCount"];
-function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
-  var h;
-  const { text: a, language: s } = Dr(),
-    d = (f) => o({ ...e, ...f }),
+function zce({ step, fields, rightFields, sheets, onChange }) {
+  const { text, language } = Dr(),
+    d = (f) => onChange({ ...step, ...f }),
     u = (f, p, m, v) =>
       i.jsxs("label", {
         children: [
@@ -483,37 +480,36 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
           }),
         ],
       }),
-    c = (f, p, m) =>
-      i.jsx($ce, { label: f, fields: r, selected: p, onChange: m });
-  switch (e.kind) {
+    c = (f, p, m) => i.jsx($ce, { label: f, fields, selected: p, onChange: m });
+  switch (step.kind) {
     case "select":
-      return c("Keep columns", e.fields, (f) => d({ fields: f }));
+      return c("Keep columns", step.fields, (f) => d({ fields: f }));
     case "rename":
       return i.jsxs(i.Fragment, {
         children: [
-          e.mappings.map((f, p) =>
+          step.mappings.map((f, p) =>
             i.jsxs(
               "div",
               {
                 className: "recipe-line",
                 children: [
-                  u(`Rename source ${p + 1}`, f.from, r, (m) =>
+                  u(`Rename source ${p + 1}`, f.from, fields, (m) =>
                     d({
-                      mappings: e.mappings.map((v, g) =>
+                      mappings: step.mappings.map((v, g) =>
                         p === g ? { ...v, from: m } : v,
                       ),
                     }),
                   ),
                   l(`Rename to ${p + 1}`, f.to, (m) =>
                     d({
-                      mappings: e.mappings.map((v, g) =>
+                      mappings: step.mappings.map((v, g) =>
                         p === g ? { ...v, to: m } : v,
                       ),
                     }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ mappings: e.mappings.filter((m, v) => p !== v) }),
+                      d({ mappings: step.mappings.filter((m, v) => p !== v) }),
                     children: [i.jsx(M, { children: "Remove rename " }), p + 1],
                   }),
                 ],
@@ -524,7 +520,10 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
           i.jsx("button", {
             onClick: () =>
               d({
-                mappings: [...e.mappings, { from: r[0] ?? "", to: "Renamed" }],
+                mappings: [
+                  ...step.mappings,
+                  { from: fields[0] ?? "", to: "Renamed" },
+                ],
               }),
             children: i.jsx(M, { children: "Add rename" }),
           }),
@@ -537,10 +536,10 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             children: [
               i.jsx(M, { children: "Combine conditions" }),
               i.jsxs("select", {
-                "aria-label": a("Filter condition logic"),
-                value: e.join,
+                "aria-label": text("Filter condition logic"),
+                value: step.join,
                 onChange: (f) => d({ join: f.target.value }),
-                lang: s("Filter condition logic"),
+                lang: language("Filter condition logic"),
                 "data-ui-label": "Filter condition logic",
                 children: [
                   i.jsx("option", {
@@ -555,7 +554,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
               }),
             ],
           }),
-          e.conditions.map((f, p) =>
+          step.conditions.map((f, p) =>
             i.jsxs(
               "fieldset",
               {
@@ -563,9 +562,9 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   i.jsxs("legend", {
                     children: [i.jsx(M, { children: "Condition " }), p + 1],
                   }),
-                  u(`Filter field ${p + 1}`, f.field, r, (m) =>
+                  u(`Filter field ${p + 1}`, f.field, fields, (m) =>
                     d({
-                      conditions: e.conditions.map((v, g) =>
+                      conditions: step.conditions.map((v, g) =>
                         p === g ? { ...v, field: m } : v,
                       ),
                     }),
@@ -578,7 +577,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                         value: f.operator,
                         onChange: (m) =>
                           d({
-                            conditions: e.conditions.map((v, g) =>
+                            conditions: step.conditions.map((v, g) =>
                               p === g ? { ...v, operator: m.target.value } : v,
                             ),
                           }),
@@ -604,14 +603,16 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                       value: f.value,
                       onChange: (m) =>
                         d({
-                          conditions: e.conditions.map((v, g) =>
+                          conditions: step.conditions.map((v, g) =>
                             p === g ? { ...v, value: m } : v,
                           ),
                         }),
                     }),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ conditions: e.conditions.filter((m, v) => v !== p) }),
+                      d({
+                        conditions: step.conditions.filter((m, v) => v !== p),
+                      }),
                     children: [
                       i.jsx(M, { children: "Remove condition " }),
                       p + 1,
@@ -626,8 +627,8 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             onClick: () =>
               d({
                 conditions: [
-                  ...e.conditions,
-                  { field: r[0] ?? "", operator: "equals", value: "" },
+                  ...step.conditions,
+                  { field: fields[0] ?? "", operator: "equals", value: "" },
                 ],
               }),
             children: i.jsx(M, { children: "Add condition" }),
@@ -643,15 +644,15 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "types":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Convert columns", e.fields, (f) => d({ fields: f })),
+          c("Convert columns", step.fields, (f) => d({ fields: f })),
           i.jsxs("label", {
             children: [
               i.jsx(M, { children: "Output type" }),
               i.jsx("select", {
-                "aria-label": a("Conversion type"),
-                value: e.to,
+                "aria-label": text("Conversion type"),
+                value: step.to,
                 onChange: (f) => d({ to: f.target.value }),
-                lang: s("Conversion type"),
+                lang: language("Conversion type"),
                 "data-ui-label": "Conversion type",
                 children: ["text", "number", "integer", "boolean", "date"].map(
                   (f) => i.jsx("option", { children: f }, f),
@@ -666,10 +667,10 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                 children: [
                   i.jsx(M, { children: "Decimal separator" }),
                   i.jsxs("select", {
-                    "aria-label": a("Recipe decimal separator"),
-                    value: e.decimal,
+                    "aria-label": text("Recipe decimal separator"),
+                    value: step.decimal,
                     onChange: (f) => d({ decimal: f.target.value }),
-                    lang: s("Recipe decimal separator"),
+                    lang: language("Recipe decimal separator"),
                     "data-ui-label": "Recipe decimal separator",
                     children: [
                       i.jsx("option", { children: "." }),
@@ -682,10 +683,10 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                 children: [
                   i.jsx(M, { children: "Grouping separator" }),
                   i.jsxs("select", {
-                    "aria-label": a("Recipe grouping separator"),
-                    value: e.group,
+                    "aria-label": text("Recipe grouping separator"),
+                    value: step.group,
                     onChange: (f) => d({ group: f.target.value }),
-                    lang: s("Recipe grouping separator"),
+                    lang: language("Recipe grouping separator"),
                     "data-ui-label": "Recipe grouping separator",
                     children: [
                       i.jsx("option", { value: "", children: "None" }),
@@ -704,10 +705,10 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                 children: [
                   i.jsx(M, { children: "Date order" }),
                   i.jsxs("select", {
-                    "aria-label": a("Recipe date order"),
-                    value: e.dateOrder,
+                    "aria-label": text("Recipe date order"),
+                    value: step.dateOrder,
                     onChange: (f) => d({ dateOrder: f.target.value }),
-                    lang: s("Recipe date order"),
+                    lang: language("Recipe date order"),
                     "data-ui-label": "Recipe date order",
                     children: [
                       i.jsx("option", { children: "MDY" }),
@@ -729,15 +730,15 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "replace":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Replace in columns", e.fields, (f) => d({ fields: f })),
+          c("Replace in columns", step.fields, (f) => d({ fields: f })),
           i.jsxs("label", {
             children: [
               i.jsx(M, { children: "Replacement mode" }),
               i.jsxs("select", {
-                "aria-label": a("Replacement mode"),
-                value: e.mode,
+                "aria-label": text("Replacement mode"),
+                value: step.mode,
                 onChange: (f) => d({ mode: f.target.value }),
-                lang: s("Replacement mode"),
+                lang: language("Replacement mode"),
                 "data-ui-label": "Replacement mode",
                 children: [
                   i.jsx("option", {
@@ -753,13 +754,13 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             ],
           }),
           i.jsx(Fk, {
-            label: a("Find value"),
-            value: e.find,
+            label: text("Find value"),
+            value: step.find,
             onChange: (f) => d({ find: f }),
           }),
           i.jsx(Fk, {
-            label: a("Replacement value"),
-            value: e.replacement,
+            label: text("Replacement value"),
+            value: step.replacement,
             onChange: (f) => d({ replacement: f }),
           }),
         ],
@@ -767,16 +768,16 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "derive":
       return i.jsxs(i.Fragment, {
         children: [
-          l("Derived column name", e.name, (f) => d({ name: f })),
+          l("Derived column name", step.name, (f) => d({ name: f })),
           i.jsxs("label", {
             children: [
               i.jsx(M, { children: "Row expression" }),
               i.jsx("textarea", {
-                "aria-label": a("Row expression"),
+                "aria-label": text("Row expression"),
                 rows: 4,
-                value: e.expression,
+                value: step.expression,
                 onChange: (f) => d({ expression: f.target.value }),
-                lang: s("Row expression"),
+                lang: language("Row expression"),
                 "data-ui-label": "Row expression",
               }),
             ],
@@ -792,15 +793,15 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "sort":
       return i.jsxs(i.Fragment, {
         children: [
-          e.fields.map((f, p) =>
+          step.fields.map((f, p) =>
             i.jsxs(
               "div",
               {
                 className: "recipe-line",
                 children: [
-                  u(`Sort field ${p + 1}`, f.field, r, (m) =>
+                  u(`Sort field ${p + 1}`, f.field, fields, (m) =>
                     d({
-                      fields: e.fields.map((v, g) =>
+                      fields: step.fields.map((v, g) =>
                         g === p ? { ...v, field: m } : v,
                       ),
                     }),
@@ -813,7 +814,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                         value: f.direction,
                         onChange: (m) =>
                           d({
-                            fields: e.fields.map((v, g) =>
+                            fields: step.fields.map((v, g) =>
                               g === p ? { ...v, direction: m.target.value } : v,
                             ),
                           }),
@@ -832,7 +833,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   }),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ fields: e.fields.filter((m, v) => v !== p) }),
+                      d({ fields: step.fields.filter((m, v) => v !== p) }),
                     children: [i.jsx(M, { children: "Remove sort " }), p + 1],
                   }),
                 ],
@@ -844,8 +845,8 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             onClick: () =>
               d({
                 fields: [
-                  ...e.fields,
-                  { field: r[0] ?? "", direction: "ascending" },
+                  ...step.fields,
+                  { field: fields[0] ?? "", direction: "ascending" },
                 ],
               }),
             children: i.jsx(M, { children: "Add sort field" }),
@@ -855,15 +856,17 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "unpivot":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Unpivot columns", e.fields, (f) => d({ fields: f })),
-          l("Attribute column name", e.attribute, (f) => d({ attribute: f })),
-          l("Value column name", e.value, (f) => d({ value: f })),
+          c("Unpivot columns", step.fields, (f) => d({ fields: f })),
+          l("Attribute column name", step.attribute, (f) =>
+            d({ attribute: f }),
+          ),
+          l("Value column name", step.value, (f) => d({ value: f })),
           i.jsxs("label", {
             className: "recipe-check",
             children: [
               i.jsx("input", {
                 type: "checkbox",
-                checked: e.keepNulls,
+                checked: step.keepNulls,
                 onChange: (f) => d({ keepNulls: f.target.checked }),
               }),
               i.jsx(M, { children: "Retain blank values" }),
@@ -874,8 +877,8 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "group":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Group keys", e.keys, (f) => d({ keys: f })),
-          e.values.map((f, p) =>
+          c("Group keys", step.keys, (f) => d({ keys: f })),
+          step.values.map((f, p) =>
             i.jsxs(
               "fieldset",
               {
@@ -883,9 +886,9 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   i.jsxs("legend", {
                     children: [i.jsx(M, { children: "Aggregate " }), p + 1],
                   }),
-                  u(`Aggregate field ${p + 1}`, f.field, r, (m) =>
+                  u(`Aggregate field ${p + 1}`, f.field, fields, (m) =>
                     d({
-                      values: e.values.map((v, g) =>
+                      values: step.values.map((v, g) =>
                         g === p ? { ...v, field: m } : v,
                       ),
                     }),
@@ -898,7 +901,7 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                         value: f.operation,
                         onChange: (m) =>
                           d({
-                            values: e.values.map((v, g) =>
+                            values: step.values.map((v, g) =>
                               g === p ? { ...v, operation: m.target.value } : v,
                             ),
                           }),
@@ -910,14 +913,14 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   }),
                   l(`Aggregate name ${p + 1}`, f.name, (m) =>
                     d({
-                      values: e.values.map((v, g) =>
+                      values: step.values.map((v, g) =>
                         g === p ? { ...v, name: m } : v,
                       ),
                     }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ values: e.values.filter((m, v) => v !== p) }),
+                      d({ values: step.values.filter((m, v) => v !== p) }),
                     children: [
                       i.jsx(M, { children: "Remove aggregate " }),
                       p + 1,
@@ -932,11 +935,11 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             onClick: () =>
               d({
                 values: [
-                  ...e.values,
+                  ...step.values,
                   {
-                    field: r.at(-1) ?? "",
+                    field: fields.at(-1) ?? "",
                     operation: "sum",
-                    name: `Total ${e.values.length + 1}`,
+                    name: `Total ${step.values.length + 1}`,
                   },
                 ],
               }),
@@ -953,17 +956,19 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
     case "pivot":
       return i.jsxs(i.Fragment, {
         children: [
-          c("Pivot grouping keys", e.keys, (f) => d({ keys: f })),
-          u("Pivot attribute field", e.column, r, (f) => d({ column: f })),
-          u("Pivot value field", e.value, r, (f) => d({ value: f })),
+          c("Pivot grouping keys", step.keys, (f) => d({ keys: f })),
+          u("Pivot attribute field", step.column, fields, (f) =>
+            d({ column: f }),
+          ),
+          u("Pivot value field", step.value, fields, (f) => d({ value: f })),
           i.jsxs("label", {
             children: [
               i.jsx(M, { children: "Aggregation" }),
               i.jsx("select", {
-                "aria-label": a("Pivot aggregation"),
-                value: e.operation,
+                "aria-label": text("Pivot aggregation"),
+                value: step.operation,
                 onChange: (f) => d({ operation: f.target.value }),
-                lang: s("Pivot aggregation"),
+                lang: language("Pivot aggregation"),
                 "data-ui-label": "Pivot aggregation",
                 children: B7.map((f) => i.jsx("option", { children: f }, f)),
               }),
@@ -981,9 +986,9 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
       return i.jsxs(i.Fragment, {
         children: [
           i.jsx(CT, {
-            label: a("Append source"),
-            source: e.source,
-            sheets: n,
+            label: text("Append source"),
+            source: step.source,
+            sheets,
             onChange: (f) => d({ source: f }),
           }),
           i.jsx("p", {
@@ -998,19 +1003,19 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
       return i.jsxs(i.Fragment, {
         children: [
           i.jsx(CT, {
-            label: a("Merge source"),
-            source: e.source,
-            sheets: n,
+            label: text("Merge source"),
+            source: step.source,
+            sheets,
             onChange: (f) => d({ source: f }),
           }),
           i.jsxs("label", {
             children: [
               i.jsx(M, { children: "Join mode" }),
               i.jsx("select", {
-                "aria-label": a("Recipe join mode"),
-                value: e.mode,
+                "aria-label": text("Recipe join mode"),
+                value: step.mode,
                 onChange: (f) => d({ mode: f.target.value }),
-                lang: s("Recipe join mode"),
+                lang: language("Recipe join mode"),
                 "data-ui-label": "Recipe join mode",
                 children: [
                   "inner",
@@ -1023,30 +1028,30 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
               }),
             ],
           }),
-          l("Right column prefix", e.prefix, (f) => d({ prefix: f })),
-          e.keys.map((f, p) =>
+          l("Right column prefix", step.prefix, (f) => d({ prefix: f })),
+          step.keys.map((f, p) =>
             i.jsxs(
               "div",
               {
                 className: "recipe-line",
                 children: [
-                  u(`Recipe left key ${p + 1}`, f.left, r, (m) =>
+                  u(`Recipe left key ${p + 1}`, f.left, fields, (m) =>
                     d({
-                      keys: e.keys.map((v, g) =>
+                      keys: step.keys.map((v, g) =>
                         p === g ? { ...v, left: m } : v,
                       ),
                     }),
                   ),
-                  u(`Recipe right key ${p + 1}`, f.right, t, (m) =>
+                  u(`Recipe right key ${p + 1}`, f.right, rightFields, (m) =>
                     d({
-                      keys: e.keys.map((v, g) =>
+                      keys: step.keys.map((v, g) =>
                         p === g ? { ...v, right: m } : v,
                       ),
                     }),
                   ),
                   i.jsxs("button", {
                     onClick: () =>
-                      d({ keys: e.keys.filter((m, v) => v !== p) }),
+                      d({ keys: step.keys.filter((m, v) => v !== p) }),
                     children: [i.jsx(M, { children: "Remove key " }), p + 1],
                   }),
                 ],
@@ -1056,7 +1061,12 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
           ),
           i.jsx("button", {
             onClick: () =>
-              d({ keys: [...e.keys, { left: r[0] ?? "", right: t[0] ?? "" }] }),
+              d({
+                keys: [
+                  ...step.keys,
+                  { left: fields[0] ?? "", right: rightFields[0] ?? "" },
+                ],
+              }),
             children: i.jsx(M, { children: "Add merge key" }),
           }),
           [
@@ -1072,11 +1082,11 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                 children: [
                   i.jsx("input", {
                     type: "checkbox",
-                    checked: !!((m = e.normalization) != null && m[f]),
+                    checked: !!((m = step.normalization) != null && m[f]),
                     onChange: (v) =>
                       d({
                         normalization: {
-                          ...e.normalization,
+                          ...step.normalization,
                           [f]: v.target.checked,
                         },
                       }),
@@ -1091,17 +1101,16 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             children: [
               i.jsx(M, { children: "Unicode normalization" }),
               i.jsxs("select", {
-                "aria-label": a("Recipe Unicode normalization"),
-                value:
-                  ((h = e.normalization) == null ? void 0 : h.unicode) ?? "",
+                "aria-label": text("Recipe Unicode normalization"),
+                value: step.normalization?.unicode ?? "",
                 onChange: (f) =>
                   d({
                     normalization: {
-                      ...e.normalization,
-                      unicode: f.target.value || void 0,
+                      ...step.normalization,
+                      unicode: f.target.value || undefined,
                     },
                   }),
-                lang: s("Recipe Unicode normalization"),
+                lang: language("Recipe Unicode normalization"),
                 "data-ui-label": "Recipe Unicode normalization",
                 children: [
                   i.jsx("option", { value: "", children: "None" }),
@@ -1116,18 +1125,18 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
             children: [
               i.jsx("input", {
                 type: "checkbox",
-                checked: !!e.fuzzy,
+                checked: !!step.fuzzy,
                 onChange: (f) =>
                   d({
                     fuzzy: f.target.checked
                       ? { key: 0, threshold: 0.8 }
-                      : void 0,
+                      : undefined,
                   }),
               }),
               i.jsx(M, { children: "Fuzzy text key" }),
             ],
           }),
-          e.fuzzy &&
+          step.fuzzy &&
             i.jsxs("div", {
               className: "recipe-line",
               children: [
@@ -1135,15 +1144,15 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   children: [
                     i.jsx(M, { children: "Key pair" }),
                     i.jsx("select", {
-                      "aria-label": a("Recipe fuzzy key"),
-                      value: e.fuzzy.key,
+                      "aria-label": text("Recipe fuzzy key"),
+                      value: step.fuzzy.key,
                       onChange: (f) =>
                         d({
-                          fuzzy: { ...e.fuzzy, key: Number(f.target.value) },
+                          fuzzy: { ...step.fuzzy, key: Number(f.target.value) },
                         }),
-                      lang: s("Recipe fuzzy key"),
+                      lang: language("Recipe fuzzy key"),
                       "data-ui-label": "Recipe fuzzy key",
-                      children: e.keys.map((f, p) =>
+                      children: step.keys.map((f, p) =>
                         i.jsx("option", { value: p, children: p + 1 }, p),
                       ),
                     }),
@@ -1153,19 +1162,19 @@ function zce({ step: e, fields: r, rightFields: t, sheets: n, onChange: o }) {
                   children: [
                     i.jsx(M, { children: "Minimum similarity" }),
                     i.jsx(ci, {
-                      "aria-label": a("Recipe fuzzy threshold"),
+                      "aria-label": text("Recipe fuzzy threshold"),
                       min: "0",
                       max: "1",
                       step: "0.01",
-                      value: e.fuzzy.threshold,
+                      value: step.fuzzy.threshold,
                       onValueChange: (f) =>
                         d({
                           fuzzy: {
-                            ...e.fuzzy,
+                            ...step.fuzzy,
                             threshold: f === "" ? NaN : Number(f),
                           },
                         }),
-                      lang: s("Recipe fuzzy threshold"),
+                      lang: language("Recipe fuzzy threshold"),
                       "data-ui-label": "Recipe fuzzy threshold",
                     }),
                   ],

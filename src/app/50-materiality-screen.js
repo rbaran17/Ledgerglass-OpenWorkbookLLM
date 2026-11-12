@@ -16,11 +16,18 @@ import { U1, ct, ut } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { MC, OC } from "./07-xlsx-archive-reader.js";
 import { yh } from "./09-workbook-links.js";
-import { II, Iz, Rz, l3, mde, pde } from "./21-aging-and-materiality-screens.js";
+import {
+  II,
+  Iz,
+  Rz,
+  l3,
+  mde,
+  pde,
+} from "./21-aging-and-materiality-screens.js";
 import { Aj, L4e, kj } from "./49-outlines-and-comments.js";
 
 function P4e(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = yh(),
     o = ne.useId(),
     a = ne.useRef(null),
@@ -89,10 +96,7 @@ function P4e(e) {
       : null,
     we = Aj(c),
     Ee = se != null && se.disclose ? N : null,
-    Ae =
-      (Ee == null
-        ? void 0
-        : Ee.rows.filter((Me) => K === "all" || Me.disposition === K)) ?? [],
+    Ae = Ee?.rows.filter((Me) => K === "all" || Me.disposition === K) ?? [],
     ye = Math.max(1, Math.ceil(Ae.length / II.pageSize)),
     Te = Math.min(q, ye - 1),
     Pe = (Me) => {
@@ -105,15 +109,12 @@ function P4e(e) {
         J(""));
     };
   ne.useEffect(() => {
-    var ke, je;
+    var je;
     u.current = true;
     const Me = document.activeElement;
     return (
-      (je =
-        (ke = a.current) == null
-          ? void 0
-          : ke.querySelector('[data-ui-label="Source range"]')) == null ||
-        je.focus(),
+      (je = a.current?.querySelector('[data-ui-label="Source range"]')) ==
+        null || je.focus(),
       () => {
         ((u.current = false),
           d.current++,
@@ -200,18 +201,16 @@ function P4e(e) {
       "aria-labelledby": `${o}-title`,
       ref: a,
       onKeyDown: (Me) => {
-        var ke, je, $e;
+        var je, $e;
         if (
           (Me.stopPropagation(),
           Me.key === "Escape" && (Me.preventDefault(), e.onClose()),
           Me.key === "Tab")
         ) {
           const Je = Array.from(
-            ((ke = a.current) == null
-              ? void 0
-              : ke.querySelectorAll(
-                  'button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
-                )) ?? [],
+            a.current?.querySelectorAll(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), summary, [tabindex="0"]',
+            ) ?? [],
           ).filter(
             (ze) =>
               !ze.closest("details:not([open])") || ze.tagName === "SUMMARY",
@@ -243,9 +242,9 @@ function P4e(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close materiality screen"),
+              "aria-label": text("Close materiality screen"),
               onClick: e.onClose,
-              lang: t("Close materiality screen"),
+              lang: language("Close materiality screen"),
               "data-ui-label": "Close materiality screen",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -272,10 +271,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Source range" }),
                 i.jsx("input", {
-                  "aria-label": r("Source range"),
+                  "aria-label": text("Source range"),
                   value: Se ? c : "",
                   onChange: (Me) => h(Me.target.value),
-                  lang: t("Source range"),
+                  lang: language("Source range"),
                   "data-ui-label": "Source range",
                 }),
               ],
@@ -318,11 +317,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Declared currency" }),
                 i.jsx("input", {
-                  "aria-label": r("Declared currency"),
+                  "aria-label": text("Declared currency"),
                   value: E,
                   maxLength: 3,
                   onChange: (Me) => A(Me.target.value),
-                  lang: t("Declared currency"),
+                  lang: language("Declared currency"),
                   "data-ui-label": "Declared currency",
                 }),
               ],
@@ -331,12 +330,12 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Threshold" }),
                 i.jsx(ci, {
-                  "aria-label": r("Threshold"),
+                  "aria-label": text("Threshold"),
                   min: "0",
                   step: "any",
                   value: k,
                   onValueChange: (Me) => F(Me),
-                  lang: t("Threshold"),
+                  lang: language("Threshold"),
                   "data-ui-label": "Threshold",
                 }),
               ],
@@ -345,10 +344,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Amount comparison" }),
                 i.jsxs("select", {
-                  "aria-label": r("Amount comparison"),
+                  "aria-label": text("Amount comparison"),
                   value: I,
                   onChange: (Me) => O(Me.target.value),
-                  lang: t("Amount comparison"),
+                  lang: language("Amount comparison"),
                   "data-ui-label": "Amount comparison",
                   children: [
                     i.jsx("option", {
@@ -367,10 +366,10 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Comparison rule" }),
                 i.jsxs("select", {
-                  "aria-label": r("Comparison rule"),
+                  "aria-label": text("Comparison rule"),
                   value: j,
                   onChange: (Me) => z(Me.target.value),
-                  lang: t("Comparison rule"),
+                  lang: language("Comparison rule"),
                   "data-ui-label": "Comparison rule",
                   children: [
                     i.jsx("option", {
@@ -398,11 +397,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Effective from (inclusive)" }),
                 i.jsx("input", {
-                  "aria-label": r("Effective from"),
+                  "aria-label": text("Effective from"),
                   type: "date",
                   value: V,
                   onChange: (Me) => D(Me.target.value),
-                  lang: t("Effective from"),
+                  lang: language("Effective from"),
                   "data-ui-label": "Effective from",
                 }),
               ],
@@ -411,11 +410,11 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Effective to (inclusive)" }),
                 i.jsx("input", {
-                  "aria-label": r("Effective to"),
+                  "aria-label": text("Effective to"),
                   type: "date",
                   value: B,
                   onChange: (Me) => _(Me.target.value),
-                  lang: t("Effective to"),
+                  lang: language("Effective to"),
                   "data-ui-label": "Effective to",
                 }),
               ],
@@ -427,11 +426,11 @@ function P4e(e) {
             className: "materiality-check",
             children: [
               i.jsx("input", {
-                "aria-label": r("Include hidden content"),
+                "aria-label": text("Include hidden content"),
                 type: "checkbox",
                 checked: C,
                 onChange: (Me) => T(Me.target.checked),
-                lang: t("Include hidden content"),
+                lang: language("Include hidden content"),
                 "data-ui-label": "Include hidden content",
               }),
               i.jsx(M, {
@@ -459,15 +458,14 @@ function P4e(e) {
               children: [
                 i.jsx(M, { children: "Load saved configuration/report" }),
                 i.jsx("input", {
-                  "aria-label": r("Load saved configuration"),
+                  "aria-label": text("Load saved configuration"),
                   type: "file",
                   accept: "application/json,.json",
                   onChange: (Me) => {
-                    var je;
-                    const ke = (je = Me.target.files) == null ? void 0 : je[0];
+                    const ke = Me.target.files?.[0];
                     ((Me.target.value = ""), Re(ke));
                   },
-                  lang: t("Load saved configuration"),
+                  lang: language("Load saved configuration"),
                   "data-ui-label": "Load saved configuration",
                 }),
               ],
@@ -497,8 +495,8 @@ function P4e(e) {
         Ee &&
           i.jsxs("section", {
             className: "materiality-result",
-            "aria-label": r("Materiality screen results"),
-            lang: t("Materiality screen results"),
+            "aria-label": text("Materiality screen results"),
+            lang: language("Materiality screen results"),
             "data-ui-label": "Materiality screen results",
             children: [
               i.jsx("h3", {
@@ -626,12 +624,12 @@ function P4e(e) {
                 children: [
                   i.jsx(M, { children: "Rows to review" }),
                   i.jsxs("select", {
-                    "aria-label": r("Rows to review"),
+                    "aria-label": text("Rows to review"),
                     value: K,
                     onChange: (Me) => {
                       (te(Me.target.value), W(0));
                     },
-                    lang: t("Rows to review"),
+                    lang: language("Rows to review"),
                     "data-ui-label": "Rows to review",
                     children: [
                       i.jsx("option", {
@@ -791,8 +789,8 @@ function P4e(e) {
                 }),
               }),
               i.jsxs("nav", {
-                "aria-label": r("Screen result pages"),
-                lang: t("Screen result pages"),
+                "aria-label": text("Screen result pages"),
+                lang: language("Screen result pages"),
                 "data-ui-label": "Screen result pages",
                 children: [
                   i.jsx("button", {
@@ -959,12 +957,11 @@ function V4e(e, r) {
         .slice(0, 10);
 }
 function yw(e, r) {
-  var u;
   if (!Number.isFinite(e) || Math.abs(e) > 1e15) return null;
   const [t, n = "0"] = Math.abs(e).toString().split("e"),
     o = t.split("."),
     a = BigInt(o.join("")),
-    s = r - (((u = o[1]) == null ? void 0 : u.length) ?? 0) + Number(n);
+    s = r - (o[1]?.length ?? 0) + Number(n);
   if (s >= 0) return a * 10n ** BigInt(s);
   const d = 10n ** BigInt(-s);
   return a % d === 0n ? a / d : null;
@@ -1075,8 +1072,7 @@ function Rj(e, r) {
     (t.groups = new Set(r.map((o) => o.group.id)).size),
     (t.findings = r.length));
   const n = r.reduce((o, a) => {
-    var s;
-    return o + BigInt(((s = a.missing) == null ? void 0 : s.count) ?? 0);
+    return o + BigInt(a.missing?.count ?? 0);
   }, 0n);
   return (
     n > BigInt(Number.MAX_SAFE_INTEGER) &&
@@ -1273,7 +1269,7 @@ function W4e(e, r, t = {}) {
           ) {
             const U = R.slice(
               y.prefix.length,
-              y.suffix ? R.length - y.suffix.length : void 0,
+              y.suffix ? R.length - y.suffix.length : undefined,
             );
             /^\d{1,15}$/.test(U) && ($ = Number(U));
           }
@@ -1590,14 +1586,14 @@ function YW(e, r, t, n = {}) {
         )
       : o.request !== JSON.stringify(s)
         ? {
-            current: !1,
-            disclose: !0,
+            current: false,
+            disclose: true,
             reason:
               "Settings changed. This is a previous result; run checks again before export.",
           }
         : {
-            current: !0,
-            disclose: !0,
+            current: true,
+            disclose: true,
             reason: "Current source and rule configuration.",
           };
   } catch {

@@ -3,7 +3,19 @@ import i from "react/jsx-runtime";
 import ne from "react";
 import { hr } from "./01-core-schemas-and-hashing.js";
 import { Mt } from "./02-financial-functions.js";
-import { B2, Np, TC, Vn, _t, cn, ct, jw, pf, ut, y0 } from "./03-workbook-model.js";
+import {
+  B2,
+  Np,
+  TC,
+  Vn,
+  _t,
+  cn,
+  ct,
+  jw,
+  pf,
+  ut,
+  y0,
+} from "./03-workbook-model.js";
 import { Dr, M, aI, sI } from "./04-cell-input-paste-and-fill.js";
 import { m0 } from "./12-formula-dependency-inspector.js";
 import { f_, h_ } from "./35-formula-compatibility-report.js";
@@ -97,7 +109,7 @@ function cxe(e, r = {}) {
       return E === "ready"
         ? (o.push(w), { id: w.id, status: "unavailable", anchor: w.anchor })
         : E === "orphaned"
-          ? r.allowedSheetIds !== void 0 &&
+          ? r.allowedSheetIds !== undefined &&
             !t.allowedSheetIds.includes(w.anchor.sheetId)
             ? {
                 id: w.id,
@@ -295,7 +307,7 @@ function dxe(e, r, t = {}) {
   return structuredClone(n.anchor);
 }
 const rj = (e) =>
-  e === void 0
+  e === undefined
     ? "Unavailable"
     : e === null
       ? "(blank)"
@@ -303,8 +315,7 @@ const rj = (e) =>
         ? String(e).toUpperCase()
         : String(e);
 function fxe(e) {
-  var O, j;
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -337,14 +348,11 @@ function fxe(e) {
       }
     }, [e.workbook, e.allowHidden, e.allowedSheetIds, s]);
   ne.useEffect(() => {
-    var V, D;
+    var D;
     const z = document.activeElement;
     return (
-      (D =
-        (V = o.current) == null
-          ? void 0
-          : V.querySelector('[data-ui-label="Close Watch Window"]')) == null ||
-        D.focus(),
+      (D = o.current?.querySelector('[data-ui-label="Close Watch Window"]')) ==
+        null || D.focus(),
       () => {
         z != null && z.isConnected && z.focus();
       }
@@ -396,7 +404,7 @@ function fxe(e) {
         w(V);
       }
     },
-    F = ((O = y.result) == null ? void 0 : O.rows) ?? [],
+    F = y.result?.rows ?? [],
     I =
       !!c &&
       c.snapshot === JSON.stringify(e.workbook) &&
@@ -420,18 +428,16 @@ function fxe(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (z) => {
-        var V, D, B;
+        var D, B;
         if (
           (z.stopPropagation(),
           z.key === "Escape" && (z.preventDefault(), a.current()),
           z.key === "Tab")
         ) {
           const _ = [
-            ...(((V = o.current) == null
-              ? void 0
-              : V.querySelectorAll(
-                  'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
-                )) ?? []),
+            ...(o.current?.querySelectorAll(
+              'button:not(:disabled),input:not(:disabled),summary,[tabindex="0"]',
+            ) ?? []),
           ].filter((C) => !C.hidden);
           z.shiftKey && document.activeElement === _[0]
             ? (z.preventDefault(), (D = _.at(-1)) == null || D.focus())
@@ -458,9 +464,9 @@ function fxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": r("Close Watch Window"),
+              "aria-label": text("Close Watch Window"),
               onClick: e.onClose,
-              lang: t("Close Watch Window"),
+              lang: language("Close Watch Window"),
               "data-ui-label": "Close Watch Window",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -637,8 +643,8 @@ function fxe(e) {
         c &&
           i.jsxs("section", {
             className: "fw-preview",
-            "aria-label": r("Watch action preview"),
-            lang: t("Watch action preview"),
+            "aria-label": text("Watch action preview"),
+            lang: language("Watch action preview"),
             "data-ui-label": "Watch action preview",
             children: [
               i.jsx("h3", {
@@ -674,23 +680,23 @@ function fxe(e) {
                 children: [
                   ...c.added.map((z) => ({ watch: z, action: "Add" })),
                   ...c.removed.map((z) => ({ watch: z, action: "Remove" })),
-                ].map(({ watch: z, action: V }) => {
-                  const D = F.find((_) => _.id === z.id),
+                ].map(({ watch, action }) => {
+                  const D = F.find((_) => _.id === watch.id),
                     B =
-                      I && (V === "Add" || (D != null && D.anchor))
-                        ? `${z.anchor.sheetName}!${z.anchor.address}`
+                      I && (action === "Add" || (D != null && D.anchor))
+                        ? `${watch.anchor.sheetName}!${watch.anchor.address}`
                         : "Watch outside current context";
                   return i.jsxs(
                     "li",
                     {
                       children: [
-                        V,
+                        action,
                         ": ",
                         B,
-                        z.orphaned ? ` (${z.orphaned})` : "",
+                        watch.orphaned ? ` (${watch.orphaned})` : "",
                       ],
                     },
-                    z.id,
+                    watch.id,
                   );
                 }),
               }),
@@ -719,9 +725,7 @@ function fxe(e) {
             i.jsx("summary", {
               children: i.jsx(M, { children: "Calculation scope and limits" }),
             }),
-            (j = y.result) == null
-              ? void 0
-              : j.notes.map((z) => i.jsx("p", { children: z }, z)),
+            y.result?.notes.map((z) => i.jsx("p", { children: z }, z)),
             i.jsx("p", {
               children: i.jsx(M, {
                 children:
@@ -831,10 +835,10 @@ function mW(e, r, t = {}) {
     o = e.sheets.find((z) => z.id === n.formulaSheetId),
     a = e.sheets.find((z) => z.id === n.variableSheetId);
   if (!o || !a) throw Error("A selected Goal Seek worksheet no longer exists.");
-  if (t.includeHidden !== void 0 && typeof t.includeHidden != "boolean")
+  if (t.includeHidden !== undefined && typeof t.includeHidden != "boolean")
     throw Error("Include hidden must be boolean.");
   if (
-    t.allowedSheetIds !== void 0 &&
+    t.allowedSheetIds !== undefined &&
     (!Array.isArray(t.allowedSheetIds) ||
       t.allowedSheetIds.some(
         (z) => typeof z != "string" || !e.sheets.some((V) => V.id === z),
@@ -883,7 +887,7 @@ function mW(e, r, t = {}) {
     const V = ct(z.range),
       D = _t(n.variableAddress),
       B = z.columns[D.col - V.firstCol],
-      _ = B == null ? void 0 : B.calculatedFormula;
+      _ = B?.calculatedFormula;
     if (
       D.row === V.firstRow ||
       (z.showTotals && D.row === V.lastRow) ||
@@ -959,7 +963,7 @@ function mW(e, r, t = {}) {
   const p = c.issues.find((z) => f.has(z.from));
   if (p || c.cycles.length)
     throw Error(
-      `Goal Seek requires supported static dependencies: ${(p == null ? void 0 : p.message) ?? "the dependency graph contains a cycle."}`,
+      `Goal Seek requires supported static dependencies: ${p?.message ?? "the dependency graph contains a cycle."}`,
     );
   if (!f.has(nj(a.id, n.variableAddress)))
     throw Error(
@@ -990,7 +994,7 @@ function mW(e, r, t = {}) {
   for (const z of h) {
     const V = e.sheets.find((B) => B.id === z.sheetId),
       D = V.cells[z.address];
-    if ((D == null ? void 0 : D.raw) === null || !D)
+    if (D?.raw === null || !D)
       throw Error(
         "Goal Seek requires populated static dependency cells; blank or possible spill-child dependencies are not supported.",
       );
@@ -1213,11 +1217,10 @@ function pxe(e, r, t = {}) {
   return n.next;
 }
 function mxe(e) {
-  var J, q;
   const r = Dr(),
     [t] = ne.useState(r.entryLocale),
     n = (W, K) => sI(W, K, t),
-    { text: o, language: a } = Dr(),
+    { text, language } = Dr(),
     s = ne.useId(),
     d = ne.useRef(null),
     u = ne.useRef(e.onClose);
@@ -1253,13 +1256,10 @@ function mxe(e) {
       D.context.includeHidden === T.includeHidden &&
       JSON.stringify(D.context.allowedSheetIds) === JSON.stringify(N);
   ne.useEffect(() => {
-    var K, te;
+    var te;
     const W = document.activeElement;
     return (
-      (te =
-        (K = d.current) == null
-          ? void 0
-          : K.querySelector('[data-ui-label="Set cell"]')) == null ||
+      (te = d.current?.querySelector('[data-ui-label="Set cell"]')) == null ||
         te.focus(),
       () => {
         W != null && W.isConnected && W.focus();
@@ -1320,18 +1320,16 @@ function mxe(e) {
       "aria-modal": "true",
       "aria-labelledby": `${s}-title`,
       onKeyDown: (W) => {
-        var K, te, ae;
+        var te, ae;
         if (
           (W.stopPropagation(),
           W.key === "Escape" && (W.preventDefault(), u.current()),
           W.key === "Tab")
         ) {
           const oe = [
-            ...(((K = d.current) == null
-              ? void 0
-              : K.querySelectorAll(
-                  "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
-                )) ?? []),
+            ...(d.current?.querySelectorAll(
+              "button:not(:disabled),input:not(:disabled),select:not(:disabled),summary",
+            ) ?? []),
           ].filter((de) => !de.hidden);
           W.shiftKey && document.activeElement === oe[0]
             ? (W.preventDefault(), (te = oe.at(-1)) == null || te.focus())
@@ -1358,9 +1356,9 @@ function mxe(e) {
               ],
             }),
             i.jsx("button", {
-              "aria-label": o("Close Goal Seek"),
+              "aria-label": text("Close Goal Seek"),
               onClick: e.onClose,
-              lang: a("Close Goal Seek"),
+              lang: language("Close Goal Seek"),
               "data-ui-label": "Close Goal Seek",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -1379,11 +1377,11 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Formula worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": o("Formula worksheet"),
+                  "aria-label": text("Formula worksheet"),
                   value: L ? l : "",
                   disabled: e.readOnly,
                   onChange: (W) => G(c, W.target.value),
-                  lang: a("Formula worksheet"),
+                  lang: language("Formula worksheet"),
                   "data-ui-label": "Formula worksheet",
                   children: [
                     i.jsx("option", {
@@ -1402,12 +1400,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Set cell" }),
                 i.jsx("input", {
-                  "aria-label": o("Set cell"),
+                  "aria-label": text("Set cell"),
                   value: L ? h : "",
-                  placeholder: o("B1"),
+                  placeholder: text("B1"),
                   readOnly: e.readOnly,
                   onChange: (W) => G(f, W.target.value),
-                  lang: a("Set cell"),
+                  lang: language("Set cell"),
                   "data-ui-label": "Set cell",
                 }),
               ],
@@ -1416,11 +1414,11 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Changing worksheet" }),
                 i.jsxs("select", {
-                  "aria-label": o("Changing worksheet"),
+                  "aria-label": text("Changing worksheet"),
                   value: $ ? p : "",
                   disabled: e.readOnly,
                   onChange: (W) => G(m, W.target.value),
-                  lang: a("Changing worksheet"),
+                  lang: language("Changing worksheet"),
                   "data-ui-label": "Changing worksheet",
                   children: [
                     i.jsx("option", {
@@ -1439,12 +1437,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "By changing cell" }),
                 i.jsx("input", {
-                  "aria-label": o("By changing cell"),
+                  "aria-label": text("By changing cell"),
                   value: $ ? v : "",
-                  placeholder: o("A1"),
+                  placeholder: text("A1"),
                   readOnly: e.readOnly,
                   onChange: (W) => G(g, W.target.value),
-                  lang: a("By changing cell"),
+                  lang: language("By changing cell"),
                   "data-ui-label": "By changing cell",
                 }),
               ],
@@ -1453,12 +1451,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "To value" }),
                 i.jsx("input", {
-                  "aria-label": o("Target value"),
+                  "aria-label": text("Target value"),
                   value: b,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(y, W.target.value),
-                  lang: a("Target value"),
+                  lang: language("Target value"),
                   "data-ui-label": "Target value",
                 }),
               ],
@@ -1467,12 +1465,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Absolute tolerance" }),
                 i.jsx("input", {
-                  "aria-label": o("Absolute tolerance"),
+                  "aria-label": text("Absolute tolerance"),
                   value: F,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(I, W.target.value),
-                  lang: a("Absolute tolerance"),
+                  lang: language("Absolute tolerance"),
                   "data-ui-label": "Absolute tolerance",
                 }),
               ],
@@ -1481,12 +1479,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Lower bound" }),
                 i.jsx("input", {
-                  "aria-label": o("Lower bound"),
+                  "aria-label": text("Lower bound"),
                   value: w,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(E, W.target.value),
-                  lang: a("Lower bound"),
+                  lang: language("Lower bound"),
                   "data-ui-label": "Lower bound",
                 }),
               ],
@@ -1495,12 +1493,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Upper bound" }),
                 i.jsx("input", {
-                  "aria-label": o("Upper bound"),
+                  "aria-label": text("Upper bound"),
                   value: A,
                   inputMode: "decimal",
                   readOnly: e.readOnly,
                   onChange: (W) => G(k, W.target.value),
-                  lang: a("Upper bound"),
+                  lang: language("Upper bound"),
                   "data-ui-label": "Upper bound",
                 }),
               ],
@@ -1509,12 +1507,12 @@ function mxe(e) {
               children: [
                 i.jsx(M, { children: "Maximum iterations" }),
                 i.jsx("input", {
-                  "aria-label": o("Maximum iterations"),
+                  "aria-label": text("Maximum iterations"),
                   value: O,
                   inputMode: "numeric",
                   readOnly: e.readOnly,
                   onChange: (W) => G(j, W.target.value),
-                  lang: a("Maximum iterations"),
+                  lang: language("Maximum iterations"),
                   "data-ui-label": "Maximum iterations",
                 }),
               ],
@@ -1545,8 +1543,8 @@ function mxe(e) {
         D &&
           i.jsxs("section", {
             className: "gs-preview",
-            "aria-label": o("Goal Seek result"),
-            lang: a("Goal Seek result"),
+            "aria-label": text("Goal Seek result"),
+            lang: language("Goal Seek result"),
             "data-ui-label": "Goal Seek result",
             children: [
               U
@@ -1570,11 +1568,9 @@ function mxe(e) {
                           }),
                           i.jsxs("dd", {
                             children: [
-                              (J = e.workbook.sheets.find(
+                              e.workbook.sheets.find(
                                 (W) => W.id === D.request.formulaSheetId,
-                              )) == null
-                                ? void 0
-                                : J.name,
+                              )?.name,
                               "!",
                               D.request.formulaAddress,
                             ],
@@ -1584,11 +1580,9 @@ function mxe(e) {
                           }),
                           i.jsxs("dd", {
                             children: [
-                              (q = e.workbook.sheets.find(
+                              e.workbook.sheets.find(
                                 (W) => W.id === D.request.variableSheetId,
-                              )) == null
-                                ? void 0
-                                : q.name,
+                              )?.name,
                               "!",
                               D.request.variableAddress,
                             ],
@@ -1739,12 +1733,12 @@ function mxe(e) {
 }
 function lm(e, r = {}) {
   if (
-    (r.readOnly !== void 0 && typeof r.readOnly != "boolean") ||
-    (r.includeHidden !== void 0 && typeof r.includeHidden != "boolean")
+    (r.readOnly !== undefined && typeof r.readOnly != "boolean") ||
+    (r.includeHidden !== undefined && typeof r.includeHidden != "boolean")
   )
     throw Error("Analysis permissions must be boolean.");
   if (
-    r.allowedSheetIds !== void 0 &&
+    r.allowedSheetIds !== undefined &&
     (!Array.isArray(r.allowedSheetIds) ||
       r.allowedSheetIds.some(
         (t) => typeof t != "string" || !e.sheets.some((n) => n.id === t),
@@ -1807,9 +1801,9 @@ function p_(e) {
   });
 }
 function gW(e) {
-  var r, t;
+  var t;
   if (
-    ((r = e.calculation) == null ? void 0 : r.mode) === "manual" ||
+    e.calculation?.mode === "manual" ||
     ((t = e.calculation) != null && t.iterative)
   )
     throw Error(

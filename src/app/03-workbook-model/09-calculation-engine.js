@@ -49,11 +49,11 @@ import { DB, Die, FN, Fw, _t, ct } from "./07-conditional-formatting.js";
 import { CR, z1 } from "./08-chart-model.js";
 
 function Cf(e, r = {}, t, n) {
-  var W, K;
+  var K;
   const o = z3(e),
     a = new Set([...Fc, ...o.map((te) => te.name)]),
-    s = (n == null ? void 0 : n.budget) ?? SN(e),
-    d = (n == null ? void 0 : n.dateContext) ?? lx(e.datePolicy),
+    s = n?.budget ?? SN(e),
+    d = n?.dateContext ?? lx(e.datePolicy),
     u = new Set(),
     l = new Map(),
     c = new Map(),
@@ -82,19 +82,16 @@ function Cf(e, r = {}, t, n) {
   let F = 0;
   const I = [];
   let O = 0;
-  const j =
-      (W = e.definedNames) == null
-        ? void 0
-        : W.some((te) =>
-            /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te.refersTo),
-          ),
+  const j = e.definedNames?.some((te) =>
+      /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te.refersTo),
+    ),
     z =
       (K = e.definedNames) != null && K.length
         ? new RegExp(
             `(?:^|[^A-Za-z0-9_.\\\\])(?:${e.definedNames.map((te) => te.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?![A-Za-z0-9_.\\\\])`,
             "i",
           )
-        : void 0,
+        : undefined,
     V = (te) =>
       /\b(?:_xlfn\.)?(?:LET|LAMBDA)\s*\(/i.test(te) ||
       !!(j && z != null && z.test(te)),
@@ -114,7 +111,6 @@ function Cf(e, r = {}, t, n) {
       te.id,
       Object.entries(te.cells)
         .filter(([, ae]) => {
-          var oe;
           return (
             typeof ae.raw == "string" &&
             ae.raw.startsWith("=") &&
@@ -125,7 +121,7 @@ function Cf(e, r = {}, t, n) {
                 ae.raw.replace(/"(?:[^"]|"")*"/g, '""').includes(":")) ||
               /[{}#]/.test(ae.raw.replace(/"(?:[^"]|"")*"/g, '""')) ||
               /^=\s*[^()+*/]*:/.test(ae.raw) ||
-              (((oe = e.definedNames) == null ? void 0 : oe.length) &&
+              (e.definedNames?.length &&
                 /^=\s*[A-Za-z_][A-Za-z0-9_.]*\s*$/.test(ae.raw)))
           );
         })
@@ -137,13 +133,12 @@ function Cf(e, r = {}, t, n) {
         }),
     );
   const $ = (te, ae, oe, de = true) => {
-      var ge;
       const he = (se, we = true) => {
         const Ee = CR(se, e, ae, oe, we);
         if (Ee) throw (l.set(`${ae}:${oe}`, Ee), f(Ee.error));
       };
       ((te = D.rewrite(te)), he(te, false));
-      let Se = de ? pf(te, e, ae, [], t == null ? void 0 : t.allowName) : te;
+      let Se = de ? pf(te, e, ae, [], t?.allowName) : te;
       ((Se = D.rewrite(Se)), he(Se));
       let le = "",
         ce = 0;
@@ -153,11 +148,7 @@ function Cf(e, r = {}, t, n) {
             Se.slice(ce),
           );
         if (se) {
-          const ye = C.get(
-            (
-              ((ge = se[1]) == null ? void 0 : ge.replace(/''/g, "'")) ?? se[2]
-            ).toLowerCase(),
-          );
+          const ye = C.get((se[1]?.replace(/''/g, "'") ?? se[2]).toLowerCase());
           if (!ye) throw f("#REF!");
           const Te = _t(se[3]),
             Pe = `${ut(Te.col)}${Te.row + 1}`,
@@ -223,41 +214,42 @@ function Cf(e, r = {}, t, n) {
       const te = Fie(
         new JN({
           onVariable: () => null,
-          onCell: ({ sheet: le, row: ce, col: ge }) => {
-            const se = U(le);
+          onCell: ({ sheet, row, col }) => {
+            const se = U(sheet);
             if (
-              !Number.isInteger(ce) ||
-              !Number.isInteger(ge) ||
-              ce < 1 ||
-              ge < 1 ||
-              ce > se.rowCount ||
-              ge > se.colCount
+              !Number.isInteger(row) ||
+              !Number.isInteger(col) ||
+              row < 1 ||
+              col < 1 ||
+              row > se.rowCount ||
+              col > se.colCount
             )
               throw f("#REF!");
-            return Q(se.id, `${ut(ge - 1)}${ce}`);
+            return Q(se.id, `${ut(col - 1)}${row}`);
           },
-          onRange: ({ sheet: le, from: ce, to: ge }) => {
-            const se = U(le),
-              we = ge.row,
-              Ee = ge.col;
+          onRange: ({ sheet, from, to }) => {
+            const se = U(sheet),
+              we = to.row,
+              Ee = to.col;
             if (
-              ce.row < 1 ||
-              ce.col < 1 ||
+              from.row < 1 ||
+              from.col < 1 ||
               we > se.rowCount ||
               Ee > se.colCount ||
-              we < ce.row ||
-              Ee < ce.col
+              we < from.row ||
+              Ee < from.col
             )
               throw f("#REF!");
-            if ((we - ce.row + 1) * (Ee - ce.col + 1) > 2e4) throw f("#LIMIT!");
+            if ((we - from.row + 1) * (Ee - from.col + 1) > 2e4)
+              throw f("#LIMIT!");
             const Ae = s.reserve(
-              (we - ce.row + 1) * (32 + (Ee - ce.col + 1) * 8),
+              (we - from.row + 1) * (32 + (Ee - from.col + 1) * 8),
             );
             if (Ae) throw f(Ae);
             const ye = [];
-            for (let Te = ce.row; Te <= we; Te++) {
+            for (let Te = from.row; Te <= we; Te++) {
               const Pe = [];
-              for (let qe = ce.col; qe <= Ee; qe++) {
+              for (let qe = from.col; qe <= Ee; qe++) {
                 const ht = Q(se.id, `${ut(qe - 1)}${Te}`);
                 if (
                   wn(ht) &&
@@ -272,9 +264,8 @@ function Cf(e, r = {}, t, n) {
           },
         }),
         (le, ce, ge) => {
-          var se;
           return p(le, ce, {
-            currentSheetName: (se = ge.position) == null ? void 0 : se.sheet,
+            currentSheetName: ge.position?.sheet,
             retrieve: (we) => ge.retrieveRef(we),
             issue: f,
             isIssue: wn,
@@ -296,7 +287,7 @@ function Cf(e, r = {}, t, n) {
                         result: null,
                       });
                   }
-                : void 0,
+                : undefined,
             isActive: (we, Ee) => y.has(`${we}:${Ee}`),
             expandedFormula: (we, Ee) => {
               try {
@@ -319,20 +310,17 @@ function Cf(e, r = {}, t, n) {
           h.set(we, { ...le, sheetId: ge, address: se });
         },
         (le, ce, ge) => {
-          var Te;
           const se =
-            le && typeof le == "object" && "ref" in le ? le.ref : void 0;
+            le && typeof le == "object" && "ref" in le ? le.ref : undefined;
           if (!(se != null && se.from) || !se.to) return;
-          const we = U(
-              se.sheet ?? ((Te = te.position) == null ? void 0 : Te.sheet),
-            ),
+          const we = U(se.sheet ?? te.position?.sheet),
             Ee = `${ut(se.from.col + ge - 1)}${se.from.row + ce}`;
           if (t && !t.allowRead(we.id, Ee)) throw f("#BLOCKED!");
           n == null || n.read(`${we.id}:${Ee}`);
           const Ae = we.cells[Ee];
           if (
             (Ae != null && Ae.literal) ||
-            typeof (Ae == null ? void 0 : Ae.raw) != "string" ||
+            typeof Ae?.raw != "string" ||
             !Ae.raw.startsWith("=")
           )
             return;
@@ -347,7 +335,7 @@ function Cf(e, r = {}, t, n) {
                 !t.allowDatabaseCriterion(we.id, xd(ye, Pe, 0))
               )
                 throw f("#BLOCKED!");
-              const ht = pf(ye, e, we.id, [], t == null ? void 0 : t.allowName),
+              const ht = pf(ye, e, we.id, [], t?.allowName),
                 Re = xd(ht, Pe, 0);
               if (Re.length > Ja.maxFormulaLength) throw f("#LIMIT!");
               return V(Re)
@@ -359,7 +347,7 @@ function Cf(e, r = {}, t, n) {
                       row: se.from.row + ce,
                       col: se.from.col + ge,
                     },
-                    !0,
+                    true,
                   );
             } finally {
               O--;
@@ -388,10 +376,10 @@ function Cf(e, r = {}, t, n) {
         };
       }
       const ae = (le) => {
-          const ce = s.work() ?? (n == null ? void 0 : n.check());
+          const ce = s.work() ?? n?.check();
           if (ce) return f(ce);
           const ge = le(),
-            se = s.value(ge) ?? (n == null ? void 0 : n.check());
+            se = s.value(ge) ?? n?.check();
           return se ? f(se) : ge;
         },
         oe = te._callFunction.bind(te),
@@ -456,7 +444,7 @@ function Cf(e, r = {}, t, n) {
         supported: a,
         issue: f,
         isIssue: wn,
-        allowName: t == null ? void 0 : t.allowName,
+        allowName: t?.allowName,
         step: t
           ? (de, he, Se) =>
               t.step({
@@ -466,7 +454,7 @@ function Cf(e, r = {}, t, n) {
                 operation: he,
                 result: Se,
               })
-          : void 0,
+          : undefined,
         diagnostic: (de, he) =>
           c.set(`${ae}:${oe}`, {
             sheetId: ae,
@@ -504,7 +492,7 @@ function Cf(e, r = {}, t, n) {
             return se.parse(
               le,
               { sheet: _.get(he).name, row: Ee.row + 1, col: Ee.col + 1 },
-              !0,
+              true,
             );
           } finally {
             ((se._callFunction = we), F--);
@@ -512,7 +500,7 @@ function Cf(e, r = {}, t, n) {
         },
       }),
     Q = (te, ae) => {
-      const oe = s.work() ?? (n == null ? void 0 : n.check());
+      const oe = s.work() ?? n?.check();
       if (oe) return f(oe);
       if (!t) return X(te, ae);
       if (!t.allowRead(te, ae)) return f("#BLOCKED!");
@@ -544,7 +532,7 @@ function Cf(e, r = {}, t, n) {
         le = D.values.get(Se);
       if (le) return le.type === "error" ? f(String(le.value)) : le.value;
       n == null || n.read(Se);
-      const ce = n == null ? void 0 : n.value(Se, y.size > 0 || w.size > 0);
+      const ce = n?.value(Se, y.size > 0 || w.size > 0);
       if (ce) return ce.type === "error" ? f(String(ce.value)) : ce.value;
       for (const Te of y) (ye = E.get(Te)) == null || ye.add(Se);
       if (y.has(Se) || w.has(Se))
@@ -569,14 +557,14 @@ function Cf(e, r = {}, t, n) {
           )
             return v.get(Se).value;
         }
-        return (ge == null ? void 0 : ge.raw) ?? null;
+        return ge?.raw ?? null;
       }
       if (typeof ge.raw != "string" || !ge.raw.startsWith("=") || ge.literal)
         return ge.raw;
       const se = ge.raw;
       n == null || n.enter(Se);
       let Ee = (() => {
-        var Me, ke, je, $e;
+        var $e;
         if (
           y.size + w.size >= Ja.maxFormulaDepth ||
           se.length > Ja.maxFormulaLength ||
@@ -628,7 +616,11 @@ function Cf(e, r = {}, t, n) {
           const Je = A[ht] ?? (A[ht] = G()),
             ze = Pe
               ? H(Te, te, ae)
-              : Je.parse(Te, { sheet: he.name, row: oe + 1, col: de + 1 }, !0);
+              : Je.parse(
+                  Te,
+                  { sheet: he.name, row: oe + 1, col: de + 1 },
+                  true,
+                );
           if (wn(ze)) Re = f(ze.error);
           else if (typeof ze == "number")
             Re = Number.isFinite(ze) ? ze : f("#NUM!");
@@ -638,7 +630,7 @@ function Cf(e, r = {}, t, n) {
             Re = ze.length <= 32767 ? ze : f("#LIMIT!");
           else if (Array.isArray(ze)) {
             const at = ze.every(Array.isArray) ? ze : [ze],
-              _e = ((Me = at[0]) == null ? void 0 : Me.length) ?? 0;
+              _e = at[0]?.length ?? 0;
             if (!at.length || !_e || at.some((Ze) => Ze.length !== _e))
               Re = f("#CALC!");
             else if (
@@ -656,8 +648,8 @@ function Cf(e, r = {}, t, n) {
               }),
                 (Re = f("#SPILL!")));
             else {
-              let Ze = !1,
-                lt = !1;
+              let Ze = false,
+                lt = false;
               const be = {
                   firstRow: oe,
                   lastRow: oe + at.length - 1,
@@ -673,13 +665,10 @@ function Cf(e, r = {}, t, n) {
                     mt.lastCol >= be.firstCol
                   );
                 },
-                pt = (ke = he.merges) == null ? void 0 : ke.find(ft),
-                Fe =
-                  (je = he.tables) == null
-                    ? void 0
-                    : je.find((nt) => ft(nt.range));
+                pt = he.merges?.find(ft),
+                Fe = he.tables?.find((nt) => ft(nt.range));
               if (pt || Fe) {
-                Ze = !0;
+                Ze = true;
                 const nt = pt ?? Fe.range;
                 b.set(Se, {
                   sheetId: te,
@@ -696,14 +685,14 @@ function Cf(e, r = {}, t, n) {
                   const Wt = `${ut(de + mt)}${oe + nt + 1}`,
                     Zt = he.cells[Wt];
                   if (($e = E.get(Se)) != null && $e.has(`${te}:${Wt}`)) {
-                    lt = !0;
+                    lt = true;
                     break;
                   }
                   if (
                     Wt !== ae &&
                     ((Zt && Zt.raw !== null) || v.has(`${te}:${Wt}`))
                   ) {
-                    ((Ze = !0),
+                    ((Ze = true),
                       b.set(Se, {
                         sheetId: te,
                         anchor: ae,
@@ -752,14 +741,14 @@ function Cf(e, r = {}, t, n) {
           const ze =
             Je && typeof Je == "object" && "details" in Je
               ? Je.details
-              : void 0;
+              : undefined;
           Re = wn(ze) ? f(ze.error) : wn(Je) ? f(Je.error) : f("#ERROR!");
         } finally {
           (y.delete(Se), E.delete(Se));
         }
         return Re;
       })();
-      const Ae = s.value(Ee) ?? (n == null ? void 0 : n.check());
+      const Ae = s.value(Ee) ?? n?.check();
       return (
         Ae && (Ee = f(Ae)),
         m.set(Se, Ee),
@@ -793,11 +782,7 @@ function Cf(e, r = {}, t, n) {
     },
     J = (te, ae) => J.getTypedValue(te, ae).value;
   J.getTypedValue = (te, ae) => {
-    var oe, de, he;
-    if (
-      ((oe = n == null ? void 0 : n.running) == null ? void 0 : oe.call(n)) ===
-      false
-    )
+    if (n?.running?.call(n) === false)
       try {
         const Se = _t(ae),
           le = _.get(te);
@@ -805,13 +790,9 @@ function Cf(e, r = {}, t, n) {
           return { type: "error", value: "#REF!" };
         const ce = `${ut(Se.col)}${Se.row + 1}`,
           ge = `${te}:${ce}`,
-          se = n.value(ge, !1);
+          se = n.value(ge, false);
         if (se) return { ...se };
-        const we =
-          m.get(ge) ??
-          ((de = v.get(ge)) == null ? void 0 : de.value) ??
-          ((he = le.cells[ce]) == null ? void 0 : he.raw) ??
-          null;
+        const we = m.get(ge) ?? v.get(ge)?.value ?? le.cells[ce]?.raw ?? null;
         return wn(we)
           ? { type: "error", value: we.error }
           : {
@@ -883,9 +864,9 @@ function Cf(e, r = {}, t, n) {
             : (q ?? (q = G())).parse(
                 ce,
                 { sheet: he.name, row: Se.row + 1, col: Se.col + 1 },
-                !0,
+                true,
               ),
-          we = s.value(se) ?? (n == null ? void 0 : n.check());
+          we = s.value(se) ?? n?.check();
         return we
           ? f(we).error
           : wn(se)
@@ -907,7 +888,9 @@ function Cf(e, r = {}, t, n) {
                       : "#VALUE!";
       } catch (he) {
         const Se =
-          he && typeof he == "object" && "details" in he ? he.details : void 0;
+          he && typeof he == "object" && "details" in he
+            ? he.details
+            : undefined;
         return wn(Se)
           ? f(Se.error).error
           : wn(he)
@@ -923,17 +906,12 @@ function Cf(e, r = {}, t, n) {
     (J.getSpillDiagnostic = (te, ae) => {
       J(te, ae);
       const oe = b.get(`${te}:${ae}`);
-      return oe ? { ...oe } : void 0;
+      return oe ? { ...oe } : undefined;
     }),
     (J.getSpillAnchor = (te, ae) => {
-      var oe;
-      return (
-        J(te, ae),
-        (oe = v.get(`${te}:${ae}`)) == null ? void 0 : oe.anchor
-      );
+      return (J(te, ae), v.get(`${te}:${ae}`)?.anchor);
     }),
     (J.getSpillEntries = (te) => {
-      var ae;
       s.begin();
       try {
         const oe = R.get(te) ?? [];
@@ -943,11 +921,7 @@ function Cf(e, r = {}, t, n) {
             new Error("Spill discovery exceeds 1,000 possible array formulas.")
           );
         T = 0;
-        for (const he of ((ae = n == null ? void 0 : n.running) == null
-          ? void 0
-          : ae.call(n)) === !1
-          ? []
-          : oe)
+        for (const he of n?.running?.call(n) === false ? [] : oe)
           if ((Q(te, he), T > Mt.maxCells))
             throw new Error(
               "Spill discovery exceeds 100,000 calculation reads.",
@@ -955,9 +929,9 @@ function Cf(e, r = {}, t, n) {
         const de = `${te}:`;
         return [...v.entries()]
           .filter(([he]) => he.startsWith(de))
-          .map(([he, { anchor: Se }]) => ({
+          .map(([he, { anchor }]) => ({
             address: he.slice(de.length),
-            anchor: Se,
+            anchor,
           }));
       } finally {
         s.end();
@@ -1104,9 +1078,8 @@ function cU(e, r, t, n) {
     s = (c, h) => `${c}:${h.replace(/\$/g, "").toUpperCase()}`,
     d = new Map(e.sheets.map((c) => [c.id, c])),
     u = (c, h) => {
-      var g, b;
       const f = s(c, h),
-        p = t.get(f) ?? ((g = o.get(f)) == null ? void 0 : g.result);
+        p = t.get(f) ?? o.get(f)?.result;
       if (p) return { ...p };
       const m = d.get(c);
       if (!m) return { type: "error", value: "#REF!" };
@@ -1117,10 +1090,7 @@ function cU(e, r, t, n) {
       } catch {
         return { type: "error", value: "#REF!" };
       }
-      const v =
-        ((b = m.cells[h.replace(/\$/g, "").toUpperCase()]) == null
-          ? void 0
-          : b.raw) ?? null;
+      const v = m.cells[h.replace(/\$/g, "").toUpperCase()]?.raw ?? null;
       return {
         type:
           v === null
@@ -1146,20 +1116,15 @@ function cU(e, r, t, n) {
       getSpillEntries: (c) =>
         n.spills
           .filter((h) => h.sheetId === c)
-          .map(({ address: h, anchor: f }) => ({ address: h, anchor: f })),
+          .map(({ address, anchor }) => ({ address, anchor })),
       getSpillAnchor: (c, h) => {
-        var f;
-        return (f = o.get(s(c, h))) == null ? void 0 : f.anchor;
+        return o.get(s(c, h))?.anchor;
       },
       getSpillRange: (c, h) => {
-        var f;
-        return (f = a.get(s(c, h))) == null ? void 0 : f.range;
+        return a.get(s(c, h))?.range;
       },
       getSpillDiagnostic: (c, h) => {
-        var f;
-        return structuredClone(
-          (f = a.get(s(c, h))) == null ? void 0 : f.diagnostic,
-        );
+        return structuredClone(a.get(s(c, h))?.diagnostic);
       },
       peekSpill: (c, h) => {
         const f = a.get(s(c, h));
@@ -1173,14 +1138,8 @@ function cU(e, r, t, n) {
   );
 }
 function L5(e) {
-  var m;
   const r = tu.get(e);
-  if (
-    ((m = r == null ? void 0 : r.report.execution) == null
-      ? void 0
-      : m.state) === "pending" &&
-    nm(r, e)
-  )
+  if (r?.report.execution?.state === "pending" && nm(r, e))
     return { calculator: r.calculator, report: r.report };
   const t = pd(),
     n = W1(e),
@@ -1198,7 +1157,7 @@ function L5(e) {
   const c = {
     workbookId: e.id,
     revision: e.revision,
-    run: ((o == null ? void 0 : o.report.run) ?? 0) + 1,
+    run: (o?.report.run ?? 0) + 1,
     settings: n.settings,
     resources: SN(e).report(),
     volatile: { functions: n.volatile, policy: yE },
@@ -1270,7 +1229,6 @@ function L5(e) {
   );
 }
 function uU(e, r, t) {
-  var l;
   const n = tu.get(e),
     o = W1(e);
   if (!n || n.report !== r || !nm(n, e, o)) return;
@@ -1285,10 +1243,7 @@ function uU(e, r, t) {
     s = new Map();
   for (const c of t.report.cells) {
     const h = `${c.sheetId}:${c.address}`;
-    if (
-      a.has(h) ||
-      ((l = o.formulas.get(h)) == null ? void 0 : l.formula) !== c.formula
-    )
+    if (a.has(h) || o.formulas.get(h)?.formula !== c.formula)
       throw Error(
         "The worker result contains stale or duplicate formula inputs.",
       );
@@ -1382,7 +1337,7 @@ function Xie(e, r, t, n, o) {
 }
 function dU(e, r, t, n) {
   const o = pd(),
-    { formulas: a, settings: s } = r,
+    { formulas, settings } = r,
     d = lx(e.datePolicy),
     u = SN(e);
   u.begin();
@@ -1395,8 +1350,14 @@ function dU(e, r, t, n) {
     : t
       ? "Changed inputs and transitive dependents"
       : "First calculation of this snapshot";
-  if (n || !t || r.metadata !== t.metadata || ik(e, a) || ik(e, t.formulas))
-    (a.forEach((U, G) => l.add(G)),
+  if (
+    n ||
+    !t ||
+    r.metadata !== t.metadata ||
+    ik(e, formulas) ||
+    ik(e, t.formulas)
+  )
+    (formulas.forEach((U, G) => l.add(G)),
       t &&
         !n &&
         (p =
@@ -1409,13 +1370,10 @@ function dU(e, r, t, n) {
       H = t.inputs();
     for (const J of new Set([...G.keys(), ...H.keys()]))
       G.get(J) !== H.get(J) && U.add(J);
-    (a.forEach((J, q) => {
-      var W;
+    (formulas.forEach((J, q) => {
       (_O.test(J.formula) ||
         !t.values.has(q) ||
-        ["#TIMEOUT!", "#LIMIT!"].includes(
-          String((W = t.values.get(q)) == null ? void 0 : W.value),
-        )) &&
+        ["#TIMEOUT!", "#LIMIT!"].includes(String(t.values.get(q)?.value))) &&
         U.add(q);
     }),
       t.report.cycles.flat().forEach((J) => U.add(J)));
@@ -1430,10 +1388,10 @@ function dU(e, r, t, n) {
     for (let J = 0; J < X.length; J++)
       for (const q of Q.get(X[J]) ?? []) U.has(q) || (U.add(q), X.push(q));
     U.forEach((J) => {
-      a.has(J) && l.add(J);
+      formulas.has(J) && l.add(J);
     });
   }
-  a.forEach((U, G) => {
+  formulas.forEach((U, G) => {
     !l.has(G) &&
       t != null &&
       t.values.has(G) &&
@@ -1447,12 +1405,12 @@ function dU(e, r, t, n) {
     E = [...c.values()].reduce((U, G) => U + G.size, 0);
   const A = () => (
       y && !w && (w = u.check()),
-      y && !w && pd() - o > s.timeBudgetMs && (w = "#TIMEOUT!"),
-      y ? w : void 0
+      y && !w && pd() - o > settings.timeBudgetMs && (w = "#TIMEOUT!"),
+      y ? w : undefined
     ),
     k = (U, G) => {
       const H = [];
-      return Cf(e, {}, void 0, {
+      return Cf(e, {}, undefined, {
         budget: u,
         running: () => y,
         dateContext: d,
@@ -1467,9 +1425,8 @@ function dU(e, r, t, n) {
           return J && G != null && G.has(X) ? G.get(X) : U.get(X);
         },
         enter(X) {
-          var J;
           (H.push(X),
-            (E -= ((J = c.get(X)) == null ? void 0 : J.size) ?? 0),
+            (E -= c.get(X)?.size ?? 0),
             c.set(X, new Set()),
             f.set(X, (f.get(X) ?? 0) + 1));
         },
@@ -1488,28 +1445,26 @@ function dU(e, r, t, n) {
         },
       });
     },
-    F = s.mode === "manual" && !n;
+    F = settings.mode === "manual" && !n;
   F &&
     l.forEach((U) => {
-      (h.set(U, ng),
-        v.set(U, ng),
-        c.set(U, new Set(t == null ? void 0 : t.dependencies.get(U))));
+      (h.set(U, ng), v.set(U, ng), c.set(U, new Set(t?.dependencies.get(U))));
     });
   let I = k(v);
   const O = () => {
-    for (const [U, G] of a)
+    for (const [U, G] of formulas)
       h.set(U, v.get(U) ?? I.getTypedValue(G.sheetId, G.address));
   };
   F || O();
   const j = {
-    status: s.iterative ? "not-needed" : "off",
+    status: settings.iterative ? "not-needed" : "off",
     passes: 0,
     maxDelta: null,
-    message: s.iterative
+    message: settings.iterative
       ? "No circular calculation was required."
       : "Iteration is disabled. Circular references return #CYCLE!.",
   };
-  if (!F && b.size && s.iterative) {
+  if (!F && b.size && settings.iterative) {
     const U = new Set(b),
       G = new Map();
     c.forEach((Q, X) =>
@@ -1526,22 +1481,22 @@ function dU(e, r, t, n) {
         U.has(X) || v.set(X, Q);
       }),
       (j.status = "failed"),
-      ik(e, a) ||
-        [...a.values()].some((Q) => _O.test(Q.formula)) ||
+      ik(e, formulas) ||
+        [...formulas.values()].some((Q) => _O.test(Q.formula)) ||
         b.size > 1e3)
     )
       j.message =
         "Iteration supports at most 1,000 deterministic scalar cycle cells. Names, arrays, dynamic references and volatile formulas must be removed from this calculation.";
     else {
       let Q = new Map([...b].map((X) => [X, { type: "number", value: 0 }]));
-      j.message = `No convergence within ${s.maxIterations} simultaneous passes from zero.`;
-      for (let X = 0; X < s.maxIterations && !A(); X++) {
+      j.message = `No convergence within ${settings.maxIterations} simultaneous passes from zero.`;
+      for (let X = 0; X < settings.maxIterations && !A(); X++) {
         I = k(v, Q);
         const J = new Map();
         let q = 0,
           W = true;
         for (const K of b) {
-          const te = a.get(K),
+          const te = formulas.get(K),
             ae = I.getTypedValue(te.sheetId, te.address);
           if (
             (J.set(K, ae), ae.type !== "number" || !Number.isFinite(ae.value))
@@ -1558,7 +1513,7 @@ function dU(e, r, t, n) {
             "The circular calculation produced a nonnumeric value or calculation error.";
           break;
         }
-        if (((Q = J), q <= s.maxChange)) {
+        if (((Q = J), q <= settings.maxChange)) {
           ((j.status = "converged"),
             (j.message = `Converged from zero in ${X + 1} simultaneous passes; maximum change ${q}.`));
           break;
@@ -1576,7 +1531,7 @@ function dU(e, r, t, n) {
       (l.forEach((U) => h.set(U, F5(w))),
       j.status === "converged" && (j.status = "failed"),
       b.size &&
-        s.iterative &&
+        settings.iterative &&
         (j.message = `Calculation stopped with ${w}; no intermediate result is current.`)),
     (y = false),
     u.end());
@@ -1589,13 +1544,11 @@ function dU(e, r, t, n) {
       for (const G of t.calculator.getSpillEntries(U.id))
         l.has(`${U.id}:${G.anchor}`) && D.set(`${U.id}:${G.address}`, G.anchor);
   z.getTypedValue = (U, G) => {
-    var J, q;
     const H = V(U, G);
     if (h.has(H)) return { ...h.get(H) };
-    const Q =
-      (J = e.sheets.find((W) => W.id === U)) == null
-        ? void 0
-        : J.cells[G.replace(/\$/g, "").toUpperCase()];
+    const Q = e.sheets.find((W) => W.id === U)?.cells[
+      G.replace(/\$/g, "").toUpperCase()
+    ];
     if (
       Q &&
       Q.raw !== null &&
@@ -1612,7 +1565,7 @@ function dU(e, r, t, n) {
       };
     if (D.has(H)) return { ...ng };
     const X = I.getSpillAnchor(U, G);
-    return X && ((q = h.get(`${U}:${X}`)) == null ? void 0 : q.type) === "error"
+    return X && h.get(`${U}:${X}`)?.type === "error"
       ? { ...h.get(`${U}:${X}`) }
       : I.getTypedValue(U, G);
   };
@@ -1647,32 +1600,30 @@ function dU(e, r, t, n) {
       ...U.filter(
         (H) =>
           !l.has(`${H.sheetId}:${H.address}`) &&
-          a.has(`${H.sheetId}:${H.address}`),
+          formulas.has(`${H.sheetId}:${H.address}`),
       ),
       ...G,
     ],
-    C = (t == null ? void 0 : t.calculator.getReferenceDiagnostics()) ?? [],
-    T = (t == null ? void 0 : t.calculator.getNamedFormulaDiagnostics()) ?? [],
-    N = (t == null ? void 0 : t.calculator.getFinancialDiagnostics()) ?? [];
+    C = t?.calculator.getReferenceDiagnostics() ?? [],
+    T = t?.calculator.getNamedFormulaDiagnostics() ?? [],
+    N = t?.calculator.getFinancialDiagnostics() ?? [];
   ((z.getFinancialDiagnostics = () =>
     structuredClone(_(N, I.getFinancialDiagnostics()))),
     (z.getReferenceDiagnostics = () => _(C, I.getReferenceDiagnostics())),
     (z.getNamedFormulaDiagnostics = () =>
       _(T, I.getNamedFormulaDiagnostics())));
   const R = new Map(
-      t == null
-        ? void 0
-        : t.report.cells.map((U) => [`${U.sheetId}:${U.address}`, U]),
+      t?.report.cells.map((U) => [`${U.sheetId}:${U.address}`, U]),
     ),
     L = new Map();
-  for (const { sheetId: U, address: G, ...H } of z.getFinancialDiagnostics()) {
-    const Q = `${U}:${G}`;
+  for (const { sheetId, address, ...H } of z.getFinancialDiagnostics()) {
+    const Q = `${sheetId}:${address}`;
     L.set(Q, [...(L.get(Q) ?? []), H]);
   }
-  const $ = [...a].map(([U, G]) => {
+  const $ = [...formulas].map(([U, G]) => {
     var X;
     const H = h.get(U) ?? ng,
-      Q = t == null ? void 0 : t.values.get(U);
+      Q = t?.values.get(U);
     return {
       ...G,
       ...(H.value !== "#PENDING!" && L.has(U) ? { financial: L.get(U) } : {}),
@@ -1687,7 +1638,7 @@ function dU(e, r, t, n) {
         ? { lastKnown: { revision: t.report.revision, result: { ...Q } } }
         : {}),
       ...(H.value === "#PENDING!" &&
-      (Q == null ? void 0 : Q.value) === "#PENDING!" &&
+      Q?.value === "#PENDING!" &&
       (X = R.get(U)) != null &&
       X.lastKnown
         ? { lastKnown: R.get(U).lastKnown }
@@ -1706,7 +1657,7 @@ function dU(e, r, t, n) {
       volatile: {
         functions: [
           ...new Set(
-            [...a.values()]
+            [...formulas.values()]
               .flatMap((U) => Rg(U.formula))
               .concat((e.definedNames ?? []).flatMap((U) => Rg(U.refersTo))),
           ),
@@ -1730,12 +1681,12 @@ function dU(e, r, t, n) {
       dateContext: d,
       workbookId: e.id,
       revision: e.revision,
-      run: ((t == null ? void 0 : t.report.run) ?? 0) + 1,
-      settings: s,
+      run: (t?.report.run ?? 0) + 1,
+      settings,
       reason: p,
-      formulaCount: a.size,
+      formulaCount: formulas.size,
       evaluated: $.filter((U) => U.evaluations > 0).length,
-      reused: a.size - l.size,
+      reused: formulas.size - l.size,
       pending: $.filter((U) => U.status === "pending").length,
       elapsedMs: Math.max(0, pd() - o),
       dependencyEdges: [...c.values()].reduce((U, G) => U + G.size, 0),
@@ -1744,7 +1695,7 @@ function dU(e, r, t, n) {
       cells: $,
       limits: {
         dependencyEdges: j5,
-        cooperativeTimeBudgetMs: s.timeBudgetMs,
+        cooperativeTimeBudgetMs: settings.timeBudgetMs,
         hardInterrupt: false,
       },
     },
@@ -1754,7 +1705,7 @@ function Gw(e) {
   const r = W1(e),
     t = tu.get(e);
   if (nm(t, e, r)) return { calculator: t.calculator, report: t.report };
-  const n = dU(e, r, t ? void 0 : ch.get(e), false);
+  const n = dU(e, r, t ? undefined : ch.get(e), false);
   return (
     A1(n.report),
     tu.set(e, n),
@@ -1828,7 +1779,7 @@ function LB(e, r, t, n = {}) {
 function sU(e) {
   const r = W1(e),
     t = tu.get(e),
-    n = dU(e, r, nm(t, e, r) ? t : void 0, true);
+    n = dU(e, r, nm(t, e, r) ? t : undefined, true);
   return (
     A1(n.report),
     tu.set(e, n),
@@ -1843,10 +1794,10 @@ function Wie(e, r) {
       "The workbook or calculation run changed. Review current calculation results before exporting evidence.",
     );
   const n = e.importedCalculationCaches,
-    o = ((n == null ? void 0 : n.entries) ?? []).map((a) => {
+    o = (n?.entries ?? []).map((a) => {
       const s = e.sheets.find((h) => h.id === a.sheetId),
-        d = s == null ? void 0 : s.cells[a.address],
-        u = s ? t.calculator.getTypedValue(a.sheetId, a.address) : void 0,
+        d = s?.cells[a.address],
+        u = s ? t.calculator.getTypedValue(a.sheetId, a.address) : undefined,
         l =
           a.cache &&
           u &&
@@ -1858,10 +1809,9 @@ function Wie(e, r) {
         c = s
           ? d != null && d.literal
             ? "neutralized-or-literal"
-            : (d == null ? void 0 : d.raw) !== a.formula
+            : d?.raw !== a.formula
               ? "formula-changed"
-              : (u == null ? void 0 : u.type) === "error" &&
-                  u.value === "#PENDING!"
+              : u?.type === "error" && u.value === "#PENDING!"
                 ? "pending"
                 : a.cache
                   ? l

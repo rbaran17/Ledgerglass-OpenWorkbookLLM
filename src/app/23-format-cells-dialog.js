@@ -32,8 +32,8 @@ import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { $k, Tde, jI, oy } from "./22-themes-and-cell-styles.js";
 
 function Nde(e) {
-  var $, U, G;
-  const { text: r, language: t } = Dr(),
+  var $;
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef(e.onClose);
@@ -54,10 +54,7 @@ function Nde(e) {
       active: e.active,
     }),
     [h] = ne.useState(() => {
-      var H;
-      return oh(
-        ys((H = s == null ? void 0 : s.cells[l]) == null ? void 0 : H.style),
-      );
+      return oh(ys(s?.cells[l]?.style));
     }),
     [f, p] = ne.useState(
       e.mode === "alignment"
@@ -70,7 +67,7 @@ function Nde(e) {
     [g, b] = ne.useState(""),
     [y, w] = ne.useState(),
     [E, A] = ne.useState({ style: "thin", color: "#000000" }),
-    [k, F] = ne.useState(h.fontSize === void 0 ? "" : String(h.fontSize)),
+    [k, F] = ne.useState(h.fontSize === undefined ? "" : String(h.fontSize)),
     [I, O] = ne.useState(String(h.indent ?? 0)),
     j = y1(d),
     z = ne.useMemo(() => Vn(e.workbook), [e.workbook]),
@@ -85,7 +82,7 @@ function Nde(e) {
     B =
       e.readOnly ||
       D ||
-      !!(($ = s == null ? void 0 : s.protection) != null && $.enabled) ||
+      !!(($ = s?.protection) != null && $.enabled) ||
       !s ||
       j > 500;
   let _ = h,
@@ -123,14 +120,11 @@ function Nde(e) {
   });
   return (
     ne.useEffect(() => {
-      var Q, X;
+      var X;
       const H = document.activeElement;
       return (
-        (X =
-          (Q = o.current) == null
-            ? void 0
-            : Q.querySelector('[role="tab"][aria-selected="true"]')) == null ||
-          X.focus(),
+        (X = o.current?.querySelector('[role="tab"][aria-selected="true"]')) ==
+          null || X.focus(),
         () => {
           H != null && H.isConnected && H.focus();
         }
@@ -145,18 +139,15 @@ function Nde(e) {
         "aria-modal": "true",
         "aria-labelledby": `${n}-title`,
         onKeyDown: (H) => {
-          var Q;
           if (
             (H.stopPropagation(),
             H.key === "Escape" && (H.preventDefault(), a.current()),
             H.key === "Tab")
           ) {
             const X = [
-                ...(((Q = o.current) == null
-                  ? void 0
-                  : Q.querySelectorAll(
-                      'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
-                    )) ?? []),
+                ...(o.current?.querySelectorAll(
+                  'button:not(:disabled):not([tabindex="-1"]),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),[tabindex="0"]',
+                ) ?? []),
               ],
               J = X[0],
               q = X.at(-1);
@@ -176,9 +167,9 @@ function Nde(e) {
                 children: i.jsx(M, { children: "Format Cells" }),
               }),
               i.jsx("button", {
-                "aria-label": r("Close cell styles"),
+                "aria-label": text("Close cell styles"),
                 onClick: e.onClose,
-                lang: t("Close cell styles"),
+                lang: language("Close cell styles"),
                 "data-ui-label": "Close cell styles",
                 children: i.jsx(X, { size: 18 }),
               }),
@@ -187,8 +178,8 @@ function Nde(e) {
           i.jsx("div", {
             className: "cs-tabs",
             role: "tablist",
-            "aria-label": r("Cell style settings"),
-            lang: t("Cell style settings"),
+            "aria-label": text("Cell style settings"),
+            lang: language("Cell style settings"),
             "data-ui-label": "Cell style settings",
             children: oy.map((H, Q) =>
               i.jsx(
@@ -201,7 +192,7 @@ function Nde(e) {
                   tabIndex: f === H ? 0 : -1,
                   onClick: () => p(H),
                   onKeyDown: (X) => {
-                    var J, q;
+                    var q;
                     if (
                       ["ArrowLeft", "ArrowRight", "Home", "End"].includes(X.key)
                     ) {
@@ -215,10 +206,8 @@ function Nde(e) {
                                 (X.key === "ArrowRight" ? 1 : oy.length - 1)) %
                               oy.length;
                       (p(oy[W]),
-                        (q =
-                          (J = X.currentTarget.parentElement) == null
-                            ? void 0
-                            : J.children[W]) == null || q.focus());
+                        (q = X.currentTarget.parentElement?.children[W]) ==
+                          null || q.focus());
                     }
                   },
                   children: H,
@@ -279,9 +268,7 @@ function Nde(e) {
                           "This workbook is read-only. You can inspect style previews.",
                       }),
                     }),
-                  ((U = s == null ? void 0 : s.protection) == null
-                    ? void 0
-                    : U.enabled) &&
+                  s?.protection?.enabled &&
                     i.jsx("p", {
                       className: "cs-notice",
                       children: i.jsx(M, {
@@ -323,13 +310,14 @@ function Nde(e) {
                                   children: [
                                     i.jsx(M, { children: "Font" }),
                                     i.jsxs("select", {
-                                      "aria-label": r("Font family"),
+                                      "aria-label": text("Font family"),
                                       value: _.fontFamily ?? "",
                                       onChange: (H) =>
                                         T({
-                                          fontFamily: H.target.value || void 0,
+                                          fontFamily:
+                                            H.target.value || undefined,
                                         }),
-                                      lang: t("Font family"),
+                                      lang: language("Font family"),
                                       "data-ui-label": "Font family",
                                       children: [
                                         i.jsx("option", {
@@ -348,20 +336,20 @@ function Nde(e) {
                                     i.jsx(M, { children: "Size" }),
                                     i.jsx(ci, {
                                       allowEmpty: true,
-                                      "aria-label": r("Font size"),
+                                      "aria-label": text("Font size"),
                                       min: 8,
                                       max: 72,
                                       step: 1,
-                                      placeholder: r("Default (14 px)"),
+                                      placeholder: text("Default (14 px)"),
                                       value: k,
                                       onValueChange: (H) => {
                                         (F(H),
                                           T({
                                             fontSize:
-                                              H === "" ? void 0 : Number(H),
+                                              H === "" ? undefined : Number(H),
                                           }));
                                       },
-                                      lang: t("Font size"),
+                                      lang: language("Font size"),
                                       "data-ui-label": "Font size",
                                     }),
                                   ],
@@ -410,16 +398,17 @@ function Nde(e) {
                                       children: [
                                         i.jsx("input", {
                                           type: "color",
-                                          "aria-label": r("Font color"),
+                                          "aria-label": text("Font color"),
                                           value: $k(_.color, "#000000"),
                                           onChange: (H) =>
                                             T({ color: H.target.value }),
-                                          lang: t("Font color"),
+                                          lang: language("Font color"),
                                           "data-ui-label": "Font color",
                                         }),
                                         i.jsx("button", {
                                           type: "button",
-                                          onClick: () => T({ color: void 0 }),
+                                          onClick: () =>
+                                            T({ color: undefined }),
                                           children: i.jsx(M, {
                                             children: "Automatic",
                                           }),
@@ -436,16 +425,16 @@ function Nde(e) {
                                       children: [
                                         i.jsx("input", {
                                           type: "color",
-                                          "aria-label": r("Fill color"),
+                                          "aria-label": text("Fill color"),
                                           value: $k(_.fill, "#ffffff"),
                                           onChange: (H) =>
                                             T({ fill: H.target.value }),
-                                          lang: t("Fill color"),
+                                          lang: language("Fill color"),
                                           "data-ui-label": "Fill color",
                                         }),
                                         i.jsx("button", {
                                           type: "button",
-                                          onClick: () => T({ fill: void 0 }),
+                                          onClick: () => T({ fill: undefined }),
                                           children: i.jsx(M, {
                                             children: "No fill",
                                           }),
@@ -468,11 +457,15 @@ function Nde(e) {
                                   children: [
                                     i.jsx(M, { children: "Horizontal" }),
                                     i.jsxs("select", {
-                                      "aria-label": r("Horizontal alignment"),
+                                      "aria-label": text(
+                                        "Horizontal alignment",
+                                      ),
                                       value: _.align ?? "",
                                       onChange: (H) =>
-                                        T({ align: H.target.value || void 0 }),
-                                      lang: t("Horizontal alignment"),
+                                        T({
+                                          align: H.target.value || undefined,
+                                        }),
+                                      lang: language("Horizontal alignment"),
                                       "data-ui-label": "Horizontal alignment",
                                       children: [
                                         i.jsx("option", {
@@ -499,14 +492,14 @@ function Nde(e) {
                                   children: [
                                     i.jsx(M, { children: "Vertical" }),
                                     i.jsxs("select", {
-                                      "aria-label": r("Vertical alignment"),
+                                      "aria-label": text("Vertical alignment"),
                                       value: _.verticalAlign ?? "",
                                       onChange: (H) =>
                                         T({
                                           verticalAlign:
-                                            H.target.value || void 0,
+                                            H.target.value || undefined,
                                         }),
-                                      lang: t("Vertical alignment"),
+                                      lang: language("Vertical alignment"),
                                       "data-ui-label": "Vertical alignment",
                                       children: [
                                         i.jsx("option", {
@@ -533,7 +526,7 @@ function Nde(e) {
                                   children: [
                                     i.jsx(M, { children: "Indent" }),
                                     i.jsx(ci, {
-                                      "aria-label": r("Indent level"),
+                                      "aria-label": text("Indent level"),
                                       min: 0,
                                       max: 15,
                                       step: 1,
@@ -544,7 +537,7 @@ function Nde(e) {
                                             indent: H === "" ? NaN : Number(H),
                                           }));
                                       },
-                                      lang: t("Indent level"),
+                                      lang: language("Indent level"),
                                       "data-ui-label": "Indent level",
                                     }),
                                   ],
@@ -556,11 +549,11 @@ function Nde(e) {
                               children: [
                                 i.jsx("input", {
                                   type: "checkbox",
-                                  "aria-label": r("Wrap text"),
+                                  "aria-label": text("Wrap text"),
                                   checked: _.wrap ?? false,
                                   onChange: (H) =>
                                     T({ wrap: H.target.checked }),
-                                  lang: t("Wrap text"),
+                                  lang: language("Wrap text"),
                                   "data-ui-label": "Wrap text",
                                 }),
                                 i.jsx(M, { children: "Wrap text" }),
@@ -585,11 +578,11 @@ function Nde(e) {
                                   children: [
                                     i.jsx(M, { children: "Line" }),
                                     i.jsx("select", {
-                                      "aria-label": r("Border line style"),
+                                      "aria-label": text("Border line style"),
                                       value: E.style,
                                       onChange: (H) =>
                                         A({ ...E, style: H.target.value }),
-                                      lang: t("Border line style"),
+                                      lang: language("Border line style"),
                                       "data-ui-label": "Border line style",
                                       children: uB.map((H) =>
                                         i.jsx(
@@ -611,11 +604,11 @@ function Nde(e) {
                                     i.jsx(M, { children: "Color" }),
                                     i.jsx("input", {
                                       type: "color",
-                                      "aria-label": r("Border color"),
+                                      "aria-label": text("Border color"),
                                       value: $k(E.color, "#000000"),
                                       onChange: (H) =>
                                         A({ ...E, color: H.target.value }),
-                                      lang: t("Border color"),
+                                      lang: language("Border color"),
                                       "data-ui-label": "Border color",
                                     }),
                                   ],
@@ -633,7 +626,7 @@ function Nde(e) {
                                 i.jsx("button", {
                                   type: "button",
                                   onClick: () => {
-                                    (w(void 0),
+                                    (w(undefined),
                                       v((H) => {
                                         const Q = { ...H };
                                         return (delete Q.borders, Q);
@@ -711,14 +704,14 @@ function Nde(e) {
                   }),
                   i.jsxs("section", {
                     className: "cs-preview",
-                    "aria-label": r("Cell style preview"),
-                    lang: t("Cell style preview"),
+                    "aria-label": text("Cell style preview"),
+                    lang: language("Cell style preview"),
                     "data-ui-label": "Cell style preview",
                     children: [
                       i.jsxs("h3", {
                         children: [
                           i.jsx(M, { children: "Preview · " }),
-                          s == null ? void 0 : s.name,
+                          s?.name,
                           "!",
                           l,
                         ],
@@ -726,8 +719,8 @@ function Nde(e) {
                       f === "Border"
                         ? i.jsx("table", {
                             className: "cs-border-preview",
-                            "aria-label": r("Border preset preview"),
-                            lang: t("Border preset preview"),
+                            "aria-label": text("Border preset preview"),
+                            lang: language("Border preset preview"),
                             "data-ui-label": "Border preset preview",
                             children: i.jsx("tbody", {
                               children: [0, 1, 2].map((H) =>
@@ -773,14 +766,10 @@ function Nde(e) {
                                     },
                                     children: i.jsx(jI, {
                                       dateSystem:
-                                        (G = e.workbook.datePolicy) == null
-                                          ? void 0
-                                          : G.dateSystem,
+                                        e.workbook.datePolicy?.dateSystem,
                                       value: V === null ? "Audit evidence" : V,
                                       cell: {
-                                        ...((s == null
-                                          ? void 0
-                                          : s.cells[l]) ?? { raw: null }),
+                                        ...(s?.cells[l] ?? { raw: null }),
                                         style: _,
                                       },
                                     }),
@@ -870,8 +859,8 @@ function W7(e) {
     .join("; ");
 }
 function Rde(e) {
-  var O, j, z, V;
-  const { text: r, language: t } = Dr(),
+  var O;
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef({
@@ -881,11 +870,9 @@ function Rde(e) {
       guard: JSON.stringify(e.workbook),
     }),
     [s, d] = ne.useState(() => {
-      var D;
       return structuredClone(
-        ((D = e.workbook.sheets.find((B) => B.id === e.sheetId)) == null
-          ? void 0
-          : D.conditionalFormats) ?? [],
+        e.workbook.sheets.find((B) => B.id === e.sheetId)?.conditionalFormats ??
+          [],
       );
     }),
     [u, l] = ne.useState(() => t2(e.range)),
@@ -901,11 +888,10 @@ function Rde(e) {
     w = J3(s),
     E = ["colorScale", "dataBar", "iconSet"].includes(u.kind);
   ne.useEffect(() => {
-    var B, _;
+    var _;
     const D = document.activeElement;
     return (
-      (_ = (B = o.current) == null ? void 0 : B.querySelector("button")) ==
-        null || _.focus(),
+      (_ = o.current?.querySelector("button")) == null || _.focus(),
       () => {
         D != null && D.isConnected && D.focus();
       }
@@ -923,7 +909,7 @@ function Rde(e) {
         const D = {
             ...u,
             id: u.id || crypto.randomUUID(),
-            ...(E ? { stopIfTrue: !1 } : {}),
+            ...(E ? { stopIfTrue: false } : {}),
           },
           B = u.id ? w.map((C) => (C.id === u.id ? D : C)) : [D, ...w],
           _ = FN(B.map((C, T) => ({ ...C, priority: T + 1 })));
@@ -951,18 +937,15 @@ function Rde(e) {
       "aria-modal": "true",
       "aria-labelledby": `${n}-title`,
       onKeyDown: (D) => {
-        var B;
         if (
           (D.stopPropagation(),
           D.key === "Escape" && (D.preventDefault(), e.onClose()),
           D.key === "Tab")
         ) {
           const _ = [
-              ...(((B = o.current) == null
-                ? void 0
-                : B.querySelectorAll(
-                    "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
-                  )) ?? []),
+              ...(o.current?.querySelectorAll(
+                "button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary",
+              ) ?? []),
             ],
             C = _[0],
             T = _.at(-1);
@@ -983,9 +966,9 @@ function Rde(e) {
               }),
             }),
             i.jsx("button", {
-              "aria-label": r("Close conditional formatting"),
+              "aria-label": text("Close conditional formatting"),
               onClick: e.onClose,
-              lang: t("Close conditional formatting"),
+              lang: language("Close conditional formatting"),
               "data-ui-label": "Close conditional formatting",
               children: "×",
             }),
@@ -993,7 +976,7 @@ function Rde(e) {
         }),
         i.jsxs("p", {
           children: [
-            (g == null ? void 0 : g.name) ?? "Worksheet removed",
+            g?.name ?? "Worksheet removed",
             " ",
             i.jsx(M, {
               children:
@@ -1014,16 +997,14 @@ function Rde(e) {
             role: "alert",
             children: i.jsx(M, { children: "This workbook is read-only." }),
           }),
-        ((j = g == null ? void 0 : g.protection) == null
-          ? void 0
-          : j.enabled) &&
+        g?.protection?.enabled &&
           i.jsx("p", {
             role: "alert",
             children: i.jsx(M, {
               children: "Unprotect this worksheet before changing rules.",
             }),
           }),
-        s.some((D) => D.priority === void 0) &&
+        s.some((D) => D.priority === undefined) &&
           i.jsx("p", {
             children: i.jsx(M, {
               children:
@@ -1034,8 +1015,8 @@ function Rde(e) {
           className: "cf-workspace",
           children: [
             i.jsxs("section", {
-              "aria-label": r("Conditional rules"),
-              lang: t("Conditional rules"),
+              "aria-label": text("Conditional rules"),
+              lang: language("Conditional rules"),
               "data-ui-label": "Conditional rules",
               children: [
                 i.jsxs("h3", {
@@ -1301,19 +1282,13 @@ function Rde(e) {
                             children: [
                               i.jsx(M, { children: "Middle icon starts at" }),
                               i.jsx(ci, {
-                                "aria-label": r("Middle icon starts at"),
-                                value:
-                                  ((z = u.iconThresholds) == null
-                                    ? void 0
-                                    : z[0]) ?? 33,
+                                "aria-label": text("Middle icon starts at"),
+                                value: u.iconThresholds?.[0] ?? 33,
                                 onValueChange: (D) => {
-                                  var B;
                                   return k({
                                     iconThresholds: [
                                       Number(D),
-                                      ((B = u.iconThresholds) == null
-                                        ? void 0
-                                        : B[1]) ?? 67,
+                                      u.iconThresholds?.[1] ?? 67,
                                     ],
                                   });
                                 },
@@ -1324,18 +1299,12 @@ function Rde(e) {
                             children: [
                               i.jsx(M, { children: "High icon starts at" }),
                               i.jsx(ci, {
-                                "aria-label": r("High icon starts at"),
-                                value:
-                                  ((V = u.iconThresholds) == null
-                                    ? void 0
-                                    : V[1]) ?? 67,
+                                "aria-label": text("High icon starts at"),
+                                value: u.iconThresholds?.[1] ?? 67,
                                 onValueChange: (D) => {
-                                  var B;
                                   return k({
                                     iconThresholds: [
-                                      ((B = u.iconThresholds) == null
-                                        ? void 0
-                                        : B[0]) ?? 33,
+                                      u.iconThresholds?.[0] ?? 33,
                                       Number(D),
                                     ],
                                   });
@@ -1381,8 +1350,8 @@ function Rde(e) {
         f &&
           i.jsxs("section", {
             className: "cf-preview",
-            "aria-label": r("Conditional formatting preview"),
-            lang: t("Conditional formatting preview"),
+            "aria-label": text("Conditional formatting preview"),
+            lang: language("Conditional formatting preview"),
             "data-ui-label": "Conditional formatting preview",
             children: [
               i.jsxs("h3", {
@@ -1537,8 +1506,8 @@ function Rde(e) {
               }),
               f.samples.length > 10 &&
                 i.jsxs("nav", {
-                  "aria-label": r("Conditional preview pages"),
-                  lang: t("Conditional preview pages"),
+                  "aria-label": text("Conditional preview pages"),
+                  lang: language("Conditional preview pages"),
                   "data-ui-label": "Conditional preview pages",
                   children: [
                     i.jsx("button", {
@@ -1598,15 +1567,15 @@ function Rde(e) {
     }),
   });
 }
-function Fz({ decoration: e, children: r }) {
-  const { text: t, language: n } = Dr();
+function Fz({ decoration, children }) {
+  const { text, language } = Dr();
   if (
-    !(e != null && e.dataBar) &&
-    !(e != null && e.icon) &&
-    !(e != null && e.errors.length)
+    !(decoration != null && decoration.dataBar) &&
+    !(decoration != null && decoration.icon) &&
+    !(decoration != null && decoration.errors.length)
   )
-    return i.jsx(i.Fragment, { children: r });
-  const o = e.dataBar;
+    return i.jsx(i.Fragment, { children });
+  const o = decoration.dataBar;
   return i.jsxs("span", {
     style: { display: "block", position: "relative", minWidth: 0 },
     children: [
@@ -1643,23 +1612,24 @@ function Fz({ decoration: e, children: r }) {
       i.jsxs("span", {
         style: { position: "relative", zIndex: 1 },
         children: [
-          e.icon &&
+          decoration.icon &&
             i.jsx("span", {
               role: "img",
-              "aria-label": `${e.icon.label} conditional indicator`,
-              title: `${e.icon.label} conditional indicator`,
-              style: { color: e.icon.color, marginRight: 4 },
-              children: e.icon.symbol,
+              "aria-label": `${decoration.icon.label} conditional indicator`,
+              title: `${decoration.icon.label} conditional indicator`,
+              style: { color: decoration.icon.color, marginRight: 4 },
+              children: decoration.icon.symbol,
             }),
-          r,
-          e.errors.length > 0 &&
+          children,
+          decoration.errors.length > 0 &&
             i.jsx("span", {
               role: "img",
-              "aria-label": t("Conditional formatting error"),
-              title: e.errors.map((a) => `${a.ruleId}: ${a.message}`).join(`
+              "aria-label": text("Conditional formatting error"),
+              title: decoration.errors.map((a) => `${a.ruleId}: ${a.message}`)
+                .join(`
 `),
               style: { color: "#a4262c", marginLeft: 3 },
-              lang: n("Conditional formatting error"),
+              lang: language("Conditional formatting error"),
               "data-ui-label": "Conditional formatting error",
               children: "⚠",
             }),
@@ -1687,7 +1657,6 @@ const r2 = (e, r) => {
     return (r.lastRow - r.firstRow + 1) * (r.lastCol - r.firstCol + 1);
   };
 function Bz(e, r, t, n = false, o = {}) {
-  var f;
   if (o.readOnly) throw Error("This workbook is read-only.");
   const a = Nr(e, r);
   jn(a);
@@ -1749,11 +1718,7 @@ function Bz(e, r, t, n = false, o = {}) {
           c.push({
             address: y,
             cell: structuredClone(w ?? { raw: null }),
-            display: Af(
-              l(r, y),
-              w,
-              (f = e.datePolicy) == null ? void 0 : f.dateSystem,
-            ),
+            display: Af(l(r, y), w, e.datePolicy?.dateSystem),
             discussions: E,
             effect:
               y === v
@@ -1796,7 +1761,7 @@ function _de(e, r, t = {}) {
       "The workbook changed. Close this preview and review the current cells again.",
     );
   const n = Bz(e, r.sheetId, r.range, r.unmerge, t),
-    o = (a) => ({ ...a, cells: a.cells.map(({ display: s, ...d }) => d) });
+    o = (a) => ({ ...a, cells: a.cells.map(({ display, ...d }) => d) });
   if (JSON.stringify(o(n)) !== JSON.stringify(o(r)))
     throw Error("The merge preview changed. Create a fresh preview.");
   return kE(e, r.sheetId, r.range, r.unmerge);

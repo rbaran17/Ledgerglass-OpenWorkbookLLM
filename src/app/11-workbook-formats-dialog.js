@@ -11,7 +11,7 @@ import { yh } from "./09-workbook-links.js";
 import { Bue, Lue, Uue, X$ } from "./10-source-import-dialog.js";
 
 function $ue(e) {
-  const { text: r } = Dr(),
+  const { text } = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
     o = yh(),
@@ -118,7 +118,7 @@ function $ue(e) {
         report: y.report,
         originalLabel: u
           ? `Download original ${u.format.toUpperCase()}`
-          : void 0,
+          : undefined,
         blocked:
           g ||
           (y.snapshot !== e.workbook
@@ -127,11 +127,11 @@ function $ue(e) {
               ? "This workbook is read-only."
               : m
                 ? "Completing the reviewed operation."
-                : void 0),
+                : undefined),
         onClose: () => {
           (w(null), b(""));
         },
-        onOriginal: u && y.imported ? () => void z(false) : void 0,
+        onOriginal: u && y.imported ? () => void z(false) : undefined,
         onReport: () =>
           void k(async () => {
             await j(
@@ -207,7 +207,7 @@ function $ue(e) {
                   ],
                 }),
                 i.jsx("button", {
-                  "aria-label": r("Close workbook formats"),
+                  "aria-label": text("Close workbook formats"),
                   onClick: e.onClose,
                   children: i.jsx(X, { size: 20 }),
                 }),
@@ -242,12 +242,10 @@ function $ue(e) {
                         i.jsx("input", {
                           type: "file",
                           accept: ".xls,.xlsb,.xlsm,.xltx,.xltm,.ods",
-                          "aria-label": r("Inspect alternate workbook"),
+                          "aria-label": text("Inspect alternate workbook"),
                           disabled: m,
                           onChange: (V) => {
-                            var B;
-                            const D =
-                              (B = V.target.files) == null ? void 0 : B[0];
+                            const D = V.target.files?.[0];
                             ((V.target.value = ""), D && F(D));
                           },
                         }),
@@ -393,14 +391,10 @@ function $ue(e) {
                               i.jsx("input", {
                                 type: "file",
                                 accept: ".xlsx",
-                                "aria-label": r("Choose converted XLSX"),
+                                "aria-label": text("Choose converted XLSX"),
                                 disabled: m || e.readOnly || !f,
                                 onChange: (V) => {
-                                  var B;
-                                  const D =
-                                    (B = V.target.files) == null
-                                      ? void 0
-                                      : B[0];
+                                  const D = V.target.files?.[0];
                                   ((V.target.value = ""), D && I(D, false));
                                 },
                               }),
@@ -514,8 +508,8 @@ class Oo extends Error {
     yc(this, "currentWorkbookId");
     ((this.code = t),
       (this.name = "PersistenceError"),
-      (this.currentRevision = o == null ? void 0 : o.revision),
-      (this.currentWorkbookId = o == null ? void 0 : o.workbookId));
+      (this.currentRevision = o?.revision),
+      (this.currentWorkbookId = o?.workbookId));
   }
 }
 const X4 = "ledgerglass-local-workbook",
@@ -531,7 +525,7 @@ function Mi(e, r, t) {
   throw new Oo(e, r, t);
 }
 function Uu(e) {
-  return e === void 0
+  return e === undefined
     ? "undefined"
     : e === null || typeof e != "object"
       ? JSON.stringify(e)
@@ -539,7 +533,7 @@ function Uu(e) {
         ? `[${e.map(Uu).join(",")}]`
         : `{${Object.keys(e)
             .sort()
-            .filter((r) => e[r] !== void 0)
+            .filter((r) => e[r] !== undefined)
             .map((r) => `${JSON.stringify(r)}:${Uu(e[r])}`)
             .join(",")}}`;
 }
@@ -565,7 +559,7 @@ function Ag(e) {
 function G$(e, r) {
   const t = e.sheets.find((d) => !d.hidden);
   if (!t) return Mi("invalid", "A saved workbook needs a visible worksheet.");
-  if (r === void 0)
+  if (r === undefined)
     return { activeSheetId: t.id, selection: { sheetId: t.id, range: "A1" } };
   if (!N1(r) || typeof r.activeSheetId != "string" || !N1(r.selection))
     return Mi("invalid", "Invalid saved worksheet selection.");
@@ -636,7 +630,6 @@ function S7(e) {
   };
 }
 function fT(e, r) {
-  var f, p;
   const t = Ag(e),
     n = Ag(r);
   if (t.id !== n.id)
@@ -711,7 +704,7 @@ function fT(e, r) {
       b = (E) =>
         E
           ? Object.fromEntries(Object.entries(E).filter(([A]) => A !== "cells"))
-          : void 0,
+          : undefined,
       y = b(v),
       w = b(g);
     if (!v || !g)
@@ -731,24 +724,21 @@ function fT(e, r) {
             attribution: h(),
           });
     for (const E of new Set([
-      ...Object.keys((v == null ? void 0 : v.cells) ?? {}),
-      ...Object.keys((g == null ? void 0 : g.cells) ?? {}),
+      ...Object.keys(v?.cells ?? {}),
+      ...Object.keys(g?.cells ?? {}),
     ])) {
-      const A = v == null ? void 0 : v.cells[E],
-        k = g == null ? void 0 : g.cells[E];
+      const A = v?.cells[E],
+        k = g?.cells[E];
       a(A, k) &&
         o.cellChanges.push({
           sheetId: m,
           address: E,
-          ...(A === void 0 ? {} : { before: dd(A) }),
-          ...(k === void 0 ? {} : { after: dd(k) }),
+          ...(A === undefined ? {} : { before: dd(A) }),
+          ...(k === undefined ? {} : { after: dd(k) }),
           attribution: l(
-            Uu((f = u.get(`${m}:${E}`)) == null ? void 0 : f.change.after) ===
-              Uu(k)
-              ? (p = u.get(`${m}:${E}`)) == null
-                ? void 0
-                : p.event
-              : void 0,
+            Uu(u.get(`${m}:${E}`)?.change.after) === Uu(k)
+              ? u.get(`${m}:${E}`)?.event
+              : undefined,
             "cell-history",
           ),
         });
@@ -841,7 +831,7 @@ function BC(e, r, t = {}) {
           "Unsupported or corrupt local workbook envelope; stored data was preserved.",
         );
       let y, w;
-      if (f.previous !== void 0)
+      if (f.previous !== undefined)
         try {
           w = Rk(f.previous);
         } catch {
@@ -911,17 +901,17 @@ function BC(e, r, t = {}) {
         checkpoints: A,
       };
     }
-    const { workbook: g, view: b } = p.current;
+    const { workbook, view } = p.current;
     return {
       envelope: p,
       result: {
-        workbook: dd(g),
-        view: dd(b),
+        workbook: dd(workbook),
+        view: dd(view),
         guard: {
           namespace: r,
           generation: p.generation,
-          workbookId: g.id,
-          revision: g.revision,
+          workbookId: workbook.id,
+          revision: workbook.revision,
           digest: i3(h),
         },
         recovered: m,
@@ -944,7 +934,7 @@ function BC(e, r, t = {}) {
         ? Mi(
             "conflict",
             "Another workbook window saved a different version. Reload or export your unsaved changes before resolving the conflict.",
-            f == null ? void 0 : f.result.guard,
+            f?.result.guard,
           )
         : f;
   }
@@ -982,14 +972,13 @@ function BC(e, r, t = {}) {
     };
   }
   function l(h) {
-    const f = ((h == null ? void 0 : h.envelope.generation) ?? 0) + 1;
+    const f = (h?.envelope.generation ?? 0) + 1;
     return Number.isSafeInteger(f)
       ? f
       : Mi("limit", "Local version generation limit reached.");
   }
   function c(h, f) {
-    const p =
-      h == null ? void 0 : h.envelope.checkpoints.find((m) => m.id === f);
+    const p = h?.envelope.checkpoints.find((m) => m.id === f);
     return (
       p ||
       Mi(
@@ -1000,8 +989,7 @@ function BC(e, r, t = {}) {
   }
   return {
     load: () => {
-      var h;
-      return ((h = s()) == null ? void 0 : h.result) ?? null;
+      return s()?.result ?? null;
     },
     save(h, f, p, m = {}) {
       const v = d(p),
@@ -1011,7 +999,7 @@ function BC(e, r, t = {}) {
         ? Mi(
             "conflict",
             "Opening another workbook requires an explicit namespace replacement or a separate namespace.",
-            v == null ? void 0 : v.result.guard,
+            v?.result.guard,
           )
         : b && v && g.workbook.revision < v.result.workbook.revision
           ? Mi(
@@ -1035,9 +1023,7 @@ function BC(e, r, t = {}) {
                   generation: l(v),
                   current: g,
                   ...(v ? { previous: v.envelope.current } : {}),
-                  checkpoints: b
-                    ? ((v == null ? void 0 : v.envelope.checkpoints) ?? [])
-                    : [],
+                  checkpoints: b ? (v?.envelope.checkpoints ?? []) : [],
                 },
                 p,
               );
@@ -1061,12 +1047,11 @@ function BC(e, r, t = {}) {
       );
     },
     listCheckpoints: () => {
-      var h;
-      return ((h = s()) == null ? void 0 : h.result.checkpoints) ?? [];
+      return s()?.result.checkpoints ?? [];
     },
     compareCheckpoint: (h, f) => fT(c(s(), h).snapshot.workbook, f),
     restoreCheckpoint(h, f, p, m = "Auditor") {
-      var k, F;
+      var k;
       const v = d(p),
         g = Ag(f);
       if (
@@ -1082,8 +1067,7 @@ function BC(e, r, t = {}) {
       if (
         ((k = g.structureProtection) != null && k.enabled) ||
         g.sheets.some((I) => {
-          var O;
-          return (O = I.protection) == null ? void 0 : O.enabled;
+          return I.protection?.enabled;
         })
       )
         return Mi(
@@ -1106,11 +1090,7 @@ function BC(e, r, t = {}) {
         (E.metadata = {
           ...(E.metadata ?? g.metadata),
           createdAt: g.metadata.createdAt,
-          modifiedAt: [
-            g.metadata.modifiedAt,
-            ((F = E.metadata) == null ? void 0 : F.modifiedAt) ?? w,
-            w,
-          ]
+          modifiedAt: [g.metadata.modifiedAt, E.metadata?.modifiedAt ?? w, w]
             .sort()
             .at(-1),
         }),
@@ -1126,7 +1106,7 @@ function BC(e, r, t = {}) {
             action: `Restored checkpoint “${b.label}” from revision ${b.snapshot.workbook.revision}${A > 1 ? ` (${O + 1}/${A})` : ""}`,
             changes: y.cellChanges
               .slice(O * 500, (O + 1) * 500)
-              .map(({ attribution: j, ...z }) => z),
+              .map(({ attribution, ...z }) => z),
           })),
         ]),
         (E = Ag(E)),
@@ -1162,15 +1142,15 @@ function zue(e = {}) {
     d = e.maxBytes ?? 10 * 1024 * 1024,
     u = (f, p) => f === p || JSON.stringify(f) === JSON.stringify(p);
   function l(f) {
-    if (!u(f, (t == null ? void 0 : t.guard) ?? null))
+    if (!u(f, t?.guard ?? null))
       throw new Oo(
         "conflict",
         "The saved session changed. Reload before replacing it.",
-        t == null ? void 0 : t.guard,
+        t?.guard,
       );
   }
   function c(f) {
-    const p = ((t == null ? void 0 : t.guard.generation) ?? 0) + 1;
+    const p = (t?.guard.generation ?? 0) + 1;
     if (!Number.isSafeInteger(p))
       throw new Oo("limit", "Session generation limit reached.");
     return (
@@ -1211,7 +1191,7 @@ function zue(e = {}) {
         throw new Oo(
           "conflict",
           "Opening another workbook requires an explicit session replacement.",
-          t == null ? void 0 : t.guard,
+          t?.guard,
         );
       if (
         y &&
@@ -1231,13 +1211,13 @@ function zue(e = {}) {
           savedAt: "1970-01-01T00:00:00.000Z",
           digest: "0".repeat(40),
         }),
-        A = y ? ((t == null ? void 0 : t.checkpoints) ?? []) : [],
+        A = y ? (t?.checkpoints ?? []) : [],
         k = A.reduce((I, O) => I + (s.get(O.id) ?? 0), 0);
       if (
         lE({
           format: "ledgerglass-local-workbook",
           version: 1,
-          generation: ((t == null ? void 0 : t.guard.generation) ?? 0) + 1,
+          generation: (t?.guard.generation ?? 0) + 1,
           current: E(g, w),
           ...(t ? { previous: E(t.workbook, t.view) } : {}),
           checkpoints: [],
@@ -1257,7 +1237,7 @@ function zue(e = {}) {
           view: w,
           guard: m,
           recovered: false,
-          checkpoints: y ? ((t == null ? void 0 : t.checkpoints) ?? []) : [],
+          checkpoints: y ? (t?.checkpoints ?? []) : [],
         })
       );
     },
@@ -1286,15 +1266,14 @@ function zue(e = {}) {
           );
       return c(v);
     },
-    listCheckpoints: () =>
-      structuredClone((t == null ? void 0 : t.checkpoints) ?? []),
+    listCheckpoints: () => structuredClone(t?.checkpoints ?? []),
     compareCheckpoint: (f, p) => o.compareCheckpoint(f, p),
     restoreCheckpoint(f, p, m, v) {
       if ((l(m), !t || !u(p, t.workbook)))
         throw new Oo(
           "conflict",
           "Save the current revision before restoring a checkpoint.",
-          t == null ? void 0 : t.guard,
+          t?.guard,
         );
       const g = h(),
         b = o.restoreCheckpoint(f, p, g.guard, v);

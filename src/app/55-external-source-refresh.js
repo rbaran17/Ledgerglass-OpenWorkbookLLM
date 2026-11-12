@@ -4,10 +4,20 @@ import { hr } from "./01-core-schemas-and-hashing.js";
 import { Mp, Rn, _t, ut, yU } from "./03-workbook-model.js";
 import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { kz } from "./20-calculation-options-and-sources.js";
-import { A_, EH, G2e, H2e, S_, TH, W2e, X2e, lN, q2e } from "./54-workbook-save-conflicts.js";
+import {
+  A_,
+  EH,
+  G2e,
+  H2e,
+  S_,
+  TH,
+  W2e,
+  X2e,
+  lN,
+  q2e,
+} from "./54-workbook-save-conflicts.js";
 
 function Z2e(e) {
-  var _, C;
   const r = Dr(),
     t = ne.useId(),
     n = ne.useRef(null),
@@ -50,14 +60,13 @@ function Z2e(e) {
       u.adapter === e.adapter &&
       u.scope === O
         ? u.result
-        : void 0;
+        : undefined;
   (ne.useEffect(() => {
-    var N, R;
+    var R;
     F.current = true;
     const T = document.activeElement;
     return (
-      (R = (N = n.current) == null ? void 0 : N.querySelector("button")) ==
-        null || R.focus(),
+      (R = n.current?.querySelector("button")) == null || R.focus(),
       () => {
         var L;
         ((F.current = false),
@@ -91,7 +100,6 @@ function Z2e(e) {
     ((T = I.current) == null || T.abort(), e.onClose());
   }
   async function D(T = false) {
-    var G, H;
     if (
       I.current ||
       !e.adapter ||
@@ -183,13 +191,8 @@ function Z2e(e) {
       (v(X.message), l(null));
       let J = N.workbook;
       for (const q of s) {
-        const W =
-          (H =
-            (G = N.workbook.sheets.find((K) => K.id === q)) == null
-              ? void 0
-              : G.externalConnection) == null
-            ? void 0
-            : H.source.id;
+        const W = N.workbook.sheets.find((K) => K.id === q)?.externalConnection
+          ?.source.id;
         W && (J = lN(J, q, W, X.code, U));
       }
       if (J !== N.workbook)
@@ -203,10 +206,7 @@ function Z2e(e) {
       I.current === L && ((I.current = null), F.current && h(false));
     }
   }
-  const B =
-    (_ = z == null ? void 0 : z.entries.find((T) => T.sheetId === y)) == null
-      ? void 0
-      : _.snapshot;
+  const B = z?.entries.find((T) => T.sheetId === y)?.snapshot;
   return i.jsx("div", {
     className: "lg-modal-backdrop",
     children: i.jsxs("section", {
@@ -356,8 +356,7 @@ function Z2e(e) {
                   i.jsx("button", {
                     type: "button",
                     onClick: () => {
-                      var T;
-                      return (T = I.current) == null ? void 0 : T.abort();
+                      return I.current?.abort();
                     },
                     children: i.jsx(M, { children: "Cancel refresh" }),
                   }),
@@ -452,13 +451,10 @@ function Z2e(e) {
                                     }),
                                     i.jsx("tbody", {
                                       children: yU(T.snapshot).map(($) => {
-                                        var G;
                                         const U =
-                                          ((G = R.controls.find(
+                                          R.controls.find(
                                             (H) => H.field === $.field,
-                                          )) == null
-                                            ? void 0
-                                            : G.sum) ?? 0;
+                                          )?.sum ?? 0;
                                         return i.jsxs(
                                           "tr",
                                           {
@@ -513,10 +509,7 @@ function Z2e(e) {
                 "aria-label": r.text("Batch source rows"),
                 children: [
                   i.jsx("h3", {
-                    children:
-                      (C = e.workbook.sheets.find((T) => T.id === y)) == null
-                        ? void 0
-                        : C.name,
+                    children: e.workbook.sheets.find((T) => T.id === y)?.name,
                   }),
                   i.jsx("div", {
                     className: "lg-source-scroll",
@@ -618,9 +611,9 @@ function Z2e(e) {
     }),
   });
 }
-function K2e({ workbook: e, sheetId: r, onReview: t }) {
-  const n = e.sheets.find((s) => s.id === r),
-    o = n == null ? void 0 : n.externalConnection;
+function K2e({ workbook, sheetId, onReview }) {
+  const n = workbook.sheets.find((s) => s.id === sheetId),
+    o = n?.externalConnection;
   if (!n || !o) return null;
   let a = true;
   try {
@@ -655,7 +648,7 @@ function K2e({ workbook: e, sheetId: r, onReview: t }) {
       }),
       i.jsx("button", {
         type: "button",
-        onClick: t,
+        onClick: onReview,
         children: i.jsx(M, { children: "Connections & Refresh" }),
       }),
     ],
@@ -665,7 +658,7 @@ function NH(e) {
   return new Rn(e).message;
 }
 function Y2e(e) {
-  var Q, X, J, q;
+  var X;
   const [r, t] = ne.useState(false),
     n = Dr(),
     o = ne.useId(),
@@ -676,12 +669,9 @@ function Y2e(e) {
     u = ne.useRef(null),
     l = ne.useRef(false),
     c = ne.useRef([e.workbook, e.readOnly, JSON.stringify(e.allowedSheetIds)]),
-    h =
-      (Q = e.workbook.sheets.find((W) => W.id === e.sheetId)) == null
-        ? void 0
-        : Q.externalConnection,
+    h = e.workbook.sheets.find((W) => W.id === e.sheetId)?.externalConnection,
     [f, p] = ne.useState(h ? e.sheetId : ""),
-    [m, v] = ne.useState((h == null ? void 0 : h.source.id) ?? ""),
+    [m, v] = ne.useState(h?.source.id ?? ""),
     [g, b] = ne.useState("External data"),
     [y, w] = ne.useState([]),
     [E, A] = ne.useState(""),
@@ -690,13 +680,11 @@ function Y2e(e) {
     [j, z] = ne.useState(null),
     [V, D] = ne.useState(0),
     B = e.workbook.sheets.find((W) => W.id === f),
-    _ = B == null ? void 0 : B.externalConnection,
+    _ = B?.externalConnection,
     C =
-      (j == null ? void 0 : j.book) === e.workbook &&
-      j.adapter === e.adapter &&
-      !e.readOnly
+      j?.book === e.workbook && j.adapter === e.adapter && !e.readOnly
         ? j.plan
-        : void 0,
+        : undefined,
     T = { readOnly: e.readOnly, allowedSheetIds: e.allowedSheetIds },
     N =
       !B ||
@@ -706,12 +694,11 @@ function Y2e(e) {
         (!e.allowedSheetIds || e.allowedSheetIds.includes(B.id))),
     R = !!e.readOnly || !N || !e.adapter || !!E;
   (ne.useEffect(() => {
-    var K, te;
+    var te;
     d.current = true;
     const W = document.activeElement;
     return (
-      (te = (K = a.current) == null ? void 0 : K.querySelector("button")) ==
-        null || te.focus(),
+      (te = a.current?.querySelector("button")) == null || te.focus(),
       () => {
         var ae;
         ((d.current = false),
@@ -758,8 +745,7 @@ function Y2e(e) {
       if (!d.current || W !== s.current.adapter) return;
       (w(te),
         v((ae) => {
-          var oe;
-          return ae || ((oe = te[0]) == null ? void 0 : oe.source.id) || "";
+          return ae || te[0]?.source.id || "";
         }));
     } catch (te) {
       d.current && F(Mp(te).message);
@@ -818,7 +804,7 @@ function Y2e(e) {
           K.workbook,
           he.snapshot,
           he.grant,
-          { outputName: g, sheetId: oe || void 0 },
+          { outputName: g, sheetId: oe || undefined },
           T,
         );
         (z({ plan: Se, book: K.workbook, adapter: te }), D(0));
@@ -941,19 +927,11 @@ function Y2e(e) {
                           value: f,
                           disabled: !!E,
                           onChange: (W) => {
-                            var te, ae;
                             ($(), p(W.target.value));
-                            const K =
-                              (te = e.workbook.sheets.find(
-                                (oe) => oe.id === W.target.value,
-                              )) == null
-                                ? void 0
-                                : te.externalConnection;
-                            v(
-                              (K == null ? void 0 : K.source.id) ??
-                                ((ae = y[0]) == null ? void 0 : ae.source.id) ??
-                                "",
-                            );
+                            const K = e.workbook.sheets.find(
+                              (oe) => oe.id === W.target.value,
+                            )?.externalConnection;
+                            v(K?.source.id ?? y[0]?.source.id ?? "");
                           },
                           children: [
                             i.jsx("option", {
@@ -998,7 +976,7 @@ function Y2e(e) {
                               i.jsxs("option", {
                                 value: m,
                                 children: [
-                                  (_ == null ? void 0 : _.source.label) ?? m,
+                                  _?.source.label ?? m,
                                   " · approval unavailable",
                                 ],
                               }),
@@ -1131,8 +1109,7 @@ function Y2e(e) {
                       i.jsx("button", {
                         type: "button",
                         onClick: () => {
-                          var W;
-                          return (W = u.current) == null ? void 0 : W.abort();
+                          return u.current?.abort();
                         },
                         children: i.jsx(M, { children: "Cancel refresh" }),
                       }),
@@ -1176,14 +1153,13 @@ function Y2e(e) {
                       i.jsxs("p", {
                         children: [
                           "Rows: ",
-                          ((J = C.previous) == null ? void 0 : J.rows) ?? 0,
+                          C.previous?.rows ?? 0,
                           " →",
                           " ",
                           C.snapshot.rows.length,
                           " · change",
                           " ",
-                          C.snapshot.rows.length -
-                            (((q = C.previous) == null ? void 0 : q.rows) ?? 0),
+                          C.snapshot.rows.length - (C.previous?.rows ?? 0),
                         ],
                       }),
                       i.jsx("div", {
@@ -1219,16 +1195,10 @@ function Y2e(e) {
                             }),
                             i.jsx("tbody", {
                               children: C.controls.map((W) => {
-                                var te, ae;
                                 const K =
-                                  ((ae =
-                                    (te = C.previous) == null
-                                      ? void 0
-                                      : te.controls.find(
-                                          (oe) => oe.field === W.field,
-                                        )) == null
-                                    ? void 0
-                                    : ae.sum) ?? 0;
+                                  C.previous?.controls.find(
+                                    (oe) => oe.field === W.field,
+                                  )?.sum ?? 0;
                                 return i.jsxs(
                                   "tr",
                                   {

@@ -2,7 +2,16 @@ import { X, ChevronDown } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import __calculationWorkerSource from "../workers/calculation.worker.js?worker-source";
-import { JF, QF, es, g1, kN, nB, pd, yc } from "./01-core-schemas-and-hashing.js";
+import {
+  JF,
+  QF,
+  es,
+  g1,
+  kN,
+  nB,
+  pd,
+  yc,
+} from "./01-core-schemas-and-hashing.js";
 import { Mt } from "./02-financial-functions.js";
 import {
   Gw,
@@ -32,7 +41,7 @@ import { Dr, M } from "./04-cell-input-paste-and-fill.js";
 import { Bz, _de } from "./23-format-cells-dialog.js";
 
 function Dde(e) {
-  const { text: r, language: t } = Dr(),
+  const { text, language } = Dr(),
     n = ne.useId(),
     o = ne.useRef(null),
     a = ne.useRef({
@@ -64,17 +73,13 @@ function Dde(e) {
       }
     }, [d]),
     g = v.plan,
-    b = Math.max(
-      1,
-      Math.ceil(((g == null ? void 0 : g.cells.length) ?? 0) / 12),
-    ),
+    b = Math.max(1, Math.ceil((g?.cells.length ?? 0) / 12)),
     y = Math.min(l, b - 1);
   ne.useEffect(() => {
-    var A, k;
+    var k;
     const E = document.activeElement;
     return (
-      (k = (A = o.current) == null ? void 0 : A.querySelector("button")) ==
-        null || k.focus(),
+      (k = o.current?.querySelector("button")) == null || k.focus(),
       () => {
         E != null && E.isConnected && E.focus();
       }
@@ -111,17 +116,15 @@ function Dde(e) {
       "aria-labelledby": n,
       tabIndex: -1,
       onKeyDown: (E) => {
-        var A;
         if (
           (E.key === "Escape" &&
             (E.preventDefault(), E.stopPropagation(), e.onClose()),
           E.key === "Tab")
         ) {
           const k = Array.from(
-              ((A = o.current) == null
-                ? void 0
-                : A.querySelectorAll('button:not(:disabled),[tabindex="0"]')) ??
-                [],
+              o.current?.querySelectorAll(
+                'button:not(:disabled),[tabindex="0"]',
+              ) ?? [],
             ),
             F = k[0],
             I = k.at(-1);
@@ -141,9 +144,9 @@ function Dde(e) {
               children: d ? "Unmerge cells" : "Merge & Center",
             }),
             i.jsx("button", {
-              "aria-label": r("Close merge preview"),
+              "aria-label": text("Close merge preview"),
               onClick: e.onClose,
-              lang: t("Close merge preview"),
+              lang: language("Close merge preview"),
               "data-ui-label": "Close merge preview",
               children: i.jsx(X, { size: 18 }),
             }),
@@ -154,11 +157,7 @@ function Dde(e) {
           children: [
             i.jsx("p", {
               children: i.jsxs("strong", {
-                children: [
-                  (g == null ? void 0 : g.sheetName) ?? "Worksheet",
-                  "!",
-                  a.current.range,
-                ],
+                children: [g?.sheetName ?? "Worksheet", "!", a.current.range],
               }),
             }),
             i.jsx("p", {
@@ -188,8 +187,8 @@ function Dde(e) {
             }),
             g &&
               i.jsxs("section", {
-                "aria-label": r("Merge preview"),
-                lang: t("Merge preview"),
+                "aria-label": text("Merge preview"),
+                lang: language("Merge preview"),
                 "data-ui-label": "Merge preview",
                 children: [
                   i.jsxs("p", {
@@ -252,14 +251,14 @@ function Dde(e) {
                                         String(E.cell.raw ?? "(blank)"),
                                       ],
                                     }),
-                                    E.cell.note !== void 0 &&
+                                    E.cell.note !== undefined &&
                                       i.jsxs("div", {
                                         children: [
                                           i.jsx(M, { children: "Note: " }),
                                           E.cell.note,
                                         ],
                                       }),
-                                    E.cell.tickmark !== void 0 &&
+                                    E.cell.tickmark !== undefined &&
                                       i.jsxs("div", {
                                         children: [
                                           i.jsx(M, {
@@ -419,13 +418,13 @@ function sw(e, r, t, n, o = {}) {
   ])) {
     const p = r.sheets.find((v) => v.id === f),
       m = e.sheets.find((v) => v.id === f);
-    if ((m == null ? void 0 : m.cells) !== (p == null ? void 0 : p.cells))
+    if (m?.cells !== p?.cells)
       for (const v of new Set([
-        ...Object.keys((m == null ? void 0 : m.cells) ?? {}),
-        ...Object.keys((p == null ? void 0 : p.cells) ?? {}),
+        ...Object.keys(m?.cells ?? {}),
+        ...Object.keys(p?.cells ?? {}),
       ])) {
-        const g = m == null ? void 0 : m.cells[v],
-          b = p == null ? void 0 : p.cells[v];
+        const g = m?.cells[v],
+          b = p?.cells[v];
         if (
           !(g === b || JSON.stringify(g) === JSON.stringify(b)) &&
           (a.push({
@@ -463,12 +462,11 @@ function sw(e, r, t, n, o = {}) {
   v0(
     r,
     a.filter((f) => {
-      var p, m, v, g;
+      var v, g;
       return (
         r.sheets.some((b) => b.id === f.sheetId) &&
         !(o.restoringHistory && d.has(u(f.sheetId, f.address, f.after))) &&
-        ((((p = f.before) == null ? void 0 : p.raw) ?? null) !==
-          (((m = f.after) == null ? void 0 : m.raw) ?? null) ||
+        ((f.before?.raw ?? null) !== (f.after?.raw ?? null) ||
           !!((v = f.before) != null && v.literal) !=
             !!((g = f.after) != null && g.literal))
       );
@@ -524,10 +522,10 @@ function Ode(e, r, t, n) {
     a = e.sheets.map((s) => {
       const d = r.sheets.find((l) => l.id === s.id),
         u = {};
-      if ((d == null ? void 0 : d.cells) !== s.cells) {
+      if (d?.cells !== s.cells) {
         for (const l in s.cells) {
           const c = s.cells[l],
-            h = d == null ? void 0 : d.cells[l];
+            h = d?.cells[l];
           (!h || c.raw !== h.raw || !!c.literal != !!h.literal) &&
             (u[l] = { raw: c.raw, ...(c.literal ? { literal: true } : {}) });
         }
@@ -557,7 +555,7 @@ class Mde {
   }
   terminateWorker() {
     const r = this.worker;
-    ((this.worker = void 0), (this.completed = void 0));
+    ((this.worker = undefined), (this.completed = undefined));
     try {
       r && Promise.resolve(r.terminate()).catch(() => {});
     } catch {}
@@ -572,16 +570,14 @@ class Mde {
     (this.cancel(), this.terminateWorker());
   }
   run(r, t = {}) {
-    var u;
     this.cancel("A newer calculation replaced this request.");
     const n = L5(r).report,
       o = ++this.nextId,
       a = pd(),
-      { memoryBudgetBytes: s } = JF(r.calculation),
-      d =
-        (u = this.reliability) == null ? void 0 : u.start("calculation", "run");
+      { memoryBudgetBytes } = JF(r.calculation),
+      d = this.reliability?.start("calculation", "run");
     return new Promise((l) => {
-      var v, g, b;
+      var v, g;
       let c = false,
         h;
       const f = (y, w = false) => {
@@ -590,7 +586,7 @@ class Mde {
             ((c = true),
             h && clearTimeout(h),
             (E = t.signal) == null || E.removeEventListener("abort", m),
-            (this.active = void 0),
+            (this.active = undefined),
             this.worker &&
               ((this.worker.onmessage = null),
               (this.worker.onerror = null),
@@ -630,7 +626,7 @@ class Mde {
       if (
         ((g = t.signal) == null ||
           g.addEventListener("abort", m, { once: true }),
-        QF(r, s) > s)
+        QF(r, memoryBudgetBytes) > memoryBudgetBytes)
       ) {
         p(
           "#LIMIT!",
@@ -644,20 +640,16 @@ class Mde {
             "#TIMEOUT!",
             "Calculation exceeded its time budget and its worker was terminated. Inputs are intact; simplify formulas or increase the budget, then retry.",
           ),
-        ((b = r.calculation) == null ? void 0 : b.timeBudgetMs) ?? 2500,
+        r.calculation?.timeBudgetMs ?? 2500,
       );
       try {
         (this.worker ?? (this.worker = this.factory()),
-          (this.worker.onmessage = ({ data: y }) => {
-            var E, A, k, F, I;
+          (this.worker.onmessage = ({ data }) => {
+            var F;
             if (c) return;
-            const w = y;
+            const w = data;
             if (!(!w || w.id !== o)) {
-              if (
-                pd() - a >
-                (((E = r.calculation) == null ? void 0 : E.timeBudgetMs) ??
-                  2500)
-              ) {
+              if (pd() - a > (r.calculation?.timeBudgetMs ?? 2500)) {
                 p(
                   "#TIMEOUT!",
                   "The worker result arrived after the calculation deadline and was discarded.",
@@ -673,7 +665,7 @@ class Mde {
                 );
                 return;
               }
-              if (kN(w.result, s) > s) {
+              if (kN(w.result, memoryBudgetBytes) > memoryBudgetBytes) {
                 p(
                   "#LIMIT!",
                   "Calculation results exceed the working-data budget; no partial results were published.",
@@ -686,13 +678,9 @@ class Mde {
                     execution: {
                       mode: "worker",
                       state:
-                        ((A = w.result.report.execution) == null
-                          ? void 0
-                          : A.state) === "pending"
+                        w.result.report.execution?.state === "pending"
                           ? "complete"
-                          : (((k = w.result.report.execution) == null
-                              ? void 0
-                              : k.state) ?? "complete"),
+                          : (w.result.report.execution?.state ?? "complete"),
                       message:
                         (F = w.result.report.resources) != null && F.stopped
                           ? (w.result.report.resources.reason ??
@@ -702,18 +690,15 @@ class Mde {
                             : "Calculated in an isolated worker. Source inputs were not modified.",
                       wallElapsedMs: pd() - a,
                     },
-                    limits: { ...w.result.report.limits, hardInterrupt: !0 },
+                    limits: { ...w.result.report.limits, hardInterrupt: true },
                   },
                   j = uU(r, n, { ...w.result, report: O });
                 j && (this.completed = r);
-                const z =
-                  (I = j == null ? void 0 : j.report.resources) == null
-                    ? void 0
-                    : I.stopped;
+                const z = j?.report.resources?.stopped;
                 (d == null ||
                   d.finish(
                     j ? (z ? "failed" : "succeeded") : "cancelled",
-                    z ? (z === "#TIMEOUT!" ? "timeout" : "limit") : void 0,
+                    z ? (z === "#TIMEOUT!" ? "timeout" : "limit") : undefined,
                   ),
                   f(j));
               } catch {
@@ -754,14 +739,10 @@ function Fde() {
       };
     return (
       (r.onmessage = (n) => {
-        var o;
-        return (o = t.onmessage) == null ? void 0 : o.call(t, { data: n.data });
+        return t.onmessage?.call(t, { data: n.data });
       }),
       (r.onerror = (n) => {
-        var o;
-        return (o = t.onerror) == null
-          ? void 0
-          : o.call(t, { message: n.message });
+        return t.onerror?.call(t, { message: n.message });
       }),
       t
     );
@@ -771,25 +752,26 @@ function Fde() {
 }
 function Bde(e, r, t, n) {
   const a =
-      r === null ? void 0 : (r ?? (typeof Worker == "function" ? Fde : void 0)),
-    s = ne.useMemo(() => (a ? new Mde(a, n) : void 0), [a, n]),
+      r === null
+        ? undefined
+        : (r ?? (typeof Worker == "function" ? Fde : undefined)),
+    s = ne.useMemo(() => (a ? new Mde(a, n) : undefined), [a, n]),
     [d, u] = ne.useState(0),
     l = ne.useRef(t);
   l.current = t;
-  const c = ne.useRef(void 0),
-    h = ne.useRef(void 0);
+  const c = ne.useRef(undefined),
+    h = ne.useRef(undefined);
   s && h.current !== e && (L5(e), (h.current = e));
   const f = (g = false) => {
-      var y;
-      const b = n == null ? void 0 : n.start("calculation", "run");
+      const b = n?.start("calculation", "run");
       try {
         const w = g ? sU(e) : Gw(e),
-          E = (y = w.report.resources) == null ? void 0 : y.stopped;
+          E = w.report.resources?.stopped;
         return (
           b == null ||
             b.finish(
               E ? "failed" : "succeeded",
-              E === "#TIMEOUT!" ? "timeout" : E ? "limit" : void 0,
+              E === "#TIMEOUT!" ? "timeout" : E ? "limit" : undefined,
             ),
           w
         );
@@ -799,12 +781,12 @@ function Bde(e, r, t, n) {
     },
     p = ne.useMemo(() => (s ? (Hie(e) ?? L5(e)) : f()), [e, s, d]);
   return (
-    ne.useEffect(() => () => (s == null ? void 0 : s.dispose()), [s]),
+    ne.useEffect(() => () => s?.dispose(), [s]),
     ne.useEffect(() => {
       if (!s) return;
       const g = new AbortController(),
         b = setTimeout(() => {
-          ((c.current = void 0),
+          ((c.current = undefined),
             s.run(e, { signal: g.signal }).then((y) => {
               !g.signal.aborted && y && (u((w) => w + 1), l.current());
             }));
@@ -812,14 +794,16 @@ function Bde(e, r, t, n) {
       return (
         (c.current = b),
         () => {
-          (clearTimeout(b), c.current === b && (c.current = void 0), g.abort());
+          (clearTimeout(b),
+            c.current === b && (c.current = undefined),
+            g.abort());
         }
       );
     }, [e, s]),
     {
       calculation: p,
       run: () => {
-        if ((clearTimeout(c.current), (c.current = void 0), !s)) {
+        if ((clearTimeout(c.current), (c.current = undefined), !s)) {
           (f(true), u((g) => g + 1), l.current());
           return;
         }
@@ -830,8 +814,8 @@ function Bde(e, r, t, n) {
           l.current());
       },
       cancel: () => {
-        if (c.current !== void 0 && s) {
-          (clearTimeout(c.current), (c.current = void 0));
+        if (c.current !== undefined && s) {
+          (clearTimeout(c.current), (c.current = undefined));
           const g = new AbortController();
           (g.abort(),
             s.run(e, { signal: g.signal }).then(() => u((b) => b + 1)));
@@ -1181,14 +1165,10 @@ const ap = (e) =>
       : NaN;
   };
 function Pde(e, r, t, n = {}) {
-  var R, L, $;
   const o = Nr(e, r),
     a = Vn(e),
     s = Ta(o, false),
-    d =
-      n.range ??
-      ((R = n.population) == null ? void 0 : R.definition.range) ??
-      s;
+    d = n.range ?? n.population?.definition.range ?? s;
   if (
     n.population &&
     n.population.scope !== "full" &&
@@ -1197,15 +1177,13 @@ function Pde(e, r, t, n = {}) {
     throw Error("Choose full or visible analysis scope.");
   const u = n.population
     ? f0(e, r, n.population.definition, a).context
-    : void 0;
+    : undefined;
   if (u && d !== u.range && d !== n.population.definition.range)
     throw Error(
       "The analysis range must match the declared filter population.",
     );
   const l =
-      ((L = n.population) == null ? void 0 : L.scope) === "visible"
-        ? new Set(u.visibleSourceRows)
-        : null,
+      n.population?.scope === "visible" ? new Set(u.visibleSourceRows) : null,
     c = Ix(d);
   if (
     c.some((U) => {
@@ -1282,7 +1260,7 @@ function Pde(e, r, t, n = {}) {
     },
     O = (U) => k.map((G) => g(U.addresses[G])),
     j = [],
-    z = `${o.name}!${d}; first selected row is the header; ${v.length} nonempty data rows. Population scope: ${(($ = n.population) == null ? void 0 : $.scope) === "visible" ? `visible filter population (${u.visibleRows} visible / ${u.totalRows} total data rows); original source addresses retained.` : "full selected source range, including hidden and filtered rows."}`,
+    z = `${o.name}!${d}; first selected row is the header; ${v.length} nonempty data rows. Population scope: ${n.population?.scope === "visible" ? `visible filter population (${u.visibleRows} visible / ${u.totalRows} total data rows); original source addresses retained.` : "full selected source range, including hidden and filtered rows."}`,
     V = v.filter(
       (U) => !["total", "grand total", "totals"].includes(q7(U.values[0])),
     ),
@@ -1338,14 +1316,14 @@ function Pde(e, r, t, n = {}) {
       throw new Error(
         "No numeric amount column found. Include a Debit/Credit, Amount, Net, or Balance column.",
       );
-    for (const { row: G, amount: H } of C)
-      Math.abs(H) >= U &&
+    for (const { row, amount } of C)
+      Math.abs(amount) >= U &&
         j.push({
-          id: `materiality-${G.row + 1}`,
-          title: `Row ${G.row + 1} · ${ap(H)}`,
-          detail: `Absolute row amount ${ap(Math.abs(H))} meets or exceeds the screening threshold ${ap(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
+          id: `materiality-${row.row + 1}`,
+          title: `Row ${row.row + 1} · ${ap(amount)}`,
+          detail: `Absolute row amount ${ap(Math.abs(amount))} meets or exceeds the screening threshold ${ap(U)}. This is a row-level screen; it does not set audit materiality or aggregate a journal.`,
           severity: "high",
-          citations: b(G),
+          citations: b(row),
         });
     return {
       title: "Materiality screen",
@@ -1403,11 +1381,11 @@ function Pde(e, r, t, n = {}) {
       );
     const U = y("account", "account name", "gl account", "category"),
       G = new Map();
-    for (const { row: H, amount: Q } of C) {
-      const X = U < 0 ? "All rows" : String(H.values[U] ?? "(blank account)");
+    for (const { row, amount } of C) {
+      const X = U < 0 ? "All rows" : String(row.values[U] ?? "(blank account)");
       G.has(X) || G.set(X, { total: 0, rows: [] });
       const J = G.get(X);
-      ((J.total += Q), J.rows.push(H));
+      ((J.total += amount), J.rows.push(row));
     }
     return (
       [...G]
@@ -1453,8 +1431,8 @@ function Pde(e, r, t, n = {}) {
         ].map((X) => [X, { total: 0, rows: [] }]),
       );
     let Q = 0;
-    for (const { row: X, amount: J } of C) {
-      const q = X.values[U],
+    for (const { row, amount } of C) {
+      const q = row.values[U],
         W =
           typeof q == "number"
             ? Date.UTC(1899, 11, 31) +
@@ -1478,7 +1456,7 @@ function Pde(e, r, t, n = {}) {
                   ? "61–90 days"
                   : "Over 90 days",
         ae = H.get(te);
-      ((ae.total += J), ae.rows.push(X));
+      ((ae.total += amount), ae.rows.push(row));
     }
     return (
       [...H].forEach(([X, J], q) =>
@@ -1621,7 +1599,7 @@ function zde(e, r) {
     }
   }
 }
-function Vde({ commands: e, onClose: r, onLocate: t }) {
+function Vde({ commands, onClose, onLocate }) {
   const [n, o] = ne.useState(""),
     a = ne.useRef(null),
     s = ne.useId();
@@ -1636,7 +1614,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
     );
   }, []);
   const d = (c) => c.toLowerCase().includes(n.trim().toLowerCase()),
-    u = e.filter((c) => d(`${c.name} ${c.location} ${c.reason ?? ""}`)),
+    u = commands.filter((c) => d(`${c.name} ${c.location} ${c.reason ?? ""}`)),
     l = $de.filter((c) => d(c.join(" ")));
   return i.jsx("div", {
     className: "lg-modal-backdrop",
@@ -1645,7 +1623,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
       role: "dialog",
       "aria-modal": "true",
       "aria-labelledby": s,
-      onKeyDown: (c) => zde(c, r),
+      onKeyDown: (c) => zde(c, onClose),
       children: [
         i.jsxs("header", {
           children: [
@@ -1655,7 +1633,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
             }),
             i.jsx("button", {
               type: "button",
-              onClick: r,
+              onClick: onClose,
               children: i.jsx(M, { children: "Close command reference" }),
             }),
           ],
@@ -1759,7 +1737,7 @@ function Vde({ commands: e, onClose: r, onLocate: t }) {
                               i.jsx("button", {
                                 type: "button",
                                 "aria-label": `Show ${c.name} in ${c.location}`,
-                                onClick: () => t(c),
+                                onClick: () => onLocate(c),
                                 children: i.jsx(M, {
                                   children: "Show command",
                                 }),
@@ -1832,7 +1810,7 @@ function G7(e, r, t, n) {
       ) {
         h = h.replace(/ \(Ctrl\+[A-Z]\)$/, "");
         const m = `${r}:${o.length}`,
-          v = f ? n(h) : void 0;
+          v = f ? n(h) : undefined;
         (o.push({ id: m, name: h, location: d, reason: v }),
           l.type === t.group
             ? (p = { commandId: m, reason: v })
@@ -1848,8 +1826,8 @@ function G7(e, r, t, n) {
       return ne.cloneElement(
         l,
         p,
-        c.children === void 0
-          ? void 0
+        c.children === undefined
+          ? undefined
           : a(c.children, d, l.type === "label" ? ST(c.children) : u),
       );
     });
@@ -1911,33 +1889,33 @@ const Uh = [
       "Ask AI Assistant": "AI assistant",
     })[e] ?? e.replace(/ \(Ctrl\+[A-Z]\)$/, "");
 function Mn({
-  commandId: e,
-  reason: r,
-  label: t,
-  children: n,
-  className: o = "",
-  onDialog: a,
-  dialogLabel: s,
-  dialogDisabled: d,
+  commandId,
+  reason,
+  label,
+  children,
+  className = "",
+  onDialog,
+  dialogLabel,
+  dialogDisabled,
 }) {
   return i.jsxs("div", {
-    className: `xl-ribbon-group ${o}`,
+    className: `xl-ribbon-group ${className}`,
     children: [
-      i.jsx("div", { className: "xl-group-commands", children: n }),
+      i.jsx("div", { className: "xl-group-commands", children }),
       i.jsxs("div", {
         className: "xl-group-label",
         style: { position: "relative" },
         children: [
-          t,
-          a &&
+          label,
+          onDialog &&
             i.jsx("button", {
-              "data-workbook-command": e,
-              "aria-description": r,
+              "data-workbook-command": commandId,
+              "aria-description": reason,
               type: "button",
-              title: r ? `${s}: ${r}` : s,
-              "aria-label": s,
-              disabled: d,
-              onClick: a,
+              title: reason ? `${dialogLabel}: ${reason}` : dialogLabel,
+              "aria-label": dialogLabel,
+              disabled: dialogDisabled,
+              onClick: onDialog,
               style: {
                 position: "absolute",
                 right: 0,
@@ -1956,56 +1934,57 @@ function Mn({
   });
 }
 function lr({
-  commandId: e,
-  reason: r,
-  icon: t,
-  label: n,
-  onClick: o,
-  disabled: a,
-  large: s,
-  active: d,
-  title: u,
-  className: l = "",
-  dropdown: c = false,
+  commandId,
+  reason,
+  icon,
+  label,
+  onClick,
+  disabled,
+  large,
+  active,
+  title,
+  className = "",
+  dropdown = false,
 }) {
   return i.jsxs("button", {
-    "data-workbook-command": e,
-    "aria-description": r,
+    "data-workbook-command": commandId,
+    "aria-description": reason,
     type: "button",
-    className: `xl-command ${s ? "xl-command-large" : ""} ${d ? "xl-command-active" : ""} ${l}`,
-    onClick: o,
-    disabled: a,
-    title: r ? `${n}: ${r}` : (u ?? n),
-    "aria-label": Lz(n),
-    "aria-pressed": d === void 0 ? void 0 : d,
+    className: `xl-command ${large ? "xl-command-large" : ""} ${active ? "xl-command-active" : ""} ${className}`,
+    onClick,
+    disabled,
+    title: reason ? `${label}: ${reason}` : (title ?? label),
+    "aria-label": Lz(label),
+    "aria-pressed": active === undefined ? undefined : active,
     children: [
-      i.jsx("span", { className: "xl-command-icon", children: t }),
-      i.jsx("span", { className: "xl-command-label", children: n }),
-      c && i.jsx(ChevronDown, { className: "xl-command-chevron", size: 10 }),
+      i.jsx("span", { className: "xl-command-icon", children: icon }),
+      i.jsx("span", { className: "xl-command-label", children: label }),
+      dropdown &&
+        i.jsx(ChevronDown, { className: "xl-command-chevron", size: 10 }),
     ],
   });
 }
 function Xl({
-  commandId: e,
-  reason: r,
-  icon: t,
-  label: n,
-  onClick: o,
-  disabled: a,
-  active: s,
-  className: d = "",
+  commandId,
+  reason,
+  icon,
+  label,
+  onClick,
+  disabled,
+  active,
+  className = "",
 }) {
   return i.jsx("button", {
-    "data-workbook-command": e,
-    "aria-description": r,
+    "data-workbook-command": commandId,
+    "aria-description": reason,
     type: "button",
-    className: `xl-icon-button ${s ? "xl-command-active" : ""} ${d}`,
-    "aria-label": Lz(n),
-    title: r ? `${n}: ${r}` : n,
-    onClick: o,
-    disabled: a,
-    "aria-pressed": s === void 0 ? void 0 : s,
-    children: t,
+    className: `xl-icon-button ${active ? "xl-command-active" : ""} ${className}`,
+    "aria-label": Lz(label),
+    title: reason ? `${label}: ${reason}` : label,
+    onClick,
+    disabled,
+    "aria-pressed": active === undefined ? undefined : active,
+    children: icon,
   });
 }
 

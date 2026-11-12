@@ -61,8 +61,8 @@ import { G7, Mn, Uh, Vde, Xl, lr } from "./24-merge-and-audit-analysis.js";
 import { Hk } from "./25-color-picker.js";
 
 function Hde(e) {
-  var U, G, H, Q, X;
-  const { text: r, language: t } = Dr(),
+  var H;
+  const { text, language } = Dr(),
     [n, o] = ne.useState("Home"),
     [a, s] = ne.useState(false),
     d = ne.useRef(null),
@@ -75,13 +75,9 @@ function Hde(e) {
     b = ne.useId(),
     y = !c || f,
     w = () => {
-      var J, q;
-      return (q =
-        (J = m.current) == null
-          ? void 0
-          : J.querySelector('[role="tab"][aria-selected="true"]')) == null
-        ? void 0
-        : q.focus();
+      return m.current
+        ?.querySelector('[role="tab"][aria-selected="true"]')
+        ?.focus();
     },
     E = () => {
       var J;
@@ -122,7 +118,7 @@ function Hde(e) {
         const W = q.target;
         if (!(W instanceof Element) || W.closest('[role="dialog"]')) return;
         const K = m.current,
-          te = (K == null ? void 0 : K.closest(".lg-app")) ?? K;
+          te = K?.closest(".lg-app") ?? K;
         !te ||
           (te.classList.contains("lg-app")
             ? W.closest(".lg-app") !== te
@@ -135,16 +131,17 @@ function Hde(e) {
       );
     }, []));
   const k = e.readOnly || e.busy,
-    F = ys((U = e.cell) == null ? void 0 : U.style),
+    F = ys(e.cell?.style),
     I = (J) => e.onFormat({ style: J }),
-    O = (J) => e.onFormat({ format: J, numFmt: void 0, numberFormat: void 0 }),
+    O = (J) =>
+      e.onFormat({ format: J, numFmt: undefined, numberFormat: undefined }),
     j =
-      ((G = e.cell) == null ? void 0 : G.numberFormat) &&
+      e.cell?.numberFormat &&
       !["number", "currency", "accounting", "percent"].includes(
         e.cell.numberFormat.category,
       ),
     z = (J) => {
-      var K, te, ae, oe, de, he, Se;
+      var K;
       if ((K = e.cell) != null && K.numberFormat && !j) {
         const le = l0({
           ...e.cell.numberFormat,
@@ -157,16 +154,16 @@ function Hde(e) {
         return;
       }
       const q =
-          $B((te = e.cell) == null ? void 0 : te.numFmt) ??
-          (((ae = e.cell) == null ? void 0 : ae.format) === "currency" ||
-          ((oe = e.cell) == null ? void 0 : oe.format) === "number" ||
-          ((de = e.cell) == null ? void 0 : de.format) === "percent"
+          $B(e.cell?.numFmt) ??
+          (e.cell?.format === "currency" ||
+          e.cell?.format === "number" ||
+          e.cell?.format === "percent"
             ? 2
             : 0),
         W = Math.max(0, Math.min(10, q + J));
       e.onFormat({
-        numberFormat: void 0,
-        numFmt: `${((he = e.cell) == null ? void 0 : he.format) === "currency" ? "$" : ""}#,##0${W ? `.${"0".repeat(W)}` : ""}${((Se = e.cell) == null ? void 0 : Se.format) === "percent" ? "%" : ""}`,
+        numberFormat: undefined,
+        numFmt: `${e.cell?.format === "currency" ? "$" : ""}#,##0${W ? `.${"0".repeat(W)}` : ""}${e.cell?.format === "percent" ? "%" : ""}`,
       });
     };
   ne.useEffect(() => {
@@ -184,20 +181,20 @@ function Hde(e) {
       (l(false), J());
     },
     D = i.jsxs("select", {
-      "aria-label": r("Number format"),
+      "aria-label": text("Number format"),
       value:
         (H = e.cell) != null && H.numberFormat
           ? "advanced"
-          : (((Q = e.cell) == null ? void 0 : Q.format) ?? "general"),
+          : (e.cell?.format ?? "general"),
       disabled: k,
       onChange: (J) =>
         J.target.value === "advanced"
           ? e.onTool("numberFormat")
           : O(J.target.value),
-      lang: t("Number format"),
+      lang: language("Number format"),
       "data-ui-label": "Number format",
       children: [
-        ((X = e.cell) == null ? void 0 : X.numberFormat) &&
+        e.cell?.numberFormat &&
           i.jsxs("option", {
             value: "advanced",
             children: [
@@ -217,10 +214,10 @@ function Hde(e) {
       ],
     }),
     B = i.jsx("select", {
-      "aria-label": r("Zoom"),
+      "aria-label": text("Zoom"),
       value: e.zoom,
       onChange: (J) => e.onZoom(Number(J.target.value)),
-      lang: t("Zoom"),
+      lang: language("Zoom"),
       "data-ui-label": "Zoom",
       children: Array.from(
         new Set([50, 75, 90, 100, 110, 125, 150, 175, 200, e.zoom]),
@@ -254,7 +251,7 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(Mn, {
-                  label: r("Clipboard"),
+                  label: text("Clipboard"),
                   className: "xl-clipboard-group",
                   children: [
                     i.jsxs("div", {
@@ -262,7 +259,7 @@ function Hde(e) {
                       children: [
                         i.jsx(lr, {
                           icon: i.jsx(Clipboard, {}),
-                          label: r("Paste"),
+                          label: text("Paste"),
                           large: true,
                           onClick: e.onPaste,
                           disabled: k,
@@ -271,13 +268,13 @@ function Hde(e) {
                         i.jsxs("button", {
                           type: "button",
                           className: "xl-paste-special",
-                          "aria-label": r("Paste Special"),
-                          title: r(
+                          "aria-label": text("Paste Special"),
+                          title: text(
                             "Choose values, formulas, formatting and other paste options",
                           ),
                           disabled: k,
                           onClick: () => e.onTool("pasteSpecial"),
-                          lang: t("Paste Special"),
+                          lang: language("Paste Special"),
                           "data-ui-label": "Paste Special",
                           children: [
                             i.jsx(M, { children: "Paste Special" }),
@@ -291,18 +288,18 @@ function Hde(e) {
                       children: [
                         i.jsx(lr, {
                           icon: i.jsx(Scissors, {}),
-                          label: r("Cut"),
+                          label: text("Cut"),
                           onClick: e.onCut,
                           disabled: k,
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(Copy, {}),
-                          label: r("Copy"),
+                          label: text("Copy"),
                           onClick: e.onCopy,
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(Paintbrush, {}),
-                          label: r("Format Painter"),
+                          label: text("Format Painter"),
                           onClick: () => e.onTool("paint"),
                           disabled: k,
                         }),
@@ -311,21 +308,21 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Font"),
+                  label: text("Font"),
                   className: "xl-font-group",
                   onDialog: () => e.onTool("cellStyle"),
-                  dialogLabel: r("Cell Styles"),
+                  dialogLabel: text("Cell Styles"),
                   dialogDisabled: k,
                   children: [
                     i.jsxs("div", {
                       className: "xl-font-selects",
                       children: [
                         i.jsx("select", {
-                          "aria-label": r("Font family"),
+                          "aria-label": text("Font family"),
                           value: F.fontFamily ?? "Calibri",
                           disabled: k,
                           onChange: (q) => I({ fontFamily: q.target.value }),
-                          lang: t("Font family"),
+                          lang: language("Font family"),
                           "data-ui-label": "Font family",
                           children: [
                             "Calibri",
@@ -336,12 +333,12 @@ function Hde(e) {
                           ].map((q) => i.jsx("option", { children: q }, q)),
                         }),
                         i.jsx("select", {
-                          "aria-label": r("Font size"),
+                          "aria-label": text("Font size"),
                           value: F.fontSize ?? 11,
                           disabled: k,
                           onChange: (q) =>
                             I({ fontSize: Number(q.target.value) }),
-                          lang: t("Font size"),
+                          lang: language("Font size"),
                           "data-ui-label": "Font size",
                           children: Array.from(
                             new Set([
@@ -374,7 +371,7 @@ function Hde(e) {
                               i.jsx("sup", { children: "⌃" }),
                             ],
                           }),
-                          label: r("Increase Font Size"),
+                          label: text("Increase Font Size"),
                           disabled: k,
                           onClick: () =>
                             I({
@@ -388,21 +385,21 @@ function Hde(e) {
                       children: [
                         i.jsx(Xl, {
                           icon: i.jsx(Bold, { size: 15 }),
-                          label: r("Bold (Ctrl+B)"),
+                          label: text("Bold (Ctrl+B)"),
                           active: !!F.bold,
                           onClick: () => I({ bold: !F.bold }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
                           icon: i.jsx(Italic, { size: 15 }),
-                          label: r("Italic (Ctrl+I)"),
+                          label: text("Italic (Ctrl+I)"),
                           active: !!F.italic,
                           onClick: () => I({ italic: !F.italic }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
                           icon: i.jsx(Underline, { size: 15 }),
-                          label: r("Underline (Ctrl+U)"),
+                          label: text("Underline (Ctrl+U)"),
                           active: !!F.underline,
                           onClick: () => I({ underline: !F.underline }),
                           disabled: k,
@@ -410,13 +407,13 @@ function Hde(e) {
                         i.jsx("span", { className: "xl-control-divider" }),
                         i.jsxs("select", {
                           className: "xl-border-select",
-                          "aria-label": r("Borders"),
-                          title: r("Borders"),
+                          "aria-label": text("Borders"),
+                          title: text("Borders"),
                           value: F.border ?? "none",
                           disabled: k,
                           onChange: (q) =>
-                            I({ border: q.target.value, borders: void 0 }),
-                          lang: t("Borders"),
+                            I({ border: q.target.value, borders: undefined }),
+                          lang: language("Borders"),
                           "data-ui-label": "Borders",
                           children: [
                             i.jsx("option", { value: "none", children: "▦" }),
@@ -447,7 +444,7 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Alignment"),
+                  label: text("Alignment"),
                   className: "xl-alignment-group",
                   children: [
                     i.jsxs("div", {
@@ -455,28 +452,28 @@ function Hde(e) {
                       children: [
                         i.jsx(Xl, {
                           icon: i.jsx(AlignLeft, { size: 16 }),
-                          label: r("Align Left"),
+                          label: text("Align Left"),
                           active: F.align === "left",
                           onClick: () => I({ align: "left" }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
                           icon: i.jsx(AlignCenter, { size: 16 }),
-                          label: r("Center"),
+                          label: text("Center"),
                           active: F.align === "center",
                           onClick: () => I({ align: "center" }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
                           icon: i.jsx(AlignRight, { size: 16 }),
-                          label: r("Align Right"),
+                          label: text("Align Right"),
                           active: F.align === "right",
                           onClick: () => I({ align: "right" }),
                           disabled: k,
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(WrapText, {}),
-                          label: r("Wrap Text"),
+                          label: text("Wrap Text"),
                           active: !!F.wrap,
                           onClick: () => I({ wrap: !F.wrap }),
                           disabled: k,
@@ -485,20 +482,20 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Grid2x2, {}),
-                      label: r("Merge & Center"),
+                      label: text("Merge & Center"),
                       onClick: () => e.onTool("merge"),
                       disabled: k,
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Number"),
+                  label: text("Number"),
                   className: "xl-number-group",
                   children: [
                     D,
                     i.jsx(lr, {
                       icon: i.jsx(DollarSign, { size: 15 }),
-                      label: r("Format Cells"),
+                      label: text("Format Cells"),
                       onClick: () => e.onTool("numberFormat"),
                       disabled: k,
                     }),
@@ -507,13 +504,13 @@ function Hde(e) {
                       children: [
                         i.jsx(Xl, {
                           icon: i.jsx(DollarSign, { size: 16 }),
-                          label: r("Currency"),
+                          label: text("Currency"),
                           onClick: () => O("currency"),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
                           icon: i.jsx(Percent, { size: 15 }),
-                          label: r("Percent Style"),
+                          label: text("Percent Style"),
                           onClick: () => O("percent"),
                           disabled: k,
                         }),
@@ -522,12 +519,12 @@ function Hde(e) {
                             className: "xl-comma-icon",
                             children: ",",
                           }),
-                          label: r("Comma Style"),
+                          label: text("Comma Style"),
                           onClick: () =>
                             e.onFormat({
                               format: "number",
                               numFmt: "#,##0.00",
-                              numberFormat: void 0,
+                              numberFormat: undefined,
                             }),
                           disabled: k,
                         }),
@@ -539,7 +536,7 @@ function Hde(e) {
                               i.jsx("small", { children: ".00" }),
                             ],
                           }),
-                          label: r("Increase Decimal"),
+                          label: text("Increase Decimal"),
                           onClick: () => z(1),
                           disabled: k || !!j,
                         }),
@@ -548,7 +545,7 @@ function Hde(e) {
                             className: "xl-decimal-icon",
                             children: ["→", i.jsx("small", { children: ".0" })],
                           }),
-                          label: r("Decrease Decimal"),
+                          label: text("Decrease Decimal"),
                           onClick: () => z(-1),
                           disabled: k || !!j,
                         }),
@@ -557,31 +554,31 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Styles"),
+                  label: text("Styles"),
                   className: "xl-styles-group",
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Grid3x3, {}),
-                      label: r("Conditional Formatting"),
+                      label: text("Conditional Formatting"),
                       large: true,
                       onClick: () => e.onTool("conditional"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Format as Table"),
+                      label: text("Format as Table"),
                       large: true,
                       onClick: () => e.onTool("table"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(LayoutGrid, {}),
-                      label: r("Heading Style"),
+                      label: text("Heading Style"),
                       large: true,
                       onClick: () =>
                         I({ fill: "#E2EFDA", color: "#375623", bold: true }),
                       disabled: k,
-                      title: r(
+                      title: text(
                         "Apply green heading cell style to the selection",
                       ),
                       className: "xl-green-icon",
@@ -589,28 +586,28 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Cells"),
+                  label: text("Cells"),
                   className: "xl-cells-group",
                   children: i.jsxs("div", {
                     className: "xl-command-stack",
                     children: [
                       i.jsx(lr, {
                         icon: i.jsx(Rows3, {}),
-                        label: r("Insert Row"),
+                        label: text("Insert Row"),
                         onClick: e.onAddRow,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
                       i.jsx(lr, {
                         icon: i.jsx(Table2, {}),
-                        label: r("Insert Column"),
+                        label: text("Insert Column"),
                         onClick: e.onAddColumn,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
                       i.jsx(lr, {
                         icon: i.jsx(Sheet, {}),
-                        label: r("New Sheet"),
+                        label: text("New Sheet"),
                         onClick: e.onAddSheet,
                         disabled:
                           e.busy ||
@@ -621,37 +618,41 @@ function Hde(e) {
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("Cell Size"),
+                  label: text("Cell Size"),
                   children: i.jsxs("div", {
                     className: "xl-command-stack",
                     children: [
                       i.jsx(lr, {
                         icon: i.jsx(Maximize, {}),
-                        label: r("AutoFit Column Width"),
+                        label: text("AutoFit Column Width"),
                         onClick: e.onAutoFitColumns,
                         disabled: k,
-                        title: r("Fit the selected columns to their contents"),
+                        title: text(
+                          "Fit the selected columns to their contents",
+                        ),
                       }),
                       i.jsx(lr, {
                         icon: i.jsx(Rows3, {}),
-                        label: r("AutoFit Row Height"),
+                        label: text("AutoFit Row Height"),
                         onClick: e.onAutoFitRows,
                         disabled: k,
-                        title: r(
+                        title: text(
                           "Fit the selected rows to their contents and wrapping",
                         ),
                       }),
                       i.jsx(lr, {
                         icon: i.jsx(Rows3, {}),
-                        label: r("Hide & Unhide"),
+                        label: text("Hide & Unhide"),
                         onClick: () => e.onTool("viewSettings"),
-                        title: r("Hide or restore selected rows and columns"),
+                        title: text(
+                          "Hide or restore selected rows and columns",
+                        ),
                       }),
                     ],
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Editing"),
+                  label: text("Editing"),
                   className: "xl-editing-group",
                   children: [
                     i.jsxs("div", {
@@ -659,20 +660,20 @@ function Hde(e) {
                       children: [
                         i.jsx(lr, {
                           icon: i.jsx(Sigma, {}),
-                          label: r("AutoSum"),
+                          label: text("AutoSum"),
                           onClick: e.onAutosum,
                           disabled: k,
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(ArrowDownToLine, {}),
-                          label: r("Fill Down"),
+                          label: text("Fill Down"),
                           onClick: e.onFillDown,
                           disabled: k,
                           className: "xl-blue-icon",
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(Eraser, {}),
-                          label: r("Clear"),
+                          label: text("Clear"),
                           onClick: e.onClear,
                           disabled: k,
                         }),
@@ -680,41 +681,41 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Fill Series"),
+                      label: text("Fill Series"),
                       large: true,
                       onClick: () => e.onTool("fillSeries"),
                       disabled: k,
-                      title: r(
+                      title: text(
                         "Fill in any direction or create a number or date series",
                       ),
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ListFilter, {}),
-                      label: r("Sort & Filter"),
+                      label: text("Sort & Filter"),
                       large: true,
                       onClick: e.onToggleFilter,
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Search, {}),
-                      label: r("Find & Select"),
+                      label: text("Find & Select"),
                       large: true,
                       onClick: e.onFind,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Search, {}),
-                      label: r("Advanced Find"),
+                      label: text("Advanced Find"),
                       onClick: () => e.onTool("search"),
-                      title: r(
+                      title: text(
                         "Find all matches, preview replacements, or inspect special cells (Ctrl/⌘+Shift+F)",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Search, {}),
-                      label: r("Go To Special"),
+                      label: text("Go To Special"),
                       onClick: () => e.onTool("goToSpecial"),
-                      title: r(
+                      title: text(
                         "Select formulas, errors, constants, notes or blanks (F5)",
                       ),
                     }),
@@ -726,18 +727,18 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(Mn, {
-                  label: r("Tables"),
+                  label: text("Tables"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("PivotTable"),
+                      label: text("PivotTable"),
                       large: true,
                       onClick: () => e.onTool("pivot"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Table"),
+                      label: text("Table"),
                       large: true,
                       onClick: () => e.onTool("table"),
                       disabled: k,
@@ -745,18 +746,18 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Illustrations"),
+                  label: text("Illustrations"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Image$1, {}),
-                      label: r("Pictures"),
+                      label: text("Pictures"),
                       large: true,
                       onClick: () => e.onTool("picture"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Square, {}),
-                      label: r("Shapes"),
+                      label: text("Shapes"),
                       large: true,
                       onClick: () => e.onTool("shape"),
                       disabled: k,
@@ -764,20 +765,20 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Charts"),
+                  label: text("Charts"),
                   children: i.jsx(lr, {
                     icon: i.jsx(ChartColumn, {}),
-                    label: r("Recommended Charts"),
+                    label: text("Recommended Charts"),
                     large: true,
                     onClick: () => e.onTool("chart"),
                     disabled: k,
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("Comments"),
+                  label: text("Comments"),
                   children: i.jsx(lr, {
                     icon: i.jsx(MessageSquare, {}),
-                    label: r("New Note"),
+                    label: text("New Note"),
                     large: true,
                     onClick: e.onNote,
                     disabled: k,
@@ -785,11 +786,11 @@ function Hde(e) {
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Worksheet"),
+                  label: text("Worksheet"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Sheet, {}),
-                      label: r("New Sheet"),
+                      label: text("New Sheet"),
                       large: true,
                       onClick: e.onAddSheet,
                       disabled:
@@ -800,14 +801,14 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Insert Row"),
+                      label: text("Insert Row"),
                       large: true,
                       onClick: e.onAddRow,
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Insert Column"),
+                      label: text("Insert Column"),
                       large: true,
                       onClick: e.onAddColumn,
                       disabled: k,
@@ -815,10 +816,10 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Files"),
+                  label: text("Files"),
                   children: i.jsx(lr, {
                     icon: i.jsx(FolderOpen, {}),
-                    label: r("Open Workbook"),
+                    label: text("Open Workbook"),
                     large: true,
                     onClick: e.onImport,
                     disabled: k,
@@ -831,42 +832,42 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsx(Mn, {
-                  label: r("Themes"),
+                  label: text("Themes"),
                   children: i.jsx(lr, {
                     icon: i.jsx(LayoutGrid, {}),
-                    label: r("Themes"),
+                    label: text("Themes"),
                     large: true,
                     onClick: () => e.onTool("themes"),
                     disabled: k,
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Page Setup"),
+                  label: text("Page Setup"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Sheet, {}),
-                      label: r("Margins"),
+                      label: text("Margins"),
                       large: true,
                       onClick: () => e.onTool("margins"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Orientation"),
+                      label: text("Orientation"),
                       large: true,
                       onClick: () => e.onTool("orientation"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Square, {}),
-                      label: r("Size"),
+                      label: text("Size"),
                       large: true,
                       onClick: () => e.onTool("size"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Grid2x2, {}),
-                      label: r("Print Area"),
+                      label: text("Print Area"),
                       large: true,
                       onClick: () => e.onTool("printArea"),
                       disabled: false,
@@ -874,18 +875,18 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Print titles and breaks"),
+                  label: text("Print titles and breaks"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Print Titles"),
+                      label: text("Print Titles"),
                       onClick: () => e.onTool("printTitles"),
                       disabled: false,
                       large: true,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Grid2x2, {}),
-                      label: r("Page Breaks"),
+                      label: text("Page Breaks"),
                       onClick: () => e.onTool("pageBreaks"),
                       disabled: false,
                       large: true,
@@ -893,17 +894,17 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Scale to Fit"),
+                  label: text("Scale to Fit"),
                   children: i.jsx(lr, {
                     icon: i.jsx(Maximize, {}),
-                    label: r("Fit to Page"),
+                    label: text("Fit to Page"),
                     large: true,
                     onClick: () => e.onTool("fit"),
                     disabled: false,
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Sheet Options"),
+                  label: text("Sheet Options"),
                   className: "xl-options-group",
                   children: [
                     i.jsxs("label", {
@@ -934,11 +935,11 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(Mn, {
-                  label: r("Function Library"),
+                  label: text("Function Library"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Sigma, {}),
-                      label: r("AutoSum"),
+                      label: text("AutoSum"),
                       large: true,
                       onClick: e.onAutosum,
                       disabled: k,
@@ -946,13 +947,13 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(BookOpen, {}),
-                      label: r("Function Reference"),
+                      label: text("Function Reference"),
                       large: true,
                       onClick: () => e.onPanel("help"),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Insert Function"),
+                      label: text("Insert Function"),
                       large: true,
                       onClick: () => e.onTool("function"),
                       disabled: false,
@@ -960,52 +961,52 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Extensions"),
+                  label: text("Extensions"),
                   children: i.jsx(lr, {
                     icon: i.jsx(Calculator, {}),
-                    label: r("Add-ins & Functions"),
+                    label: text("Add-ins & Functions"),
                     large: true,
                     onClick: () => e.onTool("extensions"),
                     disabled: e.busy,
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("Defined Names"),
+                  label: text("Defined Names"),
                   children: i.jsx(lr, {
                     icon: i.jsx(Table2, {}),
-                    label: r("Name Manager"),
+                    label: text("Name Manager"),
                     large: true,
                     onClick: () => e.onTool("names"),
                     disabled: false,
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Formula Auditing"),
+                  label: text("Formula Auditing"),
                   children: [
                     i.jsxs("div", {
                       className: "xl-command-stack",
                       children: [
                         i.jsx(lr, {
                           icon: i.jsx(ArrowLeftRight, {}),
-                          label: r("Trace Precedents"),
+                          label: text("Trace Precedents"),
                           onClick: () => e.onTool("tracePrecedents"),
-                          title: r(
+                          title: text(
                             "Inspect the cells referenced by the active formula",
                           ),
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(ArrowLeftRight, {}),
-                          label: r("Trace Dependents"),
+                          label: text("Trace Dependents"),
                           onClick: () => e.onTool("traceDependents"),
-                          title: r(
+                          title: text(
                             "Inspect formulas that reference the active cell",
                           ),
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(Sheet, {}),
-                          label: r("Watch Window"),
+                          label: text("Watch Window"),
                           onClick: () => e.onTool("formulaWatches"),
-                          title: r(
+                          title: text(
                             "Track selected cells and their current calculated values",
                           ),
                         }),
@@ -1013,32 +1014,32 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Evaluate Formula"),
+                      label: text("Evaluate Formula"),
                       large: true,
                       onClick: () => e.onTool("evaluateFormula"),
-                      title: r(
+                      title: text(
                         "Replay actual calculation steps and inspect errors",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ShieldCheck, {}),
-                      label: r("Compatibility"),
+                      label: text("Compatibility"),
                       large: true,
                       onClick: () => e.onTool("functionCompatibility"),
-                      title: r(
+                      title: text(
                         "Review function contracts and unsupported formulas",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Sheet, {}),
-                      label: r("Show Formulas"),
+                      label: text("Show Formulas"),
                       large: true,
                       active: e.showFormulas,
                       onClick: e.onShowFormulas,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ShieldCheck, {}),
-                      label: r("Audit Checks"),
+                      label: text("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
                       className: "xl-green-icon",
@@ -1046,33 +1047,33 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Calculation"),
+                  label: text("Calculation"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Calculation Options"),
+                      label: text("Calculation Options"),
                       large: true,
                       onClick: () => e.onTool("calculation"),
-                      title: r(
+                      title: text(
                         "Automatic or manual mode, iteration and calculation evidence",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Calculate Now"),
+                      label: text("Calculate Now"),
                       large: true,
                       onClick: () => e.onTool("calculateNow"),
-                      title: r(
+                      title: text(
                         "Recalculate the workbook without changing source cells",
                       ),
                     }),
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Formula Assistance"),
+                  label: text("Formula Assistance"),
                   children: i.jsx(lr, {
                     icon: i.jsx(Sparkles, {}),
-                    label: r("Ask AI Assistant"),
+                    label: text("Ask AI Assistant"),
                     large: true,
                     onClick: () => e.onPanel("assistant"),
                     className: "xl-purple-icon",
@@ -1084,86 +1085,86 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(Mn, {
-                  label: r("Get & Transform Data"),
+                  label: text("Get & Transform Data"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(FolderOpen, {}),
-                      label: r("Get Data"),
+                      label: text("Get Data"),
                       large: true,
                       onClick: e.onImport,
                       disabled: k,
                       className: "xl-gold-icon",
-                      title: r("Import Excel, CSV, TSV, or workbook JSON"),
+                      title: text("Import Excel, CSV, TSV, or workbook JSON"),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("From Table / Range"),
+                      label: text("From Table / Range"),
                       large: true,
                       onClick: () => e.onTool("query"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ArrowLeftRight, {}),
-                      label: r("Append / Join"),
+                      label: text("Append / Join"),
                       large: true,
                       onClick: () => e.onTool("combinePopulations"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review combined populations, unmatched records and match counts",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Transformation Recipes"),
+                      label: text("Transformation Recipes"),
                       large: true,
                       onClick: () => e.onTool("transformationRecipes"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Build versioned steps with source fingerprints, failure details and reviewed outputs",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(FolderOpen, {}),
-                      label: r("Connections & Refresh"),
+                      label: text("Connections & Refresh"),
                       large: true,
                       onClick: () => e.onTool("externalSources"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review approved external sources, control changes and last successful data",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Data Model"),
+                      label: text("Data Model"),
                       large: true,
                       onClick: () => e.onTool("dataModel"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Build typed tables, relationships and measures across shared dimensions",
                       ),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Sort & Filter"),
+                  label: text("Sort & Filter"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Filter, {}),
-                      label: r("Column Filters"),
+                      label: text("Column Filters"),
                       large: true,
                       onClick: () => e.onTool("populationFilter"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Filter values, text, numbers, dates and advanced criteria while retaining source rows",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ArrowDownAZ, {}),
-                      label: r("Custom Sort"),
+                      label: text("Custom Sort"),
                       large: true,
                       onClick: () => e.onTool("sort"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review a stable multi-level sort of complete worksheet records",
                       ),
                     }),
@@ -1172,209 +1173,209 @@ function Hde(e) {
                       children: [
                         i.jsx(lr, {
                           icon: i.jsx(ArrowDownAZ, {}),
-                          label: r("Sort A to Z"),
+                          label: text("Sort A to Z"),
                           onClick: () => e.onSort("asc"),
                           className: "xl-blue-icon",
-                          title: r(
+                          title: text(
                             "Sort worksheet view ascending by the selected column",
                           ),
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(ArrowUpAZ, {}),
-                          label: r("Sort Z to A"),
+                          label: text("Sort Z to A"),
                           onClick: () => e.onSort("desc"),
                           className: "xl-blue-icon",
-                          title: r(
+                          title: text(
                             "Sort worksheet view descending by the selected column",
                           ),
                         }),
                         i.jsx(lr, {
                           icon: i.jsx(Eraser, {}),
-                          label: r("Clear Sort"),
+                          label: text("Clear Sort"),
                           onClick: () => e.onSort(null),
                         }),
                       ],
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Filter, {}),
-                      label: r("Filter"),
+                      label: text("Filter"),
                       large: true,
                       onClick: e.onToggleFilter,
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Data Tools"),
+                  label: text("Data Tools"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(ClipboardCheck, {}),
-                      label: r("Audit Checks"),
+                      label: text("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(CheckCheck, {}),
-                      label: r("Data Validation"),
+                      label: text("Data Validation"),
                       large: true,
                       onClick: () => e.onTool("validation"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review validation rules and inspect existing values; editing requires write access",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Copy, {}),
-                      label: r("Remove Duplicates"),
+                      label: text("Remove Duplicates"),
                       large: true,
                       onClick: () => e.onTool("duplicates"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review duplicate groups and create a separate deduplicated population",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Columns3, {}),
-                      label: r("Text to Columns"),
+                      label: text("Text to Columns"),
                       large: true,
                       onClick: () => e.onTool("textToColumns"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Preview split fields and types before creating a separate output",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Columns3, {}),
-                      label: r("Clean up text"),
+                      label: text("Clean up text"),
                       large: true,
                       onClick: () => e.onTool("textCleanup"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review cleanup and extraction steps while retaining original evidence",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Columns3, {}),
-                      label: r("Clean & Reshape"),
+                      label: text("Clean & Reshape"),
                       large: true,
                       onClick: () => e.onTool("fieldTransform"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review splitting, conversions, gap filling and inferred patterns with retained exceptions",
                       ),
                     }),
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Workbook Links"),
+                  label: text("Workbook Links"),
                   children: i.jsx(lr, {
                     icon: i.jsx(FileSpreadsheet, {}),
-                    label: r("Workbook Links"),
+                    label: text("Workbook Links"),
                     large: true,
                     onClick: () => e.onTool("workbookLinks"),
                     disabled: e.busy,
-                    title: r(
+                    title: text(
                       "Inspect, resolve, refresh, replace and break approved workbook links",
                     ),
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("What-If Analysis"),
+                  label: text("What-If Analysis"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Scenario Manager"),
+                      label: text("Scenario Manager"),
                       large: true,
                       onClick: () => e.onTool("scenarios"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Compare named assumptions and review a scenario before applying it",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Data Table"),
+                      label: text("Data Table"),
                       large: true,
                       onClick: () => e.onTool("dataTable"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Build a one- or two-variable sensitivity table with retained baseline assumptions",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Goal Seek"),
+                      label: text("Goal Seek"),
                       large: true,
                       onClick: () => e.onTool("goalSeek"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Find a numeric input that reaches a target formula result",
                       ),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Analysis"),
+                  label: text("Analysis"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Calculator, {}),
-                      label: r("Solver"),
+                      label: text("Solver"),
                       large: true,
                       onClick: () => e.onTool("solver"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review bounded linear optimization with explicit constraints",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Data Analysis"),
+                      label: text("Data Analysis"),
                       large: true,
                       onClick: () => e.onTool("statistics"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Descriptive statistics, regression, distributions and forecasts",
                       ),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Outline"),
+                  label: text("Outline"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Table2, {}),
-                      label: r("Consolidate / Subtotals"),
+                      label: text("Consolidate / Subtotals"),
                       large: true,
                       onClick: () => e.onTool("consolidation"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review cross-sheet or approved-workbook rollups, source context and grouped subtotals",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Group & Outline"),
+                      label: text("Group & Outline"),
                       large: true,
                       onClick: () => e.onTool("outlines"),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Export"),
+                  label: text("Export"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Copy, {}),
-                      label: r("Report Outputs"),
+                      label: text("Report Outputs"),
                       large: true,
                       onClick: () => e.onTool("reportOutputs"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Publish fixed snapshots, review linked refreshes and inspect embedded objects",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(FileSpreadsheet, {}),
-                      label: r("Save as Excel"),
+                      label: text("Save as Excel"),
                       large: true,
                       onClick: () => e.onExport("xlsx"),
                       disabled: e.busy,
@@ -1382,7 +1383,7 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Download, {}),
-                      label: r("Export CSV"),
+                      label: text("Export CSV"),
                       large: true,
                       onClick: () => e.onExport("csv"),
                       disabled: e.busy,
@@ -1395,20 +1396,20 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsx(Mn, {
-                  label: r("Proofing"),
+                  label: text("Proofing"),
                   children: i.jsx(lr, {
                     icon: i.jsx(BookOpen, {}),
-                    label: r("Spelling"),
+                    label: text("Spelling"),
                     large: true,
                     onClick: () => e.onTool("spelling"),
                     disabled: false,
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("Notes"),
+                  label: text("Notes"),
                   children: i.jsx(lr, {
                     icon: i.jsx(MessageSquare, {}),
-                    label: r("New / Edit Note"),
+                    label: text("New / Edit Note"),
                     large: true,
                     onClick: e.onNote,
                     disabled: k,
@@ -1416,57 +1417,57 @@ function Hde(e) {
                   }),
                 }),
                 i.jsxs(Mn, {
-                  label: r("Comments"),
+                  label: text("Comments"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(MessageSquare, {}),
-                      label: r("Review Comments"),
+                      label: text("Review Comments"),
                       large: true,
                       onClick: () => e.onTool("comments"),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(MessageSquare, {}),
-                      label: r("Hyperlink"),
+                      label: text("Hyperlink"),
                       onClick: () => e.onTool("hyperlink"),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Audit Review"),
+                  label: text("Audit Review"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(ListFilter, {}),
-                      label: r("Pattern Checks"),
+                      label: text("Pattern Checks"),
                       large: true,
                       onClick: () => e.onTool("patterns"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Test explicit duplicate keys, sequence gaps, round amounts, weekends, holidays and combined rules",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ListFilter, {}),
-                      label: r("Aging Schedule"),
+                      label: text("Aging Schedule"),
                       large: true,
                       onClick: () => e.onTool("aging"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Reconcile configurable aging buckets using a fixed as-of date",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ListFilter, {}),
-                      label: r("Risk Screening"),
+                      label: text("Risk Screening"),
                       large: true,
                       onClick: () => e.onTool("materiality"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Review explicit thresholds, currency and effective period",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(CheckCheck, {}),
-                      label: r("Mark Reviewed"),
+                      label: text("Mark Reviewed"),
                       large: true,
                       onClick: e.onReviewed,
                       disabled: k,
@@ -1474,7 +1475,7 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(ClipboardCheck, {}),
-                      label: r("Audit Checks"),
+                      label: text("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
                       className: "xl-green-icon",
@@ -1482,21 +1483,21 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Changes"),
+                  label: text("Changes"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(ArrowLeftRight, {}),
-                      label: r("Compare Workbooks"),
+                      label: text("Compare Workbooks"),
                       large: true,
                       onClick: () => e.onTool("workbookComparison"),
                       disabled: e.busy,
-                      title: r(
+                      title: text(
                         "Compare keyed rows, formulas, links and hidden content",
                       ),
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(History, {}),
-                      label: r("Show Changes"),
+                      label: text("Show Changes"),
                       large: true,
                       onClick: () => e.onPanel("history"),
                       className: "xl-blue-icon",
@@ -1504,7 +1505,7 @@ function Hde(e) {
                   ],
                 }),
                 i.jsx(Mn, {
-                  label: r("Protection"),
+                  label: text("Protection"),
                   children: i.jsx(lr, {
                     icon: i.jsx(ShieldCheck, {}),
                     label: e.sheetProtected
@@ -1516,24 +1517,24 @@ function Hde(e) {
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("AI Review"),
+                  label: text("AI Review"),
                   children: i.jsx(lr, {
                     icon: i.jsx(Sparkles, {}),
-                    label: r("AI Assistant"),
+                    label: text("AI Assistant"),
                     large: true,
                     onClick: () => e.onPanel("assistant"),
                     className: "xl-purple-icon",
                   }),
                 }),
                 i.jsx(Mn, {
-                  label: r("Automation"),
+                  label: text("Automation"),
                   children: i.jsx(lr, {
                     icon: i.jsx(FileCode, {}),
-                    label: r("Automation & Scripts"),
+                    label: text("Automation & Scripts"),
                     large: true,
                     onClick: () => e.onTool("automation"),
                     disabled: e.busy,
-                    title: r(
+                    title: text(
                       "Inspect and preserve VBA/Office Scripts; review bounded migrations",
                     ),
                   }),
@@ -1544,11 +1545,11 @@ function Hde(e) {
             i.jsxs(i.Fragment, {
               children: [
                 i.jsxs(Mn, {
-                  label: r("Workbook Views"),
+                  label: text("Workbook Views"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Grid3x3, {}),
-                      label: r("Normal"),
+                      label: text("Normal"),
                       large: true,
                       active: true,
                       onClick: () => {
@@ -1558,7 +1559,7 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Sheet, {}),
-                      label: r("Page Layout"),
+                      label: text("Page Layout"),
                       large: true,
                       onClick: () => e.onTool("pageLayout"),
                       disabled: false,
@@ -1566,7 +1567,7 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Show"),
+                  label: text("Show"),
                   className: "xl-options-group",
                   children: [
                     i.jsxs("label", {
@@ -1602,7 +1603,7 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Zoom"),
+                  label: text("Zoom"),
                   className: "xl-zoom-group",
                   children: [
                     i.jsxs("div", {
@@ -1618,39 +1619,39 @@ function Hde(e) {
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Window"),
+                  label: text("Window"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Grid2x2, {}),
-                      label: r("Split"),
+                      label: text("Split"),
                       onClick: () => e.onTool("viewSettings"),
-                      title: r(
+                      title: text(
                         "Split the worksheet into two or four scrolling panes",
                       ),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Default Sizes"),
+                      label: text("Default Sizes"),
                       onClick: () => e.onTool("viewSettings"),
-                      title: r(
+                      title: text(
                         "Set worksheet-wide row height and column width",
                       ),
                       disabled: k,
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Grid2x2, {}),
-                      label: r("Freeze Panes"),
+                      label: text("Freeze Panes"),
                       large: true,
                       onClick: () => e.onTool("viewSettings"),
-                      title: r(
+                      title: text(
                         "Freeze rows and columns above and to the left of the selected cell",
                       ),
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(PanelTop, {}),
-                      label: r("Freeze Top Row"),
+                      label: text("Freeze Top Row"),
                       large: true,
                       active: e.freezeRows,
                       onClick: e.onFreeze,
@@ -1658,26 +1659,26 @@ function Hde(e) {
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(Rows3, {}),
-                      label: r("Hide & Unhide"),
+                      label: text("Hide & Unhide"),
                       large: true,
                       onClick: () => e.onTool("viewSettings"),
-                      title: r("Hide or restore selected rows and columns"),
+                      title: text("Hide or restore selected rows and columns"),
                     }),
                   ],
                 }),
                 i.jsxs(Mn, {
-                  label: r("Task Panes"),
+                  label: text("Task Panes"),
                   children: [
                     i.jsx(lr, {
                       icon: i.jsx(Sparkles, {}),
-                      label: r("AI Assistant"),
+                      label: text("AI Assistant"),
                       large: true,
                       onClick: () => e.onPanel("assistant"),
                       className: "xl-purple-icon",
                     }),
                     i.jsx(lr, {
                       icon: i.jsx(History, {}),
-                      label: r("Show Changes"),
+                      label: text("Show Changes"),
                       large: true,
                       onClick: () => e.onPanel("history"),
                     }),
@@ -1692,8 +1693,8 @@ function Hde(e) {
       i.jsxs("div", {
         className: "xl-file-menu",
         role: "menu",
-        "aria-label": r("File"),
-        lang: t("File"),
+        "aria-label": text("File"),
+        lang: language("File"),
         "data-ui-label": "File",
         children: [
           i.jsxs("button", {
@@ -1979,13 +1980,13 @@ function Hde(e) {
         id: "quick-undo",
         name: "Undo",
         location: "Quick access",
-        reason: k || !e.canUndo ? _("Undo") : void 0,
+        reason: k || !e.canUndo ? _("Undo") : undefined,
       },
       {
         id: "quick-redo",
         name: "Redo",
         location: "Quick access",
-        reason: k || !e.canRedo ? _("Redo") : void 0,
+        reason: k || !e.canRedo ? _("Redo") : undefined,
       },
     ],
     $ = (J) => {
@@ -1998,13 +1999,10 @@ function Hde(e) {
     };
   return (
     ne.useEffect(() => {
-      var W;
       const J = d.current;
       if (!J) return;
       const q = Array.from(
-        ((W = m.current) == null
-          ? void 0
-          : W.querySelectorAll("[data-workbook-command]")) ?? [],
+        m.current?.querySelectorAll("[data-workbook-command]") ?? [],
       ).find((K) => K.dataset.workbookCommand === J);
       q && (q.focus(), (d.current = null));
     }),
@@ -2051,14 +2049,14 @@ function Hde(e) {
           ref: m,
           role: "group",
           className: `xl-ribbon${c ? " xl-ribbon-collapsed" : ""}`,
-          "aria-label": r("Workbook ribbon"),
+          "aria-label": text("Workbook ribbon"),
           onKeyDown: (J) => {
             J.key === "Escape" &&
               f &&
               !J.defaultPrevented &&
               (J.preventDefault(), J.stopPropagation(), w(), p(false));
           },
-          lang: t("Workbook ribbon"),
+          lang: language("Workbook ribbon"),
           "data-ui-label": "Workbook ribbon",
           children: [
             i.jsxs("div", {
@@ -2068,7 +2066,7 @@ function Hde(e) {
                   className: "xl-file-control",
                   ref: g,
                   onKeyDown: (J) => {
-                    var q, W, K, te;
+                    var W, te;
                     if (!(
                       J.altKey ||
                       J.ctrlKey ||
@@ -2085,11 +2083,9 @@ function Hde(e) {
                           return;
                         }
                         const ae = Array.from(
-                            ((q = g.current) == null
-                              ? void 0
-                              : q.querySelectorAll(
-                                  '[role="menuitem"]:not(:disabled)',
-                                )) ?? [],
+                            g.current?.querySelectorAll(
+                              '[role="menuitem"]:not(:disabled)',
+                            ) ?? [],
                           ),
                           oe = ae.indexOf(document.activeElement),
                           de =
@@ -2108,10 +2104,7 @@ function Hde(e) {
                           (J.preventDefault(),
                           J.stopPropagation(),
                           l(false),
-                          (te =
-                            (K = g.current) == null
-                              ? void 0
-                              : K.querySelector("button")) == null ||
+                          (te = g.current?.querySelector("button")) == null ||
                             te.focus());
                   },
                   children: [
@@ -2131,8 +2124,8 @@ function Hde(e) {
                 i.jsx("div", {
                   className: "xl-ribbon-tabs",
                   role: "tablist",
-                  "aria-label": r("Ribbon tabs"),
-                  lang: t("Ribbon tabs"),
+                  "aria-label": text("Ribbon tabs"),
+                  lang: language("Ribbon tabs"),
                   "data-ui-label": "Ribbon tabs",
                   children: Uh.map((J, q) =>
                     i.jsx(
@@ -2146,7 +2139,7 @@ function Hde(e) {
                         "aria-expanded": n === J && y,
                         tabIndex: n === J ? 0 : -1,
                         className: n === J ? "xl-tab-active" : "",
-                        title: r(
+                        title: text(
                           "Double-click to collapse or expand the ribbon",
                         ),
                         onClick: () => A(J),
@@ -2186,7 +2179,7 @@ function Hde(e) {
                             }
                           }
                         },
-                        lang: t(
+                        lang: language(
                           "Double-click to collapse or expand the ribbon",
                         ),
                         children: i.jsx(M, { children: J }),
@@ -2201,7 +2194,9 @@ function Hde(e) {
                     i.jsx("button", {
                       type: "button",
                       className: "xl-icon-button xl-ribbon-toggle",
-                      "aria-label": r(c ? "Expand ribbon" : "Collapse ribbon"),
+                      "aria-label": text(
+                        c ? "Expand ribbon" : "Collapse ribbon",
+                      ),
                       "aria-expanded": y,
                       "aria-controls": `${b}-panel`,
                       title: c
@@ -2214,7 +2209,7 @@ function Hde(e) {
                     }),
                     i.jsx(Xl, {
                       icon: i.jsx(Undo2, { size: 16 }),
-                      label: r("Undo (Ctrl+Z)"),
+                      label: text("Undo (Ctrl+Z)"),
                       commandId: "quick-undo",
                       reason: L[0].reason,
                       onClick: e.onUndo,
@@ -2222,7 +2217,7 @@ function Hde(e) {
                     }),
                     i.jsx(Xl, {
                       icon: i.jsx(Redo2, { size: 16 }),
-                      label: r("Redo (Ctrl+Y)"),
+                      label: text("Redo (Ctrl+Y)"),
                       commandId: "quick-redo",
                       reason: L[1].reason,
                       onClick: e.onRedo,
@@ -2230,16 +2225,16 @@ function Hde(e) {
                     }),
                     i.jsx(Xl, {
                       icon: i.jsx(BookOpen, { size: 16 }),
-                      label: r("Commands & shortcuts"),
+                      label: text("Commands & shortcuts"),
                       onClick: () => s(true),
                     }),
                     i.jsx("span", { className: "xl-tabbar-divider" }),
                     i.jsxs("button", {
                       type: "button",
                       className: "xl-ai-button",
-                      "aria-label": r("AI assistant"),
+                      "aria-label": text("AI assistant"),
                       onClick: () => e.onPanel("assistant"),
-                      lang: t("AI assistant"),
+                      lang: language("AI assistant"),
                       "data-ui-label": "AI assistant",
                       children: [
                         i.jsx(Sparkles, { size: 15 }),

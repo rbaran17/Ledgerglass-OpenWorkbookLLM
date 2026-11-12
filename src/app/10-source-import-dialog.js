@@ -5,10 +5,21 @@ import { Cd, FU, ut } from "./03-workbook-model.js";
 import { Dr, M, ci } from "./04-cell-input-paste-and-fill.js";
 import { oT } from "./05-add-ins-and-custom-functions.js";
 import { H1, MC } from "./07-xlsx-archive-reader.js";
-import { Due, H$, Iue, Mue, Oue, Rue, _ue, jue, q$, yh } from "./09-workbook-links.js";
+import {
+  Due,
+  H$,
+  Iue,
+  Mue,
+  Oue,
+  Rue,
+  _ue,
+  jue,
+  q$,
+  yh,
+} from "./09-workbook-links.js";
 
 function Fue(e) {
-  var we, Ee;
+  var Ee;
   const r = ne.useId(),
     t = ne.useRef(null),
     n = ne.useRef(e),
@@ -63,9 +74,8 @@ function Fue(e) {
       }
     },
     H = (Ae) => {
-      var ye;
       (u(Ae),
-        c(((ye = Ae.tables[0]) == null ? void 0 : ye.id) ?? ""),
+        c(Ae.tables[0]?.id ?? ""),
         E(null),
         y({}),
         N({}),
@@ -108,25 +118,20 @@ function Fue(e) {
         );
       }),
     K = () => E(null),
-    te = d == null ? void 0 : d.tables.find((Ae) => Ae.id === l),
+    te = d?.tables.find((Ae) => Ae.id === l),
     ae =
-      (te == null
-        ? void 0
-        : te.rows
-            .flatMap((Ae, ye) =>
-              Ae.map((Te, Pe) => ({
-                cell: Te,
-                row: ye,
-                column: Pe,
-                key: `${ye}:${Pe}`,
-              })),
-            )
-            .filter((Ae) => Ae.cell.confidence < Cd.confidence)) ?? [],
+      te?.rows
+        .flatMap((Ae, ye) =>
+          Ae.map((Te, Pe) => ({
+            cell: Te,
+            row: ye,
+            column: Pe,
+            key: `${ye}:${Pe}`,
+          })),
+        )
+        .filter((Ae) => Ae.cell.confidence < Cd.confidence) ?? [],
     oe = ae.filter((Ae) => !b[Ae.key]).length,
-    de =
-      (we = e.workbook.sourceImports) == null
-        ? void 0
-        : we.find((Ae) => Ae.id === R),
+    de = e.workbook.sourceImports?.find((Ae) => Ae.id === R),
     [he, Se] = $.split(":").map(Number),
     le = de ? Mue(e.workbook, de.id, he, Se) : null,
     ce = () => {
@@ -247,9 +252,7 @@ function Fue(e) {
                       accept: ".json,.xml,.pdf,.png,.jpg,.jpeg,.html,.htm",
                       disabled: F,
                       onChange: (Ae) => {
-                        var Te;
-                        const ye =
-                          (Te = Ae.target.files) == null ? void 0 : Te[0];
+                        const ye = Ae.target.files?.[0];
                         ((Ae.target.value = ""), ye && Q(ye));
                       },
                     }),
@@ -367,11 +370,7 @@ function Fue(e) {
                               disabled: F,
                               "aria-label": "Load extraction JSON",
                               onChange: (Ae) => {
-                                var Te;
-                                const ye =
-                                  (Te = Ae.target.files) == null
-                                    ? void 0
-                                    : Te[0];
+                                const ye = Ae.target.files?.[0];
                                 ((Ae.target.value = ""), ye && X$1(ye));
                               },
                             }),
@@ -581,8 +580,7 @@ function Fue(e) {
                         }),
                         ae
                           .slice(_ * 10, _ * 10 + 10)
-                          .map(({ cell: Ae, row: ye, column: Te, key: Pe }) => {
-                            var qe, ht;
+                          .map(({ cell, row, column, key }) => {
                             return i.jsxs(
                               "div",
                               {
@@ -592,23 +590,25 @@ function Fue(e) {
                                     children: [
                                       i.jsxs("strong", {
                                         children: [
-                                          ut(Te),
-                                          ye + 2,
+                                          ut(column),
+                                          row + 2,
                                           " · ",
-                                          Math.round(Ae.confidence * 100),
+                                          Math.round(cell.confidence * 100),
                                           "% confidence",
                                         ],
                                       }),
                                       i.jsx("p", {
-                                        children: String(Ae.value ?? "(null)"),
+                                        children: String(
+                                          cell.value ?? "(null)",
+                                        ),
                                       }),
                                       i.jsxs("small", {
                                         children: [
-                                          Ae.path,
+                                          cell.path,
                                           " ·",
                                           " ",
-                                          Ae.region
-                                            ? `Page ${Ae.region.page} · x ${Ae.region.x}, y ${Ae.region.y}, w ${Ae.region.width}, h ${Ae.region.height}`
+                                          cell.region
+                                            ? `Page ${cell.region.page} · x ${cell.region.x}, y ${cell.region.y}, w ${cell.region.width}, h ${cell.region.height}`
                                             : "Structured field",
                                         ],
                                       }),
@@ -617,25 +617,22 @@ function Fue(e) {
                                   i.jsxs("label", {
                                     children: [
                                       "Review ",
-                                      Pe,
+                                      key,
                                       i.jsxs("select", {
-                                        "aria-label": "Review " + Pe,
-                                        value:
-                                          ((qe = b[Pe]) == null
-                                            ? void 0
-                                            : qe.decision) ?? "",
+                                        "aria-label": "Review " + key,
+                                        value: b[key]?.decision ?? "",
                                         onChange: (Re) => {
                                           Re.target.value
-                                            ? se(Pe, {
+                                            ? se(key, {
                                                 decision: Re.target.value,
                                                 ...(Re.target.value ===
                                                 "correct"
-                                                  ? { value: Ae.value }
+                                                  ? { value: cell.value }
                                                   : {}),
                                               })
                                             : (y((Me) => {
                                                 const ke = { ...Me };
-                                                return (delete ke[Pe], ke);
+                                                return (delete ke[key], ke);
                                               }),
                                               K());
                                         },
@@ -660,17 +657,16 @@ function Fue(e) {
                                       }),
                                     ],
                                   }),
-                                  ((ht = b[Pe]) == null
-                                    ? void 0
-                                    : ht.decision) === "correct" &&
+                                  b[key]?.decision === "correct" &&
                                     i.jsxs("label", {
                                       children: [
                                         "Corrected value (JSON scalar)",
                                         i.jsx("input", {
-                                          "aria-label": "Corrected value " + Pe,
-                                          "aria-invalid": T[Pe] || void 0,
+                                          "aria-label":
+                                            "Corrected value " + key,
+                                          "aria-invalid": T[key] || undefined,
                                           defaultValue: JSON.stringify(
-                                            Ae.value,
+                                            cell.value,
                                           ),
                                           onChange: (Re) => {
                                             try {
@@ -686,7 +682,7 @@ function Fue(e) {
                                                 ].includes(typeof Me)
                                               )
                                                 throw Error();
-                                              (se(Pe, {
+                                              (se(key, {
                                                 decision: "correct",
                                                 value: Me,
                                               }),
@@ -696,7 +692,7 @@ function Fue(e) {
                                             } catch {
                                               (N((Me) => ({
                                                 ...Me,
-                                                [Pe]: true,
+                                                [key]: true,
                                               })),
                                                 E(null),
                                                 Re.target.setCustomValidity(
@@ -709,7 +705,7 @@ function Fue(e) {
                                     }),
                                 ],
                               },
-                              Pe,
+                              key,
                             );
                           }),
                         i.jsxs("div", {
@@ -848,7 +844,7 @@ function Fue(e) {
                           type: "button",
                           onClick: () =>
                             void G(async () => {
-                              const { base64: Ae, ...ye } = de.original;
+                              const { base64, ...ye } = de.original;
                               await q(
                                 de.original.fileName + ".import-review.json",
                                 new Blob(
@@ -1018,12 +1014,12 @@ const Tk = {
   flattened: "Flattened",
   dropped: "Dropped",
 };
-function Pue({ inventory: e }) {
-  const { text: r, language: t } = Dr(),
+function Pue({ inventory }) {
+  const { text, language } = Dr(),
     [n, o] = ne.useState(""),
     [a, s] = ne.useState("all"),
     [d, u] = ne.useState(0),
-    l = e.parts.filter(
+    l = inventory.parts.filter(
       (f) =>
         (a === "all" || f.disposition === a) &&
         [
@@ -1043,8 +1039,8 @@ function Pue({ inventory: e }) {
     h = Math.min(d, c);
   return i.jsxs("section", {
     className: "lg-xlsx-inventory",
-    "aria-label": r("Source package inventory"),
-    lang: t("Source package inventory"),
+    "aria-label": text("Source package inventory"),
+    lang: language("Source package inventory"),
     "data-ui-label": "Source package inventory",
     children: [
       i.jsx("h3", {
@@ -1052,30 +1048,30 @@ function Pue({ inventory: e }) {
       }),
       i.jsxs("p", {
         children: [
-          e.parts.length,
+          inventory.parts.length,
           " ",
           i.jsx(M, { children: "entries inventoried ·" }),
           " ",
-          e.counts.editable,
+          inventory.counts.editable,
           " ",
           i.jsx(M, { children: "editable ·" }),
           " ",
-          e.counts["preserved-opaque"],
+          inventory.counts["preserved-opaque"],
           " ",
           i.jsx(M, { children: "preserved opaque ·" }),
           " ",
-          e.counts.flattened,
+          inventory.counts.flattened,
           " ",
           i.jsx(M, { children: "flattened · " }),
-          e.counts.dropped,
+          inventory.counts.dropped,
           " ",
           i.jsx(M, { children: "dropped from the derived copy." }),
         ],
       }),
-      i.jsx("p", { children: e.note }),
+      i.jsx("p", { children: inventory.note }),
       i.jsx("p", {
         children:
-          e.phase === "export-result"
+          inventory.phase === "export-result"
             ? "These are the checked outcomes for this generated file."
             : "Opaque parts shown here are eligible for export. Export checks the current package and limits again before reporting the final outcome.",
       }),
@@ -1114,8 +1110,8 @@ function Pue({ inventory: e }) {
         ],
       }),
       i.jsxs("table", {
-        "aria-label": r("Workbook part inventory"),
-        lang: t("Workbook part inventory"),
+        "aria-label": text("Workbook part inventory"),
+        lang: language("Workbook part inventory"),
         "data-ui-label": "Workbook part inventory",
         children: [
           i.jsx("thead", {
@@ -1283,17 +1279,17 @@ function Pue({ inventory: e }) {
   });
 }
 function X$({
-  report: e,
-  blocked: r,
-  onConfirm: t,
-  onClose: n,
-  onReport: o,
-  onOriginal: a,
-  originalLabel: s = "Download original XLSX",
-  inspectOnly: d = false,
+  report,
+  blocked,
+  onConfirm,
+  onClose,
+  onReport,
+  onOriginal,
+  originalLabel = "Download original XLSX",
+  inspectOnly = false,
 }) {
   var m;
-  const { text: u, language: l } = Dr(),
+  const { text, language } = Dr(),
     c = ne.useId(),
     h = ne.useRef(null);
   ne.useEffect(() => {
@@ -1306,8 +1302,8 @@ function X$({
       }
     );
   }, []);
-  const f = e.direction === "import",
-    p = e.caches;
+  const f = report.direction === "import",
+    p = report.caches;
   return i.jsx("div", {
     className: "lg-xlsx-overlay",
     children: i.jsxs("section", {
@@ -1318,17 +1314,15 @@ function X$({
       tabIndex: -1,
       className: "lg-xlsx-review",
       onKeyDown: (v) => {
-        var g;
         if (
-          (v.key === "Escape" && (v.preventDefault(), v.stopPropagation(), n()),
+          (v.key === "Escape" &&
+            (v.preventDefault(), v.stopPropagation(), onClose()),
           v.key === "Tab")
         ) {
           const b = [
-              ...(((g = h.current) == null
-                ? void 0
-                : g.querySelectorAll(
-                    'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]',
-                  )) ?? []),
+              ...(h.current?.querySelectorAll(
+                'button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary,[tabindex="0"]',
+              ) ?? []),
             ],
             y = b[0],
             w = b.at(-1);
@@ -1343,23 +1337,25 @@ function X$({
       children: [
         i.jsx("h2", {
           id: c,
-          children: d
+          children: inspectOnly
             ? "Original XLSX and compatibility"
-            : `Review ${e.format === "xltx" ? "XLTX" : "XLSX"} ${f ? "import" : "export"}`,
+            : `Review ${report.format === "xltx" ? "XLTX" : "XLSX"} ${f ? "import" : "export"}`,
         }),
         i.jsxs("p", {
           children: [
-            i.jsx("strong", { children: e.fileName }),
+            i.jsx("strong", { children: report.fileName }),
             " ·",
             " ",
-            (e.fileBytes / 1024).toFixed(1),
+            (report.fileBytes / 1024).toFixed(1),
             " ",
             i.jsx(M, { children: "KiB · " }),
-            e.sheets.length,
+            report.sheets.length,
             " ",
             i.jsx(M, { children: "worksheets in current conversion ·" }),
             " ",
-            e.sheets.reduce((v, g) => v + g.storedCells, 0).toLocaleString(),
+            report.sheets
+              .reduce((v, g) => v + g.storedCells, 0)
+              .toLocaleString(),
             " ",
             i.jsx(M, { children: "stored cells" }),
           ],
@@ -1370,7 +1366,7 @@ function X$({
               "This is a derived copy with supported content. It is not a lossless Excel conversion. Keep the original file and a native JSON backup.",
           }),
         }),
-        d
+        inspectOnly
           ? i.jsx("p", {
               children: i.jsx(M, {
                 children:
@@ -1385,7 +1381,7 @@ function X$({
                       "Opening replaces the current workbook. Cancel keeps it unchanged; Undo can restore it after opening.",
                   }),
                   " ",
-                  e.originalFileRetained
+                  report.originalFileRetained
                     ? "The exact original is retained in this workbook and native JSON; access it later from the File menu."
                     : "No source bytes are attached to this report.",
                 ],
@@ -1393,61 +1389,61 @@ function X$({
             : i.jsxs("p", {
                 children: [
                   i.jsx(M, { children: "The download contains revision " }),
-                  e.revision,
+                  report.revision,
                   " ",
                   i.jsx(M, { children: "of" }),
                   " ",
-                  e.workbookName,
+                  report.workbookName,
                   i.jsx(M, {
                     children:
                       ". Unsupported native features remain in your current workbook and JSON backup.",
                   }),
                 ],
               }),
-        e.originalSource &&
+        report.originalSource &&
           i.jsxs("p", {
             className: "lg-xlsx-source",
             children: [
               i.jsx(M, {
-                children: e.alternateOriginal
+                children: report.alternateOriginal
                   ? "Converted XLSX retained: "
                   : "Original retained: ",
               }),
-              i.jsx("strong", { children: e.originalSource.fileName }),
+              i.jsx("strong", { children: report.originalSource.fileName }),
               " ·",
               " ",
-              e.originalSource.byteLength.toLocaleString(),
+              report.originalSource.byteLength.toLocaleString(),
               " ",
               i.jsx(M, { children: "bytes" }),
               i.jsx("br", {}),
               i.jsxs("small", {
                 children: [
                   i.jsx(M, { children: "SHA-256: " }),
-                  i.jsx("code", { children: e.originalSource.sha256 }),
+                  i.jsx("code", { children: report.originalSource.sha256 }),
                 ],
               }),
             ],
           }),
-        e.alternateOriginal &&
+        report.alternateOriginal &&
           i.jsxs("p", {
             className: "lg-xlsx-source",
             children: [
               i.jsxs("strong", {
                 children: [
                   "Original ",
-                  e.alternateOriginal.format.toUpperCase(),
+                  report.alternateOriginal.format.toUpperCase(),
                   ": ",
-                  e.alternateOriginal.fileName,
+                  report.alternateOriginal.fileName,
                 ],
               }),
               " · ",
-              e.alternateOriginal.byteLength.toLocaleString(),
+              report.alternateOriginal.byteLength.toLocaleString(),
               " bytes",
               i.jsx("br", {}),
               i.jsxs("small", {
                 children: [
                   "SHA-256: ",
-                  i.jsx("code", { children: e.alternateOriginal.sha256 }),
+                  i.jsx("code", { children: report.alternateOriginal.sha256 }),
                 ],
               }),
             ],
@@ -1455,20 +1451,20 @@ function X$({
         i.jsxs("div", {
           className: "lg-xlsx-scroll",
           children: [
-            e.partInventory &&
+            report.partInventory &&
               i.jsx(
                 Pue,
-                { inventory: e.partInventory },
-                e.partInventory.sourceSha256,
+                { inventory: report.partInventory },
+                report.partInventory.sourceSha256,
               ),
-            !d &&
+            !inspectOnly &&
               i.jsxs(i.Fragment, {
                 children: [
                   i.jsx("h3", {
                     children: i.jsx(M, { children: "Worksheets" }),
                   }),
                   i.jsx("ul", {
-                    children: e.sheets.map((v) =>
+                    children: report.sheets.map((v) =>
                       i.jsxs(
                         "li",
                         {
@@ -1531,8 +1527,8 @@ function X$({
                       }),
                   !!p.issues.length &&
                     i.jsxs("table", {
-                      "aria-label": u("Formula cache differences"),
-                      lang: l("Formula cache differences"),
+                      "aria-label": text("Formula cache differences"),
+                      lang: language("Formula cache differences"),
                       "data-ui-label": "Formula cache differences",
                       children: [
                         i.jsx("thead", {
@@ -1604,21 +1600,21 @@ function X$({
               children: i.jsx(M, { children: "Compatibility notices" }),
             }),
             i.jsxs("ul", {
-              "aria-label": u("Compatibility notices"),
-              lang: l("Compatibility notices"),
+              "aria-label": text("Compatibility notices"),
+              lang: language("Compatibility notices"),
               "data-ui-label": "Compatibility notices",
               children: [
-                (m = e.embeddedObjectLosses) != null && m.length
+                (m = report.embeddedObjectLosses) != null && m.length
                   ? i.jsxs("li", {
                       children: [
                         i.jsxs("strong", {
                           children: [
-                            e.embeddedObjectLosses.length,
+                            report.embeddedObjectLosses.length,
                             " unsupported embedded-object item(s) omitted",
                           ],
                         }),
                         i.jsx("ul", {
-                          children: e.embeddedObjectLosses.map((v, g) =>
+                          children: report.embeddedObjectLosses.map((v, g) =>
                             i.jsxs(
                               "li",
                               {
@@ -1638,32 +1634,35 @@ function X$({
                       ],
                     })
                   : null,
-                e.warnings.map((v, g) => i.jsx("li", { children: v }, g)),
+                report.warnings.map((v, g) => i.jsx("li", { children: v }, g)),
               ],
             }),
           ],
         }),
-        r && i.jsx("p", { role: "alert", children: r }),
+        blocked && i.jsx("p", { role: "alert", children: blocked }),
         i.jsxs("footer", {
           children: [
-            i.jsx("button", { onClick: n, children: d ? "Close" : "Cancel" }),
-            e.originalFileRetained &&
-              a &&
+            i.jsx("button", {
+              onClick: onClose,
+              children: inspectOnly ? "Close" : "Cancel",
+            }),
+            report.originalFileRetained &&
+              onOriginal &&
               i.jsx("button", {
-                onClick: a,
-                children: i.jsx(M, { children: s }),
+                onClick: onOriginal,
+                children: i.jsx(M, { children: originalLabel }),
               }),
             i.jsx("button", {
-              onClick: o,
+              onClick: onReport,
               children: i.jsx(M, { children: "Save compatibility report" }),
             }),
-            !d &&
+            !inspectOnly &&
               i.jsx("button", {
-                disabled: !!r,
-                onClick: t,
+                disabled: !!blocked,
+                onClick: onConfirm,
                 children: f
                   ? "Open derived workbook"
-                  : `Download derived ${e.format === "xltx" ? "XLTX" : "XLSX"}`,
+                  : `Download derived ${report.format === "xltx" ? "XLTX" : "XLSX"}`,
               }),
           ],
         }),
@@ -1671,11 +1670,11 @@ function X$({
     }),
   });
 }
-const Uue = ({ filename: e, blob: r }) => {
-  const t = URL.createObjectURL(r),
+const Uue = ({ filename, blob }) => {
+  const t = URL.createObjectURL(blob),
     n = document.createElement("a");
   ((n.href = t),
-    (n.download = e),
+    (n.download = filename),
     n.click(),
     setTimeout(() => URL.revokeObjectURL(t), 1e3));
 };
