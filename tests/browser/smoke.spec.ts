@@ -27,7 +27,7 @@ async function select(page: Page, address: string) {
   const box = page.getByLabel("Selected range");
   await box.fill(address);
   await box.press("Enter");
-  await expect(cell(page, address)).toHaveAttribute("aria-selected", "true");
+  await expect(cell(page, address.split(":")[0])).toHaveAttribute("aria-selected", "true");
 }
 
 test("blank workbook loads under the production content security policy", async ({ page }) => {
@@ -191,5 +191,78 @@ test("XML import parses elements and entities", async ({ page }) => {
   await expect(cell(page, "A2")).toHaveAttribute("aria-label", "A2 Cash & bank");
   await expect(cell(page, "B2")).toHaveAttribute("aria-label", "B2 1250.5");
   await expect(cell(page, "B3")).toHaveAttribute("aria-label", "B3 -300");
+  expect(errors).toEqual([]);
+});
+
+test("alternate workbook format round-trips through its ZIP archive", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByText(/^Workbook formats/).click();
+  await page.getByRole("button", { name: "Review XLTX export" }).click();
+  const downloading = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download derived XLTX" }).click();
+  const download = await downloading;
+  const bytes = await readFile(await download.path());
+  expect(bytes.subarray(0, 2).toString()).toBe("PK");
+
+  await open(page, "temporary");
+  await page.getByLabel("Import workbook file").setInputFiles({
+    name: "roundtrip.xltx",
+    mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.template",
+    buffer: bytes,
+  });
+  await page.getByRole("button", { name: "Preview template workbook" }).click();
+  await page.getByRole("button", { name: "Open derived workbook" }).click();
+  await expect(cell(page, "A1")).toHaveAttribute("aria-label", "A1 Journal ID", { timeout: 30_000 });
+  expect(errors).toEqual([]);
+});
+
+test("schedule PDF export produces a PDF file", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "Trial balance" }).click();
+  // Column widths depend on the fonts installed; the app refuses to print a number
+  // that does not fit, so size the columns to their content first.
+  await select(page, "A1:E16");
+  await page.getByRole("button", { name: "AutoFit Column Width" }).click();
+  await page.getByRole("tab", { name: "Page Layout", exact: true }).click();
+  await page.getByRole("button", { name: "Margins", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Page setup and print preview" });
+  await dialog.getByRole("button", { name: "Create PDF", exact: true }).click();
+  const link = dialog.getByRole("link", { name: /Download PDF/ });
+  // If no PDF appears, say what the dialog reported instead of only timing out.
+  const appeared = await link
+    .waitFor({ state: "visible", timeout: 45_000 })
+    .then(() => true, () => false);
+  if (!appeared) {
+    const report = (await dialog.innerText())
+      .split("\n")
+      .filter((line) => /issue|warning|error|fail|block|cannot|unable|exceed|beyond/i.test(line))
+      .slice(0, 12)
+      .join(" | ");
+    throw new Error(`No PDF was produced. Dialog reported: ${report || "(nothing matching)"}; page errors: ${errors.join("; ") || "none"}`);
+  }
+  const downloading = page.waitForEvent("download");
+  await link.click();
+  const download = await downloading;
+  const bytes = await readFile(await download.path());
+  expect(bytes.subarray(0, 5).toString()).toBe("%PDF-");
+  expect(bytes.length).toBeGreaterThan(1000);
+  expect(bytes.subarray(-1024).toString("latin1")).toContain("%%EOF");
+  expect(errors).toEqual([]);
+});
+
+test("assistant reply is rendered as Markdown", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const prompt = page.getByLabel("Assistant prompt");
+  await prompt.fill("Summarize the selected range");
+  await prompt.press("Enter");
+  const conversation = page.getByLabel("Conversation");
+  await expect(conversation).toContainText("Local deterministic demo", { timeout: 30_000 });
+  await expect(conversation.locator("strong").first()).toBeVisible();
+  await expect(conversation.locator("p").first()).toBeVisible();
   expect(errors).toEqual([]);
 });

@@ -1,3 +1,4 @@
+import { LoaderCircle as Zn, Paperclip as $c } from "lucide-react";
 import "../styles/assistant.css";
 var _c = Object.defineProperty;
 var Wn = (t) => {
@@ -52,29 +53,7 @@ import {
   p as kc,
 } from "../main.js";
 import { AssistantChatMarkdown as jc } from "./AssistantChatMarkdown.js";
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Zn = di("LoaderCircle", [
-  ["path", { d: "M21 12a9 9 0 1 1-6.219-8.56", key: "13zald" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const $c = di("Paperclip", [
-  ["path", { d: "M13.234 20.252 21 12.3", key: "1cbrk9" }],
-  [
-    "path",
-    {
-      d: "m16 6-8.414 8.586a2 2 0 0 0 0 2.828 2 2 0 0 0 2.828 0l8.414-8.586a4 4 0 0 0 0-5.656 4 4 0 0 0-5.656 0l-8.415 8.585a6 6 0 1 0 8.486 8.486",
-      key: "1pkts6",
-    },
-  ],
-]);
+
 let lt = null;
 function Oc(t, e) {
   ((t.currentIndex = 0),
@@ -6996,17 +6975,15 @@ var Ar = class {
     const n = e.toolName,
       r = e.toolCallId,
       i = Oe.toResponse(t);
-    this.threadApi
-      .getState()
-      .addToolResult({
-        messageId: s.id,
-        toolName: n,
-        toolCallId: r,
-        result: i.result,
-        isError: i.isError,
-        ...(i.artifact !== void 0 && { artifact: i.artifact }),
-        ...(i.modelContent !== void 0 && { modelContent: i.modelContent }),
-      });
+    this.threadApi.getState().addToolResult({
+      messageId: s.id,
+      toolName: n,
+      toolCallId: r,
+      result: i.result,
+      isError: i.isError,
+      ...(i.artifact !== void 0 && { artifact: i.artifact }),
+      ...(i.modelContent !== void 0 && { modelContent: i.modelContent }),
+    });
   }
   resumeToolCall(t) {
     const e = this.contentBinding.getState();
@@ -7122,13 +7099,11 @@ var ff = class {
   }
   submitFeedback({ type: t, comment: e }) {
     const s = this._core.getState();
-    this._threadBinding
-      .getState()
-      .submitFeedback({
-        messageId: s.id,
-        type: t,
-        ...(e !== void 0 ? { comment: e } : void 0),
-      });
+    this._threadBinding.getState().submitFeedback({
+      messageId: s.id,
+      type: t,
+      ...(e !== void 0 ? { comment: e } : void 0),
+    });
   }
   switchToBranch({ position: t, branchId: e }) {
     const s = this._core.getState();
