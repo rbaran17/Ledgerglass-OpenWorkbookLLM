@@ -27,7 +27,7 @@ async function select(page: Page, address: string) {
   const box = page.getByLabel("Selected range");
   await box.fill(address);
   await box.press("Enter");
-  await expect(cell(page, address)).toHaveAttribute("aria-selected", "true");
+  await expect(cell(page, address.split(":")[0])).toHaveAttribute("aria-selected", "true");
 }
 
 test("blank workbook loads under the production content security policy", async ({ page }) => {
@@ -222,6 +222,10 @@ test("schedule PDF export produces a PDF file", async ({ page }) => {
   const errors = watchForErrors(page);
   await open(page, "demo&temporary");
   await page.getByRole("button", { name: "Trial balance" }).click();
+  // Column widths depend on the fonts installed; the app refuses to print a number
+  // that does not fit, so size the columns to their content first.
+  await select(page, "A1:E16");
+  await page.getByRole("button", { name: "AutoFit Column Width" }).click();
   await page.getByRole("tab", { name: "Page Layout", exact: true }).click();
   await page.getByRole("button", { name: "Margins", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Page setup and print preview" });
