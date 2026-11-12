@@ -2,7 +2,11 @@
  * Type declarations for `@ledgerglass/workbook/source-connectors`: connectors that read rows for
  * the source gateway. For Node servers only. See docs/SOURCES.md.
  */
-import type { SourceColumn, SourceConnector, SourceKind } from "./source-gateway";
+import type {
+  SourceColumn,
+  SourceConnector,
+  SourceKind,
+} from "./source-gateway";
 
 /** A record a query returns: values in column order, or an object keyed by column name. */
 export type SourceRecord = readonly unknown[] | Record<string, unknown>;
@@ -64,7 +68,9 @@ export interface QueryConnectorOptions extends SourceConnectorBaseOptions {
    * Runs the fixed query and returns its records. An `ExternalSourceError` keeps its code, an abort
    * or timeout maps to its own code, and any other failure is reported as "unavailable".
    */
-  run(context: { signal?: AbortSignal }): SourceRecord[] | Promise<SourceRecord[]>;
+  run(context: {
+    signal?: AbortSignal;
+  }): SourceRecord[] | Promise<SourceRecord[]>;
 }
 
 export interface SqliteConnectorOptions extends SourceConnectorBaseOptions {

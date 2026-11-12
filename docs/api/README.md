@@ -14,7 +14,7 @@ The model functions the library exports, by area. Every function listed on these
 
 Runnable examples are in [`examples/`](../../examples/README.md). [All exports](exports.md) lists every public name on one page, with the entry points that export it.
 
-The editor component, the assistant adapters and the core functions (`createBlankWorkbook`, `normalizeWorkbookInput`, `getWorkbookCalculation`, `applyCellPatchTransaction`) are described in [Using Ledgerglass as a library](../LIBRARY.md). The agent-rendered workbook is in [Showing a workbook from an agent](../AGENT-UI.md), and the MCP server in [MCP](../MCP.md).
+The editor component, the assistant adapters and the core functions (`createBlankWorkbook`, `normalizeWorkbookInput`, `getWorkbookCalculation`, `applyCellPatchTransaction`) are described in [Using Ledgerglass as a library](../LIBRARY.md). External data sources (the gateway, connectors and browser adapter) are in [External data sources](../SOURCES.md). The agent-rendered workbook is in [Showing a workbook from an agent](../AGENT-UI.md), and the MCP server in [MCP](../MCP.md).
 
 ## Where to import from
 

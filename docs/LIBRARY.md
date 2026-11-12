@@ -55,7 +55,7 @@ Give the container a definite height: the editor fills it. With a height of `aut
 | `persistenceKey`               | Browser storage key for saving the workbook locally. Without it nothing is stored.    |
 | `workbookStore`                | Your own store, used in place of browser storage.                                     |
 
-The component accepts further props for linked workbooks, consolidation, extensions and external sources. They are listed in the parameter list of `MainWorksheetEditor` in `src/app/56-main-worksheet-editor.js`; they work, but they are not documented here because their contracts were not recovered in full.
+`externalSourceAdapter` connects the Data > Connections & Refresh dialog to sources your server offers; see [External data sources](SOURCES.md). The component accepts further props for linked workbooks, consolidation and extensions. They are listed in the parameter list of `MainWorksheetEditor` in `src/app/56-main-worksheet-editor.js`; they work, but they are not documented here because their contracts were not recovered in full.
 
 ## Connect a model
 

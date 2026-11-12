@@ -11,7 +11,7 @@ import type {
   ExternalSourceErrorInstance,
   SourceApproval,
   SourcePayload,
-} from "./source-gateway";
+} from "./source-protocol";
 
 /** What a cell stores: a number, text, a boolean, a formula beginning with "=", or nothing. */
 export type RawCellContent = string | number | boolean | null;

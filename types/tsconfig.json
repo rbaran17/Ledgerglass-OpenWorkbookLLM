@@ -14,7 +14,9 @@
       "@ledgerglass/workbook/mcp": ["types/mcp.d.ts"],
       "@ledgerglass/workbook/node": ["types/node.d.ts"],
       "@ledgerglass/workbook/source-gateway": ["types/source-gateway.d.ts"],
-      "@ledgerglass/workbook/source-connectors": ["types/source-connectors.d.ts"]
+      "@ledgerglass/workbook/source-connectors": [
+        "types/source-connectors.d.ts"
+      ]
     }
   },
   "include": [
@@ -26,6 +28,7 @@
     "sdk/*.d.ts",
     "tests/consumer.tsx",
     "tests/node-consumer.ts",
-    "tests/sources-consumer.ts"
+    "tests/sources-consumer.ts",
+    "source-protocol.d.ts"
   ]
 }

@@ -216,9 +216,15 @@ export function createODataConnector(options = {}) {
     columns: options.columns,
     controlFields: options.controlFields,
     async read({ signal } = {}) {
+      // Written by hand so the option names keep their "$" and spaces travel as %20, which is
+      // what OData services expect; URLSearchParams would send "%24select" and "+".
       const first = new URL(url);
-      first.searchParams.set("$select", fields.join(","));
-      if (options.filter) first.searchParams.set("$filter", options.filter);
+      const query = [
+        first.search.replace(/^\?/, ""),
+        `$select=${fields.map(encodeURIComponent).join(",")}`,
+        options.filter ? `$filter=${encodeURIComponent(options.filter)}` : "",
+      ].filter(Boolean);
+      first.search = query.join("&");
       const records = [];
       let next = first;
       // A page link is followed only on the origin the host configured.

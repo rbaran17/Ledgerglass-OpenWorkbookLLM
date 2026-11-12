@@ -337,14 +337,31 @@ export function createSourceGatewayHttpHandler(gateway, options = {}) {
       let size = 0;
       for await (const chunk of request) {
         size += chunk.length;
-        if (size > maxBodyBytes) throw new ExternalSourceError("invalid");
+        if (size > maxBodyBytes) {
+          send(response, 400, {
+            error: {
+              code: "invalid",
+              message: "The request is not a valid source request.",
+            },
+          });
+          return true;
+        }
         chunks.push(chunk);
       }
       let body;
       try {
-        body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        body = parseSourceRequest(
+          JSON.parse(Buffer.concat(chunks).toString("utf8")),
+        );
       } catch {
-        throw new ExternalSourceError("invalid");
+        // The protocol's "invalid" text describes a bad source reply; say what is wrong here.
+        send(response, 400, {
+          error: {
+            code: "invalid",
+            message: "The request is not a valid source request.",
+          },
+        });
+        return true;
       }
       const result = await Promise.race([
         gateway.handle(body, { principal, signal: abort.signal }),

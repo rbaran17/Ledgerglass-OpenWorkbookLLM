@@ -521,7 +521,7 @@ describe("createODataConnector", () => {
       ["c", 3],
     ]);
     expect(fetch.calls.map((call) => call.url)).toEqual([
-      "https://odata.example.test/odata/Invoices?%24select=Id%2CAmount",
+      "https://odata.example.test/odata/Invoices?$select=Id,Amount",
       `${url}?$skiptoken=2`,
       "https://odata.example.test/odata/Invoices?$skiptoken=3",
     ]);
@@ -882,5 +882,26 @@ describe("createSqliteConnector query check", () => {
 
   test("one trailing semicolon is allowed", () => {
     expect(build("SELECT 1 AS v;")).not.toThrow();
+  });
+});
+
+describe("createODataConnector query string", () => {
+  test("option names keep their $ and a filter's spaces travel as %20", async () => {
+    const urls = [];
+    const connector = createODataConnector({
+      id: "inv",
+      label: "Invoices",
+      url: "https://odata.example.test/odata/Invoices?tenant=7",
+      filter: "Amount gt 100 and Name eq 'a b'",
+      columns: [{ name: "Id", type: "text" }],
+      fetch: async (url) => {
+        urls.push(String(url));
+        return new Response(JSON.stringify({ value: [{ Id: "x" }] }));
+      },
+    });
+    await connector.read();
+    expect(urls).toEqual([
+      "https://odata.example.test/odata/Invoices?tenant=7&$select=Id&$filter=Amount%20gt%20100%20and%20Name%20eq%20%27a%20b%27",
+    ]);
   });
 });
