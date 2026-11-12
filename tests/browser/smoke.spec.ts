@@ -237,3 +237,17 @@ test("schedule PDF export produces a PDF file", async ({ page }) => {
   expect(bytes.subarray(-1024).toString("latin1")).toContain("%%EOF");
   expect(errors).toEqual([]);
 });
+
+test("assistant reply is rendered as Markdown", async ({ page }) => {
+  const errors = watchForErrors(page);
+  await open(page, "demo&temporary");
+  await page.getByRole("button", { name: "AI assistant" }).click();
+  const prompt = page.getByLabel("Assistant prompt");
+  await prompt.fill("Summarize the selected range");
+  await prompt.press("Enter");
+  const conversation = page.getByLabel("Conversation");
+  await expect(conversation).toContainText("Local deterministic demo", { timeout: 30_000 });
+  await expect(conversation.locator("strong").first()).toBeVisible();
+  await expect(conversation.locator("p").first()).toBeVisible();
+  expect(errors).toEqual([]);
+});
