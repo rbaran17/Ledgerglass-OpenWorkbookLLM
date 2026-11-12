@@ -7,28 +7,34 @@ import {
 } from "@assistant-ui/react";
 import { LoaderCircle, Paperclip } from "lucide-react";
 import "../styles/assistant.css";
+import jsxRuntime from "react/jsx-runtime";
+import React from "react";
 import {
-  u,
-  r,
-  j,
-  P,
-  W,
-  T,
-  S,
-  A,
-  C,
-  d,
-  e,
-  f,
-  h,
-  i,
-  l,
-  p,
-  v,
-  k,
-  F,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Copy,
+  FileText,
+  Plus,
+  RotateCcw,
+  Sparkles,
+  Square,
+  Table2,
   X,
-} from "../main.js";
+} from "lucide-react";
+import {
+  LocalizedText,
+  createEmptyAssistantConversation,
+  useWorkbookMessages,
+} from "../app/04-cell-input-paste-and-fill.js";
+import {
+  assistantRequestLimits,
+  parseAssistantChatRequest,
+} from "../app/19b-assistant-protocol.js";
+import {
+  attachmentAcceptAttribute,
+  prepareChatAttachment,
+} from "../app/20-calculation-options-and-assistant.js";
 import { AssistantChatMarkdown } from "./AssistantChatMarkdown.js";
 
 const db = (t) =>
@@ -36,23 +42,23 @@ const db = (t) =>
     ? `${Math.max(1, Math.ceil(t / 1024))} KB`
     : `${(t / 1024 / 1024).toFixed(1)} MB`;
 function ai({ file, remove }) {
-  const { text, language, message } = u();
-  return j.jsxs("div", {
+  const { text, language, message } = useWorkbookMessages();
+  return jsxRuntime.jsxs("div", {
     className: "lg-chat-file",
     children: [
-      j.jsxs("details", {
+      jsxRuntime.jsxs("details", {
         children: [
-          j.jsxs("summary", {
+          jsxRuntime.jsxs("summary", {
             children: [
-              j.jsx(F, { size: 17, "aria-hidden": "true" }),
-              j.jsxs("span", {
+              jsxRuntime.jsx(FileText, { size: 17, "aria-hidden": "true" }),
+              jsxRuntime.jsxs("span", {
                 children: [
-                  j.jsx("strong", { children: file.name }),
-                  j.jsxs("small", {
+                  jsxRuntime.jsx("strong", { children: file.name }),
+                  jsxRuntime.jsxs("small", {
                     children: [
                       db(file.size),
                       " ",
-                      j.jsx(W, { children: "·" }),
+                      jsxRuntime.jsx(LocalizedText, { children: "·" }),
                       " ",
                       file.encoding === "utf8" ||
                       file.mediaType.startsWith("image/")
@@ -65,7 +71,7 @@ function ai({ file, remove }) {
             ],
           }),
           file.encoding === "utf8"
-            ? j.jsxs("pre", {
+            ? jsxRuntime.jsxs("pre", {
                 className: "lg-chat-file-preview",
                 children: [
                   file.data.slice(0, 4e3),
@@ -76,13 +82,13 @@ function ai({ file, remove }) {
                 ],
               })
             : file.mediaType.startsWith("image/")
-              ? j.jsx("img", {
+              ? jsxRuntime.jsx("img", {
                   src: `data:${file.mediaType};base64,${file.data}`,
                   alt: message("Preview of {name}", { name: file.name }),
                 })
-              : j.jsx("p", {
+              : jsxRuntime.jsx("p", {
                   className: "lg-chat-file-description",
-                  children: j.jsx(W, {
+                  children: jsxRuntime.jsx(LocalizedText, {
                     children:
                       "The original file will accompany your message. Preview is unavailable for this format.",
                   }),
@@ -90,40 +96,42 @@ function ai({ file, remove }) {
         ],
       }),
       remove &&
-        j.jsx("button", {
+        jsxRuntime.jsx("button", {
           type: "button",
           "aria-label": message("Remove attachment {name}", {
             name: file.name,
           }),
           title: text("Remove attachment"),
           onClick: remove,
-          children: j.jsx(X, { size: 14 }),
+          children: jsxRuntime.jsx(X, { size: 14 }),
         }),
     ],
   });
 }
 function mb(t) {
-  const { text, language, message } = u(),
-    r$1 = r.useRef(t);
+  const { text, language, message } = useWorkbookMessages(),
+    r$1 = React.useRef(t);
   r$1.current = t;
-  const i$1 = r.useRef(false),
-    o = r.useRef(null),
-    a = r.useRef(null),
-    c = r.useRef(null),
-    [l$1, u$1] = r.useState(false),
-    [h$1, d$1] = r.useState(""),
-    [f$1, p$1] = r.useState(false),
-    [m, _] = r.useState(null),
-    [x, y] = r.useState("");
-  (r.useEffect(() => () => c.current?.abort(), []),
-    r.useEffect(() => {
+  const i$1 = React.useRef(false),
+    o = React.useRef(null),
+    a = React.useRef(null),
+    c = React.useRef(null),
+    [l$1, u$1] = React.useState(false),
+    [h$1, d$1] = React.useState(""),
+    [f$1, p$1] = React.useState(false),
+    [m, _] = React.useState(null),
+    [x, y] = React.useState("");
+  (React.useEffect(() => () => c.current?.abort(), []),
+    React.useEffect(() => {
       (c.current?.abort(), u$1(false), d$1(""));
     }, [t.session.id, t.adapter]));
   async function w(v) {
     if (!v.length || !t.adapter.chat?.attachments || c.current || l$1 || t.busy)
       return;
     const D = t.session.attachments;
-    if ((d$1(""), D.length + v.length > l.filesPerMessage)) {
+    if (
+      (d$1(""), D.length + v.length > assistantRequestLimits.filesPerMessage)
+    ) {
       d$1(
         "Attach up to 4 files per message. Remove a file before adding more.",
       );
@@ -131,7 +139,7 @@ function mb(t) {
     }
     if (
       D.reduce((F, H) => F + H.size, 0) + v.reduce((F, H) => F + H.size, 0) >
-      l.totalFileBytes
+      assistantRequestLimits.totalFileBytes
     ) {
       d$1("Attachments must total 10 MB or less.");
       return;
@@ -150,7 +158,9 @@ function mb(t) {
       U = t.session.id;
     ((c.current = $), u$1(true));
     try {
-      const F = await Promise.all(v.map((H) => p(H, $.signal)));
+      const F = await Promise.all(
+        v.map((H) => prepareChatAttachment(H, $.signal)),
+      );
       $.signal.aborted ||
         t.setSession((H) =>
           H.id === U ? { ...H, attachments: [...H.attachments, ...F] } : H,
@@ -194,14 +204,14 @@ function mb(t) {
         throw Error(
           "Start a new chat to continue. This chat has reached its message limit.",
         );
-      if (v$1.length > l.promptCharacters)
+      if (v$1.length > assistantRequestLimits.promptCharacters)
         throw Error("Keep your message under 10,000 characters.");
       if (U.length && !$.adapter.chat?.attachments)
         throw Error(
           "This provider does not support file attachments. Remove the files or connect a chat-enabled provider.",
         );
       $.adapter.chat &&
-        (J = v({
+        (J = parseAssistantChatRequest({
           version: 1,
           messages: $.adapter.chat.history ? H : [],
           attachments: U,
@@ -274,7 +284,7 @@ function mb(t) {
       i$1.current = false;
     }
   }
-  const I = r.useMemo(
+  const I = React.useMemo(
       () =>
         t.session.messages.map((v) => ({
           id: v.id,
@@ -315,7 +325,7 @@ function mb(t) {
       (t.onCancel(),
         t.onReset(),
         c.current?.abort(),
-        t.setSession(k()),
+        t.setSession(createEmptyAssistantConversation()),
         y("New chat started."),
         a.current?.focus());
     },
@@ -330,48 +340,50 @@ function mb(t) {
         );
       }
     };
-  return j.jsx(AssistantRuntimeProvider, {
+  return jsxRuntime.jsx(AssistantRuntimeProvider, {
     runtime: R,
-    children: j.jsxs(ThreadPrimitive.Root, {
+    children: jsxRuntime.jsxs(ThreadPrimitive.Root, {
       className: "lg-chat",
       role: "group",
       "aria-label": text("Workbook chat"),
       children: [
-        j.jsxs("div", {
+        jsxRuntime.jsxs("div", {
           className: "lg-chat-toolbar",
           children: [
-            j.jsxs("span", {
+            jsxRuntime.jsxs("span", {
               className: "lg-chat-provider",
               title: t.adapter.name,
               children: [
-                j.jsx("i", {}),
+                jsxRuntime.jsx("i", {}),
                 t.local ? text("Local demo") : t.adapter.name,
               ],
             }),
-            j.jsxs("button", {
+            jsxRuntime.jsxs("button", {
               type: "button",
               onClick: P$1,
               "aria-label": text("New chat"),
               title: text("New chat"),
               children: [
-                j.jsx(P, { size: 16 }),
-                j.jsx("span", {
-                  children: j.jsx(W, { children: "New chat" }),
+                jsxRuntime.jsx(Plus, { size: 16 }),
+                jsxRuntime.jsx("span", {
+                  children: jsxRuntime.jsx(LocalizedText, {
+                    children: "New chat",
+                  }),
                 }),
               ],
             }),
           ],
         }),
-        j.jsxs("div", {
+        jsxRuntime.jsxs("div", {
           className: "lg-chat-context",
           role: "group",
           "aria-label": text("Shared workbook context"),
           children: [
-            j.jsx(T, { size: 16 }),
-            j.jsxs("span", {
+            jsxRuntime.jsx(Table2, { size: 16 }),
+            jsxRuntime.jsxs("span", {
               children: [
-                j.jsx("strong", { children: t.selectionLabel }),
-                j.jsx("small", {
+                jsxRuntime.jsx("strong", { children: t.selectionLabel }),
+                jsxRuntime.jsx("small", {
                   children: message(
                     "{count} selected cells · shared when you send",
                     {
@@ -383,7 +395,7 @@ function mb(t) {
             }),
           ],
         }),
-        j.jsxs(ThreadPrimitive.Viewport, {
+        jsxRuntime.jsxs(ThreadPrimitive.Viewport, {
           className: "lg-chat-messages",
           role: "log",
           "aria-label": text("Conversation"),
@@ -396,30 +408,32 @@ function mb(t) {
           children: [
             !t.session.messages.length &&
               !t.proposalId &&
-              j.jsxs("div", {
+              jsxRuntime.jsxs("div", {
                 className: "lg-chat-welcome",
                 children: [
-                  j.jsx("div", {
+                  jsxRuntime.jsx("div", {
                     className: "lg-chat-welcome-icon",
-                    children: j.jsx(S, { size: 24 }),
+                    children: jsxRuntime.jsx(Sparkles, { size: 24 }),
                   }),
-                  j.jsx("h3", {
-                    children: j.jsx(W, { children: "How can I help?" }),
+                  jsxRuntime.jsx("h3", {
+                    children: jsxRuntime.jsx(LocalizedText, {
+                      children: "How can I help?",
+                    }),
                   }),
-                  j.jsx("p", {
-                    children: j.jsx(W, {
+                  jsxRuntime.jsx("p", {
+                    children: jsxRuntime.jsx(LocalizedText, {
                       children:
                         "Ask about your selection, attach a file, or work through a formula together.",
                     }),
                   }),
-                  j.jsx("div", {
+                  jsxRuntime.jsx("div", {
                     className: "lg-chat-suggestions",
                     children: [
                       "Explain this selection",
                       "Highlight values above 25000",
                       "Add a total formula",
                     ].map((v) =>
-                      j.jsxs(
+                      jsxRuntime.jsxs(
                         "button",
                         {
                           type: "button",
@@ -428,8 +442,8 @@ function mb(t) {
                             (t.setSession((D) => ({ ...D, draft: v })), S$1(v));
                           },
                           children: [
-                            j.jsx(W, { children: v }),
-                            j.jsx(A, { size: 13 }),
+                            jsxRuntime.jsx(LocalizedText, { children: v }),
+                            jsxRuntime.jsx(ArrowUp, { size: 13 }),
                           ],
                         },
                         v,
@@ -438,13 +452,13 @@ function mb(t) {
                   }),
                 ],
               }),
-            j.jsx(ThreadPrimitive.Messages, {
+            jsxRuntime.jsx(ThreadPrimitive.Messages, {
               children: ({ message }) => {
                 const D = message.metadata.custom.source;
                 if (!D) return null;
                 const $ = D.scope === t.scope,
                   U = $ && D.proposalId === t.proposalId && !!t.review;
-                return j.jsxs(MessagePrimitive.Root, {
+                return jsxRuntime.jsxs(MessagePrimitive.Root, {
                   role: "article",
                   className: `lg-chat-message ${D.role}`,
                   "aria-label":
@@ -452,30 +466,32 @@ function mb(t) {
                       ? text("Your message")
                       : text("Assistant message"),
                   children: [
-                    j.jsxs("div", {
+                    jsxRuntime.jsxs("div", {
                       className: "lg-chat-message-label",
                       children: [
                         D.role === "user"
                           ? "You"
-                          : j.jsxs(j.Fragment, {
+                          : jsxRuntime.jsxs(jsxRuntime.Fragment, {
                               children: [
-                                j.jsx(S, { size: 13 }),
-                                j.jsx(W, { children: "Assistant" }),
+                                jsxRuntime.jsx(Sparkles, { size: 13 }),
+                                jsxRuntime.jsx(LocalizedText, {
+                                  children: "Assistant",
+                                }),
                               ],
                             }),
-                        j.jsx("small", { children: D.label }),
+                        jsxRuntime.jsx("small", { children: D.label }),
                       ],
                     }),
-                    j.jsxs("div", {
+                    jsxRuntime.jsxs("div", {
                       className: `lg-chat-bubble ${$ ? "" : "archived"}`,
                       children: [
                         $ &&
                           D.attachments?.map((F) =>
-                            j.jsx(ai, { file: F }, F.id),
+                            jsxRuntime.jsx(ai, { file: F }, F.id),
                           ),
                         U
                           ? t.review
-                          : j.jsx(AssistantChatMarkdown, {
+                          : jsxRuntime.jsx(AssistantChatMarkdown, {
                               children: $
                                 ? D.text
                                 : text(
@@ -486,41 +502,43 @@ function mb(t) {
                     }),
                     $ &&
                       D.outcome === "complete" &&
-                      j.jsxs("div", {
+                      jsxRuntime.jsxs("div", {
                         className: "lg-chat-message-actions",
                         children: [
-                          j.jsx("button", {
+                          jsxRuntime.jsx("button", {
                             type: "button",
                             "aria-label": text("Copy assistant response"),
                             title: text("Copy response"),
                             onClick: () => void E(D),
                             children:
                               m === D.id
-                                ? j.jsx(C, { size: 14 })
-                                : j.jsx(d, { size: 14 }),
+                                ? jsxRuntime.jsx(Check, { size: 14 })
+                                : jsxRuntime.jsx(Copy, { size: 14 }),
                           }),
                           D === t.session.messages.at(-1) &&
-                            j.jsx("button", {
+                            jsxRuntime.jsx("button", {
                               type: "button",
                               "aria-label": text("Regenerate response"),
                               title: text("Regenerate response"),
                               disabled: t.busy || l$1,
                               onClick: M,
-                              children: j.jsx(e, { size: 14 }),
+                              children: jsxRuntime.jsx(RotateCcw, { size: 14 }),
                             }),
                         ],
                       }),
                     $ &&
                       (D.outcome === "failed" || D.outcome === "stopped") &&
                       D === t.session.messages.at(-1) &&
-                      j.jsxs("button", {
+                      jsxRuntime.jsxs("button", {
                         type: "button",
                         className: "lg-chat-retry",
                         disabled: t.busy || l$1,
                         onClick: M,
                         children: [
-                          j.jsx(e, { size: 13 }),
-                          j.jsx(W, { children: "Retry message" }),
+                          jsxRuntime.jsx(RotateCcw, { size: 13 }),
+                          jsxRuntime.jsx(LocalizedText, {
+                            children: "Retry message",
+                          }),
                         ],
                       }),
                   ],
@@ -529,40 +547,45 @@ function mb(t) {
             }),
             !k$1 &&
               t.review &&
-              j.jsx("div", {
+              jsxRuntime.jsx("div", {
                 className: "lg-chat-external-review",
                 children: t.review,
               }),
             t.busy &&
-              j.jsxs("div", {
+              jsxRuntime.jsxs("div", {
                 role: "status",
                 className: "lg-chat-thinking",
                 children: [
-                  j.jsx(LoaderCircle, { size: 15, className: "lg-spin" }),
-                  j.jsx(W, { children: "Preparing a response…" }),
+                  jsxRuntime.jsx(LoaderCircle, {
+                    size: 15,
+                    className: "lg-spin",
+                  }),
+                  jsxRuntime.jsx(LocalizedText, {
+                    children: "Preparing a response…",
+                  }),
                 ],
               }),
           ],
         }),
-        j.jsxs("div", {
+        jsxRuntime.jsxs("div", {
           className: "lg-chat-composer-area",
           children: [
-            j.jsx(ThreadPrimitive.ScrollToBottom, {
+            jsxRuntime.jsx(ThreadPrimitive.ScrollToBottom, {
               className: "lg-chat-scroll",
               "aria-label": text("Scroll to latest message"),
               title: text("Scroll to latest message"),
-              children: j.jsx(f, { size: 14 }),
+              children: jsxRuntime.jsx(ArrowDown, { size: 14 }),
             }),
             h$1 &&
-              j.jsx("p", {
+              jsxRuntime.jsx("p", {
                 role: "alert",
                 className: "lg-chat-error",
-                children: j.jsx("span", {
+                children: jsxRuntime.jsx("span", {
                   lang: language(h$1),
                   children: text(h$1),
                 }),
               }),
-            j.jsxs(ComposerPrimitive.Root, {
+            jsxRuntime.jsxs(ComposerPrimitive.Root, {
               className: `lg-chat-composer ${f$1 ? "dragging" : ""}`,
               onSubmit: (v) => {
                 (v.preventDefault(), S$1(t.session.draft));
@@ -583,12 +606,12 @@ function mb(t) {
               },
               children: [
                 t.session.attachments.length > 0 &&
-                  j.jsx("div", {
+                  jsxRuntime.jsx("div", {
                     className: "lg-chat-attachments",
                     role: "group",
                     "aria-label": text("Attached files"),
                     children: t.session.attachments.map((v) =>
-                      j.jsx(
+                      jsxRuntime.jsx(
                         ai,
                         {
                           file: v,
@@ -605,15 +628,20 @@ function mb(t) {
                     ),
                   }),
                 l$1 &&
-                  j.jsxs("p", {
+                  jsxRuntime.jsxs("p", {
                     role: "status",
                     className: "lg-chat-preparing",
                     children: [
-                      j.jsx(LoaderCircle, { size: 13, className: "lg-spin" }),
-                      j.jsx(W, { children: "Preparing attachments…" }),
+                      jsxRuntime.jsx(LoaderCircle, {
+                        size: 13,
+                        className: "lg-spin",
+                      }),
+                      jsxRuntime.jsx(LocalizedText, {
+                        children: "Preparing attachments…",
+                      }),
                     ],
                   }),
-                j.jsx(ComposerPrimitive.Input, {
+                jsxRuntime.jsx(ComposerPrimitive.Input, {
                   ref: a,
                   "aria-label": text("Assistant prompt"),
                   lang: language("Assistant prompt"),
@@ -637,24 +665,24 @@ function mb(t) {
                         : d$1("This provider does not support attachments."));
                   },
                 }),
-                j.jsxs("div", {
+                jsxRuntime.jsxs("div", {
                   className: "lg-chat-composer-actions",
                   children: [
-                    j.jsxs("div", {
+                    jsxRuntime.jsxs("div", {
                       children: [
-                        j.jsx("input", {
+                        jsxRuntime.jsx("input", {
                           ref: o,
                           type: "file",
                           hidden: true,
                           multiple: true,
-                          accept: h,
+                          accept: attachmentAcceptAttribute,
                           "aria-label": text("Upload chat attachments"),
                           onChange: (v) => {
                             const D = Array.from(v.currentTarget.files ?? []);
                             ((v.currentTarget.value = ""), w(D));
                           },
                         }),
-                        j.jsx("button", {
+                        jsxRuntime.jsx("button", {
                           type: "button",
                           "aria-label": text("Attach files"),
                           title: t.adapter.chat?.attachments
@@ -665,9 +693,9 @@ function mb(t) {
                           disabled:
                             !t.adapter.chat?.attachments || t.busy || l$1,
                           onClick: () => o.current?.click(),
-                          children: j.jsx(Paperclip, { size: 18 }),
+                          children: jsxRuntime.jsx(Paperclip, { size: 18 }),
                         }),
-                        j.jsx("span", {
+                        jsxRuntime.jsx("span", {
                           children: text(
                             f$1 ? "Drop files here" : "Enter to send",
                           ),
@@ -675,30 +703,30 @@ function mb(t) {
                       ],
                     }),
                     t.busy
-                      ? j.jsx("button", {
+                      ? jsxRuntime.jsx("button", {
                           type: "button",
                           className: "lg-chat-send",
                           "aria-label": text("Cancel request"),
                           title: text("Stop response"),
                           onClick: t.onCancel,
-                          children: j.jsx(i, {
+                          children: jsxRuntime.jsx(Square, {
                             size: 15,
                             fill: "currentColor",
                           }),
                         })
-                      : j.jsx("button", {
+                      : jsxRuntime.jsx("button", {
                           type: "submit",
                           className: "lg-chat-send",
                           "aria-label": text("Send selection"),
                           title: text("Send message and selected context"),
                           disabled: !t.session.draft.trim() || l$1,
-                          children: j.jsx(A, { size: 19 }),
+                          children: jsxRuntime.jsx(ArrowUp, { size: 19 }),
                         }),
                   ],
                 }),
               ],
             }),
-            j.jsxs("p", {
+            jsxRuntime.jsxs("p", {
               className: "lg-chat-footnote",
               children: [
                 t.local
@@ -710,17 +738,20 @@ function mb(t) {
                     : text(
                         "Selection only · file and chat-history support unavailable",
                       ),
-                j.jsx("br", {}),
-                j.jsx(W, {
+                jsxRuntime.jsx("br", {}),
+                jsxRuntime.jsx(LocalizedText, {
                   children:
                     "Review proposed changes before applying. Shift+Enter for a new line.",
                 }),
               ],
             }),
-            j.jsx("span", {
+            jsxRuntime.jsx("span", {
               className: "lg-sr-only",
               role: "status",
-              children: j.jsx("span", { lang: language(x), children: text(x) }),
+              children: jsxRuntime.jsx("span", {
+                lang: language(x),
+                children: text(x),
+              }),
             }),
           ],
         }),

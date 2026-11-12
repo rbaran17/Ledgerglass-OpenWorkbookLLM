@@ -76,7 +76,7 @@ import { TextCleanupDialog } from "../43-text-cleanup.js";
 import { CleanAndReshapeDialog } from "../44-clean-and-reshape.js";
 import { DuplicateReviewDialog } from "../28-duplicate-review-and-structure.js";
 
-function renderEditorDialogs({
+function EditorDialogs({
   persistenceState,
   dialogState,
   navigationState,
@@ -837,4 +837,4 @@ function renderEditorDialogs({
   );
 }
 
-export { renderEditorDialogs };
+export { EditorDialogs };

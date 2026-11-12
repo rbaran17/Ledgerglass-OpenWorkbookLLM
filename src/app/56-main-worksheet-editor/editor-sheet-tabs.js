@@ -1,7 +1,7 @@
 import i from "react/jsx-runtime";
 import { Layers, Plus } from "lucide-react";
 
-function renderSheetTabs({
+function EditorSheetTabs({
   dialogState,
   selectionState,
   navigationState,
@@ -135,4 +135,4 @@ function renderSheetTabs({
   });
 }
 
-export { renderSheetTabs };
+export { EditorSheetTabs };

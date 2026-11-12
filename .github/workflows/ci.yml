@@ -69,6 +69,10 @@ jobs:
         run: npm run test:e2e
         env:
           LEDGERGLASS_BUILD: dist-container
+      - name: Build the library and mount it in a host page
+        run: |
+          npm run build:lib
+          npm run test:lib
 
   containers:
     name: Container images

@@ -1,3 +1,4 @@
+import ne from "react";
 import i from "react/jsx-runtime";
 import { Check, X } from "lucide-react";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
@@ -6,7 +7,7 @@ import {
   isWithinFormulaSuggestions,
 } from "../53-find-replace-go-to.js";
 
-function renderFormulaBar({
+function EditorFormulaBar({
   formulaEntryState,
   navigationState,
   selectionState,
@@ -26,6 +27,8 @@ function renderFormulaBar({
   commitNameBoxReference,
   moveSelectionAfterCommit,
 }) {
+  // The suggestion list belongs to the formula bar alone, so its ref lives here.
+  const formulaSuggestionListRef = ne.useRef(null);
   return i.jsxs("div", {
     className: "lg-formula-bar",
     children: [
@@ -110,18 +113,14 @@ function renderFormulaBar({
               if (
                 !formulaEntryState.formulaPointerStateRef.current.span &&
                 formulaEntryState.cellEditText.length > 1 &&
-                formulaEntryState.formulaSuggestionListRef.current?.handleKeyDown(
-                  fe,
-                )
+                formulaSuggestionListRef.current?.handleKeyDown(fe)
               )
                 return;
               (fe.preventDefault(), cancelCellEdit());
               return;
             }
             handleFormulaKeyDown(fe) ||
-              formulaEntryState.formulaSuggestionListRef.current?.handleKeyDown(
-                fe,
-              ) ||
+              formulaSuggestionListRef.current?.handleKeyDown(fe) ||
               ((fe.key === "Enter" || fe.key === "Tab") &&
                 (fe.preventDefault(),
                 commitCellEdit() &&
@@ -132,7 +131,7 @@ function renderFormulaBar({
         "data-ui-label": "Formula bar",
       }),
       i.jsx(FormulaSuggestionList, {
-        ref: formulaEntryState.formulaSuggestionListRef,
+        ref: formulaSuggestionListRef,
         onExit: () => {
           (formulaEntryState.setIsFormulaBarFocused(false), commitCellEdit());
         },
@@ -159,4 +158,4 @@ function renderFormulaBar({
   });
 }
 
-export { renderFormulaBar };
+export { EditorFormulaBar };

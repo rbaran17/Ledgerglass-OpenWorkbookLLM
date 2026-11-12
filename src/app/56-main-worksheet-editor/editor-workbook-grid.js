@@ -1,5 +1,5 @@
 import i from "react/jsx-runtime";
-import { renderFormulaBar } from "./render-formula-bar.js";
+import { EditorFormulaBar } from "./editor-formula-bar.js";
 import {
   collectStyleFallbackWarnings,
   describeNamedStyleFallback,
@@ -11,11 +11,11 @@ import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { Filter, Search, X } from "lucide-react";
 import { PivotResultsStatusBar } from "../29-worksheet-tools-and-pivot-panels.js";
 import { SplitPaneLayout } from "../53-find-replace-go-to.js";
-import { renderSheetTabs } from "./render-sheet-tabs.js";
-import { renderStatusBar } from "./render-status-bar.js";
+import { EditorSheetTabs } from "./editor-sheet-tabs.js";
+import { EditorStatusBar } from "./editor-status-bar.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 
-function renderWorkbookGrid({
+function EditorWorkbookGrid({
   dialogState,
   selectionState,
   navigationState,
@@ -80,7 +80,7 @@ function renderWorkbookGrid({
     lang: language("Spreadsheet workbook"),
     "data-ui-label": "Spreadsheet workbook",
     children: [
-      renderFormulaBar({
+      i.jsx(EditorFormulaBar, {
         formulaEntryState,
         navigationState,
         selectionState,
@@ -620,7 +620,7 @@ function renderWorkbookGrid({
           ),
         renderPane: renderGridPane,
       }),
-      renderSheetTabs({
+      i.jsx(EditorSheetTabs, {
         dialogState,
         selectionState,
         navigationState,
@@ -634,7 +634,7 @@ function renderWorkbookGrid({
         commitCellEdit,
         switchActiveWorksheet,
       }),
-      renderStatusBar({
+      i.jsx(EditorStatusBar, {
         dialogState,
         selectionState,
         operationStatusState,
@@ -652,4 +652,4 @@ function renderWorkbookGrid({
   });
 }
 
-export { renderWorkbookGrid };
+export { EditorWorkbookGrid };

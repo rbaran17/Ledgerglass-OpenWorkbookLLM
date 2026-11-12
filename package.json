@@ -7,10 +7,12 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "build:lib": "vite build --config vite.lib.config.ts",
     "test": "npm run test:deployment && npm run test:unit",
     "test:unit": "vitest run",
     "preview": "vite preview --host 127.0.0.1",
     "test:e2e": "playwright test",
+    "test:lib": "node scripts/verify-lib.mjs",
     "start": "node scripts/serve.mjs",
     "build:portable": "npm run build && node scripts/portable.mjs",
     "format": "prettier --write src tests scripts *.ts",
@@ -55,6 +57,8 @@
     "vitest": "^5.1.0"
   },
   "exports": {
+    ".": "./lib/ledgerglass.js",
+    "./style.css": "./lib/ledgerglass.css",
     "./mcp": "./src/mcp/server.js"
   },
   "files": [
@@ -62,6 +66,7 @@
     "LICENSE",
     "THIRD-PARTY-NOTICES.txt",
     "docs",
+    "lib",
     "scripts/mcp-stdio.mjs",
     "src/mcp",
     "src/app"

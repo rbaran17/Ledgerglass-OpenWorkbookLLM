@@ -7,7 +7,7 @@ import {
   buildFillPreview,
 } from "../04-cell-input-paste-and-fill.js";
 
-function renderEditorRibbon({
+function EditorRibbonBar({
   selectionState,
   dialogState,
   filterSortState,
@@ -145,4 +145,4 @@ function renderEditorRibbon({
   });
 }
 
-export { renderEditorRibbon };
+export { EditorRibbonBar };

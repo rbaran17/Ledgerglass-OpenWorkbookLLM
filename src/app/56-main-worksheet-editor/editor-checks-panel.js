@@ -17,7 +17,7 @@ import {
 import { columnIndexToLetters } from "../03-workbook-model.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 
-function renderChecksPanel({
+function EditorChecksPanel({
   dialogState,
   filterSortState,
   auditState,
@@ -437,4 +437,4 @@ function renderChecksPanel({
   );
 }
 
-export { renderChecksPanel };
+export { EditorChecksPanel };

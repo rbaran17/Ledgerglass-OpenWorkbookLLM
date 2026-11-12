@@ -78,7 +78,6 @@ function useNavigationState() {
 /** Cell editing and formula entry: caret, pointer references, edit text and validation */
 function useFormulaEntryState() {
   const formulaInputRef = ne.useRef(null),
-    formulaSuggestionListRef = ne.useRef(null),
     [formulaCaretPosition, setFormulaCaretPosition] = ne.useState(0),
     [isFormulaBarFocused, setIsFormulaBarFocused] = ne.useState(false),
     [cellEditText, setCellEditText] = ne.useState(""),
@@ -97,7 +96,6 @@ function useFormulaEntryState() {
     [validationReviewState, setValidationReviewState] = ne.useState(null);
   return {
     formulaInputRef,
-    formulaSuggestionListRef,
     formulaCaretPosition,
     setFormulaCaretPosition,
     isFormulaBarFocused,

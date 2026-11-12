@@ -205,13 +205,13 @@ import {
   toFileProcessingError,
 } from "../app/06c-package-and-worksheet-parsing.js";
 
-var T8 = Object.create;
+var createPrototypeObject = Object.create;
 
-var A8 = Object.getOwnPropertyDescriptor;
-var I8 = Object.getOwnPropertyNames;
-var R8 = Object.getPrototypeOf,
-  N8 = Object.prototype.hasOwnProperty;
-var Mc = ((e) =>
+var readPropertyDescriptor = Object.getOwnPropertyDescriptor;
+var listOwnPropertyNames = Object.getOwnPropertyNames;
+var readPrototypeOf = Object.getPrototypeOf,
+  hasOwnPropertyCheck = Object.prototype.hasOwnProperty;
+var dynamicRequire = ((e) =>
   typeof require < "u"
     ? require
     : typeof Proxy < "u"
@@ -220,20 +220,20 @@ var Mc = ((e) =>
   if (typeof require < "u") return require.apply(this, arguments);
   throw Error('Dynamic require of "' + e + '" is not supported');
 });
-var O8 = (e, t, n, i) => {
+var copyModuleExports = (e, t, n, i) => {
   if ((t && typeof t == "object") || typeof t == "function")
-    for (let r of I8(t))
-      !N8.call(e, r) &&
+    for (let r of listOwnPropertyNames(t))
+      !hasOwnPropertyCheck.call(e, r) &&
         r !== n &&
         objectDefineProperty(e, r, {
           get: () => t[r],
-          enumerable: !(i = A8(t, r)) || i.enumerable,
+          enumerable: !(i = readPropertyDescriptor(t, r)) || i.enumerable,
         });
   return e;
 };
-var Bi = (e, t, n) => (
-  (n = e != null ? T8(R8(e)) : {}),
-  O8(
+var toEsModule = (e, t, n) => (
+  (n = e != null ? createPrototypeObject(readPrototypeOf(e)) : {}),
+  copyModuleExports(
     t || !e || !e.__esModule
       ? objectDefineProperty(n, "default", { value: e, enumerable: true })
       : n,
@@ -241,13 +241,13 @@ var Bi = (e, t, n) => (
   )
 );
 
-var Mo = () => __lib_saxes;
+var getSaxesModule = () => __lib_saxes;
 
-var u8 = () => __lib_exceljs;
-var d8 = () => __lib_papaparse;
-var AN = Bi(Mo(), 1);
+var getExceljsModule = () => __lib_exceljs;
+var getPapaparseModule = () => __lib_papaparse;
+var saxesEsModuleForXml = toEsModule(getSaxesModule(), 1);
 
-function _p(e, t = "1900") {
+function dateToExcelSerial(e, t = "1900") {
   return (
     dateToSerial(e.getUTCFullYear(), e.getUTCMonth() + 1, e.getUTCDate(), t) +
     (e.getUTCHours() * 36e5 +
@@ -258,9 +258,9 @@ function _p(e, t = "1900") {
   );
 }
 
-var BP = { maxStyles: 50, maxCells: 500, maxName: 80 };
+var namedStyleLimits = { maxStyles: 50, maxCells: 500, maxName: 80 };
 
-function VP(e) {
+function normalizeWorkbookStyleCatalog(e) {
   (bo(e) || Fr("Workbook styles must be an object."),
     assertKnownStyleKeys(
       e,
@@ -270,7 +270,8 @@ function VP(e) {
     e.missingTheme !== undefined &&
       e.missingTheme !== true &&
       Fr("Invalid missing theme flag."),
-    (!Array.isArray(e.styles) || e.styles.length > BP.maxStyles) &&
+    (!Array.isArray(e.styles) ||
+      e.styles.length > namedStyleLimits.maxStyles) &&
       Fr("A workbook supports at most 50 named styles."));
   let t = new Set(),
     n = new Set(),
@@ -309,8 +310,8 @@ function VP(e) {
   );
 }
 
-function z6(e, t) {
-  let n = e === undefined ? undefined : VP(e);
+function applyNamedStyleCatalog(e, t) {
+  let n = e === undefined ? undefined : normalizeWorkbookStyleCatalog(e);
   n ? (t.styleCatalog = n) : delete t.styleCatalog;
   let i = bo(e) && e.theme === undefined;
   for (let r of t.sheets)
@@ -330,8 +331,8 @@ function z6(e, t) {
     }
 }
 
-function Q6(e = "Book1") {
-  return gi({
+function createBlankWorkbook(e = "Book1") {
+  return toValidWorkbook({
     schemaVersion: 1,
     id: crypto.randomUUID(),
     name: e.trim(),
@@ -351,7 +352,7 @@ function Q6(e = "Book1") {
   });
 }
 
-function Bw(e) {
+function collectDataValidationWarnings(e) {
   if (!e.sheets.some((n) => n.validations?.length)) return [];
   let t = summarizeValidationInspection(e);
   return t.invalidCells || !t.complete
@@ -361,7 +362,7 @@ function Bw(e) {
     : [];
 }
 
-function s5(e, t, n) {
+function resolveDefinedNameScopes(e, t, n) {
   if (new Set(n.map((r) => r.toLowerCase())).size !== n.length)
     return throwXlsxDefinedNameError(
       "Duplicate worksheet names make name scopes ambiguous.",
@@ -388,7 +389,7 @@ function s5(e, t, n) {
   }
 }
 
-function Wm(e, t) {
+function createSourceRowProvenance(e, t) {
   if (
     !isBoundedString(t.id, 100) ||
     !isBoundedString(t.name, 255) ||
@@ -423,7 +424,7 @@ function Wm(e, t) {
   return { ...e, sheets: i, rowOrigins: n };
 }
 
-function j5(e, t) {
+function convertImportedTables(e, t) {
   let n = [],
     i = [],
     r = e.model.tables ?? [];
@@ -490,7 +491,7 @@ function j5(e, t) {
   return (i.length && ((t.tables = i), normalizeTableDefinitions(t, t)), n);
 }
 
-function XW(e) {
+function validateReportSnapshot(e) {
   if (new TextEncoder().encode(JSON.stringify(e)).length > 4e6)
     throw Error("A report snapshot exceeds 4 MB.");
   let t = calculationReportSchema.parse(e),
@@ -545,7 +546,7 @@ function XW(e) {
     throw Error("Report metadata is not canonical.");
   return t;
 }
-function OR(e, t) {
+function validateReportOutputs(e, t) {
   if (e.reportOutputs !== undefined) {
     let n = X.array(
       X.object({
@@ -563,7 +564,10 @@ function OR(e, t) {
       reportOutputLimits.metadataBytes
     )
       throw Error("Saved reports exceed 16 MB.");
-    t.reportOutputs = n.map((i) => ({ ...i, snapshot: XW(i.snapshot) }));
+    t.reportOutputs = n.map((i) => ({
+      ...i,
+      snapshot: validateReportSnapshot(i.snapshot),
+    }));
   }
   if (e.embeddedObjectInventories !== undefined) {
     let n = X.array(importedCacheEvidenceSchema)
@@ -578,7 +582,7 @@ function OR(e, t) {
   }
 }
 
-function lN(e, t) {
+function importPageSetup(e, t) {
   let n = e.pageSetup,
     i = createDefaultPageSetup(t);
   if (
@@ -610,7 +614,7 @@ function lN(e, t) {
   validatePageSetup(r, t);
 }
 
-var fN = {
+var fieldTransformLimits = {
   sourceCells: 500,
   sourceCharacters: 2e5,
   fields: 50,
@@ -624,12 +628,12 @@ var fN = {
   evidenceCharacters: 5e6,
 };
 
-function gN(e, t) {
+function validateFieldTransformEvidence(e, t) {
   if (e === undefined) return;
   if (
     !Array.isArray(e) ||
     e.length > 100 ||
-    JSON.stringify(e).length > fN.evidenceCharacters
+    JSON.stringify(e).length > fieldTransformLimits.evidenceCharacters
   )
     throw Error(
       "Field transformation evidence exceeds its native history budget. Keep the original backup.",
@@ -713,10 +717,10 @@ function gN(e, t) {
   });
 }
 
-function gi(e) {
-  return LV(e, false);
+function toValidWorkbook(e) {
+  return normalizeWorkbookDocument(e, false);
 }
-function LV(e, t) {
+function normalizeWorkbookDocument(e, t) {
   if (t && isDeepFrozenValue(e) && $V.has(e)) return e;
   if (!Gs(e) || e.schemaVersion !== 1)
     return jt("Unsupported workbook schema. Expected schemaVersion 1.");
@@ -894,7 +898,7 @@ function LV(e, t) {
     buildExternalSourceRefreshState(e, f),
     validateDataModelReport(e, f),
     validateAnalysisReport(e, f),
-    OR(e, f),
+    validateReportOutputs(e, f),
     normalizeRowProvenance(e, f),
     validateAutomationArtifacts(e, f),
     readRetainedXlsxSource(e, f),
@@ -902,7 +906,7 @@ function LV(e, t) {
     validateSourceImports(e, f),
     attachWorkbookLinkMetadata(e, f),
     normalizeTextCleanups(e.textCleanups, f),
-    gN(e.fieldTransforms, f),
+    validateFieldTransformEvidence(e.fieldTransforms, f),
     validateTableSourceEvidence(e.tableEvidence, f),
     e.whatIfAnalyses !== undefined &&
       (f.whatIfAnalyses = validateSavedWhatIfAnalyses(e.whatIfAnalyses)),
@@ -913,7 +917,7 @@ function LV(e, t) {
     validateWorkbookMetadata(e.metadata, f),
     assertUniqueTableNames(f),
     normalizeReviewMetadata(e, f),
-    z6(e.styleCatalog, f),
+    applyNamedStyleCatalog(e.styleCatalog, f),
     e.formulaWatches !== undefined &&
       (f.formulaWatches = validateFormulaWatches(e.formulaWatches, f)),
     dR(e, f),
@@ -922,12 +926,12 @@ function LV(e, t) {
   );
 }
 
-var WV = (e) => {
+var bytesToBase64 = (e) => {
   let t = "";
   for (let n of e) t += String.fromCharCode(n);
   return btoa(t);
 };
-function SN(e, t, n, i = {}) {
+function collectImportedPictures(e, t, n, i = {}) {
   let r = [],
     o = [],
     a = 0,
@@ -967,7 +971,7 @@ function SN(e, t, n, i = {}) {
           ? c.base64
           : c.base64
             ? `data:image/${u};base64,${c.base64}`
-            : `data:image/${u};base64,${WV(new Uint8Array(c.buffer))}`,
+            : `data:image/${u};base64,${bytesToBase64(new Uint8Array(c.buffer))}`,
         h = inspectPictureDataUrl(p),
         m = Math.floor(l.range.tl.col),
         g = Math.floor(l.range.tl.row),
@@ -1005,8 +1009,9 @@ function SN(e, t, n, i = {}) {
   return (validateDrawingObjects(r, n), o);
 }
 
-var TN = (e) => e.replaceAll("~", "~0").replaceAll("/", "~1");
-function qV(e) {
+var escapeJsonPointerSegment = (e) =>
+  e.replaceAll("~", "~0").replaceAll("/", "~1");
+function parseStrictJsonText(e) {
   let t = 0,
     n = 0,
     i = () => {
@@ -1074,7 +1079,7 @@ function qV(e) {
   if ((i(), t !== e.length)) throw Error("Trailing JSON content.");
   return a;
 }
-function XV(e, t) {
+function describeStructuredValue(e, t) {
   return {
     value: typeof e == "object" && e !== null ? JSON.stringify(e) : e,
     type:
@@ -1089,12 +1094,13 @@ function XV(e, t) {
     confidence: 1,
   };
 }
-function HV(e) {
+function collectJsonSourceTables(e) {
   let t = [],
     n = (i, r) => {
       if (Array.isArray(i)) i.length && t.push({ value: i, path: r });
       else if (yg(i))
-        for (let [o, a] of Object.entries(i)) n(a, r + "/" + TN(o));
+        for (let [o, a] of Object.entries(i))
+          n(a, r + "/" + escapeJsonPointerSegment(o));
     };
   if (
     (n(e, ""),
@@ -1112,8 +1118,9 @@ function HV(e) {
           f = o ? i.path : i.path + "/" + u,
           p = (h, m) => {
             if (yg(h) && Object.keys(h).length)
-              for (let [g, b] of Object.entries(h)) p(b, m + "/" + TN(g));
-            else (a.add(m), d.set(m, XV(h, f + m)));
+              for (let [g, b] of Object.entries(h))
+                p(b, m + "/" + escapeJsonPointerSegment(g));
+            else (a.add(m), d.set(m, describeStructuredValue(h, f + m)));
           };
         return (p(c, ""), d);
       }),
@@ -1139,7 +1146,7 @@ function HV(e) {
     };
   });
 }
-function GV(e) {
+function parseXmlSourceTables(e) {
   if (/<!DOCTYPE|<!ENTITY/i.test(e))
     throw Error("XML document types and entities are not supported.");
   if (/<\?xml[^>]*encoding\s*=\s*['"](?!utf-8['"])/i.test(e))
@@ -1147,7 +1154,7 @@ function GV(e) {
   let t = [],
     n = [],
     i = 0,
-    r = new AN.SaxesParser({ xmlns: true }),
+    r = new saxesEsModuleForXml.SaxesParser({ xmlns: true }),
     o = (u, d) => (u ? `{${u}}${d}` : d);
   r.on("opentag", (u) => {
     if (++i > sourceImportLimits.nodes || t.length >= sourceImportLimits.depth)
@@ -1356,7 +1363,7 @@ function GV(e) {
     };
   });
 }
-function gk(e, t) {
+function inspectSourceFile(e, t) {
   if (e.length < 1 || e.length > sourceImportLimits.bytes)
     throw Error("Source byte budget exceeded.");
   let n = t.split(".").at(-1)?.toLowerCase(),
@@ -1369,7 +1376,10 @@ function gk(e, t) {
     let c = new TextDecoder("utf-8", { fatal: true })
       .decode(e)
       .replace(/^\uFEFF/, "");
-    ((r = i === "json" ? HV(qV(c)) : GV(c)),
+    ((r =
+      i === "json"
+        ? collectJsonSourceTables(parseStrictJsonText(c))
+        : parseXmlSourceTables(c)),
       (o = i === "json" ? "native-json" : "native-xml"),
       (a = "Ledgerglass structured source v1"),
       s.push(
@@ -1415,7 +1425,7 @@ function gk(e, t) {
   return (recordSourceInspection(l, e, t), l);
 }
 
-function PN(e) {
+function inspectCompoundFileContainer(e) {
   let t = () => {
       throw Error(
         "Unsupported, encrypted or corrupt legacy workbook. Open the original in its source application and save an unencrypted XLSX copy.",
@@ -1609,7 +1619,7 @@ function PN(e) {
     : t();
 }
 
-function tq(e) {
+function buildAlternateFormatGuidance(e) {
   return [
     "Keep the original file. Inspection and conversion here never execute macros, objects or external refreshes.",
     e === "ods"
@@ -1621,7 +1631,7 @@ function tq(e) {
   ];
 }
 
-function Vd(e, t) {
+function inspectAlternateWorkbookFile(e, t) {
   if (
     !t ||
     t.length > 255 ||
@@ -1637,7 +1647,7 @@ function Vd(e, t) {
     throw Error("Choose an XLS, XLSB, XLSM, XLTX, XLTM or ODS source.");
   let i, r, o;
   if (e[0] === 208 && e[1] === 207) {
-    let s = PN(e);
+    let s = inspectCompoundFileContainer(e);
     ((i = "xls"),
       (r =
         s.version + " workbook in a CFB container; binary cells not decoded"),
@@ -1675,7 +1685,7 @@ function Vd(e, t) {
     identity: r,
     execution: "never",
     parts: o,
-    steps: tq(n),
+    steps: buildAlternateFormatGuidance(n),
     warnings: [
       "Identity inspection is not workbook conversion, malware scanning or a guarantee of formula, date or style equivalence.",
       "All source parts are retained only in the exact original. No macros, binary formulas, embedded objects or external links execute during inspection.",
@@ -1691,11 +1701,11 @@ function Vd(e, t) {
   };
   return (validateIsolatedFormatInspection(a, e, t), a);
 }
-var UN = Bi(Mo(), 1);
-function FN(e, t) {
+var saxesEsModuleForLinks = toEsModule(getSaxesModule(), 1);
+function parseExternalLinkTargets(e, t) {
   let n = (a, s) => {
       if (!e[a]) return;
-      let l = new UN.SaxesParser({ xmlns: true });
+      let l = new saxesEsModuleForLinks.SaxesParser({ xmlns: true });
       (l.on("opentag", s),
         l.on("doctype", () => {
           throw Error("External link metadata cannot contain DTDs.");
@@ -1756,15 +1766,15 @@ function FN(e, t) {
   );
 }
 
-async function zN(e) {
+async function convertXltxTemplateFile(e) {
   if (e.size > 10 * 1024 * 1024) throw Error("Files must be 10 MB or smaller.");
   let t = new Uint8Array(await e.arrayBuffer()),
-    n = Vd(t, e.name);
+    n = inspectAlternateWorkbookFile(t, e.name);
   if (n.format !== "xltx")
     throw Error("Only XLTX templates use the native template adapter.");
   let i = convertTemplateToXlsx(t, "xltx", "xlsx"),
     r = e.name.replace(/\.xltx$/i, "").slice(0, 236) + ".template-copy.xlsx",
-    o = await kg({
+    o = await importWorkbookFile({
       name: r,
       size: i.length,
       arrayBuffer: async () => i.buffer,
@@ -1802,11 +1812,11 @@ async function zN(e) {
   );
 }
 
-var qd = (e, t) =>
+var argbColorOrFallback = (e, t) =>
   e?.argb && /^[a-f\d]{8}$/i.test(e.argb)
     ? `#${e.argb.slice(-6).toLowerCase()}`
     : t;
-function lq(e) {
+function collapseCellAddressesToRanges(e) {
   let t = e.map(_t).sort((o, a) => o.row - a.row || o.col - a.col),
     n = [];
   for (let o of t) {
@@ -1834,7 +1844,7 @@ function lq(e) {
   );
 }
 
-function uq(e) {
+function buildDataValidationRule(e) {
   let t = {
       list: "list",
       decimal: "number",
@@ -1902,12 +1912,12 @@ function uq(e) {
     : null;
 }
 
-function hq(e, t) {
+function buildConditionalFormatRule(e, t) {
   let n =
       e.style?.fill?.type === "pattern"
-        ? qd(e.style.fill.fgColor, "#fff2cc")
+        ? argbColorOrFallback(e.style.fill.fgColor, "#fff2cc")
         : "#fff2cc",
-    i = qd(e.style?.font?.color, "#000000"),
+    i = argbColorOrFallback(e.style?.font?.color, "#000000"),
     r = {
       id: GN(),
       priority: Number.isFinite(e.priority) ? e.priority : 1e4,
@@ -1950,8 +1960,8 @@ function hq(e, t) {
     return {
       ...r,
       kind: "colorScale",
-      minColor: qd(e.color?.[0], "#f8e99b"),
-      maxColor: qd(e.color?.[1], "#63be7b"),
+      minColor: argbColorOrFallback(e.color?.[0], "#f8e99b"),
+      maxColor: argbColorOrFallback(e.color?.[1], "#63be7b"),
     };
   if (
     e.type === "dataBar" &&
@@ -1961,7 +1971,11 @@ function hq(e, t) {
     e.showValue !== false &&
     e.direction !== "rightToLeft"
   )
-    return { ...r, kind: "dataBar", fill: qd(e.color, "#4472c4") };
+    return {
+      ...r,
+      kind: "dataBar",
+      fill: argbColorOrFallback(e.color, "#4472c4"),
+    };
   if (
     e.type === "iconSet" &&
     e.iconSet === "3Arrows" &&
@@ -2037,7 +2051,7 @@ function hq(e, t) {
     ? null
     : { ...r, kind: a, value: s, second: l };
 }
-function YN(e, t, n = {}, i = []) {
+function convertWorksheetFeatures(e, t, n = {}, i = []) {
   let r = [],
     o = {},
     a = e.model.merges ?? [];
@@ -2068,7 +2082,7 @@ function YN(e, t, n = {}, i = []) {
       _ =
         b && area && !w
           ? null
-          : uq(
+          : buildDataValidationRule(
               b && area
                 ? { ...rule, formulae: area.operands.map(Number) }
                 : rule,
@@ -2084,7 +2098,7 @@ function YN(e, t, n = {}, i = []) {
       r.push(
         "An imported validation has error alerts disabled. Local validation requires Stop or explicit Warning/Information review; source values were retained.",
       );
-    for (let S of lq(addresses)) {
+    for (let S of collapseCellAddressesToRanges(addresses)) {
       if (c.length >= 100) {
         r.push(
           "Additional validation areas beyond the 100-rule limit were omitted; source cells were retained.",
@@ -2144,7 +2158,7 @@ function YN(e, t, n = {}, i = []) {
                 : E,
             ),
           });
-        let O = hq(S, w);
+        let O = buildConditionalFormatRule(S, w);
         if (O && (O.kind === "duplicate" || O.kind === "unique")) {
           let E = true;
           for (let [R, I] of Object.entries(t.cells)) {
@@ -2211,7 +2225,7 @@ function YN(e, t, n = {}, i = []) {
   );
 }
 
-function t8(e, t, n) {
+function applyCalculationProperties(e, t, n) {
   ((e.calculation = {
     ...defaultCalculationSettings,
     mode: t.mode === "manual" ? "manual" : "automatic",
@@ -2246,9 +2260,9 @@ function t8(e, t, n) {
         "Source iteration limits exceed local limits. Local defaults are used; original settings remain in imported cache evidence.",
       ));
 }
-var i8 = Bi(Mo(), 1);
+var saxesEsModuleForAutomation = toEsModule(getSaxesModule(), 1);
 
-function n8(e) {
+function decodeUtf8Strict(e) {
   try {
     let t = new TextDecoder("utf-8", { fatal: true }).decode(e);
     if (t.includes("\0")) throw Error();
@@ -2259,7 +2273,7 @@ function n8(e) {
     );
   }
 }
-function pq(e) {
+function inspectAutomationArchive(e) {
   let t = inspectXlsxPackage(e, { allowBinaryWorkbookInventory: true }),
     n = new Map(),
     i = 0,
@@ -2316,10 +2330,10 @@ function pq(e) {
   if (n.size !== t.size) throw Error("Automation archive is incomplete.");
   return n;
 }
-function mq(e, t, n) {
+function scanAutomationXmlMetadata(e, t, n) {
   if (/<\?xml[^>]*encoding\s*=\s*["'](?!utf-8|utf8)[^"']+/i.test(e))
     throw Error(`Unsupported XML encoding in ${t}.`);
-  let i = new i8.SaxesParser({ xmlns: false }),
+  let i = new saxesEsModuleForAutomation.SaxesParser({ xmlns: false }),
     r = 0,
     o = 0;
   (i.on("doctype", () => {
@@ -2336,7 +2350,7 @@ function mq(e, t, n) {
     }),
     i.write(e).close());
 }
-function o8(e, t) {
+function inspectAutomationFile(e, t) {
   if (
     (requireAutomationFileName(t),
     !ArrayBuffer.isView(e) ||
@@ -2364,7 +2378,7 @@ function o8(e, t) {
   if (["bas", "vba", "cls", "ts", "osts"].includes(r ?? "")) {
     if (n.length > automationLimits.maxSourceBytes)
       throw Error("Text automation source is limited to 256 KiB.");
-    let o = n8(n),
+    let o = decodeUtf8Strict(n),
       a = r === "ts" || r === "osts" ? "office-script" : "vba";
     if (((i.kind = r === "osts" ? "office-script-container" : a), r === "osts"))
       try {
@@ -2421,7 +2435,7 @@ function o8(e, t) {
     ["xlsm", "xlam", "xltm", "xlsx", "xltx"].includes(r ?? "") ||
     (n[0] === 80 && n[1] === 75)
   ) {
-    let o = pq(n),
+    let o = inspectAutomationArchive(n),
       a = new Map(),
       s = (l, c) => {
         let u = "";
@@ -2449,7 +2463,7 @@ function o8(e, t) {
     for (let [l, c] of o)
       (s(l, ""),
         /\.(?:xml|rels)$/i.test(l) &&
-          mq(n8(c), l, (u, d) => {
+          scanAutomationXmlMetadata(decodeUtf8Strict(c), l, (u, d) => {
             if (
               (u === "Override" &&
                 d.PartName &&
@@ -2522,9 +2536,10 @@ function o8(e, t) {
   );
 }
 
-function gq(e, t) {
+function toTypedCellValue(e, t) {
   if (e != null) {
-    if (e instanceof Date) return { type: "number", value: _p(e, t) };
+    if (e instanceof Date)
+      return { type: "number", value: dateToExcelSerial(e, t) };
     if (typeof e == "object" && "error" in e && typeof e.error == "string")
       return { type: "error", value: e.error };
     if (typeof e == "string") return { type: "text", value: e };
@@ -2533,7 +2548,7 @@ function gq(e, t) {
       return { type: "number", value: e };
   }
 }
-function bq(e, t) {
+function typedValuesMatch(e, t) {
   return (
     e.type === t.type &&
     (typeof e.value == "number" && typeof t.value == "number"
@@ -2542,7 +2557,14 @@ function bq(e, t) {
       : e.value === t.value)
   );
 }
-function a8(e, t, n, i = new Map(), r, o = new Map()) {
+function compareFormulaCachesWithRecalculation(
+  e,
+  t,
+  n,
+  i = new Map(),
+  r,
+  o = new Map(),
+) {
   let a = calculateWorkbookWithSettings(t);
   for (let s of t.sheets) {
     let l = e.getWorksheet(s.name);
@@ -2558,7 +2580,10 @@ function a8(e, t, n, i = new Map(), r, o = new Map()) {
           ? { type: "text", value: "" }
           : o.get(s.name)?.has(c)
             ? { type: "number", value: Number(o.get(s.name).get(c)) }
-            : gq(l.getCell(c).result, t.datePolicy?.dateSystem ?? "1900"),
+            : toTypedCellValue(
+                l.getCell(c).result,
+                t.datePolicy?.dateSystem ?? "1900",
+              ),
         p = a.getTypedValue(s.id, c);
       r &&
         r.entries.push({
@@ -2572,7 +2597,7 @@ function a8(e, t, n, i = new Map(), r, o = new Map()) {
         : p.type === "error" && p.value === "#PENDING!"
           ? "pending"
           : f
-            ? bq(f, p)
+            ? typedValuesMatch(f, p)
               ? "matched"
               : "different"
             : "missing";
@@ -2606,7 +2631,7 @@ function a8(e, t, n, i = new Map(), r, o = new Map()) {
         `${n.caches.neutralized} external/action formula(s) were converted to literal text.`,
       ));
 }
-function l8(e, t) {
+function assertNoLegacyArrayFormulas(e, t) {
   let n = (r, o) =>
       new RegExp(`(?:^|\\s)${o}\\s*=\\s*(["'])(.*?)\\1`, "i")
         .exec(r)?.[2]
@@ -2636,10 +2661,10 @@ function l8(e, t) {
     );
   }
 }
-var y8 = Bi(u8(), 1);
-var p8 = Bi(d8(), 1);
+var exceljsEsModule = toEsModule(getExceljsModule(), 1);
+var papaparseEsModule = toEsModule(getPapaparseModule(), 1);
 
-function Aq(e, t) {
+function decodeDelimitedBytes(e, t) {
   if (e.length > workbookLimits.maxFileBytes)
     throw Error("Delimited files must be 10 MB or smaller.");
   let n =
@@ -2671,7 +2696,7 @@ function Aq(e, t) {
     );
   return { text: r, encoding: i };
 }
-function Iq(e, t, n, i) {
+function tokenizeDelimitedText(e, t, n, i) {
   let r = [],
     o = "",
     a = "start",
@@ -2781,14 +2806,14 @@ function Iq(e, t, n, i) {
     (n.complete = !c));
 }
 
-function g8(e, t, n, i) {
+function parseDelimitedRecords(e, t, n, i) {
   let r = normalizeDelimitedOptions(n),
-    o = Aq(e, r.encoding);
+    o = decodeDelimitedBytes(e, r.encoding);
   ((r.encoding = o.encoding),
     r.delimiter === "auto" &&
       (r.delimiter = /\.tsv$/i.test(t)
         ? "	"
-        : p8.default.parse(o.text.slice(0, 65536), {
+        : papaparseEsModule.default.parse(o.text.slice(0, 65536), {
             preview: 10,
             quoteChar: r.quote === "none" ? "" : r.quote,
             escapeChar: r.escape === "double" ? r.quote : "\\",
@@ -2809,7 +2834,7 @@ function g8(e, t, n, i) {
       ));
   let l = 0;
   if (
-    (Iq(o.text, r, a, (c, u, d) => {
+    (tokenizeDelimitedText(o.text, r, a, (c, u, d) => {
       ((a.records = u),
         c.every((f) => f === "") && a.blankRecords++,
         !l && !d && (l = c.length),
@@ -2910,16 +2935,16 @@ function g8(e, t, n, i) {
   }
   return ((a.valid = a.complete && a.issueCount === 0), { r: a, cells: s });
 }
-function b8(e, t, n = {}) {
-  return g8(e, t, n, false).r;
+function validateDelimitedImport(e, t, n = {}) {
+  return parseDelimitedRecords(e, t, n, false).r;
 }
-function Eg(e, t, n = {}) {
-  let { r, cells } = g8(e, t, n, true);
+function importDelimitedWorkbook(e, t, n = {}) {
+  let { r, cells } = parseDelimitedRecords(e, t, n, true);
   if (!r.valid)
     throw Error(
       `Unable to read delimited data: ${r.issues[0]?.message ?? "Incomplete preview."} Review the import schema; no rows were imported.`,
     );
-  let o = Q6(
+  let o = createBlankWorkbook(
       t
         .replace(/\.[^.]+$/, " ")
         .trim()
@@ -2936,18 +2961,22 @@ function Eg(e, t, n = {}) {
       hasHeader: r.options.hasHeader,
     }),
     {
-      workbook: gi(
-        Wm(o, { id: crypto.randomUUID(), name: t.slice(0, 255), kind: "file" }),
+      workbook: toValidWorkbook(
+        createSourceRowProvenance(o, {
+          id: crypto.randomUUID(),
+          name: t.slice(0, 255),
+          kind: "file",
+        }),
       ),
       warnings: r.warnings,
       delimitedReport: r,
     }
   );
 }
-var Nk = () => globalThis.crypto.randomUUID();
-var $q = (e, t) => ({
+var createRandomUuid = () => globalThis.crypto.randomUUID();
+var createImportedWorkbook = (e, t) => ({
   schemaVersion: 1,
-  id: Nk(),
+  id: createRandomUuid(),
   name: e.replace(/\.[^.]+$/, "").slice(0, 200) || "Imported workbook",
   revision: 0,
   metadata: createWorkbookMetadata(),
@@ -2955,7 +2984,7 @@ var $q = (e, t) => ({
   events: [],
 });
 
-function v8(e, t) {
+function parseXlsxWorkbookPackage(e, t) {
   let n = inspectXlsxPackage(e),
     i = new Set(n.keys()),
     r = n.size,
@@ -3043,7 +3072,7 @@ function v8(e, t) {
                 (!Number.isInteger(L) || L < 8 || L > 72) && (m = true);
               }
             if (/^xl\/worksheets\//i.test(_.name)) {
-              (l8(I, _.name),
+              (assertNoLegacyArrayFormulas(I, _.name),
                 (h = parseWorksheetCells(I, _.name, h)),
                 /^xl\/worksheets\/[^/]+\.xml$/i.test(_.name) &&
                   t.numericTokens.set(_.name, scanXlsxNumericTokens(I)));
@@ -3300,7 +3329,7 @@ function v8(e, t) {
     w
   );
 }
-function Lq(e) {
+function classifyNumberFormat(e) {
   if (!(!e || e === "General"))
     return /%/.test(e)
       ? "percent"
@@ -3310,12 +3339,12 @@ function Lq(e) {
           ? "date"
           : "number";
 }
-function Ga(e) {
+function normalizeArgbHexColor(e) {
   return e && /^(?:[0-9a-f]{8}|[0-9a-f]{6})$/i.test(e)
     ? `#${e.slice(-6).toLowerCase()}`
     : undefined;
 }
-function Uq(e, t = [], n, i = false) {
+function convertXlsxCellToRecord(e, t = [], n, i = false) {
   let r = (m) => {
       t.includes(m) || t.push(m);
     },
@@ -3328,7 +3357,10 @@ function Uq(e, t = [], n, i = false) {
     : typeof o == "number" || typeof o == "boolean"
       ? (a = o)
       : o instanceof Date
-        ? (a = n !== undefined ? Number(n) : _p(o, i ? "1904" : "1900"))
+        ? (a =
+            n !== undefined
+              ? Number(n)
+              : dateToExcelSerial(o, i ? "1904" : "1900"))
         : o &&
           typeof o == "object" &&
           ("formula" in o || "sharedFormula" in o
@@ -3376,7 +3408,7 @@ function Uq(e, t = [], n, i = false) {
       );
       continue;
     }
-    let b = Ga(g.color?.argb);
+    let b = normalizeArgbHexColor(g.color?.argb);
     (g.color &&
       !b &&
       r(
@@ -3420,7 +3452,7 @@ function Uq(e, t = [], n, i = false) {
         "Unsupported text positioning/alignment settings were omitted; raw values were retained.",
       ),
     e.font?.color &&
-      !Ga(e.font.color.argb) &&
+      !normalizeArgbHexColor(e.font.color.argb) &&
       r(
         "A theme/indexed font color uses the editor default; theme bindings are not preserved.",
       ),
@@ -3433,16 +3465,16 @@ function Uq(e, t = [], n, i = false) {
     e.fill?.type === "pattern" &&
       e.fill.pattern === "solid" &&
       e.fill.fgColor &&
-      !Ga(e.fill.fgColor.argb) &&
+      !normalizeArgbHexColor(e.fill.fgColor.argb) &&
       r(
         "A theme/indexed fill color uses the editor default; theme bindings are not preserved.",
       ));
-  let f = Ga(e.font?.color?.argb);
+  let f = normalizeArgbHexColor(e.font?.color?.argb);
   if (
     (f && (l.color = f),
     e.fill?.type === "pattern" && e.fill.pattern === "solid")
   ) {
-    let m = Ga(e.fill.fgColor?.argb);
+    let m = normalizeArgbHexColor(e.fill.fgColor?.argb);
     m && (l.fill = m);
   }
   e.alignment &&
@@ -3457,19 +3489,22 @@ function Uq(e, t = [], n, i = false) {
     raw: a,
     ...(s ? { literal: s } : {}),
     ...(Object.keys(l).length ? { style: l } : {}),
-    ...(h ? { numFmt: h, format: Lq(h) } : {}),
+    ...(h ? { numFmt: h, format: classifyNumberFormat(h) } : {}),
     ...(p ? { note: p } : {}),
   };
 }
-async function kg(e) {
-  if (/\.xltx$/i.test(e.name)) return zN(e);
+async function importWorkbookFile(e) {
+  if (/\.xltx$/i.test(e.name)) return convertXltxTemplateFile(e);
   if (/\.json$/i.test(e.name)) {
     if (e.size > workbookLimits.maxNativeBytes)
       throw new Error("Native workbook exceeds the 50 MB import limit.");
-    let S = Fq(await e.text());
+    let S = parseNativeWorkbookJson(await e.text());
     return {
       workbook: S,
-      warnings: [...collectStyleFallbackWarnings(S), ...Bw(S)],
+      warnings: [
+        ...collectStyleFallbackWarnings(S),
+        ...collectDataValidationWarnings(S),
+      ],
     };
   }
   if (e.size > workbookLimits.maxFileBytes)
@@ -3479,9 +3514,13 @@ async function kg(e) {
       "Legacy or macro-enabled Excel formats are not supported. Save as XLSX, CSV or native JSON.",
     );
   if (/\.(csv|tsv)$/i.test(e.name))
-    return Eg(new Uint8Array(await e.arrayBuffer()), e.name, {
-      hasHeader: false,
-    });
+    return importDelimitedWorkbook(
+      new Uint8Array(await e.arrayBuffer()),
+      e.name,
+      {
+        hasHeader: false,
+      },
+    );
   if (!/\.xlsx$/i.test(e.name))
     throw new Error("Choose an XLSX, CSV, TSV or JSON file.");
   let t = new Uint8Array(await e.arrayBuffer()),
@@ -3500,10 +3539,10 @@ async function kg(e) {
     };
   if (t.byteLength > workbookLimits.maxFileBytes)
     throw new Error("XLSX files must be 10 MB or smaller.");
-  let i = v8(t, n),
+  let i = parseXlsxWorkbookPackage(t, n),
     r = retainOriginalXlsx(t, e.name),
     o = F$(Nd(t), r.sha256),
-    a = new y8.default.Workbook(),
+    a = new exceljsEsModule.default.Workbook(),
     s = t;
   if (n.names.length || n.nameWarnings.length) {
     let S = Nd(t);
@@ -3564,7 +3603,7 @@ async function kg(e) {
         for (let F of N.cells) {
           let z = S.getCell(F.address);
           if (z.isMerged && z.master.address !== z.address) continue;
-          let j = Uq(
+          let j = convertXlsxCellToRecord(
             z,
             i,
             n.numericTokens.get(U ?? "")?.get(F.address),
@@ -3615,7 +3654,7 @@ async function kg(e) {
         k = v(S.properties.defaultRowHeight, 4 / 3, 21, 546, "row height"),
         x = v(S.properties.defaultColWidth, 7, 40, 600, "column width"),
         C = {
-          id: Nk(),
+          id: createRandomUuid(),
           name: S.name,
           ...(k !== undefined ? { defaultRowHeight: k } : {}),
           ...(x !== undefined ? { defaultColumnWidth: x } : {}),
@@ -3630,22 +3669,24 @@ async function kg(e) {
           ...(Object.keys(I).length ? { rowHeights: I } : {}),
           ...(S.state !== "visible" ? { hidden: true } : {}),
           ...(S.state === "veryHidden" ? { veryHidden: true } : {}),
-          ...(Ga(S.properties.tabColor?.argb)
-            ? { tabColor: Ga(S.properties.tabColor?.argb) }
+          ...(normalizeArgbHexColor(S.properties.tabColor?.argb)
+            ? { tabColor: normalizeArgbHexColor(S.properties.tabColor?.argb) }
             : {}),
         };
-      (i.push(...j5(S, C)),
+      (i.push(...convertImportedTables(S, C)),
         i.push(
-          ...YN(
+          ...convertWorksheetFeatures(
             S,
             C,
             n.conditionalStops.get(U ?? ""),
             n.validationAreas.get(U ?? ""),
           ),
         ),
-        i.push(...SN(a, S, C, { containerFilename: e.name })));
+        i.push(
+          ...collectImportedPictures(a, S, C, { containerFilename: e.name }),
+        ));
       try {
-        lN(S, C);
+        importPageSetup(S, C);
         let N = n.printBreaks.get(U ?? "");
         N && validatePageSetup({ ...C.pageLayout, ...N }, C);
       } catch (N) {
@@ -3664,9 +3705,9 @@ async function kg(e) {
     i.push(
       "Formula results are recalculated by the supported local formula engine. Unsupported Excel functions may display errors. Cell error values are imported as displayed text. Audit history and application tickmarks are available only in native JSON backups.",
     ));
-  let d = $q(e.name, u);
+  let d = createImportedWorkbook(e.name, u);
   d.xlsxSource = r;
-  let f = FN(Nd(t), r.sha256);
+  let f = parseExternalLinkTargets(Nd(t), r.sha256);
   (f.length &&
     (d.workbookLinks = { schemaVersion: 1, sources: [], packageTargets: f }),
     a.properties.date1904 &&
@@ -3692,7 +3733,7 @@ async function kg(e) {
         createdAt: a.created.toISOString(),
         modifiedAt: a.modified.toISOString(),
       }));
-  let m = s5(n.names, d, [...n.sheetNames.keys()]);
+  let m = resolveDefinedNameScopes(n.names, d, [...n.sheetNames.keys()]);
   m.length && (d.definedNames = m);
   let g = n.calculation ?? {
     mode: "auto",
@@ -3700,8 +3741,14 @@ async function kg(e) {
     maxIterations: null,
     maxChange: null,
   };
-  t8(d, g, i);
-  let b = gi(Wm(d, { id: Nk(), name: e.name, kind: "file" })),
+  applyCalculationProperties(d, g, i);
+  let b = toValidWorkbook(
+      createSourceRowProvenance(d, {
+        id: createRandomUuid(),
+        name: e.name,
+        kind: "file",
+      }),
+    ),
     w = buildExchangeSchemaReport("import", e.name, t.byteLength, b, i);
   ((w.partInventory = o),
     w.warnings.push(
@@ -3722,7 +3769,7 @@ async function kg(e) {
     entries: [],
   };
   return (
-    a8(
+    compareFormulaCachesWithRecalculation(
       a,
       b,
       w,
@@ -3742,11 +3789,11 @@ async function kg(e) {
       ),
     ),
     (b.importedCalculationCaches = _),
-    w.warnings.push(...Bw(b)),
-    { workbook: gi(b), warnings: w.warnings, report: w }
+    w.warnings.push(...collectDataValidationWarnings(b)),
+    { workbook: toValidWorkbook(b), warnings: w.warnings, report: w }
   );
 }
-function Fq(e) {
+function parseNativeWorkbookJson(e) {
   if (new TextEncoder().encode(e).length > workbookLimits.maxNativeBytes)
     throw new Error("Native workbook exceeds the 50 MB import limit.");
   let t;
@@ -3755,17 +3802,17 @@ function Fq(e) {
   } catch {
     throw new Error("The native workbook is not valid JSON.");
   }
-  return gi(t);
+  return toValidWorkbook(t);
 }
 
-function w8(e) {
+function buildRetainedXlsxSchemaReport(e) {
   let t = requireRetainedXlsxSource(e),
-    n = v8(t.bytes, createEmptyExportLedger()),
+    n = parseXlsxWorkbookPackage(t.bytes, createEmptyExportLedger()),
     i = buildExchangeSchemaReport("import", t.fileName, t.bytes.length, e, n);
   return ((i.partInventory = F$(Nd(t.bytes), t.sha256)), i);
 }
 
-function _8(e) {
+function toErrorResponse(e) {
   let { code, message } = toFileProcessingError(e);
   return { code, message };
 }
@@ -3787,7 +3834,7 @@ for (let e of [
     writable: false,
     configurable: false,
   });
-function S8(e) {
+function parseJsonWithinBudget(e) {
   let t = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(e)),
     n = [{ value: t, depth: 0 }],
     i = 0;
@@ -3804,11 +3851,11 @@ function S8(e) {
   }
   return t;
 }
-var Pk = self,
-  C8 = false;
-Pk.onmessage = async ({ data }) => {
-  if (C8) return;
-  C8 = true;
+var workerScope = self,
+  messageHandled = false;
+workerScope.onmessage = async ({ data }) => {
+  if (messageHandled) return;
+  messageHandled = true;
   let t = data?.id;
   try {
     if (
@@ -3821,15 +3868,15 @@ Pk.onmessage = async ({ data }) => {
     let n;
     switch (data.operation) {
       case "source":
-        n = gk(data.bytes, data.fileName);
+        n = inspectSourceFile(data.bytes, data.fileName);
         break;
       case "formats":
-        n = Vd(data.bytes, data.fileName);
+        n = inspectAlternateWorkbookFile(data.bytes, data.fileName);
         break;
       case "workbook": {
-        /\.json$/i.test(data.fileName) && S8(data.bytes);
+        /\.json$/i.test(data.fileName) && parseJsonWithinBudget(data.bytes);
         let i = data.bytes,
-          r = await kg({
+          r = await importWorkbookFile({
             name: data.fileName,
             size: i.length,
             arrayBuffer: async () => i.buffer,
@@ -3839,15 +3886,15 @@ Pk.onmessage = async ({ data }) => {
         if (
           (/\.json$/i.test(data.fileName) &&
             r.workbook.xlsxSource &&
-            w8(r.workbook),
+            buildRetainedXlsxSchemaReport(r.workbook),
           /\.json$/i.test(data.fileName) && r.workbook.alternateSource)
         ) {
           let o = r.workbook.alternateSource;
-          Vd(validateAlternateSource(o), o.fileName);
+          inspectAlternateWorkbookFile(validateAlternateSource(o), o.fileName);
         }
         if (/\.json$/i.test(data.fileName))
           for (let o of r.workbook.sourceImports ?? []) {
-            let a = gk(
+            let a = inspectSourceFile(
               validateRetainedSourceFile(o.original),
               o.original.fileName,
             );
@@ -3864,20 +3911,30 @@ Pk.onmessage = async ({ data }) => {
         break;
       }
       case "delimited": {
-        let i = b8(data.bytes, data.fileName, data.options);
+        let i = validateDelimitedImport(
+          data.bytes,
+          data.fileName,
+          data.options,
+        );
         n = {
           report: i,
           ...(i.valid
-            ? { workbook: Eg(data.bytes, data.fileName, data.options).workbook }
+            ? {
+                workbook: importDelimitedWorkbook(
+                  data.bytes,
+                  data.fileName,
+                  data.options,
+                ).workbook,
+              }
             : {}),
         };
         break;
       }
       case "automation":
-        n = o8(data.bytes, data.fileName);
+        n = inspectAutomationFile(data.bytes, data.fileName);
         break;
       case "json":
-        n = S8(data.bytes);
+        n = parseJsonWithinBudget(data.bytes);
         break;
       case "picture": {
         let i = "";
@@ -3892,8 +3949,8 @@ Pk.onmessage = async ({ data }) => {
     }
     if (new TextEncoder().encode(JSON.stringify(n)).length > u1.maxResultBytes)
       throw new FileProcessingError("FILE_LIMIT");
-    Pk.postMessage({ id: t, ok: true, value: n });
+    workerScope.postMessage({ id: t, ok: true, value: n });
   } catch (n) {
-    Pk.postMessage({ id: t, ok: false, error: _8(n) });
+    workerScope.postMessage({ id: t, ok: false, error: toErrorResponse(n) });
   }
 };

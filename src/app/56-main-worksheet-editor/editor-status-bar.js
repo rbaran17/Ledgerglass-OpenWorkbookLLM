@@ -2,7 +2,7 @@ import i from "react/jsx-runtime";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { formatNumberWithPattern } from "../03-workbook-model.js";
 
-function renderStatusBar({
+function EditorStatusBar({
   dialogState,
   selectionState,
   operationStatusState,
@@ -147,4 +147,4 @@ function renderStatusBar({
   });
 }
 
-export { renderStatusBar };
+export { EditorStatusBar };
