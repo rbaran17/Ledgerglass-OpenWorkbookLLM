@@ -1,3 +1,112 @@
+import {
+  Info,
+  Check,
+  Bell,
+  UserRound,
+  FileSpreadsheet,
+  FolderClosed,
+  LayoutGrid,
+  ChevronRight,
+  FolderOpen,
+  PanelLeftClose,
+  Search,
+  ChevronDown,
+  ArrowUpRight,
+  PanelLeftOpen,
+  Minimize2,
+  Maximize2,
+  X,
+  BookOpen,
+  ArrowLeft,
+  Filter,
+  Plus,
+  Layers,
+  ClipboardCheck,
+  Sparkles,
+  History,
+  CircleHelp,
+  PanelRightClose,
+  ListFilter,
+  Copy,
+  FlaskConical,
+  ChartColumn,
+  Clock3,
+  Download,
+  ShieldCheck,
+  ArrowRight,
+  ListTree,
+  MessageSquare,
+  Link2,
+  RotateCcw,
+  ExternalLink,
+  Clipboard,
+  Rows3,
+  Grid2x2,
+  ArrowDown,
+  ArrowUp,
+  EyeOff,
+  Eye as Eye$1,
+  LockKeyhole,
+  Trash2,
+  LockKeyholeOpen,
+  ImagePlus,
+  Shapes,
+  Palette,
+  FileText,
+  Printer,
+  CircleCheck,
+  FileInput,
+  FilePlus2,
+  Sheet,
+  FileJson,
+  Type,
+  FileCode,
+  ChevronUp,
+  Undo2,
+  Redo2,
+  Paintbrush,
+  CheckCheck,
+  Scissors,
+  Bold,
+  Italic,
+  Underline,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  WrapText,
+  DollarSign,
+  Percent,
+  Grid3x3,
+  Table2,
+  Maximize,
+  Sigma,
+  ArrowDownToLine,
+  Eraser,
+  Image as Image$1,
+  Square,
+  Calculator,
+  ArrowLeftRight,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  Columns3,
+  PanelTop,
+  Move,
+  PaintBucket,
+} from "lucide-react";
+export {
+  ArrowUp as A,
+  Check as C,
+  FileText as F,
+  Plus as P,
+  Sparkles as S,
+  Table2 as T,
+  X,
+  createLucideIcon as c,
+  Copy as d,
+  RotateCcw as e,
+  ArrowDown as f,
+  Square as i,
+} from "lucide-react";
 import qre from "fast-formula-parser";
 import "./styles/workbook.css";
 import __fileParserWorkerSource from "./workers/file-parser.worker.js?worker-source";
@@ -25940,1380 +26049,7 @@ function zae(e) {
     ? e + ")".repeat(t)
     : e;
 }
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Vae = (e) => e.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase(),
-  h$ = (...e) =>
-    e
-      .filter((r, t, n) => !!r && r.trim() !== "" && n.indexOf(r) === t)
-      .join(" ")
-      .trim();
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ var Wae = {
-  xmlns: "http://www.w3.org/2000/svg",
-  width: 24,
-  height: 24,
-  viewBox: "0 0 24 24",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 2,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-};
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Hae = ne.forwardRef(
-  (
-    {
-      color: e = "currentColor",
-      size: r = 24,
-      strokeWidth: t = 2,
-      absoluteStrokeWidth: n,
-      className: o = "",
-      children: a,
-      iconNode: s,
-      ...d
-    },
-    u,
-  ) =>
-    ne.createElement(
-      "svg",
-      {
-        ref: u,
-        ...Wae,
-        width: r,
-        height: r,
-        stroke: e,
-        strokeWidth: n ? (Number(t) * 24) / Number(r) : t,
-        className: h$("lucide", o),
-        ...d,
-      },
-      [
-        ...s.map(([l, c]) => ne.createElement(l, c)),
-        ...(Array.isArray(a) ? a : [a]),
-      ],
-    ),
-);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Er = (e, r) => {
-  const t = ne.forwardRef(({ className: n, ...o }, a) =>
-    ne.createElement(Hae, {
-      ref: a,
-      iconNode: r,
-      className: h$(`lucide-${Vae(e)}`, n),
-      ...o,
-    }),
-  );
-  return ((t.displayName = `${e}`), t);
-};
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const qae = Er("AlignCenter", [
-  ["path", { d: "M17 12H7", key: "16if0g" }],
-  ["path", { d: "M19 18H5", key: "18s9l3" }],
-  ["path", { d: "M21 6H3", key: "1jwq7v" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Xae = Er("AlignLeft", [
-  ["path", { d: "M15 12H3", key: "6jk70r" }],
-  ["path", { d: "M17 18H3", key: "1amg6g" }],
-  ["path", { d: "M21 6H3", key: "1jwq7v" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Gae = Er("AlignRight", [
-  ["path", { d: "M21 12H9", key: "dn1m92" }],
-  ["path", { d: "M21 18H7", key: "1ygte8" }],
-  ["path", { d: "M21 6H3", key: "1jwq7v" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const YO = Er("ArrowDownAZ", [
-  ["path", { d: "m3 16 4 4 4-4", key: "1co6wj" }],
-  ["path", { d: "M7 20V4", key: "1yoxec" }],
-  ["path", { d: "M20 8h-5", key: "1vsyxs" }],
-  ["path", { d: "M15 10V6.5a2.5 2.5 0 0 1 5 0V10", key: "ag13bf" }],
-  ["path", { d: "M15 14h5l-5 6h5", key: "ur5jdg" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Zae = Er("ArrowDownToLine", [
-  ["path", { d: "M12 17V3", key: "1cwfxf" }],
-  ["path", { d: "m6 11 6 6 6-6", key: "12ii2o" }],
-  ["path", { d: "M19 21H5", key: "150jfl" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const uI = Er("ArrowDown", [
-  ["path", { d: "M12 5v14", key: "s699le" }],
-  ["path", { d: "m19 12-7 7-7-7", key: "1idqje" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const W4 = Er("ArrowLeftRight", [
-  ["path", { d: "M8 3 4 7l4 4", key: "9rb6wj" }],
-  ["path", { d: "M4 7h16", key: "6tx8e3" }],
-  ["path", { d: "m16 21 4-4-4-4", key: "siv7j2" }],
-  ["path", { d: "M20 17H4", key: "h6l3hr" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const p$ = Er("ArrowLeft", [
-  ["path", { d: "m12 19-7-7 7-7", key: "1l729n" }],
-  ["path", { d: "M19 12H5", key: "x3x0zl" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const m$ = Er("ArrowRight", [
-  ["path", { d: "M5 12h14", key: "1ays0h" }],
-  ["path", { d: "m12 5 7 7-7 7", key: "xquz4c" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Kae = Er("ArrowUpAZ", [
-  ["path", { d: "m3 8 4-4 4 4", key: "11wl7u" }],
-  ["path", { d: "M7 4v16", key: "1glfcx" }],
-  ["path", { d: "M20 8h-5", key: "1vsyxs" }],
-  ["path", { d: "M15 10V6.5a2.5 2.5 0 0 1 5 0V10", key: "ag13bf" }],
-  ["path", { d: "M15 14h5l-5 6h5", key: "ur5jdg" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Q5 = Er("ArrowUpRight", [
-  ["path", { d: "M7 7h10v10", key: "1tivn9" }],
-  ["path", { d: "M7 17 17 7", key: "1vkiza" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const cI = Er("ArrowUp", [
-  ["path", { d: "m5 12 7-7 7 7", key: "hav0vg" }],
-  ["path", { d: "M12 19V5", key: "x0mq9r" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Yae = Er("Bell", [
-  ["path", { d: "M10.268 21a2 2 0 0 0 3.464 0", key: "vwvbt9" }],
-  [
-    "path",
-    {
-      d: "M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326",
-      key: "11g9vi",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Jae = Er("Bold", [
-  [
-    "path",
-    {
-      d: "M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8",
-      key: "mg9rjx",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Iy = Er("BookOpen", [
-  ["path", { d: "M12 7v14", key: "1akyts" }],
-  [
-    "path",
-    {
-      d: "M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z",
-      key: "ruj8y",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const op = Er("Calculator", [
-  [
-    "rect",
-    { width: "16", height: "20", x: "4", y: "2", rx: "2", key: "1nb95v" },
-  ],
-  ["line", { x1: "8", x2: "16", y1: "6", y2: "6", key: "x4nwl0" }],
-  ["line", { x1: "16", x2: "16", y1: "14", y2: "18", key: "wjye3r" }],
-  ["path", { d: "M16 10h.01", key: "1m94wz" }],
-  ["path", { d: "M12 10h.01", key: "1nrarc" }],
-  ["path", { d: "M8 10h.01", key: "19clt8" }],
-  ["path", { d: "M12 14h.01", key: "1etili" }],
-  ["path", { d: "M8 14h.01", key: "6423bh" }],
-  ["path", { d: "M12 18h.01", key: "mhygvu" }],
-  ["path", { d: "M8 18h.01", key: "lrp35t" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const dI = Er("ChartColumn", [
-  ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16", key: "c24i48" }],
-  ["path", { d: "M18 17V9", key: "2bz60n" }],
-  ["path", { d: "M13 17V5", key: "1frdt8" }],
-  ["path", { d: "M8 17v-3", key: "17ska0" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const eT = Er("CheckCheck", [
-  ["path", { d: "M18 6 7 17l-5-5", key: "116fxf" }],
-  ["path", { d: "m22 10-7.5 7.5L13 16", key: "ke71qq" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Eg = Er("Check", [["path", { d: "M20 6 9 17l-5-5", key: "1gmf2c" }]]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Kw = Er("ChevronDown", [
-  ["path", { d: "m6 9 6 6 6-6", key: "qrunsl" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const JO = Er("ChevronRight", [
-  ["path", { d: "m9 18 6-6-6-6", key: "mthhwq" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Qae = Er("ChevronUp", [
-  ["path", { d: "m18 15-6-6-6 6", key: "153udz" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ese = Er("CircleCheck", [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "m9 12 2 2 4-4", key: "dzmm74" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const tse = Er("CircleHelp", [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3", key: "1u773s" }],
-  ["path", { d: "M12 17h.01", key: "p32p05" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ew = Er("ClipboardCheck", [
-  [
-    "rect",
-    {
-      width: "8",
-      height: "4",
-      x: "8",
-      y: "2",
-      rx: "1",
-      ry: "1",
-      key: "tgr4d6",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2",
-      key: "116196",
-    },
-  ],
-  ["path", { d: "m9 14 2 2 4-4", key: "df797q" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const g$ = Er("Clipboard", [
-  [
-    "rect",
-    {
-      width: "8",
-      height: "4",
-      x: "8",
-      y: "2",
-      rx: "1",
-      ry: "1",
-      key: "tgr4d6",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2",
-      key: "116196",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const rse = Er("Clock3", [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["polyline", { points: "12 6 12 12 16.5 12", key: "1aq6pp" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const fk = Er("Columns3", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M9 3v18", key: "fh3hqa" }],
-  ["path", { d: "M15 3v18", key: "14nvp0" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const tw = Er("Copy", [
-  [
-    "rect",
-    {
-      width: "14",
-      height: "14",
-      x: "8",
-      y: "8",
-      rx: "2",
-      ry: "2",
-      key: "17jyea",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2",
-      key: "zix9uf",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const QO = Er("DollarSign", [
-  ["line", { x1: "12", x2: "12", y1: "2", y2: "22", key: "7eqyqh" }],
-  [
-    "path",
-    { d: "M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6", key: "1b0p4s" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const e3 = Er("Download", [
-  ["path", { d: "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", key: "ih7n3h" }],
-  ["polyline", { points: "7 10 12 15 17 10", key: "2ggqvy" }],
-  ["line", { x1: "12", x2: "12", y1: "15", y2: "3", key: "1vk2je" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const e7 = Er("Eraser", [
-  [
-    "path",
-    {
-      d: "m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21",
-      key: "182aya",
-    },
-  ],
-  ["path", { d: "M22 21H7", key: "t4ddhn" }],
-  ["path", { d: "m5 11 9 9", key: "1mo9qw" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const nse = Er("ExternalLink", [
-  ["path", { d: "M15 3h6v6", key: "1q9fwt" }],
-  ["path", { d: "M10 14 21 3", key: "gplh6r" }],
-  [
-    "path",
-    {
-      d: "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6",
-      key: "a6xqqp",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ise = Er("EyeOff", [
-  [
-    "path",
-    {
-      d: "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49",
-      key: "ct8e1f",
-    },
-  ],
-  ["path", { d: "M14.084 14.158a3 3 0 0 1-4.242-4.242", key: "151rxh" }],
-  [
-    "path",
-    {
-      d: "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143",
-      key: "13bj9a",
-    },
-  ],
-  ["path", { d: "m2 2 20 20", key: "1ooewy" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ose = Er("Eye", [
-  [
-    "path",
-    {
-      d: "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0",
-      key: "1nclc0",
-    },
-  ],
-  ["circle", { cx: "12", cy: "12", r: "3", key: "1v7zrd" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const t7 = Er("FileCode", [
-  ["path", { d: "M10 12.5 8 15l2 2.5", key: "1tg20x" }],
-  ["path", { d: "m14 12.5 2 2.5-2 2.5", key: "yinavb" }],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  [
-    "path",
-    {
-      d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z",
-      key: "1mlx9k",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ase = Er("FileInput", [
-  [
-    "path",
-    { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4", key: "1pf5j1" },
-  ],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  ["path", { d: "M2 15h10", key: "jfw4w8" }],
-  ["path", { d: "m9 18 3-3-3-3", key: "112psh" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const sse = Er("FileJson", [
-  [
-    "path",
-    {
-      d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
-      key: "1rqfz7",
-    },
-  ],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  [
-    "path",
-    {
-      d: "M10 12a1 1 0 0 0-1 1v1a1 1 0 0 1-1 1 1 1 0 0 1 1 1v1a1 1 0 0 0 1 1",
-      key: "1oajmo",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M14 18a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1 1 1 0 0 1-1-1v-1a1 1 0 0 0-1-1",
-      key: "mpwhp6",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const r7 = Er("FilePlus2", [
-  [
-    "path",
-    { d: "M4 22h14a2 2 0 0 0 2-2V7l-5-5H6a2 2 0 0 0-2 2v4", key: "1pf5j1" },
-  ],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  ["path", { d: "M3 15h6", key: "4e2qda" }],
-  ["path", { d: "M6 12v6", key: "1u72j0" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Kl = Er("FileSpreadsheet", [
-  [
-    "path",
-    {
-      d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
-      key: "1rqfz7",
-    },
-  ],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  ["path", { d: "M8 13h2", key: "yr2amv" }],
-  ["path", { d: "M14 13h2", key: "un5t4a" }],
-  ["path", { d: "M8 17h2", key: "2yhykz" }],
-  ["path", { d: "M14 17h2", key: "10kma7" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const lse = Er("FileText", [
-  [
-    "path",
-    {
-      d: "M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z",
-      key: "1rqfz7",
-    },
-  ],
-  ["path", { d: "M14 2v4a2 2 0 0 0 2 2h4", key: "tnqrlb" }],
-  ["path", { d: "M10 9H8", key: "b1mrlr" }],
-  ["path", { d: "M16 13H8", key: "t4e002" }],
-  ["path", { d: "M16 17H8", key: "z1uh3a" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const rw = Er("Filter", [
-  [
-    "polygon",
-    { points: "22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3", key: "1yg77f" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const use = Er("FlaskConical", [
-  [
-    "path",
-    {
-      d: "M14 2v6a2 2 0 0 0 .245.96l5.51 10.08A2 2 0 0 1 18 22H6a2 2 0 0 1-1.755-2.96l5.51-10.08A2 2 0 0 0 10 8V2",
-      key: "18mbvz",
-    },
-  ],
-  ["path", { d: "M6.453 15h11.094", key: "3shlmq" }],
-  ["path", { d: "M8.5 2h7", key: "csnxdl" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const cse = Er("FolderClosed", [
-  [
-    "path",
-    {
-      d: "M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z",
-      key: "1kt360",
-    },
-  ],
-  ["path", { d: "M2 10h20", key: "1ir3d8" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const og = Er("FolderOpen", [
-  [
-    "path",
-    {
-      d: "m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2",
-      key: "usdka0",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Ym = Er("Grid2x2", [
-  ["path", { d: "M12 3v18", key: "108xh3" }],
-  ["path", { d: "M3 12h18", key: "1i2n21" }],
-  [
-    "rect",
-    { x: "3", y: "3", width: "18", height: "18", rx: "2", key: "h1oib" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const n7 = Er("Grid3x3", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M3 9h18", key: "1pudct" }],
-  ["path", { d: "M3 15h18", key: "5xshup" }],
-  ["path", { d: "M9 3v18", key: "fh3hqa" }],
-  ["path", { d: "M15 3v18", key: "14nvp0" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const nw = Er("History", [
-  [
-    "path",
-    { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" },
-  ],
-  ["path", { d: "M3 3v5h5", key: "1xhq8a" }],
-  ["path", { d: "M12 7v5l4 2", key: "1fdv2h" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const dse = Er("ImagePlus", [
-  ["path", { d: "M16 5h6", key: "1vod17" }],
-  ["path", { d: "M19 2v6", key: "4bpg5p" }],
-  [
-    "path",
-    {
-      d: "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
-      key: "1ue2ih",
-    },
-  ],
-  ["path", { d: "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", key: "1xmnt7" }],
-  ["circle", { cx: "9", cy: "9", r: "2", key: "af1f0g" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const fse = Er("Image", [
-  [
-    "rect",
-    {
-      width: "18",
-      height: "18",
-      x: "3",
-      y: "3",
-      rx: "2",
-      ry: "2",
-      key: "1m3agn",
-    },
-  ],
-  ["circle", { cx: "9", cy: "9", r: "2", key: "af1f0g" }],
-  ["path", { d: "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", key: "1xmnt7" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Zb = Er("Info", [
-  ["circle", { cx: "12", cy: "12", r: "10", key: "1mglay" }],
-  ["path", { d: "M12 16v-4", key: "1dtifu" }],
-  ["path", { d: "M12 8h.01", key: "e9boi3" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const hse = Er("Italic", [
-  ["line", { x1: "19", x2: "10", y1: "4", y2: "4", key: "15jd3p" }],
-  ["line", { x1: "14", x2: "5", y1: "20", y2: "20", key: "bu0au3" }],
-  ["line", { x1: "15", x2: "9", y1: "4", y2: "20", key: "uljnxc" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const pse = Er("Layers", [
-  [
-    "path",
-    {
-      d: "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
-      key: "zw3jo",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12",
-      key: "1wduqc",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17",
-      key: "kqbvx6",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const t3 = Er("LayoutGrid", [
-  ["rect", { width: "7", height: "7", x: "3", y: "3", rx: "1", key: "1g98yp" }],
-  [
-    "rect",
-    { width: "7", height: "7", x: "14", y: "3", rx: "1", key: "6d4xhi" },
-  ],
-  [
-    "rect",
-    { width: "7", height: "7", x: "14", y: "14", rx: "1", key: "nxv5o0" },
-  ],
-  [
-    "rect",
-    { width: "7", height: "7", x: "3", y: "14", rx: "1", key: "1bb6yr" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const i7 = Er("Link2", [
-  ["path", { d: "M9 17H7A5 5 0 0 1 7 7h2", key: "8i5ue5" }],
-  ["path", { d: "M15 7h2a5 5 0 1 1 0 10h-2", key: "1b9ql8" }],
-  ["line", { x1: "8", x2: "16", y1: "12", y2: "12", key: "1jonct" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const t1 = Er("ListFilter", [
-  ["path", { d: "M3 6h18", key: "d0wm0j" }],
-  ["path", { d: "M7 12h10", key: "b7w52i" }],
-  ["path", { d: "M10 18h4", key: "1ulq68" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const mse = Er("ListTree", [
-  ["path", { d: "M21 12h-8", key: "1bmf0i" }],
-  ["path", { d: "M21 6H8", key: "1pqkrb" }],
-  ["path", { d: "M21 18h-8", key: "1tm79t" }],
-  ["path", { d: "M3 6v4c0 1.1.9 2 2 2h3", key: "1ywdgy" }],
-  ["path", { d: "M3 10v6c0 1.1.9 2 2 2h3", key: "2wc746" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const gse = Er("LockKeyholeOpen", [
-  ["circle", { cx: "12", cy: "16", r: "1", key: "1au0dj" }],
-  [
-    "rect",
-    { width: "18", height: "12", x: "3", y: "10", rx: "2", key: "l0tzu3" },
-  ],
-  ["path", { d: "M7 10V7a5 5 0 0 1 9.33-2.5", key: "car5b7" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const o7 = Er("LockKeyhole", [
-  ["circle", { cx: "12", cy: "16", r: "1", key: "1au0dj" }],
-  [
-    "rect",
-    { x: "3", y: "10", width: "18", height: "12", rx: "2", key: "6s8ecr" },
-  ],
-  ["path", { d: "M7 10V7a5 5 0 0 1 10 0v3", key: "1pqi11" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const vse = Er("Maximize2", [
-  ["polyline", { points: "15 3 21 3 21 9", key: "mznyad" }],
-  ["polyline", { points: "9 21 3 21 3 15", key: "1avn1i" }],
-  ["line", { x1: "21", x2: "14", y1: "3", y2: "10", key: "ota7mn" }],
-  ["line", { x1: "3", x2: "10", y1: "21", y2: "14", key: "1atl0r" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const hk = Er("Maximize", [
-  ["path", { d: "M8 3H5a2 2 0 0 0-2 2v3", key: "1dcmit" }],
-  ["path", { d: "M21 8V5a2 2 0 0 0-2-2h-3", key: "1e4gt3" }],
-  ["path", { d: "M3 16v3a2 2 0 0 0 2 2h3", key: "wsl5sc" }],
-  ["path", { d: "M16 21h3a2 2 0 0 0 2-2v-3", key: "18trek" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const _y = Er("MessageSquare", [
-  [
-    "path",
-    {
-      d: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-      key: "1lielz",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const bse = Er("Minimize2", [
-  ["polyline", { points: "4 14 10 14 10 20", key: "11kfnr" }],
-  ["polyline", { points: "20 10 14 10 14 4", key: "rlmsce" }],
-  ["line", { x1: "14", x2: "21", y1: "10", y2: "3", key: "o5lafz" }],
-  ["line", { x1: "3", x2: "10", y1: "21", y2: "14", key: "1atl0r" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const yse = Er("Move", [
-  ["path", { d: "M12 2v20", key: "t6zp3m" }],
-  ["path", { d: "m15 19-3 3-3-3", key: "11eu04" }],
-  ["path", { d: "m19 9 3 3-3 3", key: "1mg7y2" }],
-  ["path", { d: "M2 12h20", key: "9i4pu4" }],
-  ["path", { d: "m5 9-3 3 3 3", key: "j64kie" }],
-  ["path", { d: "m9 5 3-3 3 3", key: "l8vdw6" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const wse = Er("PaintBucket", [
-  [
-    "path",
-    {
-      d: "m19 11-8-8-8.6 8.6a2 2 0 0 0 0 2.8l5.2 5.2c.8.8 2 .8 2.8 0L19 11Z",
-      key: "irua1i",
-    },
-  ],
-  ["path", { d: "m5 2 5 5", key: "1lls2c" }],
-  ["path", { d: "M2 13h15", key: "1hkzvu" }],
-  [
-    "path",
-    {
-      d: "M22 20a2 2 0 1 1-4 0c0-1.6 1.7-2.4 2-4 .3 1.6 2 2.4 2 4Z",
-      key: "xk76lq",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const v$ = Er("Paintbrush", [
-  ["path", { d: "m14.622 17.897-10.68-2.913", key: "vj2p1u" }],
-  [
-    "path",
-    {
-      d: "M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z",
-      key: "18tc5c",
-    },
-  ],
-  [
-    "path",
-    {
-      d: "M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15",
-      key: "ytzfxy",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const xse = Er("Palette", [
-  [
-    "circle",
-    { cx: "13.5", cy: "6.5", r: ".5", fill: "currentColor", key: "1okk4w" },
-  ],
-  [
-    "circle",
-    { cx: "17.5", cy: "10.5", r: ".5", fill: "currentColor", key: "f64h9f" },
-  ],
-  [
-    "circle",
-    { cx: "8.5", cy: "7.5", r: ".5", fill: "currentColor", key: "fotxhn" },
-  ],
-  [
-    "circle",
-    { cx: "6.5", cy: "12.5", r: ".5", fill: "currentColor", key: "qy21gx" },
-  ],
-  [
-    "path",
-    {
-      d: "M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z",
-      key: "12rzf8",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Ese = Er("PanelLeftClose", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M9 3v18", key: "fh3hqa" }],
-  ["path", { d: "m16 15-3-3 3-3", key: "14y99z" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Cse = Er("PanelLeftOpen", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M9 3v18", key: "fh3hqa" }],
-  ["path", { d: "m14 9 3 3-3 3", key: "8010ee" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Ase = Er("PanelRightClose", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M15 3v18", key: "14nvp0" }],
-  ["path", { d: "m8 9 3 3-3 3", key: "12hl5m" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const kse = Er("PanelTop", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M3 9h18", key: "1pudct" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Sse = Er("Percent", [
-  ["line", { x1: "19", x2: "5", y1: "5", y2: "19", key: "1x9vlm" }],
-  ["circle", { cx: "6.5", cy: "6.5", r: "2.5", key: "4mh3h7" }],
-  ["circle", { cx: "17.5", cy: "17.5", r: "2.5", key: "1mdrzq" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const fI = Er("Plus", [
-  ["path", { d: "M5 12h14", key: "1ays0h" }],
-  ["path", { d: "M12 5v14", key: "s699le" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Tse = Er("Printer", [
-  [
-    "path",
-    {
-      d: "M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2",
-      key: "143wyd",
-    },
-  ],
-  ["path", { d: "M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6", key: "1itne7" }],
-  [
-    "rect",
-    { x: "6", y: "14", width: "12", height: "8", rx: "1", key: "1ue0tg" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Nse = Er("Redo2", [
-  ["path", { d: "m15 14 5-5-5-5", key: "12vg1m" }],
-  [
-    "path",
-    {
-      d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13",
-      key: "6uklza",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Rse = Er("RotateCcw", [
-  [
-    "path",
-    { d: "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", key: "1357e3" },
-  ],
-  ["path", { d: "M3 3v5h5", key: "1xhq8a" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Qd = Er("Rows3", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-  ["path", { d: "M21 9H3", key: "1338ky" }],
-  ["path", { d: "M21 15H3", key: "9uk58r" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Ise = Er("Scissors", [
-  ["circle", { cx: "6", cy: "6", r: "3", key: "1lh9wr" }],
-  ["path", { d: "M8.12 8.12 12 12", key: "1alkpv" }],
-  ["path", { d: "M20 4 8.12 15.88", key: "xgtan2" }],
-  ["circle", { cx: "6", cy: "18", r: "3", key: "fqmcym" }],
-  ["path", { d: "M14.8 14.8 20 20", key: "ptml3r" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const ag = Er("Search", [
-  ["circle", { cx: "11", cy: "11", r: "8", key: "4ej97u" }],
-  ["path", { d: "m21 21-4.3-4.3", key: "1qie3q" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const _se = Er("Shapes", [
-  [
-    "path",
-    {
-      d: "M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z",
-      key: "1bo67w",
-    },
-  ],
-  [
-    "rect",
-    { x: "3", y: "14", width: "7", height: "7", rx: "1", key: "1bkyp8" },
-  ],
-  ["circle", { cx: "17.5", cy: "17.5", r: "3.5", key: "w3z12y" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Fm = Er("Sheet", [
-  [
-    "rect",
-    {
-      width: "18",
-      height: "18",
-      x: "3",
-      y: "3",
-      rx: "2",
-      ry: "2",
-      key: "1m3agn",
-    },
-  ],
-  ["line", { x1: "3", x2: "21", y1: "9", y2: "9", key: "1vqk6q" }],
-  ["line", { x1: "3", x2: "21", y1: "15", y2: "15", key: "o2sbyz" }],
-  ["line", { x1: "9", x2: "9", y1: "9", y2: "21", key: "1ib60c" }],
-  ["line", { x1: "15", x2: "15", y1: "9", y2: "21", key: "1n26ft" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const iw = Er("ShieldCheck", [
-  [
-    "path",
-    {
-      d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
-      key: "oel41y",
-    },
-  ],
-  ["path", { d: "m9 12 2 2 4-4", key: "dzmm74" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const a7 = Er("Sigma", [
-  [
-    "path",
-    {
-      d: "M18 7V5a1 1 0 0 0-1-1H6.5a.5.5 0 0 0-.4.8l4.5 6a2 2 0 0 1 0 2.4l-4.5 6a.5.5 0 0 0 .4.8H17a1 1 0 0 0 1-1v-2",
-      key: "wuwx1p",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Dy = Er("Sparkles", [
-  [
-    "path",
-    {
-      d: "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z",
-      key: "4pj2yx",
-    },
-  ],
-  ["path", { d: "M20 3v4", key: "1olli1" }],
-  ["path", { d: "M22 5h-4", key: "1gvqau" }],
-  ["path", { d: "M4 17v2", key: "vumght" }],
-  ["path", { d: "M5 18H3", key: "zchphs" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const s7 = Er("Square", [
-  [
-    "rect",
-    { width: "18", height: "18", x: "3", y: "3", rx: "2", key: "afitv7" },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const sd = Er("Table2", [
-  [
-    "path",
-    {
-      d: "M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18",
-      key: "gugj83",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const b$ = Er("Trash2", [
-  ["path", { d: "M3 6h18", key: "d0wm0j" }],
-  ["path", { d: "M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6", key: "4alrt4" }],
-  ["path", { d: "M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2", key: "v07s0e" }],
-  ["line", { x1: "10", x2: "10", y1: "11", y2: "17", key: "1uufr5" }],
-  ["line", { x1: "14", x2: "14", y1: "11", y2: "17", key: "xtxkd" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Dse = Er("Type", [
-  ["polyline", { points: "4 7 4 4 20 4 20 7", key: "1nosan" }],
-  ["line", { x1: "9", x2: "15", y1: "20", y2: "20", key: "swin9y" }],
-  ["line", { x1: "12", x2: "12", y1: "4", y2: "20", key: "1tx1rr" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Ose = Er("Underline", [
-  ["path", { d: "M6 4v6a6 6 0 0 0 12 0V4", key: "9kb039" }],
-  ["line", { x1: "4", x2: "20", y1: "20", y2: "20", key: "nun2al" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Mse = Er("Undo2", [
-  ["path", { d: "M9 14 4 9l5-5", key: "102s5s" }],
-  [
-    "path",
-    {
-      d: "M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11",
-      key: "f3b9sd",
-    },
-  ],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const jse = Er("UserRound", [
-  ["circle", { cx: "12", cy: "8", r: "5", key: "1hypcn" }],
-  ["path", { d: "M20 21a8 8 0 0 0-16 0", key: "rfgkzh" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const Fse = Er("WrapText", [
-  ["line", { x1: "3", x2: "21", y1: "6", y2: "6", key: "4m8b97" }],
-  ["path", { d: "M3 12h15a3 3 0 1 1 0 6h-4", key: "1cl7v7" }],
-  ["polyline", { points: "16 16 14 18 16 20", key: "1jznyi" }],
-  ["line", { x1: "3", x2: "10", y1: "18", y2: "18", key: "1h33wv" }],
-]);
-/**
- * @license lucide-react v0.468.0 - ISC
- *
- * This source code is licensed under the ISC license.
- * See the LICENSE file in the root directory of this source tree.
- */ const dn = Er("X", [
-    ["path", { d: "M18 6 6 18", key: "1bl5f8" }],
-    ["path", { d: "m6 6 12 12", key: "d8bk6v" }],
-  ]),
-  l7 = new WeakMap();
+const l7 = new WeakMap();
 function y$(e, r) {
   const t = es(e);
   let n = t ? l7.get(e) : void 0;
@@ -28023,7 +26759,7 @@ function Hse({ workbook: e, extensions: r, onReview: t }) {
     : null;
 }
 function qse(e) {
-  var G, H, Q, X, J, q;
+  var G, H, Q, X$1, J, q;
   const r = ne.useRef(null),
     t = ne.useRef(e),
     n = ne.useRef(null),
@@ -28139,7 +26875,7 @@ function qse(e) {
           B(),
           A("Reviewed changes applied. Raw formulas are preserved."));
       }),
-    L = ((X = I.data) == null ? void 0 : X.cells) ?? [],
+    L = ((X$1 = I.data) == null ? void 0 : X$1.cells) ?? [],
     $ = Math.max(1, Math.ceil(L.length / 10)),
     U = Math.min(k, $ - 1);
   return i.jsx("div", {
@@ -28187,7 +26923,7 @@ function qse(e) {
               onClick: () => {
                 (B(), e.onClose());
               },
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -37429,22 +36165,22 @@ function Nue(e) {
         return { inventory: null, error: se.message };
       }
     }, [e.workbook, H]),
-    X = Q.inventory,
+    X$1 = Q.inventory,
     J =
-      X == null
+      X$1 == null
         ? void 0
-        : X.links.find((se) => {
+        : X$1.links.find((se) => {
             var we;
             return (
               se.target ===
-              (u || ((we = X.links[0]) == null ? void 0 : we.target))
+              (u || ((we = X$1.links[0]) == null ? void 0 : we.target))
             );
           }),
     q = (J == null ? void 0 : J.target) ?? "",
     W =
-      (X == null
+      (X$1 == null
         ? void 0
-        : X.cells.filter((se) =>
+        : X$1.cells.filter((se) =>
             se.references.some((we) => we.target === q),
           )) ?? [],
     K = (se) => {
@@ -37585,7 +36321,7 @@ function Nue(e) {
             i.jsx("button", {
               "aria-label": "Close workbook links",
               onClick: e.onClose,
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -37609,7 +36345,7 @@ function Nue(e) {
               children: [
                 i.jsxs("strong", {
                   children: [
-                    (X == null ? void 0 : X.links.length) ?? 0,
+                    (X$1 == null ? void 0 : X$1.links.length) ?? 0,
                     " linked sources",
                   ],
                 }),
@@ -37620,7 +36356,7 @@ function Nue(e) {
                 }),
               ],
             }),
-            X != null && X.links.length
+            X$1 != null && X$1.links.length
               ? i.jsxs(i.Fragment, {
                   children: [
                     i.jsxs("label", {
@@ -37632,7 +36368,7 @@ function Nue(e) {
                           onChange: (se) => {
                             (l(se.target.value), v(false), b(false), le());
                           },
-                          children: X.links.map((se) =>
+                          children: X$1.links.map((se) =>
                             i.jsxs(
                               "option",
                               {
@@ -37686,7 +36422,7 @@ function Nue(e) {
                             }),
                           ],
                         }),
-                        i.jsx("p", { children: X.cachePolicy }),
+                        i.jsx("p", { children: X$1.cachePolicy }),
                         (J == null ? void 0 : J.cached) &&
                           J.status !== "matches-approved-snapshot" &&
                           i.jsx("p", {
@@ -37888,12 +36624,12 @@ function Nue(e) {
                   children:
                     "No supported external workbook references were found. Static links such as =SUM('[Source.xlsx]Sheet1'!A1:A3) can be reviewed here.",
                 }),
-            !!(X != null && X.unsupported.length) &&
+            !!(X$1 != null && X$1.unsupported.length) &&
               i.jsxs("section", {
                 className: "lg-links-warning",
                 children: [
                   i.jsx("h3", { children: "Unsupported external syntax" }),
-                  X.unsupported.slice(0, 20).map((se) =>
+                  X$1.unsupported.slice(0, 20).map((se) =>
                     i.jsxs(
                       "p",
                       {
@@ -38555,7 +37291,7 @@ function Fue(e) {
   ne.useEffect(() => {
     e.initialFile && Q(e.initialFile);
   }, [e.initialFile]);
-  const X = (Ae) =>
+  const X$1 = (Ae) =>
       G(async (ye) => {
         const Te = d,
           Pe = await MC(Ae, s.begin());
@@ -38680,7 +37416,7 @@ function Fue(e) {
               type: "button",
               onClick: e.onClose,
               "aria-label": "Close import sources",
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -38701,7 +37437,7 @@ function Fue(e) {
               i.jsxs("p", {
                 role: "status",
                 className: "lg-source-success",
-                children: [i.jsx(ese, { size: 17 }), z],
+                children: [i.jsx(CircleCheck, { size: 17 }), z],
               }),
             i.jsxs("div", {
               className: "lg-formats-actions",
@@ -38709,7 +37445,7 @@ function Fue(e) {
                 i.jsxs("label", {
                   className: "lg-source-file",
                   children: [
-                    i.jsx(ase, { size: 18 }),
+                    i.jsx(FileInput, { size: 18 }),
                     "Choose source file",
                     i.jsx("input", {
                       "aria-label": "Import source file",
@@ -38775,7 +37511,7 @@ function Fue(e) {
                         disabled: F,
                         onClick: () => void W(false),
                         children: [
-                          i.jsx(e3, { size: 16 }),
+                          i.jsx(Download, { size: 16 }),
                           "Download original source",
                         ],
                       }),
@@ -38842,7 +37578,7 @@ function Fue(e) {
                                   (Te = Ae.target.files) == null
                                     ? void 0
                                     : Te[0];
-                                ((Ae.target.value = ""), ye && X(ye));
+                                ((Ae.target.value = ""), ye && X$1(ye));
                               },
                             }),
                           ],
@@ -40348,7 +39084,7 @@ function $ue(e) {
                 i.jsx("button", {
                   "aria-label": r("Close workbook formats"),
                   onClick: e.onClose,
-                  children: i.jsx(dn, { size: 20 }),
+                  children: i.jsx(X, { size: 20 }),
                 }),
               ],
             }),
@@ -43934,7 +42670,7 @@ function ice(e) {
     (e.onApprovedWorkbooksChange ? e.onApprovedWorkbooksChange(K) : y(K),
       j(null));
   }
-  const X = R
+  const X$1 = R
       ? D === "contributions"
         ? R.contributions
         : D === "subtotals"
@@ -43943,7 +42679,7 @@ function ice(e) {
             ? R.sources
             : R.exceptions
       : [],
-    J = Math.max(1, Math.ceil(X.length / 25)),
+    J = Math.max(1, Math.ceil(X$1.length / 25)),
     q = Math.min(z, J - 1);
   return i.jsx("div", {
     className: "lg-modal-backdrop lg-consolidation-backdrop",
@@ -44000,7 +42736,7 @@ function ice(e) {
               onClick: e.onClose,
               lang: t("Close consolidation"),
               "data-ui-label": "Close consolidation",
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -44903,7 +43639,7 @@ function ice(e) {
                           }),
                         ],
                       }),
-                      !X.length &&
+                      !X$1.length &&
                         i.jsxs("p", {
                           children: [i.jsx(M, { children: "No " }), D, "."],
                         }),
@@ -44925,7 +43661,7 @@ function ice(e) {
                           i.jsx(M, { children: "of " }),
                           J,
                           " · ",
-                          X.length,
+                          X$1.length,
                           " ",
                           i.jsx(M, { children: "records" }),
                         ],
@@ -47042,7 +45778,7 @@ function vce(e) {
           ),
         }));
     };
-  function X() {
+  function X$1() {
     try {
       const le = uce(e.workbook, h, p, v || void 0, D);
       let ce = le.name,
@@ -47151,7 +45887,7 @@ function vce(e) {
             i.jsx("button", {
               "aria-label": r("Close data model"),
               onClick: e.onClose,
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -47241,7 +45977,7 @@ function vce(e) {
                       !v && ql("Headed range", R("Model source range", p, m)),
                       i.jsx("button", {
                         disabled: a.tables.length >= ta.tables,
-                        onClick: X,
+                        onClick: X$1,
                         children: i.jsx(M, { children: "Add table" }),
                       }),
                     ],
@@ -52045,8 +50781,8 @@ function Hce(e) {
     G = e.workbook.transformationRecipes ?? [],
     H = G.find((ye) => ye.id === m),
     Q = G.find((ye) => ye.id === c),
-    X = Q == null ? void 0 : Q.versions.find((ye) => ye.version === f),
-    J = !X || X.definitionHash !== hr(s),
+    X$1 = Q == null ? void 0 : Q.versions.find((ye) => ye.version === f),
+    J = !X$1 || X$1.definitionHash !== hr(s),
     q = JSON.stringify([e.workbook, e.sheetId, e.range, s, c, f, k, $]),
     W = (j == null ? void 0 : j.stamp) === q,
     K = W ? j.plan.run : void 0;
@@ -52248,7 +50984,7 @@ function Hce(e) {
               onClick: e.onClose,
               lang: t("Close transformation recipes"),
               "data-ui-label": "Close transformation recipes",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -54452,7 +53188,7 @@ function Zce(e) {
               onClick: e.onClose,
               lang: t("Close Calculation Options"),
               "data-ui-label": "Close Calculation Options",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -57411,7 +56147,7 @@ function Ede(e) {
     [L, $] = ne.useState(""),
     [U, G] = ne.useState(""),
     [H, Q] = ne.useState(""),
-    [X, J] = ne.useState(0),
+    [X$1, J] = ne.useState(0),
     [q, W] = ne.useState("all"),
     K = {
       sheetId: e.sheetId,
@@ -57462,7 +56198,7 @@ function Ede(e) {
               q === "all" || q === Me.disposition || Me.exceptions.includes(q),
           )) ?? [],
     we = Math.max(1, Math.ceil(se.length / aw.pageSize)),
-    Ee = Math.min(X, we - 1),
+    Ee = Math.min(X$1, we - 1),
     Ae = P7(c),
     ye = (Me) => {
       ($(
@@ -57614,7 +56350,7 @@ function Ede(e) {
               onClick: e.onClose,
               lang: t("Close aging schedule"),
               "data-ui-label": "Close aging schedule",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -58908,7 +57644,7 @@ function Sde(e) {
     );
   }, []);
   const Q = bB(e.workbook),
-    X = Math.max(1, Math.ceil(((j == null ? void 0 : j.count) ?? 0) / 20));
+    X$1 = Math.max(1, Math.ceil(((j == null ? void 0 : j.count) ?? 0) / 20));
   let J = {};
   try {
     J = vB(E, y);
@@ -58957,7 +57693,7 @@ function Sde(e) {
               onClick: e.onClose,
               lang: t("Close Themes and Cell Styles"),
               "data-ui-label": "Close Themes and Cell Styles",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -59651,11 +58387,11 @@ function Sde(e) {
                                 B + 1,
                                 " ",
                                 i.jsx(M, { children: "of " }),
-                                X,
+                                X$1,
                               ],
                             }),
                             i.jsx("button", {
-                              disabled: B + 1 >= X,
+                              disabled: B + 1 >= X$1,
                               onClick: () => _((de) => de + 1),
                               children: i.jsx(M, { children: "Next changes" }),
                             }),
@@ -59886,7 +58622,7 @@ function Nde(e) {
                 onClick: e.onClose,
                 lang: t("Close cell styles"),
                 "data-ui-label": "Close cell styles",
-                children: i.jsx(dn, { size: 18 }),
+                children: i.jsx(X, { size: 18 }),
               }),
             ],
           }),
@@ -61621,7 +60357,7 @@ function Dde(e) {
               onClick: e.onClose,
               lang: t("Close merge preview"),
               "data-ui-label": "Close merge preview",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -63457,7 +62193,7 @@ function lr({
     children: [
       i.jsx("span", { className: "xl-command-icon", children: t }),
       i.jsx("span", { className: "xl-command-label", children: n }),
-      c && i.jsx(Kw, { className: "xl-command-chevron", size: 10 }),
+      c && i.jsx(ChevronDown, { className: "xl-command-chevron", size: 10 }),
     ],
   });
 }
@@ -63527,13 +62263,13 @@ function Hk({
               style: { "--swatch-color": n },
               children:
                 t === "fill"
-                  ? i.jsx(wse, { size: 15 })
+                  ? i.jsx(PaintBucket, { size: 15 })
                   : i.jsx("span", {
                       className: "xl-font-color-glyph",
                       children: i.jsx(M, { children: "A" }),
                     }),
             }),
-            i.jsx(Kw, { size: 9 }),
+            i.jsx(ChevronDown, { size: 9 }),
           ],
         }),
         s &&
@@ -63794,7 +62530,7 @@ function Hde(e) {
                       className: "xl-paste-commands",
                       children: [
                         i.jsx(lr, {
-                          icon: i.jsx(g$, {}),
+                          icon: i.jsx(Clipboard, {}),
                           label: r("Paste"),
                           large: true,
                           onClick: e.onPaste,
@@ -63814,7 +62550,7 @@ function Hde(e) {
                           "data-ui-label": "Paste Special",
                           children: [
                             i.jsx(M, { children: "Paste Special" }),
-                            i.jsx(Kw, { size: 10 }),
+                            i.jsx(ChevronDown, { size: 10 }),
                           ],
                         }),
                       ],
@@ -63823,18 +62559,18 @@ function Hde(e) {
                       className: "xl-command-stack",
                       children: [
                         i.jsx(lr, {
-                          icon: i.jsx(Ise, {}),
+                          icon: i.jsx(Scissors, {}),
                           label: r("Cut"),
                           onClick: e.onCut,
                           disabled: k,
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(tw, {}),
+                          icon: i.jsx(Copy, {}),
                           label: r("Copy"),
                           onClick: e.onCopy,
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(v$, {}),
+                          icon: i.jsx(Paintbrush, {}),
                           label: r("Format Painter"),
                           onClick: () => e.onTool("paint"),
                           disabled: k,
@@ -63920,21 +62656,21 @@ function Hde(e) {
                       className: "xl-font-buttons",
                       children: [
                         i.jsx(Xl, {
-                          icon: i.jsx(Jae, { size: 15 }),
+                          icon: i.jsx(Bold, { size: 15 }),
                           label: r("Bold (Ctrl+B)"),
                           active: !!F.bold,
                           onClick: () => I({ bold: !F.bold }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
-                          icon: i.jsx(hse, { size: 15 }),
+                          icon: i.jsx(Italic, { size: 15 }),
                           label: r("Italic (Ctrl+I)"),
                           active: !!F.italic,
                           onClick: () => I({ italic: !F.italic }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
-                          icon: i.jsx(Ose, { size: 15 }),
+                          icon: i.jsx(Underline, { size: 15 }),
                           label: r("Underline (Ctrl+U)"),
                           active: !!F.underline,
                           onClick: () => I({ underline: !F.underline }),
@@ -63987,28 +62723,28 @@ function Hde(e) {
                       className: "xl-alignment-top",
                       children: [
                         i.jsx(Xl, {
-                          icon: i.jsx(Xae, { size: 16 }),
+                          icon: i.jsx(AlignLeft, { size: 16 }),
                           label: r("Align Left"),
                           active: F.align === "left",
                           onClick: () => I({ align: "left" }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
-                          icon: i.jsx(qae, { size: 16 }),
+                          icon: i.jsx(AlignCenter, { size: 16 }),
                           label: r("Center"),
                           active: F.align === "center",
                           onClick: () => I({ align: "center" }),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
-                          icon: i.jsx(Gae, { size: 16 }),
+                          icon: i.jsx(AlignRight, { size: 16 }),
                           label: r("Align Right"),
                           active: F.align === "right",
                           onClick: () => I({ align: "right" }),
                           disabled: k,
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(Fse, {}),
+                          icon: i.jsx(WrapText, {}),
                           label: r("Wrap Text"),
                           active: !!F.wrap,
                           onClick: () => I({ wrap: !F.wrap }),
@@ -64017,7 +62753,7 @@ function Hde(e) {
                       ],
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Ym, {}),
+                      icon: i.jsx(Grid2x2, {}),
                       label: r("Merge & Center"),
                       onClick: () => e.onTool("merge"),
                       disabled: k,
@@ -64030,7 +62766,7 @@ function Hde(e) {
                   children: [
                     D,
                     i.jsx(lr, {
-                      icon: i.jsx(QO, { size: 15 }),
+                      icon: i.jsx(DollarSign, { size: 15 }),
                       label: r("Format Cells"),
                       onClick: () => e.onTool("numberFormat"),
                       disabled: k,
@@ -64039,13 +62775,13 @@ function Hde(e) {
                       className: "xl-number-buttons",
                       children: [
                         i.jsx(Xl, {
-                          icon: i.jsx(QO, { size: 16 }),
+                          icon: i.jsx(DollarSign, { size: 16 }),
                           label: r("Currency"),
                           onClick: () => O("currency"),
                           disabled: k,
                         }),
                         i.jsx(Xl, {
-                          icon: i.jsx(Sse, { size: 15 }),
+                          icon: i.jsx(Percent, { size: 15 }),
                           label: r("Percent Style"),
                           onClick: () => O("percent"),
                           disabled: k,
@@ -64094,21 +62830,21 @@ function Hde(e) {
                   className: "xl-styles-group",
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(n7, {}),
+                      icon: i.jsx(Grid3x3, {}),
                       label: r("Conditional Formatting"),
                       large: true,
                       onClick: () => e.onTool("conditional"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Format as Table"),
                       large: true,
                       onClick: () => e.onTool("table"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(t3, {}),
+                      icon: i.jsx(LayoutGrid, {}),
                       label: r("Heading Style"),
                       large: true,
                       onClick: () =>
@@ -64128,21 +62864,21 @@ function Hde(e) {
                     className: "xl-command-stack",
                     children: [
                       i.jsx(lr, {
-                        icon: i.jsx(Qd, {}),
+                        icon: i.jsx(Rows3, {}),
                         label: r("Insert Row"),
                         onClick: e.onAddRow,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
                       i.jsx(lr, {
-                        icon: i.jsx(sd, {}),
+                        icon: i.jsx(Table2, {}),
                         label: r("Insert Column"),
                         onClick: e.onAddColumn,
                         disabled: k,
                         className: "xl-green-icon",
                       }),
                       i.jsx(lr, {
-                        icon: i.jsx(Fm, {}),
+                        icon: i.jsx(Sheet, {}),
                         label: r("New Sheet"),
                         onClick: e.onAddSheet,
                         disabled:
@@ -64159,14 +62895,14 @@ function Hde(e) {
                     className: "xl-command-stack",
                     children: [
                       i.jsx(lr, {
-                        icon: i.jsx(hk, {}),
+                        icon: i.jsx(Maximize, {}),
                         label: r("AutoFit Column Width"),
                         onClick: e.onAutoFitColumns,
                         disabled: k,
                         title: r("Fit the selected columns to their contents"),
                       }),
                       i.jsx(lr, {
-                        icon: i.jsx(Qd, {}),
+                        icon: i.jsx(Rows3, {}),
                         label: r("AutoFit Row Height"),
                         onClick: e.onAutoFitRows,
                         disabled: k,
@@ -64175,7 +62911,7 @@ function Hde(e) {
                         ),
                       }),
                       i.jsx(lr, {
-                        icon: i.jsx(Qd, {}),
+                        icon: i.jsx(Rows3, {}),
                         label: r("Hide & Unhide"),
                         onClick: () => e.onTool("viewSettings"),
                         title: r("Hide or restore selected rows and columns"),
@@ -64191,20 +62927,20 @@ function Hde(e) {
                       className: "xl-command-stack",
                       children: [
                         i.jsx(lr, {
-                          icon: i.jsx(a7, {}),
+                          icon: i.jsx(Sigma, {}),
                           label: r("AutoSum"),
                           onClick: e.onAutosum,
                           disabled: k,
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(Zae, {}),
+                          icon: i.jsx(ArrowDownToLine, {}),
                           label: r("Fill Down"),
                           onClick: e.onFillDown,
                           disabled: k,
                           className: "xl-blue-icon",
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(e7, {}),
+                          icon: i.jsx(Eraser, {}),
                           label: r("Clear"),
                           onClick: e.onClear,
                           disabled: k,
@@ -64212,7 +62948,7 @@ function Hde(e) {
                       ],
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Fill Series"),
                       large: true,
                       onClick: () => e.onTool("fillSeries"),
@@ -64223,20 +62959,20 @@ function Hde(e) {
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(t1, {}),
+                      icon: i.jsx(ListFilter, {}),
                       label: r("Sort & Filter"),
                       large: true,
                       onClick: e.onToggleFilter,
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(ag, {}),
+                      icon: i.jsx(Search, {}),
                       label: r("Find & Select"),
                       large: true,
                       onClick: e.onFind,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(ag, {}),
+                      icon: i.jsx(Search, {}),
                       label: r("Advanced Find"),
                       onClick: () => e.onTool("search"),
                       title: r(
@@ -64244,7 +62980,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(ag, {}),
+                      icon: i.jsx(Search, {}),
                       label: r("Go To Special"),
                       onClick: () => e.onTool("goToSpecial"),
                       title: r(
@@ -64262,14 +62998,14 @@ function Hde(e) {
                   label: r("Tables"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("PivotTable"),
                       large: true,
                       onClick: () => e.onTool("pivot"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Table"),
                       large: true,
                       onClick: () => e.onTool("table"),
@@ -64281,14 +63017,14 @@ function Hde(e) {
                   label: r("Illustrations"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(fse, {}),
+                      icon: i.jsx(Image$1, {}),
                       label: r("Pictures"),
                       large: true,
                       onClick: () => e.onTool("picture"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(s7, {}),
+                      icon: i.jsx(Square, {}),
                       label: r("Shapes"),
                       large: true,
                       onClick: () => e.onTool("shape"),
@@ -64299,7 +63035,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Charts"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(dI, {}),
+                    icon: i.jsx(ChartColumn, {}),
                     label: r("Recommended Charts"),
                     large: true,
                     onClick: () => e.onTool("chart"),
@@ -64309,7 +63045,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Comments"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(_y, {}),
+                    icon: i.jsx(MessageSquare, {}),
                     label: r("New Note"),
                     large: true,
                     onClick: e.onNote,
@@ -64321,7 +63057,7 @@ function Hde(e) {
                   label: r("Worksheet"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(Fm, {}),
+                      icon: i.jsx(Sheet, {}),
                       label: r("New Sheet"),
                       large: true,
                       onClick: e.onAddSheet,
@@ -64332,14 +63068,14 @@ function Hde(e) {
                       className: "xl-green-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Insert Row"),
                       large: true,
                       onClick: e.onAddRow,
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Insert Column"),
                       large: true,
                       onClick: e.onAddColumn,
@@ -64350,7 +63086,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Files"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(og, {}),
+                    icon: i.jsx(FolderOpen, {}),
                     label: r("Open Workbook"),
                     large: true,
                     onClick: e.onImport,
@@ -64366,7 +63102,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Themes"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(t3, {}),
+                    icon: i.jsx(LayoutGrid, {}),
                     label: r("Themes"),
                     large: true,
                     onClick: () => e.onTool("themes"),
@@ -64377,28 +63113,28 @@ function Hde(e) {
                   label: r("Page Setup"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(Fm, {}),
+                      icon: i.jsx(Sheet, {}),
                       label: r("Margins"),
                       large: true,
                       onClick: () => e.onTool("margins"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Orientation"),
                       large: true,
                       onClick: () => e.onTool("orientation"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(s7, {}),
+                      icon: i.jsx(Square, {}),
                       label: r("Size"),
                       large: true,
                       onClick: () => e.onTool("size"),
                       disabled: false,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Ym, {}),
+                      icon: i.jsx(Grid2x2, {}),
                       label: r("Print Area"),
                       large: true,
                       onClick: () => e.onTool("printArea"),
@@ -64410,14 +63146,14 @@ function Hde(e) {
                   label: r("Print titles and breaks"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Print Titles"),
                       onClick: () => e.onTool("printTitles"),
                       disabled: false,
                       large: true,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Ym, {}),
+                      icon: i.jsx(Grid2x2, {}),
                       label: r("Page Breaks"),
                       onClick: () => e.onTool("pageBreaks"),
                       disabled: false,
@@ -64428,7 +63164,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Scale to Fit"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(hk, {}),
+                    icon: i.jsx(Maximize, {}),
                     label: r("Fit to Page"),
                     large: true,
                     onClick: () => e.onTool("fit"),
@@ -64470,7 +63206,7 @@ function Hde(e) {
                   label: r("Function Library"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(a7, {}),
+                      icon: i.jsx(Sigma, {}),
                       label: r("AutoSum"),
                       large: true,
                       onClick: e.onAutosum,
@@ -64478,13 +63214,13 @@ function Hde(e) {
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Iy, {}),
+                      icon: i.jsx(BookOpen, {}),
                       label: r("Function Reference"),
                       large: true,
                       onClick: () => e.onPanel("help"),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Insert Function"),
                       large: true,
                       onClick: () => e.onTool("function"),
@@ -64495,7 +63231,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Extensions"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(op, {}),
+                    icon: i.jsx(Calculator, {}),
                     label: r("Add-ins & Functions"),
                     large: true,
                     onClick: () => e.onTool("extensions"),
@@ -64505,7 +63241,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Defined Names"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(sd, {}),
+                    icon: i.jsx(Table2, {}),
                     label: r("Name Manager"),
                     large: true,
                     onClick: () => e.onTool("names"),
@@ -64519,7 +63255,7 @@ function Hde(e) {
                       className: "xl-command-stack",
                       children: [
                         i.jsx(lr, {
-                          icon: i.jsx(W4, {}),
+                          icon: i.jsx(ArrowLeftRight, {}),
                           label: r("Trace Precedents"),
                           onClick: () => e.onTool("tracePrecedents"),
                           title: r(
@@ -64527,7 +63263,7 @@ function Hde(e) {
                           ),
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(W4, {}),
+                          icon: i.jsx(ArrowLeftRight, {}),
                           label: r("Trace Dependents"),
                           onClick: () => e.onTool("traceDependents"),
                           title: r(
@@ -64535,7 +63271,7 @@ function Hde(e) {
                           ),
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(Fm, {}),
+                          icon: i.jsx(Sheet, {}),
                           label: r("Watch Window"),
                           onClick: () => e.onTool("formulaWatches"),
                           title: r(
@@ -64545,7 +63281,7 @@ function Hde(e) {
                       ],
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Evaluate Formula"),
                       large: true,
                       onClick: () => e.onTool("evaluateFormula"),
@@ -64554,7 +63290,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(iw, {}),
+                      icon: i.jsx(ShieldCheck, {}),
                       label: r("Compatibility"),
                       large: true,
                       onClick: () => e.onTool("functionCompatibility"),
@@ -64563,14 +63299,14 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Fm, {}),
+                      icon: i.jsx(Sheet, {}),
                       label: r("Show Formulas"),
                       large: true,
                       active: e.showFormulas,
                       onClick: e.onShowFormulas,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(iw, {}),
+                      icon: i.jsx(ShieldCheck, {}),
                       label: r("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
@@ -64582,7 +63318,7 @@ function Hde(e) {
                   label: r("Calculation"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Calculation Options"),
                       large: true,
                       onClick: () => e.onTool("calculation"),
@@ -64591,7 +63327,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Calculate Now"),
                       large: true,
                       onClick: () => e.onTool("calculateNow"),
@@ -64604,7 +63340,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Formula Assistance"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(Dy, {}),
+                    icon: i.jsx(Sparkles, {}),
                     label: r("Ask AI Assistant"),
                     large: true,
                     onClick: () => e.onPanel("assistant"),
@@ -64620,7 +63356,7 @@ function Hde(e) {
                   label: r("Get & Transform Data"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(og, {}),
+                      icon: i.jsx(FolderOpen, {}),
                       label: r("Get Data"),
                       large: true,
                       onClick: e.onImport,
@@ -64629,14 +63365,14 @@ function Hde(e) {
                       title: r("Import Excel, CSV, TSV, or workbook JSON"),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("From Table / Range"),
                       large: true,
                       onClick: () => e.onTool("query"),
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(W4, {}),
+                      icon: i.jsx(ArrowLeftRight, {}),
                       label: r("Append / Join"),
                       large: true,
                       onClick: () => e.onTool("combinePopulations"),
@@ -64646,7 +63382,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Transformation Recipes"),
                       large: true,
                       onClick: () => e.onTool("transformationRecipes"),
@@ -64656,7 +63392,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(og, {}),
+                      icon: i.jsx(FolderOpen, {}),
                       label: r("Connections & Refresh"),
                       large: true,
                       onClick: () => e.onTool("externalSources"),
@@ -64666,7 +63402,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Data Model"),
                       large: true,
                       onClick: () => e.onTool("dataModel"),
@@ -64681,7 +63417,7 @@ function Hde(e) {
                   label: r("Sort & Filter"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(rw, {}),
+                      icon: i.jsx(Filter, {}),
                       label: r("Column Filters"),
                       large: true,
                       onClick: () => e.onTool("populationFilter"),
@@ -64691,7 +63427,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(YO, {}),
+                      icon: i.jsx(ArrowDownAZ, {}),
                       label: r("Custom Sort"),
                       large: true,
                       onClick: () => e.onTool("sort"),
@@ -64704,7 +63440,7 @@ function Hde(e) {
                       className: "xl-command-stack",
                       children: [
                         i.jsx(lr, {
-                          icon: i.jsx(YO, {}),
+                          icon: i.jsx(ArrowDownAZ, {}),
                           label: r("Sort A to Z"),
                           onClick: () => e.onSort("asc"),
                           className: "xl-blue-icon",
@@ -64713,7 +63449,7 @@ function Hde(e) {
                           ),
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(Kae, {}),
+                          icon: i.jsx(ArrowUpAZ, {}),
                           label: r("Sort Z to A"),
                           onClick: () => e.onSort("desc"),
                           className: "xl-blue-icon",
@@ -64722,14 +63458,14 @@ function Hde(e) {
                           ),
                         }),
                         i.jsx(lr, {
-                          icon: i.jsx(e7, {}),
+                          icon: i.jsx(Eraser, {}),
                           label: r("Clear Sort"),
                           onClick: () => e.onSort(null),
                         }),
                       ],
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(rw, {}),
+                      icon: i.jsx(Filter, {}),
                       label: r("Filter"),
                       large: true,
                       onClick: e.onToggleFilter,
@@ -64740,14 +63476,14 @@ function Hde(e) {
                   label: r("Data Tools"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(ew, {}),
+                      icon: i.jsx(ClipboardCheck, {}),
                       label: r("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
                       className: "xl-green-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(eT, {}),
+                      icon: i.jsx(CheckCheck, {}),
                       label: r("Data Validation"),
                       large: true,
                       onClick: () => e.onTool("validation"),
@@ -64757,7 +63493,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(tw, {}),
+                      icon: i.jsx(Copy, {}),
                       label: r("Remove Duplicates"),
                       large: true,
                       onClick: () => e.onTool("duplicates"),
@@ -64767,7 +63503,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(fk, {}),
+                      icon: i.jsx(Columns3, {}),
                       label: r("Text to Columns"),
                       large: true,
                       onClick: () => e.onTool("textToColumns"),
@@ -64777,7 +63513,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(fk, {}),
+                      icon: i.jsx(Columns3, {}),
                       label: r("Clean up text"),
                       large: true,
                       onClick: () => e.onTool("textCleanup"),
@@ -64787,7 +63523,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(fk, {}),
+                      icon: i.jsx(Columns3, {}),
                       label: r("Clean & Reshape"),
                       large: true,
                       onClick: () => e.onTool("fieldTransform"),
@@ -64801,7 +63537,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Workbook Links"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(Kl, {}),
+                    icon: i.jsx(FileSpreadsheet, {}),
                     label: r("Workbook Links"),
                     large: true,
                     onClick: () => e.onTool("workbookLinks"),
@@ -64815,7 +63551,7 @@ function Hde(e) {
                   label: r("What-If Analysis"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Scenario Manager"),
                       large: true,
                       onClick: () => e.onTool("scenarios"),
@@ -64825,7 +63561,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Data Table"),
                       large: true,
                       onClick: () => e.onTool("dataTable"),
@@ -64835,7 +63571,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Goal Seek"),
                       large: true,
                       onClick: () => e.onTool("goalSeek"),
@@ -64850,7 +63586,7 @@ function Hde(e) {
                   label: r("Analysis"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(op, {}),
+                      icon: i.jsx(Calculator, {}),
                       label: r("Solver"),
                       large: true,
                       onClick: () => e.onTool("solver"),
@@ -64860,7 +63596,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Data Analysis"),
                       large: true,
                       onClick: () => e.onTool("statistics"),
@@ -64875,7 +63611,7 @@ function Hde(e) {
                   label: r("Outline"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(sd, {}),
+                      icon: i.jsx(Table2, {}),
                       label: r("Consolidate / Subtotals"),
                       large: true,
                       onClick: () => e.onTool("consolidation"),
@@ -64885,7 +63621,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Group & Outline"),
                       large: true,
                       onClick: () => e.onTool("outlines"),
@@ -64896,7 +63632,7 @@ function Hde(e) {
                   label: r("Export"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(tw, {}),
+                      icon: i.jsx(Copy, {}),
                       label: r("Report Outputs"),
                       large: true,
                       onClick: () => e.onTool("reportOutputs"),
@@ -64906,7 +63642,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Kl, {}),
+                      icon: i.jsx(FileSpreadsheet, {}),
                       label: r("Save as Excel"),
                       large: true,
                       onClick: () => e.onExport("xlsx"),
@@ -64914,7 +63650,7 @@ function Hde(e) {
                       className: "xl-green-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(e3, {}),
+                      icon: i.jsx(Download, {}),
                       label: r("Export CSV"),
                       large: true,
                       onClick: () => e.onExport("csv"),
@@ -64930,7 +63666,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Proofing"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(Iy, {}),
+                    icon: i.jsx(BookOpen, {}),
                     label: r("Spelling"),
                     large: true,
                     onClick: () => e.onTool("spelling"),
@@ -64940,7 +63676,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Notes"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(_y, {}),
+                    icon: i.jsx(MessageSquare, {}),
                     label: r("New / Edit Note"),
                     large: true,
                     onClick: e.onNote,
@@ -64952,13 +63688,13 @@ function Hde(e) {
                   label: r("Comments"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(_y, {}),
+                      icon: i.jsx(MessageSquare, {}),
                       label: r("Review Comments"),
                       large: true,
                       onClick: () => e.onTool("comments"),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(_y, {}),
+                      icon: i.jsx(MessageSquare, {}),
                       label: r("Hyperlink"),
                       onClick: () => e.onTool("hyperlink"),
                     }),
@@ -64968,7 +63704,7 @@ function Hde(e) {
                   label: r("Audit Review"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(t1, {}),
+                      icon: i.jsx(ListFilter, {}),
                       label: r("Pattern Checks"),
                       large: true,
                       onClick: () => e.onTool("patterns"),
@@ -64978,7 +63714,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(t1, {}),
+                      icon: i.jsx(ListFilter, {}),
                       label: r("Aging Schedule"),
                       large: true,
                       onClick: () => e.onTool("aging"),
@@ -64988,7 +63724,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(t1, {}),
+                      icon: i.jsx(ListFilter, {}),
                       label: r("Risk Screening"),
                       large: true,
                       onClick: () => e.onTool("materiality"),
@@ -64998,7 +63734,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(eT, {}),
+                      icon: i.jsx(CheckCheck, {}),
                       label: r("Mark Reviewed"),
                       large: true,
                       onClick: e.onReviewed,
@@ -65006,7 +63742,7 @@ function Hde(e) {
                       className: "xl-green-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(ew, {}),
+                      icon: i.jsx(ClipboardCheck, {}),
                       label: r("Audit Checks"),
                       large: true,
                       onClick: () => e.onPanel("checks"),
@@ -65018,7 +63754,7 @@ function Hde(e) {
                   label: r("Changes"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(W4, {}),
+                      icon: i.jsx(ArrowLeftRight, {}),
                       label: r("Compare Workbooks"),
                       large: true,
                       onClick: () => e.onTool("workbookComparison"),
@@ -65028,7 +63764,7 @@ function Hde(e) {
                       ),
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(nw, {}),
+                      icon: i.jsx(History, {}),
                       label: r("Show Changes"),
                       large: true,
                       onClick: () => e.onPanel("history"),
@@ -65039,7 +63775,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Protection"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(iw, {}),
+                    icon: i.jsx(ShieldCheck, {}),
                     label: e.sheetProtected
                       ? "Unprotect Sheet"
                       : "Protect Sheet",
@@ -65051,7 +63787,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("AI Review"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(Dy, {}),
+                    icon: i.jsx(Sparkles, {}),
                     label: r("AI Assistant"),
                     large: true,
                     onClick: () => e.onPanel("assistant"),
@@ -65061,7 +63797,7 @@ function Hde(e) {
                 i.jsx(Mn, {
                   label: r("Automation"),
                   children: i.jsx(lr, {
-                    icon: i.jsx(t7, {}),
+                    icon: i.jsx(FileCode, {}),
                     label: r("Automation & Scripts"),
                     large: true,
                     onClick: () => e.onTool("automation"),
@@ -65080,7 +63816,7 @@ function Hde(e) {
                   label: r("Workbook Views"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(n7, {}),
+                      icon: i.jsx(Grid3x3, {}),
                       label: r("Normal"),
                       large: true,
                       active: true,
@@ -65090,7 +63826,7 @@ function Hde(e) {
                       },
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Fm, {}),
+                      icon: i.jsx(Sheet, {}),
                       label: r("Page Layout"),
                       large: true,
                       onClick: () => e.onTool("pageLayout"),
@@ -65140,10 +63876,10 @@ function Hde(e) {
                   children: [
                     i.jsxs("div", {
                       className: "xl-zoom-selector",
-                      children: [i.jsx(ag, { size: 22 }), B],
+                      children: [i.jsx(Search, { size: 22 }), B],
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(hk, {}),
+                      icon: i.jsx(Maximize, {}),
                       label: "100%",
                       large: true,
                       onClick: () => e.onZoom(100),
@@ -65154,7 +63890,7 @@ function Hde(e) {
                   label: r("Window"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(Ym, {}),
+                      icon: i.jsx(Grid2x2, {}),
                       label: r("Split"),
                       onClick: () => e.onTool("viewSettings"),
                       title: r(
@@ -65163,7 +63899,7 @@ function Hde(e) {
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Default Sizes"),
                       onClick: () => e.onTool("viewSettings"),
                       title: r(
@@ -65172,7 +63908,7 @@ function Hde(e) {
                       disabled: k,
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Ym, {}),
+                      icon: i.jsx(Grid2x2, {}),
                       label: r("Freeze Panes"),
                       large: true,
                       onClick: () => e.onTool("viewSettings"),
@@ -65182,7 +63918,7 @@ function Hde(e) {
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(kse, {}),
+                      icon: i.jsx(PanelTop, {}),
                       label: r("Freeze Top Row"),
                       large: true,
                       active: e.freezeRows,
@@ -65190,7 +63926,7 @@ function Hde(e) {
                       className: "xl-blue-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(Qd, {}),
+                      icon: i.jsx(Rows3, {}),
                       label: r("Hide & Unhide"),
                       large: true,
                       onClick: () => e.onTool("viewSettings"),
@@ -65202,14 +63938,14 @@ function Hde(e) {
                   label: r("Task Panes"),
                   children: [
                     i.jsx(lr, {
-                      icon: i.jsx(Dy, {}),
+                      icon: i.jsx(Sparkles, {}),
                       label: r("AI Assistant"),
                       large: true,
                       onClick: () => e.onPanel("assistant"),
                       className: "xl-purple-icon",
                     }),
                     i.jsx(lr, {
-                      icon: i.jsx(nw, {}),
+                      icon: i.jsx(History, {}),
                       label: r("Show Changes"),
                       large: true,
                       onClick: () => e.onPanel("history"),
@@ -65235,7 +63971,7 @@ function Hde(e) {
             onClick: () => V(e.onNew),
             disabled: k,
             children: [
-              i.jsx(r7, { size: 18 }),
+              i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "New" }),
@@ -65252,7 +63988,7 @@ function Hde(e) {
             onClick: () => V(e.onImport),
             disabled: k,
             children: [
-              i.jsx(og, { size: 18 }),
+              i.jsx(FolderOpen, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Open" }),
@@ -65271,7 +64007,7 @@ function Hde(e) {
             role: "menuitem",
             onClick: () => V(() => e.onTool("sheets")),
             children: [
-              i.jsx(Fm, { size: 18 }),
+              i.jsx(Sheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Manage worksheets" }),
@@ -65290,7 +64026,7 @@ function Hde(e) {
             role: "menuitem",
             onClick: () => V(() => e.onTool("workbookProperties")),
             children: [
-              i.jsx(Kl, { size: 18 }),
+              i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Workbook properties" }),
@@ -65308,7 +64044,7 @@ function Hde(e) {
             role: "menuitem",
             onClick: () => V(() => e.onTool("versions")),
             children: [
-              i.jsx(nw, { size: 18 }),
+              i.jsx(History, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Version history" }),
@@ -65327,7 +64063,7 @@ function Hde(e) {
             disabled: !e.allowProtectionChange || e.busy,
             onClick: () => V(() => e.onTool("template")),
             children: [
-              i.jsx(r7, { size: 18 }),
+              i.jsx(FilePlus2, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "New from current template" }),
@@ -65347,7 +64083,7 @@ function Hde(e) {
             onClick: () => V(() => e.onExport("xlsx")),
             disabled: e.busy,
             children: [
-              i.jsx(Kl, { size: 18 }),
+              i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Save as Excel" }),
@@ -65364,7 +64100,7 @@ function Hde(e) {
             onClick: () => V(() => e.onExport("csv")),
             disabled: e.busy,
             children: [
-              i.jsx(e3, { size: 18 }),
+              i.jsx(Download, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Save as CSV" }),
@@ -65383,7 +64119,7 @@ function Hde(e) {
             onClick: () => V(() => e.onExport("json")),
             disabled: e.busy,
             children: [
-              i.jsx(sse, { size: 18 }),
+              i.jsx(FileJson, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Save workbook data" }),
@@ -65402,7 +64138,7 @@ function Hde(e) {
             disabled: e.busy,
             onClick: () => V(() => e.onTool("xlsxSource")),
             children: [
-              i.jsx(Kl, { size: 18 }),
+              i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Original XLSX and compatibility" }),
@@ -65421,7 +64157,7 @@ function Hde(e) {
             disabled: e.busy,
             onClick: () => V(() => e.onTool("importSources")),
             children: [
-              i.jsx(Kl, { size: 18 }),
+              i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Import sources" }),
@@ -65440,7 +64176,7 @@ function Hde(e) {
             disabled: e.busy,
             onClick: () => V(() => e.onTool("workbookFormats")),
             children: [
-              i.jsx(Kl, { size: 18 }),
+              i.jsx(FileSpreadsheet, { size: 18 }),
               i.jsxs("span", {
                 children: [
                   i.jsx(M, { children: "Workbook formats" }),
@@ -65460,7 +64196,7 @@ function Hde(e) {
             onClick: () => V(e.onRename),
             disabled: k,
             children: [
-              i.jsx(Dse, { size: 18 }),
+              i.jsx(Type, { size: 18 }),
               i.jsx("span", {
                 children: i.jsx(M, { children: "Rename workbook" }),
               }),
@@ -65472,7 +64208,7 @@ function Hde(e) {
             onClick: () => V(e.onDemo),
             disabled: k,
             children: [
-              i.jsx(ew, { size: 18 }),
+              i.jsx(ClipboardCheck, { size: 18 }),
               i.jsx("span", {
                 children: i.jsx(M, { children: "Open audit example" }),
               }),
@@ -65484,7 +64220,7 @@ function Hde(e) {
             disabled: e.busy,
             onClick: () => V(() => e.onTool("automation")),
             children: [
-              i.jsx(t7, { size: 18 }),
+              i.jsx(FileCode, { size: 18 }),
               i.jsx("span", {
                 children: i.jsx(M, { children: "Automation & Scripts" }),
               }),
@@ -65495,7 +64231,7 @@ function Hde(e) {
             role: "menuitem",
             onClick: () => V(() => e.onPanel("help")),
             children: [
-              i.jsx(Iy, { size: 18 }),
+              i.jsx(BookOpen, { size: 18 }),
               i.jsx("span", {
                 children: i.jsx(M, { children: "Workbook help" }),
               }),
@@ -65742,11 +64478,11 @@ function Hde(e) {
                         : "Collapse ribbon (Ctrl+F1)",
                       onClick: E,
                       children: c
-                        ? i.jsx(Kw, { size: 16 })
-                        : i.jsx(Qae, { size: 16 }),
+                        ? i.jsx(ChevronDown, { size: 16 })
+                        : i.jsx(ChevronUp, { size: 16 }),
                     }),
                     i.jsx(Xl, {
-                      icon: i.jsx(Mse, { size: 16 }),
+                      icon: i.jsx(Undo2, { size: 16 }),
                       label: r("Undo (Ctrl+Z)"),
                       commandId: "quick-undo",
                       reason: L[0].reason,
@@ -65754,7 +64490,7 @@ function Hde(e) {
                       disabled: k || !e.canUndo,
                     }),
                     i.jsx(Xl, {
-                      icon: i.jsx(Nse, { size: 16 }),
+                      icon: i.jsx(Redo2, { size: 16 }),
                       label: r("Redo (Ctrl+Y)"),
                       commandId: "quick-redo",
                       reason: L[1].reason,
@@ -65762,7 +64498,7 @@ function Hde(e) {
                       disabled: k || !e.canRedo,
                     }),
                     i.jsx(Xl, {
-                      icon: i.jsx(Iy, { size: 16 }),
+                      icon: i.jsx(BookOpen, { size: 16 }),
                       label: r("Commands & shortcuts"),
                       onClick: () => s(true),
                     }),
@@ -65775,7 +64511,7 @@ function Hde(e) {
                       lang: t("AI assistant"),
                       "data-ui-label": "AI assistant",
                       children: [
-                        i.jsx(Dy, { size: 15 }),
+                        i.jsx(Sparkles, { size: 15 }),
                         i.jsx("span", {
                           children: i.jsx(M, { children: "AI Assistant" }),
                         }),
@@ -65828,7 +64564,7 @@ function qde({
     [L, $] = ne.useState("stop"),
     [U, G] = ne.useState("Invalid value"),
     [H, Q] = ne.useState("Enter a value that satisfies this rule."),
-    [X, J] = ne.useState(""),
+    [X$1, J] = ne.useState(""),
     [q, W] = ne.useState(),
     K = ne.useRef(null);
   ne.useEffect(() => {
@@ -65961,7 +64697,7 @@ function qde({
               onClick: o,
               lang: u("Close data validation"),
               "data-ui-label": "Close data validation",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -66375,7 +65111,7 @@ function qde({
                 }),
               ],
             }),
-            X && i.jsx("p", { role: "alert", children: X }),
+            X$1 && i.jsx("p", { role: "alert", children: X$1 }),
           ],
         }),
         i.jsxs("footer", {
@@ -67592,7 +66328,7 @@ function $z(e) {
       U.includes($.id) &&
       (G.includeHidden || (!$.hidden && !$.veryHidden)),
     Q = JSON.stringify([e.sheetId, e.range]),
-    X = JSON.stringify([e.workbook, e.readOnly, U, G.includeHidden, Q]),
+    X$1 = JSON.stringify([e.workbook, e.readOnly, U, G.includeHidden, Q]),
     J =
       !!I &&
       !e.readOnly &&
@@ -67604,7 +66340,7 @@ function $z(e) {
       (O(null), D(""), R(0));
     },
     W = (le) => {
-      (_(X),
+      (_(X$1),
         D(
           le instanceof Error
             ? le.message
@@ -67768,7 +66504,7 @@ function $z(e) {
               onClick: e.onClose,
               lang: t("Close duplicate review"),
               "data-ui-label": "Close duplicate review",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -67974,7 +66710,7 @@ function $z(e) {
           }),
         }),
         V &&
-          B === X &&
+          B === X$1 &&
           i.jsx("p", { className: "dup-error", role: "alert", children: V }),
         i.jsx("button", {
           className: "dup-primary",
@@ -68616,7 +67352,7 @@ function afe({
               onClick: a,
               lang: u("Close structure tool"),
               "data-ui-label": "Close structure tool",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -69001,7 +67737,7 @@ function lfe({
     [R, L] = ne.useState(1),
     [$, U] = ne.useState(false),
     [G, H] = ne.useState(""),
-    [Q, X] = ne.useState(""),
+    [Q, X$1] = ne.useState(""),
     [J, q] = ne.useState(false),
     [W, K] = ne.useState(""),
     te = ne.useRef(null),
@@ -69141,7 +67877,7 @@ function lfe({
             ),
           $e = WQ(r, t, h, je, D);
         if (!$e.removed) {
-          X("No duplicate rows found.");
+          X$1("No duplicate rows found.");
           return;
         }
         ce($e.workbook, `Remove ${$e.removed} duplicate rows from selection`);
@@ -69232,7 +67968,7 @@ function lfe({
           children: [
             i.jsxs("span", {
               children: [
-                i.jsx(Ym, { size: 19 }),
+                i.jsx(Grid2x2, { size: 19 }),
                 i.jsx("h2", { children: le[e] ?? e }),
               ],
             }),
@@ -69241,7 +67977,7 @@ function lfe({
               onClick: a,
               lang: u("Close worksheet tool"),
               "data-ui-label": "Close worksheet tool",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -69269,7 +68005,7 @@ function lfe({
                 children: [
                   i.jsxs("p", {
                     children: [
-                      i.jsx(v$, { size: 16 }),
+                      i.jsx(Paintbrush, { size: 16 }),
                       " ",
                       i.jsx(M, { children: "Copy formatting from" }),
                       " ",
@@ -69705,7 +68441,7 @@ function lfe({
                 children: [
                   i.jsxs("p", {
                     children: [
-                      i.jsx(iw, { size: 17 }),
+                      i.jsx(ShieldCheck, { size: 17 }),
                       " ",
                       (Pe = l.protection) != null && Pe.enabled
                         ? "Unlock editing on this worksheet."
@@ -69790,7 +68526,7 @@ function lfe({
                 children: [
                   i.jsxs("p", {
                     children: [
-                      i.jsx(eT, { size: 17 }),
+                      i.jsx(CheckCheck, { size: 17 }),
                       " ",
                       i.jsx(M, {
                         children:
@@ -74989,10 +73725,10 @@ function Wz(e) {
               "aria-level": 2,
               children: [
                 a === "picture"
-                  ? i.jsx(dse, { size: 19 })
+                  ? i.jsx(ImagePlus, { size: 19 })
                   : a === "chart"
-                    ? i.jsx(dI, { size: 19 })
-                    : i.jsx(_se, { size: 19 }),
+                    ? i.jsx(ChartColumn, { size: 19 })
+                    : i.jsx(Shapes, { size: 19 }),
                 e.objectId ? B : "Insert " + a,
               ],
             }),
@@ -75001,7 +73737,7 @@ function Wz(e) {
               onClick: e.onClose,
               lang: t("Close drawing tools"),
               "data-ui-label": "Close drawing tools",
-              children: i.jsx(dn, { size: 17 }),
+              children: i.jsx(X, { size: 17 }),
             }),
           ],
         }),
@@ -75652,7 +74388,7 @@ function Cfe(e) {
                                                 O.clientY,
                                               ));
                                           },
-                                          children: i.jsx(yse, { size: 14 }),
+                                          children: i.jsx(Move, { size: 14 }),
                                         }),
                                         i.jsx("input", {
                                           "aria-label": r(
@@ -75671,7 +74407,7 @@ function Cfe(e) {
                                         i.jsx("button", {
                                           "aria-label": "Delete " + A.label,
                                           onClick: () => g(A.id),
-                                          children: i.jsx(b$, { size: 14 }),
+                                          children: i.jsx(Trash2, { size: 14 }),
                                         }),
                                       ],
                                     }),
@@ -94541,7 +93277,7 @@ async function Fme(e, r, t) {
   }
 }
 function Bme(e) {
-  var X, J, q;
+  var X$1, J, q;
   const { text: r, language: t } = Dr(),
     n = ne.useRef(e);
   n.current = e;
@@ -94814,7 +93550,9 @@ function Bme(e) {
           children: [
             i.jsxs("span", {
               children: [
-                B ? i.jsx(xse, { size: 19 }) : i.jsx(lse, { size: 19 }),
+                B
+                  ? i.jsx(Palette, { size: 19 })
+                  : i.jsx(FileText, { size: 19 }),
                 B ? "Themes" : "Page Setup",
               ],
             }),
@@ -94823,7 +93561,7 @@ function Bme(e) {
               onClick: Q,
               lang: t("Close page setup"),
               "data-ui-label": "Close page setup",
-              children: i.jsx(dn, { size: 17 }),
+              children: i.jsx(X, { size: 17 }),
             }),
           ],
         }),
@@ -95255,7 +93993,7 @@ function Bme(e) {
                           "Replaces the header and footer with workbook name, engagement, period, revision and page numbers. Fields: &[Workbook], &[Engagement], &[Period], &[Revision]. Missing properties display a “not set” label. Values come from this workbook; revision is local history, not an approval or certification.",
                       }),
                     }),
-                    !!((X = b.merges) != null && X.length) &&
+                    !!((X$1 = b.merges) != null && X$1.length) &&
                       i.jsx("p", {
                         className: "dg-muted",
                         children: i.jsx(M, {
@@ -95463,7 +94201,7 @@ function Bme(e) {
                 onClick: G,
                 disabled: !!C.error || c || u,
                 children: [
-                  i.jsx(Tse, { size: 14 }),
+                  i.jsx(Printer, { size: 14 }),
                   c && !f ? "Preparing print…" : "Print / Save as PDF",
                 ],
               }),
@@ -97145,7 +95883,7 @@ function rxe({
       (_ || B(JSON.stringify(r)), C(true), N(null), U(""), se(we));
     },
     Q = o || !c || !!((de = r.structureProtection) != null && de.enabled),
-    X = (se) =>
+    X$1 = (se) =>
       V(se instanceof Error ? se.message : "The name could not be saved."),
     J = ne.useMemo(
       () => Fc.filter((se) => se.toLowerCase().includes(h.toLowerCase())),
@@ -97237,7 +95975,7 @@ function rxe({
           ye = q6(r, Ae, { readOnly: o });
         (ye !== r && s(ye, `${Ee ? "Edit" : "Define"} name: ${we.name}`), te());
       } catch (we) {
-        X(we);
+        X$1(we);
       }
     },
     oe = () => {
@@ -97271,7 +96009,7 @@ function rxe({
         ),
           V(""));
       } catch (se) {
-        (X(se), U(""));
+        (X$1(se), U(""));
       }
     };
   return i.jsx("div", {
@@ -97298,7 +96036,7 @@ function rxe({
               onClick: a,
               lang: l("Close formula tools"),
               "data-ui-label": "Close formula tools",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -97537,7 +96275,7 @@ function rxe({
                                               s(ye, `Delete name: ${se.name}`),
                                               te());
                                           } catch (Ae) {
-                                            X(Ae);
+                                            X$1(Ae);
                                           }
                                         },
                                         children: i.jsx(M, {
@@ -97817,7 +96555,7 @@ function rxe({
                               ),
                               te());
                           } catch (Ee) {
-                            X(Ee);
+                            X$1(Ee);
                           }
                         },
                         children: i.jsx(M, { children: "Apply rename" }),
@@ -98194,7 +96932,7 @@ function ixe(e) {
               onClick: e.onClose,
               lang: t("Close compatibility"),
               "data-ui-label": "Close compatibility",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -98970,7 +97708,7 @@ function sxe(e) {
               onClick: e.onClose,
               lang: t("Close formula evaluation"),
               "data-ui-label": "Close formula evaluation",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -99392,7 +98130,7 @@ function lxe(e) {
               onClick: e.onClose,
               lang: t("Close calculation inspection"),
               "data-ui-label": "Close calculation inspection",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -100311,7 +99049,7 @@ function fxe(e) {
               onClick: e.onClose,
               lang: t("Close Watch Window"),
               "data-ui-label": "Close Watch Window",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -101142,7 +99880,7 @@ function mxe(e) {
         (B(null), H(W));
       }
     },
-    X = () => {
+    X$1 = () => {
       if (D)
         try {
           const W = pxe(e.workbook, D, { ...T, readOnly: e.readOnly });
@@ -101211,7 +99949,7 @@ function mxe(e) {
               onClick: e.onClose,
               lang: a("Close Goal Seek"),
               "data-ui-label": "Close Goal Seek",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -101546,7 +100284,7 @@ function mxe(e) {
               i.jsx("button", {
                 className: "gs-primary",
                 disabled: e.readOnly || !D.result.converged,
-                onClick: X,
+                onClick: X$1,
                 children: i.jsx(M, { children: "Apply result" }),
               }),
             ],
@@ -102883,7 +101621,7 @@ function kxe(e) {
         (!e.allowedSheetIds || e.allowedSheetIds.includes(te.id)) &&
         ($.includeHidden || (!te.hidden && !te.veryHidden)),
     ),
-    X = (te, ae, oe) =>
+    X$1 = (te, ae, oe) =>
       i.jsx("select", {
         "aria-label": r(oe),
         value: te,
@@ -103011,7 +101749,7 @@ function kxe(e) {
             i.jsx("button", {
               "aria-label": r("Close analysis"),
               onClick: e.onClose,
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -103108,7 +101846,7 @@ function kxe(e) {
                                   children: [
                                     Oi(
                                       "Objective worksheet",
-                                      X(
+                                      X$1(
                                         A.objective.sheetId,
                                         (te) =>
                                           G({
@@ -103191,7 +101929,7 @@ function kxe(e) {
                                       children: [
                                         Oi(
                                           `Variable ${ae + 1} worksheet`,
-                                          X(
+                                          X$1(
                                             te.cell.sheetId,
                                             (oe) =>
                                               G({
@@ -103357,7 +102095,7 @@ function kxe(e) {
                                       children: [
                                         Oi(
                                           `Constraint ${ae + 1} worksheet`,
-                                          X(
+                                          X$1(
                                             te.left.sheetId,
                                             (oe) =>
                                               G({
@@ -103496,7 +102234,7 @@ function kxe(e) {
                                               children: [
                                                 Oi(
                                                   `Constraint ${ae + 1} right worksheet`,
-                                                  X(
+                                                  X$1(
                                                     te.right.sheetId,
                                                     (oe) =>
                                                       G({
@@ -103631,7 +102369,7 @@ function kxe(e) {
                                   children: [
                                     Oi(
                                       "Source worksheet",
-                                      X(
+                                      X$1(
                                         F.sheetId,
                                         (te) => H({ sheetId: te }),
                                         "Source worksheet",
@@ -104869,7 +103607,7 @@ function Fxe(e) {
               ? void 0
               : Se.scrollTo) == null || le.call(Se, 0, 0));
       }),
-    X = async (ae, oe) => {
+    X$1 = async (ae, oe) => {
       (_(true), F(""));
       try {
         const de = a.current,
@@ -104955,7 +103693,7 @@ function Fxe(e) {
             i.jsx("button", {
               "aria-label": r("Close report outputs"),
               onClick: e.onClose,
-              children: i.jsx(dn, { size: 20 }),
+              children: i.jsx(X, { size: 20 }),
             }),
           ],
         }),
@@ -105422,7 +104160,7 @@ function Fxe(e) {
                     "button",
                     {
                       disabled: B,
-                      onClick: () => void X(ae, U),
+                      onClick: () => void X$1(ae, U),
                       children: ["Export ", ae.toUpperCase()],
                     },
                     ae,
@@ -106042,7 +104780,7 @@ function $xe(e) {
     ),
     H = JSON.stringify([U, $.includeHidden]),
     Q = ne.useRef(H),
-    X =
+    X$1 =
       !!T &&
       T.snapshot === JSON.stringify(e.workbook) &&
       T.context.includeHidden === $.includeHidden &&
@@ -106206,7 +104944,7 @@ function $xe(e) {
             setTimeout(() => URL.revokeObjectURL(se), 1e3));
         }
       }),
-    Se = X && T ? kW(T) : [],
+    Se = X$1 && T ? kW(T) : [],
     le = Se.findIndex((ge) => ge[0] === "Source assumptions at preview");
   return i.jsx("div", {
     className: "gs-backdrop",
@@ -106266,7 +105004,7 @@ function $xe(e) {
               onClick: e.onClose,
               lang: t("Close What-if Analysis"),
               "data-ui-label": "Close What-if Analysis",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -106622,7 +105360,7 @@ function $xe(e) {
             lang: t("What-if results"),
             "data-ui-label": "What-if results",
             children: [
-              X
+              X$1
                 ? i.jsxs(i.Fragment, {
                     children: [
                       i.jsx("h3", {
@@ -109194,7 +107932,7 @@ function e4e(e) {
     [R, L] = ne.useState(""),
     [$, U] = ne.useState(""),
     [G, H] = ne.useState("output"),
-    [Q, X] = ne.useState(0),
+    [Q, X$1] = ne.useState(0),
     J = {
       includeHidden: !!e.allowHidden && D,
       allowedSheetIds: e.allowedSheetIds,
@@ -109240,7 +107978,7 @@ function e4e(e) {
       );
     }, []));
   const de = () => {
-      (C(null), L(""), X(0));
+      (C(null), L(""), X$1(0));
     },
     he = (Re, Me) => {
       (Re(Me), de());
@@ -109285,7 +108023,7 @@ function e4e(e) {
         ),
           N(K),
           L(""),
-          X(0),
+          X$1(0),
           H("output"));
       } catch (Re) {
         (C(null), Se(Re));
@@ -109407,7 +108145,7 @@ function e4e(e) {
               onClick: e.onClose,
               lang: t("Close Combine populations"),
               "data-ui-label": "Close Combine populations",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -109986,7 +108724,7 @@ function e4e(e) {
                         "aria-label": r("Population review view"),
                         value: G,
                         onChange: (Re) => {
-                          (H(Re.target.value), X(0));
+                          (H(Re.target.value), X$1(0));
                         },
                         lang: t("Population review view"),
                         "data-ui-label": "Population review view",
@@ -110103,7 +108841,7 @@ function e4e(e) {
                     children: [
                       i.jsx("button", {
                         disabled: !Ee,
-                        onClick: () => X(Ee - 1),
+                        onClick: () => X$1(Ee - 1),
                         children: i.jsx(M, { children: "Previous records" }),
                       }),
                       i.jsxs("span", {
@@ -110122,7 +108860,7 @@ function e4e(e) {
                       }),
                       i.jsx("button", {
                         disabled: Ee >= we - 1,
-                        onClick: () => X(Ee + 1),
+                        onClick: () => X$1(Ee + 1),
                         children: i.jsx(M, { children: "Next records" }),
                       }),
                     ],
@@ -110261,11 +108999,11 @@ function t4e(e) {
     ne.useEffect(() => {
       (d(e.sheetId), l(e.range), z([]), D(0), _(null), R(null));
     }, [e.sheetId, e.range]));
-  const X = () => {
+  const X$1 = () => {
       (_(null), R(null), (a.current = false));
     },
     J = (ae, oe) => {
-      (ae(oe), X());
+      (ae(oe), X$1());
     },
     q = (ae) =>
       R({
@@ -110277,7 +109015,7 @@ function t4e(e) {
             : "Text could not be split. Review the source and settings.",
       }),
     W = () => {
-      X();
+      X$1();
       try {
         const ae = {
             sourceSheetId: s,
@@ -110369,7 +109107,7 @@ function t4e(e) {
               onClick: e.onClose,
               lang: t("Close Text to Columns"),
               "data-ui-label": "Close Text to Columns",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -110474,7 +109212,7 @@ function t4e(e) {
                   type: "checkbox",
                   checked: m,
                   onChange: (ae) => {
-                    (v(ae.target.checked), X());
+                    (v(ae.target.checked), X$1());
                   },
                 }),
                 i.jsx(M, { children: "First source row contains headings" }),
@@ -110488,7 +109226,7 @@ function t4e(e) {
                     type: "checkbox",
                     checked: I,
                     onChange: (ae) => {
-                      (O(ae.target.checked), X());
+                      (O(ae.target.checked), X$1());
                     },
                   }),
                   i.jsx(M, { children: "Include hidden cells" }),
@@ -110604,7 +109342,7 @@ function t4e(e) {
                             { length: V },
                             (Se, le) => j[le] ?? "text",
                           );
-                          ((he[oe] = de.target.value), z(he), X());
+                          ((he[oe] = de.target.value), z(he), X$1());
                         },
                         children: [
                           i.jsx("option", { value: "text", children: "Text" }),
@@ -111308,7 +110046,7 @@ function s4e(e) {
               onClick: e.onClose,
               lang: t("Close text cleanup"),
               "data-ui-label": "Close text cleanup",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -111901,7 +110639,7 @@ function l4e(e) {
     [R, L] = ne.useState(",;"),
     [$, U] = ne.useState(false),
     [G, H] = ne.useState("5, 10"),
-    [Q, X] = ne.useState(" "),
+    [Q, X$1] = ne.useState(" "),
     [J, q] = ne.useState("Combined"),
     [W, K] = ne.useState(false),
     [te, ae] = ne.useState("number"),
@@ -112173,7 +110911,8 @@ function l4e(e) {
           L(Dt.delimiters),
           U(Dt.collapse),
           H(Dt.breaks.join(", "))),
-        Dt.kind === "concat" && (q(Dt.name), X(Dt.separator), K(Dt.skipBlank)),
+        Dt.kind === "concat" &&
+          (q(Dt.name), X$1(Dt.separator), K(Dt.skipBlank)),
         Dt.kind === "convert" &&
           (ae(Dt.to), de(Dt.decimal), Se(Dt.group), ce(Dt.dateOrder)),
         Dt.kind === "fill" &&
@@ -112301,7 +111040,7 @@ function l4e(e) {
               onClick: e.onClose,
               lang: t("Close Clean & Reshape"),
               "data-ui-label": "Close Clean & Reshape",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -112707,7 +111446,7 @@ function l4e(e) {
                           i.jsx("input", {
                             "aria-label": r("Concatenation separator"),
                             value: Q,
-                            onChange: (Qe) => X(Qe.target.value),
+                            onChange: (Qe) => X$1(Qe.target.value),
                             lang: t("Concatenation separator"),
                             "data-ui-label": "Concatenation separator",
                           }),
@@ -114182,7 +112921,7 @@ function p4e(e) {
               onClick: e.onClose,
               lang: t("Close custom sort"),
               "data-ui-label": "Close custom sort",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -114298,7 +113037,7 @@ function p4e(e) {
                   h([...c, dj(N.find((X) => !c.some((J) => J.column === X)))]));
               },
               children: [
-                i.jsx(fI, { size: 15 }),
+                i.jsx(Plus, { size: 15 }),
                 i.jsx(M, { children: "Add level" }),
               ],
             }),
@@ -114306,7 +113045,7 @@ function p4e(e) {
         }),
         i.jsx("ol", {
           className: "sort-levels",
-          children: c.map((X, J) =>
+          children: c.map((X$1, J) =>
             i.jsxs(
               "li",
               {
@@ -114323,13 +113062,13 @@ function p4e(e) {
                             "aria-label": `Column ${J + 1}`,
                             min: T.firstCol + 1,
                             max: T.lastCol + 1,
-                            value: X.column + 1,
+                            value: X$1.column + 1,
                             onValueChange: (q) =>
                               L(J, { column: Number(q) - 1 }),
                           })
                         : i.jsx("select", {
                             "aria-label": `Column ${J + 1}`,
-                            value: X.column,
+                            value: X$1.column,
                             onChange: (q) =>
                               L(J, { column: Number(q.target.value) }),
                             children: N.map((q) => {
@@ -114356,7 +113095,7 @@ function p4e(e) {
                       i.jsx(M, { children: "Order" }),
                       i.jsxs("select", {
                         "aria-label": `Order ${J + 1}`,
-                        value: X.direction,
+                        value: X$1.direction,
                         onChange: (q) => L(J, { direction: q.target.value }),
                         children: [
                           i.jsx("option", {
@@ -114376,7 +113115,7 @@ function p4e(e) {
                       i.jsx(M, { children: "Interpret as" }),
                       i.jsxs("select", {
                         "aria-label": `Interpretation ${J + 1}`,
-                        value: X.type,
+                        value: X$1.type,
                         onChange: (q) =>
                           L(J, { type: q.target.value, useCustom: false }),
                         children: [
@@ -114404,13 +113143,13 @@ function p4e(e) {
                         "aria-label": `Move level ${J + 1} up`,
                         disabled: J === 0,
                         onClick: () => $(J, -1),
-                        children: i.jsx(cI, { size: 15 }),
+                        children: i.jsx(ArrowUp, { size: 15 }),
                       }),
                       i.jsx("button", {
                         "aria-label": `Move level ${J + 1} down`,
                         disabled: J === c.length - 1,
                         onClick: () => $(J, 1),
-                        children: i.jsx(uI, { size: 15 }),
+                        children: i.jsx(ArrowDown, { size: 15 }),
                       }),
                       i.jsx("button", {
                         "aria-label": `Remove level ${J + 1}`,
@@ -114418,11 +113157,11 @@ function p4e(e) {
                         onClick: () => {
                           (R(), h(c.filter((q, W) => W !== J)));
                         },
-                        children: i.jsx(dn, { size: 15 }),
+                        children: i.jsx(X, { size: 15 }),
                       }),
                     ],
                   }),
-                  X.type === "text" &&
+                  X$1.type === "text" &&
                     i.jsxs("div", {
                       className: "sort-custom",
                       children: [
@@ -114430,7 +113169,7 @@ function p4e(e) {
                           children: [
                             i.jsx("input", {
                               type: "checkbox",
-                              checked: X.useCustom,
+                              checked: X$1.useCustom,
                               onChange: (q) =>
                                 L(J, { useCustom: q.target.checked }),
                             }),
@@ -114440,7 +113179,7 @@ function p4e(e) {
                             J + 1,
                           ],
                         }),
-                        X.useCustom &&
+                        X$1.useCustom &&
                           i.jsxs("label", {
                             children: [
                               i.jsx(M, { children: "One value per line" }),
@@ -114450,7 +113189,7 @@ function p4e(e) {
                                 placeholder: `High
 Medium
 Low`,
-                                value: X.customText,
+                                value: X$1.customText,
                                 onChange: (q) =>
                                   L(J, { customText: q.target.value }),
                               }),
@@ -114848,7 +113587,7 @@ function m4e(e) {
       v(bS(ae));
     }
   }
-  function X() {
+  function X$1() {
     if (!(!E || !k)) {
       if (E.workbook !== V.current.workbook) {
         v("The workbook changed. Review current dependencies before deleting.");
@@ -114947,7 +113686,7 @@ function m4e(e) {
           children: [
             i.jsxs("div", {
               children: [
-                i.jsx(Kl, { size: 19 }),
+                i.jsx(FileSpreadsheet, { size: 19 }),
                 i.jsx("h2", {
                   id: B,
                   children: i.jsx(M, { children: "Manage Worksheets" }),
@@ -114960,7 +113699,7 @@ function m4e(e) {
               onClick: e.onClose,
               lang: t("Close worksheet manager"),
               "data-ui-label": "Close worksheet manager",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -114993,7 +113732,7 @@ function m4e(e) {
                       onClick: H,
                       lang: t("Add worksheet"),
                       "data-ui-label": "Add worksheet",
-                      children: i.jsx(fI, { size: 16 }),
+                      children: i.jsx(Plus, { size: 16 }),
                     }),
                   ],
                 }),
@@ -115026,7 +113765,7 @@ function m4e(e) {
                                 }),
                               ],
                             }),
-                            ae.hidden && i.jsx(ise, { size: 14 }),
+                            ae.hidden && i.jsx(EyeOff, { size: 14 }),
                           ],
                         }),
                       },
@@ -115054,7 +113793,7 @@ function m4e(e) {
                         (e.onSelectSheet(a.id), e.onClose());
                       },
                       children: [
-                        i.jsx(ose, { size: 14 }),
+                        i.jsx(Eye$1, { size: 14 }),
                         i.jsx(M, { children: "Go to sheet" }),
                       ],
                     }),
@@ -115072,7 +113811,7 @@ function m4e(e) {
                   i.jsxs("p", {
                     className: "sm-lock-note",
                     children: [
-                      i.jsx(o7, { size: 14 }),
+                      i.jsx(LockKeyhole, { size: 14 }),
                       i.jsx(M, {
                         children:
                           "Workbook structure is protected. Unlock it below to make changes.",
@@ -115197,7 +113936,7 @@ function m4e(e) {
                               true,
                             ),
                           children: [
-                            i.jsx(tw, { size: 14 }),
+                            i.jsx(Copy, { size: 14 }),
                             i.jsx(M, { children: "Duplicate sheet" }),
                           ],
                         }),
@@ -115215,7 +113954,7 @@ function m4e(e) {
                                 ),
                               lang: t("Move worksheet up"),
                               "data-ui-label": "Move worksheet up",
-                              children: i.jsx(cI, { size: 15 }),
+                              children: i.jsx(ArrowUp, { size: 15 }),
                             }),
                             i.jsx("button", {
                               type: "button",
@@ -115228,7 +113967,7 @@ function m4e(e) {
                                 ),
                               lang: t("Move worksheet down"),
                               "data-ui-label": "Move worksheet down",
-                              children: i.jsx(uI, { size: 15 }),
+                              children: i.jsx(ArrowDown, { size: 15 }),
                             }),
                           ],
                         }),
@@ -115333,7 +114072,7 @@ function m4e(e) {
                       title: L ? "Keep at least one visible worksheet" : void 0,
                       onClick: Q,
                       children: [
-                        i.jsx(b$, { size: 14 }),
+                        i.jsx(Trash2, { size: 14 }),
                         i.jsx(M, { children: "Delete worksheet…" }),
                       ],
                     }),
@@ -115490,7 +114229,7 @@ function m4e(e) {
                                 type: "button",
                                 className: "sm-danger sm-delete-final",
                                 disabled: !$ || !k || W,
-                                onClick: X,
+                                onClick: X$1,
                                 children: i.jsx(M, {
                                   children: "Delete worksheet",
                                 }),
@@ -115512,7 +114251,9 @@ function m4e(e) {
             i.jsxs("div", {
               className: "sm-protection-title",
               children: [
-                _ ? i.jsx(o7, { size: 16 }) : i.jsx(gse, { size: 16 }),
+                _
+                  ? i.jsx(LockKeyhole, { size: 16 })
+                  : i.jsx(LockKeyholeOpen, { size: 16 }),
                 i.jsx("strong", {
                   children: i.jsx(M, { children: "Workbook structure" }),
                 }),
@@ -115843,7 +114584,7 @@ function v4e(e) {
               onClick: e.onClose,
               lang: t("Close workbook manager"),
               "data-ui-label": "Close workbook manager",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -116245,10 +114986,10 @@ function v4e(e) {
   });
 }
 const b4e = [
-    { value: "down", label: "Fill down", icon: uI },
-    { value: "right", label: "Fill right", icon: m$ },
-    { value: "up", label: "Fill up", icon: cI },
-    { value: "left", label: "Fill left", icon: p$ },
+    { value: "down", label: "Fill down", icon: ArrowDown },
+    { value: "right", label: "Fill right", icon: ArrowRight },
+    { value: "up", label: "Fill up", icon: ArrowUp },
+    { value: "left", label: "Fill left", icon: ArrowLeft },
   ],
   pj = (e) =>
     e instanceof Error ? e.message : "This change could not be completed.";
@@ -116285,7 +115026,7 @@ function y4e(e) {
     [L, $] = ne.useState("day"),
     [U, G] = ne.useState("preserveDay"),
     [H, Q] = ne.useState("row"),
-    [X, J] = ne.useState(0),
+    [X$1, J] = ne.useState(0),
     [q, W] = ne.useState(0),
     [K] = ne.useState(() => gQ(e.workbook)),
     [te, ae] = ne.useState(() => String(Dg(d))),
@@ -116457,7 +115198,12 @@ function y4e(e) {
         : e.mode === "fillSeries"
           ? "Fill Series"
           : "Worksheet View",
-    ze = e.mode === "pasteSpecial" ? g$ : e.mode === "fillSeries" ? Qd : Ym;
+    ze =
+      e.mode === "pasteSpecial"
+        ? Clipboard
+        : e.mode === "fillSeries"
+          ? Rows3
+          : Grid2x2;
   return i.jsx("div", {
     className: "et-backdrop",
     children: i.jsxs("section", {
@@ -116501,7 +115247,7 @@ function y4e(e) {
               onClick: e.onClose,
               lang: t("Close editing tools"),
               "data-ui-label": "Close editing tools",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -117364,40 +116110,42 @@ function y4e(e) {
                         ? i.jsxs(i.Fragment, {
                             children: [
                               i.jsx("ul", {
-                                children: Pe.slice(X * 20, (X + 1) * 20).map(
-                                  (Ze) =>
-                                    i.jsxs(
-                                      "li",
-                                      {
-                                        children: [
-                                          i.jsx("span", {
-                                            children: $e(Ze.start, Ze.end),
+                                children: Pe.slice(
+                                  X$1 * 20,
+                                  (X$1 + 1) * 20,
+                                ).map((Ze) =>
+                                  i.jsxs(
+                                    "li",
+                                    {
+                                      children: [
+                                        i.jsx("span", {
+                                          children: $e(Ze.start, Ze.end),
+                                        }),
+                                        i.jsx("button", {
+                                          type: "button",
+                                          "aria-label": `Unhide ${$e(Ze.start, Ze.end).toLowerCase()}`,
+                                          disabled: we || Ee,
+                                          onClick: () =>
+                                            ke(
+                                              () =>
+                                                d6(
+                                                  e.workbook,
+                                                  e.sheetId,
+                                                  H,
+                                                  Ze.start,
+                                                  Ze.end,
+                                                  !1,
+                                                ),
+                                              `Unhide ${H === "row" ? "rows" : "columns"}`,
+                                            ),
+                                          children: i.jsx(M, {
+                                            children: "Unhide",
                                           }),
-                                          i.jsx("button", {
-                                            type: "button",
-                                            "aria-label": `Unhide ${$e(Ze.start, Ze.end).toLowerCase()}`,
-                                            disabled: we || Ee,
-                                            onClick: () =>
-                                              ke(
-                                                () =>
-                                                  d6(
-                                                    e.workbook,
-                                                    e.sheetId,
-                                                    H,
-                                                    Ze.start,
-                                                    Ze.end,
-                                                    !1,
-                                                  ),
-                                                `Unhide ${H === "row" ? "rows" : "columns"}`,
-                                              ),
-                                            children: i.jsx(M, {
-                                              children: "Unhide",
-                                            }),
-                                          }),
-                                        ],
-                                      },
-                                      `${Ze.start}-${Ze.end}`,
-                                    ),
+                                        }),
+                                      ],
+                                    },
+                                    `${Ze.start}-${Ze.end}`,
+                                  ),
                                 ),
                               }),
                               qe > 1 &&
@@ -117406,7 +116154,7 @@ function y4e(e) {
                                   children: [
                                     i.jsx("button", {
                                       type: "button",
-                                      disabled: !X,
+                                      disabled: !X$1,
                                       onClick: () => J((Ze) => Ze - 1),
                                       children: i.jsx(M, {
                                         children: "Previous hidden items",
@@ -117415,7 +116163,7 @@ function y4e(e) {
                                     i.jsxs("span", {
                                       children: [
                                         i.jsx(M, { children: "Page " }),
-                                        X + 1,
+                                        X$1 + 1,
                                         " ",
                                         i.jsx(M, { children: "of " }),
                                         qe,
@@ -117423,7 +116171,7 @@ function y4e(e) {
                                     }),
                                     i.jsx("button", {
                                       type: "button",
-                                      disabled: X + 1 >= qe,
+                                      disabled: X$1 + 1 >= qe,
                                       onClick: () => J((Ze) => Ze + 1),
                                       children: i.jsx(M, {
                                         children: "Next hidden items",
@@ -118972,7 +117720,7 @@ function I4e(e) {
             i.jsxs("h2", {
               id: n,
               children: [
-                i.jsx(m$, { size: 19 }),
+                i.jsx(ArrowRight, { size: 19 }),
                 i.jsx(M, { children: "Move cells" }),
               ],
             }),
@@ -118982,7 +117730,7 @@ function I4e(e) {
               onClick: e.onClose,
               lang: t("Close move preview"),
               "data-ui-label": "Close move preview",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -119264,7 +118012,7 @@ function M4e(e) {
   } catch (te) {
     H = te instanceof Error ? te.message : "The format could not be previewed.";
   }
-  const X = [
+  const X$1 = [
       {
         name: `${(j == null ? void 0 : j.name) ?? "Worksheet"}!${D}`,
         value: Q,
@@ -119353,7 +118101,7 @@ function M4e(e) {
                 onClick: e.onClose,
                 lang: t("Close number formats"),
                 "data-ui-label": "Close number formats",
-                children: i.jsx(dn, { size: 18 }),
+                children: i.jsx(X, { size: 18 }),
               }),
             ],
           }),
@@ -119511,7 +118259,7 @@ function M4e(e) {
                             }),
                           }),
                           i.jsx("tbody", {
-                            children: X.map((te) => {
+                            children: X$1.map((te) => {
                               var oe;
                               const ae = G
                                 ? vg(
@@ -119966,7 +118714,7 @@ function j4e(e) {
         i.jsxs("header", {
           className: "ot-header",
           children: [
-            i.jsx(mse, { size: 20 }),
+            i.jsx(ListTree, { size: 20 }),
             i.jsx("h2", {
               id: n,
               children: i.jsx(M, { children: "Row and column outlines" }),
@@ -119977,7 +118725,7 @@ function j4e(e) {
               onClick: e.onClose,
               lang: t("Close outline tools"),
               "data-ui-label": "Close outline tools",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -120329,7 +119077,7 @@ function B4e(e) {
     Q = e.workbook.sheets.find(
       (se) => se.id === (H == null ? void 0 : H.anchor.sheetId),
     ),
-    X =
+    X$1 =
       e.readOnly ||
       L ||
       !!(H != null && H.orphaned) ||
@@ -120447,7 +119195,7 @@ function B4e(e) {
               onClick: e.onClose,
               lang: t("Close review tools"),
               "data-ui-label": "Close review tools",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -120490,8 +119238,8 @@ function B4e(e) {
                 },
                 children: [
                   se === "comments"
-                    ? i.jsx(_y, { size: 15 })
-                    : i.jsx(i7, { size: 15 }),
+                    ? i.jsx(MessageSquare, { size: 15 })
+                    : i.jsx(Link2, { size: 15 }),
                   se === "comments" ? "Comments" : "Hyperlink",
                 ],
               },
@@ -120725,7 +119473,7 @@ function B4e(e) {
                                     i.jsxs("p", {
                                       className: "rv-resolution",
                                       children: [
-                                        i.jsx(Eg, { size: 14 }),
+                                        i.jsx(Check, { size: 14 }),
                                         " ",
                                         i.jsx(M, { children: "Resolved by" }),
                                         " ",
@@ -120798,7 +119546,7 @@ function B4e(e) {
                                     i.jsx("div", {
                                       className: "rv-thread-actions",
                                       children: i.jsxs("button", {
-                                        disabled: X,
+                                        disabled: X$1,
                                         onClick: () =>
                                           q(
                                             () =>
@@ -120815,8 +119563,8 @@ function B4e(e) {
                                           ),
                                         children: [
                                           H.resolved
-                                            ? i.jsx(Rse, { size: 14 })
-                                            : i.jsx(Eg, { size: 14 }),
+                                            ? i.jsx(RotateCcw, { size: 14 })
+                                            : i.jsx(Check, { size: 14 }),
                                           H.resolved
                                             ? "Reopen discussion"
                                             : "Resolve discussion",
@@ -120846,7 +119594,7 @@ function B4e(e) {
                                               rows: 3,
                                               maxLength: Jl.textLength,
                                               value: k,
-                                              disabled: X,
+                                              disabled: X$1,
                                               onChange: (se) =>
                                                 F(se.target.value),
                                               lang: t("Reply"),
@@ -120856,7 +119604,7 @@ function B4e(e) {
                                         }),
                                         i.jsx("button", {
                                           className: "rv-primary",
-                                          disabled: X || !k.trim(),
+                                          disabled: X$1 || !k.trim(),
                                           children: i.jsx(M, {
                                             children: "Post reply",
                                           }),
@@ -121073,7 +119821,7 @@ function B4e(e) {
                             lang: t("Link preview"),
                             "data-ui-label": "Link preview",
                             children: [
-                              i.jsx(i7, { size: 15 }),
+                              i.jsx(Link2, { size: 15 }),
                               i.jsx("span", {
                                 children:
                                   K.label ||
@@ -121090,7 +119838,7 @@ function B4e(e) {
                                     lang: t("Open link preview"),
                                     "data-ui-label": "Open link preview",
                                     children: [
-                                      i.jsx(nse, { size: 15 }),
+                                      i.jsx(ExternalLink, { size: 15 }),
                                       i.jsx(M, { children: "Open link" }),
                                     ],
                                   })
@@ -121188,7 +119936,7 @@ function P4e(e) {
     [L, $] = ne.useState(""),
     [U, G] = ne.useState(""),
     [H, Q] = ne.useState(""),
-    [X, J] = ne.useState(""),
+    [X$1, J] = ne.useState(""),
     [q, W] = ne.useState(0),
     [K, te] = ne.useState("all"),
     ae = {
@@ -121391,7 +120139,7 @@ function P4e(e) {
               onClick: e.onClose,
               lang: t("Close materiality screen"),
               "data-ui-label": "Close materiality screen",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -121630,7 +120378,7 @@ function P4e(e) {
             className: "materiality-error",
             children: U,
           }),
-        X && i.jsx("p", { role: "status", children: X }),
+        X$1 && i.jsx("p", { role: "status", children: X$1 }),
         N &&
           se &&
           i.jsx("p", {
@@ -122912,7 +121660,7 @@ function Z4e(e) {
       1,
       Math.ceil(((H == null ? void 0 : H.rows.length) ?? 0) / gf.pageSize),
     ),
-    X = Math.min(B, Q - 1),
+    X$1 = Math.min(B, Q - 1),
     J = G4e(C.range),
     q = e.workbook.sheets.find((ce) => ce.id === e.sheetId),
     W = (ce) => h((ge) => ({ ...ge, ...ce })),
@@ -123107,7 +121855,7 @@ function Z4e(e) {
               onClick: e.onClose,
               lang: t("Close pattern checks"),
               "data-ui-label": "Close pattern checks",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -123852,7 +122600,7 @@ function Z4e(e) {
                       children:
                         H == null
                           ? void 0
-                          : H.rows.slice(X * 20, (X + 1) * 20).map((ce) => {
+                          : H.rows.slice(X$1 * 20, (X$1 + 1) * 20).map((ce) => {
                               var ge;
                               return i.jsxs(
                                 "tr",
@@ -123890,22 +122638,22 @@ function Z4e(e) {
                 "data-ui-label": "Evidence pages",
                 children: [
                   i.jsx("button", {
-                    disabled: !X,
-                    onClick: () => _(X - 1),
+                    disabled: !X$1,
+                    onClick: () => _(X$1 - 1),
                     children: i.jsx(M, { children: "Previous rows" }),
                   }),
                   i.jsxs("span", {
                     children: [
                       i.jsx(M, { children: "Page " }),
-                      X + 1,
+                      X$1 + 1,
                       " ",
                       i.jsx(M, { children: "of " }),
                       Q,
                     ],
                   }),
                   i.jsx("button", {
-                    disabled: X >= Q - 1,
-                    onClick: () => _(X + 1),
+                    disabled: X$1 >= Q - 1,
+                    onClick: () => _(X$1 + 1),
                     children: i.jsx(M, { children: "Next rows" }),
                   }),
                 ],
@@ -125495,7 +124243,7 @@ function u2e(e) {
     ne.useEffect(() => {
       B && !g.length && b([Q(B)]);
     }, [B]));
-  const X = (oe, de) => {
+  const X$1 = (oe, de) => {
       (b(g.map((he, Se) => (Se === oe ? de : he))), H());
     },
     J = async (oe) => {
@@ -125608,7 +124356,7 @@ function u2e(e) {
               onClick: ae,
               lang: t("Close workbook comparison"),
               "data-ui-label": "Close workbook comparison",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -125721,7 +124469,7 @@ function u2e(e) {
                               i.jsxs("select", {
                                 value: oe.before.sheetId,
                                 onChange: (le) =>
-                                  X(de, {
+                                  X$1(de, {
                                     ...oe,
                                     before: {
                                       ...oe.before,
@@ -125751,7 +124499,7 @@ function u2e(e) {
                               i.jsx("input", {
                                 value: oe.before.range,
                                 onChange: (le) =>
-                                  X(de, {
+                                  X$1(de, {
                                     ...oe,
                                     before: {
                                       ...oe.before,
@@ -125768,7 +124516,7 @@ function u2e(e) {
                               i.jsxs("select", {
                                 value: oe.after.sheetId,
                                 onChange: (le) =>
-                                  X(de, {
+                                  X$1(de, {
                                     ...oe,
                                     after: {
                                       ...oe.after,
@@ -125798,7 +124546,7 @@ function u2e(e) {
                               i.jsx("input", {
                                 value: oe.after.range,
                                 onChange: (le) =>
-                                  X(de, {
+                                  X$1(de, {
                                     ...oe,
                                     after: {
                                       ...oe.after,
@@ -125815,7 +124563,7 @@ function u2e(e) {
                               i.jsxs("select", {
                                 value: oe.rowMatch,
                                 onChange: (le) =>
-                                  X(de, {
+                                  X$1(de, {
                                     ...oe,
                                     rowMatch: le.target.value,
                                     keys:
@@ -125842,7 +124590,10 @@ function u2e(e) {
                                 type: "checkbox",
                                 checked: oe.headers,
                                 onChange: (le) =>
-                                  X(de, { ...oe, headers: le.target.checked }),
+                                  X$1(de, {
+                                    ...oe,
+                                    headers: le.target.checked,
+                                  }),
                               }),
                               i.jsx(M, {
                                 children: "First row contains headers ",
@@ -125880,7 +124631,7 @@ function u2e(e) {
                                             i.jsx("input", {
                                               value: le.before,
                                               onChange: (ge) =>
-                                                X(de, {
+                                                X$1(de, {
                                                   ...oe,
                                                   keys: oe.keys.map((se, we) =>
                                                     we === ce
@@ -125906,7 +124657,7 @@ function u2e(e) {
                                             i.jsx("input", {
                                               value: le.after,
                                               onChange: (ge) =>
-                                                X(de, {
+                                                X$1(de, {
                                                   ...oe,
                                                   keys: oe.keys.map((se, we) =>
                                                     we === ce
@@ -125924,7 +124675,7 @@ function u2e(e) {
                                         i.jsxs("button", {
                                           disabled: oe.keys.length < 2,
                                           onClick: () =>
-                                            X(de, {
+                                            X$1(de, {
                                               ...oe,
                                               keys: oe.keys.filter(
                                                 (ge, se) => se !== ce,
@@ -125950,7 +124701,7 @@ function u2e(e) {
                                   ? void 0
                                   : Se.length) ?? 0) >= 8,
                               onClick: () =>
-                                X(de, {
+                                X$1(de, {
                                   ...oe,
                                   keys: [
                                     ...(oe.keys ?? []),
@@ -126857,7 +125608,7 @@ function y2e(e) {
     [L, $] = ne.useState(null),
     [U, G] = ne.useState(0),
     [H, Q] = ne.useState(0),
-    [X, J] = ne.useState(""),
+    [X$1, J] = ne.useState(""),
     [q, W] = ne.useState(""),
     [K, te] = ne.useState({}),
     ae = () => ({
@@ -127114,7 +125865,7 @@ function y2e(e) {
             i.jsxs("h2", {
               id: n,
               children: [
-                i.jsx(ag, { size: 18 }),
+                i.jsx(Search, { size: 18 }),
                 i.jsx(M, { children: "Find and Replace" }),
               ],
             }),
@@ -127124,7 +125875,7 @@ function y2e(e) {
               onClick: e.onClose,
               lang: t("Close Find and Replace"),
               "data-ui-label": "Close Find and Replace",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -127472,8 +126223,12 @@ function y2e(e) {
                       ],
                     }),
             }),
-            X &&
-              i.jsx("p", { className: "st-error", role: "alert", children: X }),
+            X$1 &&
+              i.jsx("p", {
+                className: "st-error",
+                role: "alert",
+                children: X$1,
+              }),
             q &&
               i.jsx("p", {
                 className: "st-status",
@@ -129006,7 +127761,7 @@ function P2e(e) {
               onClick: e.onClose,
               lang: t("Close save conflict"),
               "data-ui-label": "Close save conflict",
-              children: i.jsx(dn, { size: 18 }),
+              children: i.jsx(X, { size: 18 }),
             }),
           ],
         }),
@@ -131812,12 +130567,12 @@ function rEe({
       () => (U.extensions || (e != null && e.length) ? IC(U, e) : U),
       [U, e],
     ),
-    [Q, X] = ne.useState([]),
+    [Q, X$1] = ne.useState([]),
     [J, q] = ne.useState([]),
     W = r ?? J,
     K = r !== void 0 ? t : q,
     te = u ?? Q,
-    ae = u ? c : X,
+    ae = u ? c : X$1,
     [oe, de] = ne.useState(H.sheets.find((fe) => !fe.hidden).id),
     he =
       H.sheets.find((fe) => fe.id === oe && !fe.hidden) ??
@@ -136161,7 +134916,7 @@ function rEe({
                   },
                   lang: N("Dismiss notification"),
                   "data-ui-label": "Dismiss notification",
-                  children: i.jsx(dn, { size: 14 }),
+                  children: i.jsx(X, { size: 14 }),
                 }),
               ],
             }),
@@ -136253,7 +135008,7 @@ function rEe({
                         onClick: Da,
                         lang: N("Cancel cell edit"),
                         "data-ui-label": "Cancel cell edit",
-                        children: i.jsx(dn, { size: 15 }),
+                        children: i.jsx(X, { size: 15 }),
                       }),
                       i.jsx("button", {
                         "aria-label": T("Apply cell value"),
@@ -136265,7 +135020,7 @@ function rEe({
                         },
                         lang: N("Apply cell value"),
                         "data-ui-label": "Apply cell value",
-                        children: i.jsx(Eg, { size: 15 }),
+                        children: i.jsx(Check, { size: 15 }),
                       }),
                       i.jsx("span", {
                         className: "lg-fx",
@@ -136577,7 +135332,7 @@ function rEe({
                       lang: N("Population filter context"),
                       "data-ui-label": "Population filter context",
                       children: [
-                        i.jsx(rw, { size: 14 }),
+                        i.jsx(Filter, { size: 14 }),
                         i.jsx("strong", {
                           children: Bd
                             ? "Filter paused — workbook changed"
@@ -136672,7 +135427,7 @@ function rEe({
                     i.jsxs("div", {
                       className: "lg-find-bar",
                       children: [
-                        i.jsx(rw, { size: 14 }),
+                        i.jsx(Filter, { size: 14 }),
                         i.jsx("input", {
                           "aria-label": T("Filter rows"),
                           placeholder: T("Filter rows (first row is a header)"),
@@ -136696,7 +135451,7 @@ function rEe({
                           },
                           lang: N("Close filter"),
                           "data-ui-label": "Close filter",
-                          children: i.jsx(dn, { size: 14 }),
+                          children: i.jsx(X, { size: 14 }),
                         }),
                       ],
                     }),
@@ -136710,7 +135465,7 @@ function rEe({
                     i.jsxs("div", {
                       className: "lg-find-bar",
                       children: [
-                        i.jsx(ag, { size: 14 }),
+                        i.jsx(Search, { size: 14 }),
                         i.jsx("input", {
                           ref: Ld,
                           "aria-label": T("Find text"),
@@ -136749,7 +135504,7 @@ function rEe({
                           },
                           lang: N("Close find"),
                           "data-ui-label": "Close find",
-                          children: i.jsx(dn, { size: 14 }),
+                          children: i.jsx(X, { size: 14 }),
                         }),
                       ],
                     }),
@@ -136781,7 +135536,7 @@ function rEe({
                     i.jsxs("div", {
                       className: "lg-view-note",
                       children: [
-                        i.jsx(rw, { size: 12 }),
+                        i.jsx(Filter, { size: 12 }),
                         " ",
                         i.jsx(M, {
                           children:
@@ -136942,7 +135697,7 @@ function rEe({
                               }),
                             lang: N("Add worksheet"),
                             "data-ui-label": "Add worksheet",
-                            children: i.jsx(fI, { size: 16 }),
+                            children: i.jsx(Plus, { size: 16 }),
                           }),
                           i.jsx("button", {
                             "aria-label": T("Manage worksheets"),
@@ -136950,7 +135705,7 @@ function rEe({
                             onClick: () => Pn("sheets"),
                             lang: N("Manage worksheets"),
                             "data-ui-label": "Manage worksheets",
-                            children: i.jsx(pse, { size: 16 }),
+                            children: i.jsx(Layers, { size: 16 }),
                           }),
                         ],
                       }),
@@ -137093,12 +135848,12 @@ function rEe({
                         i.jsxs("div", {
                           children: [
                             Lr === "checks"
-                              ? i.jsx(ew, { size: 18 })
+                              ? i.jsx(ClipboardCheck, { size: 18 })
                               : Lr === "assistant"
-                                ? i.jsx(Dy, { size: 18 })
+                                ? i.jsx(Sparkles, { size: 18 })
                                 : Lr === "history"
-                                  ? i.jsx(nw, { size: 18 })
-                                  : i.jsx(tse, { size: 18 }),
+                                  ? i.jsx(History, { size: 18 })
+                                  : i.jsx(CircleHelp, { size: 18 }),
                             i.jsx("h2", {
                               children:
                                 Lr === "checks"
@@ -137116,7 +135871,7 @@ function rEe({
                           onClick: () => Pr(null),
                           lang: N("Close side panel"),
                           "data-ui-label": "Close side panel",
-                          children: i.jsx(Ase, { size: 16 }),
+                          children: i.jsx(PanelRightClose, { size: 16 }),
                         }),
                       ],
                     }),
@@ -137187,7 +135942,7 @@ function rEe({
                                   i.jsxs("button", {
                                     onClick: () => Pn("patterns"),
                                     children: [
-                                      i.jsx(t1, { size: 17 }),
+                                      i.jsx(ListFilter, { size: 17 }),
                                       i.jsxs("span", {
                                         children: [
                                           i.jsx("strong", {
@@ -137209,33 +135964,33 @@ function rEe({
                                     {
                                       kind: "duplicates",
                                       title: "Duplicate entries",
-                                      icon: tw,
+                                      icon: Copy,
                                       detail: "Find repeated transaction IDs",
                                     },
                                     {
                                       kind: "materiality",
                                       title: "Materiality scan",
-                                      icon: t1,
+                                      icon: ListFilter,
                                       detail:
                                         "Surface amounts above a threshold",
                                     },
                                     {
                                       kind: "sample",
                                       title: "Select a sample",
-                                      icon: use,
+                                      icon: FlaskConical,
                                       detail:
                                         "Repeatable selection with a seed",
                                     },
                                     {
                                       kind: "summary",
                                       title: "Account summary",
-                                      icon: dI,
+                                      icon: ChartColumn,
                                       detail: "Group and total the population",
                                     },
                                     {
                                       kind: "aging",
                                       title: "Aging analysis",
-                                      icon: rse,
+                                      icon: Clock3,
                                       detail: "Bucket transactions by age",
                                     },
                                   ].map((fe) =>
@@ -137375,9 +136130,9 @@ function rEe({
                                 className: "lg-button dark full",
                                 onClick: Rs,
                                 children: [
-                                  i.jsx(ew, { size: 15 }),
+                                  i.jsx(ClipboardCheck, { size: 15 }),
                                   i.jsx(M, { children: "Run check" }),
-                                  i.jsx(Q5, { size: 15 }),
+                                  i.jsx(ArrowUpRight, { size: 15 }),
                                 ],
                               }),
                               os
@@ -137405,7 +136160,7 @@ function rEe({
                                             `Audit-${is}-revision-${H.revision}.json`,
                                           ),
                                         children: [
-                                          i.jsx(e3, { size: 13 }),
+                                          i.jsx(Download, { size: 13 }),
                                           i.jsx(M, {
                                             children: "Export evidence report",
                                           }),
@@ -137456,7 +136211,7 @@ function rEe({
                                                           Oe.sheetName,
                                                           "!",
                                                           Oe.address,
-                                                          i.jsx(Q5, {
+                                                          i.jsx(ArrowUpRight, {
                                                             size: 10,
                                                           }),
                                                         ],
@@ -137475,7 +136230,7 @@ function rEe({
                                 : i.jsxs("div", {
                                     className: "lg-info-card",
                                     children: [
-                                      i.jsx(iw, { size: 18 }),
+                                      i.jsx(ShieldCheck, { size: 18 }),
                                       i.jsxs("div", {
                                         children: [
                                           i.jsx("strong", {
@@ -137798,7 +136553,9 @@ function rEe({
                                                             ));
                                                         }),
                                                       children: [
-                                                        i.jsx(Eg, { size: 15 }),
+                                                        i.jsx(Check, {
+                                                          size: 15,
+                                                        }),
                                                         i.jsx(M, {
                                                           children: "Apply ",
                                                         }),
@@ -137854,7 +136611,7 @@ function rEe({
                                 ? i.jsxs("div", {
                                     className: "lg-empty",
                                     children: [
-                                      i.jsx(nw, { size: 26 }),
+                                      i.jsx(History, { size: 26 }),
                                       i.jsx("p", {
                                         children: i.jsx(M, {
                                           children:
@@ -138030,7 +136787,7 @@ function rEe({
                                 className: "lg-button full",
                                 onClick: () => window.print(),
                                 children: [
-                                  i.jsx(Kl, { size: 15 }),
+                                  i.jsx(FileSpreadsheet, { size: 15 }),
                                   i.jsx(M, { children: "Print current view" }),
                                 ],
                               }),
@@ -138105,7 +136862,7 @@ function rEe({
                 onClick: () => Ia(null),
                 lang: N("Close dialog"),
                 "data-ui-label": "Close dialog",
-                children: i.jsx(dn, { size: 18 }),
+                children: i.jsx(X, { size: 18 }),
               }),
               i.jsx("h2", {
                 id: `${$}-dialog-title`,
@@ -138890,17 +137647,19 @@ function sEe() {
                 "aria-label": "About embedded workbook",
                 title: "About this example",
                 onClick: () => A(true),
-                children: i.jsx(Zb, { size: 17 }),
+                children: i.jsx(Info, { size: 17 }),
               }),
               i.jsxs(RS, {
                 label: "Notifications",
-                trigger: i.jsx(Yae, { size: 20, "aria-hidden": "true" }),
+                trigger: i.jsx(Bell, { size: 20, "aria-hidden": "true" }),
                 children: [
                   i.jsx("h2", { children: "Workspace notifications" }),
                   i.jsxs("div", {
                     className: `emb-notification ${O ? "emb-notification-warning" : ""}`,
                     children: [
-                      O ? i.jsx(Zb, { size: 19 }) : i.jsx(Eg, { size: 19 }),
+                      O
+                        ? i.jsx(Info, { size: 19 })
+                        : i.jsx(Check, { size: 19 }),
                       i.jsxs("div", {
                         children: [
                           i.jsx("strong", {
@@ -138938,7 +137697,7 @@ function sEe() {
                   i.jsxs("div", {
                     className: "emb-profile-heading",
                     children: [
-                      i.jsx(jse, { size: 22 }),
+                      i.jsx(UserRound, { size: 22 }),
                       i.jsxs("div", {
                         children: [
                           i.jsx("strong", { children: "Example preparer" }),
@@ -138957,7 +137716,10 @@ function sEe() {
                   i.jsxs("button", {
                     type: "button",
                     onClick: () => A(true),
-                    children: [i.jsx(Zb, { size: 16 }), "About this workspace"],
+                    children: [
+                      i.jsx(Info, { size: 16 }),
+                      "About this workspace",
+                    ],
                   }),
                 ],
               }),
@@ -138972,7 +137734,7 @@ function sEe() {
           i.jsxs(RS, {
             label: "Workspace switcher",
             className: "emb-workspace-switcher",
-            trigger: i.jsx(t3, { size: 21, "aria-hidden": "true" }),
+            trigger: i.jsx(LayoutGrid, { size: 21, "aria-hidden": "true" }),
             children: [
               i.jsx("h2", { children: "Your workbooks" }),
               xp.map((R) =>
@@ -138981,7 +137743,7 @@ function sEe() {
                   {
                     type: "button",
                     onClick: () => T(R),
-                    children: [i.jsx(Kl, { size: 18 }), Wf[R]],
+                    children: [i.jsx(FileSpreadsheet, { size: 18 }), Wf[R]],
                   },
                   R,
                 ),
@@ -138992,7 +137754,7 @@ function sEe() {
                 "aria-pressed": g,
                 onClick: () => b((R) => !R),
                 children: [
-                  i.jsx(cse, { size: 18 }),
+                  i.jsx(FolderClosed, { size: 18 }),
                   g ? "Hide" : "Show",
                   " document browser",
                 ],
@@ -139004,9 +137766,9 @@ function sEe() {
             className: "emb-breadcrumb",
             children: [
               i.jsx("span", { children: "Workspace" }),
-              i.jsx(JO, { size: 14, "aria-hidden": "true" }),
+              i.jsx(ChevronRight, { size: 14, "aria-hidden": "true" }),
               i.jsx("span", { children: "Example engagement" }),
-              i.jsx(JO, { size: 14, "aria-hidden": "true" }),
+              i.jsx(ChevronRight, { size: 14, "aria-hidden": "true" }),
               i.jsx("strong", {
                 "aria-current": "page",
                 children: "Workpapers",
@@ -139032,7 +137794,7 @@ function sEe() {
             children: [
               i.jsx("div", {
                 className: "emb-engagement-icon",
-                children: i.jsx(og, { size: 21 }),
+                children: i.jsx(FolderOpen, { size: 21 }),
               }),
               i.jsxs("div", {
                 children: [
@@ -139051,14 +137813,14 @@ function sEe() {
                 "aria-label": "Hide document browser",
                 title: "Hide document browser",
                 onClick: () => b(false),
-                children: i.jsx(Ese, { size: 15 }),
+                children: i.jsx(PanelLeftClose, { size: 15 }),
               }),
             ],
           }),
           i.jsxs("label", {
             className: "emb-search",
             children: [
-              i.jsx(ag, { size: 14 }),
+              i.jsx(Search, { size: 14 }),
               i.jsx("input", {
                 type: "search",
                 "aria-label": "Search workpapers",
@@ -139071,8 +137833,8 @@ function sEe() {
           i.jsxs("div", {
             className: "emb-folder-label",
             children: [
-              i.jsx(Kw, { size: 12 }),
-              i.jsx(og, { size: 14 }),
+              i.jsx(ChevronDown, { size: 12 }),
+              i.jsx(FolderOpen, { size: 14 }),
               i.jsx("span", { children: "Audit files" }),
               i.jsx("span", { children: xp.length }),
             ],
@@ -139092,7 +137854,7 @@ function sEe() {
                     children: [
                       i.jsx("div", {
                         className: "emb-document-icon",
-                        children: i.jsx(Kl, { size: 17 }),
+                        children: i.jsx(FileSpreadsheet, { size: 17 }),
                       }),
                       i.jsxs("div", {
                         children: [
@@ -139137,7 +137899,10 @@ function sEe() {
               i.jsxs("button", {
                 type: "button",
                 onClick: () => A(true),
-                children: ["About this example", i.jsx(Q5, { size: 12 })],
+                children: [
+                  "About this example",
+                  i.jsx(ArrowUpRight, { size: 12 }),
+                ],
               }),
             ],
           }),
@@ -139170,13 +137935,16 @@ function sEe() {
                       className: "emb-show-documents",
                       onClick: () => b(true),
                       children: [
-                        i.jsx(Cse, { size: 16 }),
+                        i.jsx(PanelLeftOpen, { size: 16 }),
                         i.jsx("span", { children: "Documents" }),
                       ],
                     }),
                   i.jsxs("span", {
                     className: "emb-workpaper-count",
-                    children: [i.jsx(Kl, { size: 14 }), "2 workbooks"],
+                    children: [
+                      i.jsx(FileSpreadsheet, { size: 14 }),
+                      "2 workbooks",
+                    ],
                   }),
                 ],
               }),
@@ -139193,7 +137961,7 @@ function sEe() {
                   className: a === R && f ? "emb-mobile-active" : "",
                   "aria-label": `Open ${Wf[R]}`,
                   onClick: () => T(R),
-                  children: [i.jsx(Kl, { size: 14 }), Wf[R]],
+                  children: [i.jsx(FileSpreadsheet, { size: 14 }), Wf[R]],
                 },
                 R,
               ),
@@ -139205,7 +137973,7 @@ function sEe() {
               role: "status",
               "aria-label": "Workspace save status",
               children: [
-                i.jsx(Zb, { size: 15 }),
+                i.jsx(Info, { size: 15 }),
                 i.jsx("span", { children: O }),
               ],
             }),
@@ -139223,7 +137991,7 @@ function sEe() {
                     children: [
                       i.jsx("div", {
                         className: "emb-window-file-icon",
-                        children: i.jsx(Kl, { size: 17 }),
+                        children: i.jsx(FileSpreadsheet, { size: 17 }),
                       }),
                       i.jsxs("div", {
                         children: [
@@ -139245,7 +138013,7 @@ function sEe() {
                         role: "status",
                         children: [
                           j
-                            ? i.jsx(Eg, { size: 13 })
+                            ? i.jsx(Check, { size: 13 })
                             : i.jsx("span", { className: "emb-save-dot" }),
                           i.jsx("span", {
                             children: O
@@ -139267,8 +138035,8 @@ function sEe() {
                           : "Expand workbook window",
                         onClick: () => v((R) => !R),
                         children: m
-                          ? i.jsx(bse, { size: 16 })
-                          : i.jsx(vse, { size: 16 }),
+                          ? i.jsx(Minimize2, { size: 16 })
+                          : i.jsx(Maximize2, { size: 16 }),
                       }),
                       i.jsx("button", {
                         type: "button",
@@ -139277,7 +138045,7 @@ function sEe() {
                         onClick: () => {
                           (p(false), v(false));
                         },
-                        children: i.jsx(dn, { size: 17 }),
+                        children: i.jsx(X, { size: 17 }),
                       }),
                     ],
                   }),
@@ -139351,7 +138119,7 @@ function sEe() {
               children: [
                 i.jsx("div", {
                   className: "emb-empty-icon",
-                  children: i.jsx(Kl, { size: 31 }),
+                  children: i.jsx(FileSpreadsheet, { size: 31 }),
                 }),
                 i.jsx("h2", { children: "Workbook closed" }),
                 i.jsxs("p", {
@@ -139364,7 +138132,7 @@ function sEe() {
                 i.jsxs("button", {
                   type: "button",
                   onClick: () => p(true),
-                  children: [i.jsx(og, { size: 16 }), "Reopen ", Wf[a]],
+                  children: [i.jsx(FolderOpen, { size: 16 }), "Reopen ", Wf[a]],
                 }),
               ],
             }),
@@ -139372,7 +138140,10 @@ function sEe() {
             className: "emb-workspace-footer",
             children: [
               i.jsxs("span", {
-                children: [i.jsx(t3, { size: 12 }), "Embedded workbook editor"],
+                children: [
+                  i.jsx(LayoutGrid, { size: 12 }),
+                  "Embedded workbook editor",
+                ],
               }),
               i.jsxs("span", {
                 children: [
@@ -139416,11 +138187,11 @@ function sEe() {
                 "aria-label": "Close example details",
                 autoFocus: true,
                 onClick: () => A(false),
-                children: i.jsx(dn, { size: 18 }),
+                children: i.jsx(X, { size: 18 }),
               }),
               i.jsx("div", {
                 className: "emb-info-icon",
-                children: i.jsx(Iy, { size: 25 }),
+                children: i.jsx(BookOpen, { size: 25 }),
               }),
               i.jsx("p", {
                 className: "emb-section-kicker",
@@ -139441,7 +138212,7 @@ function sEe() {
               i.jsxs("div", {
                 className: "emb-info-detail",
                 children: [
-                  i.jsx(Eg, { size: 16 }),
+                  i.jsx(Check, { size: 16 }),
                   i.jsx("span", {
                     children: O
                       ? "Changes are kept in this tab while browser storage is unavailable."
@@ -139452,7 +138223,7 @@ function sEe() {
               i.jsxs("div", {
                 className: "emb-info-detail",
                 children: [
-                  i.jsx(Kl, { size: 16 }),
+                  i.jsx(FileSpreadsheet, { size: 16 }),
                   i.jsx("span", {
                     children:
                       "The general ledger contains synthetic example data. The draft workbook starts blank.",
@@ -139462,7 +138233,7 @@ function sEe() {
               i.jsxs("div", {
                 className: "emb-info-detail",
                 children: [
-                  i.jsx(Zb, { size: 16 }),
+                  i.jsx(Info, { size: 16 }),
                   i.jsx("span", {
                     children:
                       "AI Assistant uses the local demonstration adapter. No external AI provider is connected.",
@@ -139473,7 +138244,10 @@ function sEe() {
                 type: "button",
                 className: "emb-info-return",
                 onClick: () => A(false),
-                children: [i.jsx(p$, { size: 15 }), "Back to workpapers"],
+                children: [
+                  i.jsx(ArrowLeft, { size: 15 }),
+                  "Back to workpapers",
+                ],
               }),
             ],
           }),
@@ -139494,23 +138268,11 @@ Hq.createRoot(document.getElementById("root")).render(
 );
 
 export {
-  cI as A,
-  Eg as C,
-  lse as F,
-  fI as P,
   Gq as R,
-  Dy as S,
-  sd as T,
   M as W,
-  dn as X,
   uEe as a,
-  Er as c,
-  tw as d,
-  Rse as e,
-  uI as f,
   ax as g,
   cEe as h,
-  s7 as i,
   Lae as k,
   Zm as l,
   dEe as p,
