@@ -525,6 +525,33 @@ export const ExternalSourceError: new (
   code: ExternalSourceErrorCode,
 ) => ExternalSourceErrorInstance;
 
+/**
+ * Records one edit: returns `after` with `revision` one higher than `before`, an event added to
+ * `events` (with an empty change list) and the modified time updated. The SDK's edit functions
+ * call it themselves; use it for an edit you made by hand. Returns `after` unchanged if it is the
+ * same object as `before` or already has a higher revision. Throws a TypeError without an action.
+ */
+export function recordWorkbookChange(
+  before: Workbook,
+  after: Workbook,
+  details: { action: string; actor?: string },
+): Workbook;
+
+/**
+ * Returns the edit functions of the worksheets, cells, tables, rules and calculation areas,
+ * recording their edits under the given actor instead of "Preparer". Throws a TypeError if the
+ * actor is not 1 to 100 characters of text.
+ */
+export function createActorEdits(
+  actor: string,
+): Readonly<
+  typeof import("./sdk/calculation") &
+    typeof import("./sdk/cells") &
+    typeof import("./sdk/rules") &
+    typeof import("./sdk/tables") &
+    typeof import("./sdk/worksheets")
+>;
+
 /** The wider model API, by area. Reference pages are in docs/api/. */
 export * from "./sdk/calculation";
 export * from "./sdk/cells";

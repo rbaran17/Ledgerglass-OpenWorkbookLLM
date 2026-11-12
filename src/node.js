@@ -20,6 +20,9 @@ export * from "./sdk/rules.js";
 export * from "./sdk/tables.js";
 export * from "./sdk/worksheets.js";
 
+/** Recording of edits: see docs/api/README.md, "Edits are recorded". */
+export { createActorEdits, recordWorkbookChange } from "./sdk/recording.js";
+
 /** Node conveniences: files by path, and all calculated values at once. */
 export { readWorkbookFile, writeWorkbookFile } from "./node/files.js";
 export { calculateWorkbookValues } from "./node/values.js";
