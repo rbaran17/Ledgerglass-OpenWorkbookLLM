@@ -5,7 +5,7 @@ import ne from "react";
 import {
   parseFormulaTree,
   listInstalledExtensionFunctions,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   verifyPrintSnapshotGuard,
   builtinFunctionNames,
@@ -35,7 +35,7 @@ import {
   measurePrintLayoutIssues,
   printPaperStyles,
   buildPrintPages,
-} from "./32-drawing-and-chart-export.js";
+} from "./32-drawing-objects-and-printing.js";
 
 function PageSetupDialog(e) {
   const { text, language } = useWorkbookMessages(),

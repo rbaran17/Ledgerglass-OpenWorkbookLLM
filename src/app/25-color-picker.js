@@ -2,7 +2,7 @@ import { ChevronDown, PaintBucket } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { LocalizedText } from "./04-cell-input-paste-and-fill.js";
-import { Wde } from "./24-merge-and-audit-analysis.js";
+import { Wde } from "./24-merge-audit-and-ribbon-helpers.js";
 
 function ColorPickerButton({
   commandId,

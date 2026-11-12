@@ -7,8 +7,8 @@ import {
   fingerprintCanonicalValue,
   normalizeBindingName,
   normalizeDatePolicy,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   serializeTypedKeyValues,
@@ -36,7 +36,7 @@ import {
   knownFunctionNameSet,
   isFormulaInputValue,
   sheetRangeReferencePattern,
-} from "./11-workbook-formats-dialog.js";
+} from "./11-local-workbook-store-and-versions.js";
 
 function inspectFormulaDependencies(e, r) {
   if (!["precedents", "dependents"].includes(r.direction))

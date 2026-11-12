@@ -2,7 +2,7 @@ import {
   FileProcessingError,
   assertImportFileAllowed,
   toFileProcessingError,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
 import {
   computeCrc32,
@@ -18,11 +18,11 @@ import {
   u1,
   validateIsolatedFormatInspection,
   validateWorkbookPackage,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
-import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
+import { sha256HexDigest } from "./01-schemas-date-functions-and-validation.js";
 
-import { fileProcessingErrorMessages } from "./06-analysis-tools.js";
+import { fileProcessingErrorMessages } from "./06-unsupported-marker-and-message-catalog.js";
 import { fileParserWorkerSource } from "./06b-file-parser-worker-source.js";
 
 function workerErrorToFileError(e) {

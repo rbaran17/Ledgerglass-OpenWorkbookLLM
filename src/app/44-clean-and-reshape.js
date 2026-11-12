@@ -1,4 +1,4 @@
-import { stringifyJsonValue } from "./42-combine-populations.js";
+import { stringifyJsonValue } from "./42-combine-populations-and-text-columns.js";
 import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
@@ -7,7 +7,7 @@ import {
   normalizeDatePolicy,
   dateSystemMaxSerial,
   parseDateText,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   findSheetOrThrow,
   calculateWorkbookWithSettings,
@@ -26,7 +26,7 @@ import {
   verifyTransformationPreview,
   selectExceptionFreeRows,
   buildTransformationPreview,
-} from "./16-text-split-tools.js";
+} from "./16-transformation-recipe-engine.js";
 import {
   textCleanupStepLabels,
   describeSplitFieldStep,

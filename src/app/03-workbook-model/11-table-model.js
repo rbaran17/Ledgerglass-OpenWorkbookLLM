@@ -15,7 +15,7 @@ import {
   minRowHeight,
   maxColumnWidth,
   minColumnWidth,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import {
   isDeepFrozenValue,
   copyExtensionCacheEntries,
@@ -24,7 +24,7 @@ import {
   normalizeDatePolicy,
   fingerprintCanonicalValue,
   deepFreezeValue,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 import {
   cloneStyleValue,
   reconcileWorkbookStyleBindings,
@@ -43,7 +43,7 @@ import {
   renameStyleNamespace,
   trimRequiredMetadataText,
 } from "./01-cell-styles-and-themes.js";
-import { validateNumberFormatSettings } from "./02-number-formats.js";
+import { validateNumberFormatSettings } from "./02-formula-function-evaluators.js";
 import {
   assertWorkbookStructureEditable,
   createUniqueWorksheetName,
@@ -85,7 +85,7 @@ import {
   buildExternalSourceRefreshState,
   verifyConsolidationEvidence,
   zie,
-} from "./05-consolidation-and-sources.js";
+} from "./05-formula-engine-and-name-operations.js";
 import {
   validateAnalysisReport,
   validateDataModelReport,
@@ -123,7 +123,7 @@ import {
   parseRangeAddress,
   validateSavedWhatIfAnalyses,
   analysisOutputEvidenceSchema,
-} from "./07-conditional-formatting.js";
+} from "./07-conditional-rules-worksheet-features.js";
 import {
   measureRangeArea,
   normalizeTableDefinitions,
@@ -141,7 +141,7 @@ import {
   filterSourceRows,
   normalizePivotDefinition,
   validateDrawingObjects,
-} from "./08-chart-model.js";
+} from "./08-table-pivot-query-definitions.js";
 import {
   updateConditionalFormatRules,
   calculateWorkbookWithSettings,
@@ -162,7 +162,7 @@ import {
   aggregatePivotRows,
   applyNamedStyleChange,
   validateReviewedTableHeaders,
-} from "./10-print-layout.js";
+} from "./10-table-filters-and-pivot-views.js";
 
 function createWorksheetRecord(e) {
   return !e.trim() || e.length > 31 || /[\\/\[\]*?:]/.test(e)

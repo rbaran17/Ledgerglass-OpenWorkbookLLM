@@ -20,12 +20,12 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { PivotStatusBadge } from "./29-conditional-formatting-dialog.js";
+import { PivotStatusBadge } from "./29-worksheet-tools-and-pivot-panels.js";
 import {
   pivotShowAsLabels,
   PivotChartFigure,
   formatPivotGroupLabel,
-} from "./30-table-and-pivot-builder.js";
+} from "./30-table-tools-dialog.js";
 
 function PivotExplorerDialog(e) {
   const { text, language } = useWorkbookMessages(),

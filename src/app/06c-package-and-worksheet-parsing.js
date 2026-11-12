@@ -12,13 +12,16 @@ import {
   dateSystemMaxSerial,
   dateSystemSerialOffset,
   sha256HexDigest,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   excelMessagePatterns,
   fileProcessingErrorMessages,
   unsupportedXlsxMarkers,
-} from "./06-analysis-tools.js";
-import { fileImportLimits, workbookLimits } from "./02-financial-functions.js";
+} from "./06-unsupported-marker-and-message-catalog.js";
+import {
+  fileImportLimits,
+  workbookLimits,
+} from "./02-text-and-financial-functions.js";
 import Ox from "saxes";
 import { Unzip, UnzipInflate, strFromU8, strToU8, zipSync } from "fflate";
 
@@ -66,7 +69,7 @@ function validateIsolatedFormatInspection(e, r, t) {
   });
 }
 
-/* From 07-xlsx-archive-reader.js */
+/* From 07-file-import-and-worker-dispatch.js */
 const unsupportedArrayFormulaReasons = new Set([
   ...unsupportedXlsxMarkers,
   "Legacy CSE array formula",
@@ -877,7 +880,7 @@ function convertTemplateToXlsx(e, r, t) {
   return zipSync(n);
 }
 
-/* From 08-xlsx-export-and-preservation.js */
+/* From 08-xlsx-import-export-and-preservation.js */
 const z2 =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/";
 const customPropertiesContentType =
@@ -1911,7 +1914,7 @@ function parseSeriesSeedDate(e, r = "1900") {
   );
 }
 
-/* From 07-xlsx-archive-reader.js */
+/* From 07-file-import-and-worker-dispatch.js */
 class FileProcessingError extends Error {
   constructor(r, t = fileProcessingErrorMessages[r]) {
     (super(t), (this.code = r), (this.name = "FileProcessingError"));
@@ -1975,7 +1978,7 @@ function assertImportFileAllowed(e, r, t) {
     );
 }
 
-/* From 08-xlsx-export-and-preservation.js */
+/* From 08-xlsx-import-export-and-preservation.js */
 function parseDelimitedDateText(e, r, t = "1900") {
   const n =
     /^(\d{1,4})([-/])(\d{1,2})\2(\d{1,4})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(

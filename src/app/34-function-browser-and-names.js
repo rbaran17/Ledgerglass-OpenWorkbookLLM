@@ -4,7 +4,7 @@ import ne from "react";
 import {
   parseFormulaTree,
   dateFunctionNames,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   databaseFunctionNames,
   builtinFunctionNames,

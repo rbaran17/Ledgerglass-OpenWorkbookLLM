@@ -1,7 +1,7 @@
 import { Pv, _t, columnIndexToLetters } from "../03-workbook-model.js";
 import i from "react/jsx-runtime";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
-import { DrawingObjectOverlay } from "../32-drawing-and-chart-export.js";
+import { DrawingObjectOverlay } from "../32-drawing-objects-and-printing.js";
 import { Tp } from "../53-find-replace-go-to.js";
 
 function createGridPaneRenderer({

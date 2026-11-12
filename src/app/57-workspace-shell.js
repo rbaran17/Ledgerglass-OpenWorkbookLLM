@@ -26,9 +26,9 @@ import {
   normalizeWorkbookInput,
   createBlankWorkbook,
 } from "./03-workbook-model.js";
-import { createLocalWorkbookStore } from "./11-workbook-formats-dialog.js";
-import { buildLocalDemoProposal } from "./20-calculation-options-and-sources.js";
-import { buildSampleLedgerWorkbook } from "./24-merge-and-audit-analysis.js";
+import { createLocalWorkbookStore } from "./11-local-workbook-store-and-versions.js";
+import { buildLocalDemoProposal } from "./20-calculation-options-and-assistant.js";
+import { buildSampleLedgerWorkbook } from "./24-merge-audit-and-ribbon-helpers.js";
 import {
   workbookLockName,
   saveWorkbookWithLock,

@@ -10,7 +10,7 @@ import {
 import { renderChecksPanel } from "./render-checks-panel.js";
 import { renderAssistantPanel } from "./render-assistant-panel.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
-import { WorkbookCapacityLimits } from "../20-calculation-options-and-sources.js";
+import { WorkbookCapacityLimits } from "../20-calculation-options-and-assistant.js";
 
 function renderSidePanel({
   adapter,

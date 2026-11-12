@@ -1,6 +1,6 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
+import { sha256HexDigest } from "./01-schemas-date-functions-and-validation.js";
 import {
   calculateWorkbookWithSettings,
   decodeAutomationArtifact,
@@ -14,14 +14,14 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { importAutomationFile } from "./07-xlsx-archive-reader.js";
+import { importAutomationFile } from "./07-file-import-and-worker-dispatch.js";
 import {
   retainSourceArtifact,
   verifyAutomationInspection,
-} from "./08-xlsx-export-and-preservation.js";
+} from "./08-xlsx-import-export-and-preservation.js";
 import { useOperationScope } from "./09-workbook-links.js";
-import { validateAssistantFormula } from "./20-calculation-options-and-sources.js";
-import { applyWorkbookChange } from "./24-merge-and-audit-analysis.js";
+import { validateAssistantFormula } from "./20-calculation-options-and-assistant.js";
+import { applyWorkbookChange } from "./24-merge-audit-and-ribbon-helpers.js";
 import {
   splitVbaStatements,
   vbaStringLiteralPattern,
@@ -29,7 +29,7 @@ import {
   VbaAssignmentParser,
   createVbaSyntaxError,
   parseVbaAssignmentValue,
-} from "./40-what-if-analysis.js";
+} from "./40-what-if-and-delimited-dialogs.js";
 
 function parseVbaCommands(e) {
   const r = [],

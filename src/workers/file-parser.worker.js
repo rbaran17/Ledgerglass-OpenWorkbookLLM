@@ -27,12 +27,12 @@ import {
   sha256HexDigest,
   validateExtensionState,
   validateSavedRecipeMetadata,
-} from "../app/01-core-schemas-and-hashing.js";
+} from "../app/01-schemas-date-functions-and-validation.js";
 import {
   fileImportLimits,
   supportedFontFamilies,
   workbookLimits,
-} from "../app/02-financial-functions.js";
+} from "../app/02-text-and-financial-functions.js";
 import {
   assertKnownStyleKeys,
   borderLineStyles,
@@ -84,7 +84,7 @@ import {
   importFormulaCacheEvidence,
   verifyConsolidationEvidence,
   zie as dR,
-} from "../app/03-workbook-model/05-consolidation-and-sources.js";
+} from "../app/03-workbook-model/05-formula-engine-and-name-operations.js";
 import {
   P2,
   alternateFormatExtensions,
@@ -124,7 +124,7 @@ import {
   validateFormulaWatches,
   validateSavedWhatIfAnalyses,
   validateWorksheetFeatures,
-} from "../app/03-workbook-model/07-conditional-formatting.js";
+} from "../app/03-workbook-model/07-conditional-rules-worksheet-features.js";
 import {
   Cn as Ks,
   normalizeTableDefinitions,
@@ -133,7 +133,7 @@ import {
   validateColumnName,
   validateDrawingObjects,
   validateTableName,
-} from "../app/03-workbook-model/08-chart-model.js";
+} from "../app/03-workbook-model/08-table-pivot-query-definitions.js";
 import {
   calculateWorkbookWithSettings,
   calculationReportSchema,
@@ -145,7 +145,7 @@ import {
   createDefaultPageSetup,
   validatePageSetup,
   validateSavedFilterViews,
-} from "../app/03-workbook-model/10-print-layout.js";
+} from "../app/03-workbook-model/10-table-filters-and-pivot-views.js";
 import {
   normalizeCellRecord,
   normalizeCellRecordInput,
@@ -194,16 +194,16 @@ import {
   validateWorkbookPackage,
   validateXlsxNumericValue,
   xlsxExchangeSupportNotice,
-} from "../app/06c-file-format-core.js";
+} from "../app/06c-package-and-worksheet-parsing.js";
 
-import { buildExternalSourceRefreshState } from "../app/03-workbook-model/05-consolidation-and-sources.js";
-import { validateFreezePanes } from "../app/03-workbook-model/07-conditional-formatting.js";
+import { buildExternalSourceRefreshState } from "../app/03-workbook-model/05-formula-engine-and-name-operations.js";
+import { validateFreezePanes } from "../app/03-workbook-model/07-conditional-rules-worksheet-features.js";
 import {
   FileProcessingError,
   assertImportFileAllowed,
   parseDelimitedCellValue,
   toFileProcessingError,
-} from "../app/06c-file-format-core.js";
+} from "../app/06c-package-and-worksheet-parsing.js";
 
 var T8 = Object.create;
 

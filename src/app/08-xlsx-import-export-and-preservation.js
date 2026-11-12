@@ -1,4 +1,4 @@
-import { parseDelimitedCellValue } from "./06c-file-format-core.js";
+import { parseDelimitedCellValue } from "./06c-package-and-worksheet-parsing.js";
 
 import {
   F$,
@@ -40,7 +40,7 @@ import {
   validateWorkbookPackage,
   validateXlsxNumericValue,
   xlsxExchangeSupportNotice,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
 import {
   strFromU8,
@@ -57,8 +57,11 @@ import {
   sha256HexDigest,
   normalizeDatePolicy,
   dateSystemMaxSerial,
-} from "./01-core-schemas-and-hashing.js";
-import { fileImportLimits, workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import {
+  fileImportLimits,
+  workbookLimits,
+} from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   defaultRowHeightOf,
@@ -94,7 +97,7 @@ import {
   inspectionSignatureCache,
   describeImportSource,
   readGeneratedTemplateBuffer,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 
 async function exportXltxTemplate(e) {
   const r = await exportWorkbookToXlsx(e),

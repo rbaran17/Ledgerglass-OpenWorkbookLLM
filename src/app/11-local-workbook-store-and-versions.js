@@ -7,8 +7,8 @@ import {
   deepFreezeValue,
   measureSerializedBytes,
   defineDataPropertyByKey,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   builtinFunctionNames,
   requireAlternateFormatOriginal,
@@ -27,11 +27,11 @@ import {
   describeImportSource,
   templateConversionRoutes,
   detectSupportedFileFormats,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 import {
   exportXltxTemplate,
   exportWorkbookToXlsx,
-} from "./08-xlsx-export-and-preservation.js";
+} from "./08-xlsx-import-export-and-preservation.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   validateConvertedSource,

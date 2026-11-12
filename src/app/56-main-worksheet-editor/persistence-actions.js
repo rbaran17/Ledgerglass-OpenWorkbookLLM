@@ -1,11 +1,11 @@
-import { WorkbookRevisionConflictError } from "../11-workbook-formats-dialog.js";
+import { WorkbookRevisionConflictError } from "../11-local-workbook-store-and-versions.js";
 import {
   chainMaybePromise,
   isPromiseLike,
 } from "../55-external-source-refresh.js";
 import { findRecoverableCheckpoint } from "../54-workbook-save-conflicts.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
-import { encodeNativeWorkbook } from "../08-xlsx-export-and-preservation.js";
+import { encodeNativeWorkbook } from "../08-xlsx-import-export-and-preservation.js";
 import {
   buildCanonicalWorkbookSnapshot,
   carryCalculatorRecordForward,

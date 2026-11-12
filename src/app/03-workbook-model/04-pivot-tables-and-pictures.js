@@ -3,12 +3,12 @@ import {
   throwWorkbookError,
 } from "./01-cell-styles-and-themes.js";
 import { isNullOrEmptyValue } from "./03-defined-names.js";
-import { boundedTextSchema } from "../01-core-schemas-and-hashing.js";
-import { flattenNestedValues } from "../02-financial-functions.js";
+import { boundedTextSchema } from "../01-schemas-date-functions-and-validation.js";
+import { flattenNestedValues } from "../02-text-and-financial-functions.js";
 import {
   workbookLimits,
   supportedFinancialFunctionNames,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import { strToU8 } from "fflate";
 import {
   string,
@@ -28,7 +28,7 @@ import {
   supportedFunctionNames,
   normalizeFunctionName,
   parseFormulaTree,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 import { assertSheetUnprotected } from "./01-cell-styles-and-themes.js";
 import {
   FormulaParser,
@@ -38,7 +38,7 @@ import {
   significanceTestFunctionNames,
   ownedLookupFunctionNames,
   modernFunctionNames,
-} from "./02-number-formats.js";
+} from "./02-formula-function-evaluators.js";
 import {
   definedNameScopeKey,
   hashPictureBytes,

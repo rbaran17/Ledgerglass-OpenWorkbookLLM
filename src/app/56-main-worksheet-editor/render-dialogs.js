@@ -9,29 +9,29 @@ import { FindReplaceDialog } from "../53-find-replace-go-to.js";
 import {
   ConditionalFormattingRulesManager,
   FormatCellsDialog,
-} from "../23-format-cells-dialog.js";
+} from "../23-format-cells-and-conditional-formatting.js";
 import { ThemesAndCellStylesDialog } from "../22-themes-and-cell-styles.js";
-import { MergeCellsPreviewDialog } from "../24-merge-and-audit-analysis.js";
-import { M4e } from "../48-format-cells-and-move.js";
+import { MergeCellsPreviewDialog } from "../24-merge-audit-and-ribbon-helpers.js";
+import { M4e } from "../48-move-cells-and-reference-repair.js";
 import {
   OutlineToolsPanel,
   ReviewToolsPanel,
-} from "../49-outlines-and-comments.js";
+} from "../49-review-tools-and-outlines.js";
 import { PasteSpecialDialog } from "../47-fill-and-paste-special.js";
 import {
   CustomSortDialog,
   WorksheetTabBar,
 } from "../45-sorting-and-worksheets.js";
 import { WorkbookManagerDialog } from "../46-workbook-manager.js";
-import { TableToolsDialog } from "../30-table-and-pivot-builder.js";
-import { PivotExplorerDialog } from "../31-pivot-explore-and-slicers.js";
-import { PicturePropertiesDialog } from "../32-drawing-and-chart-export.js";
+import { TableToolsDialog } from "../30-table-tools-dialog.js";
+import { PivotExplorerDialog } from "../31-pivot-explorer-and-charts.js";
+import { PicturePropertiesDialog } from "../32-drawing-objects-and-printing.js";
 import { PageSetupDialog } from "../33-page-setup-and-print.js";
 import {
   CalculationInspectorDialog,
   EvaluateFormulaDialog,
   FormulaCompatibilityDialog,
-} from "../35-formula-compatibility-report.js";
+} from "../35-formula-inspection-and-compatibility.js";
 import { FunctionAndNameDialog } from "../34-function-browser-and-names.js";
 import { FilterViewsDialog } from "../19-filter-views-dialog.js";
 import {
@@ -43,8 +43,8 @@ import { DataAnalysisDialog } from "../38-data-analysis-dialog.js";
 import { AddInsAndCustomFunctionsDialog } from "../05-add-ins-and-custom-functions.js";
 import { WorkbookLinksDialog } from "../09-workbook-links.js";
 import { SourceImportDialog } from "../10-source-import-dialog.js";
-import { FormatConversionDialog } from "../11-workbook-formats-dialog.js";
-import { ReportOutputsDialog } from "../39-report-outputs.js";
+import { FormatConversionDialog } from "../11-local-workbook-store-and-versions.js";
+import { ReportOutputsDialog } from "../39-report-outputs-and-what-if.js";
 import { DataModelDialog } from "../15-data-model-dialog.js";
 import { PatternCheckDialog } from "../51-pattern-checks-and-citations.js";
 import {
@@ -52,26 +52,26 @@ import {
   formatOccupiedRangeAddress,
 } from "../03-workbook-model.js";
 import { AgingScheduleScreen } from "../21-aging-and-materiality-screens.js";
-import { MaterialityRiskScreen } from "../50-materiality-screen.js";
+import { MaterialityRiskScreen } from "../50-materiality-screen-and-pattern-checks.js";
 import { WorkbookComparisonDialog } from "../52-workbook-comparison.js";
-import { WhatIfAnalysisDialog } from "../40-what-if-analysis.js";
+import { WhatIfAnalysisDialog } from "../40-what-if-and-delimited-dialogs.js";
 import {
   FormulaWatchWindow,
   GoalSeekDialog,
 } from "../36-watch-window-and-goal-seek.js";
-import { CalculationOptionsDialog } from "../20-calculation-options-and-sources.js";
-import { DataToolDialogRouter } from "../29-conditional-formatting-dialog.js";
+import { CalculationOptionsDialog } from "../20-calculation-options-and-assistant.js";
+import { DataToolDialogRouter } from "../29-worksheet-tools-and-pivot-panels.js";
 import {
   ConsolidationDialog,
   saveBlobToFile,
 } from "../13-consolidation-dialog.js";
-import { encodeNativeWorkbook } from "../08-xlsx-export-and-preservation.js";
-import { importAutomationFile } from "../07-xlsx-archive-reader.js";
+import { encodeNativeWorkbook } from "../08-xlsx-import-export-and-preservation.js";
+import { importAutomationFile } from "../07-file-import-and-worker-dispatch.js";
 import { TransformationRecipesDialog } from "../18-transformation-recipes-dialog.js";
 import {
   CombinePopulationsDialog,
   TextToColumnsDialog,
-} from "../42-combine-populations.js";
+} from "../42-combine-populations-and-text-columns.js";
 import { TextCleanupDialog } from "../43-text-cleanup.js";
 import { CleanAndReshapeDialog } from "../44-clean-and-reshape.js";
 import { DuplicateReviewDialog } from "../28-duplicate-review-and-structure.js";

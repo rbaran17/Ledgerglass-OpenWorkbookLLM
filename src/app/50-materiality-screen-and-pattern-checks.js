@@ -1,6 +1,6 @@
 import { listRangeColumnIndexes } from "./21-aging-and-materiality-screens.js";
 import { throwErrorMessage, isNullOrEmptyValue } from "./03-workbook-model.js";
-import { cloneStructuredValue } from "./11-workbook-formats-dialog.js";
+import { cloneStructuredValue } from "./11-local-workbook-store-and-versions.js";
 
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
@@ -15,7 +15,7 @@ import {
   literal,
   object,
 } from "zod";
-import { sha256HexDigest } from "./01-core-schemas-and-hashing.js";
+import { sha256HexDigest } from "./01-schemas-date-functions-and-validation.js";
 import {
   findRowOrigin,
   parseRangeAddress,
@@ -29,7 +29,7 @@ import {
 import {
   importNativeJsonFile,
   toFileProcessingError,
-} from "./07-xlsx-archive-reader.js";
+} from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import {
   materialityScreenLimits,
@@ -42,7 +42,7 @@ import {
 import {
   comparatorSymbols,
   formatCellValueLabel,
-} from "./49-outlines-and-comments.js";
+} from "./49-review-tools-and-outlines.js";
 
 function MaterialityRiskScreen(e) {
   const { text, language } = useWorkbookMessages(),

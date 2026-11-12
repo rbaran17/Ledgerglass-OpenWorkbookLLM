@@ -4,7 +4,7 @@ import {
   failWithMessage,
 } from "./03-workbook-model.js";
 import { formatCellAddress } from "./04-cell-input-paste-and-fill.js";
-import { formatRangeCornerCells } from "./08-xlsx-export-and-preservation.js";
+import { formatRangeCornerCells } from "./08-xlsx-import-export-and-preservation.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";

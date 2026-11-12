@@ -6,7 +6,7 @@ import {
   serialToDateParts,
   dateSystemMaxSerial,
   parseDateText,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 
 function solveRateCandidates(e, r, t = financialSolverLimits.minRate) {
   const n = Math.log1p(t),

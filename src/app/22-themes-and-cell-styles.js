@@ -1,11 +1,11 @@
-import { cloneStructuredValue } from "./11-workbook-formats-dialog.js";
+import { cloneStructuredValue } from "./11-local-workbook-store-and-versions.js";
 import i from "react/jsx-runtime";
 import ne from "react";
 import { X } from "lucide-react";
 import {
   maxSelectionAreas,
   supportedFontFamilies,
-} from "./02-financial-functions.js";
+} from "./02-text-and-financial-functions.js";
 import {
   cellStyleToCss,
   getImportedNumberFormatWarning,

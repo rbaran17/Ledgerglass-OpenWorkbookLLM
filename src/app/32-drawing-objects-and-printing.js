@@ -41,16 +41,16 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { importPictureFile } from "./07-xlsx-archive-reader.js";
+import { importPictureFile } from "./07-file-import-and-worker-dispatch.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
 import { CellValuePreview } from "./22-themes-and-cell-styles.js";
-import { ConditionalFormatIndicator } from "./23-format-cells-dialog.js";
+import { ConditionalFormatIndicator } from "./23-format-cells-and-conditional-formatting.js";
 import {
   ChartReportSvg,
   downloadTextFile,
   ChartSettingsPanel,
   ChartPreviewFrame,
-} from "./31-pivot-explore-and-slicers.js";
+} from "./31-pivot-explorer-and-charts.js";
 
 function ChartInspectionPanel({
   report,

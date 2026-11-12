@@ -5,13 +5,13 @@ import {
   parseSeriesSeedDate,
   s$,
   throwDateSeriesRangeError,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
 import {
   formatCellAddress,
   maxExcelDateSerial,
   utcDateFromParts,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
 import { isPlainObjectValue, throwWorkbookError } from "./03-workbook-model.js";
 import ne from "react";
@@ -31,8 +31,8 @@ import {
   dateSystemSerialOffset,
   dateSystemMaxSerial,
   listInstalledExtensionFunctions,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   formatNumberWithPattern,
   evaluateWorkbookFormulas,

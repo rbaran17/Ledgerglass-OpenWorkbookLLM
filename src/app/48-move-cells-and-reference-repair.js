@@ -3,7 +3,7 @@ import {
   eI,
   formatCellAddress,
 } from "./04-cell-input-paste-and-fill.js";
-import { isFormulaInputValue } from "./11-workbook-formats-dialog.js";
+import { isFormulaInputValue } from "./11-local-workbook-store-and-versions.js";
 import { formatSortRangeAddress } from "./44-clean-and-reshape.js";
 import {
   rangesIntersect,
@@ -14,7 +14,7 @@ import {
 import { X, ArrowRight } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { workbookLimits } from "./02-financial-functions.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   summarizeNumberFormat,
   formatNumberWithPattern,

@@ -1,4 +1,4 @@
-import { x7 } from "../08-xlsx-export-and-preservation.js";
+import { x7 } from "../08-xlsx-import-export-and-preservation.js";
 import { createCutSourceSnapshot } from "../47-fill-and-paste-special.js";
 import {
   buildClipboardSnapshot,
@@ -6,7 +6,7 @@ import {
   parseDateCellEntry,
 } from "../04-cell-input-paste-and-fill.js";
 import { _t, columnIndexToLetters } from "../03-workbook-model.js";
-import { workbookLimits } from "../02-financial-functions.js";
+import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { wy } from "../55-external-source-refresh.js";
 
 function createClipboardAndFindActions({

@@ -3,7 +3,7 @@ import {
   recordSourceInspection,
   sourceInspectionRecords,
   validateIsolatedFormatInspection,
-} from "./06c-file-format-core.js";
+} from "./06c-package-and-worksheet-parsing.js";
 
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -15,7 +15,7 @@ import {
   fingerprintCanonicalValue,
   validateExtensionValue,
   normalizeDatePolicy,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   formatExternalSheetReference,
   rewriteFormulaReferences,

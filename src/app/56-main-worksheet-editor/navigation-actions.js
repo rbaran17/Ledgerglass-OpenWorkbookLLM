@@ -1,7 +1,7 @@
 import {
   applyWorkbookChange,
   recordCrossWorkbookImport,
-} from "../24-merge-and-audit-analysis.js";
+} from "../24-merge-audit-and-ribbon-helpers.js";
 import {
   Pv,
   _t,
@@ -16,7 +16,7 @@ import {
 import { logicalToPhysicalPixels } from "../53-find-replace-go-to.js";
 import { wy } from "../55-external-source-refresh.js";
 import { parseGoToReference } from "../22-themes-and-cell-styles.js";
-import { isDeepFrozenValue } from "../01-core-schemas-and-hashing.js";
+import { isDeepFrozenValue } from "../01-schemas-date-functions-and-validation.js";
 
 function createNavigationActions({
   actor,

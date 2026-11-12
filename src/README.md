@@ -3,14 +3,14 @@
 The original TypeScript project was lost. This directory was recovered from the
 compiled application in `dist/` and is now the source the build uses.
 
-| Path | Contents |
-| --- | --- |
-| `main.js` | The entry: loads the application modules in order and re-exports what the assistant panel needs |
-| `app/` | The application, split into 57 ordered modules; see [`app/README.md`](app/README.md) for what each one holds |
-| `assistant/AssistantChat.js` | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported |
-| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source |
-| `workers/` | File-parser and calculation worker sources, bundled at build time and started as Blob workers |
-| `styles/` | Workbook and assistant stylesheets |
+| Path                                 | Contents                                                                                                     |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `main.js`                            | The entry: loads the application modules in order and re-exports what the assistant panel needs              |
+| `app/`                               | The application, split into 57 ordered modules; see [`app/README.md`](app/README.md) for what each one holds |
+| `assistant/AssistantChat.js`         | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported                |
+| `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source                                    |
+| `workers/`                           | File-parser and calculation worker sources, bundled at build time and started as Blob workers                |
+| `styles/`                            | Workbook and assistant stylesheets                                                                           |
 
 ## What to expect
 
@@ -40,7 +40,7 @@ compiled application in `dist/` and is now the source the build uses.
 - The workers (`workers/*.worker.js`) are bundled by
   `scripts/worker-source-plugin.mjs`. They import the core model from
   `app/01-…`, `app/02-…`, `app/03-workbook-model/`, `app/06-…` and
-  `app/06c-file-format-core.js` instead of carrying their own copies: the
+  `app/06c-package-and-worksheet-parsing.js` instead of carrying their own copies: the
   calculation worker is about 100 lines (its message handler) and the file
   parser about 3,900 (parsing that only runs there, still with minified
   names). Those modules must stay free of React, DOM access and

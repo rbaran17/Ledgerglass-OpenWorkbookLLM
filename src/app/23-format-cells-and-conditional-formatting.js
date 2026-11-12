@@ -1,9 +1,9 @@
 import { rangesOverlap } from "./15-data-model-dialog.js";
-import { countRangeCells } from "./08-xlsx-export-and-preservation.js";
+import { countRangeCells } from "./08-xlsx-import-export-and-preservation.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { supportedFontFamilies } from "./02-financial-functions.js";
+import { supportedFontFamilies } from "./02-text-and-financial-functions.js";
 import {
   assertConditionalFormatPreviewCurrent,
   formatNumberWithPattern,

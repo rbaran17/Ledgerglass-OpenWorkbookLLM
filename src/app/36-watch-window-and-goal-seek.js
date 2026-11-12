@@ -1,10 +1,10 @@
 import { isFiniteNumber } from "./03-workbook-model.js";
-import { buildCompositeKey } from "./11-workbook-formats-dialog.js";
+import { buildCompositeKey } from "./11-local-workbook-store-and-versions.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { fingerprintCanonicalValue } from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+import { fingerprintCanonicalValue } from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   B2,
   enumerateSelectionCells,
@@ -24,11 +24,11 @@ import {
   formatCellEntryForEdit,
   validateLocalizedNumberEntry,
 } from "./04-cell-input-paste-and-fill.js";
-import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import { inspectFormulaDependencies } from "./12-consolidation-and-dependency-inspection.js";
 import {
   normalizeFormulaWatchContext,
   classifyWatchedCell,
-} from "./35-formula-compatibility-report.js";
+} from "./35-formula-inspection-and-compatibility.js";
 
 function applyFormulaWatchAction(e, r, t = {}) {
   if (t.readOnly)

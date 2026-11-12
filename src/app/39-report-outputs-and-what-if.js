@@ -25,13 +25,13 @@ import {
   LocalizedText,
   validateLocalizedNumberEntry,
 } from "./04-cell-input-paste-and-fill.js";
-import { importAutomationFile } from "./07-xlsx-archive-reader.js";
+import { importAutomationFile } from "./07-file-import-and-worker-dispatch.js";
 import {
   retainEmbeddedObjectInventory,
   inspectEmbeddedObjects,
-} from "./08-xlsx-export-and-preservation.js";
+} from "./08-xlsx-import-export-and-preservation.js";
 import { useCancellableOperation } from "./09-workbook-links.js";
-import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import { inspectFormulaDependencies } from "./12-consolidation-and-dependency-inspection.js";
 import {
   describeReportOutputStatus,
   publishReportOutput,

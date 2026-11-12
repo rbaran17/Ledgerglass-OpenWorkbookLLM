@@ -8,7 +8,7 @@ import {
   normalizeFunctionName,
   tokenizeFormulaText,
   normalizeBindingName,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   rewriteFormulaReferences,
   frozenConversionUnits,
@@ -22,7 +22,7 @@ import {
   useWorkbookMessages,
   LocalizedText,
 } from "./04-cell-input-paste-and-fill.js";
-import { inspectFormulaDependencies } from "./12-formula-dependency-inspector.js";
+import { inspectFormulaDependencies } from "./12-consolidation-and-dependency-inspection.js";
 import {
   nameScanLimits,
   buildFunctionCatalogEntry,

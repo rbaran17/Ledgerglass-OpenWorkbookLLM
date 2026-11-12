@@ -1,19 +1,19 @@
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
-import { defineDataPropertyByKey } from "./01-core-schemas-and-hashing.js";
+import { defineDataPropertyByKey } from "./01-schemas-date-functions-and-validation.js";
 import { automationLimits, columnIndexToLetters } from "./03-workbook-model.js";
 import {
   useWorkbookMessages,
   LocalizedText,
   localizeDecimalPoint,
 } from "./04-cell-input-paste-and-fill.js";
-import { importDelimitedFile } from "./07-xlsx-archive-reader.js";
+import { importDelimitedFile } from "./07-file-import-and-worker-dispatch.js";
 import {
   delimitedImportDefaults,
   exportWorksheetToCsv,
   getWorksheetUsedRange,
-} from "./08-xlsx-export-and-preservation.js";
+} from "./08-xlsx-import-export-and-preservation.js";
 import { useOperationScope } from "./09-workbook-links.js";
 import {
   buildWhatIfPreview,
@@ -24,7 +24,7 @@ import {
   buildWhatIfReportRows,
   isWhatIfAnalysisInScope,
   parseAssumptionNumbers,
-} from "./39-report-outputs.js";
+} from "./39-report-outputs-and-what-if.js";
 
 function WhatIfAnalysisDialog(e) {
   const { text, language, entryLocale } = useWorkbookMessages(),

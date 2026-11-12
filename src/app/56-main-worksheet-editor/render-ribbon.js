@@ -1,7 +1,7 @@
 import i from "react/jsx-runtime";
 import { WorkbookRibbon } from "../26-workbook-ribbon.js";
 import { _t, applyAutoSum, createBlankWorkbook } from "../03-workbook-model.js";
-import { buildSampleLedgerWorkbook } from "../24-merge-and-audit-analysis.js";
+import { buildSampleLedgerWorkbook } from "../24-merge-audit-and-ribbon-helpers.js";
 import {
   applyCellPreview,
   buildFillPreview,

@@ -6,8 +6,8 @@ import {
   canonicalJsonStringify,
   recipeStoreFormatId,
   normalizeDatePolicy,
-} from "./01-core-schemas-and-hashing.js";
-import { workbookLimits } from "./02-financial-functions.js";
+} from "./01-schemas-date-functions-and-validation.js";
+import { workbookLimits } from "./02-text-and-financial-functions.js";
 import {
   assertWorkbookStructureEditable,
   createWorksheetRecord,
@@ -20,14 +20,14 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { inspectOutputNameSafety } from "./12-formula-dependency-inspector.js";
+import { inspectOutputNameSafety } from "./12-consolidation-and-dependency-inspection.js";
 import {
   executeRecipeStep,
   resolveRecipeSourceTable,
   validateRecipeOutputTable,
   profileFieldTypes,
   buildFieldControlTotals,
-} from "./16-text-split-tools.js";
+} from "./16-transformation-recipe-engine.js";
 
 function runTransformationRecipe(e, r, t = {}) {
   const n = parseTransformationRecipe(r),

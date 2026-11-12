@@ -12,7 +12,7 @@ import {
 } from "../51-pattern-checks-and-citations.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { Check } from "lucide-react";
-import { validateProposedCalculation } from "../20-calculation-options-and-sources.js";
+import { validateProposedCalculation } from "../20-calculation-options-and-assistant.js";
 
 function renderAssistantPanel({
   adapter,

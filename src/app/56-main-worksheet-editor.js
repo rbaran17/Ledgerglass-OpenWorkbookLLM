@@ -25,7 +25,7 @@ import {
   minRowHeight,
   maxColumnWidth,
   minColumnWidth,
-} from "./02-financial-functions.js";
+} from "./02-text-and-financial-functions.js";
 import {
   defaultRowHeightOf,
   evaluateConditionalFormatRules,
@@ -57,7 +57,7 @@ import {
 } from "./04-cell-input-paste-and-fill.js";
 import { CustomFunctionReviewBanner } from "./05-add-ins-and-custom-functions.js";
 
-import { exportWorksheetToCsv } from "./08-xlsx-export-and-preservation.js";
+import { exportWorksheetToCsv } from "./08-xlsx-import-export-and-preservation.js";
 import {
   useOperationScope,
   WorkbookLinkStatusBadge,
@@ -67,7 +67,7 @@ import { XlsxConversionReview } from "./10-source-import-dialog.js";
 import {
   WorkbookRevisionConflictError,
   createWorkbookSession,
-} from "./11-workbook-formats-dialog.js";
+} from "./11-local-workbook-store-and-versions.js";
 import { ConsolidationStatusBanner } from "./13-consolidation-dialog.js";
 import {
   DataModelSnapshotNotice,
@@ -79,18 +79,18 @@ import {
   GridContextMenu,
   validateProposedCalculation,
   buildAssistantSelectionContext,
-} from "./20-calculation-options-and-sources.js";
+} from "./20-calculation-options-and-assistant.js";
 
 import { ConnectionStatusNotice } from "./22-themes-and-cell-styles.js";
 
-import { useCalculationRun } from "./24-merge-and-audit-analysis.js";
+import { useCalculationRun } from "./24-merge-audit-and-ribbon-helpers.js";
 
 import { AnalysisSnapshotNotice } from "./38-data-analysis-dialog.js";
 
-import { DelimitedImportExportDialog } from "./40-what-if-analysis.js";
+import { DelimitedImportExportDialog } from "./40-what-if-and-delimited-dialogs.js";
 
 import { FillPreviewDialog } from "./47-fill-and-paste-special.js";
-import { MoveCellsDialog } from "./48-format-cells-and-move.js";
+import { MoveCellsDialog } from "./48-move-cells-and-reference-repair.js";
 
 import { buildAnswerCitations } from "./51-pattern-checks-and-citations.js";
 

@@ -40,7 +40,7 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { applyStructuralEdit } from "./27-data-validation-dialog.js";
+import { applyStructuralEdit } from "./27-validation-and-structural-edits.js";
 import {
   assertSortWorkbookAuthorized,
   buildAllowedSheetKey,

@@ -9,7 +9,7 @@ import {
 } from "../03-workbook-model.js";
 import { LocalizedText } from "../04-cell-input-paste-and-fill.js";
 import { Filter, Search, X } from "lucide-react";
-import { PivotResultsStatusBar } from "../29-conditional-formatting-dialog.js";
+import { PivotResultsStatusBar } from "../29-worksheet-tools-and-pivot-panels.js";
 import { SplitPaneLayout } from "../53-find-replace-go-to.js";
 import { renderSheetTabs } from "./render-sheet-tabs.js";
 import { renderStatusBar } from "./render-status-bar.js";

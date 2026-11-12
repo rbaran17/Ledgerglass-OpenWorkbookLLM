@@ -1,5 +1,5 @@
-import { hasOnlyAllowedKeys } from "./12-formula-dependency-inspector.js";
-import { isPlainRecord } from "./11-workbook-formats-dialog.js";
+import { hasOnlyAllowedKeys } from "./12-consolidation-and-dependency-inspection.js";
+import { isPlainRecord } from "./11-local-workbook-store-and-versions.js";
 import { X } from "lucide-react";
 import i from "react/jsx-runtime";
 import ne from "react";
@@ -14,12 +14,12 @@ import {
   normalizeDatePolicy,
   calculationFeatureSupport,
   defineDataPropertyByKey,
-} from "./01-core-schemas-and-hashing.js";
+} from "./01-schemas-date-functions-and-validation.js";
 import {
   workbookLimitTable,
   workbookLimits,
   supportedFontFamilies,
-} from "./02-financial-functions.js";
+} from "./02-text-and-financial-functions.js";
 import {
   evaluateWorkbookFormulas,
   builtinFunctionNames,
@@ -36,7 +36,7 @@ import {
   LocalizedText,
   LocalizedNumberField,
 } from "./04-cell-input-paste-and-fill.js";
-import { numericPrecisionPolicy } from "./08-xlsx-export-and-preservation.js";
+import { numericPrecisionPolicy } from "./08-xlsx-import-export-and-preservation.js";
 
 function CalculationOptionsDialog(e) {
   const { text, language } = useWorkbookMessages(),

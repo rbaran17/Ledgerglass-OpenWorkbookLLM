@@ -1,6 +1,6 @@
 import i from "react/jsx-runtime";
 import ne from "react";
-import { normalizeDatePolicy } from "./01-core-schemas-and-hashing.js";
+import { normalizeDatePolicy } from "./01-schemas-date-functions-and-validation.js";
 import {
   buildFilterFacetValues,
   resolveTableDataRange,

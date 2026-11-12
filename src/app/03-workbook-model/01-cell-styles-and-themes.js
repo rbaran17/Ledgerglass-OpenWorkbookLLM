@@ -7,14 +7,14 @@ import {
   defaultRowHeight,
   defaultColumnWidth,
   workbookLimits,
-} from "../02-financial-functions.js";
+} from "../02-text-and-financial-functions.js";
 import {
   hasLinkedOrBoundCells,
   dateCalculationLimits,
   defaultDatePolicy,
   parseDateText,
   defineDataPropertyByKey,
-} from "../01-core-schemas-and-hashing.js";
+} from "../01-schemas-date-functions-and-validation.js";
 
 const cellBorderEdges = ["top", "right", "bottom", "left"],
   borderLineStyles = [

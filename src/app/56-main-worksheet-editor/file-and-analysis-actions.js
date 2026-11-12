@@ -4,19 +4,19 @@ import {
   importDelimitedFile,
   importWorkbookFile,
   toFileProcessingError,
-} from "../07-xlsx-archive-reader.js";
-import { workbookLimits } from "../02-financial-functions.js";
+} from "../07-file-import-and-worker-dispatch.js";
+import { workbookLimits } from "../02-text-and-financial-functions.js";
 import { saveBlobToFile } from "../13-consolidation-dialog.js";
 import {
   encodeNativeWorkbook,
   exportWorkbookToXlsx,
-} from "../08-xlsx-export-and-preservation.js";
-import { runAuditAnalysis } from "../24-merge-and-audit-analysis.js";
+} from "../08-xlsx-import-export-and-preservation.js";
+import { runAuditAnalysis } from "../24-merge-audit-and-ribbon-helpers.js";
 import { formatOccupiedRangeAddress } from "../03-workbook-model.js";
 import {
   buildAssistantSelectionContext,
   validateProposedCalculation,
-} from "../20-calculation-options-and-sources.js";
+} from "../20-calculation-options-and-assistant.js";
 import { requestAssistantAnswer } from "../21-aging-and-materiality-screens.js";
 import { buildAnswerCitations } from "../51-pattern-checks-and-citations.js";
 

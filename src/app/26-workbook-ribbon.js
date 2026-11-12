@@ -72,7 +72,7 @@ import {
   CommandReferenceDialog,
   RibbonIconButton,
   RibbonCommandButton,
-} from "./24-merge-and-audit-analysis.js";
+} from "./24-merge-audit-and-ribbon-helpers.js";
 import { ColorPickerButton } from "./25-color-picker.js";
 
 function WorkbookRibbon(e) {
