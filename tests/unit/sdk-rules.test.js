@@ -15,7 +15,6 @@ import {
   resolveDefinedNameValue,
   resolveValidationInspection,
   reviewThreadLimits,
-  setCellHyperlink,
   setReviewThreadResolved,
   sortConditionalRulesByPriority,
   summarizeValidationInspection,
@@ -924,49 +923,6 @@ describe("review threads, hyperlinks and formula watches", () => {
       address: "B2",
       label: "Go",
     });
-  });
-
-  test("setCellHyperlink sets a link on a cell and keeps the value", () => {
-    const workbook = sampleWorkbook();
-    const sheetId = workbook.sheets[0].id;
-    workbook.sheets[0].cells.A3 = { raw: 7 };
-    const next = setCellHyperlink(workbook, sheetId, "A3", {
-      kind: "external",
-      url: "https://example.com",
-    });
-    expect(next.sheets[0].cells.A3).toEqual({
-      raw: 7,
-      hyperlink: { kind: "external", url: "https://example.com/" },
-    });
-    expect(workbook.sheets[0].cells.A3).toEqual({ raw: 7 });
-  });
-
-  test("setCellHyperlink leaves the revision unchanged and refuses bad input", () => {
-    const workbook = { ...sampleWorkbook(), revision: 3 };
-    const sheetId = workbook.sheets[0].id;
-    const next = setCellHyperlink(workbook, sheetId, "A3", {
-      kind: "external",
-      url: "https://example.com",
-    });
-    expect(next.revision).toBe(3);
-    expect(() =>
-      setCellHyperlink(workbook, "no-such-sheet", "A3", {
-        kind: "external",
-        url: "https://example.com",
-      }),
-    ).toThrow("Sheet not found: no-such-sheet");
-    expect(() =>
-      setCellHyperlink(
-        workbook,
-        sheetId,
-        "A3",
-        {
-          kind: "external",
-          url: "https://example.com",
-        },
-        { readOnly: true },
-      ),
-    ).toThrow("This workbook is read-only.");
   });
 
   test("validateFormulaWatches returns watches, and marks one with a missing sheet as orphaned", () => {

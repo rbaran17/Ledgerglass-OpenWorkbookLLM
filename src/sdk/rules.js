@@ -33,6 +33,5 @@ export {
   setReviewThreadResolved,
   reviewThreadLimits,
   validateHyperlinkRecord,
-  setCellHyperlink,
   validateFormulaWatches,
 } from "../app/03-workbook-model.js";

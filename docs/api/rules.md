@@ -462,33 +462,6 @@ validateHyperlinkRecord({
 // { kind: "external", url: "https://example.com/a%20b", label: "Example" }
 ```
 
-## setCellHyperlink
-
-```ts
-export function setCellHyperlink(
-  workbook: Workbook,
-  sheetId: string,
-  address: string,
-  hyperlink: HyperlinkInput,
-  options?: RuleEditOptions,
-): Workbook;
-```
-
-Returns a new workbook in which the cell has the given hyperlink. The cell's value is kept. The revision and the event list are not changed. It throws if the sheet does not exist, the address is invalid, the link is refused, or the workbook is read-only.
-
-```js
-import { createBlankWorkbook, setCellHyperlink } from "@ledgerglass/workbook";
-
-const workbook = createBlankWorkbook("Budget");
-const sheet = workbook.sheets[0];
-sheet.cells.A1 = { raw: "Source data" };
-const next = setCellHyperlink(workbook, sheet.id, "A1", {
-  kind: "external",
-  url: "https://example.com/data",
-});
-next.sheets[0].cells.A1; // { raw: "Source data", hyperlink: { kind: "external", url: "https://example.com/data" } }
-```
-
 ## validateFormulaWatches
 
 ```ts

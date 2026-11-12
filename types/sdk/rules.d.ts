@@ -446,15 +446,6 @@ export function validateHyperlinkRecord(
   hyperlink: HyperlinkInput,
 ): HyperlinkRecord;
 
-/** Sets or replaces the hyperlink on a cell and returns a new workbook. The revision and events are not changed. Throws if the sheet or address is invalid, the link is refused, or the workbook is read-only. */
-export function setCellHyperlink(
-  workbook: Workbook,
-  sheetId: string,
-  address: string,
-  hyperlink: HyperlinkInput,
-  options?: RuleEditOptions,
-): Workbook;
-
 /** Checks formula watches and returns normalised copies. A watch whose sheet is missing is kept and marked orphaned. Throws for duplicate IDs or two active watches on one cell. */
 export function validateFormulaWatches(
   formulaWatches: FormulaWatch[] | undefined,
