@@ -32,7 +32,7 @@
     "fast-formula-parser": "1.0.19",
     "fflate": "^0.8.3",
     "html-to-image": "1.11.13",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.70.0",
     "papaparse": "^5.5.3",
     "pdf-lib": "1.17.1",
     "react": "^19.3.1",
