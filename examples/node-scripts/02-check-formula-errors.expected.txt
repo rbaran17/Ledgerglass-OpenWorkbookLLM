@@ -1,0 +1,2 @@
+Budget!B1: #DIV/0!
+Budget!C1: #REF!

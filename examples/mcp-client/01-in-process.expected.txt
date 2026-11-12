@@ -1,0 +1,24 @@
+tools (9):
+  workbook_check_formula_compatibility
+  workbook_evaluate_formula
+  workbook_get_capabilities
+  workbook_get_context
+  workbook_get_formula_contracts
+  workbook_inspect_formula
+  workbook_queue_proposal
+  workbook_read_range
+  workbook_run_audit_checks
+max selection cells: 500
+writes: None. Proposals are queued for human review and are never applied by this server.
+context: sheet Sheet1, range A1:C4, 12 cells, revision 1
+read A2:B2: Rent | 1200
+inspect =SUM(B2:B3): functions SUM, references B2, B3, proposable true
+evaluate =B2*2 as B4: 2400
+audit: 12 cells checked, 2 findings
+  B3 number-stored-as-text (medium)
+  C4 error-value (high)
+queued: true, applied: false
+host review queue: 1 proposal
+queued patches: B3 -> 85.5
+workbook unchanged: true
+B3 still holds: 85.50

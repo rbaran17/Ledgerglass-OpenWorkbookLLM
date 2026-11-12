@@ -14,6 +14,13 @@ export { WorkbookSyncBoundary as AuditWorkbook } from "./app/56-main-worksheet-e
 export { Vj as localDemoAdapter } from "./app/55-external-source-refresh.js";
 export { createHttpAdapter } from "./integrations/http-adapter.js";
 
+/**
+ * External data sources: the adapter for the editor's `externalSourceAdapter` prop, which talks
+ * to a source gateway on your server (see docs/SOURCES.md), and the error it reports.
+ */
+export { createHttpSourceAdapter } from "./integrations/http-source-adapter.js";
+export { ExternalSourceError } from "./app/03-workbook-model.js";
+
 /** Workbook model: create, normalise, calculate and edit workbooks without the interface. */
 export {
   applyCellPatchTransaction,
@@ -24,6 +31,17 @@ export {
   shiftFormulaReferences,
 } from "./app/03-workbook-model.js";
 export { workbookLimits } from "./app/02-text-and-financial-functions.js";
+
+/**
+ * The wider model API, by area. Each area has a reference page in docs/api/ and its declarations
+ * in types/sdk/. These functions also load in Node through `@ledgerglass/workbook/node`.
+ */
+export * from "./sdk/calculation.js";
+export * from "./sdk/cells.js";
+export * from "./sdk/files.js";
+export * from "./sdk/rules.js";
+export * from "./sdk/tables.js";
+export * from "./sdk/worksheets.js";
 
 /** Assistant protocol: the approved-selection context and the checks applied to proposals. */
 export {

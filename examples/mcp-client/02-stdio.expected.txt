@@ -1,0 +1,7 @@
+tools (9): workbook_check_formula_compatibility, workbook_evaluate_formula, workbook_get_capabilities, workbook_get_context, workbook_get_formula_contracts, workbook_inspect_formula, workbook_queue_proposal, workbook_read_range, workbook_run_audit_checks
+read A2:B2: Rent | 1200
+read D9: refused (yes): That range is outside the approved selection.
+queued: true, applied: false
+outbox entries: 1
+outbox patches: B3 -> 85.5
+workbook file unchanged: true

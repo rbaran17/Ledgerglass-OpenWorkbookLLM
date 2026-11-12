@@ -4,11 +4,13 @@
 
 > The library was rebuilt after the original SDK source was lost. The export names below were chosen for the rebuild, and the original package's exact API was not recovered. TypeScript declarations for everything listed here are in `types/` (hand-written, and checked by `npm run test:types`); the application's internals are untyped JavaScript. The package is not published to a registry (`"private": true`).
 
+> **More of the model is public now.** About 125 further functions (files, worksheets, cells, tables and pivots, rules, calculation) are documented in the [API reference](api/README.md), and the same functions run in Node through [`@ledgerglass/workbook/node`](api/node.md).
+
 ## Build
 
 ```sh
 npm ci
-npm run build:lib   # writes lib/ledgerglass.js, lib/ledgerglass.css and code-split chunks
+npm run build:lib   # writes lib/ledgerglass.js, lib/ledgerglass.css, code-split chunks and lib/node.js
 npm run test:lib    # mounts the built library in a host page and drives it in a browser
 ```
 
@@ -39,7 +41,7 @@ export function Workbook() {
 }
 ```
 
-Give the container a height: the editor fills it.
+Give the container a definite height: the editor fills it. With a height of `auto` all the way up (for example an unsized `#root`), the editor sizes itself from its full row count, which can exhaust the browser tab's memory.
 
 | Prop                           | Meaning                                                                               |
 | ------------------------------ | ------------------------------------------------------------------------------------- |
@@ -53,7 +55,7 @@ Give the container a height: the editor fills it.
 | `persistenceKey`               | Browser storage key for saving the workbook locally. Without it nothing is stored.    |
 | `workbookStore`                | Your own store, used in place of browser storage.                                     |
 
-The component accepts further props for linked workbooks, consolidation, extensions and external sources. They are listed in the parameter list of `MainWorksheetEditor` in `src/app/56-main-worksheet-editor.js`; they work, but they are not documented here because their contracts were not recovered in full.
+`externalSourceAdapter` connects the Data > Connections & Refresh dialog to sources your server offers; see [External data sources](SOURCES.md). The component accepts further props for linked workbooks, consolidation and extensions. They are listed in the parameter list of `MainWorksheetEditor` in `src/app/56-main-worksheet-editor.js`; they work, but they are not documented here because their contracts were not recovered in full.
 
 ## Connect a model
 
@@ -99,7 +101,7 @@ const edited = applyCellPatchTransaction(
 getWorkbookCalculation(edited).calculator.getTypedValue(sheet.id, "A1"); // { type: "number", value: 42 }
 ```
 
-The library entry also loads the editor and its stylesheet, so it is for browser bundles. In Node, import the model directly from `src/app/03-workbook-model.js`, as the MCP server and the unit tests do.
+The library entry also loads the editor and its stylesheet, so it is for browser bundles. In Node, import the same functions from [`@ledgerglass/workbook/node`](api/node.md), which leaves the interface out and adds file helpers that take a path.
 
 ## Exports
 

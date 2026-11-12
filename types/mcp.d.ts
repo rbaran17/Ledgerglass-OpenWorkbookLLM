@@ -17,5 +17,5 @@ export interface WorkbookMcpHost {
   beforeRequest?(): unknown;
 }
 
-/** Creates an MCP server with nine read-only tools and proposal queuing over one selection. */
+/** Creates an MCP server with nine tools over one approved selection: eight read-only tools and one that queues a proposal for review. */
 export function createWorkbookMcpServer(host: WorkbookMcpHost): McpServer;

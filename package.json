@@ -28,13 +28,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
-    "build:lib": "vite build --config vite.lib.config.ts",
+    "build:lib": "vite build --config vite.lib.config.ts && vite build --config vite.node.config.ts",
     "test": "npm run test:deployment && npm run test:unit",
     "test:unit": "vitest run",
-    "test:types": "tsc -p types/tsconfig.json",
+    "test:types": "tsc -p types/tsconfig.json && node scripts/build-api-index.mjs --check",
+    "docs:api": "node scripts/build-api-index.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test:e2e": "playwright test",
-    "test:lib": "node scripts/verify-lib.mjs",
+    "test:lib": "node scripts/verify-lib.mjs && node scripts/verify-node.mjs",
+    "test:examples": "node scripts/verify-examples.mjs",
     "test:agent-ui": "npm run build:lib && npm ci --prefix tests/agent-ui-host --ignore-scripts --no-audit --no-fund && node scripts/verify-agent-ui.mjs",
     "start": "node scripts/serve.mjs",
     "build:portable": "npm run build && node scripts/portable.mjs",
@@ -86,9 +88,25 @@
       "import": "./lib/ledgerglass.js"
     },
     "./style.css": "./lib/ledgerglass.css",
+    "./node": {
+      "types": "./types/node.d.ts",
+      "import": "./lib/node.js"
+    },
+    "./calculation-node": {
+      "types": "./types/node.d.ts",
+      "import": "./lib/node.js"
+    },
     "./mcp": {
       "types": "./types/mcp.d.ts",
       "import": "./src/mcp/server.js"
+    },
+    "./source-gateway": {
+      "types": "./types/source-gateway.d.ts",
+      "import": "./src/sources/gateway.js"
+    },
+    "./source-connectors": {
+      "types": "./types/source-connectors.d.ts",
+      "import": "./src/sources/connectors.js"
     }
   },
   "files": [
@@ -96,10 +114,12 @@
     "LICENSE",
     "THIRD-PARTY-NOTICES.txt",
     "docs/*.md",
+    "docs/api/*.md",
     "lib",
     "types",
     "scripts/mcp-stdio.mjs",
     "src/mcp",
+    "src/sources",
     "src/app"
   ],
   "overrides": {

@@ -1,0 +1,6 @@
+Budget values:
+  B5: {"type":"number","value":1950.5}
+  B6: {"type":"number","value":0.6152268649064343}
+Wrote budget.xlsx
+Wrote budget.json
+XLSX warnings: 3

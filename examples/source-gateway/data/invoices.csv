@@ -1,0 +1,5 @@
+Invoice,Date,Customer,Amount,Paid
+INV-1001,2026-01-05,Northwind,1200.50,true
+INV-1002,2026-01-09,Contoso,300.00,false
+INV-1003,2026-01-14,Fabrikam,845.25,true
+INV-1004,2026-01-20,Northwind,2150.00,false

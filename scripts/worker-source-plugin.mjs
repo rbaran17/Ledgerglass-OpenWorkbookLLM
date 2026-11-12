@@ -1,4 +1,5 @@
 import { build } from "esbuild";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const SUFFIX = "?worker-source";
@@ -28,15 +29,20 @@ export function workerSourceVite() {
     resolveId(source, importer) {
       if (!source.endsWith(SUFFIX)) return null;
       const path = source.slice(0, -SUFFIX.length);
-      const absolutePath = resolve(
+      let absolutePath = resolve(
         importer ? dirname(importer) : process.cwd(),
         path,
       );
+      // Vitest can pass the importer relative to the project root ("/src/app/x.js").
+      if (!existsSync(absolutePath) && importer?.startsWith("/"))
+        absolutePath = resolve(process.cwd(), `.${dirname(importer)}`, path);
       return absolutePath + SUFFIX;
     },
     async load(id) {
       if (!id.endsWith(SUFFIX)) return null;
-      const path = id.slice(0, -SUFFIX.length);
+      let path = id.slice(0, -SUFFIX.length);
+      // A cached module id can also arrive relative to the project root.
+      if (!existsSync(path)) path = resolve(process.cwd(), `.${path}`);
       this.addWatchFile(path);
       const text = await bundleWorker(path);
       return `export default ${JSON.stringify(text)};`;

@@ -6,6 +6,12 @@
  * which is why several object types allow extra properties.
  */
 import type { ComponentType } from "react";
+import type {
+  ExternalSourceErrorCode,
+  ExternalSourceErrorInstance,
+  SourceApproval,
+  SourcePayload,
+} from "./source-protocol";
 
 /** What a cell stores: a number, text, a boolean, a formula beginning with "=", or nothing. */
 export type RawCellContent = string | number | boolean | null;
@@ -94,6 +100,7 @@ export interface CellPatch {
   cell: Cell;
 }
 
+/** The size limits the model enforces: rows, columns, cells, file sizes and assistant selection sizes. */
 export const workbookLimits: Readonly<{
   maxRows: number;
   maxCols: number;
@@ -106,14 +113,19 @@ export const workbookLimits: Readonly<{
   maxPatches: number;
 }>;
 
+/** Returns a new workbook with one empty sheet. */
 export function createBlankWorkbook(name?: string): Workbook;
 /** Validates and completes workbook data, for example parsed native JSON. Throws if it is invalid. */
 export function normalizeWorkbookInput(input: unknown): Workbook;
+/** Calculates the workbook (or reuses the cached calculation) and returns the calculator and its report. */
 export function getWorkbookCalculation(workbook: Workbook): {
   calculator: Calculator;
   report: CalculationReport;
 };
-/** Returns a new workbook with the changes applied and recorded; the original is not modified. */
+/**
+ * Returns a new workbook with the changes applied and recorded; the original is not modified.
+ * Throws a `DataValidationError` if a value breaks a data validation rule whose style is "stop".
+ */
 export function applyCellPatchTransaction(
   workbook: Workbook,
   patches: CellPatch[],
@@ -121,6 +133,7 @@ export function applyCellPatchTransaction(
   action?: string,
   options?: Record<string, unknown>,
 ): Workbook;
+/** Returns a normalised copy of the workbook suitable for comparing or hashing. */
 export function buildCanonicalWorkbookSnapshot(workbook: Workbook): Workbook;
 /** Moves the relative references in a formula. A reference pushed off the grid becomes "#REF!". */
 export function shiftFormulaReferences(
@@ -162,6 +175,7 @@ export function resolveAssistantSelection(
   workbook: Workbook,
   selection: AssistantSelection,
 ): string[];
+/** Builds what an assistant may see for an approved selection: the cells, their values and identifiers. Throws if the selection is not allowed. */
 export function buildAssistantSelectionContext(
   workbook: Workbook,
   selection: AssistantSelection,
@@ -193,6 +207,7 @@ export interface AssistantAdapter {
 /** The built-in demonstration adapter. It calls no model and no network. */
 export const localDemoAdapter: AssistantAdapter;
 
+/** Returns an assistant adapter that asks your own server for a proposal. */
 export function createHttpAdapter(options: {
   /** Your server's URL. It receives `{ prompt, context, request }` and returns a proposal. */
   endpoint: string;
@@ -216,6 +231,8 @@ export interface AuditWorkbookProps {
   /** Browser storage key for saving locally. Without it nothing is stored. */
   persistenceKey?: string;
   workbookStore?: unknown;
+  /** Adapter for external data sources, read through your gateway. See docs/SOURCES.md. */
+  externalSourceAdapter?: ExternalSourceAdapter;
   [extra: string]: unknown;
 }
 
@@ -464,3 +481,54 @@ export function createWorkbookCatalog<TCatalog>(
   },
   options?: WorkbookCatalogOptions,
 ): TCatalog;
+
+/** The client side of the external source protocol, as the editor's `externalSourceAdapter` prop uses it. */
+export interface ExternalSourceAdapter {
+  /** The sources this user may see, each with an approval. Rejects with `ExternalSourceError`. */
+  catalog(options?: { signal?: AbortSignal }): Promise<SourceApproval[]>;
+  /** A fresh approval for one source. Rejects with `ExternalSourceError`. */
+  authorize(
+    sourceId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SourceApproval>;
+  /** The source's rows as a payload. The editor checks it again before using it. Rejects with `ExternalSourceError`. */
+  refresh(
+    sourceId: string,
+    options?: { signal?: AbortSignal },
+  ): Promise<SourcePayload>;
+}
+
+export interface ExternalSourceAdapterOptions {
+  /** The URL of your source gateway, for example "/api/sources". */
+  endpoint: string;
+  /** Sent with every request, for example an Authorization header. */
+  headers?: Record<string, string>;
+  /** The fetch to use. Default: the global fetch. */
+  fetch?: typeof fetch;
+  /** Credential handling for the request. Default "same-origin". */
+  credentials?: RequestCredentials;
+}
+
+/**
+ * Returns an adapter that sends the editor's source requests to your gateway. Throws `TypeError`
+ * without an endpoint; its methods reject with `ExternalSourceError` carrying the server's code.
+ */
+export function createHttpSourceAdapter(
+  options: ExternalSourceAdapterOptions,
+): ExternalSourceAdapter;
+
+/**
+ * The error external source operations reject with. Its message is the text the editor shows for
+ * its code.
+ */
+export const ExternalSourceError: new (
+  code: ExternalSourceErrorCode,
+) => ExternalSourceErrorInstance;
+
+/** The wider model API, by area. Reference pages are in docs/api/. */
+export * from "./sdk/calculation";
+export * from "./sdk/cells";
+export * from "./sdk/files";
+export * from "./sdk/rules";
+export * from "./sdk/tables";
+export * from "./sdk/worksheets";
