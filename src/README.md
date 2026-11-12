@@ -6,7 +6,7 @@ compiled application in `dist/` and is now the source the build uses.
 | Path | Contents |
 | --- | --- |
 | `main.js` | The application entry: workbook UI, core model and the third-party libraries not yet replaced by imports |
-| `assistant/AssistantChat.js` | The assistant chat panel, loaded on demand; still recovered code with its UI libraries inlined |
+| `assistant/AssistantChat.js` | The assistant chat panel, loaded on demand; recovered code, with the chat UI library imported |
 | `assistant/AssistantChatMarkdown.js` | The Markdown renderer for assistant replies; rewritten as ordinary source |
 | `workers/` | File-parser and calculation worker sources, bundled at build time and started as Blob workers |
 | `styles/` | Workbook and assistant stylesheets |
@@ -21,8 +21,9 @@ compiled application in `dist/` and is now the source the build uses.
   the lucide-react icons, fflate, pdf-lib and html-to-image are imported from
   `node_modules`. In the workers, zod, ExcelJS, saxes, Papa Parse,
   fflate and the formula parser are. Updates to these take effect on the next build.
-- In `assistant/AssistantChat.js`, the assistant UI libraries are still
-  inlined at the versions the original build used. Updating `package.json` does not change them yet.
+- No known third-party library is inlined any more. This rests on licence
+  banners and known signatures, so a small library without a banner could
+  still be present.
 - The workers (`workers/*.worker.js`) are bundled by
   `scripts/worker-source-plugin.mjs` and contain their own copies of the core
   model, under different minified names from `main.js`. The MCP SDK is not
@@ -41,10 +42,8 @@ LEDGERGLASS_BUILD=dist-container npm run test:e2e
 
 ## Roadmap
 
-1. Replace the remaining inlined third-party libraries with imports from
-   `node_modules`, one library at a time, so dependency updates take effect.
-2. Split `main.js` into modules along the original boundaries.
-3. Share the core model between `main.js` and the workers instead of keeping
+1. Split `main.js` into modules along the original boundaries.
+2. Share the core model between `main.js` and the workers instead of keeping
    three copies.
-4. Give exported and frequently used identifiers meaningful names; add types.
-5. Grow the browser checks and add unit tests around the core model.
+3. Give exported and frequently used identifiers meaningful names; add types.
+4. Grow the browser checks and add unit tests around the core model.
